@@ -2505,10 +2505,8 @@ impl SdroxideApp {
                     .id_salt("band-dock-scroll")
                     .show(ui, |ui| {
                         let mode = self.state.rx[0].mode;
-                        let stated = self
-                            .radio_cfg
-                            .as_ref()
-                            .is_some_and(|c| !c.freq_ranges_rx.is_empty());
+                        let stated =
+                            self.radio_cfg.as_ref().is_some_and(|c| !c.freq_ranges_rx.is_empty());
                         let atsmini = self
                             .radio_cfg
                             .as_ref()
@@ -3140,11 +3138,8 @@ impl SdroxideApp {
                 // the chip and the fill *breathes*, so "armed, waiting" and
                 // "recording now" are told apart at a glance without the label.
                 let lit = audio || iq;
-                let fill = if lit {
-                    rec_chip_fill(ui.input(|i| i.time))
-                } else {
-                    crate::theme::ALERT()
-                };
+                let fill =
+                    if lit { rec_chip_fill(ui.input(|i| i.time)) } else { crate::theme::ALERT() };
                 let rec = crate::chrome::chip_accent(ui, lit, "REC", fill, Color32::WHITE)
                     .on_hover_text(hover);
                 if auto && !lit {
@@ -3664,10 +3659,7 @@ impl SdroxideApp {
                         clip_label(secs)
                     )
                 };
-                if crate::chrome::chip(ui, armed || pending, label)
-                    .on_hover_text(hint)
-                    .clicked()
-                {
+                if crate::chrome::chip(ui, armed || pending, label).on_hover_text(hint).clicked() {
                     // A clip is one span, not a squelch run: disarm the gate,
                     // and drop any longer deadline it replaces. Running
                     // already, the span starts now; idle, the recording is
@@ -7691,7 +7683,7 @@ pub(in crate::app) fn band_mode_menu(
                 // signals all the same, and this is where an operator looks for
                 // one.
                 for m in
-                    Mode::DIGITAL.into_iter().chain([Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Dab, Mode::Hfdl])
+                    Mode::DIGITAL.into_iter().chain([Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl])
                 {
                     mode_band_chip(ui, mode, m, band, state, cmds);
                 }
@@ -7734,7 +7726,7 @@ pub(in crate::app) fn band_mode_menu(
             crate::chrome::menu_caption(ui, "Digital");
             ui.horizontal_wrapped(|ui| {
                 for m in
-                    Mode::DIGITAL.into_iter().chain([Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Dab, Mode::Hfdl])
+                    Mode::DIGITAL.into_iter().chain([Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl])
                 {
                     mode_listen_chip(ui, mode, m, state, cmds);
                 }

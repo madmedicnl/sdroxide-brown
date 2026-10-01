@@ -1,21 +1,39 @@
 //! DAB / DAB+ reception for this program, wrapping the [`dabradio`] decoder.
 //!
+//! # Status: NOT SHIPPED — retained for future work
+//!
+//! **DAB is deliberately hidden from the user in this build.** Nothing in the UI
+//! offers the mode, and [`DAB_ENABLED`] is `false`, which stops the engine
+//! starting the lane even if a stored session still names `Mode::Dab`. The code
+//! is kept so the work is not thrown away, not because it is ready.
+//!
+//! What it does do, proven off air: the OFDM front end syncs, the FIC decodes,
+//! and the ensemble and **service list** come up — including a multiplex that
+//! advertises no ensemble label, which some do. What it does **not** do: play a
+//! station reliably. The DAB+ audio path decodes the first service of a capture
+//! and then fails on others, and faad2 refuses most Access Units with
+//! `FAAD_DECODE_ERROR` (bit errors) on **every** service — the reference
+//! `dabradio` decoder (fdk-aac) takes the same Access Units cleanly. That is the
+//! open problem, and it is a decoder problem, not a plumbing one: the frames
+//! reaching the AAC step are byte-identical in size and Reed–Solomon-clean.
+//!
+//! ## The licence constraint that shapes any future fix
+//!
+//! `dabradio` reaches its AAC stage through **fdk-aac**, which is optional
+//! there. The FDK licence grants **no patent licence** and forbids a copyright
+//! licence fee — restrictions the GPL cannot carry — so a binary with fdk-aac
+//! **linked in cannot be distributed** (it is why Debian ships it `non-free`).
+//! This crate therefore runs the pipeline with fdk-aac **off** and hands the
+//! Reed–Solomon-corrected Access Units to the **stock faad2** the binary already
+//! carries for DRM ([`AacDecoder`]). Any future fix must stay on this side of
+//! the line: a GPL-compatible decoder, or fdk-aac loaded **at run time** (the
+//! trick `vendor/dream` already uses) rather than linked. DAB (not DAB+) carries
+//! MP2, which is pure Rust in `dabradio` and needs no swap.
+//!
 //! DAB Mode I is a **wideband** service — about 1.536 MHz of occupied spectrum
 //! in Band III, demodulated by an OFDM front end that wants its input at
 //! 2.048 Msps — so, like ADS-B, it cannot ride the 12 kHz `on_rx_iq` tap the
 //! narrow modes share. It is fed raw I/Q from a lane of its own.
-//!
-//! The decoder is the MIT [`dabradio`] crate, taken as a **library** (upstream
-//! PR `xoolive/desperado#52`, branch `lib/split-dabradio`). That split is what
-//! makes the audio path licensable: `dabradio`'s DAB+ decoding reaches its AAC
-//! stage through **fdk-aac**, which is optional there, and the FDK licence
-//! cannot be linked into a GPL build. So this crate runs the same pipeline with
-//! fdk-aac **off** and hands the Reed–Solomon-corrected Access Units to the
-//! **stock faad2** the binary already carries for DRM ([`AacDecoder`]). DAB (not
-//! DAB+) carries MP2, which is pure Rust in `dabradio` and needs no swap.
-//!
-//! Proven against a real off-air capture (channel 8B, Nancy): the ensemble and
-//! service list, and DAB+ audio through faad2. Not yet proven on live RF.
 
 use std::collections::VecDeque;
 
@@ -26,6 +44,15 @@ use tracing::warn;
 pub mod aac;
 
 pub use aac::AacDecoder;
+
+/// Whether DAB ships in this build. **`false` — see the crate docs.**
+///
+/// A single switch, so the whole feature is one flag rather than a scattering
+/// of `cfg`s. The UI does not offer the mode; the engine consults this so a
+/// stored session that once selected `Mode::Dab` cannot start a lane the build
+/// does not support. Flip it to `true` (and restore the mode to the band menu's
+/// chip lists) to bring DAB back once the audio path is fixed.
+pub const DAB_ENABLED: bool = false;
 
 /// The rate the DAB Mode I OFDM front end is defined at, in samples/s.
 pub const DAB_SAMPLE_RATE: u32 = 2_048_000;
@@ -308,6 +335,30 @@ impl DabReceiver {
         pcm
     }
 
+    /// The shape of the PCM [`Self::take_pcm`] hands out: `(sample_rate_hz,
+    /// channels)`, interleaved.
+    ///
+    /// A consumer has to know this to de-interleave, and getting it wrong is
+    /// not subtle: treating stereo as mono plays the channels as consecutive
+    /// samples, doubling the rate and garbling both. DAB+ AAC learns both from
+    /// the AudioSpecificConfig, so before the first frame decodes there is
+    /// nothing to report and 48 kHz stereo is the honest default (SBR doubled
+    /// to 48 kHz is what DAB+ always ends at). MP2 in DAB is 48 kHz stereo.
+    pub fn pcm_format(&self) -> (u32, usize) {
+        match self.audio.as_ref() {
+            Some(pipe) => match pipe.coding {
+                DabCoding::DabPlus => pipe
+                    .aac
+                    .as_ref()
+                    .map(|a| (a.sample_rate(), a.channels().max(1)))
+                    .unwrap_or((48_000, 2)),
+                DabCoding::MpegLayer2 => (48_000, 2),
+                DabCoding::Unsupported => (48_000, 2),
+            },
+            None => (48_000, 2),
+        }
+    }
+
     /// Build the audio pipeline for `which`, if the FIC names it.
     fn start_audio(&mut self, which: &str) {
         use dabradio::fic::fib::AudioCoding;
@@ -316,9 +367,10 @@ impl DabReceiver {
             Some(sid) => self.ensemble.services.get(&sid),
             None => {
                 let want = which.trim().to_lowercase();
-                self.ensemble.services.values().find(|s| {
-                    s.label.as_ref().is_some_and(|l| l.trim().to_lowercase() == want)
-                })
+                self.ensemble
+                    .services
+                    .values()
+                    .find(|s| s.label.as_ref().is_some_and(|l| l.trim().to_lowercase() == want))
             }
         };
         let Some(service) = service else { return };
@@ -328,16 +380,12 @@ impl DabReceiver {
         let Some(msc) = dabradio::msc::MscHandler::new(subch) else { return };
         let bitrate = subch.bitrate;
         let (coding, superframe, mp2) = match coding {
-            AudioCoding::DabPlus => (
-                DabCoding::DabPlus,
-                Some(dabradio::audio::SuperframeDecoder::new(bitrate)),
-                None,
-            ),
-            AudioCoding::MpegLayer2 => (
-                DabCoding::MpegLayer2,
-                None,
-                Some(dabradio::audio::mp2::Mp2Decoder::new()),
-            ),
+            AudioCoding::DabPlus => {
+                (DabCoding::DabPlus, Some(dabradio::audio::SuperframeDecoder::new(bitrate)), None)
+            }
+            AudioCoding::MpegLayer2 => {
+                (DabCoding::MpegLayer2, None, Some(dabradio::audio::mp2::Mp2Decoder::new()))
+            }
             AudioCoding::Other(_) => (DabCoding::Unsupported, None, None),
         };
         self.audio = Some(AudioPipe {
@@ -375,10 +423,9 @@ mod tests {
     #[test]
     #[ignore]
     fn an_off_air_capture_decodes_services_and_audio() {
-        let (Ok(path), Ok(rate)) = (
-            std::env::var("SDROXIDE_DAB_SAMPLE"),
-            std::env::var("SDROXIDE_DAB_SAMPLE_RATE"),
-        ) else {
+        let (Ok(path), Ok(rate)) =
+            (std::env::var("SDROXIDE_DAB_SAMPLE"), std::env::var("SDROXIDE_DAB_SAMPLE_RATE"))
+        else {
             return;
         };
         let rate: f64 = rate.parse().expect("rate");

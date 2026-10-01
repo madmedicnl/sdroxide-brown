@@ -68,9 +68,7 @@ impl AacDecoder {
     /// it succeeds is the caller's to see: an unsupported profile is a real
     /// answer, and the service is then named with no audio rather than silent.
     pub fn configure(&mut self, asc: &[u8]) -> bool {
-        let r = unsafe {
-            dab_aac_init(self.handle, asc.as_ptr(), asc.len() as c_ulong)
-        };
+        let r = unsafe { dab_aac_init(self.handle, asc.as_ptr(), asc.len() as c_ulong) };
         if r == 0 {
             self.rate = unsafe { dab_aac_rate(self.handle) } as u32;
             self.channels = unsafe { dab_aac_channels(self.handle) } as usize;

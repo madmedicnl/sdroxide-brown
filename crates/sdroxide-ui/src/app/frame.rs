@@ -1362,14 +1362,18 @@ impl SdroxideApp {
         // if nothing on screen is moving.
         crate::repaint::after_ms(ctx, 100);
 
-        // A block that yields an ensemble (the status names one) joins the list.
+        // A block that carries a multiplex joins the list. The test used to be
+        // an ensemble *name* alone, and that is too strict: a multiplex whose
+        // FIC carries services but no ensemble label was a station the operator
+        // could plainly see, and the sweep walked straight past it and never
+        // offered the channel — the reported "it found a station but the channel
+        // did not appear in the list".
         if let Some(st) = self.dab_status.as_ref()
-            && let Some(label) = &st.ensemble
+            && crate::app::panels::dab::dab_block_has_multiplex(st)
         {
             let name = sdroxide_types::DAB_BAND_III[scan.at].0.to_string();
             if !scan.found.contains(&name) {
                 scan.found.push(name);
-                let _ = label;
             }
         }
 

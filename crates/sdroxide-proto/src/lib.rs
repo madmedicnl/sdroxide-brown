@@ -1624,7 +1624,19 @@ use sdroxide_types::{
 /// `Command::SetDabConfig` and `ServerMsg::DabStatus` — all appended last.
 /// `RadioState` rides whole, so a v186 peer reads the extra bytes as the start
 /// of the next field. A downstream (fork) addition.
-pub const PROTO_VERSION: u16 = 187;
+///
+/// v188: the ALC reading is optional, and the per-band gain switch. Two
+/// changes, either of which forces the bump. `TxMeters::alc` became
+/// `Option<f32>`, so a rig that never answers an ALC read shows *not reported*
+/// rather than a confident `0%` — the two were indistinguishable, which is
+/// issue #600. That is not an append: `TxMeters` sits **mid** `Meters` (`po`
+/// follows it), `Meters` rides whole inside `RadioState`, and the extra
+/// `Option` tag shifts every byte after it — a v187 client with the transmitter
+/// keyed reads `alc`'s tag as `po` and runs off the end. Appended beside it:
+/// `RadioState::gain_by_band` and `Command::SetGainByBand` (issue #605), the
+/// opt-in per-band front-end gain memory. Same reasoning as v68, which bumped
+/// for this very struct. A downstream (fork) addition.
+pub const PROTO_VERSION: u16 = 188;
 const VERSION_BYTE: u8 = 0x12;
 
 #[derive(Debug, thiserror::Error)]
@@ -2202,7 +2214,10 @@ mod tests {
         // A remote client's screen settings, both directions. Appended
         // variants, so a discriminant slip here would show as a decode error.
         let settings = sdroxide_types::ClientScreen::default();
-        let ask = ClientMsg::SetClientSettings { profile: Some("Contest".into()), settings: settings.clone() };
+        let ask = ClientMsg::SetClientSettings {
+            profile: Some("Contest".into()),
+            settings: settings.clone(),
+        };
         assert_eq!(decode::<ClientMsg>(&encode(&ask).unwrap()).unwrap(), ask);
         let answered = ServerMsg::ClientSettings(ClientSettingsReply {
             profile: Some("Contest".into()),

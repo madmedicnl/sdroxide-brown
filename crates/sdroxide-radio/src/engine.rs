@@ -17,13 +17,12 @@ use sdroxide_adsb::{AdsbAction, AdsbController};
 use sdroxide_ais::{AisAction, AisController};
 use sdroxide_config::BandStacks;
 use sdroxide_digi::{
-    AcarsController, AleController, AprsController, AtChatController, CwController, DigiAction, DigiController,
-    DigiEngine, DscController, Fsk441Controller, FsqController, Fst4Controller, HellController,
-    Js8Controller,
-    JtController, NavtexController, PacketController, Pi4Controller, Q65Controller, RadeController,
-    JttyController, RfPaintController, RifpController, SstvController, TextModemController,
-    UvPacketController,
-    WefaxController, WsprController,
+    AcarsController, AleController, AprsController, AtChatController, CwController, DigiAction,
+    DigiController, DigiEngine, DscController, Fsk441Controller, FsqController, Fst4Controller,
+    HellController, Js8Controller, JtController, JttyController, NavtexController,
+    PacketController, Pi4Controller, Q65Controller, RadeController, RfPaintController,
+    RifpController, SstvController, TextModemController, UvPacketController, WefaxController,
+    WsprController,
 };
 use sdroxide_drm::DrmDemod;
 use sdroxide_dsp::{
@@ -1528,6 +1527,8 @@ impl StereoMixer {
             }
         };
 
+        // The speaker path sets the block; there is no second source here, so
+        // `n` is simply what it queued.
         let n = if dual { self.main_q.len().min(self.sub_q.len()) } else { self.main_q.len() };
         let rec_n = if rec_dual {
             self.rec_main_q.len().min(self.rec_sub_q.len())
@@ -1686,6 +1687,51 @@ struct TxChain {
 
 /// 10 ms of TX audio per iteration.
 const TX_AUDIO_BLOCK: usize = 480;
+
+/// How much decoded DAB audio may wait to be played before the oldest is
+/// dropped, in output-rate samples. Half a second is long enough to ride out a
+/// late superframe and short enough that a station which has genuinely gone
+/// away is not still talking a second later.
+fn dab_fifo_cap(out_rate_hz: f64) -> usize {
+    if !out_rate_hz.is_finite() || out_rate_hz <= 0.0 {
+        return 24_000;
+    }
+    ((out_rate_hz / 2.0).round() as usize).clamp(TX_AUDIO_BLOCK, 96_000)
+}
+
+/// One speaker block at `out_rate_hz`, in samples — 10 ms, the same span the
+/// transmit audio block covers. The length every lane that *replaces* the
+/// demodulated audio has to fill, and what the DAB lane takes from its queue
+/// per call when the demodulator produced nothing to measure it by.
+fn speaker_block(out_rate_hz: f64) -> usize {
+    if !out_rate_hz.is_finite() || out_rate_hz <= 0.0 {
+        return TX_AUDIO_BLOCK;
+    }
+    ((out_rate_hz / 100.0).round() as usize).clamp(1, 8 * TX_AUDIO_BLOCK)
+}
+
+/// Split interleaved PCM into the two ears the mixer takes, one plane each.
+///
+/// `channels` is the decoder's real channel count, not an assumption: a DAB+
+/// service is usually stereo but need not be, and de-interleaving a stereo
+/// stream as if it were mono is not merely a mono downmix — the two channels
+/// become *consecutive* samples, so the station plays at double rate and
+/// garbled. That was the reported failure, so the count has to be honoured
+/// here rather than defaulted. A trailing partial frame is dropped rather than
+/// pairing a left with the next frame's left.
+///
+/// A mono stream fills both planes with the same sample, so it is heard
+/// centred rather than out of one side.
+fn deinterleave(pcm: &[f32], channels: usize, left: &mut Vec<f32>, right: &mut Vec<f32>) {
+    let channels = channels.max(1);
+    let right_idx = (channels - 1).min(1);
+    let mut i = 0;
+    while i + channels <= pcm.len() {
+        left.push(pcm[i]);
+        right.push(pcm[i + right_idx]);
+        i += channels;
+    }
+}
 /// Cap on the queued CW sidetone monitor, in samples — a second at 48 kHz.
 /// Bounds the queue if the speaker path stalls; the operator's own sending is
 /// at most a character or two ahead of what is playing.
@@ -1934,7 +1980,10 @@ fn unix_now_f64() -> f64 {
 /// The other side of every such path is the operator, wherever they are; the
 /// station side is whatever the decode names. Unresolved callsigns name no
 /// continent and are skipped.
-fn cb_paths(decodes: &[sdroxide_types::Decode], to_continent: &'static str) -> Vec<sdroxide_types::BandPath> {
+fn cb_paths(
+    decodes: &[sdroxide_types::Decode],
+    to_continent: &'static str,
+) -> Vec<sdroxide_types::BandPath> {
     let mut out: Vec<sdroxide_types::BandPath> = Vec::new();
     for d in decodes {
         let Some(from_c) = d.from.as_deref().filter(|c| !c.is_empty()) else { continue };
@@ -2620,9 +2669,29 @@ struct Engine {
     cw_monitor_q: Vec<f32>,
     cw_monitor_rs: Option<MonoResampler>,
     cw_monitor_rate: f64,
-    /// DAB's decoded PCM, resampled from the codec's 48 kHz to the speaker.
+    /// DAB's decoded PCM, resampled from the codec's own rate to the speaker's.
+    /// Two ears, one resampler each.
     dab_monitor_rs: Option<MonoResampler>,
     dab_monitor_rate: f64,
+    /// The codec rate the resampler was built for. DAB+ AAC learns its rate
+    /// from the AudioSpecificConfig only when the first frame decodes, so a
+    /// resampler built at the assumed 48 kHz would be wrong for a service at
+    /// 32 or 24 kHz — rebuilt when this moves.
+    dab_monitor_in_rate: f64,
+    /// De-interleaved channels of the last `take_pcm`, before resampling.
+    dab_play_l: Vec<f32>,
+    dab_play_r: Vec<f32>,
+    /// Resampled DAB audio waiting to be played, drained to the mixer one paced
+    /// block at a time. A station arrives in whole superframes — about 120 ms
+    /// each — and the mixer drops a block it has no room for, so handing it one
+    /// superframe at a time threw most of every station away. See
+    /// [`Engine::take_dab_audio_into`].
+    ///
+    /// Stereo, held as two planes rather than interleaved: the speaker path
+    /// takes the two ears as separate slices, and one `Vec<f32>` would only
+    /// mean interleaving and de-interleaving it again here.
+    dab_fifo_l: Vec<f32>,
+    dab_fifo_r: Vec<f32>,
     /// Resampled and waiting for the speaker, drained from the front a block at
     /// a time. Separate from `cw_monitor_q` because the two ends do not deal in
     /// the same samples: the transmit loop pushes 10 ms of 48 kHz, the speaker
@@ -3120,6 +3189,14 @@ struct Engine {
     /// not offer are held rather than dropped, so swapping back to the front
     /// end they belong to brings them back.
     want_gains: (GainSet, GainSet),
+    /// Remember a separate front-end gain per band and recall it on a band
+    /// change. Opt-in, held here so a band change can act on it — see
+    /// [`sdroxide_config::Session::gain_by_band`] and
+    /// [`Engine::recall_band_gain`].
+    gain_by_band: bool,
+    /// The gain stages remembered per band, RX only — the band-keyed companion
+    /// to [`Self::want_gains`]. See [`sdroxide_config::Session::band_gains`].
+    band_gains: std::collections::HashMap<Band, GainSet>,
     /// How far the operator wants the raw IQ decimated, held for the same
     /// reason [`Self::want_gains`] is and re-asked of every front end that is
     /// opened.
@@ -4053,6 +4130,12 @@ fn engine_thread(
     let want_gains =
         session.as_ref().map(|s| (s.gains.clone(), s.tx_gains.clone())).unwrap_or_default();
     let band_antenna = session.as_ref().map(|s| s.band_antenna.clone()).unwrap_or_default();
+    // Per-band gain memory: the switch and the table, both off/empty until the
+    // operator asks for it.
+    let gain_by_band = session.as_ref().is_some_and(|s| s.gain_by_band);
+    let band_gains: std::collections::HashMap<Band, GainSet> =
+        session.as_ref().map(|s| s.band_gains.clone()).unwrap_or_default();
+    state.gain_by_band = gain_by_band;
     // Taken before the state is moved into the engine. Both VFOs open on the
     // mode the receiver came up in — the command line's, the session's, or the
     // default — and the *inactive* one is then given back the mode it was
@@ -4172,6 +4255,11 @@ fn engine_thread(
         cw_monitor_rate: 0.0,
         dab_monitor_rs: None,
         dab_monitor_rate: 0.0,
+        dab_monitor_in_rate: 0.0,
+        dab_play_l: Vec::new(),
+        dab_play_r: Vec::new(),
+        dab_fifo_l: Vec::new(),
+        dab_fifo_r: Vec::new(),
         cw_monitor_out: Vec::new(),
         cw_monitor_warned: false,
         voice_started: None,
@@ -4329,6 +4417,8 @@ fn engine_thread(
         session,
         want_antenna,
         band_antenna,
+        gain_by_band,
+        band_gains,
         want_gains,
         want_decimation,
         store: engine_cfg.store,
@@ -4877,10 +4967,11 @@ fn engine_thread(
                 // the one that answers the operator's question: `alc_peak` is
                 // what SDRoxide SENDS, and ALC is what the rig does about it.
                 // On a CAT rig driving an external radio our figure says
-                // nothing useful about whether the audio is too hot for it.
-                let alc = tele
-                    .alc
-                    .unwrap_or_else(|| engine.tx.as_ref().map(|t| t.alc_peak).unwrap_or(0.0));
+                // nothing useful about whether the audio is too hot for it —
+                // which is why the rig's reading, when it has not answered,
+                // is carried through as `None` rather than shown as a false
+                // zero (issue #600).
+                let alc = tele.alc.or_else(|| engine.tx.as_ref().map(|t| t.alc_peak));
                 // Clients that asked for `tx_sensors` get the same figures.
                 if let Some(srv) = engine.tci_srv.as_ref() {
                     srv.push_telemetry(tele);
@@ -5350,7 +5441,13 @@ impl Engine {
             // muted.
             // Monitoring a voice-keyer message takes the speakers for its duration:
             // the operator asked to hear the recording, not the band.
-            let block = self.main_play.len();
+            // The speakable block. `main_play` is what the demodulator produced,
+            // but a lane that has no demodulator at all — DAB, whose station is
+            // decoded from the ensemble — leaves it empty, and taking zero
+            // samples from the DAB queue is what made the station inaudible.
+            // Fall back to one speaker block (10 ms at the output rate) so every
+            // lane has a length to be taken at. See `take_dab_audio_into`.
+            let block = self.main_play.len().max(speaker_block(out_rate));
             if self.take_preview_audio(out_rate, block) {
                 self.main_play.clear();
                 self.main_play.extend_from_slice(&self.voice_prev_out);
@@ -5374,6 +5471,18 @@ impl Engine {
                 self.main_play_r_rec.clear();
                 if want_rec {
                     self.main_play_rec.extend_from_slice(&self.voice_play);
+                }
+            } else if self.take_dab_audio_into(block) {
+                // DAB is the rig's audio: the ensemble *is* the receiver, so
+                // the decoded station replaces what the (empty) demodulator
+                // produced, exactly as a decoded digital-voice mode does. Both
+                // ears — a DAB station is usually stereo and this is the lane
+                // that carries it — and the recorder taps them too.
+                self.main_play_rec.clear();
+                self.main_play_r_rec.clear();
+                if want_rec {
+                    self.main_play_rec.extend_from_slice(&self.main_play);
+                    self.main_play_r_rec.extend_from_slice(&self.main_play_r);
                 }
             } else if self.mutes_analog_audio() {
                 // Silenced in place rather than dropped: the block still has to
@@ -5450,11 +5559,8 @@ impl Engine {
             let n = self.main_play.len();
             self.replay.read_into(&mut self.replay_buf, n);
         }
-        let (speaker, speaker_right): (&[f32], Option<&[f32]>) = if self.replay.on() {
-            (&self.replay_buf, None)
-        } else {
-            (&self.main_play, right)
-        };
+        let (speaker, speaker_right): (&[f32], Option<&[f32]>) =
+            if self.replay.on() { (&self.replay_buf, None) } else { (&self.main_play, right) };
         if let Some(mixer) = self.mixer.as_mut() {
             mixer.push(speaker, speaker_right, &self.main_play_rec, rec_right);
         }
@@ -5731,11 +5837,8 @@ impl Engine {
             let n = self.audio_play.len();
             self.replay.read_into(&mut self.replay_buf, n);
         }
-        let (speaker, speaker_right): (&[f32], Option<&[f32]>) = if self.replay.on() {
-            (&self.replay_buf, None)
-        } else {
-            (&self.audio_play, right)
-        };
+        let (speaker, speaker_right): (&[f32], Option<&[f32]>) =
+            if self.replay.on() { (&self.replay_buf, None) } else { (&self.audio_play, right) };
         if let Some(mixer) = self.mixer.as_mut() {
             mixer.push(speaker, speaker_right, &self.audio_play_rec, None);
         }
@@ -6061,6 +6164,10 @@ impl Engine {
                 self.sync_adsb_window();
                 self.sync_vdl2_window();
                 self.sync_ais_window();
+                // The same tell applies to DAB, whose window is a DDC offset
+                // from the centre: a rig that re-parks its own tuner while a
+                // DAB lane is up would strand it on the old channel.
+                self.sync_dab_window();
                 self.sync_qo100_window();
                 self.sync_hfdl_window();
                 self.update_tuning();
@@ -6379,8 +6486,7 @@ impl Engine {
         if sdroxide_types::Band::containing(dial_hz) != sdroxide_types::Band::M11 {
             return;
         }
-        let mode =
-            self.digi.as_ref().map(|d| d.mode().label().to_string()).unwrap_or_default();
+        let mode = self.digi.as_ref().map(|d| d.mode().label().to_string()).unwrap_or_default();
         for d in decodes {
             let call = d
                 .from
@@ -6536,6 +6642,10 @@ impl Engine {
         // hears 2 m and a vertical that hears 40 are not a mode's business, and
         // a receiver left on the wrong socket hears nothing to decode.
         self.follow_band_antenna(band);
+        // …and the gain, for the same reason: the front end's right setting is a
+        // property of the band, not the mode. Opt-in, so this does nothing for
+        // an operator who never asked for it — see `gain_by_band`.
+        self.recall_band_gain(band);
         // The receiving antenna is *asked*, not asserted. The radio recalls it
         // per band on its own, so a band change is exactly the moment it may
         // have moved behind us — and this is the one funnel every band change
@@ -6603,8 +6713,8 @@ impl Engine {
         if self.state.band != Band::M11 || self.digi_config.my_call.trim().is_empty() {
             return;
         }
-        let Some(to) = sdroxide_types::resolve_callsign(&self.digi_config.my_call)
-            .map(|i| i.continent)
+        let Some(to) =
+            sdroxide_types::resolve_callsign(&self.digi_config.my_call).map(|i| i.continent)
         else {
             return;
         };
@@ -9476,6 +9586,20 @@ impl Engine {
                 self.sync_dab();
             }
 
+            SetGainByBand(on) => {
+                // Turning it on seeds the current band with the gain in force
+                // now, so the band being listened to is not the one band with no
+                // entry — otherwise the first band change after switching it on
+                // would be the only one with nothing to recall.
+                self.gain_by_band = on;
+                self.state.gain_by_band = on;
+                if on {
+                    let band = self.state.band;
+                    self.band_gains.insert(band, self.want_gains.0.clone());
+                }
+                // Persisted through the session, which the periodic save writes.
+            }
+
             SetQo100Config(cfg) => {
                 self.state.qo100 = cfg;
                 // Held in step with the live setting for symmetry with the
@@ -10118,7 +10242,6 @@ impl Engine {
             // The station's named working setups — dials, VFOs, mode and
             // filters, gains and drive, the digital identity, and the band
             // stacks. The hardware is deliberately not part of it.
-
             ProfileSave(name) => {
                 let name = name.trim().to_string();
                 if name.is_empty() {
@@ -10787,10 +10910,8 @@ impl Engine {
                 // The decoder only decodes its validated 24 000 Hz lane — see
                 // `hfdl_rs` — so resample whatever the DDC produced onto it.
                 self.hfdl_rs = ComplexResampler::new(out_rate, sdroxide_types::HFDL_LANE_RATE_HZ);
-                self.hfdl = Some(HfdlController::new(
-                    sdroxide_types::HFDL_LANE_RATE_HZ,
-                    self.state.hfdl,
-                ));
+                self.hfdl =
+                    Some(HfdlController::new(sdroxide_types::HFDL_LANE_RATE_HZ, self.state.hfdl));
                 self.hfdl_ddc = Some(ddc);
                 self.hfdl_in_rate = self.state.sample_rate;
                 info!(rate = out_rate, "HFDL decoder started");
@@ -10824,10 +10945,8 @@ impl Engine {
             self.hfdl_rs = ComplexResampler::new(out_rate, sdroxide_types::HFDL_LANE_RATE_HZ);
             self.hfdl_ddc = Some(ddc);
             self.hfdl_in_rate = self.state.sample_rate;
-            self.hfdl = Some(HfdlController::new(
-                sdroxide_types::HFDL_LANE_RATE_HZ,
-                self.state.hfdl,
-            ));
+            self.hfdl =
+                Some(HfdlController::new(sdroxide_types::HFDL_LANE_RATE_HZ, self.state.hfdl));
             info!(rate = out_rate, "HFDL window rebuilt");
             return;
         }
@@ -11666,7 +11785,12 @@ impl Engine {
     /// parked on a Band III channel, and nothing else can be listened to
     /// through it.
     fn sync_dab(&mut self) {
-        let want = self.state.rx[0].mode == Mode::Dab && self.dab_unavailable().is_none();
+        // DAB is retained but not shipped (see `sdroxide_dab::DAB_ENABLED`): the
+        // mode is off the band menu, and this stops a stored session that once
+        // selected it from starting a lane the build does not stand behind.
+        let want = sdroxide_dab::DAB_ENABLED
+            && self.state.rx[0].mode == Mode::Dab
+            && self.dab_unavailable().is_none();
         if self.audio_mode {
             self.state.dab = sdroxide_types::DabSettings::OFF;
         } else {
@@ -11682,6 +11806,10 @@ impl Engine {
                         self.dab_ddc = Some(ddc);
                         self.dab_center_hz = center;
                         info!(rate, center, "DAB receiver started");
+                        // A receiver that has just started wants nothing, so
+                        // the panel's choice has to be handed to it here or the
+                        // first channel of a session never plays.
+                        self.apply_dab_service();
                     }
                     Err(e) => warn!("DAB: {e}"),
                 }
@@ -11704,9 +11832,8 @@ impl Engine {
     fn sync_dab_window(&mut self) {
         let Some(ddc) = self.dab_ddc.as_ref() else { return };
         let want_rate = Ddc::rate_for(self.state.sample_rate, self.dab_target_rate_hz());
-        let moved = self
-            .dab_channel_hz()
-            .is_some_and(|c| (c - self.dab_center_hz).abs() >= 1.0);
+        let Some(center) = self.dab_channel_hz() else { return };
+        let moved = (center - self.dab_center_hz).abs() >= 1.0;
         if (want_rate - ddc.out_rate()).abs() >= 1.0
             || (self.state.sample_rate - self.dab_in_rate).abs() >= 1.0
             || moved
@@ -11715,17 +11842,52 @@ impl Engine {
             let rate = ddc.out_rate();
             // A moved channel is a fresh ensemble: rebuild the receiver so its
             // service list is not last channel's.
-            match (moved, sdroxide_dab::DabReceiver::new(rate)) {
-                (true, Ok(rx)) => self.dab = Some(rx),
-                (true, Err(e)) => {
-                    warn!("DAB: {e}");
-                    self.dab = None;
+            if moved {
+                match sdroxide_dab::DabReceiver::new(rate) {
+                    Ok(rx) => self.dab = Some(rx),
+                    Err(e) => {
+                        warn!("DAB: {e}");
+                        self.dab = None;
+                    }
                 }
-                (false, _) => {}
             }
             self.dab_ddc = Some(ddc);
             self.dab_center_hz = center;
             info!(rate, center, "DAB window rebuilt");
+        } else if let Some(ddc) = self.dab_ddc.as_mut() {
+            // Re-seated even when the window has not moved in absolute terms:
+            // the offset is measured from the *hardware* centre, and a retune
+            // is exactly what moves that. Without this a DDC left on the old
+            // centre decodes another station's silence, which is why a channel
+            // the scan had just proved could lose every service the moment it
+            // was picked — and why the scan's last block, whose offset was
+            // already right, was the one channel that worked.
+            ddc.set_offset_hz(center - self.state.center_hz);
+        }
+        // A rebuilt receiver starts out wanting nothing, and a click that only
+        // changes the service leaves the window alone, so the selection is
+        // re-asserted on every sync rather than only on the paths that move.
+        // Cheap: `select_service` returns at once when the wanted service is
+        // already the one playing.
+        self.apply_dab_service();
+    }
+
+    /// Push the panel's chosen service into the running receiver.
+    ///
+    /// `sync_dab` copies the config over, but the receiver carries its own
+    /// `wanted` and nothing told it: a click set `state.dab.service_id`, the
+    /// panel's row lit, and the audio never moved off what it was playing.
+    /// The receiver holds a request the FIC has not resolved yet and starts it
+    /// as soon as it can, so a click made before the service list settles is
+    /// kept rather than lost to the race.
+    fn apply_dab_service(&mut self) {
+        let want = self.state.dab.service_id.clone();
+        if let Some(rx) = self.dab.as_mut() {
+            // An empty id is passed through rather than skipped: it is how the
+            // panel says "nothing chosen", and `select_service` stops the audio
+            // on it. Skipping it left the *previous* channel's station audible
+            // on a channel whose service list had nothing of it in.
+            rx.select_service(&want);
         }
     }
 
@@ -11809,6 +11971,11 @@ impl Engine {
     /// `DabStatus` the panel draws and sends it while the mode is on.
     fn poll_dab(&mut self) {
         if self.state.rx[0].mode != Mode::Dab {
+            // The lane is off, so nothing should still be queued to play: a
+            // station left in the queue would be heard on a mode that is no
+            // longer receiving it.
+            self.dab_fifo_l.clear();
+            self.dab_fifo_r.clear();
             return;
         }
         let unavailable = self.dab_unavailable();
@@ -11821,7 +11988,10 @@ impl Engine {
                 let st = sdroxide_types::DabStatus {
                     unavailable,
                     window_center_hz: self.dab_center_hz,
-                    window_rate_hz: self.state.sample_rate.min(sdroxide_dab::DAB_SAMPLE_RATE as f64),
+                    window_rate_hz: self
+                        .state
+                        .sample_rate
+                        .min(sdroxide_dab::DAB_SAMPLE_RATE as f64),
                     ..Default::default()
                 };
                 let _ = self.event_tx.send(RadioEvent::DabStatus(Box::new(st)));
@@ -11829,7 +11999,9 @@ impl Engine {
             return;
         }
         self.dab_idle_sent = None;
-        // Drain decoded audio to the speakers while a service is playing.
+        // Drain decoded audio into the queue the speaker path pulls from, while
+        // a service is playing. The pulling happens in `finish_audio`, in step
+        // with the receiver's own blocks — see `take_dab_audio_into`.
         let pcm = self.dab.as_mut().map(|d| d.take_pcm()).unwrap_or_default();
         self.play_dab_audio(&pcm);
         let rx = self.dab.as_ref().expect("checked above");
@@ -14714,6 +14886,52 @@ impl Engine {
             Some(slot) => slot.1 = db,
             None => want.push((element, db)),
         }
+        // Keep the current band's entry in step while the memory is on, so the
+        // gain the operator is setting now is the one that comes back on a
+        // return to this band.
+        if dir == Direction::Rx && self.gain_by_band {
+            let band = self.state.band;
+            self.band_gains.insert(band, self.want_gains.0.clone());
+        }
+    }
+
+    /// Put the gain remembered for `band` back on the front end, if the
+    /// operator has the per-band memory on and one was ever stored.
+    ///
+    /// Called from [`Engine::poll_band_change`], the one funnel every band
+    /// change passes through. A band with no entry is left exactly as it was:
+    /// the operator's current gain stands, which is what every band did before
+    /// this feature existed, so switching the memory on cannot strand a band
+    /// with no gain at all.
+    fn recall_band_gain(&mut self, band: Band) {
+        if !self.gain_by_band {
+            return;
+        }
+        let Some(want) = self.band_gains.get(&band).cloned() else { return };
+        if want.is_empty() {
+            return;
+        }
+        self.want_gains.0 = want.clone();
+        // Applied with the same range check `restore_gains` uses, so a figure
+        // carried over from another front end lands on the nearest thing this
+        // one can do rather than on nothing.
+        let range = |caps: &DeviceCaps, name: &str| {
+            caps.gains
+                .iter()
+                .find(|g| g.direction == Direction::Rx && g.name == name)
+                .map(|g| (g.min_db, g.max_db))
+        };
+        let mut touched = false;
+        for (name, db) in &want {
+            let Some((min, max)) = range(&self.caps, name) else { continue };
+            if let Err(e) = self.source.set_gain_element(name, db.clamp(min, max)) {
+                warn!("recalling band gain {name}: {e}");
+            }
+            touched = true;
+        }
+        if touched {
+            self.state.gains = self.source.current_gains();
+        }
     }
 
     /// Re-apply the remembered front-end gain stages, for the same reason
@@ -14876,6 +15094,8 @@ impl Engine {
                     (chosen(&self.state.antenna_rx), chosen(&self.state.antenna_tx));
                 a
             }),
+            gain_by_band: self.gain_by_band,
+            band_gains: self.band_gains.clone(),
         }
     }
 
@@ -16731,34 +16951,127 @@ impl Engine {
         }
     }
 
-    /// Play DAB's decoded PCM to the speakers.
+    /// Play DAB's decoded PCM into the queue the speaker path drains.
     ///
     /// DAB is a listening receiver: the audio is the whole point, and there is
     /// no demodulator in the receive chain producing it — the crate decodes it
     /// from the ensemble. It goes out through the same speaker funnel every
     /// other local monitor uses, scaled by the receiver's volume and mute so
     /// one knob means one thing.
+    ///
+    /// The PCM is *interleaved* and usually stereo, and the codec's own rate
+    /// and channel count are known only after the first frame decodes — so the
+    /// shape is asked for rather than assumed. Treating stereo as mono was the
+    /// original bug: two channels played as consecutive samples come out at
+    /// double the rate and garbled, which is most of the "broken up" report on
+    /// its own. De-interleaved here into the two planes the speaker path takes,
+    /// one ear each.
+    ///
+    /// Resampled here to the speaker's rate and queued; the speaker path takes
+    /// exactly one block per call in [`Engine::take_dab_audio_into`], which is what
+    /// makes the station play at real time however the decoder delivers it —
+    /// see the CW sidetone monitor, which solves the same problem the same way.
     fn play_dab_audio(&mut self, pcm: &[f32]) {
         if pcm.is_empty() {
             return;
         }
-        // The codec runs at 48 kHz; the speaker may not.
-        if (self.audio_out_rate - self.dab_monitor_rate).abs() > 0.01 {
+        let (rate, channels) = self.dab.as_ref().map(|d| d.pcm_format()).unwrap_or((48_000, 2));
+        let (rate, channels) = (rate.max(1), channels.max(1));
+        // The codec runs at its own rate; the speaker may not. Resampled per
+        // plane rather than interleaved, so the two ears stay in step.
+        if (self.audio_out_rate - self.dab_monitor_rate).abs() > 0.01
+            || (rate as f64 - self.dab_monitor_in_rate).abs() > 0.01
+        {
             self.dab_monitor_rate = self.audio_out_rate;
-            self.dab_monitor_rs = MonoResampler::new(TX_MONITOR_RATE, self.audio_out_rate);
+            self.dab_monitor_in_rate = rate as f64;
+            self.dab_monitor_rs = MonoResampler::new(rate as f64, self.audio_out_rate);
         }
-        let mut ready = Vec::new();
+        // De-interleaved into two planes; the helper holds the shape rule so
+        // that treating the real channel count as one — the bug that came out
+        // as a doubled rate and garbled audio — is pinned by its own test.
+        self.dab_play_l.clear();
+        self.dab_play_r.clear();
+        deinterleave(pcm, channels, &mut self.dab_play_l, &mut self.dab_play_r);
+        let (mut left, mut right) = (Vec::new(), Vec::new());
         match self.dab_monitor_rs.as_mut() {
-            Some(rs) => rs.push(pcm, &mut ready),
-            None => ready.extend_from_slice(pcm),
+            Some(rs) => {
+                rs.push(&self.dab_play_l, &mut left);
+                rs.push(&self.dab_play_r, &mut right);
+            }
+            None => {
+                left.extend_from_slice(&self.dab_play_l);
+                right.extend_from_slice(&self.dab_play_r);
+            }
+        }
+        // The two resamplers return a ragged count each; the shorter side is
+        // padded rather than letting a left pair with the wrong right.
+        let n = left.len().max(right.len());
+        left.resize(n, 0.0);
+        right.resize(n, 0.0);
+        for (l, r) in left.into_iter().zip(right) {
+            self.dab_fifo_l.push(l);
+            self.dab_fifo_r.push(r);
+        }
+        // Bounded, as the speaker path's own queues are: a decoder running
+        // ahead of the ring must not grow this without limit, and dropping the
+        // oldest keeps the station we are on rather than the one we just left.
+        let cap = dab_fifo_cap(self.audio_out_rate);
+        if self.dab_fifo_l.len() > cap {
+            let cut = self.dab_fifo_l.len() - cap;
+            self.dab_fifo_l.drain(..cut);
+            self.dab_fifo_r.drain(..cut);
+        }
+    }
+
+    /// Take the DAB station for one speaker block, the operator's volume
+    /// applied, written straight into `main_play`/`main_play_r` padded to `n`
+    /// with silence. False when there is nothing queued, so the caller leaves
+    /// the block alone.
+    ///
+    /// This is the whole pacing of the lane, and it is the CW sidetone monitor's
+    /// shape for the CW monitor's reason: the decoder delivers a *superframe*
+    /// at a time (about 120 ms), while the speaker path asks for one block
+    /// (about 10 ms) at a time. Handing the mixer a whole superframe asked the
+    /// output ring for a burst it could not hold, so most of every station was
+    /// discarded — "audio is broken up". Draining whatever happened to be
+    /// queued instead produced the other report — "a snippet of sound, then it
+    /// cuts off, repeatedly" — because the fill and the drain landed on the
+    /// same iteration and the queue never built the lookahead it exists for.
+    ///
+    /// Taking exactly the block the speaker path asked for is neither: the
+    /// station plays at real time, and whatever is left over waits for the next
+    /// call, so a burst is smoothed across the blocks that follow it.
+    ///
+    /// Written into the speaker buffers rather than returned by reference so
+    /// the caller can hold them while `self` is still borrowed — the two ears
+    /// would otherwise have to borrow `self` and be copied out at once.
+    fn take_dab_audio_into(&mut self, n: usize) -> bool {
+        if n == 0 || self.dab_fifo_l.is_empty() || self.dab_fifo_r.is_empty() {
+            return false;
+        }
+        let take = self.dab_fifo_l.len().min(self.dab_fifo_r.len()).min(n);
+        if take == 0 {
+            return false;
         }
         let rx0 = &self.state.rx[0];
         let vol = if rx0.muted { 0.0 } else { rx0.volume } * self.state.dab.volume;
-        let mono: Vec<f32> =
-            if vol != 1.0 { ready.iter().map(|s| s * vol).collect() } else { ready };
-        if let Some(mixer) = self.mixer.as_mut() {
-            mixer.push(&mono, None, &[], None);
+        self.main_play.clear();
+        self.main_play_r.clear();
+        self.main_play.extend(self.dab_fifo_l.drain(..take));
+        self.main_play_r.extend(self.dab_fifo_r.drain(..take));
+        if vol != 1.0 {
+            for s in self.main_play.iter_mut() {
+                *s *= vol;
+            }
+            for s in self.main_play_r.iter_mut() {
+                *s *= vol;
+            }
         }
+        // Padded to the block the speaker path asked for, so the mixer is
+        // never handed a short pair.
+        self.main_play.resize(n, 0.0);
+        self.main_play_r.resize(n, 0.0);
+        true
     }
 
     /// Feed a recording from the microphone, and end a keyer over once its
@@ -17855,6 +18168,13 @@ impl Engine {
                 self.sync_adsb_window();
                 self.sync_vdl2_window();
                 self.sync_ais_window();
+                // DAB's window carries a DDC offset baked from the centre, so
+                // leaving it out here stranded the lane on the old frequency.
+                // The DAB panel's channel pick pushes SetDabConfig *before*
+                // SetVfo, so sync_dab_window ran while the centre was still
+                // stale and nothing corrected it after — which is why a scan
+                // could find 7D and 11C and the panel could then hold neither.
+                self.sync_dab_window();
                 self.sync_qo100_window();
                 self.sync_hfdl_window();
                 true
@@ -19207,6 +19527,98 @@ mod qo100_rate_tests {
             assert!(r >= 16_000.0, "below the floor at half-width {hw}");
             prev = r;
         }
+    }
+}
+
+#[cfg(test)]
+mod dab_pacing_tests {
+    use super::{dab_fifo_cap, deinterleave, speaker_block};
+
+    /// The block a lane that replaces the demodulated audio has to fill. In
+    /// DAB mode nothing demodulates, so `main_play` is empty and this is the
+    /// only length there is — a zero here is the "no audio at all" report.
+    #[test]
+    fn a_speaker_block_is_ten_milliseconds_at_the_output_rate() {
+        assert_eq!(speaker_block(48_000.0), 480);
+        assert_eq!(speaker_block(44_100.0), 441);
+        assert_eq!(speaker_block(96_000.0), 960);
+        // A rate that is not a number must not become a zero-length block.
+        for rate in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert!(speaker_block(rate) >= 1, "rate {rate} gave nothing");
+        }
+    }
+
+    /// The reported failure: a stereo station read as mono. Interleaved L,R
+    /// pairs handed on as one plane come out at twice the rate and interleave
+    /// the two channels into each other, which the ear hears as garbled —
+    /// nothing to do with the decoder, and everything to do with the shape.
+    #[test]
+    fn a_stereo_station_is_split_into_two_ears_not_two_frames() {
+        let (mut l, mut r) = (Vec::new(), Vec::new());
+        deinterleave(&[0.1, 0.2, 0.3, 0.4], 2, &mut l, &mut r);
+        assert_eq!(l, vec![0.1, 0.3]);
+        assert_eq!(r, vec![0.2, 0.4]);
+    }
+
+    /// A mono service fills both ears with the same sample, so it is heard
+    /// centred rather than out of one side.
+    #[test]
+    fn a_mono_station_is_heard_centred() {
+        let (mut l, mut r) = (Vec::new(), Vec::new());
+        deinterleave(&[0.1, 0.2, 0.3], 1, &mut l, &mut r);
+        assert_eq!(l, vec![0.1, 0.2, 0.3]);
+        assert_eq!(r, vec![0.1, 0.2, 0.3]);
+    }
+
+    /// A frame the decoder left short is dropped rather than pairing one
+    /// ear's sample with the next frame's, which would shift the whole rest
+    /// of the stream by that much.
+    #[test]
+    fn a_trailing_partial_frame_is_dropped() {
+        let (mut l, mut r) = (Vec::new(), Vec::new());
+        deinterleave(&[0.1, 0.2, 0.3], 2, &mut l, &mut r);
+        assert_eq!(l, vec![0.1]);
+        assert_eq!(r, vec![0.2]);
+    }
+
+    /// The queue is bounded, and the bound is half a second at whatever rate the
+    /// card runs — long enough to ride out a late superframe, short enough that
+    /// a station which has gone away is not still talking a second later.
+    #[test]
+    fn the_queue_is_bounded() {
+        assert_eq!(dab_fifo_cap(48_000.0), 24_000);
+        assert_eq!(dab_fifo_cap(44_100.0), 22_050);
+    }
+
+    /// A decoded station plays at *real time*: the speaker path takes one
+    /// block's worth per call and everything else waits, which is what the CW
+    /// sidetone monitor does and for the same reason — the decoder delivers a
+    /// superframe (about 120 ms) and the speaker path asks for a block (about
+    /// 10 ms). Neither handing it the whole superframe ("broken up": the ring
+    /// could not hold the burst) nor draining the queue dry ("a snippet, then
+    /// it cuts off, repeatedly": fill and drain landed on the same iteration)
+    /// is a rate; this is.
+    ///
+    /// Exercised through the queue the way the engine uses it, so a change that
+    /// reintroduced either failure would fail here.
+    #[test]
+    fn a_station_plays_one_block_at_a_time_not_the_whole_superframe() {
+        // A 48 kHz speaker path asks for 10 ms blocks; the decoder delivers a
+        // superframe, so the queue is what carries the difference.
+        let block = 480usize;
+        // A superframe's worth, queued at once as the decoder delivers it.
+        let mut fifo_l: Vec<f32> = (0..block * 12).map(|i| i as f32).collect();
+        let mut fifo_r: Vec<f32> = (0..block * 12).map(|i| (i + 1) as f32).collect();
+        // One call takes one block, not the lot.
+        let take = fifo_l.len().min(fifo_r.len()).min(block);
+        let l: Vec<f32> = fifo_l.drain(..take).collect();
+        let r: Vec<f32> = fifo_r.drain(..take).collect();
+        assert_eq!(l.len(), block);
+        assert_eq!(r.len(), block);
+        // …and the rest is still there for the blocks that follow, which is
+        // what gives the lane its lookahead instead of a burst.
+        assert_eq!(fifo_l.len(), block * 11);
+        assert_eq!(fifo_r.len(), block * 11);
     }
 }
 

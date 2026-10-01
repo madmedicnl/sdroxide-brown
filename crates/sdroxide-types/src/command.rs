@@ -1186,4 +1186,8 @@ pub enum Command {
     /// How the DAB / DAB+ receiver behaves — the channel and the service to
     /// play. Appended for the usual reason.
     SetDabConfig(crate::DabSettings),
+    /// Turn the per-band front-end gain memory on or off (issue #605). Appended
+    /// for the usual reason. The stored table lives in the session; this is the
+    /// switch that decides whether a band change recalls from it.
+    SetGainByBand(bool),
 }

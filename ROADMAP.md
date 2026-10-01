@@ -81,72 +81,65 @@ by name in `broadcast_favourites.json`, and a **★ FAVS** filter shows only the
   Noise reduction aimed at broadcast rather than speech is still open; the
   bandwidth side is the existing filter.
 - **DAB / DAB+ (Digital Audio Broadcasting).** Wanted by a listener (upstream
-  issue #483) and a natural fit for this fork — it is broadcast radio, European
-  VHF Band III (174–240 MHz) and L-band, which is where a listener already is.
-  **Not started; this is a plan, not a commitment, and it is not costed.**
-  Nothing here has been attempted and it could be considerably larger than it
-  reads — the crate question alone (below) decides whether this is a small
-  integration or a port. Treat it as "here is what is known" rather than "here
-  is a job of known size". The enabling find is
-  **`dabradio`** (MIT, ~8.4k LOC, `xoolive/desperado`), the full
-  OFDM/FIC/MSC/Viterbi/Reed-Solomon chain. Four things stand between it and us,
-  established from the 0.5.0 crate (checked 2026-09-21 — the scoping note in
-  [`AGENTS.md`](AGENTS.md) predates the current dependency list and this
-  supersedes it):
-  1. **It is a binary, not a library** (`has_lib: false`, 0.5.0). So either ask
-     the author to expose a library (the cheap, upstream-first route) or vendor
-     it and carve the core out. Vendoring means carrying code we do not
-     maintain — the same question the HFDL `xng` work answered with a pinned
-     submodule, and the maintainer's stated preference there.
-     **This is answered, 2026-09-21:** the author (`xoolive`) replied on #483
-     that he does not mind splitting `dabradio` into library + executable, and
-     is himself experimenting with HD Radio decoding and sees a shared lib for
-     both DAB and NRSC-5. So the largest unknown is gone — the work is now the
-     ordinary kind (feed it our I/Q, take audio, a panel), not a port of an
-     app. It is still not started and still not costed, and it depends on the
-     author doing the split; nothing here commits him or us.
-     **Drafted, 2026-09-25:** the split is open as draft PR
-     [`xoolive/desperado#52`](https://github.com/xoolive/desperado/pull/52)
-     (branch `lib/split-dabradio`): library modules exposed, `fdk-aac` made an
-     optional feature (the DAB+ super-frame layer always builds, so a consumer
-     plugs its own AAC — our **faad2**), the TUI/device deps behind a `bin`
-     feature. A high-level facade is left to the author's taste. Monitor it.
-  2. **`fdk-aac` is a hard, non-optional dependency** for DAB+ audio, and we do
-     not link it. The fork already vendors **faad2** (HE-AAC v2) via
-     `crates/sdroxide-faad2`, so the swap is faad2 in place of fdk-aac — a real
-     port of the AAC glue, not a feature flag. DAB (not DAB+) is MP2, which the
-     crate already does in pure Rust with `oxideav-mp2`; keep that.
-  3. **Strip the application scaffolding.** The crate is a TUI app: `ratatui`,
-     `crossterm`, `viuer`, `tinyaudio`, `clap`, `desperado` (which pulls
-     rtlsdr/airspy/hackrf front ends we do not want — we feed our own I/Q) and
-     `tokio` in full. None of that belongs in a decoder. The reusable part is
-     the DSP + FIC/MSC state machine; the work is extracting it from an async
-     binary that owns its own radio and its own terminal.
-  4. **Bandwidth.** DAB Mode I is **1.536 MHz** of occupied spectrum and wants
-     ~2.048 Msps, which is a wideband lane like ADS-B's (`is_wideband_lane`,
-     `on_rx_iq` at a high rate) rather than the 12 kHz tap the other decoders
-     use. The engine already has the pattern and the rates (`1_536_000.0` is a
-     supported rate); a DAB lane centres on the ensemble, not on a dial.
-**Staged, once the crate question is settled:** (a) decode an ensemble in a
-   bare test — sync, FIC, the service list — against a capture; (b) audio for
-   one service, faad2 in place of fdk-aac; (c) a `Mode::Dab` panel — the
-   ensemble/service list and the programme label, like the DRM panel's. **(a) is
-   the only part worth starting before the library/binary question is answered,
-   and it needs a real off-air capture** (DAB is not decodable from a synthetic
-   signal in any useful way), so the first move is a capture and a scratch
-   harness, not a crate dependency. **The capture exists now:** **pvanderp**
-   (on #483, 2026-09-22) recorded channel **12C** at a **227.360 MHz** centre,
-   2048 ksps, raw `.cs16` (dabradio-readable), 7z-compressed, via SDRconnect —
-   which left a ~40 kHz tune offset the decoder must absorb, a detail in its
-   own right. dabradio reads `.zst` rather than `.7z` (smaller fixture) and
-   `xoolive` is adding filename-inferred `--center-freq`. **Two captures now,
-   both confirmed to decode:** pvanderp's **12C** as above, and a second from
-   **kevin2008-01** (2026-09-22) — channel **8B** at **197.648 MHz**, 2.5 Msps,
-   ~30 s, raw `.cs16` in a `.zst`, from a PlutoSDR via `iio_readdev` (no SDR
-   container), which `xoolive` decoded with `--service "BFM BUSINESS"`. The
-   **dabradio 0.5.0 release binaries** make either re-playable without a local
-   build. pvanderp can record a dozen other Dutch ensembles if 12C does not
-   exercise what comes next.
+  issue #483). **Built, then withdrawn from the shipped build (2026-10-01)** —
+  see below for exactly what works and what does not, so it is not re-derived.
+  The mode is off the band menu and `sdroxide_dab::DAB_ENABLED` is `false`; the
+  code stays in the tree (`crates/sdroxide-dab`, the `Mode::Dab` lane) marked as
+  not-shipped, to be finished rather than thrown away.
+
+  **What works, proven off air** (10B at 211.648 MHz, an RSP1 at ~59 dB gain —
+  40 dB was not enough to lock on a 50 cm whip): the OFDM front end syncs, the
+  FIC decodes, and the **ensemble and service list** come up, including a
+  multiplex that advertises no ensemble label (10B carries several — the list
+  logic was fixed for that). The reference `dabradio` binary decodes all four of
+  10B's services to audio.
+
+  **What does not:** the DAB+ **audio** path. In our build faad2 refuses most
+  Access Units with `FAAD_DECODE_ERROR` (bit errors) on **every** service — only
+  a handful decode, so a station is silent or a fragment. Feeding the reference
+  decoder's *own* known-good MSC frames through our superframe+faad2 reproduces
+  it exactly, so the fault is **not** frame extraction, the OFDM chain, chunking
+  or the AudioSpecificConfig (all verified identical to the reference): it is
+  the **faad2 AAC step**, and it is content-dependent (`0x8009` limps with ~7
+  good AUs, `0x8391` gets none). The reference takes the same AUs via fdk-aac.
+
+  **The licence wall that decides any fix.** `dabradio`'s AAC stage is fdk-aac,
+  optional there. The FDK licence grants **no patent licence** and forbids a
+  copyright fee — the GPL cannot carry either, so **a binary with fdk-aac
+  linked cannot be distributed** (why Debian ships it `non-free`). A fix must
+  therefore be one of: (1) a GPL-compatible decoder that takes these AUs —
+  **faad2 is the one we have and it is failing, so this is the open question**;
+  (2) **fdk-aac loaded at run time**, not linked — the trick `vendor/dream`
+  already uses for xHE-AAC, licence-clean and the proven escape; or (3) another
+  GPL-compatible HE-AAC decoder (research). DAB (not DAB+) is MP2, pure Rust in
+  `dabradio`, and is unaffected.
+
+  **To bring it back:** fix the AAC step, flip `DAB_ENABLED` to `true`, and
+  restore `Mode::Dab` to the two band-menu chip lists (`top_bar.rs`, OPERATE and
+  LISTEN "Digital" rows). Nothing else is needed — the lane, the panel and the
+  settings all still exist and are tested.
+
+  The original scoping, for the record (the enabling find was **`dabradio`**,
+  MIT, `xoolive/desperado`; the library split is draft PR
+  [`xoolive/desperado#52`](https://github.com/xoolive/desperado/pull/52), which
+  is what we build against — `fdk-aac` made optional there is what let us swap
+  in faad2 at all):
+  1. **It is a binary, not a library** (0.5.0) — answered: the author split it.
+  2. **`fdk-aac` is a hard dependency** for DAB+ audio — swapped for faad2, which
+     is where the current failure sits.
+  3. **Application scaffolding stripped** — done: we use the DSP + FIC/MSC state
+     machine, feeding our own I/Q.
+  4. **Bandwidth.** DAB Mode I is **1.536 MHz** and wants ~2.048 Msps — a
+     wideband lane like ADS-B's. Done: the lane centres on the ensemble.
+
+  Off-air captures on hand, for re-testing without hardware: **12C** at a
+  227.360 MHz centre, 2048 ksps raw `.cs16` (pvanderp, #483, 2026-09-22, via
+  SDRconnect — it carries a ~40 kHz tune offset the decoder absorbs), and **8B**
+  at 197.648 MHz, 2.5 Msps, ~30 s raw `.cs16` in a `.zst` (kevin2008-01, from a
+  PlutoSDR; `xoolive` decoded it with `--service "BFM BUSINESS"`). The
+  **dabradio 0.5.0 release binaries** replay either without a local build. The
+  test capture used for the 2026-10-01 diagnosis was a 30 s 10B at 211.648 MHz
+  from the bench RSP1.
 
 **Eight more listening tools, audited from OpenHamClock 2026-09-22.** A
 pass over [`accius/openhamclock`](https://github.com/accius/openhamclock)
