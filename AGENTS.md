@@ -2944,12 +2944,34 @@ nothing is on the wire.
 - **Not done yet:** the manual and the README have no Retro Radio entry (the
   operator deferred the manual pass), and the faceplate is look-and-feel only.
 
-## The contest logger (fork-only, 2026-09-30)
+## The contest logger (fork-only, 2026-09-30; reviewed and fixed 2026-10-04)
 
 A single-operator contest logger, **mode-agnostic**: the operator types the
-exchange for CW, SSB or anything else, and the FT8 side is meant to auto-fill
-the same entry where the contest has an FT8 layout. The N1MM-shaped thing the
-fork's logbook was missing.
+exchange for CW, SSB or anything else, and the FT8 side auto-fills the same
+entry where the contest has an FT8 layout.
+
+**It is not "the N1MM-shaped thing the logbook was missing", which is how this
+note first described it and is wrong twice over.** It is self-sufficient for
+**single-operator** logging — typed and FT8 contacts, dupes, multipliers, rate,
+Cabrillo, no side program — and that is the whole goal, so do not sell it short.
+But it is not a replacement for what N1MM is actually bought for: multi-op
+networking across stations, per-band/per-mode breakdowns, a callsign-history
+database, bandmaps. On a single 11 m station none of that is in play.
+
+**The `LogQso` datagrams are a feeder *to* software like N1MM, not a connection
+to it.** `Command::LogQso` fans a finished contact out to WSJT-X UDP and to the
+N1MM `contactinfo` packet (`crates/sdroxide-wsjtx`, `app = "N1MM"` so a listener
+dispatches on it). Neither is interactive and neither comes *back*; the engine
+keeps no logbook, because the UI owns it. A program on the other end must exist
+to receive them. The Wine "LOG11DX WSJT Bridge" in this file is the same shape —
+a side program listening to WSJT-X UDP — so that is not a bridge to N1MM either.
+
+**The engine's `LogQso` does not write the logbook, and that is the bug class
+below.** Any panel that logs a contact *must* also write `qso_log` itself. The
+LOGBOOK window's own entry does (issue #341) and the contest window did not
+until `cb7f0933`, which is why a hand-typed contest contact was silently lost on
+every band. Before adding a logging path, copy that pairing rather than the
+command alone.
 
 - **Model:** `crates/sdroxide-types/src/contest.rs` — `ContestId`
   (`CqWw` / `CqWpx` / `ArrlDx` / `EuVhf` / `CbActivity` / `Generic` / `None`), an
@@ -2959,21 +2981,26 @@ fork's logbook was missing.
   is worse than an honest baseline; the multiplier count is real. The Cabrillo
   `CONTEST:` line picks CW/SSB/RTTY from the log's own modes.
 - **Window:** `crates/sdroxide-ui/src/app/contest.rs`, opened from
-  **LOGBOOK → CONTEST**. Session setup (contest picker, our exchange), the
-  entry form with a **dupe warning** from `worked_before`, a score/rate strip,
-  the session's log and the Cabrillo export.
+  **LOGBOOK → CONTEST**. Session setup (contest picker, our exchange), one entry
+  box per received exchange element, a score/rate strip, the session's log and
+  the Cabrillo export.
 - **State:** a `ContestSession` is the operator's own — **session-only, never on
   the wire** — and the QSOs it logs are ordinary `QsoRecord`s tagged with
   `contest_id`, carrying `stx`/`srx` and `stx_string`/`srx_string`, so scoring
   and the export read the same rows the logbook does. **No `PROTO_VERSION`
   change.**
+- **`contest_id` is the sponsor's id, not the UI label** (`ContestId::log_id`,
+  e.g. `CQ-WW`). It is an ADIF `CONTEST_ID` and is read by other people's
+  software, so it cannot be display text — and the session's own filter reads
+  the same id, so the two cannot drift apart.
 - **The CB format** is `CbActivity`: a report and a **free-text** exchange, so
   it fits whatever an 11 m activity settles on. Tighten it once the exact
   exchange is known.
 - **Auto-fill:** a completed digital QSO is tagged with the running session and
   gets its sent serial and our own exchange from the session, so FT8 logs itself
   (`frame.rs`, `RadioEvent::Ft8QsoLogged`). The station's **received** exchange
-  comes from the digi exchange.
+  comes from the digi exchange. The hand-typed path does the same write itself
+  (`contest.rs`'s `log_contest_qso`, `cb7f0933`).
 - **The two FT8 layouts (2026-09-30).** `ContestMode` carries **EU VHF**
   (`i3 = 5`, RST + serial + grid) and **RttyRoundup** (`i3 = 3`, RST + serial /
   state, the CQ WPX shape). `RttyRoundup` is **appended last** — it rides the
@@ -2986,7 +3013,81 @@ fork's logbook was missing.
   ways → RR73) and logs `stx`/`srx` and the received string.
   The contest logger's **START** sets the layout: EU VHF → `EuVhf`, CQ WPX /
   Generic → `RttyRoundup`, CQ WW and the CB activity → `None` (typed by hand).
-- **Not done yet:** the manual/README have no contest entry.
+- **Review, upstream #603, worked through 2026-10-04.** The maintainer reviewed
+  the upstream PR and raised twelve items; the PR is **withdrawn** (see below)
+  and every item is fixed on the fork:
+  - **START overwrote the digi config** and cleared an FT8 contest mode the user
+    had set. One bug in two halves: the panel pushed a whole `DigiConfig` from
+    its own stale copy, and `digi_contest_for` yields `None` for every contest
+    but EU VHF. Fixed with `Command::SetDigiContest(ContestMode)` — one field,
+    appended last, `PROTO_VERSION` 191 → **192** — so the blast radius of the
+    write is the field. This is the **general shape to remember**: `DigiConfig`
+    is positional and every build adds fields, so a whole-struct write from a
+    panel rolls back fields that panel has never heard of.
+  - **The exchange.** One box for the whole received exchange kept whichever
+    element was typed last. Now one box per `ContestId::received_fields()`
+    element, `SENT`/`RCVD` split rather than one copied into the other, the sent
+    report defaulting by mode (`599` on CW, `59` otherwise), and
+    `ContestSession::sent_exchange` putting the serial and our own text on one
+    line. EU VHF's **sent** exchange gained `Exchange::Grid` — it was sending
+    `RST_SERIAL` while receiving a locator, so our own grid never went out.
+  - **Scoring.** CQ WW zones typed into the exchange sat in `srx_string` with
+    `cq_zone` empty, so a hand-typed session counted no multipliers;
+    `cq_zone_of` reads either. ARRL DX was **inverted** — `dxcc` won
+    unconditionally, so DX states never counted. `Multiplier::DxccState` became
+    `DxccOrState` and the rule is now *which one, by where the station is*:
+    W/VE counts the entity, everyone else the state. `is_w_ve` answers from the
+    cty file (`entity::resolve_callsign(...).flag`), not a prefix list — the
+    rule is about location, so `K1ABC/7` is W/VE and a list would miss `KL`,
+    `KP`, `VO`, `CY`.
+  - **`wpx_prefix`** got three shapes wrong: a leading digit (`2E0`, `4X4`)
+    came out `"2"`; a worked area (`W1AW/7`) came out `W1` not `W7`; and no
+    digit gave no area instead of `0`. `/MM`/`/AM` fall through to the home
+    prefix.
+  - **Cabrillo:** ARRL DX does not split by mode, so `ARRL-DX-RTTY` (a contest
+    that does not exist) is gone; `CATEGORY-MODE` was hardcoded `MIXED` and now
+    reports what the log is; **FM has its own v3 code** and was falling through
+    to `PH`; `DIGU` and the other data modes were too, because none of them
+    spells "FT" — `cabrillo_mode` is a table over the modes we actually log;
+    `CREATED-BY` names the program and version (passed in, so `sdroxide-types`
+    does not depend on `sdroxide-version`); and a QSO dropped for having no
+    frequency is counted in a comment rather than lost in silence.
+  - **Dupes** ran over the whole logbook, so last month's QSO lit DUPE before
+    the contest started; now over the session's own rows. **Serials** restarted
+    at `001` after STOP/START or a restart; `ContestId::seed_serial` seeds from
+    the highest serial already tagged for that contest.
+- **11 m gets no amateur FT8 layout** (`5d8d2a7b`). `digi_contest_for` mapped
+  the serial contest to `ContestMode::RttyRoundup`, whose calling message is
+  literally `CQ RU <call>` — on the citizens' band that is longer than a Type-4
+  call can carry (the whole identifier is capped at 11 characters), so the CQ
+  did not resolve. The window now leaves the engine alone on 11 m, **and**
+  `QsoMachine::contest` refuses any amateur layout there whatever
+  `DigiConfig::contest` holds — the second half covers a setting persisted from
+  another band or left set by an older build.
+- **STOP restores the digi layout** (`5d8d2a7b`). Only START sent a
+  `SetDigiContest`, so the contest's calling message stayed in force after the
+  session ended. The window remembers what the engine held and puts it back.
+  `None` from `digi_contest_for` means "send nothing" while `ContestMode::None`
+  means "clear it" — the distinction is what keeps a session with no FT8 layout
+  from clearing the operator's own setting.
+- **A hand-typed contact reaches the logbook** (`cb7f0933`). `LogQso` is
+  fire-and-forget — the engine sends WSJT-X/N1MM and keeps no logbook — so the
+  contest window's typed contacts reached nobody: not `qso_log`, not the
+  session, not the score, not the export. It now does the whole pairing the
+  LOGBOOK window's own entry does. **Any new logging path must copy that, not
+  the command alone.** The regression test builds a real app in an isolated
+  config dir and fails on the old code with `left: 0, right: 1`.
+- **Withdrawn upstream (#603, closed 2026-10-04), fork-only.** Upstream has **no
+  contest logger at all** — the feature only ever existed in that PR. Reopening
+  it means resubmitting the whole logger plus every fix above, CB-stripped
+  (`Text` not `CbActivity`, no 11 m gate), reconstructed on `upstream/main` at
+  v174. The operator's call was to leave it fork-only for now: it is
+  self-sufficient for single-operator logging, the maintainer's queue is long,
+  and upstream's missing logger is his gap rather than a bug of ours. Revisit
+  when the fork's copy has bench hours on it.
+- **The manual has an entry** (`docs/USER_MANUAL.md` §10.8, rewritten
+  2026-10-04; in-app help is `include_str!` of the same file, so there is no
+  second copy to drift).
 
 ### The 3D window in the multi-radio shell (2026-09-26)
 
