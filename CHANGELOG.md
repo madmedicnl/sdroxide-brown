@@ -13,6 +13,42 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [1.9.17_brown] - 2026-10-04
+
+### Fixed
+
+- **The auto-notch no longer runs in the image and tone modes.** With it on, an
+  SSTV picture had its low end — around 200–290 Hz, where the sync pulses and
+  dark video sit — cancelled to a dead band in the waterfall and the spectrum.
+  The notch is an adaptive tone-canceller, and an SSTV line is made of steady
+  tones, so it was cancelling the picture. It is now offered only in the modes
+  it is meant for; the image panel (SSTV / SSTV-FM / RIFP), WEFAX, Hell and RF
+  Paint are all excluded. The keyboard and data modes are unchanged.
+- **A front end that is overloading now says so where you are looking.** A
+  receiver driven past full scale does not decode — the audio is loud but
+  carries no signal — and every panel only ever said "hunting". The SSTV,
+  NAVTEX and WEFAX panels now show a clear warning to reduce the RF/LNA gain
+  when the receiver is clipping, on any front end, not just an SDRplay.
+
+### Added
+
+- **Olivia tunes to its published calling frequency per band.** Choosing the
+  mode moves the dial onto the band's Olivia centre (14.1075 MHz on 20 m) the
+  same way SSTV and the slotted modes already did, instead of leaving it
+  wherever the last mode put it. A dial already on one of the mode's
+  frequencies is never moved.
+
+### Changed
+
+- **Clearer help for the two newcomer traps in NAVTEX and WEFAX.** Both are
+  timed broadcasts, and both quote a *channel* frequency that the radio is
+  tuned below, so "no decode" is most often the wrong dial or an empty slot,
+  not a fault. The panel hovers and the manual now say so plainly: do not type
+  the advertised number, click the channel button; a quiet band is normal; and
+  518 kHz is a night band.
+
+**Wire:** unchanged (`PROTO_VERSION` 192). This is a fix-and-help release.
+
 ## [1.9.16_brown] - 2026-10-04
 
 ### Fixed
