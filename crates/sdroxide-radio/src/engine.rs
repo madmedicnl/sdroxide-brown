@@ -13119,12 +13119,16 @@ impl Engine {
         // (`SSTV_DIALS`, region-tagged, with 27.700 on 11 m).
         //
         // Both SSTV modes, because both are one-frequency-per-band:
-        // `SSTV_FM_DIALS` carries the 6 m / 2 m / 70 cm practice entries.
+        // `SSTV_FM_DIALS` carries the 6 m / 2 cm / 70 cm practice entries.
+        // Olivia joins on the same argument (`OLIVIA_DIALS`): it works a small
+        // set of per-band centres — 14.1075 is the one everyone watches — so
+        // choosing the mode should land the dial on the band's centre rather
+        // than leave it wherever the last mode put it.
         // Everything after this line is unchanged, and in particular the check
         // below it means a dial **already** on one of the mode's frequencies is
         // never moved — so an operator listening where they chose is left
         // alone, and this only ever rescues a dial that is nowhere useful.
-        if !(mode.is_slotted() || mode.is_wspr() || mode.is_sstv()) {
+        if !(mode.is_slotted() || mode.is_wspr() || mode.is_sstv() || mode == Mode::Olivia) {
             return None;
         }
         let dial = self.state.active_freq_hz();

@@ -27,6 +27,10 @@ const M11_NOT_SSTV: f64 = 27_100_000.0;
 /// 20 m, where SSTV is worked at 14.230 MHz in USB territory.
 const TWENTY_M: f64 = 14_000_000.0;
 const SSTV_20M: f64 = 14_230_000.0;
+/// 20 m, where Olivia's calling centre is 14.1075 MHz.
+const OLIVIA_20M: f64 = 14_107_500.0;
+/// 11 m, which has no Olivia convention — so the dial must be left alone there.
+const M11_NOT_OLIVIA: f64 = 27_100_000.0;
 
 struct MockSource {
     center: f64,
@@ -153,4 +157,31 @@ fn a_band_with_no_sstv_frequency_is_left_alone() {
     let six_m = 50_000_000.0;
     let after = dial_after(&[tune(six_m), sstv()]);
     assert_eq!(after, six_m, "no SSTV frequency on this band, so the dial should not move");
+}
+
+fn olivia() -> Command {
+    Command::SetMode { rx: RxId::Main, mode: Mode::Olivia }
+}
+
+/// Choosing Olivia lands the dial on the band's Olivia calling centre, the
+/// same rule SSTV and the slotted modes already follow. 20 m's is 14.1075.
+#[test]
+fn choosing_olivia_lands_on_the_bands_calling_centre() {
+    assert_eq!(dial_after(&[tune(TWENTY_M), olivia()]), OLIVIA_20M);
+}
+
+/// The operator's own choice is respected: a dial already on one of Olivia's
+/// per-band centres is not moved (14.073 and 14.1075 are both on 20 m).
+#[test]
+fn a_dial_already_on_an_olivia_frequency_is_not_moved() {
+    let plain_centre = 14_073_000.0;
+    assert_eq!(dial_after(&[tune(plain_centre), olivia()]), plain_centre);
+    assert_eq!(dial_after(&[tune(OLIVIA_20M), olivia()]), OLIVIA_20M);
+}
+
+/// A band with no Olivia convention is left alone: Olivia's table has no 11 m
+/// entry, so there is nothing to rescue a dial there to.
+#[test]
+fn a_band_with_no_olivia_frequency_is_left_alone() {
+    assert_eq!(dial_after(&[tune(M11_NOT_OLIVIA), olivia()]), M11_NOT_OLIVIA);
 }

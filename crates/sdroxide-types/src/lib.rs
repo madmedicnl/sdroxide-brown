@@ -119,9 +119,9 @@ pub use band::Band;
 pub use band_openings::{BandOpening, BandOpeningTracker, BandPath, OpenOptions, OpeningState};
 pub use band_segments::{
     APRS_DIALS, DigiChannel, DigiPreset, FSQ_DIALS, FT2_DIALS, FT4_DIALS, FT8_DIALS,
-    FT8_DXPED_DIALS, FT8_VHF_DIALS, JS8_DIALS, PSK_DIALS, PSK_RANGES_R1, PSK_RANGES_R23,
-    RIFP_CALLING, RTTY_DIALS, RTTY_RANGES_R1, RTTY_RANGES_R23, SEGMENTS_R1, SEGMENTS_R2,
-    SEGMENTS_R3, SSTV_DIALS, Segment, SegmentKind, WSPR_DIALS, aprs_dial, aprs_dial_in,
+    FT8_DXPED_DIALS, FT8_VHF_DIALS, JS8_DIALS, OLIVIA_DIALS, PSK_DIALS, PSK_RANGES_R1,
+    PSK_RANGES_R23, RIFP_CALLING, RTTY_DIALS, RTTY_RANGES_R1, RTTY_RANGES_R23, SEGMENTS_R1,
+    SEGMENTS_R2, SEGMENTS_R3, SSTV_DIALS, Segment, SegmentKind, WSPR_DIALS, aprs_dial, aprs_dial_in,
     digi_channels, digi_channels_for, digi_channels_in, digi_channels_in_region, digi_presets,
     is_aprs_channel, is_auto_digi, is_cw_segment, is_digi_segment, is_psk_segment,
     is_psk_segment_in, is_rtty_segment, is_rtty_segment_in, psk_ranges, psk_ranges_in, rtty_ranges,

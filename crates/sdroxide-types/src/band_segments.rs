@@ -402,6 +402,37 @@ pub const SSTV_DIALS: &[(f64, &str, u8)] = &[
     (28_690_000.0, "secondary", mask::ALL),
 ];
 
+/// Olivia calling frequencies (Hz), the published per-band conventions.
+///
+/// Olivia has no single world calling frequency the way FT8 does; the
+/// community works a small set of "centres" per band, and the one everybody
+/// watches is **14.1075** on 20 m. The table is the widely published plan
+/// (the one the digital-mode communities and the `oliviadigitalmode.org`
+/// spotting page agree on), matching the European plan a reporter sent in
+/// (fork discussion #5).
+///
+/// Tagged `ALL` where the frequency is shared practice; no region-only
+/// entries are invented, because this table is what the operator is *tuned
+/// to*, not what they may transmit on — the band lockout is a separate rule.
+///
+/// Note the sub-mode is not part of the dial: 8/250, 16/500 and the rest all
+/// sit on the same centre, which is why tuning by band is enough.
+pub const OLIVIA_DIALS: &[(f64, &str, u8)] = &[
+    (1_827_000.0, "", mask::ALL),
+    (1_839_000.0, "secondary", mask::ALL),
+    (3_583_000.0, "", mask::ALL),
+    (7_038_500.0, "", mask::R1),
+    (7_073_000.0, "", mask::R23),
+    (10_143_000.0, "", mask::ALL),
+    (14_073_000.0, "secondary", mask::ALL),
+    (14_107_500.0, "", mask::ALL),
+    (18_103_000.0, "", mask::ALL),
+    (21_073_000.0, "", mask::ALL),
+    (24_923_000.0, "", mask::ALL),
+    (28_123_000.0, "", mask::ALL),
+    (50_305_000.0, "", mask::ALL),
+];
+
 /// The VHF/UHF image channels, where analog SSTV rides an FM carrier
 /// ([`crate::Mode::SstvFm`]) rather than a sideband.
 ///
@@ -945,6 +976,7 @@ pub fn digi_channels_for(mode: crate::Mode, region: Region) -> Vec<DigiChannel> 
         Mode::Psk => tagged(PSK_DIALS),
         Mode::Rtty => tagged(RTTY_DIALS),
         Mode::Fsq => plain(FSQ_DIALS),
+        Mode::Olivia => tagged(OLIVIA_DIALS),
         Mode::Sstv => tagged(SSTV_DIALS),
         Mode::SstvFm => tagged(SSTV_FM_DIALS),
         Mode::Rifp => plain(RIFP_CALLING),
@@ -1055,13 +1087,31 @@ mod tests {
                 "{r:?} should still offer the operator's own"
             );
         }
+        // Olivia now has a published table of its own, so the operator's saved
+        // 14.1065 sits beside the built-in 14.1075 as a second entry.
         let olivia = digi_channels_for(crate::Mode::Olivia, Region::R1);
-        assert_eq!(olivia.len(), 1);
-        assert!(olivia[0].mine);
-        assert_eq!(digi_channels_in(crate::Mode::Olivia, Band::M20).len(), 1);
+        let mine: Vec<_> = olivia.iter().filter(|c| c.mine).collect();
+        assert_eq!(mine.len(), 1, "the operator's own Olivia preset should be listed");
+        assert_eq!(mine[0].dial_hz, 14_106_500.0);
+        assert!(
+            olivia.iter().any(|c| !c.mine && (c.dial_hz - 14_107_500.0).abs() < 1.0),
+            "the published 20 m Olivia calling frequency should be offered"
+        );
+        // 20 m carries the plain centre (14.073), the calling centre (14.1075)
+        // and the operator's saved 14.1065.
+        assert_eq!(
+            digi_channels_in(crate::Mode::Olivia, Band::M20).len(),
+            3,
+            "20 m has the two published centres plus the operator's own"
+        );
 
         set_digi_presets(Vec::new());
-        assert!(digi_channels_for(crate::Mode::Olivia, Region::R1).is_empty());
+        let olivia = digi_channels_for(crate::Mode::Olivia, Region::R1);
+        assert!(!olivia.iter().any(|c| c.mine), "the preset should be gone");
+        assert!(
+            olivia.iter().any(|c| (c.dial_hz - 14_107_500.0).abs() < 1.0),
+            "the published table remains with no presets"
+        );
         assert!(!digi_channels_for(crate::Mode::Psk, Region::R1).iter().any(|c| c.mine));
     }
 
