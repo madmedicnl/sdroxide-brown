@@ -63,6 +63,26 @@ granted (`gh auth refresh -h github.com -s project`).
     can only decode when the dial is set to **channel − 1.7 kHz, USB** (518 →
     516.300) and a station is in its slot. The panel hovers and manual now say
     both; no code fault found. Awaiting Cal's result.
+  - **Discussion #8 — the phone is the control, and it settles what the fault
+    is NOT.** A phone held to the speaker decodes everything, and a phone is
+    clock-independent: it just decodes the sound it hears on its own clock. So
+    the RF and the audio reaching the operator are good; do not re-litigate RF,
+    antennas or audio levels.
+  - **Discussion #8 — BENCH RESULT (2026-10-04, decisive): the server engine
+    decodes fine, with and without a client.** Instrumented `poll_digi`
+    (`DIGIDECODES` log), ran the 1.9.17 build as `--server` FT8 on 14.074:
+    - **no client attached:** 25 decode batches (6/13/3/16/3…stations), no
+      panic.
+    - **native client attached** (`--connect 127.0.0.1`): 26 batches,
+      **280 stations**.
+    So the **fork's server-side decode path is not the fault** — not the
+    engine, not the tap, not the relay to a native client. Kevin's failure is
+    **specific to the browser client** (WASM page load / WebAudio / the WASM
+    relay) or to his environment — which matches his own clue (minimise →
+    sound cuts → reload/lag). **Next and only candidate: does the bug appear
+    in the browser on *upstream* sdroxide too** (question posted to #8). If
+    upstream's browser is fine and ours is not, it is a fork browser-client
+    regression; if upstream is also bad, it is shared upstream + his setup.
   - **Discussion #8 — FT8/FTx decode, REOPENED by kevin2008-01 (2026-10-04
     16:41).** "FTx is not fixed in 1.9.16." New detail: with a brand-new web
     session it still decodes almost nothing; his phone on the speaker decodes
@@ -84,7 +104,10 @@ granted (`gh auth refresh -h github.com -s project`).
     **SAVE** button only appear after closing and reopening the session —
     images are not refreshed within a session. (3) is the same shape as the
     screen-settings sync area; treat as a real UI/state bug.
-- **Upstream PR #626 (CW engine-side keyer) — review received 2026-10-03, work
+- **Upstream PR #626 (CW engine-side keyer) — NEXT SESSION (queued 2026-10-04).**
+  Review received 2026-10-03; branch `upstream-pr/cw-key-engine`. Do it in this
+  order: **(2) the disconnect-safety fix first**, then (3) disarm, then the
+  rest, with the A-vs-B squeeze test. Work
   needed.** Maintainer: shape is right (keyer in the engine, contacts not
   edges, appended wire), but the **lifecycle** is wrong:
   - a paddle press from idle never starts an over (`set_cw_contacts` doesn't
