@@ -2489,6 +2489,7 @@ impl SdroxideApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use eframe::App;
     use sdroxide_types::{Command, RadioEvent};
 
     /// Press a chip drawn inside a `Ui` that is enabled or not, and report
@@ -2593,4 +2594,57 @@ mod tests {
             self.events.pop_front()
         }
     }
+
+    /// Reproduce Kevin's phone crash report (discussion #9) at the exact
+    /// geometries he observed: 360×800 (Chrome Android, crashed) and 1440×3200
+    /// (real phone). This drives the full app UI frame off-screen to catch
+    /// any panic in rendering/layout at narrow phone widths.
+    #[test]
+    fn phone_crash_regression_360x800() {
+        let dir = std::env::temp_dir()
+            .join(format!("sdroxide-phone-repro-360-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(360.0, 800.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest());
+        });
+    }
+
+    #[test]
+    fn phone_crash_regression_1440x3200() {
+        let dir = std::env::temp_dir()
+            .join(format!("sdroxide-phone-repro-1440-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1440.0, 3200.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest());
+        });
+    }
 }
+
