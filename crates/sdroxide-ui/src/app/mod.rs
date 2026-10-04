@@ -51,6 +51,7 @@ pub(in crate::app) mod scanner;
 pub(in crate::app) mod schedule;
 pub(in crate::app) mod settings;
 pub(in crate::app) mod signal_id;
+pub(in crate::app) mod enigma;
 pub(in crate::app) mod solar;
 pub(in crate::app) mod spectrum;
 pub(in crate::app) mod speech;
@@ -981,6 +982,8 @@ pub struct SdroxideApp {
     morse: morse::MorseState,
     /// The signal-identification guide window.
     pub(in crate::app) signal_id: signal_id::SignalIdState,
+    /// The Enigma machine and solver window (a gimmick; holds no station state).
+    pub(in crate::app) enigma: enigma::EnigmaState,
     /// The Winlink mail window. Holds its own view state; the mailbox itself
     /// lives engine-side and is read a page at a time.
     pub(in crate::app) mail: winlink::MailUi,
@@ -1823,6 +1826,7 @@ impl SdroxideApp {
             known_calls: known_calls::KnownCallsState::default(),
             morse: morse::MorseState::new(load_morse_progress(storage)),
             signal_id: signal_id::SignalIdState::default(),
+            enigma: enigma::EnigmaState::default(),
             mail: winlink::MailUi::default(),
             log_edit: None,
             spots: Vec::new(),

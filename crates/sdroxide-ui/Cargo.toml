@@ -5,6 +5,10 @@ edition.workspace = true
 
 [dependencies]
 sdroxide-types.workspace = true
+# The Enigma machine and solver. Pure integer code with no dependencies of its
+# own, so it is wasm-safe and belongs on the always-built path, not the native
+# block below.
+sdroxide-enigma = { path = "../sdroxide-enigma" }
 # The build stamp, for the three places that say which build this is: the
 # About box, the "you are running X" line on the update banner, and the
 # crash report the graphics-driver panic hook writes.

@@ -63,6 +63,7 @@ impl SdroxideApp {
                     );
                 }
                 self.digi_squelch_slider(ui, cmds);
+                self.enigma_chip(ui);
                 self.clear_rx_chip(ui, cmds);
                 self.save_rx_chip(ui);
             });
@@ -380,6 +381,7 @@ impl SdroxideApp {
                     );
                 }
                 self.digi_squelch_slider(ui, cmds);
+                self.enigma_chip(ui);
             });
         });
         ui.add_space(4.0);
