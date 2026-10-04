@@ -13,6 +13,71 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [1.9.18_brown] - 2026-10-04
+
+### Fixed
+
+- **The SAVE chip on a received SSTV picture now appears as soon as the
+  picture does.** It showed up only after the session had been closed and
+  reopened (fork discussion #7). The chip needs the picture's bytes, but the
+  fetch was asked for only while the full-size *texture* was missing — and a
+  picture can already have its texture (promoted from the copy that just
+  arrived, or fetched before its bytes were displaced) while the bytes are
+  absent or name a different picture. No request went out, so the chip stayed
+  hidden until a new session re-listed and re-fetched everything. The ask now
+  follows the bytes rather than the texture, still once per picture name, so a
+  failed fetch is not a request every frame.
+- **The phone layout keeps its controls on the screen.** On a phone the strip's
+  chips are fixed-width and were measured against a desktop row, so at 360 pt
+  the whole set ran past the edge of the display: the top row overlapped into a
+  mess, the layout was not centred, and the controls that lost that race were
+  simply not there (fork discussion #9; the base layout fault is shared with
+  upstream, issue #516). A phone now keeps three chips on the row — the
+  receiver, the display, and one **☰** — and gets a single nested menu behind
+  the ☰, grouped by subject: **BAND**, **MODE**, **SYSTEM** (the receiver, the
+  transmitter and the radio), **DECODE WINDOWS** and **EXTRAS**. Every chip the
+  fork draws on a phone remains reachable; nothing is removed, it is one level
+  deeper. The menu borrows the band/mode menu, the window list and the very same
+  control bodies the individual chips open, so a control edited in one is edited
+  in the other and the two cannot drift apart. Desktop and tablet are unchanged.
+  **The crash reported against 1.9.17 is not this**, and is not claimed to be
+  fixed: whole-frame regression tests at both reported geometries (360×800 and
+  1440×3200) run clean on this code, and it has not been seen on the bench. If
+  it happens again, the browser console output is what is needed to find it.
+
+### Added
+
+- **An Enigma machine, and a solver that breaks a ciphertext you copied.** An
+  **ENIGMA** chip in the free-text keyboard panels (PSK, RTTY, Olivia, THOR,
+  FSQ and Hell — a listener copying cipher-like text is exactly who wants a
+  decryption toy) opens a forest-green Wehrmacht faceplate: the Steckerbrett
+  across the top, rotor windows with Modell / Rotor / Ring pickers, and the
+  QWERTZ lampboard and keyboard. Typing or clicking keys enciphers live, clicking
+  a rotor window advances it, and clicking two sockets runs a cable between them.
+  It is the real machine — wheels I–VIII, the M4's thin Beta and Gamma,
+  reflectors B and C, the double-step gear, a first-class plugboard — and it
+  keeps the flaw that makes it *this* machine, that a letter never enciphers to
+  itself, which is what lets the solver prune. Give the solver a crib and it
+  recovers the rotors and the start exactly and adopts them onto the faceplate;
+  blind, it recovers rotors, start and rings by index of coincidence. A blind
+  solve *with* a plugboard is the Bombe's problem and is deliberately not
+  attempted, and the panel says which case you are in. Nothing on the air: it
+  holds no station state and touches nothing but its own faceplate. Fork-only,
+  no dependencies, and it works in the browser build.
+
+### Changed
+
+- **The FTx failures in a browser session are not the server's.** Bench-measured
+  on 1.9.17: the `--server` engine produced 25 decode batches with no client
+  attached and 26 batches / 280 stations in about two and a half minutes with a
+  client watching, so the decode path is sound. Discussion #8's symptom is
+  browser-specific or environmental — which matches the reporter's own
+  minimise-and-reload clue. No code change here; it narrows where the next
+  test goes.
+
+**Wire:** unchanged (`PROTO_VERSION` 192). A client and server on any recent
+version can talk to each other.
+
 ## [1.9.17_brown] - 2026-10-04
 
 ### Fixed
