@@ -86,7 +86,16 @@ impl SdroxideApp {
             } else {
                 ("listening".to_string(), theme::LINE_LIT())
             };
-            ui.label(RichText::new(text).color(colour).size(11.0));
+            ui.label(RichText::new(text).color(colour).size(11.0)).on_hover_text(
+                "Waiting for a chart.\n\n\
+                 WEFAX is a timetable, not a conversation: a station sends its charts at set \
+                 times, so a chosen frequency is quiet for most of the day — that is normal. \
+                 Use the STATIONS button to pick one and check the time.\n\n\
+                 If a signal is there but the picture comes out one flat tone (all grey, all \
+                 black or all white), it is the tuning or the speed — use the +0 Hz readout \
+                 and the IOC/speed control, and check the STATIONS entry matches what is \
+                 being sent.",
+            );
 
             // The tuning readout. A correctly tuned receiver puts the
             // subcarrier's excursions around 1900 Hz; several hundred hertz off

@@ -38,8 +38,19 @@ pub(super) fn navtex_list_header(
             ui.label(RichText::new("SYNC").strong().color(theme::GREEN()))
                 .on_hover_text("The character phase is locked — a signal is being read.");
         } else {
-            ui.label(RichText::new("hunting").weak())
-                .on_hover_text("No character phase yet: no signal, or not this one.");
+            ui.label(RichText::new("hunting").weak()).on_hover_text(
+                "Nothing is being read yet.\n\n\
+                 It is almost always the tuning. Do NOT type the advertised number (518) \
+                 into the frequency box: NAVTEX is quoted as a channel, and this program \
+                 listens just below it. Click the 518 button above instead — it sets the \
+                 right dial for you (516.300).\n\n\
+                 If there is clearly a strong signal but the text is still nonsense, press \
+                 REV: it is arriving the other way round.\n\n\
+                 Also remember NAVTEX is a timetable, not a conversation: a coast station \
+                 sends for ten minutes every four hours, so silence is normal most of the \
+                 time. You have to be listening when your station is due. And 518 kHz only \
+                 comes alive at night — a quiet daytime band is not a broken decoder.",
+            );
         }
         // What the time diversity actually did, which is the only quality
         // figure a mode with no checksum has.

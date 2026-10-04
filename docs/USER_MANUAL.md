@@ -4807,8 +4807,12 @@ reception needs the dial **1.9 kHz below** it: 7880 kHz is tuned at 7878.1. The
 picker does that subtraction for you, which is worth knowing because getting it
 wrong is the commonest reason a chart comes out as a blank page.
 
-Schedules change and stations close, so treat the list as where to start looking
-rather than as a timetable.
+**Like NAVTEX, WEFAX is a timetable.** A station sends its charts at set times
+on set frequencies, so for most of the day a picked frequency is simply quiet —
+that is normal, not a fault. The schedule is when to be there. It also changes
+(a station closes, a frequency moves), so treat the listed times as a good guide
+rather than a guarantee: if nothing comes at the advertised time, try the next
+frequency in the list before deciding anything is broken.
 
 **Tuning.** The `+0 Hz` readout beside the START button is the subcarrier's
 offset from where it should be. Tune for roughly zero, green: a fax subcarrier
@@ -5754,6 +5758,16 @@ is pulled in over the first second or so instead of returning nothing. It is not
 a reason to be careless: a mistuned signal still carries more errors than a
 clean one, and past about ±350 Hz the pull-in gives up.
 
+**NAVTEX is a timetable, not a conversation.** This is the single thing
+newcomers miss most, and it looks exactly like a broken decoder: each coast
+station sends for **ten minutes, once every four hours**, on its own schedule.
+Most of the time **nothing is transmitting** — a silent panel is the normal
+state, not a fault. You have to be listening when your nearest station is due.
+The schedules are published (search "NAVTEX broadcast schedule" for your
+region); there is nothing to set here, only to know. And 518 kHz is a **night**
+band: daytime you will usually hear little or nothing, which is also not a
+fault.
+
 **What you see.** Two panes:
 
 - **MESSAGES** — one entry per message, newest first, headed by the four
@@ -5795,6 +5809,14 @@ than hidden, because half a gale warning has to look like half a gale warning.
 **REV** swaps the mark and space tones, for a signal received on the other
 sideband. Off is upper sideband on the channel, which is what every published
 tuning instruction for the service says.
+
+**If it decodes as garbage, it is almost always the tuning.** NAVTEX is quoted
+as a *channel*, and this receiver sits 1.7 kHz below it in upper sideband — so
+the 518 kHz service is read with the dial on **516.300**, not 518 or 519. The
+band buttons (518 / 490 / 4209.5) set that for you; a rig tuned by hand wants
+**516.300 kHz USB**. A steady, strong signal that still reads as nonsense is
+usually landing on the wrong sideband: press **REV**. And a band with no coast
+station transmitting — 518 kHz is busy mostly at night — is not a decoder fault.
 
 ---
 
