@@ -36,49 +36,14 @@ pub struct Rotor {
 /// The eight Enigma I wheels, plus the two M4 thin wheels, by their service
 /// names. Wiring is the standard published data (see the manual's table).
 pub const ROTORS: &[Rotor] = &[
-    Rotor {
-        name: "I",
-        wiring: bytes("EKMFLGDQVZNTOWYHXUSPAIBRCJ"),
-        notches: b"Q",
-        thin: false,
-    },
-    Rotor {
-        name: "II",
-        wiring: bytes("AJDKSIRUXBLHWTMCQGZNPYFVOE"),
-        notches: b"E",
-        thin: false,
-    },
-    Rotor {
-        name: "III",
-        wiring: bytes("BDFHJLCPRTXVZNYEIWGAKMUSQO"),
-        notches: b"V",
-        thin: false,
-    },
-    Rotor {
-        name: "IV",
-        wiring: bytes("ESOVPZJAYQUIRHXLNFTGKDCMWB"),
-        notches: b"J",
-        thin: false,
-    },
-    Rotor {
-        name: "V",
-        wiring: bytes("VZBRGITYUPSDNHLXAWMJQOFECK"),
-        notches: b"Z",
-        thin: false,
-    },
+    Rotor { name: "I", wiring: bytes("EKMFLGDQVZNTOWYHXUSPAIBRCJ"), notches: b"Q", thin: false },
+    Rotor { name: "II", wiring: bytes("AJDKSIRUXBLHWTMCQGZNPYFVOE"), notches: b"E", thin: false },
+    Rotor { name: "III", wiring: bytes("BDFHJLCPRTXVZNYEIWGAKMUSQO"), notches: b"V", thin: false },
+    Rotor { name: "IV", wiring: bytes("ESOVPZJAYQUIRHXLNFTGKDCMWB"), notches: b"J", thin: false },
+    Rotor { name: "V", wiring: bytes("VZBRGITYUPSDNHLXAWMJQOFECK"), notches: b"Z", thin: false },
     // VI–VIII are the naval wheels, with two notches each.
-    Rotor {
-        name: "VI",
-        wiring: bytes("JPGVOUMFYQBENHZRDKASXLICTW"),
-        notches: b"ZM",
-        thin: false,
-    },
-    Rotor {
-        name: "VII",
-        wiring: bytes("NZJHGRCXMYSWBOUFAIVLPEKQDT"),
-        notches: b"ZM",
-        thin: false,
-    },
+    Rotor { name: "VI", wiring: bytes("JPGVOUMFYQBENHZRDKASXLICTW"), notches: b"ZM", thin: false },
+    Rotor { name: "VII", wiring: bytes("NZJHGRCXMYSWBOUFAIVLPEKQDT"), notches: b"ZM", thin: false },
     Rotor {
         name: "VIII",
         wiring: bytes("FKQHTLXOCBJSPDZRAMEWNIUYGV"),
@@ -86,18 +51,8 @@ pub const ROTORS: &[Rotor] = &[
         thin: false,
     },
     // The two thin wheels of the M4, used only in the fourth slot.
-    Rotor {
-        name: "Beta",
-        wiring: bytes("LEYJVCNIXWPBQMDRTAKZGFUHOS"),
-        notches: b"",
-        thin: true,
-    },
-    Rotor {
-        name: "Gamma",
-        wiring: bytes("FSOKANUERHMBTIYCWLQPZXVGJD"),
-        notches: b"",
-        thin: true,
-    },
+    Rotor { name: "Beta", wiring: bytes("LEYJVCNIXWPBQMDRTAKZGFUHOS"), notches: b"", thin: true },
+    Rotor { name: "Gamma", wiring: bytes("FSOKANUERHMBTIYCWLQPZXVGJD"), notches: b"", thin: true },
 ];
 
 /// The reflectors. UKW-B and UKW-C are the Enigma I's; the M4 uses the same
@@ -278,7 +233,12 @@ pub struct Enigma {
 impl Enigma {
     pub fn new(variant: Variant, wheels: Vec<Wheel>, reflector: usize) -> Self {
         assert_eq!(wheels.len(), variant.wheel_count(), "wrong wheel count for variant");
-        Enigma { variant, wheels, reflector: reflector % REFLECTORS.len(), plugboard: Plugboard::new() }
+        Enigma {
+            variant,
+            wheels,
+            reflector: reflector % REFLECTORS.len(),
+            plugboard: Plugboard::new(),
+        }
     }
 
     pub fn with_plugboard(mut self, p: Plugboard) -> Self {
@@ -502,16 +462,13 @@ mod tests {
     #[test]
     fn a_letter_never_enciphers_to_itself() {
         for r0 in 0..8u8 {
-            let wheels = vec![Wheel::new(r0 as usize, 0, 0), Wheel::new(1, 0, 0), Wheel::new(2, 0, 0)];
-            let mut e = Enigma::new(Variant::EnigmaI, wheels, 0);
+            let wheels =
+                vec![Wheel::new(r0 as usize, 0, 0), Wheel::new(1, 0, 0), Wheel::new(2, 0, 0)];
+            let e = Enigma::new(Variant::EnigmaI, wheels, 0);
             for c in 0..26u8 {
                 let mut m = e.clone();
                 assert_ne!(m.encipher(c), c, "rotor {r0} letter {c}");
             }
         }
-    }
-
-    fn step_trace_is_exact() {
-        // Placeholder kept out of the run; the assertion above stands alone.
     }
 }

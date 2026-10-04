@@ -8400,24 +8400,16 @@ mod tests {
         }
     }
 
-    /// Every menu chip the phone strip can carry, measured from the touched
-    /// layout it is laid out with: the label at 14.5 pt Chakra in a chip padded
-    /// 13 pt a side, so "TX" fills a 43 pt chip and "DISP" — the widest — a 57
-    /// pt one. The PTT, at 15 pt and with its label's own spaces for padding,
-    /// comes out 59; the band/mode chip runs to [`TOUCH_BAND_CHIP_W`].
+    /// The three chips a phone keeps on its own row, measured from the touched
+    /// layout they are laid out with: the label at 14.5 pt Chakra in a chip
+    /// padded 13 pt a side, so "DISP" — the widest — fills a 57 pt chip. The
+    /// PTT, at 15 pt and with its label's own spaces for padding, comes out 59;
+    /// the band/mode chip runs to [`TOUCH_BAND_CHIP_W`].
     ///
     /// **The list is what `menu_chips` returns for a phone**, so the planner
     /// below is measured against the row the phone actually draws. It used to
     /// carry all six chips and the phone tier now carries three (discussion
     /// #9): the receiver, the display and the one ☰ that opens the rest.
-    const P_MENU: [(&str, f32, f32); 6] = [
-        ("RX", 44.1, 18.1),
-        ("VFO", 52.8, 26.8),
-        ("SUB", 54.1, 28.1),
-        ("TX", 42.9, 16.9),
-        ("DISP", 57.1, 31.1),
-        ("SYS", 51.4, 25.4),
-    ];
     /// The three a phone keeps on the row. The ☰'s own width is measured the
     /// same way as any other label: the glyph is narrow, so the chip is a
     /// 13 pt pad a side plus it.

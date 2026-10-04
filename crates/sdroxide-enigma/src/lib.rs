@@ -18,5 +18,7 @@
 pub mod machine;
 pub mod solve;
 
-pub use machine::{Enigma, Plugboard, REFLECTORS, ROTORS, Reflector, Rotor, Variant, Wheel, group_fives, letter};
+pub use machine::{
+    Enigma, Plugboard, REFLECTORS, ROTORS, Reflector, Rotor, Variant, Wheel, group_fives, letter,
+};
 pub use solve::{Solution, SolveParams, solve};

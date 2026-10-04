@@ -122,7 +122,15 @@ pub fn index_of_coincidence(text: &[u8]) -> f64 {
 
 /// Decrypt `cipher` under a full setting, letters only.
 #[allow(clippy::too_many_arguments)]
-fn decrypt(cipher: &[u8], variant: Variant, rotors: &[usize], rings: &[u8], starts: &[u8], reflector: usize, pb: &Plugboard) -> Vec<u8> {
+fn decrypt(
+    cipher: &[u8],
+    variant: Variant,
+    rotors: &[usize],
+    rings: &[u8],
+    starts: &[u8],
+    reflector: usize,
+    pb: &Plugboard,
+) -> Vec<u8> {
     let wheels: Vec<Wheel> =
         (0..rotors.len()).map(|i| Wheel::new(rotors[i], rings[i], starts[i])).collect();
     let mut e = Enigma::new(variant, wheels, reflector).with_plugboard(*pb);
@@ -155,11 +163,7 @@ fn crib_hits(cipher: &[u8], plain: &[u8], crib: &[u8]) -> usize {
 /// than any statistical preference.
 fn score(cipher: &[u8], plain: &[u8], crib: &[u8]) -> f64 {
     let ioc = index_of_coincidence(plain);
-    if crib.is_empty() {
-        ioc
-    } else {
-        ioc + crib_hits(cipher, plain, crib) as f64 * 0.1
-    }
+    if crib.is_empty() { ioc } else { ioc + crib_hits(cipher, plain, crib) as f64 * 0.1 }
 }
 
 /// Recover the plugboard greedily, one cable at a time, keeping any swap that
@@ -260,7 +264,15 @@ pub fn solve(ciphertext: &str, params: &SolveParams) -> Solution {
                 for r in 0..26u8 {
                     let mut trial = rings.clone();
                     trial[i] = r;
-                    let plain = decrypt(&cipher, params.variant, &sol.rotors, &trial, &sol.starts, sol.reflector, &sol.plugboard);
+                    let plain = decrypt(
+                        &cipher,
+                        params.variant,
+                        &sol.rotors,
+                        &trial,
+                        &sol.starts,
+                        sol.reflector,
+                        &sol.plugboard,
+                    );
                     let s = index_of_coincidence(&plain);
                     if s > sol.score {
                         sol.score = s;
@@ -293,7 +305,15 @@ pub fn solve(ciphertext: &str, params: &SolveParams) -> Solution {
             sol.plugboard = pb;
             sol.score = s;
         } else {
-            let plain = decrypt(&cipher, params.variant, &sol.rotors, &sol.rings, &sol.starts, sol.reflector, &sol.plugboard);
+            let plain = decrypt(
+                &cipher,
+                params.variant,
+                &sol.rotors,
+                &sol.rings,
+                &sol.starts,
+                sol.reflector,
+                &sol.plugboard,
+            );
             sol.score = score(&cipher, &plain, &crib);
         }
         if best.as_ref().is_none_or(|b| sol.score > b.score) {
@@ -302,14 +322,28 @@ pub fn solve(ciphertext: &str, params: &SolveParams) -> Solution {
     }
     let mut sol = best.expect("at least one base always exists");
 
-    let plain = decrypt(&cipher, params.variant, &sol.rotors, &sol.rings, &sol.starts, sol.reflector, &sol.plugboard);
+    let plain = decrypt(
+        &cipher,
+        params.variant,
+        &sol.rotors,
+        &sol.rings,
+        &sol.starts,
+        sol.reflector,
+        &sol.plugboard,
+    );
     sol.plaintext = plain.iter().map(|&c| letter(c)).collect();
     sol
 }
 
 /// Search all `26^count` start positions for one wheel order, pushing each
 /// candidate into `out` with its base IoC. The caller keeps the best few.
-fn search_starts(cipher: &[u8], variant: Variant, rotors: &[usize], crib: &[u8], out: &mut Vec<Solution>) {
+fn search_starts(
+    cipher: &[u8],
+    variant: Variant,
+    rotors: &[usize],
+    crib: &[u8],
+    out: &mut Vec<Solution>,
+) {
     let count = rotors.len();
     let rings = vec![0u8; count];
     let mut starts = vec![0u8; count];
@@ -340,7 +374,13 @@ fn permutations(items: &[usize], k: usize) -> Vec<Vec<usize>> {
     let mut out = Vec::new();
     let mut current = Vec::new();
     let mut used = vec![false; items.len()];
-    fn rec(items: &[usize], k: usize, current: &mut Vec<usize>, used: &mut [bool], out: &mut Vec<Vec<usize>>) {
+    fn rec(
+        items: &[usize],
+        k: usize,
+        current: &mut Vec<usize>,
+        used: &mut [bool],
+        out: &mut Vec<Vec<usize>>,
+    ) {
         if current.len() == k {
             out.push(current.clone());
             return;
@@ -415,20 +455,13 @@ mod tests {
         let mut e = Enigma::new(Variant::EnigmaI, setting, 0).with_plugboard(pb);
         let ct = e.encipher_text(plain);
 
-        let sol = solve(
-            &ct,
-            &SolveParams { crib: "PLEASURE".into(), ..SolveParams::default() },
-        );
+        let sol = solve(&ct, &SolveParams { crib: "PLEASURE".into(), ..SolveParams::default() });
         // Rotors, start and reflector are recovered exactly; the plaintext is
         // read through the cables, so the crib word and the readable run
         // around it are what this pins (the plugboard is recovered best-effort
         // and the cabled letters may still be wrong).
         assert_eq!(sol.rotors, vec![1, 0, 2], "rotor order not recovered: {:?}", sol.rotors);
         assert_eq!(sol.starts, vec![7, 3, 22], "start not recovered: {:?}", sol.starts);
-        assert!(
-            sol.plaintext.contains("PLEASURE"),
-            "crib not recovered: {}",
-            sol.plaintext
-        );
+        assert!(sol.plaintext.contains("PLEASURE"), "crib not recovered: {}", sol.plaintext);
     }
 }
