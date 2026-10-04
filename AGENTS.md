@@ -24,6 +24,80 @@
 > ALE-mode build; the experimental-release recipe below is still the one to use
 > when a build needs to name it (the older pre-release tag has been removed).
 
+## Session 2026-10-04, later: 1.9.18_brown, and what the release gate is for
+
+`v1.9.18_brown` is tagged and pushed (run `37238357892`). Three functional
+changes since `v1.9.17_brown`, `PROTO_VERSION` unchanged at **192**:
+
+1. **The phone layout** (`e8e7812a`) — three chips on the row (RX, DISP, ☰) and
+   one nested menu behind the ☰, grouped BAND / MODE / SYSTEM / DECODE WINDOWS /
+   EXTRAS. Phone tier only; desktop and tablet are byte-for-byte unchanged.
+   Fork discussion **#9**, and the base layout fault is shared with upstream
+   (#516), which is why the fork answers it with a responsive menu rather than
+   upstream's fixed-width chips.
+2. **The Enigma machine and its crib solver** (`9099375f`, `021f6cce`) — the new
+   fork-only crate `sdroxide-enigma`, and an **ENIGMA** chip in the free-text
+   keyboard panels (`panels/text_modem.rs`, twice: the mode's own panel).
+3. **The SSTV SAVE chip** (`d9425662`) — asks for the picture's *bytes*, not
+   its texture, so it no longer waits for a session restart (discussion #7).
+
+**The 1.9.17 phone *crash* is NOT fixed, and must never be described as such.**
+The two new regression tests (`phone_crash_regression_360x800`,
+`…_1440x3200`, `app/mod.rs`) drive a whole frame off-screen at both reported
+geometries and **pass on current code**; the crash has never been seen on the
+bench. So the release notes claim the *layout* fault is addressed and say
+plainly that the crash is still open, asking for the browser console output if
+it recurs. **That is the general shape for a half-fixed report: separate what is
+fixed from what is not, in the notes themselves, or the next reader inherits a
+claim nobody verified.**
+
+### The gate found three warnings, and one of them was a test that never ran
+
+The house rule is a silent `cargo check --workspace --all-targets`, and the
+unreleased work broke it three ways:
+
+- **`step_trace_is_exact`** in `sdroxide-enigma/src/machine.rs` was an **empty
+  function with no `#[test]`**, left over from an earlier draft of the
+  double-step test. It never ran, nothing called it, and it is exactly what a
+  `dead_code` warning is for. The real trace is `the_double_step_is_modelled`,
+  so the Enigma commit's claim ("the double-step trace") was true and the stub
+  was still junk — **the two can both be true, and only the compiler sees it.**
+- a needless `mut` in `a_letter_never_enciphers_to_itself` (`clone()` is called
+  on the binding, `encipher` on the copy).
+- **`P_MENU`** in `top_bar.rs`'s phone-strip tests: dead the moment the phone
+  tier went from six chips to three. Its measurements were folded into
+  `P_MENU_PHONE` rather than dropped with it, since the numbers are what a
+  future chip has to beat.
+
+**Run the gate before the tag, not after.** All three were invisible to
+`cargo build`, and two of them lived in a commit whose message claimed its tests
+were complete.
+
+### Two new rules the gate taught
+
+- **`cargo test --workspace` builds `examples/`, so scratch WIP cannot live
+  there.** The untracked `crates/sdroxide-digi/examples/fst4w_probe.rs` was
+  written against an FST4W API the vendored `mfsk-core` does not have
+  (`fec::ldpc240_74`, `message_to_tones_fst4w`, `Fst4W120` — see
+  `FST4W-HANDOVER.md`), so it failed the whole workspace build with five
+  unresolved-import errors and the release gate could not run at all. It is at
+  `/tmp/opencode/fst4w-scratch/fst4w_probe.rs`. **An untracked file in
+  `examples/` is not free** — `cargo test`, `cargo build --examples` and
+  `--all-targets` all read it, and it is invisible to `git status` as a change.
+- **A new fork-only crate must be formatted when it is added.**
+  `sdroxide-enigma` was committed unformatted (both `lib.rs` and a 100-line
+  `ROTORS` table). The 2026-09-29 sweep made "every fork-only file is clean"
+  true, and that only stays true if a new crate is swept on arrival — which is
+  free, because a fork-only file can never conflict with an upstream merge.
+
+**Numbers for the day:** full suite `cargo test --release --workspace` — 247
+targets, **5363 tests, 0 failures**, no code warnings. The wasm check
+(`cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui`)
+passes and carries 273 pre-existing warnings (274 before this release's
+cleanup — measure before blaming a change). CI: the `web client (wasm)` job is
+first and green, which is the one that would have caught browser-only breakage
+in the phone work.
+
 ## Session 2026-10-02: three releases, one rustc regression, and Olivia
 
 **Read this first on any release day.** Three releases in a row failed for
@@ -2477,6 +2551,13 @@ note and were rendered from a separate HTML source; leave them alone.)
 > the same `main` → same crate version, a new tag point. Never reach 2.0 by
 > accident; the point is the escape hatch, the crate bump is the norm.
 
+0. **Run the gate before the tag, not after**: `cargo check --workspace
+   --all-targets` (it must be **silent** — the house rule, and the only check
+   that sees a `dead_code` stub standing in for a test) and
+   `cargo test --release --workspace`. The suite **builds `examples/`**, so a
+   scratch WIP probe parked in a crate's `examples/` fails the whole build and
+   the gate never runs (see the 2026-10-04 session). `--workspace` is reserved
+   for release days for the same reason; a merge wants the touched crates.
 1. Bump the workspace version in `Cargo.toml` **first** and let `cargo` refresh
    `Cargo.lock`; commit it. The Windows `.msi` and the macOS bundle take their
    version from `Cargo.toml`, so a re-tag on the same version installs as the
