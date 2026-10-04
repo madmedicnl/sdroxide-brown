@@ -5,9 +5,21 @@ default-members = [".", "crates/sdroxide-types", "crates/sdroxide-proto", "crate
 # The vendored crates are reached through `[patch.crates-io]`, not as members:
 # they are upstream's code under upstream's licences, not ours to lint or
 # version with the rest.
-exclude = ["vendor/soapysdr", "vendor/ewebsock", "vendor/xng"]
+exclude = ["vendor/soapysdr", "vendor/ewebsock", "vendor/xng", "vendor/mfsk-core"]
 
 [patch.crates-io]
+
+# `mfsk-core` 0.11.0 plus a fix for an out-of-bounds panic in the subtract
+# path. `subtract_tones_lpf`'s branch-hoisted bounds (upstream 6245c34) clamp
+# `i_hi` only to the frame length, but the buffers it indexes are the slot
+# buffer's length; a slot shorter than the frame with a negative `dt` — a
+# server radio whose tap attached mid-slot produces exactly that — panicked
+# the FT8 decode worker, and the station then decoded nothing for the rest of
+# the session. The submodule is `madmedicnl/mfsk-core` at the one-commit
+# `fix/subtract-short-buffer` branch, so this is plain 0.11.0 plus that fix
+# and nothing else. Offered upstream; drop this and return to the plain 0.11
+# dependency once it lands.
+mfsk-core = { path = "vendor/mfsk-core/mfsk-core" }
 
 # `ewebsock` 0.8.0 with one error classifier widened. On Windows a blocking
 # read whose timeout expires may be answered with `ERROR_IO_PENDING` (997)

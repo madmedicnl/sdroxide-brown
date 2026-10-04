@@ -14,3 +14,7 @@
 [submodule "vendor/xng"]
 	path = vendor/xng
 	url = https://github.com/airframesio/xng.git
+[submodule "vendor/mfsk-core"]
+	path = vendor/mfsk-core
+	url = https://github.com/madmedicnl/mfsk-core.git
+	branch = fix/subtract-short-buffer
