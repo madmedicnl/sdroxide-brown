@@ -97,6 +97,27 @@ granted (`gh auth refresh -h github.com -s project`).
     hash in the `1.9.16` screenshot, and whether a **native `--connect` client
     to the same server** decodes (that separates "server engine" from "browser
     relay/timing").
+  - **Discussion #9 — phone (web) layout, and a 1.9.17 "crash/totally
+    unusable" (kevin2008-01), open.** Two parts:
+    - **Base bug is SHARED with upstream.** The phone layout is broken on the
+      official build too — he filed upstream **dividebysandwich/sdroxide#516**,
+      the maintainer partly answered in `1fa0f29`, and it persists: layout not
+      centred and the spectrum section missing on phone mode. So do not own
+      the whole thing; it is upstream's layout, on a real phone (1440×3200,
+      Android Chrome).
+    - **A NEW 1.9.17 regression: "Crash and totally unusable"** (his 2026-10-04
+      19:26 comment, Brown web client). The screenshot shows the top chip row
+      overlapped into a mess and the panel split with a black void — i.e. the
+      **Phone tier is over-stuffed**. Strong suspicion: **the fork added too
+      many chips/controls into rows sized for fewer** (GRID, SIG ID, ISM/ISL,
+      ENIGMA, HFDL, the listener chips…), which overflows a phone width. A
+      crash (not just overlap) in 1.9.17 is the thing to chase — check the
+      Phone tier for an overflow / divide-by-zero / bad index rather than the
+      layout alone. **Cannot be reproduced without a browser**: audit the
+      `Tier::Phone` path (`frame.rs:675/923`, `top_bar.rs:664/704/1473/6917`)
+      and the `phone_pane` splits for anything that can divide by zero or
+      index out of range, and compare the reserved-widths against what the
+      fork now draws. Recorded as the phone-layout work item.
   - **Discussion #7 — SSTV (kevin2008-01), open.** Three asks: (1) menu extra
     to **re-upload**, **send to** (email a QSL picture) and **save to** a chosen
     location on a received picture; (2) **CTR does not centre** in SSTV
