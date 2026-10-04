@@ -48,6 +48,32 @@ overflow reaching an arithmetic/index that goes bad.
 
 ## 2. THE TODO (follow this order)
 
+### Step 0 — what was already tried this session (do not repeat)
+
+- **`top_bar.rs` `SYSTEM_CHIPS_BOTTOM` is clean** — no leftover ENIGMA chip,
+  array and destructure both 7. (The operator suspected the interrupted
+  ENIGMA-chip edit; the revert was clean. Ruled out.)
+- **`plan_phone_tail` (top_bar.rs:438) is already well tested at narrow
+  widths** — `a_phone_strip(320.0, …)` and the label-shrink tests cover the
+  pure arithmetic, and it is carefully guarded (`.max(1)`, `.max(0.0)`,
+  clamps). So **the crash is almost certainly NOT in the phone tail planner**;
+  look at the **rendering** (`menu_bar` with a `PhoneTail`), the
+  `phone_pane`/`digi_split` path (`frame.rs` ~`923`, `panels/mod.rs:805`), or
+  a window/panel open at phone size.
+- The full UI suite passes (694 tests), so nothing panics in the covered paths.
+
+**=> The fastest reproduction now: a whole-app off-screen frame at 360×800.**
+`SdroxideApp::new_tab(&ctx, None, None, controller, 0, true)` (the pattern in
+`app/mod.rs` test `a_manually_logged_contest_contact_reaches_the_logbook`,
+~line 2557) with `egui::Context::default()` and a `screen_rect` of
+**360×800**, then drive one frame. The app's frame body is
+`impl eframe::App for SdroxideApp { fn ui(&mut self, ui, frame) }`
+(`frame.rs:185`) and it decomposes into sub-methods (`self.top_bar`,
+`.operating_panel`, `.phone_pane`, the digital panel dispatch) — call those
+directly in a `ctx.run_ui` closure, or construct a stub `eframe::Frame` if one
+is reachable in tests. A panic there is the crash, reproduced without a browser.
+Add the same at **1440×3200** (Kevin's real geometry).
+
 ### Step 1 — reproduce / locate the crash (do first)
 
 The crash is a *bug*, separate from the layout decision. A phone over-stuff may
