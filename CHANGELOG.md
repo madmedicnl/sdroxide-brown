@@ -13,6 +13,61 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [1.9.16_brown] - 2026-10-04
+
+### Fixed
+
+- **FT8 and FTx now decode normally in a `--server` + browser session.** The
+  decoder ran on a worker thread that **crashed** on the first receive slot of
+  a server session (the radio attaches a moment after the engine starts, so the
+  first slot can be shorter than a full FT8 frame). The crash was an
+  out-of-bounds in the FT8 signal-subtraction code of the decoder library
+  (`mfsk-core`), present in every published version, so **every release from
+  1.9.10 to 1.9.15** decoded almost nothing in a browser session — one or two
+  stations at most — while the native app was fine and the audio itself was
+  good. Once the worker died the station decoded nothing at all for the rest of
+  the session, with no warning on screen and no recovery from CLEAR RX; only a
+  restart cleared it. Reported by kevin2008-01 (fork discussion #8) and
+  reproduced on the bench. The fork now carries the library fix (reported
+  upstream as mfsk-core issue #567).
+- **Olivia receive decodes on the air.** The Walsh transform, and with it the
+  scrambler, interleaver and the character bit order, now match fldigi's
+  reference (`pj_mfsk.h`), so a real Olivia transmission copies instead of
+  fragmenting into `CQ`/`ET`/`LEE`. Verified against an off-air Avalon SW Net
+  recording.
+
+### Added
+
+- **Selectable FT8 decode depth** (Fast / Normal / Deep), on the FT8 setup
+  window. Deep is the default and matches WSJT-X: it runs the checkpointed
+  signal subtraction, which recovers weak signals masked by a stronger
+  neighbour — measured 22 decodes against 12 on a busy reference slot, for
+  about a second of decode time. Fast is the plain single pass.
+- **FT8 decode in two stages**, so an auto-sequenced reply is decided from the
+  quick pass inside the transmit offset and still goes out on time; the deeper
+  subtraction returns after.
+- **A contest logger** (fork-only): a single-operator logger opened from
+  LOGBOOK → CONTEST, with CQ WW / CQ WPX / ARRL DX / EU VHF / a generic text
+  contest, multipliers, a live score and rate, the session's log and Cabrillo
+  export. FT8 contacts log themselves with the running session's exchange;
+  hand-typed contacts go into the logbook too. The two FT8 contest layouts
+  (EU VHF and the RTTY Roundup shape) pack through the decoder library's own
+  unpacker.
+- **NAVTEX automatic frequency control**: the decoder now tracks a small
+  tuning error instead of failing to decode when the receiver is slightly off.
+- **LimeSDR Mini lower transmit rates**, to clear the underruns the Mini hits
+  at its higher rates.
+
+### Changed
+
+- **FT4's targeted pass, and FST4/FST4W's DDC**, came in with the upstream
+  merge of the weak-signal modes' current decoder library. No wire-visible
+  change beyond the appended `DigiConfig` fields below.
+
+**Wire:** `PROTO_VERSION` **191 → 192** (`DigiConfig` gained `ft8_depth` and
+the contest layout's `RttyRoundup`, both appended). A remote client and server
+must be on the same version.
+
 ## [1.9.15_brown] - 2026-10-03
 
 ### Fixed
