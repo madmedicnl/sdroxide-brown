@@ -33,6 +33,17 @@ granted (`gh auth refresh -h github.com -s project`).
 
 ## Open (In Progress)
 
+- **Reported bugs from fork discussion #5 (kevin2008-01), unverified, not yet
+  fixed** — separate from the Olivia decode fix (which shipped in 1.9.16):
+  - **CLEAR RX appears to do nothing on Olivia.** Wiring looks correct
+    (`clear_rx_chip` → `DigiClearRx` → controller `clear_rx` → `text_rx`), and
+    1.9.15 produced no Olivia text at all, so this may be a symptom of the
+    decoder bug rather than a real button fault. Re-test on 1.9.16; if CLEAR
+    still fails with text on screen, it is real (possibly web-session state).
+  - **Frequency memories capped at 3 in a new web session** (10 saved → 3
+    survive). Store/sync problem in the server session path. Real bug.
+  - **A decimal frequency is rounded** (7.038.5 MHz → 7.037). `MemoryChannel
+    .freq_hz` is `f64`, so something in the save or display rounds it. Real bug.
 - **ALE**: decode a real burst off-air; wire TX; fold the mode into PR #598
 - Upstream PRs awaiting review: **#537** band openings, **#545** (tr)uSDX nG,
   **#554** UVPacket, **#557** rec silence, **#559** band-menu captions,
