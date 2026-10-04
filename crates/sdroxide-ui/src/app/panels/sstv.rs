@@ -587,6 +587,10 @@ impl SdroxideApp {
     ) {
         let ctx = ui.ctx().clone();
         let rifp = mode.is_rifp();
+        // Say it where the operator is looking if the receiver is being driven
+        // into its rails — a picture cannot decode through an overloaded front
+        // end, and the panel would otherwise only ever say "hunting".
+        self.front_end_overload_warning(ui);
         // The store is the engine's; list it once when the panel first opens.
         // Pictures that arrive afterwards are announced one at a time.
         if !self.sstv.listed {

@@ -95,6 +95,9 @@ impl SdroxideApp {
             ui.label(RichText::new("starting the NAVTEX receiver…").weak());
             return;
         };
+        // A NAVTEX receiver driven into overload hears a wall of noise, not
+        // characters, and the panel would only say "hunting".
+        self.front_end_overload_warning(ui);
         let pane = self.phone_pane(ui, sdroxide_types::Mode::Navtex);
 
         ui.horizontal(|ui| {

@@ -35,6 +35,9 @@ impl SdroxideApp {
 
         let st = self.wefax.status;
         let ctx = ui.ctx().clone();
+        // An overloaded front end turns a chart into a flat wash, and the
+        // panel would otherwise show a blank picture with no explanation.
+        self.front_end_overload_warning(ui);
         // The charts are the engine's; list its store once when the panel first
         // opens. Charts that arrive afterwards are announced one at a time.
         if !self.wefax.listed {

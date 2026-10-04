@@ -1064,6 +1064,36 @@ impl SdroxideApp {
         self.clear_rx_chip_enabled(ui, cmds, true);
     }
 
+    /// Warn, where the operator is looking, that the front end is overloading.
+    ///
+    /// A receiver driven into its rails does not decode: the audio is loud and
+    /// sounds like a signal, but the modulation is gone, so every panel says
+    /// "hunting" and nothing explains why. The S-meter's small `OVL` tag is not
+    /// where somebody staring at an SSTV or NAVTEX panel looks, and the fix —
+    /// turn the RF gain down — is worth stating right beside the symptom.
+    ///
+    /// Drawn only while the condition holds, and rate-limited by the meter's
+    /// own hysteretic overload test (`Meters::adc_overloaded`), so it does not
+    /// flicker. Returns whether it drew, for callers that want to reserve room.
+    pub(in crate::app) fn front_end_overload_warning(&self, ui: &mut egui::Ui) -> bool {
+        if !self.meters.is_some_and(|m| m.adc_overloaded()) {
+            return false;
+        }
+        ui.label(
+            RichText::new("⚠ FRONT END OVERLOADING — reduce RF gain (LNA/IF), or move the antenna")
+                .size(11.0)
+                .strong()
+                .color(crate::theme::ALERT()),
+        )
+        .on_hover_text(
+            "The receiver is being driven past full scale, so the audio is loud but carries no \
+             signal — nothing will decode while this lasts. Turn the RF/LNA gain down (more \
+             attenuation), lower the IF gain, or enable AGC. A strong nearby transmitter, or \
+             another rig on the same band, is the usual cause.",
+        );
+        true
+    }
+
     /// [`Self::clear_rx_chip`], but greyed out when there is nothing to clear.
     ///
     /// JS8's composer disables it on an empty conversation (issue #473); the
