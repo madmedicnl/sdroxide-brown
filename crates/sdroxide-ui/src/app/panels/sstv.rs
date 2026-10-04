@@ -1389,12 +1389,19 @@ impl SdroxideApp {
             let mut save = false;
             let mut pressed_delete = false;
             if let Some(r) = self.sstv.received.get(idx) {
-                // The full-size picture lives on the radio. Ask for it the
-                // moment one is opened, and show the thumbnail scaled up in the
-                // meantime rather than an empty window. Asked once per picture,
-                // whatever the answer — a fetch that fails must not become a
-                // request every frame.
-                if r.full.is_none() && self.sstv.full_asked.as_deref() != Some(&r.entry.name) {
+                // The full-size picture lives on the radio, and its *bytes* are
+                // what "Save picture…" writes out. Ask for it the moment one is
+                // opened — but ask while the bytes are missing, not merely
+                // while the texture is, because a picture can be shown full
+                // size from a texture the panel already held while its PNG
+                // bytes have moved on (a newer fetch, or a promotion from the
+                // just-received picture). Gating on the texture left the SAVE
+                // chip missing until the operator closed and reopened the
+                // session — the reported bug. Asked once per name, so a fetch
+                // that fails is not a request every frame.
+                let have_bytes =
+                    self.sstv.full_png.as_ref().is_some_and(|(n, _)| *n == r.entry.name);
+                if !have_bytes && self.sstv.full_asked.as_deref() != Some(&r.entry.name) {
                     self.sstv.full_asked = Some(r.entry.name.clone());
                     self.sstv.full_gone = false;
                     cmds.push(Command::ImageGet {
