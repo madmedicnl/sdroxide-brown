@@ -63,6 +63,45 @@ granted (`gh auth refresh -h github.com -s project`).
     can only decode when the dial is set to **channel − 1.7 kHz, USB** (518 →
     516.300) and a station is in its slot. The panel hovers and manual now say
     both; no code fault found. Awaiting Cal's result.
+  - **Discussion #8 — FT8/FTx decode, REOPENED by kevin2008-01 (2026-10-04
+    16:41).** "FTx is not fixed in 1.9.16." New detail: with a brand-new web
+    session it still decodes almost nothing; his phone on the speaker decodes
+    everything. **New hypothesis (his, and plausible):** the web client losing
+    focus / a network blip desynchronises the *server's* clock or the audio
+    stream, and FTx is clock-critical. Two concrete claims to chase:
+    (a) minimising the browser to the taskbar cuts the sound, and restoring it
+    reloads and leaves a waterfall/audio lag; (b) any power interruption
+    "throws off the clock". **The server-side decode path was fixed (the
+    subtract panic) but Kevin's case is still failing, so the panic was not the
+    whole story — or not his story.** Next: ask him for the exact build
+    hash in the `1.9.16` screenshot, and whether a **native `--connect` client
+    to the same server** decodes (that separates "server engine" from "browser
+    relay/timing").
+  - **Discussion #7 — SSTV (kevin2008-01), open.** Three asks: (1) menu extra
+    to **re-upload**, **send to** (email a QSL picture) and **save to** a chosen
+    location on a received picture; (2) **CTR does not centre** in SSTV
+    (1.9.10–15) — frequencies stay on the left; (3) received pictures and the
+    **SAVE** button only appear after closing and reopening the session —
+    images are not refreshed within a session. (3) is the same shape as the
+    screen-settings sync area; treat as a real UI/state bug.
+- **Upstream PR #626 (CW engine-side keyer) — review received 2026-10-03, work
+  needed.** Maintainer: shape is right (keyer in the engine, contacts not
+  edges, appended wire), but the **lifecycle** is wrong:
+  - a paddle press from idle never starts an over (`set_cw_contacts` doesn't
+    key TX the way `key_down` does — only works once `fill_tx_block` runs; the
+    tests hide it);
+  - **a held paddle is not released when the client disconnects** (session
+    cleanup sends only `CwKey(false)`, and the keyer skips the hold cap — must
+    fix before it keys a transmitter unattended);
+  - the keyer is **never disarmed**: `abort_tx`, `set_straight(false)` and
+    config changes leave it running; after one paddle use the straight key goes
+    dead; on a CAT rig it is armed *before* the refusal;
+  - **mode B does not send the trailing element** when a squeeze is released
+    mid-element — add a squeeze-release test pinning A vs B;
+  - taps are latched only in `poll`, so press+release in one batch is lost;
+  - the code/out text buffers grow unbounded **on the audio thread**.
+  These are the next work item on this PR (it is a draft, so no rush, but they
+  are real).
 - **ALE**: decode a real burst off-air; wire TX; fold the mode into PR #598
 - Upstream PRs awaiting review: **#537** band openings, **#545** (tr)uSDX nG,
   **#554** UVPacket, **#557** rec silence, **#559** band-menu captions,
