@@ -538,6 +538,7 @@ impl OliviaRx {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::MonoResampler;
 
     /// The transforms must be an exact pair, on every one of the 64 characters
     /// including the idle `0`. This is the invariant the transmit half is
@@ -703,6 +704,69 @@ mod tests {
         assert!(
             decoded.contains("SouthWest") && decoded.contains("G7LEE"),
             "off-air Olivia did not recover the known text: {decoded:?}"
+        );
+    }
+
+    /// The second known-text sample, and the one that proved the cure: **32/1000**
+    /// of Wikipedia's own Olivia recording, recovered to its exact text. A
+    /// reporter (fork discussion #5) produced it after the 16/500 Avalon case
+    /// above found the fault, and decoded it 100% in the app — this pins that
+    /// result so a future change cannot quietly lose it.
+    ///
+    /// Point `SDROXIDE_OLIVIA_1000_32` at the Wikipedia sample (any rate; it is
+    /// resampled here to the 8 kHz the decoder runs at). The file is a Wikimedia
+    /// Commons upload and is not redistributed with the tree, so the test is
+    /// `#[ignore]`d and skips when the variable is unset:
+    /// `https://upload.wikimedia.org/wikipedia/commons/3/32/OLIVIA_1000_32_sample.ogg`
+    #[test]
+    #[ignore]
+    fn the_wikipedia_32_1000_sample_decodes() {
+        let Ok(path) = std::env::var("SDROXIDE_OLIVIA_1000_32") else {
+            eprintln!("SDROXIDE_OLIVIA_1000_32 unset; skipping");
+            return;
+        };
+        let mut reader = hound::WavReader::open(&path).expect("open the sample WAV");
+        let spec = reader.spec();
+        let in_rate = spec.sample_rate as f64;
+        let raw: Vec<f32> = match spec.sample_format {
+            hound::SampleFormat::Float => {
+                reader.samples::<f32>().map(|s| s.expect("sample")).collect()
+            }
+            hound::SampleFormat::Int => {
+                reader.samples::<i16>().map(|s| s.expect("sample") as f32 / 32_768.0).collect()
+            }
+        };
+        // Resample to the 8 kHz the decoder is built for, exactly as the
+        // controller's resampler does in the live path.
+        let audio: Vec<f32> = if (in_rate - 8000.0).abs() < 1.0 {
+            raw
+        } else {
+            let mut rs = MonoResampler::new(in_rate, 8000.0).expect("resampler");
+            let mut out = Vec::with_capacity(raw.len() * 8000 / in_rate as usize + 64);
+            rs.push(&raw, &mut out);
+            out
+        };
+        // 32 tones over 1000 Hz → 31.25 Hz spacing. The bank is searched: the
+        // sample's comb sits a little over 1 kHz from the file's origin, and a
+        // receiver would not know that.
+        let mut best = String::new();
+        let mut hz = 800.0;
+        while hz <= 1600.0 {
+            let mut rx = OliviaRx::new(8000.0, hz, 32, 1000.0);
+            let mut got = String::new();
+            for chunk in audio.chunks(512) {
+                got.push_str(&rx.process(chunk));
+            }
+            let score = got.matches("Wikipedia").count() * 100 + got.matches("encyclopedia").count();
+            if score > best.matches("Wikipedia").count() * 100 + best.matches("encyclopedia").count() {
+                best = got;
+            }
+            hz += 5.0;
+        }
+        eprintln!("decoded {} chars: {best:?}", best.len());
+        assert!(
+            best.contains("Wikipedia") && best.contains("encyclopedia"),
+            "the 32/1000 sample did not recover its known text: {best:?}"
         );
     }
 
