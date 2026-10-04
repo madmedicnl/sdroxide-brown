@@ -33,17 +33,36 @@ granted (`gh auth refresh -h github.com -s project`).
 
 ## Open (In Progress)
 
-- **Reported bugs from fork discussion #5 (kevin2008-01), unverified, not yet
-  fixed** — separate from the Olivia decode fix (which shipped in 1.9.16):
-  - **CLEAR RX appears to do nothing on Olivia.** Wiring looks correct
-    (`clear_rx_chip` → `DigiClearRx` → controller `clear_rx` → `text_rx`), and
-    1.9.15 produced no Olivia text at all, so this may be a symptom of the
-    decoder bug rather than a real button fault. Re-test on 1.9.16; if CLEAR
-    still fails with text on screen, it is real (possibly web-session state).
-  - **Frequency memories capped at 3 in a new web session** (10 saved → 3
-    survive). Store/sync problem in the server session path. Real bug.
-  - **A decimal frequency is rounded** (7.038.5 MHz → 7.037). `MemoryChannel
-    .freq_hz` is `f64`, so something in the save or display rounds it. Real bug.
+- **Support queue, 2026-10-04.** What the fork's testers reported and where it
+  stands. Issues are disabled on the fork; reports arrive as Discussions.
+  - **Discussion #5 — Olivia decode (kevin2008-01): RESOLVED.** Find the fault
+    and fix in MORNING.md §1. In 1.9.16 the decoder decodes real Olivia; a
+    known-text sample decoded by the reporter (Wikipedia's 32/1000) reproduces
+    here and is pinned as an `#[ignore]`d test
+    (`SDROXIDE_OLIVIA_1000_32`). **Still open, and not a code matter:** nobody
+    has copied *our own* Olivia over on fldigi/MultiPSK — the transmit half is
+    unverified on air. Decode is confirmed; transmit awaiting a listener.
+  - **Discussion #5 — three store/UI bugs (kevin2008-01): OPEN, unverified.**
+    All separate from Olivia and not yet fixed:
+    - **CLEAR RX appears to do nothing on Olivia.** Wiring is correct
+      (`clear_rx_chip` → `DigiClearRx` → controller `clear_rx` → `text_rx`);
+      most likely it was a symptom of the 1.9.15 decoder producing no text.
+      Re-test on 1.9.16+; still broken with text on screen ⇒ real, check the
+      web-session path.
+    - **Frequency memories capped at 3 in a new web session** (10 saved → 3
+      survive). Store/sync in the server session path.
+    - **A decimal frequency is rounded** (7.038.5 MHz → 7.037). `MemoryChannel
+      .freq_hz` is `f64`, so the save or display is rounding it.
+  - **SSTV receive (operator, this bench): FIXED in 1.9.17.** The low end
+    (200–294 Hz) was cancelled to a dead band by the auto-notch, which was
+    running on the image/tone modes; `auto_notch_applies` now excludes SSTV,
+    SSTV-FM, RIFP, WEFAX, Hell, RF Paint. Separately, "hears a clear signal but
+    does not decode" was an **overloaded RSP1** (a keyed CRT inches away) —
+    RF-side, not code; the panels now warn when the front end is overloading.
+  - **NAVTEX "jibberish" (Cal, via the operator): support advice sent.** NAVTEX
+    can only decode when the dial is set to **channel − 1.7 kHz, USB** (518 →
+    516.300) and a station is in its slot. The panel hovers and manual now say
+    both; no code fault found. Awaiting Cal's result.
 - **ALE**: decode a real burst off-air; wire TX; fold the mode into PR #598
 - Upstream PRs awaiting review: **#537** band openings, **#545** (tr)uSDX nG,
   **#554** UVPacket, **#557** rec silence, **#559** band-menu captions,
