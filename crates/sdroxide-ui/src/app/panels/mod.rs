@@ -1094,6 +1094,25 @@ impl SdroxideApp {
         true
     }
 
+    /// A chip that opens the Enigma machine and solver.
+    ///
+    /// Offered in the **free-text keyboard modes** — PSK, RTTY, Olivia, THOR,
+    /// FSQ and Hell — because a listener copying cipher-like text off the air
+    /// is exactly who wants a decryption toy beside the decoder. Deliberately
+    /// *not* the structured modes (FT8/FT4/FT2, JS8): those carry callsigns and
+    /// grids, not free text, and a code-breaker has nothing to do there.
+    pub(in crate::app) fn enigma_chip(&mut self, ui: &mut egui::Ui) {
+        if crate::chrome::chip(ui, self.enigma.show, " ENIGMA ")
+            .on_hover_text(
+                "Enigma machine — encipher a message on a wartime faceplate, and solve a \
+                 ciphertext you copied off the air",
+            )
+            .clicked()
+        {
+            self.enigma.show = !self.enigma.show;
+        }
+    }
+
     /// [`Self::clear_rx_chip`], but greyed out when there is nothing to clear.
     ///
     /// JS8's composer disables it on an empty conversation (issue #473); the

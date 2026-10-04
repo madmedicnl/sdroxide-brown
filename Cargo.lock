@@ -5169,6 +5169,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdroxide-enigma"
+version = "1.9.16"
+
+[[package]]
 name = "sdroxide-faad2"
 version = "1.9.17"
 dependencies = [
@@ -5676,6 +5680,7 @@ dependencies = [
  "sdroxide-audio",
  "sdroxide-config",
  "sdroxide-dsp",
+ "sdroxide-enigma",
  "sdroxide-midi",
  "sdroxide-proto",
  "sdroxide-solar",

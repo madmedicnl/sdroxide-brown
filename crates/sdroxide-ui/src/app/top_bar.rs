@@ -9830,10 +9830,13 @@ mod tests {
             Some(b.default_entry().0),
             "RF Paint lost its band button"
         );
+        // Olivia gained a published per-band calling table (fork discussion #5),
+        // so its 20 m button now lands on the calling centre rather than
+        // keeping whatever dial the band had.
         assert_eq!(
             band_chip_dial(Mode::Olivia, b, digi_freq_for_band(Mode::Olivia, b)),
-            Some(14_076_000.0),
-            "Olivia lost its own 20 m dial"
+            Some(14_107_500.0),
+            "Olivia lost its own 20 m calling dial"
         );
         // ...and outside the digital modes a click is a band change as before.
         assert_eq!(band_chip_dial(Mode::Lsb, Band::M20, None), None);

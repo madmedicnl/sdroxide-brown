@@ -1,0 +1,9 @@
+[package]
+name = "sdroxide-enigma"
+version.workspace = true
+edition.workspace = true
+description = "An Enigma I/M4 emulator and a ciphertext solver, for the fork's decryption toy"
+
+[dependencies]
+# None. The machine and the solver are pure integer algorithms; keeping the
+# crate dependency-free is what lets the browser build use it unchanged.

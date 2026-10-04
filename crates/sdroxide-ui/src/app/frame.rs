@@ -1106,6 +1106,7 @@ impl eframe::App for SdroxideApp {
         self.sat_window(&ctx, &mut cmds);
         self.morse_window(&ctx);
         self.signal_id_window(&ctx);
+        self.enigma_window(&ctx);
         self.poll_known_calls(&mut cmds);
         self.known_calls_window(&ctx);
         self.help.ui(&ctx);
