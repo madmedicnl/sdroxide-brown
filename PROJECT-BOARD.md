@@ -97,34 +97,94 @@ granted (`gh auth refresh -h github.com -s project`).
     hash in the `1.9.16` screenshot, and whether a **native `--connect` client
     to the same server** decodes (that separates "server engine" from "browser
     relay/timing").
-  - **Discussion #9 — phone (web) layout, and a 1.9.17 "crash/totally
-    unusable" (kevin2008-01), open.** Two parts:
-    - **Base bug is SHARED with upstream.** The phone layout is broken on the
-      official build too — he filed upstream **dividebysandwich/sdroxide#516**,
-      the maintainer partly answered in `1fa0f29`, and it persists: layout not
-      centred and the spectrum section missing on phone mode. So do not own
-      the whole thing; it is upstream's layout, on a real phone (1440×3200,
-      Android Chrome).
-    - **A NEW 1.9.17 regression: "Crash and totally unusable"** (his 2026-10-04
-      19:26 comment, Brown web client). The screenshot shows the top chip row
-      overlapped into a mess and the panel split with a black void — i.e. the
-      **Phone tier is over-stuffed**. Strong suspicion: **the fork added too
-      many chips/controls into rows sized for fewer** (GRID, SIG ID, ISM/ISL,
-      ENIGMA, HFDL, the listener chips…), which overflows a phone width. A
-      crash (not just overlap) in 1.9.17 is the thing to chase — check the
-      Phone tier for an overflow / divide-by-zero / bad index rather than the
-      layout alone. **Cannot be reproduced without a browser**: audit the
-      `Tier::Phone` path (`frame.rs:675/923`, `top_bar.rs:664/704/1473/6917`)
-      and the `phone_pane` splits for anything that can divide by zero or
-      index out of range, and compare the reserved-widths against what the
-      fork now draws. Recorded as the phone-layout work item.
-  - **Discussion #7 — SSTV (kevin2008-01), open.** Three asks: (1) menu extra
+  - **Discussion #9 — phone (web) layout: FIXED in 1.9.19 (`b65cda82`), and the
+    two theories behind it were both wrong.** Read the screenshot before
+    theorising; that is what settled it.
+    - **It was the split view, not the layout.** With three radios open on a
+      360 pt phone, `MultiApp::ui` split the main area into equal columns with
+      no tier check — `(360 − 12) / 3 = 116 pt` each. Not three radios: the
+      phone layout clipped to a sliver, frequency readout truncated, S-meter
+      unreadable, one radio name wrapped to a single letter per line. His
+      "layout is not centred" is the same single fact. The split is now not
+      drawn on the phone; the focused radio takes the window and the stored
+      panes are kept, so widening gives the split back.
+    - **Two things it was NOT.** (a) *A missing spectrum on a phone is not a
+      bug* — `layout::Tier::waterfall_only()` is true for `Phone` and has been
+      since **2026-07-31**, long before 1.9.17; suppressing it is deliberate
+      ("a spectrum trace in a 360 pt window costs the waterfall a third of its
+      height"). (b) *`digi_pane` defaulting to 0* is irrelevant, since the
+      phone never draws a spectrum at any pane. Two hours of plausible theory
+      would have shipped a wrong fix.
+    - **The guards that should have caught it never ran.** Both phone tests
+      dropped egui's texture delta unapplied → debug-assert → the whole
+      `sdroxide-ui` **debug** suite was red (697 passed / 2 failed) with the
+      failure in the harness, not the code. And `phone_crash_regression_1440x3200`
+      fed the *physical* pixel count as logical points: 1440 pt wide is the
+      **Desktop** tier, so under a phone-sounding name it guarded nothing
+      phone-shaped. Now `411x914` (his panel at DPR 3.5), and the helper
+      **asserts the tier resolves to `Phone`** so that mistake cannot recur
+      quietly. Suite is 704/704 in debug *and* release.
+    - **Two repair tests, each verified to fail when its own rule is reverted**
+      — `split_plan` (the split is not drawn on a phone) and `strip_set` (the
+      other radios stay *reachable*; reading the stored panes would grey them
+      as "already in another column", leaving a phone that can look at one
+      radio and not change which).
+    - **NOT verified on a device.** No `MultiApp` harness here (`new` needs an
+      `eframe::CreationContext`), so the rendering is unproven — **Kevin's
+      reload is the test.** Not browser-tested either.
+    - **Still open: the 1.9.17 crash itself.** Never seen on the bench; the
+      layout fault is fixed but the crash is not, and the changelog says so.
+      Console output if it recurs.
+    - **Older note on this entry, kept because it was the wrong assumption:**
+      the base layout fault is shared with upstream (dividebysandwich#516) and
+      his screenshot shows it on the official build too. That may still be true
+      of *upstream's* layout, but our half of #9 was ours and is now fixed —
+      do not file the whole report upstream again.
+    - **SUPERSEDED — the old theory, kept so it is not re-derived.** It blamed an
+      over-stuffed `Tier::Phone` chip row (GRID, SIG ID, ISM/ISL, ENIGMA, HFDL,
+      the listener chips) and a possible overflow / divide-by-zero on
+      `frame.rs:675/923`, `top_bar.rs:664/704/1473/6917` or the `phone_pane`
+      splits. Reading the screenshot instead of theorising showed the cause is
+      neither: nothing overflowed a row, it was **three 116 pt radio columns**.
+      The 1.9.18 phone work (`e8e7812a`, three chips + a ☰ menu) had already
+      fixed the chip row; this release fixed the split. **Do not audit the chip
+      row for this report.**
+  - **Discussion #7 — SSTV (kevin2008-01).** Three asks: (1) menu extra
     to **re-upload**, **send to** (email a QSL picture) and **save to** a chosen
     location on a received picture; (2) **CTR does not centre** in SSTV
     (1.9.10–15) — frequencies stay on the left; (3) received pictures and the
     **SAVE** button only appear after closing and reopening the session —
     images are not refreshed within a session. (3) is the same shape as the
     screen-settings sync area; treat as a real UI/state bug.
+    - **(1) re-upload: DONE, `112d8df1`, in 1.9.19.** A **Re-upload** chip beside
+      **Save picture…** loads the picture into the selected transmit slot. It
+      stops there — TX is still a separate deliberate press — and is greyed
+      with a reason on a receive-only radio.
+    - **(1) save-to: already shipped.** `Save picture…` opens a real file
+      dialog (`download::save_as` → rfd). Open question for the operator:
+      **rename it to "Save picture as…"**, since the wording does not say it
+      will ask. Not done unilaterally — raised in the #7 reply instead.
+    - **(1) send-to: NOT BUILT, answered instead.** No mail account to send
+      from, and a browser cannot attach a file to a message. The only thing
+      shippable is "save it and open your mail client", which is the operator's
+      own two clicks wearing our hat — refused under the house rule against a
+      control that silently does nothing. If asked again, this is the reason.
+    - **(3): already fixed in 1.9.17** by `d9425662` — the ask now follows the
+      picture's *bytes*, not the full-size texture. Kevin's "therefore images
+      are not refreshed" was his own inference from the SAVE symptom; the
+      gallery is live via `on_saved`/`on_listing`.
+    - **(2) CTR: probably already fixed — waiting on a retest.** CTR is
+      `center_on_vfo`, the DISPLAY chip that keeps the dial in the middle of
+      the panadapter. Kevin reported it against **1.9.10–15**, and `8c0aee9d`
+      ("choosing SSTV lands on that band's SSTV frequency", 2026-10-01, in
+      1.9.18) very likely fixed it: 80 m's SSTV frequency is **3.7300**,
+      which is the middle of the 3.7275–3.7325 window in his screenshot, and
+      before that commit choosing SSTV left the dial wherever it was. Asked him
+      to retest on 1.9.19. **Do not patch this speculatively** — if he says it
+      is still off-centre, the thing to check is whether SSTV's `AudioCursor`
+      anchor (`center_on_cursor`, from `holds_standard_tones()`) fights
+      `active_freq_hz`.
+    - **(4) weak-signal decode** is upstream PR #587 / issue #622. Not ours.
 - **Upstream PR #626 (CW engine-side keyer) — NEXT SESSION (queued 2026-10-04).**
   Review received 2026-10-03; branch `upstream-pr/cw-key-engine`. Do it in this
   order: **(2) the disconnect-safety fix first**, then (3) disarm, then the
@@ -154,6 +214,29 @@ granted (`gh auth refresh -h github.com -s project`).
   **#598** ALE
 - **Rebase #568 and #561** onto current `upstream/main`
 - ALE experimental release: publish/finish once the live decode works
+
+## Known-red tests and unverified claims
+
+- **`skim_window` — genuinely red, and the fault is the skimmer's CW
+  *decode*. Next diagnosis, not a release-day patch** (measured 2026-10-05).
+  `sdroxide-radio --test skim_window`,
+  `a_station_on_the_visible_part_of_a_wide_span_is_skimmed`, fails **alone and
+  in a full run**, identically on `v1.9.16_brown` / `v1.9.17_brown` /
+  `v1.9.18_brown` — so it predates every commit in 1.9.19 and is not a
+  regression from any of them. It is in 1.9.19's changelog under "Not fixed"
+  so whoever reads the release sees it too.
+  **What the failure already rules out:** the station on 14.060 MHz is spotted
+  hundreds of times at the right frequency, so the window-following this test
+  exists to check **works**. What never arrives is
+  `callsign == Some("W1AW")`. The fault is CW decoding inside the skimmer —
+  not the view, the span, or the spotting.
+  **What it needs:** `keyed_cw` builds a real `CwTx` envelope and interpolates
+  it, and there is **no off-air recording to check the decode against**. So the
+  first job is to find what a genuine CW signal produces through this path, not
+  to loosen a threshold until it goes green.
+  **Do not** "fix" it by weakening the assertion, or by treating it as the
+  flake it was long mistaken for — an earlier `AGENTS.md` note claimed it
+  "passes alone", which was false; both files now say so.
 
 ## Session ignore list — design (coded, 2026-09-29)
 
