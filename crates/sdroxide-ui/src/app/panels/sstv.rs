@@ -1387,6 +1387,7 @@ impl SdroxideApp {
         if let Some(idx) = self.sstv.enlarged {
             let mut open = true;
             let mut save = false;
+            let mut reupload = false;
             let mut pressed_delete = false;
             if let Some(r) = self.sstv.received.get(idx) {
                 // The full-size picture lives on the radio, and its *bytes* are
@@ -1457,6 +1458,34 @@ impl SdroxideApp {
                             {
                                 save = true;
                             }
+                            // The relay convention: a picture you could not copy
+                            // is sent back out so the stations who missed it can
+                            // pick it up. It loads the transmit slot and stops
+                            // there — arming a transmitter from a click in a
+                            // picture window would key up on a misclick, and
+                            // every other route onto the air in this program is
+                            // a deliberate press of TX.
+                            // Composing a picture is worth doing on a receiver; *sending* it is
+                            // not, so on a listen-only radio the chip is greyed
+                            // with the reason rather than offered and
+                            // refused — the same rule the TX button follows.
+                            let reupload_tip = if self.tx_capable() {
+                                format!(
+                                    "Send this picture back out — loads transmit slot {}",
+                                    self.sstv.selected_slot + 1
+                                )
+                            } else {
+                                "This radio cannot transmit".to_string()
+                            };
+                            if savable {
+                                let ru = self.tx_capable();
+                                if crate::chrome::chip(ui, ru, "Re-upload")
+                                    .on_hover_text(reupload_tip)
+                                    .clicked()
+                                {
+                                    reupload = true;
+                                }
+                            }
                             // Two presses, the second one red: the file goes
                             // from the radio's disk and there is nothing to
                             // undo it with.
@@ -1519,6 +1548,15 @@ impl SdroxideApp {
                 if let Some((name, png)) = &self.sstv.full_png {
                     crate::download::save_as(name, png, crate::download::Mime::Png);
                 }
+            }
+            // Loaded into the slot, not keyed. The slot is already selected, so
+            // the picture appears in the TRANSMIT column on the other side of
+            // the divider and the operator sends it from there — which is the
+            // same two deliberate acts every other transmission takes.
+            if reupload && let Some((_, png)) = &self.sstv.full_png {
+                let slot = self.sstv.selected_slot;
+                let png = png.clone();
+                self.sstv.set_slot(slot, png, cmds);
             }
             // First press arms the chip, second sends it. The gallery entry
             // stays until the engine confirms the file is gone.
@@ -2077,5 +2115,79 @@ impl SdroxideApp {
         } else {
             format!("in {dir}")
         }
+    }
+}
+
+#[cfg(test)]
+mod reupload_tests {
+    use super::*;
+    use sdroxide_types::Command;
+
+    /// The Re-upload chip's whole job: the picture the operator is looking at
+    /// becomes the transmit slot's picture, so it can be sent back out for the
+    /// stations who could not copy it.
+    #[test]
+    fn a_received_picture_can_be_loaded_into_the_transmit_slot() {
+        let mut sstv = SstvUi::default();
+        sstv.selected_slot = 2;
+        let png = b"\x89PNG-received".to_vec();
+        let mut cmds: Vec<Command> = Vec::new();
+
+        sstv.set_slot(sstv.selected_slot, png.clone(), &mut cmds);
+
+        assert_eq!(sstv.selected_slot, 2, "the slot it was aimed at is the one set");
+        assert!(sstv.pick_error.is_none(), "an ordinary picture is not a complaint");
+        assert_eq!(
+            cmds.len(),
+            1,
+            "one command, not a stream of them: a 40 MB picture pushed per frame \
+             would be the very thing the limit below exists to stop"
+        );
+        match &cmds[0] {
+            Command::ImageSetSlot { slot, bytes } => {
+                assert_eq!(*slot, 2);
+                assert_eq!(bytes, &png, "the bytes are the received picture's own");
+            }
+            other => panic!("expected the slot to be filled, got {other:?}"),
+        }
+    }
+
+    /// A picture over the limit is refused **before** anything is sent, and it
+    /// says which limit — otherwise Re-upload appears to work and the
+    /// transmit column keeps showing the old picture, which is the fault this
+    /// fork treats as a bug rather than a shrug.
+    #[test]
+    fn a_picture_too_big_to_upload_is_refused_with_the_limit_named() {
+        let mut sstv = SstvUi::default();
+        let mut cmds: Vec<Command> = Vec::new();
+        let huge = vec![0u8; sdroxide_types::IMAGE_UPLOAD_MAX + 1];
+
+        sstv.set_slot(0, huge, &mut cmds);
+
+        assert!(cmds.is_empty(), "nothing may go to the engine");
+        let err = sstv.pick_error.as_deref().expect("an oversize picture is a complaint");
+        assert!(
+            err.contains(&format!("{}", sdroxide_types::IMAGE_UPLOAD_MAX / 1_048_576)),
+            "the limit is named, so the operator can see what to do: {err}"
+        );
+    }
+
+    /// And the complaint is cleared by the next picture that fits, so a refusal
+    /// does not sit on the panel warning about a load that has since worked.
+    #[test]
+    fn the_next_picture_that_fits_clears_an_earlier_refusal() {
+        let mut sstv = SstvUi::default();
+        let mut cmds: Vec<Command> = Vec::new();
+
+        sstv.set_slot(0, vec![0u8; sdroxide_types::IMAGE_UPLOAD_MAX + 1], &mut cmds);
+        assert!(sstv.pick_error.is_some());
+
+        sstv.set_slot(0, b"\x89PNG-small".to_vec(), &mut cmds);
+        assert!(sstv.pick_error.is_none());
+        assert_eq!(cmds.len(), 1, "only the picture that fit was sent");
+        assert!(
+            matches!(&cmds[0], Command::ImageSetSlot { .. }),
+            "the slot is filled by the one command that does it"
+        );
     }
 }
