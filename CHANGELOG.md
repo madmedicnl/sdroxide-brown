@@ -69,6 +69,11 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   addressed (see the phone entry above), but the crash itself has never been
   reproduced on the bench. If it recurs, the browser console output when it
   happens is what is needed — please send it.
+- **The skimmer does not read a callsign off a CW signal** in its own test, and
+  has not done so for several releases. The station is spotted at the right
+  frequency — the window following the view works — but the callsign never
+  arrives with it. This is a pre-existing failure, not something this release
+  introduced, and it is left alone rather than patched blind.
 
 ## [1.9.18_brown] - 2026-10-04
 
