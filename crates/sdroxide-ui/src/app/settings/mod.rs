@@ -181,6 +181,13 @@ pub(in crate::app) struct SettingsIo<'a> {
     /// identity in place, so the screen's editable copy must be re-seeded —
     /// see `SdroxideApp::profile_apply_pending`.
     digi_reseed: &'a mut bool,
+    /// Re-ask the machine for its sound cards. Opens nothing, so it cannot
+    /// disturb a running stream — which is the point: the lists are otherwise
+    /// only re-queried when this dialog is opened, so a codec plugged in while
+    /// it is already open needs this to appear. Re-reading the list is *not* the
+    /// same as re-resolving a saved name against it, and the two failures look
+    /// alike from here; see `DeviceSwap`.
+    audio_rescan: &'a mut bool,
     /// Re-enumerate the USB bus for RTL-SDR dongles. Cheap and non-invasive —
     /// no device is opened — so it cannot disturb a running stream.
     rtlsdr_rescan: &'a mut bool,
@@ -1059,6 +1066,7 @@ impl SdroxideApp {
         // Read before the window's buffers are borrowed.
         let speech_on = speech_edit.enabled;
         let mut hpsdr_discover = false;
+        let mut audio_rescan = false;
         let mut rtlsdr_rescan = false;
         let mut rx888_rescan = false;
         let mut airspyhf_rescan = false;
@@ -1268,6 +1276,7 @@ impl SdroxideApp {
                             #[cfg(not(target_arch = "wasm32"))]
                             remote_connect: &mut remote_connect,
                             digi_edit: &mut digi_edit,
+                            audio_rescan: &mut audio_rescan,
                             digi_seeded,
                             net_edit: &mut net_edit,
                             net_seeded: self.net_cfg_seeded,
@@ -1447,6 +1456,19 @@ impl SdroxideApp {
             // A LAN scan (~1.5 s), on the radio's network — which is the only
             // one an HPSDR announcement would arrive on.
             self.ask_device(ctx, P::Hpsdr);
+        }
+        if audio_rescan {
+            // A device-list question, not an open: nothing is claimed, so it is
+            // safe at any time including mid-stream. The stored name is
+            // re-resolved when the radio is next opened, not here — a rescan
+            // cannot fix a name the server has renamed, and saying otherwise
+            // would be the one thing this button must not do.
+            self.ask_device(ctx, P::RadioAudio);
+            // The operator's own speaker and microphone are enumerated locally
+            // rather than by a probe (`DeviceProbe::RadioAudio`'s own doc says
+            // so), so their list is refreshed by clearing the flag that
+            // memoises it. One button, every list of devices on offer.
+            self.audio_devices_queried = false;
         }
         if rtlsdr_rescan {
             // USB enumeration only — no device is opened, so this is safe to
@@ -2725,7 +2747,7 @@ impl SdroxideApp {
                             .as_ref()
                             .map(|(i, o)| (i.as_slice(), o.as_slice())),
                         io.can_probe,
-                        io.apply_iface,
+                        io.audio_rescan,
                         cmds,
                     ),
                     Backend::UsbAudio => settings_usb_audio_tab(
@@ -2734,7 +2756,7 @@ impl SdroxideApp {
                             .as_ref()
                             .map(|(i, o)| (i.as_slice(), o.as_slice())),
                         io.radio_edit,
-                        io.apply_iface,
+                        io.audio_rescan,
                         io.can_probe,
                     ),
                     Backend::AtsMini => settings_atsmini_tab(
@@ -2743,7 +2765,7 @@ impl SdroxideApp {
                             .as_ref()
                             .map(|(i, o)| (i.as_slice(), o.as_slice())),
                         io.radio_edit,
-                        io.apply_iface,
+                        io.audio_rescan,
                         io.can_probe,
                         self.atsmini_memories.as_deref(),
                         cmds,

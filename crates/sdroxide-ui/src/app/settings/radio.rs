@@ -1025,7 +1025,7 @@ fn cat_radio_audio(
     cfg: &mut sdroxide_types::RadioConfig,
     devices: Option<(&[String], &[String])>,
     can_probe: bool,
-    apply: &mut bool,
+    rescan: &mut bool,
 ) {
     ui.add_space(10.0);
     ui.separator();
@@ -1039,6 +1039,24 @@ fn cat_radio_audio(
         return;
     };
     let (ci, co) = (cfg.radio_audio_in.clone(), cfg.radio_audio_out.clone());
+    // Beside the pickers rather than at the foot of the tab, where every other
+    // interface puts its Rescan \u{2014} this is the row the rescan is *for*, and
+    // the same shape as the RTL-SDR dongle row's.
+    probe_only(ui, can_probe, |ui| {
+        if ui
+            .button("Rescan")
+            .on_hover_text(
+                "Ask the machine again which sound cards it has. No device is opened, so \
+                 this is safe to press while receiving.\n\nUse it after plugging a codec in. \
+                 It does not re-open the radio \u{2014} that is Apply \u{2014} and it cannot \
+                 repair a card the sound server has renamed, which is reported on the radio \
+                 instead.",
+            )
+            .clicked()
+        {
+            *rescan = true;
+        }
+    });
     egui::Grid::new("radio-audio").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
         ui.label("From radio (RX)");
         probe_only(ui, can_probe, |ui| {
@@ -1051,20 +1069,19 @@ fn cat_radio_audio(
         });
         ui.end_row();
     });
+    // No button here. There is one "Apply / reconnect" at the foot of this
+    // tab, and it already does this and everything else — it writes the
+    // whole radio config and reopens the source. A second button with the same
+    // label, a different hover and the same effect is the fork's own bug
+    // class: two controls that look like they do different things and cannot
+    // be told apart. So this section says where the button is instead.
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        if ui
-            .button("Apply / reconnect")
-            .on_hover_text("Reopen the CAT rig with these sound cards — no restart")
-            .clicked()
-        {
-            *apply = true;
-        }
-        ui.add(
-            egui::Label::new(RichText::new("Reconnects the radio without restarting.").weak())
-                .wrap(),
-        );
-    });
+    ui.label(
+        RichText::new(
+            "These cards are opened by \u{201c}Apply / reconnect\u{201d} at the foot of this tab.",
+        )
+        .weak(),
+    );
     crate::app::settings::general::settings_rx_audio_gain(ui, cfg);
 }
 
@@ -1076,7 +1093,7 @@ pub(in crate::app) fn settings_usb_audio_tab(
     ui: &mut egui::Ui,
     devices: Option<(&[String], &[String])>,
     radio_edit: &mut Option<sdroxide_types::RadioConfig>,
-    apply: &mut bool,
+    rescan: &mut bool,
     can_probe: bool,
 ) {
     let Some(cfg) = radio_edit.as_mut() else {
@@ -1095,6 +1112,22 @@ pub(in crate::app) fn settings_usb_audio_tab(
     };
     // Read out before the combos, which hand the fields to their editors.
     let (ci, co) = (cfg.radio_audio_in.clone(), cfg.radio_audio_out.clone());
+    // The same Rescan, in the same place, as the CAT tab's audio section.
+    probe_only(ui, can_probe, |ui| {
+        if ui
+            .button("Rescan")
+            .on_hover_text(
+                "Ask the machine again which sound cards it has. No device is opened, so \
+                 this is safe to press while receiving.\n\nUse it after plugging the rig's \
+                 codec in. It does not re-open the radio \u{2014} that is Apply \u{2014} and it \
+                 cannot repair a card the sound server has renamed, which is reported on \
+                 the radio instead.",
+            )
+            .clicked()
+        {
+            *rescan = true;
+        }
+    });
     egui::Grid::new("usb-audio-grid").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
         // Only the combos are greyed: wrapping whole rows would put both of
         // them, `end_row` and all, inside a single cell of the grid.
@@ -1126,19 +1159,14 @@ pub(in crate::app) fn settings_usb_audio_tab(
         )
         .weak(),
     );
-    ui.horizontal(|ui| {
-        if ui
-            .button("Apply / reconnect")
-            .on_hover_text("Reopen the radio with these sound cards — no restart")
-            .clicked()
-        {
-            *apply = true;
-        }
-        ui.add(
-            egui::Label::new(RichText::new("Reconnects the radio without restarting.").weak())
-                .wrap(),
-        );
-    });
+    // The same single button as every other interface tab — see
+    // `cat_radio_audio`. A sentence here rather than a second button.
+    ui.label(
+        RichText::new(
+            "These cards are opened by \u{201c}Apply / reconnect\u{201d} at the foot of this tab.",
+        )
+        .weak(),
+    );
 }
 
 /// The ATS Mini: a Wi-Fi/serial controlled Si4732 pocket receiver whose audio
