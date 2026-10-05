@@ -251,21 +251,13 @@ pub(in crate::app) fn settings_ui_tab(
         crate::chrome::checkbox(ui, &mut cfg.simple_ui, "hide advanced chips");
         ui.end_row();
 
-        ui.label("Retro Radio").on_hover_text(
-            "Replace the workspace with a listener's faceplate: one big tuning \
-             scale and a needle, band and mode selectors, a volume control, an \
-             S-meter and an optional decode window. A skin over the same radio \
-             — nothing is turned off, and the arrow keys, the wheel and the \
-             Ctrl+Alt+R shortcut all still work. Switch it off to get the \
-             normal workspace back exactly as it was.",
-        );
-        crate::chrome::checkbox(ui, &mut cfg.retro_radio, "draw the retro faceplate");
+
         ui.end_row();
 
         ui.label("Screen follows your profile").on_hover_text(
             "When you are a remote client of `sdroxide --server`, the *look* of \
              this screen — theme, layout, waterfall and spectrum, fonts, Simple \
-             UI, Retro Radio, the map layers — can be kept with the profile you \
+             UI, the map layers — can be kept with the profile you \
              signed in as, so it comes back on any machine instead of starting \
              from defaults.\n\n\
              **Saved when you press the button, not on every change.** On a \

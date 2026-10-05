@@ -2936,7 +2936,7 @@ screen after every new session (fork discussion #4, kevin2008-01).
   **Do not** put `UiSettings` itself on the wire. This is the trap to remember.
 - **Presentation-only is a scope cut, not a security guard.** `ClientScreen`
   carries only the look — theme, layout, waterfall/spectrum, fonts, Simple UI,
-  Retro Radio, map layers. Window geometry, display zoom, the decode-list views
+  map layers. Window geometry, display zoom, the decode-list views
   and the one-shot acknowledgements stay on the machine, so adopting a login's
   screen never moves a window off a laptop or swallows a warning. (`UiSettings`
   was never an injection risk: it carries no URLs, paths or feeds, only scalars
@@ -2995,35 +2995,56 @@ screen after every new session (fork discussion #4, kevin2008-01).
   called both from the screen save (so *enabling* the opt-in seeds the server with
   the keys in force) and from the Controls commit (so a rebind travels too).
 
-## The Retro Radio faceplate (fork-only, 2026-09-30)
+## The Retro Radio faceplate: removed (was fork-only, 2026-09-30; removed 2026-10-05)
 
-A listener's skin over the same engine: a wooden faceplate with one big tuning
-scale and a needle, BAND and MODE chips, VOLUME, SQUELCH, the receive TONE
-shelves, an S-meter, SCAN/SEEK, PRESET buttons from the memories, and an
-optional decode window. It holds **no station state** — every control pushes an
-ordinary `Command` — so leaving it restores the workspace unchanged, and
-nothing is on the wire.
+**It is gone.** The operator's verdict on using it: "it's not how I intended
+have to work that better" — so it was removed rather than reworked, and the
+workspace is the only faceplate.
 
-- **Code:** `crates/sdroxide-ui/src/app/retro.rs` holds the whole faceplate.
-  `UiSettings::retro_radio` and `Action::ToggleRetroRadio` are both
-  **client-local** (no `PROTO_VERSION` change); the action ships the default
-  **Ctrl+Alt+R**, `InputSettings::SCHEMA` is **2** and the binding rides `ADDED`,
-  so an existing `input.json` picks the shortcut up.
-- **How it hooks in:** `frame::ui` guards the top bar and the band dock with
-  one-line `!retro_radio` conditions and **prepends** the retro branch to the
-  existing panadapter if-else chain — deliberately *not* a wrap, so there is no
-  mass re-indent to fight at the next upstream merge. The dialogs still run, so
-  Settings (and turning the mode off) stays reachable. The operating-panel
-  dispatch was extracted to `SdroxideApp::operating_panel`, shared by the normal
-  layout and the retro decode window.
-- **Controls map to:** BAND → `SetBand`; MODE → `SetModeListen` (no band rule
-  for a listener); the scale → `SetVfo`; VOLUME → `SetVolume`; SQUELCH → the
-  rig's `SetRigSquelch` when the radio commands squelch, else `SetSquelch` (the
-  top strip's split, issue #192); TONE → `SetRxTone`; SCAN/SEEK →
-  `SetScanning`/`ScanNext`; PRESET → `RecallMemory`. The S-meter and the lit
-  readout reuse `widgets::smeter` and `widgets::freq_display`.
-- **Not done yet:** the manual and the README have no Retro Radio entry (the
-  operator deferred the manual pass), and the faceplate is look-and-feel only.
+What it was: a listener's skin over the same engine, a wooden faceplate with
+one big tuning scale and a needle, BAND and MODE chips, VOLUME, SQUELCH, the
+receive TONE shelves, an S-meter, SCAN/SEEK and PRESET buttons. It held **no
+station state** — every control pushed an ordinary `Command` — so it was
+always reversible, and `Ctrl+Alt+R` / Settings → UI toggled it. Kept here
+because the *reason* it was built is worth not re-deciding: a listener's screen
+should not require understanding the main workspace, and the attempt to give
+them one without a second program failed.
+
+**What went, and the two wire fields with it** (`PROTO_VERSION` 192 → **193**):
+
+- `crates/sdroxide-ui/src/app/retro.rs` (353 lines) and `SdroxideApp::retro_decode_open`.
+- `UiSettings::retro_radio` **and** `ClientScreen::retro_radio`.
+- `Action::ToggleRetroRadio`, its `Ctrl+Alt+R` default, its `Display` group arm,
+  and its entry in the schema-2 `ADDED` list.
+- The three `frame.rs` guards (top bar, band dock, panadapter branch), the
+  Settings → UI row, the README bullet, the manual's list of what travels.
+- `operating_panel` stays, now with one caller: it was extracted so the faceplate
+  and the normal layout could share it, and it is a one-call indirection rather
+  than dead code. Left alone deliberately — folding it back in is churn for
+  no behaviour.
+
+**Both wire touchpoints were the last of their kind**, which is the only reason
+this is a version bump rather than a decoding incident: `retro_radio` was the
+trailing field of `ClientScreen` and `ToggleRetroRadio` the trailing variant of
+`Action`, so nothing above either moved a discriminant or a field.
+
+**The trap, and it is the one to remember.** `input.json` is self-describing
+JSON, so a stored `"ToggleRetroRadio"` would have made `serde_json` fail **the
+whole struct** — and `load_json` on a parse failure quarantines the file and
+returns defaults. The operator would have come back to a keyboard that had
+forgotten all 25 bindings, with the cause in a `.quarantined` file. Removing an
+enum variant is therefore never only about the variant.
+
+`load_input_settings` now parses the bindings one at a time and keeps what it
+can read, naming what it dropped — the same argument `load_json_list` already
+makes for a memory list or a logbook: *hundreds of rows entered by hand over
+years, each one independent of the rest*, so "all of them, because one was odd"
+is not a trade anybody would take. One document and half of it unreadable is a
+different case, which is why `load_json` still refuses whole. Pinned by
+`one_unreadable_binding_does_not_take_the_file_with_it`, which writes a real
+`input.json`, hand-adds a binding naming the removed action, and asserts the
+other three survive **and the file is not quarantined**.
+
 
 ## The contest logger (fork-only, 2026-09-30; reviewed and fixed 2026-10-04)
 

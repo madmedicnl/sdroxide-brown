@@ -2091,7 +2091,62 @@ pub fn save_wsjtx_config(cfg: &sdroxide_types::WsjtxConfig) -> Result<(), Config
 /// the engine — it describes the hardware on the operator's desk, so a knob
 /// keeps working when the UI drives a remote engine over `--connect`.
 pub fn load_input_settings() -> sdroxide_types::InputSettings {
-    load_json("input.json")
+    let Ok(dir) = config_dir() else { return Default::default() };
+    let FileText::Text(text) = read_config_text(&dir, "input.json") else {
+        return Default::default();
+    };
+    parse_input_settings(&text)
+}
+
+/// Read one `input.json`, keeping the bindings it can and dropping the ones it
+/// cannot — and naming what it dropped.
+///
+/// `serde_json` fails a whole struct on one bad value, and `input.json` is a
+/// list of chords the operator set up one at a time, each independent of the
+/// rest. It is not a document where half of it being unreadable means none of it
+/// is usable, which is the argument `load_json_list` makes for a memory list or
+/// a logbook. So one binding naming an action this build no longer has — a
+/// removed feature, a hand-edited file — would otherwise take the other two
+/// dozen with it, and the operator would come back to a keyboard that had
+/// forgotten everything. [`load_json`] cannot help: it is one document, and it
+/// quarantines a file it cannot read at all, which is the right answer there.
+///
+/// Split out from [`load_input_settings`] so it can be exercised on a string.
+/// Setting `SDROXIDE_CONFIG_DIR` to test it would be two tests in one binary
+/// racing on a process-global, and the one already there says in its own SAFETY
+/// note that nothing else reads the variable.
+fn parse_input_settings(text: &str) -> sdroxide_types::InputSettings {
+    let Ok(mut v) = serde_json::from_str::<serde_json::Value>(text) else {
+        // Not a shape we can pick apart — hand the whole file to the strict
+        // reader, which quarantines it and says why, as it always has.
+        return load_json("input.json");
+    };
+    let Some(keys) = v.get_mut("keys").and_then(serde_json::Value::as_array_mut) else {
+        return load_json("input.json");
+    };
+    let before = keys.len();
+    let mut dropped = Vec::new();
+    keys.retain(|k| match serde_json::from_value::<sdroxide_types::KeyBinding>(k.clone()) {
+        Ok(_) => true,
+        Err(_) => {
+            dropped.push(
+                k.get("action").and_then(serde_json::Value::as_str).unwrap_or("?").to_string(),
+            );
+            false
+        }
+    });
+    if dropped.is_empty() {
+        // Everything read: the strict path, so nothing about the ordinary file
+        // changes for the sake of this tolerance.
+        return serde_json::from_value(v).unwrap_or_default();
+    }
+    tracing::warn!(
+        "input.json: {} of {before} bindings name an action this build does not have ({}) \
+         and were dropped; every other binding was kept. The rest of the file loaded.",
+        dropped.len(),
+        dropped.join(", "),
+    );
+    serde_json::from_value(v).unwrap_or_default()
 }
 
 pub fn save_input_settings(cfg: &sdroxide_types::InputSettings) -> Result<(), ConfigError> {
@@ -2426,17 +2481,19 @@ mod tests {
         def.simple_ui = true;
         store.set(None, def);
         let mut mine = sdroxide_types::ClientScreen::default();
-        mine.retro_radio = true;
+        mine.theme = sdroxide_types::UiTheme::AmberPhosphor;
         store.set(Some("Contest"), mine);
 
         // A profile with its own set gets it.
         let (from, s) = store.for_profile(Some("Contest")).expect("a stored set");
         assert_eq!(from.as_deref(), Some("Contest"));
-        assert!(s.retro_radio && !s.simple_ui);
+        assert_eq!(s.theme, sdroxide_types::UiTheme::AmberPhosphor);
+        assert!(!s.simple_ui);
         // An unknown profile falls back to the default.
         let (from, s) = store.for_profile(Some("DX")).expect("the default");
         assert!(from.is_none());
-        assert!(s.simple_ui && !s.retro_radio);
+        assert!(s.simple_ui);
+        assert_ne!(s.theme, sdroxide_types::UiTheme::AmberPhosphor);
     }
 
     /// The opt-in bindings sit beside the screen, with the same profile/default
@@ -2992,6 +3049,43 @@ mod tests {
         assert_eq!(c.spot_max_age_secs, 600, "the rest of the file still applies");
         assert!(c.cluster.enabled);
         assert!(c.freedv_reporter.enabled);
+    }
+
+    /// One binding naming an action this build no longer has must not take the
+    /// rest of the file with it. Removing the Retro Radio faceplate is what made
+    /// this reachable: `input.json` is self-describing JSON, so a stored
+    /// `"ToggleRetroRadio"` fails the whole struct, and `load_json` on a parse
+    /// failure quarantines the file and returns defaults — the operator gets a
+    /// keyboard that has forgotten every chord they set. `parse_input_settings`
+    /// is the behaviour; this drives it on a string, so nothing here depends on
+    /// a process-global config directory.
+    #[test]
+    fn one_unreadable_binding_does_not_take_the_file_with_it() {
+        let mut good = sdroxide_types::InputSettings::default();
+        good.keys.truncate(3);
+        let text = serde_json::to_string(&good).expect("serialise");
+        // Hand-added, as a file written by an older build would carry.
+        let stale = r#"{"chord":{"key":"R","ctrl":true,"shift":false,"alt":true},"action":"ToggleRetroRadio","value":1.0,"tuning":{"step":1.0,"accel":0.0,"invert":false},"button":"Toggle","enabled":true}"#;
+        let patched = text.replacen("[", &format!("[{stale},"), 1);
+        assert_ne!(patched, text, "the stale binding has to be spliced in");
+
+        let back = parse_input_settings(&patched);
+        assert_eq!(
+            back.keys.len(),
+            3,
+            "the three readable bindings survive, got {}",
+            back.keys.len()
+        );
+        // The three that survived are *these* three, in order — not merely three
+        // that happened to parse.
+        for (kept, original) in back.keys.iter().zip(good.keys.iter()) {
+            assert_eq!(kept.chord.key, original.chord.key);
+            assert_eq!(kept.action.label(), original.action.label());
+        }
+        // And a file where everything reads takes the strict path unchanged,
+        // so this tolerance costs the ordinary case nothing.
+        let clean = parse_input_settings(&text);
+        assert_eq!(clean.keys.len(), 3);
     }
 
     /// A scratch directory of our own, so the station-list tests never touch the

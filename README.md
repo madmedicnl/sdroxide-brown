@@ -223,9 +223,6 @@ client — are in [`docs/images/`](docs/images).
 - **Control** — every shortcut rebindable, any class-compliant **MIDI** controller
   (jog wheel, pads, faders, LEDs), mouse-button bindings, and optional **spoken
   announcements** through a bundled local neural voice (plus NVDA/Orca/VoiceOver).
-- **Retro Radio** — a listener's faceplate drawn over the same engine: one big
-  tuning scale and a needle, band and mode selectors, volume, squelch, tone, an
-  S-meter and an optional decode window. **Settings → UI**, or **Ctrl+Alt+R**.
 - **Contest logger** — a mode-agnostic single-operator logger with the common
   contests built in, a dupe warning, a live score and rate, and **Cabrillo**
   export. On FT8 an EU VHF or CQ WPX run logs itself.

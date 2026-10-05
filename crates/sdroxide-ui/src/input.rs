@@ -38,9 +38,6 @@ pub(crate) struct UiSink<'a> {
     pub spots: &'a mut bool,
     pub memories: &'a mut bool,
     pub voice: &'a mut bool,
-    /// The persistent [`sdroxide_types::UiSettings::retro_radio`] flag, so the
-    /// bound action flips the setting itself rather than a transient copy.
-    pub retro: &'a mut bool,
     /// Speech actions triggered this frame, for the caller to act on.
     ///
     /// Collected rather than applied here because answering them needs the
@@ -447,7 +444,6 @@ pub(crate) fn apply_action(
         ToggleSpots => *ui.spots = !*ui.spots,
         ToggleMemories => *ui.memories = !*ui.memories,
         ToggleVoice => *ui.voice = !*ui.voice,
-        ToggleRetroRadio => *ui.retro = !*ui.retro,
         SpeakStatus | SpeakRepeat | SpeechSilence | SpeechToggle => ui.speech.push(act),
         _ => {}
     }
@@ -1131,7 +1127,7 @@ mod tests {
 
     fn sink<'a>(
         view: &'a mut ViewState,
-        flags: &'a mut [bool; 7],
+        flags: &'a mut [bool; 6],
         speech: &'a mut Vec<Action>,
     ) -> UiSink<'a> {
         let (help, rest) = flags.split_at_mut(1);
@@ -1139,7 +1135,7 @@ mod tests {
         let (logbook, rest) = rest.split_at_mut(1);
         let (spots, rest) = rest.split_at_mut(1);
         let (memories, rest) = rest.split_at_mut(1);
-        let (voice, retro) = rest.split_at_mut(1);
+        let (voice, _) = rest.split_at_mut(1);
         UiSink {
             view,
             help: &mut help[0],
@@ -1148,7 +1144,6 @@ mod tests {
             spots: &mut spots[0],
             memories: &mut memories[0],
             voice: &mut voice[0],
-            retro: &mut retro[0],
             speech,
             rig_squelch: false,
             // The clamp these tests exercise is a no-op at zero span, which is
@@ -1166,7 +1161,7 @@ mod tests {
         let mut state =
             RadioState { vfo_a_hz: 14_074_000.0, active_vfo: Vfo::A, ..RadioState::default() };
         let mut view = ViewState::default();
-        let mut flags = [false; 7];
+        let mut flags = [false; 6];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1192,7 +1187,7 @@ mod tests {
             state.rx[0].mode = from;
             state.hd_radio_unavailable = unavailable.then(|| "no libnrsc5 here".to_string());
             let mut view = ViewState::default();
-            let mut flags = [false; 7];
+            let mut flags = [false; 6];
             let mut speech_acts = Vec::new();
             let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
             let mut cmds = Vec::new();
@@ -1227,7 +1222,7 @@ mod tests {
             let mut state =
                 RadioState { vfo_a_hz: hz, active_vfo: Vfo::A, ..RadioState::default() };
             let mut view = ViewState::default();
-            let mut flags = [false; 7];
+            let mut flags = [false; 6];
             let mut speech_acts = Vec::new();
             let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
             let mut cmds = Vec::new();
@@ -1270,7 +1265,7 @@ mod tests {
     fn tuning_never_goes_negative() {
         let mut state = RadioState { vfo_a_hz: 100.0, ..RadioState::default() };
         let mut view = ViewState::default();
-        let mut flags = [false; 7];
+        let mut flags = [false; 6];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1289,7 +1284,7 @@ mod tests {
     fn momentary_ptt_follows_the_button() {
         let mut state = RadioState::default();
         let mut view = ViewState::default();
-        let mut flags = [false; 7];
+        let mut flags = [false; 6];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1320,7 +1315,7 @@ mod tests {
         state.tx.ptt = true;
 
         let mut view = ViewState::default();
-        let mut flags = [false; 7];
+        let mut flags = [false; 6];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1351,7 +1346,7 @@ mod tests {
     fn one_shot_actions_ignore_release() {
         let mut state = RadioState::default();
         let mut view = ViewState::default();
-        let mut flags = [false; 7];
+        let mut flags = [false; 6];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1378,7 +1373,7 @@ mod tests {
     fn absolute_fader_maps_into_range() {
         let mut state = RadioState::default();
         let mut view = ViewState::default();
-        let mut flags = [false; 7];
+        let mut flags = [false; 6];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1401,7 +1396,7 @@ mod tests {
         let mut state = RadioState::default();
         let before = state.vfo_a_hz;
         let mut view = ViewState::default();
-        let mut flags = [false; 7];
+        let mut flags = [false; 6];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1423,7 +1418,7 @@ mod tests {
         state.rx[0] = sdroxide_types::RxState::with_mode(Mode::Usb);
 
         let mut view = ViewState::default();
-        let mut flags = [false; 7];
+        let mut flags = [false; 6];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1481,7 +1476,7 @@ mod tests {
     fn ui_only_actions_emit_no_commands() {
         let mut state = RadioState::default();
         let mut view = ViewState::default();
-        let mut flags = [false; 7];
+        let mut flags = [false; 6];
         let mut cmds = Vec::new();
         {
             let mut speech_acts = Vec::new();

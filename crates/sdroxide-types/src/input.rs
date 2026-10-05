@@ -119,9 +119,6 @@ pub enum Action {
     SpeechSilence,
     /// Announcements on/off, with a spoken confirmation either way.
     SpeechToggle,
-    /// Toggle the listener's **Retro Radio** faceplate — a display skin over
-    /// the same engine, client-local only.
-    ToggleRetroRadio,
 }
 
 /// Whether an action is driven by a value or by a button.
@@ -157,8 +154,9 @@ impl Action {
             Ptt | TuneCarrier | TxDrive | TuneDrive | MicGain | DigiAudioFreq | AbortTx
             | CwStraight | VoicePlay(_) | VoiceStop | ToneBurst => "Transmit",
             SpectrumZoom | SpectrumPan | SpectrumFloorDb | SpectrumCeilDb | FitSpan | ZoomIn
-            | ZoomOut | PeakHold | SpectrumCollapse | WaterfallCollapse | WaterfallFlip
-            | ToggleRetroRadio => "Display",
+            | ZoomOut | PeakHold | SpectrumCollapse | WaterfallCollapse | WaterfallFlip => {
+                "Display"
+            }
             ToggleHelp | ToggleSettings | ToggleLogbook | ToggleSpots | ToggleMemories
             | ToggleVoice => "Windows",
             SpeakStatus | SpeakRepeat | SpeechSilence | SpeechToggle => "Speech",
@@ -229,7 +227,6 @@ impl Action {
             SpeakRepeat => "Repeat last announcement",
             SpeechSilence => "Stop speaking",
             SpeechToggle => "Announcements on/off",
-            ToggleRetroRadio => "Retro radio",
             VfoSelect(v) => return format!("Select VFO {}", if v == Vfo::A { "A" } else { "B" }),
             BandSelect(b) => return format!("Band {}", b.label()),
             ModeSelect(m) => return format!("Mode {}", m.label()),
@@ -323,7 +320,6 @@ impl Action {
             SpeakRepeat,
             SpeechSilence,
             SpeechToggle,
-            ToggleRetroRadio,
         ]);
         v
     }
@@ -551,12 +547,6 @@ impl KeyBinding {
             // is long for keying). Only armed by the CW panel's KEY toggle, so
             // it types a space everywhere else.
             KeyBinding::momentary(KeyChord::plain("Space"), Action::CwStraight),
-            // The listener's retro faceplate. Ctrl+Alt+R: two modifiers, so it
-            // cannot be hit while typing, and an R no other default claims.
-            KeyBinding::toggle(
-                KeyChord { key: "R".to_string(), ctrl: true, shift: false, alt: true },
-                Action::ToggleRetroRadio,
-            ),
         ];
         // Numpad 1–9 then 0 play slots 1–10; numpad "−" stops a message early.
         for slot in 0..crate::VOICE_SLOTS as u8 {
@@ -947,8 +937,7 @@ impl InputSettings {
     /// action at all — a binding they moved, disabled or deleted after the
     /// migration ran is theirs, and the stamped `schema` is what stops this
     /// putting it back.
-    const ADDED: &'static [(u32, Action)] =
-        &[(1, Action::CwStraight), (2, Action::ToggleRetroRadio)];
+    const ADDED: &'static [(u32, Action)] = &[(1, Action::CwStraight)];
 
     /// Bring a loaded file up to [`Self::SCHEMA`], reporting whether it had to
     /// be touched — and so whether it is worth writing back. The stamp is
@@ -989,7 +978,7 @@ mod tests {
         let mut old = InputSettings {
             keys: KeyBinding::defaults()
                 .into_iter()
-                .filter(|b| b.action != Action::CwStraight && b.action != Action::ToggleRetroRadio)
+                .filter(|b| b.action != Action::CwStraight)
                 .collect(),
             schema: 0,
             ..InputSettings::default()
@@ -999,12 +988,6 @@ mod tests {
         assert_eq!(straight.len(), 1, "exactly one straight-key binding");
         assert_eq!(straight[0].chord, KeyChord::plain("Space"));
         assert!(straight[0].enabled);
-        // …and the binding added at schema 2 comes with it.
-        let retro: Vec<_> =
-            old.keys.iter().filter(|b| b.action == Action::ToggleRetroRadio).collect();
-        assert_eq!(retro.len(), 1, "exactly one retro-radio binding");
-        assert_eq!(retro[0].chord.key, "R");
-        assert!(retro[0].chord.ctrl && retro[0].chord.alt, "Ctrl+Alt+R");
         assert_eq!(old.schema, InputSettings::SCHEMA);
     }
 

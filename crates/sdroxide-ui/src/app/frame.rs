@@ -355,7 +355,7 @@ impl eframe::App for SdroxideApp {
             }
         }
 
-        if !self.ui_settings.retro_radio {
+        {
             egui::Panel::top(crate::layout::salted_id(&ctx, "topbar"))
                 .frame(
                     egui::Frame::new()
@@ -475,15 +475,11 @@ impl eframe::App for SdroxideApp {
         // panadapter before either draws. Shown here, after the top bar and the
         // notices, so the column sits beside the waterfall rather than under the
         // chrome.
-        if !self.ui_settings.retro_radio && self.band_docked && self.band_dock_visible {
+        if self.band_docked && self.band_dock_visible {
             self.band_dock_panel(ui, &mut cmds);
         }
-        // Remaining space: the panadapter (+ FT8/FT4 operating panel) — or, in
-        // Retro Radio, the faceplate. The dialogs below still run either way,
-        // so Settings, and turning this mode off, stay reachable.
-        if self.ui_settings.retro_radio {
-            self.retro_view(ui, &mut cmds);
-        } else if let Some(err) = self.error.clone() {
+        // Remaining space: the panadapter (+ FT8/FT4 operating panel).
+        if let Some(err) = self.error.clone() {
             let offer_retry = self.ctrl.can_reconnect();
             // Seconds until the redial that is already coming, so the screen
             // can say what is going to happen rather than only what went wrong.
@@ -2330,7 +2326,7 @@ impl SdroxideApp {
             show_voice,
             caps,
             wide_frame,
-            ui_settings,
+            ui_settings: _,
             ..
         } = self;
         // Read before the borrow below, which takes `self` apart.
@@ -2353,7 +2349,6 @@ impl SdroxideApp {
             spots: show_spots,
             memories: show_memories,
             voice: show_voice,
-            retro: &mut ui_settings.retro_radio,
             speech: &mut speech_acts,
             rig_squelch,
             zoom_out,
@@ -2407,7 +2402,7 @@ impl SdroxideApp {
             show_voice,
             caps,
             cw_key_down,
-            ui_settings,
+            ui_settings: _,
             ..
         } = self;
         // The keyboard straight key is held by the operator's hand rather than
@@ -2428,7 +2423,6 @@ impl SdroxideApp {
             spots: show_spots,
             memories: show_memories,
             voice: show_voice,
-            retro: &mut ui_settings.retro_radio,
             speech: &mut Vec::new(),
             rig_squelch,
             // Releasing held keys never pans or zooms, so the passband will do.

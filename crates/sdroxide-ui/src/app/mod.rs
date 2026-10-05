@@ -44,7 +44,6 @@ pub(in crate::app) mod publicsdr;
 pub(in crate::app) mod qo100;
 pub(in crate::app) mod rds;
 pub(in crate::app) mod recording_jobs;
-pub(in crate::app) mod retro;
 pub(in crate::app) mod sat;
 pub(in crate::app) mod save_text;
 pub(in crate::app) mod scanner;
@@ -195,7 +194,6 @@ pub struct SdroxideApp {
     rx_only_nudge_dismissed: bool,
     /// Whether the Retro Radio faceplate's decode window is open. Session-only:
     /// it is a view choice, not a station setting, so it is not persisted.
-    retro_decode_open: bool,
     /// The contest logger: whether its window is open, the running session
     /// (`None` until START), the contest picked in setup, our own exchange and
     /// the entry being typed. Session-only; the QSOs it logs go to `qso_log`.
@@ -1551,7 +1549,6 @@ impl SdroxideApp {
             retry_backoff: RETRY_MIN_S,
             radio_notice: None,
             rx_only_nudge_dismissed: false,
-            retro_decode_open: false,
             show_contest: false,
             contest: None,
             contest_pick: sdroxide_types::ContestId::CqWpx,

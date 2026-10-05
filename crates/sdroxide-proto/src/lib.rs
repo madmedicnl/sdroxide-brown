@@ -1696,8 +1696,21 @@ use sdroxide_types::{
 /// every contest but EU VHF maps to `ContestMode::None`. A v191 peer reads the
 /// added variant as the start of the next command and misreads the rest of the
 /// stream. A downstream (fork) addition.
-pub const PROTO_VERSION: u16 = 192;
-const VERSION_BYTE: u8 = 0x12;
+/// v193: the **Retro Radio** faceplate is removed — a display skin over the
+/// workspace that did not work the way it was meant to. Two wire fields go with
+/// it, and both were the *last* of their kind, which is the only reason this is a
+/// version bump and not a decoding incident: [`sdroxide_types::ClientScreen`]
+/// loses its trailing `retro_radio` bool, and [`sdroxide_types::Action`] loses
+/// its trailing `ToggleRetroRadio` variant. Nothing above either moves, so a
+/// v193 peer talking to a v192 one is caught by the version gate rather than
+/// silently misreading. Note what is *not* claimed: the faceplate held no state
+/// of its own and reached the engine through ordinary commands, so no command
+/// and no engine state changes here — the removal is the flag, the action and
+/// the window. `input.json` is self-describing JSON, so a stored binding naming
+/// the removed action would fail the whole struct; the loader now keeps the
+/// bindings it can read and names the ones it drops. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 193;
+const VERSION_BYTE: u8 = 0x13;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {

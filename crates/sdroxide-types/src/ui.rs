@@ -760,17 +760,6 @@ pub struct UiSettings {
     /// parts of it missing until they ask.
     #[serde(default)]
     pub simple_ui: bool,
-    /// **Retro Radio** mode. When on, the whole workspace is replaced by a
-    /// listener's faceplate drawn over the same engine — one big tuning scale
-    /// and a needle, band and mode selectors, a volume knob, an S-meter and an
-    /// optional decode window. A skin, not a different radio: it holds no state
-    /// of its own and reaches the engine through the ordinary commands, so
-    /// leaving it puts the normal workspace back exactly as it was.
-    ///
-    /// A display preference like [`Self::simple_ui`], so each screen chooses.
-    /// Off by default.
-    #[serde(default)]
-    pub retro_radio: bool,
     /// Where the solar-system 3D window last was — see [`Solar3dWindow`].
     ///
     /// Here rather than in the operator's view state because window geometry is
@@ -894,7 +883,6 @@ impl Default for UiSettings {
             oob_tx_dismissed: false,
             cb_tx_warning_ack: false,
             simple_ui: false,
-            retro_radio: false,
             start_swl: false,
             solar3d_window: None,
             client_share_bindings: false,
@@ -1032,7 +1020,7 @@ impl UiSettings {
 ///   seen.
 ///
 /// So it is what an operator actually redoes each session — theme, layout,
-/// waterfall and spectrum look, fonts, Simple UI, Retro Radio, the map layers —
+/// waterfall and spectrum look, fonts, Simple UI, the map layers —
 /// and no more. (There was never an injection risk: `UiSettings` carries no
 /// URLs, paths or feeds, only scalars. This is a scope cut, not a guard.)
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -1061,7 +1049,6 @@ pub struct ClientScreen {
     pub smeter_style: SmeterStyle,
     pub map_cities: bool,
     pub simple_ui: bool,
-    pub retro_radio: bool,
 }
 
 impl Default for ClientScreen {
@@ -1097,7 +1084,6 @@ impl ClientScreen {
             smeter_style: s.smeter_style,
             map_cities: s.map_cities,
             simple_ui: s.simple_ui,
-            retro_radio: s.retro_radio,
         }
     }
 
@@ -1128,7 +1114,6 @@ impl ClientScreen {
         s.smeter_style = self.smeter_style;
         s.map_cities = self.map_cities;
         s.simple_ui = self.simple_ui;
-        s.retro_radio = self.retro_radio;
     }
 }
 

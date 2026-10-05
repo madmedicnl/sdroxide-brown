@@ -14453,7 +14453,7 @@ typed and said no.
 - **A sign-in is asked for again after a reconnect.** Each socket is challenged
   on its own; *remember* is what makes that invisible.
 - **Where your screen settings live.** A remote client's own screen — the theme,
-  layout, waterfall and spectrum look, fonts, Simple UI, Retro Radio, the map
+  layout, waterfall and spectrum look, fonts, Simple UI, the map
   layers — is kept **in this browser** by default, private to the browser and
   forgotten when its storage is cleared. **Settings → UI → Screen settings on**
   can instead keep it **on the server**, against the profile you signed in as
