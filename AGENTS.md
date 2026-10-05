@@ -3372,6 +3372,120 @@ Two things worth keeping:
     `recording_stop_at`, auto mode and the reconnect countdown still do not run
     on a window that is not being drawn".
 
+## The subtract short-buffer fix: our first patch was wrong, and the symptom it left is worse than the panic (2026-10-05)
+
+`vendor/mfsk-core` carries a patch. It has now been rewritten, and the reason
+is worth more than the patch: **the first version silenced a panic by turning
+it into a silent partial subtract, and the fork shipped that for a day.**
+
+### What the bug is
+
+Upstream **issue [#567]** (not a PR request): `engine::dsp::subtract`'s
+`apply_at_offset` sized the FFT from the buffer (`nfft = audio.len()`), where
+`subtractft8.f90` (v3.2.0-rc1, lines 10-11) fixes `NFFT = NMAX = 15*12000` —
+always at least `NFRAME`, so `camp`/`cfilt` can hold the whole frame and a
+short `dd` is simply zero-filled. On a slot buffer shorter than the frame,
+`cfilt` is shorter than `nframe` and two lines index past its end.
+
+**It is not the `6245c34` branch-hoist**, which our first report blamed. That
+commit hoisted the per-iteration `j >= 0 && j < audio.len()` check into the
+two clamps; the clamps are equivalent for `audio[j]` but were **never a bound on
+`cfilt[i]`**. The end-correction block is byte-identical at `6245c34^`. There
+was no bound to lose.
+
+### Two corrections to our own report, both from the maintainer, both verified
+
+- **`dt` need not be negative.** With `endcorrection = true` — the FT8
+  wrapper's own setting (`ft8/subtract.rs:55`) — a short buffer panics at
+  **every** `dt`. Measured on `main` at `148a9e85`, a 130 284-sample buffer:
+  `dt` −2.0 panics at `subtract.rs:735` (camp build, index 130 284 = `nfft`)
+  with end correction *either* way; `dt` −0.5 / 0 / +1 / +2.5 panic at `:752`
+  (end correction, index 151 679 = `nframe-1`). Our report's off-air story
+  ("the mis-aligned slot's `dt` is negative") understated the trigger by
+  exactly the case that matters.
+- **The root cause is the FFT length, not the loop bounds.** Clamping `i_hi`
+  by the buffer stops the panic and **leaves the last `|signed_start|`
+  samples with no subtraction at all**, and an FFT shorter than the frame
+  wraps the LPF around its own ends.
+
+### What our shipped patch actually cost — the number to remember
+
+Measured with jl1nie's own `subtract_short_buffer.rs`, against the whole-slot
+result on the same samples:
+
+| | late-attach tail | whole overlap | full slot (reference) |
+|---|---|---|---|
+| our clamp (`db8b8fa`) | **0.0 dB** | −4.9 dB | −36.5 dB |
+| `nfft` fix | **−36.5 dB** | −30.0 dB | −36.5 dB |
+
+**0.0 dB is not "degraded", it is absent** — 2.6 s of signal not subtracted at
+all. Since SIC *is* the recall mechanism for FT8 `Deep` (the default), the
+pass did its ~1.1 s of work and returned nothing, while the panel still showed
+decodes from the other passes. **A loud panic became a quiet wrong answer,
+which is the harder failure to notice and the worse one to ship.**
+
+The general lesson, and it is the same shape as §10's: **a fix that makes the
+symptom stop is not a fix until the *value* is right too.** Clamping bounds
+made the panic go away and left the subtraction silently partial. The test that
+settled it was not "does not panic" but "does the whole overlap reach what a
+full slot reaches" — a question about the result, not about the absence of a
+crash.
+
+### Where the fix lives, and why there are two of them
+
+- **Upstream [PR #574](https://github.com/jl1nie/mfsk-core/pull/574)**, branch
+  `fix/subtract-short-buffer`, one commit on current `main` (`148a9e85`,
+  version **0.13.0**). `nfft = audio.len().max(nframe)`; the existing clamps
+  and the end correction are then correct as written. Also threads `nframe`
+  into `residual_band_power` (`sqf`) so the `−90/0/+90` trial search scores on
+  the grid the subtract used — flagged separately in the PR body in case he
+  wants the diff kept to one line.
+- **The vendored copy** is branch **`fix/subtract-short-buffer-0.11`**
+  (`cb340709`), the same fix rebased onto **`d243359a`** (version 0.11.0).
+  **It cannot be the 0.13.0 commit**: 0.13.0 removed `DecodeRequest` /
+  `SniperRequest` / `MultiPeriodRequest` as public API, and this fork's decode
+  calls are built on them. Re-vendoring at 0.13.0 is a migration project, not
+  a submodule bump — do not "just bump it". The pin in the test is re-recorded
+  for this base (`1_301_204_944_408_214_188`, verified unchanged by the fix)
+  because 0.11.0 synthesises via `ft8::wave_gen::tones_to_i16` where 0.13.0
+  uses the generic `engine::tx::synthesize_i16` — a different waveform, so a
+  different hash. Each base is pinned against its own unfixed output, which is
+  the property that matters.
+- **When #574 lands**, drop the `[patch.crates-io]` entry and return to the
+  plain 0.11 dependency. Do not bump to 0.13 as part of that.
+
+### Verified
+
+His three tests, on both bases: `short_buffers_do_not_panic` and
+`late_attach_subtracts_the_whole_overlap` fail on the unfixed base (panic /
+0.0 dB) and pass with the fix; `full_slot_output_is_pinned` passes on both,
+which is its whole point. Tier A+B on the 0.11 base: **103 test binaries, 0
+failures**. On the 0.13 base the same suite introduces no new failures —
+`decode_snapshot` fails, but it fails **identically on clean `main`**, and the
+decode output was diffed between `main` and the branch and is byte-identical
+(pre-existing fixture mismatch on this box, not ours). SIC-specific gates green
+on the 0.11 base: `qso3_full_parity_meets_wsjtx_golden_floor`, the three
+`sic_early_*` tests, `ft4_subtract_pipeline`. Fork side:
+`cargo check --workspace --all-targets` silent, `cargo test -p sdroxide-digi
+--release` green (513 in the main binary).
+
+**Exposure is FT8 only in practice.** FT8's dispatched slot is 15.0 s = 180 000
+samples (`mode.rs:848`) against `nframe` = 79 × 1920 = 151 680, so a slot has
+to be **> 0.7 s short** to reach this at all, and `check_slot_arrived_whole`
+only *warns* at 0.95 (`controller.rs:772`) without suppressing the dispatch —
+which is how a short buffer reaches the decoder at all. FT4's wrapper passes
+`endcorrection: false` and its frame (53 760) is well inside its 90 000-sample
+slot. **Not bench-tested on air** — the fix is a DSP invariant restored from the
+Fortran, with the evidence above, and the 0.7-s-short slot is not something to
+go looking for on 11 m.
+
+### One thing noticed and deliberately not touched
+
+`ft4::subtract`'s doc claims the LPF path "falls back to a no-op when audio is
+shorter than the FT4 frame". That guard is in `subtract_tones`; the function
+actually calls `subtract_tones_lpf`, which has no such guard. Said in the PR
+body as a follow-up rather than bundled.
+
 
 ## House rules
 

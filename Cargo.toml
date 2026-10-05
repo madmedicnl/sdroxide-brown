@@ -10,15 +10,17 @@ exclude = ["vendor/soapysdr", "vendor/ewebsock", "vendor/xng", "vendor/mfsk-core
 [patch.crates-io]
 
 # `mfsk-core` 0.11.0 plus a fix for an out-of-bounds panic in the subtract
-# path. `subtract_tones_lpf`'s branch-hoisted bounds (upstream 6245c34) clamp
-# `i_hi` only to the frame length, but the buffers it indexes are the slot
-# buffer's length; a slot shorter than the frame with a negative `dt` — a
-# server radio whose tap attached mid-slot produces exactly that — panicked
-# the FT8 decode worker, and the station then decoded nothing for the rest of
-# the session. The submodule is `madmedicnl/mfsk-core` at the one-commit
-# `fix/subtract-short-buffer` branch, so this is plain 0.11.0 plus that fix
-# and nothing else. Offered upstream; drop this and return to the plain 0.11
-# dependency once it lands.
+# path. `subtract_tones_lpf` sized its FFT from the slot buffer, where
+# `subtractft8.f90` fixes `NFFT = NMAX` at least `NFRAME` — so a buffer
+# shorter than the frame indexed past the end and panicked. With end
+# correction on (the FT8 subtract's own setting) that was any `dt`, not
+# just a mis-aligned candidate, and on the `.sic_early()` path it killed
+# the FT8 decode worker: the station then decoded nothing for the rest of
+# the session. The submodule is `madmedicnl/mfsk-core` at
+# `fix/subtract-short-buffer-0.11`, one commit on top of 0.11.0 and
+# nothing else; the same fix is upstream as jl1nie/mfsk-core#574 on a
+# later base. Drop this and return to the plain 0.11 dependency once that
+# lands.
 mfsk-core = { path = "vendor/mfsk-core/mfsk-core" }
 
 # `ewebsock` 0.8.0 with one error classifier widened. On Windows a blocking
