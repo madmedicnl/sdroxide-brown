@@ -2058,6 +2058,13 @@ impl SdroxideApp {
         self.error.is_some()
     }
 
+    /// The layout override in force, so the shell can reach the same tier
+    /// answer this radio's own frame will — see [`crate::multi`], which has to
+    /// decide the split view from the size and this.
+    pub(crate) fn layout_mode(&self) -> sdroxide_types::LayoutMode {
+        self.ui_settings.layout
+    }
+
     /// Whether the main receiver is muted — the one state both the MUTE
     /// button and the tab strip's mute chip show.
     pub(crate) fn tab_muted(&self) -> bool {
@@ -2603,14 +2610,22 @@ mod tests {
         }
     }
 
-    /// Reproduce Kevin's phone crash report (discussion #9) at the exact
-    /// geometries he observed: 360×800 (Chrome Android, crashed) and 1440×3200
-    /// (real phone). This drives the full app UI frame off-screen to catch
-    /// any panic in rendering/layout at narrow phone widths.
-    #[test]
-    fn phone_crash_regression_360x800() {
-        let dir = std::env::temp_dir()
-            .join(format!("sdroxide-phone-repro-360-{}", std::process::id()));
+    /// Drive one whole app frame off-screen at a phone size, to catch any
+    /// panic in rendering or layout at that width.
+    ///
+    /// The size is in **logical points**, which is what egui lays out in and
+    /// what `layout::tier_for` reads — one point is one CSS pixel in the
+    /// browser, and a physical pixel count is not a layout size. Asserting the
+    /// tier here is the point of the helper: a phone regression test that
+    /// quietly resolves to the desktop tier guards nothing phone-shaped, and
+    /// that is not a failure anyone would see.
+    fn phone_frame(tag: &str, size: egui::Vec2) {
+        assert_eq!(
+            crate::layout::tier_for(size, sdroxide_types::LayoutMode::Auto),
+            crate::layout::Tier::Phone,
+            "{tag}: {size:?} is not a phone size, so this test would not guard one"
+        );
+        let dir = std::env::temp_dir().join(format!("sdroxide-phone-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
@@ -2620,39 +2635,33 @@ mod tests {
         let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
 
         let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(360.0, 800.0),
-            )),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| {
+        // The frame hands back a texture delta — a glyph atlas this test has no
+        // backend to upload. epaint debug-asserts on a delta dropped unapplied
+        // and names the remedy, which is what this is.
+        ctx.run_ui(input, |ui| {
             app.ui(ui, &mut eframe::Frame::_new_kittest());
-        });
+        })
+        .drop_without_applying_deltas();
     }
 
+    /// Reproduce Kevin's phone crash report (discussion #9) at the geometry
+    /// Chrome Android gave: a 360 pt viewport, which crashed.
     #[test]
-    fn phone_crash_regression_1440x3200() {
-        let dir = std::env::temp_dir()
-            .join(format!("sdroxide-phone-repro-1440-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+    fn phone_crash_regression_360x800() {
+        phone_frame("360x800", egui::vec2(360.0, 800.0));
+    }
 
-        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
-        let ctx = egui::Context::default();
-        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
-
-        let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(1440.0, 3200.0),
-            )),
-            ..Default::default()
-        };
-        let _ = ctx.run_ui(input, |ui| {
-            app.ui(ui, &mut eframe::Frame::_new_kittest());
-        });
+    /// The same report from the real phone, whose 1440×3200 panel is 411×914
+    /// logical points at DPR 3.5. It used to be driven at the raw pixel count,
+    /// which is 1440 points wide and therefore the **desktop** tier — a phone
+    /// test that tested nothing phone-shaped, and passed in half the time it
+    /// was named for.
+    #[test]
+    fn phone_crash_regression_411x914() {
+        phone_frame("411x914", egui::vec2(411.0, 914.0));
     }
 }
 

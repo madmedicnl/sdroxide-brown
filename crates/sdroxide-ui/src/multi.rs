@@ -31,7 +31,7 @@
 use eframe::egui::{self, RichText};
 
 use crate::app::{RadioChip, RadioTabRequest, SdroxideApp};
-use sdroxide_types::RadioController;
+use sdroxide_types::{LayoutMode, RadioController};
 
 /// One radio handed to [`MultiApp::new`] by the frontend.
 pub struct RadioTab {
@@ -46,6 +46,15 @@ pub struct RadioTab {
     /// station, and there is no roster here that could say otherwise.
     pub enabled: bool,
     pub ctrl: Box<dyn RadioController>,
+}
+
+/// What the split view does in one frame — see [`MultiApp::split_plan`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SplitPlan {
+    /// Whether the panes are drawn as columns of their own.
+    drawn: bool,
+    /// Whether the strip's ⊞ may open or close a pane.
+    splittable: bool,
 }
 
 /// Builds the engine + controller for a radio created at runtime from the
@@ -294,6 +303,45 @@ impl MultiApp {
     /// should look like one.
     fn strip_wanted(&self) -> bool {
         self.tabs.iter().filter(|t| t.attached_to.is_none()).count() > 1
+    }
+
+    /// The split view's fate in a viewport of `size` — a pure function of the
+    /// size, the pane count and the operator's override, so the policy can be
+    /// pinned without a harness.
+    ///
+    /// The split is this same layout in columns side by side, and the phone
+    /// layout is deliberately the least this program draws — the waterfall and
+    /// nothing else (`layout::Tier::waterfall_only`). Three of those columns in
+    /// a 360 pt window are 116 pt each: not three radios, but the phone layout
+    /// clipped to a sliver, with the frequency readout truncated, the S-meter
+    /// unreadable and a radio name wrapped to one letter per line (discussion
+    /// #9). So on the phone the split is not drawn and the focused radio takes
+    /// the window alone.
+    ///
+    /// Every other tier is untouched, *including* a column too narrow for the
+    /// desktop strip: a 2-pane split in a 1250 pt window keeps its two columns,
+    /// each running whatever layout its own width earns, exactly as before.
+    /// Only the phone layout is a different design rather than a smaller one,
+    /// and so is the only one a column of it stops being.
+    ///
+    /// `splittable` false wherever `drawn` is false, so a ⊞ chip that cannot be
+    /// pressed is never one that would open a split nothing would show.
+    fn split_plan(size: egui::Vec2, panes: usize, mode: LayoutMode) -> SplitPlan {
+        let phone = crate::layout::tier_for(size, mode) == crate::layout::Tier::Phone;
+        SplitPlan { drawn: panes < 2 || !phone, splittable: !phone }
+    }
+
+    /// The radios the strip is drawn from: the panes on screen, or the focused
+    /// radio alone where the viewport cannot draw a split.
+    ///
+    /// The strip must read this and not the stored panes, and the difference
+    /// is the whole reason the phone is usable rather than merely narrower:
+    /// `strip_row` greys the name chip of any radio that reads as "already open
+    /// in another split view", so a strip built from three stored panes on a
+    /// screen showing one of them would leave the other two unreachable — a
+    /// phone that can look at one radio and cannot change which.
+    fn strip_set(panes: &[u32], focused: u32, plan: SplitPlan) -> Vec<u32> {
+        if plan.drawn { panes.to_vec() } else { vec![focused] }
     }
 
     /// Re-read which radios have been lent out as panadapter receivers.
@@ -635,20 +683,35 @@ impl MultiApp {
     /// view), so a name click knows which pane it re-assigns. Closing a radio
     /// is deliberately absent — that lives in Settings → Radio, behind a
     /// dialog, not one stray click away on the main window.
-    fn strip_row(&self, ui: &mut egui::Ui, pane: usize, actions: &mut Vec<StripAction>) {
+    ///
+    /// `shown` is the set of radios actually on screen, which is not always
+    /// `self.panes`: a split the viewport cannot draw shows the focused radio
+    /// alone ([`MultiApp::split_plan`]). Reading the stored panes instead would
+    /// mark every *other* radio as "already open in another split view", grey
+    /// its name chip and make it unreachable — a phone with three radios would
+    /// be able to look at exactly one of them and no way to change which.
+    /// `splittable` is whether the ⊞ may act here at all.
+    fn strip_row(
+        &self,
+        ui: &mut egui::Ui,
+        pane: usize,
+        shown: &[u32],
+        splittable: bool,
+        actions: &mut Vec<StripAction>,
+    ) {
         crate::chrome::tab_bar(ui, |ui, bar| {
             for (i, tab) in self.tabs.iter().enumerate() {
                 // A radio lent out as somebody's panadapter receiver is not one
                 // of the radios on this station's strip — unless it is the one
                 // being looked at, which is how it is reached from Settings →
                 // Radio and how the operator gets back off it.
-                if tab.attached_to.is_some() && !self.panes.contains(&tab.id) {
+                if tab.attached_to.is_some() && !shown.contains(&tab.id) {
                     continue;
                 }
                 let id = tab.id;
-                let here = self.panes.get(pane) == Some(&id);
-                let elsewhere = !here && self.panes.contains(&id);
-                let split_on = self.panes.len() > 1 && self.panes.contains(&id);
+                let here = shown.get(pane) == Some(&id);
+                let elsewhere = !here && shown.contains(&id);
+                let split_on = shown.len() > 1 && shown.contains(&id);
                 // In a split the accent marks the pane holding the keyboard.
                 let accent = if here && split_on && i == self.focused {
                     crate::theme::PINK()
@@ -718,13 +781,37 @@ impl MultiApp {
                             actions.push(StripAction::Mute { id, muted: !muted });
                         }
                     }
-                    let split = crate::chrome::chip(ui, split_on, RichText::new("⊞").size(11.0));
+                    let split_glyph = RichText::new("⊞").size(11.0);
+                    let split = if splittable {
+                        crate::chrome::chip(ui, split_on, split_glyph)
+                    } else {
+                        // Greyed and inert, but still drawn to say why: at this
+                        // width a split is not drawn at all, so a ⊞ that could
+                        // be pressed would open something the operator never
+                        // sees. Silent for the same reason the chip is not
+                        // hidden — a phone operator asking how to watch two
+                        // radios at once is owed the answer.
+                        let exact = egui::vec2(
+                            crate::chrome::chip_width(ui, "⊞", Some(11.0)),
+                            crate::chrome::chip_height(ui, Some(11.0)),
+                        );
+                        ui.allocate_ui(exact, |ui| {
+                            ui.add_enabled_ui(false, |ui| {
+                                crate::chrome::chip(ui, split_on, split_glyph)
+                            })
+                            .inner
+                        })
+                        .inner
+                    };
                     let tip = if split_on {
                         "Close this radio's split view"
-                    } else {
+                    } else if splittable {
                         "Open this radio in a split view of its own"
+                    } else {
+                        "Two radios side by side need a wider window — this screen shows one at a time"
                     };
-                    if split.on_hover_text(tip).clicked() {
+                    let split = split.on_hover_text(tip);
+                    if splittable && split.clicked() {
                         actions.push(StripAction::ToggleSplit(id));
                     }
                 });
@@ -1274,7 +1361,18 @@ impl eframe::App for MultiApp {
         let mut actions: Vec<StripAction> = Vec::new();
         let mut reqs: Vec<RadioTabRequest> = Vec::new();
 
-        if pane_tabs.len() == 1 {
+        let plan = Self::split_plan(
+            ui.max_rect().size(),
+            pane_tabs.len(),
+            self.tabs[self.focused].app.layout_mode(),
+        );
+        // What the strip is drawn from: the panes on screen, or the focused
+        // radio alone where the viewport cannot draw a split. See
+        // `strip_row` for why reading the stored panes here would be wrong.
+        let shown: Vec<u32> = Self::strip_set(&self.panes, self.tabs[self.focused].id, plan);
+        let columns = plan.drawn && pane_tabs.len() > 1;
+
+        if !columns {
             if self.strip_wanted() {
                 egui::Panel::top(egui::Id::new("radio-tab-strip"))
                     .frame(
@@ -1285,9 +1383,12 @@ impl eframe::App for MultiApp {
                             .fill(crate::theme::BG_DEEP())
                             .inner_margin(egui::Margin { left: 8, right: 8, top: 3, bottom: 0 }),
                     )
-                    .show(ui, |ui| self.strip_row(ui, 0, &mut actions));
+                    .show(ui, |ui| self.strip_row(ui, 0, &shown, plan.splittable, &mut actions));
             }
-            let f = pane_tabs[0];
+            // A split that is not drawn is not a split: the focused radio takes
+            // the window, and the stored panes are left untouched, so a window
+            // widened again gets the split back exactly as it was.
+            let f = if plan.drawn { pane_tabs[0] } else { self.focused };
             self.tabs[f].app.set_radio_roster(roster);
             eframe::App::ui(&mut self.tabs[f].app, ui, frame);
             reqs.append(&mut self.tabs[f].app.take_radio_tab_requests());
@@ -1317,7 +1418,7 @@ impl eframe::App for MultiApp {
                     .inner_margin(egui::Margin { left: 8, right: 8, top: 3, bottom: 0 })
                     .show(&mut pane_ui, |ui| {
                         ui.set_min_width(ui.available_width());
-                        self.strip_row(ui, k, &mut actions);
+                        self.strip_row(ui, k, &shown, plan.splittable, &mut actions);
                     });
                 self.tabs[ti].app.set_radio_roster(roster.clone());
                 eframe::App::ui(&mut self.tabs[ti].app, &mut pane_ui, frame);
@@ -1363,5 +1464,93 @@ impl eframe::App for MultiApp {
         for tab in &mut self.tabs {
             tab.app.shutdown_ctrl();
         }
+    }
+}
+
+#[cfg(test)]
+mod split_tests {
+    use super::*;
+
+    const PHONE: egui::Vec2 = egui::vec2(360.0, 800.0);
+
+    /// The reported case: three radios open on a 360 pt phone. The split laid
+    /// them out as 116 pt columns — the phone layout clipped to a sliver, the
+    /// readout truncated and a radio name wrapped one letter per line.
+    #[test]
+    fn a_phone_draws_one_radio_not_three_columns() {
+        let plan = MultiApp::split_plan(PHONE, 3, LayoutMode::Auto);
+        assert!(!plan.drawn, "three columns of 116 pt is not a layout");
+        assert!(!plan.splittable, "a ⊞ that opens an invisible split is worse");
+        // Two columns is no better — 177 pt each — so the rule is the tier,
+        // not the count.
+        assert!(!MultiApp::split_plan(PHONE, 2, LayoutMode::Auto).drawn);
+        // …and a phone in landscape is still a phone (below 440 tall).
+        assert!(!MultiApp::split_plan(egui::vec2(852.0, 393.0), 2, LayoutMode::Auto).drawn);
+    }
+
+    /// The regression's other half, and the subtler one: collapsing the panes is
+    /// not enough on its own. The strip decides which radios are reachable, and
+    /// it greys the name of any radio that reads as being in another column — so
+    /// a strip still built from three stored panes on a screen showing one of
+    /// them would leave the other two greyed out and a phone able to look at one
+    /// radio with no way to change which.
+    #[test]
+    fn a_collapsed_split_still_leaves_the_other_radios_reachable() {
+        let panes = [1u32, 2, 3];
+        let phone = MultiApp::split_plan(PHONE, panes.len(), LayoutMode::Auto);
+        let shown = MultiApp::strip_set(&panes, 2, phone);
+        assert_eq!(shown, vec![2], "only the focused radio is on screen");
+        // The other two are not "in another column" — that is what keeps their
+        // name chips live, so tapping one moves the window to it.
+        for id in [1u32, 3] {
+            assert!(!shown.contains(&id), "radio {id} reads as unreachable");
+        }
+        // Widening the window gives the split back, from the stored panes and
+        // not from the collapsed set the phone happened to draw.
+        let desk = MultiApp::split_plan(egui::vec2(1400.0, 800.0), panes.len(), LayoutMode::Auto);
+        assert_eq!(MultiApp::strip_set(&panes, 2, desk), panes.to_vec());
+    }
+
+    /// Every other tier is untouched, including a column too narrow for the
+    /// desktop strip: a 2-pane split in a 1250 pt window keeps its columns,
+    /// each running whatever layout its own width earns. Pinning the number is
+    /// the point — 622 pt per column, which is narrow, and still drawn.
+    #[test]
+    fn a_desktop_window_keeps_its_split() {
+        for w in [1250.0, 1400.0, 1920.0] {
+            let plan = MultiApp::split_plan(egui::vec2(w, 800.0), 2, LayoutMode::Auto);
+            assert!(plan.drawn, "{w} pt wide is a desktop split");
+            assert!(plan.splittable, "{w} pt wide may open and close panes");
+        }
+        // A tablet is wide enough for the layout, and the split goes with it.
+        assert!(MultiApp::split_plan(egui::vec2(768.0, 1024.0), 2, LayoutMode::Auto).drawn);
+    }
+
+    /// One radio is not a split, on any screen — and on a phone the ⊞ is still
+    /// inert, because opening a pane there would draw nothing.
+    #[test]
+    fn one_radio_is_not_a_split_anywhere() {
+        let phone = MultiApp::split_plan(PHONE, 1, LayoutMode::Auto);
+        assert!(phone.drawn, "the only radio is always drawn");
+        assert!(!phone.splittable, "but a split still does not fit a phone");
+        let desk = MultiApp::split_plan(egui::vec2(1400.0, 800.0), 1, LayoutMode::Auto);
+        assert!(desk.drawn && desk.splittable);
+    }
+
+    /// The operator's override wins, in both directions and for the same
+    /// reason it does everywhere else in the app: a station set to Desktop gets
+    /// the desktop layout however narrow the window is, split included, and a
+    /// station pinned to Phone gets the phone layout on a wide monitor — which
+    /// is to say no split there either. The override is not second-guessed
+    /// here; it is the same answer `layout::tier_for` already gives every other
+    /// layout decision.
+    #[test]
+    fn the_operator_override_decides_it_both_ways() {
+        assert!(MultiApp::split_plan(PHONE, 3, LayoutMode::Desktop).drawn);
+        assert!(MultiApp::split_plan(PHONE, 3, LayoutMode::Desktop).splittable);
+        assert!(
+            MultiApp::split_plan(egui::vec2(1920.0, 800.0), 3, LayoutMode::Phone).drawn == false
+        );
+        assert!(MultiApp::split_plan(egui::vec2(768.0, 1024.0), 3, LayoutMode::Small).drawn);
     }
 }
