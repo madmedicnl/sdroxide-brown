@@ -4655,10 +4655,23 @@ one of the two.
   **Attaching the picture is one click in your mail program, and the program
   cannot do it for you** — that is not an omission to be worked around. Sending
   mail means being a mail client: an account, a password and a server, which is a
-  different program with its own security to think about. What this does is
+  different program with its own security to consider. What this does is
   everything up to that point.
+  **What is written is not the bare photograph but a QSL card**: the picture with
+  the exchange laid out beside it — from, to, date, frequency, mode, both
+  reports, your grid, your callsign set down the picture's left edge, and your own
+  line at the foot — as one image, laid out like the radio-postcard eQSLs the 11 m
+  community already sends. It is the form you can print and pin up, and it is
+  what you attach. Your callsign, grid, frequency and mode come from the station's
+  own settings; the rest is what you type in the window.
+  **Anything you leave blank is simply not drawn** — a card never reports a report
+  nobody gave, so a short card is a true one. A value too long for its column is
+  shortened and marked with a rule under it, because a value that did not fit is
+  one you will want to go and check. The card is saved beside the picture it was
+  made from, under its own name, so the two sit together and a card never
+  overwrites the received picture it came from.
   **In a browser tab it cannot go further still.** A web page is not allowed to
-  attach a file to a message, so there it saves the picture (to the browser's own
+  attach a file to a message, so there it saves the card (to the browser's own
   download folder) and opens the message with the text filled in; you add the
   attachment yourself. The window says which of the two you have before you press
   anything. Nothing typed in that window is remembered after you close it — an

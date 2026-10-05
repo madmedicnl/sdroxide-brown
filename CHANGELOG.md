@@ -34,6 +34,16 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   filled in, because a web page is not permitted to attach a file to a message.
   The window says which of the two you have before you press anything, rather
   than opening a composer with nothing in it.
+- **A QSL card you can print.** The picture goes out with the exchange beside it —
+  from, to, date, frequency, mode, both reports, your grid, the sent callsign set
+  down the picture's edge and your own line at the foot — laid out as one image,
+  the way the radio-postcard eQSLs the 11 m community already sends are. Your
+  callsign, grid, frequency and mode come from the station's own settings; the
+  rest is what you type in the QSL window. **A field you leave blank is not
+  drawn**, so a card never reports a report nobody gave, and a value too long for
+  its column is shortened with a rule under it rather than silently cut. The card
+  is written beside the picture it came from, under its own name, so it never
+  overwrites the received picture it was made from.
 - **The chip row on a received picture can no longer overflow its window.** At
   360 pt the chips and the label beside them needed about 368 pt of a 344 pt
   window, and nothing wrapped it because the row did not wrap — so this was

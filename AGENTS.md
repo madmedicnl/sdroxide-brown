@@ -84,6 +84,23 @@ were complete.
   `/tmp/opencode/fst4w-scratch/fst4w_probe.rs`. **An untracked file in
   `examples/` is not free** — `cargo test`, `cargo build --examples` and
   `--all-targets` all read it, and it is invisible to `git status` as a change.
+  The counter-example is `crates/sdroxide-ui/examples/qsl_card_probe.rs`, which
+  is **committed and meant to be there**: it writes a sample QSL card to
+  `/tmp/opencode/qsl_card_sample.png` (`cargo run -p sdroxide-ui --example
+  qsl_card_probe`). Keep it — see the next rule, which is why it earns its
+  place.
+- **Rendering an image and *looking at it* finds what tests do not.** The QSL
+  card (`crates/sdroxide-ui/src/qsl_card.rs`) passed all nine of its unit tests
+  while **three typed fields were missing from the output**, and the callsign
+  down the strip read `44DC` instead of `19DCG044`. Both were layout, neither
+  was arithmetic, and no assertion about buffer sizes, colours or encoding
+  could see them: the tests asked *whether a card came out*, never *where the
+  ink landed*. The two tests that now guard it (`every_field_typed_reaches_the_
+  card`, `the_whole_callsign_lands_on_the_strip`) count dark-pixel **bands** in
+  the rendered output, and both were verified to fail against the broken layout.
+  The general shape: **for anything drawn rather than computed, render it and
+  look at it** — and if the drawing is not worth looking at from a test, an
+  `examples/` probe that writes a file is nearly free.
 - **A new fork-only crate must be formatted when it is added.**
   `sdroxide-enigma` was committed unformatted (both `lib.rs` and a 100-line
   `ROTORS` table). The 2026-09-29 sweep made "every fork-only file is clean"

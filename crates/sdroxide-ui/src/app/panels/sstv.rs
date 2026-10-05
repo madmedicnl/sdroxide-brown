@@ -1693,6 +1693,37 @@ impl SdroxideApp {
                         .desired_width(ui.available_width())
                         .desired_rows(6),
                 );
+                ui.add_space(6.0);
+                // The exchange, in the order it reads on the card. A QSL
+                // somebody can pin up carries the report and the date; without
+                // these the card is a photograph with a callsign on it.
+                ui.label(RichText::new("The card").size(10.5).strong());
+                ui.label(
+                    RichText::new(
+                        "These go on a printed card beside the picture. Leave any of them \
+                         blank and it is simply not drawn — a card never reports a report \
+                         nobody gave.",
+                    )
+                    .size(10.0)
+                    .weak(),
+                );
+                egui::Grid::new("qsl-exchange").num_columns(2).spacing([12.0, 4.0]).show(
+                    ui,
+                    |ui| {
+                        ui.label(RichText::new("Date (UTC)").size(10.0));
+                        ui.text_edit_singleline(&mut qsl.date);
+                        ui.end_row();
+                        ui.label(RichText::new("RST sent").size(10.0));
+                        ui.text_edit_singleline(&mut qsl.rst_tx);
+                        ui.end_row();
+                        ui.label(RichText::new("RST received").size(10.0));
+                        ui.text_edit_singleline(&mut qsl.rst_rx);
+                        ui.end_row();
+                        ui.label(RichText::new("Card footer").size(10.0));
+                        ui.text_edit_singleline(&mut qsl.comment);
+                        ui.end_row();
+                    },
+                );
                 ui.add_space(4.0);
                 let addressed = qsl.to.contains('@') && !qsl.to.contains(char::is_whitespace);
                 if !addressed {
@@ -1754,17 +1785,71 @@ impl SdroxideApp {
         }
     }
 
-    /// Write the QSL picture out and say where it went. Returns the path, or
-    /// `None` when there is nothing to write yet.
+    /// Write the QSL card out and say where it went.
+    ///
+    /// **The card, not the raw picture** — that is the point of the card: an
+    /// eQSL somebody can print is a picture *and* the exchange beside it, and
+    /// sending the photograph alone throws away everything the window just
+    /// asked the operator to type. Falls back to the plain picture when a card
+    /// cannot be composed (no font, an odd size), because a QSL sent as a bare
+    /// photo is still worth sending and a card that silently failed is not.
+    ///
+    /// Returns the path, or `None` when there is nothing to write.
     fn write_qsl_picture(&mut self, qsl: &SstvQsl) -> Option<String> {
-        let (name, png) = self.sstv.full_png.as_ref()?;
-        if qsl.name != *name {
+        // Both taken by value: `build_qsl_card` reads the station's own callsign
+        // and grid, which needs `&mut self`, and a borrow of `full_png` would
+        // still be live across that call.
+        let (name, png) = self.sstv.full_png.clone()?;
+        if qsl.name != name {
             // The window is open for a picture the panel has since moved on
             // from; writing the wrong one would be worse than doing nothing.
             return None;
         }
-        crate::download::save_as(name, png, crate::download::Mime::Png);
-        Some(crate::app::panels::sstv::qsl_default_path(name))
+        // The card is a fresh image, so it is written under a name of its own —
+        // otherwise a QSL card overwrites the received picture it was made from,
+        // in the operator's own store.
+        let card_name = qsl_card_name(&name);
+        let card = self.build_qsl_card(qsl, &name, &png);
+        let (write_name, bytes) = match card {
+            Some(c) => (card_name, c),
+            None => (name, png),
+        };
+        crate::download::save_as(&write_name, &bytes, crate::download::Mime::Png);
+        Some(crate::app::panels::sstv::qsl_default_path(&write_name))
+    }
+
+    /// Compose the QSL card for `name`, or `None` when it cannot be made.
+    ///
+    /// The card's fields come from the QSL window and from the station's own
+    /// settings — never invented. `from`/`to` are the two callsigns, the rest is
+    /// whatever the operator typed into the exchange rows above it.
+    fn build_qsl_card(&mut self, qsl: &SstvQsl, name: &str, png: &[u8]) -> Option<Vec<u8>> {
+        // The photograph has to come out of the PNG again: the panel holds the
+        // bytes of a file, and the card wants pixels.
+        let (photo, pw, ph) = crate::sstv::decode_image(png)?;
+        // A card wide enough to read a callsign and tall enough to hold a photo.
+        // Sized from the picture so a portrait source does not get letterboxed
+        // into a strip.
+        let w = 1000u16;
+        let h = ((w as f32 * ph as f32 / pw as f32) * 0.62).round().clamp(500.0, 760.0) as u16;
+        let my_call = self.my_call();
+        let mut spec = crate::qsl_card::CardSpec::new(photo, pw, ph)
+            .with("From", &my_call)
+            .with("To", qsl.to.clone())
+            .with("Date", qsl.date.clone())
+            .with("Mode", self.state.rx[0].mode.label())
+            .with("Freq", format!("{:.3} MHz", self.state.rx_freq_hz() / 1e6))
+            .with("RST sent", qsl.rst_tx.clone())
+            .with("RST rcvd", qsl.rst_rx.clone())
+            .with("Grid", self.my_grid());
+        spec.callsign = my_call.clone();
+        spec.comment = qsl.comment.clone();
+        spec.comment = if spec.comment.trim().is_empty() {
+            format!("Thanks for the SSTV picture.\n\n{name}")
+        } else {
+            spec.comment
+        };
+        spec.compose_png(w, h)
     }
 
     fn banner_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
@@ -2313,8 +2398,16 @@ pub(in crate::app) struct SstvQsl {
     /// worth of megabytes the `full_png` doc says not to keep.
     pub name: String,
     pub to: String,
+    /// The exchange, for the card's panel. All optional and all free-text: the
+    /// card draws a field only when it has a value, so an operator who knows
+    /// nothing but the callsign sends a card with the callsign on it.
+    pub date: String,
+    pub rst_tx: String,
+    pub rst_rx: String,
     pub subject: String,
     pub body: String,
+    /// The free line at the foot of the card — the one a person writes.
+    pub comment: String,
     /// Set once the picture has been written out and the mail client opened,
     /// so the window can say what is waiting rather than offering to do it
     /// again.
@@ -2344,6 +2437,18 @@ pub(in crate::app) fn mailto(to: &str, subject: &str, body: &str) -> String {
         out
     }
     format!("mailto:{}?subject={}&body={}", enc(to), enc(subject), enc(body))
+}
+
+/// The name a QSL card is written under, beside the picture it was made from.
+///
+/// Derived from the received picture's name rather than invented, so a card and
+/// the picture it came from sit together in the same folder and it is obvious
+/// which is which. `qsl-` in front, so it sorts next to its source.
+pub(in crate::app) fn qsl_card_name(picture: &str) -> String {
+    match picture.rsplit_once('.') {
+        Some((stem, ext)) => format!("qsl-{stem}.{ext}"),
+        None => format!("qsl-{picture}"),
+    }
 }
 
 /// Where a QSL picture is suggested to be written: the pictures folder the
@@ -2459,6 +2564,53 @@ mod qsl_tests {
             ..Default::default()
         };
         assert_eq!(qsl.written.as_deref(), Some("/home/operator/Pictures/qsl.png"));
+    }
+}
+
+#[cfg(test)]
+mod qsl_card_name_tests {
+    use super::*;
+
+    /// **The card must not overwrite the picture it was made from.** Both are
+    /// written to the operator's own store, and the card is derived from that
+    /// picture — so sharing a name would mean pressing *Email QSL picture…*
+    /// destroyed the received picture, in the very folder it lives in. That is
+    /// the kind of loss this fork treats as a bug, not a shrug.
+    #[test]
+    fn a_card_never_writes_over_the_picture_it_came_from() {
+        for picture in [
+            "2026-09-28-1916-27.267-SSTV.png",
+            "picture.png",
+            "no-extension",
+            "dotted.name.with.dots.png",
+        ] {
+            let card = qsl_card_name(picture);
+            assert_ne!(card, picture, "{picture}: the card would overwrite its own source");
+            assert!(card.starts_with("qsl-"), "{card}: a card should be obvious in a folder");
+            // Same folder and same extension, so the two sit together and the
+            // picture's own viewer still opens the card.
+            let ext_of = |s: &str| s.rsplit_once('.').map(|(_, e)| e.to_string());
+            assert_eq!(ext_of(&card), ext_of(picture), "{card}: the extension changed");
+            assert_eq!(
+                picture.rsplit_once('.').map(|(s, _)| s),
+                card.strip_prefix("qsl-").and_then(|c| c.rsplit_once('.')).map(|(s, _)| s),
+                "{card}: the card must be named after the picture it came from"
+            );
+        }
+    }
+
+    /// Two QSLs of the same picture must not collide with each other, or the
+    /// second overwrites the first in the operator's own folder.
+    #[test]
+    fn two_qsls_of_one_picture_are_told_apart_by_the_operator() {
+        // Same picture, so the derived name is the same — which is exactly why
+        // the save dialog is what separates them. This test pins that the name
+        // is *derived* and not timestamped, so the pin is worth having: a
+        // timestamp in the name would be a second source of truth to keep.
+        let a = qsl_card_name("x.png");
+        let b = qsl_card_name("x.png");
+        assert_eq!(a, b);
+        assert!(a.contains("qsl-"));
     }
 }
 
