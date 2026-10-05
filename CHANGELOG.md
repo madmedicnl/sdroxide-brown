@@ -13,6 +13,63 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [1.9.19_brown] - 2026-10-05
+
+### Fixed
+
+- **A phone no longer draws its radios side by side.** With several radios
+  open on a phone, the main area was split into equal columns — three radios on
+  a 360 pt screen became 116 pt columns each, so the frequency readout was
+  truncated, the S-meter unreadable and a radio's name wrapped to a single
+  letter per line (fork discussion #9). The split view is not drawn on the
+  phone at all now, and the radio you are working takes the window alone; the
+  radios you had open are kept, so widening the window again gives the split
+  back exactly as it was. Two things beyond drawing it: the radio strip has to
+  read the set actually on screen, or a phone could look at one radio and have
+  no way to change which, and the split button is greyed on a phone with the
+  reason in its hover rather than left able to open a split nothing would show.
+  Every other screen size is unchanged, including a two-way split in a
+  1250 pt desktop window.
+- **A renamed sound card no longer silently becomes the default.** Matching an
+  audio device compared a name that the system reports differently once it is
+  plugged into a different socket, so a card the operator had chosen fell back
+  to "system default" — and picking the default again matched every card at
+  once. Devices are now matched on their stable identifiers, with the name only
+  as a last resort.
+- **A stored profile's control bindings are offered instead of being dropped.**
+  A remote client asking for the settings of the profile it signed in as was
+  given that profile's key bindings by the server and then silently ignored
+  them, so a station set up once was never actually set up. They are now
+  offered, and taking them is a separate click rather than something that
+  happens because a profile was loaded.
+
+### Changed
+
+- **The Retro Radio faceplate is gone.** It was a listener's skin over the same
+  engine, with a wooden panel, one big tuning scale and a needle. It is
+  removed rather than reworked, and the normal workspace is the only layout
+  again. Nothing was lost with it: the faceplate held no station state of its
+  own, so every control it had is still in the workspace.
+- **A received SSTV picture can be sent back out.** A **Re-upload** chip beside
+  **Save picture…** loads the picture into the selected transmit slot, for
+  sending it back out for the stations who could not copy it (fork discussion
+  #7). It loads the slot and stops there — sending is still a deliberate press
+  of TX, as it is everywhere else. On a radio that cannot transmit the chip is
+  greyed and says so.
+- **`mfsk-core`'s FT8 signal subtraction no longer needs a whole slot.** A short
+  buffer used to cancel the last part of the subtraction instead of all of it,
+  so a weak signal under a stronger neighbour could be left uncancelled while
+  the decode list looked perfectly normal. The upstream fix is vendored: the
+  transform is now sized from the frame rather than from the buffer that
+  happened to be handed in.
+
+### Not fixed
+
+- **The 1.9.17 phone crash is still open.** The *layout* fault behind it is
+  addressed (see the phone entry above), but the crash itself has never been
+  reproduced on the bench. If it recurs, the browser console output when it
+  happens is what is needed — please send it.
+
 ## [1.9.18_brown] - 2026-10-04
 
 ### Fixed
