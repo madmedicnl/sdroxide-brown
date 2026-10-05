@@ -71,24 +71,59 @@ jobs:
     steps:
       - id: pick
         run: |
-          # The -compat builds are the same two Linux builds compiled inside an
-          # Ubuntu 22.04 container, so the binaries link glibc 2.35 and run on
-          # stable/LTS distributions (Ubuntu 22.04, Mint 21, Debian 12,
-          # Raspberry Pi OS bookworm) that the regular builds refuse with
-          # "version `GLIBC_2.39' not found" (issue report 2026-08). A
-          # container rather than `runs-on: ubuntu-22.04` because GitHub
-          # retires that runner image on 2027-04-17 with brownouts from
-          # 2026-09-17, while a container image keeps working on any runner.
-          # Every other entry carries no `container` key, which `build` reads
-          # as the empty string and GitHub as "no container".
+          # Six of the eight release artifacts are published, not nine. Dropped
+          # as of 1.9.20: `linux-aarch64`, `linux-x86_64-compat` and
+          # `linux-aarch64-compat`.
+          #
+          # The measurement, across all eight published releases and 288
+          # downloads: **21 of 31 assets have never been downloaded once**, and
+          # every one of them is a Linux ARM or `-compat` artifact. The
+          # `-soapysdr` tarballs, the `.wixpdb` and the macOS x86_64 tarballs
+          # are in that 21 too, so "zero downloads" identifies the whole
+          # long-tail packaging rather than three specific platforms — what
+          # makes this worth acting on is that the *platforms* are what cost
+          # the wall clock, and six of fifteen build jobs went to artifacts
+          # nobody has ever fetched.
+          #
+          # Why those six are the ones to drop: every one of them runs Linux on
+          # ARM or an older glibc, which is exactly the group the operator
+          # reports building from source anyway — because a prebuilt binary from
+          # a stranger's release is not what a cautious person installs on a
+          # Pi. That is a deliberate choice about who these downloads are for,
+          # not a claim that the artifacts were broken.
+          #
+          # `-compat` existed because the regular Linux build links glibc 2.39
+          # and refuses to start on Ubuntu 22.04 / Mint 21 / Debian 12 / Pi OS
+          # bookworm with "version `GLIBC_2.39' not found" (issue report
+          # 2026-08). That reason is now carried by the build-from-source
+          # section in the README, which works on any distribution, and it is
+          # the reason those users build it anyway.
+          #
+          # What is **not** dropped: `linux-x86_64` (the `.deb`, the tarball and
+          # the plain AppImage), Windows and both macOS builds, which is every
+          # asset with a non-zero download count. Windows is the top asset in
+          # every single release.
+          #
+          # The ARM and `-compat` entries are kept below under `extra_platforms`
+          # rather than deleted: a manual dispatch may name them (see the
+          # `wanted` input), so an ARM tester, or anyone who wants the artifact
+          # for a specific occasion, can still ask for exactly those builds and
+          # pay only for those. `nightly` also still builds `linux-aarch64-compat`.
+          #
+          # Every entry carries no `container` key except the `-compat` ones,
+          # which `build` reads as the empty string and GitHub as "no container".
           platforms='[
             {"label": "linux-x86_64",         "os": "ubuntu-latest"},
-            {"label": "linux-aarch64",        "os": "ubuntu-24.04-arm"},
-            {"label": "linux-x86_64-compat",  "os": "ubuntu-latest",    "container": "ubuntu:22.04"},
-            {"label": "linux-aarch64-compat", "os": "ubuntu-24.04-arm", "container": "ubuntu:22.04"},
             {"label": "windows-x86_64",       "os": "windows-latest"},
             {"label": "macos-aarch64",        "os": "macos-latest"},
             {"label": "macos-x86_64",         "os": "macos-15-intel"}
+          ]'
+          # Not in a release by default; reachable by naming them in a manual
+          # dispatch's `wanted` list. See the note above.
+          extra_platforms='[
+            {"label": "linux-aarch64",        "os": "ubuntu-24.04-arm"},
+            {"label": "linux-x86_64-compat",  "os": "ubuntu-latest",    "container": "ubuntu:22.04"},
+            {"label": "linux-aarch64-compat", "os": "ubuntu-24.04-arm", "container": "ubuntu:22.04"}
           ]'
           # Every platform is built twice: `soapy` (dynamically links SoapySDR)
           # and `cat` (--no-default-features: no SoapySDR, runs without
@@ -97,7 +132,14 @@ jobs:
           # ship and the one a tester can run without installing PothosSDR
           # first.
           if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
-            wanted='["linux-x86_64-compat", "linux-aarch64-compat", "windows-x86_64", "macos-aarch64"]'
+            # Nightly is the exception that keeps the ARM build alive: a
+            # scheduled run already builds a subset on purpose, and keeping
+            # `linux-aarch64-compat` in it means the artifact that no release
+            # publishes is still built weekly and can be grabbed from the
+            # pre-release by anyone who wants it. Names from `extra_platforms`
+            # are reachable here precisely because the matrix pool includes
+            # them.
+            wanted='["linux-x86_64", "linux-aarch64-compat", "windows-x86_64", "macos-aarch64"]'
             variants='["cat"]'
           elif [[ -n "${{ inputs.wanted }}" ]]; then
             # A manual dispatch may narrow the run to named platforms, which is
@@ -115,8 +157,29 @@ jobs:
           fi
           # An include-only matrix: one job per entry, and no cross product to
           # filter down afterwards.
+          #
+          # The pool is `platforms + extra_platforms`, never `platforms` alone:
+          # `extra_platforms` is how a manual dispatch still reaches the ARM and
+          # `-compat` builds, and if it were left out of the pool then a
+          # dispatch naming one of them would filter to nothing and produce the
+          # empty matrix that `wanted` is validated above specifically to
+          # prevent. Nothing in a release builds them unless they are named.
+          # The pool depends on whether anything was *named*.
+          #
+          # `wanted == null` is the release path, and it means "no filter", so
+          # the extras must not be in the pool there or a tag would quietly
+          # build all fourteen again. When something *is* named — a manual
+          # dispatch, or nightly — the pool is everything, because the name is
+          # what chooses. Putting the extras in unconditionally is the one
+          # version of this that looks right and reverts the whole change: it
+          # yields 14 jobs on a release tag.
+          if [[ "$wanted" == "null" ]]; then
+            pool="$platforms"
+          else
+            pool=$(jq -cn --argjson platforms "$platforms" --argjson extra "$extra_platforms" '$platforms + $extra')
+          fi
           combos=$(jq -cn \
-            --argjson platforms "$platforms" \
+            --argjson platforms "$pool" \
             --argjson wanted "$wanted" \
             --argjson variants "$variants" \
             '{include: [ $platforms[] as $p

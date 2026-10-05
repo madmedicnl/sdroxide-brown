@@ -241,11 +241,14 @@ client — are in [`docs/images/`](docs/images).
 Every release carries, for Linux:
 
 - an **AppImage** — one file, no install: download
-  `sdroxide-<version>-linux-x86_64-compat.AppImage` (or the `aarch64` one for a
-  Raspberry Pi or other ARM board), `chmod +x` it and run it. Built against
-  glibc 2.35 and with every native driver compiled in.
-- a **`.deb`**, which installs the udev rules and the menu entry for you.
+  `sdroxide-<version>-linux-x86_64.AppImage`, `chmod +x` it and run it. Built
+  with every native driver compiled in.
+- a **.deb**, which installs the udev rules and the menu entry for you.
 - a **portable tarball**, for anything else.
+
+**Raspberry Pi, ARM boards and older distributions are not published as
+prebuilt binaries** (from 1.9.20 — see the release notes). Building from source
+below works on all of them and is the supported route there.
 
 Windows gets an `.msi` and a portable `.zip`, macOS a `.dmg`. Or build it
 yourself.
