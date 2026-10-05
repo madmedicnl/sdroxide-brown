@@ -396,6 +396,25 @@ pub fn share_file(_name: &str, _data: &[u8], _mime: Mime) -> bool {
     false
 }
 
+/// Whether this is a URL worth handing to the desktop's opener, and what to
+/// hand it.
+///
+/// **Split out from [`open_external`] so it can be tested without launching
+/// anything.** The first version of that test called `open_external` directly,
+/// which shelled out to the real `xdg-open` — so `cargo test` opened a mail
+/// window on the operator's desktop, in the middle of a test run. A test that
+/// touches the machine it runs on is not a test; the launching half is now
+/// exercised by pressing the button and nothing else.
+fn external_url_ok(url: &str) -> Option<&str> {
+    let url = url.trim();
+    // Empty is nothing to open, and a leading `-` would be read as a flag by
+    // every one of these openers rather than as a URL.
+    if url.is_empty() || url.starts_with('-') {
+        return None;
+    }
+    Some(url)
+}
+
 /// Hand a URL to whatever the desktop has registered for it — a mail client, a
 /// browser — and say whether it was handed over.
 ///
@@ -413,10 +432,7 @@ pub fn share_file(_name: &str, _data: &[u8], _mime: Mime) -> bool {
 /// a window is its own business. So a caller that must not lose the content
 /// keeps a copy of it rather than trusting this.
 pub fn open_external(url: &str) -> bool {
-    // A leading `-` would be read as a flag by every one of these openers.
-    if url.trim().is_empty() || url.starts_with('-') {
-        return false;
-    }
+    let Some(url) = external_url_ok(url) else { return false };
     #[cfg(target_arch = "wasm32")]
     {
         web_sys::window().is_some_and(|w| w.open_with_url(url).is_ok())
@@ -519,14 +535,33 @@ mod tests {
         assert_eq!(read.text, "<NAME:5>Jörg <QTH:9>Jyväskylä <EOR>");
     }
 }
-#[test]
-fn an_empty_or_flag_shaped_url_is_never_handed_over() {
-    // The opener shells out, and a leading `-` would be read as an option.
-    for bad in ["", "   ", "-e", "--version"] {
-        assert!(!crate::download::open_external(bad), "{bad:?} must be refused");
+
+#[cfg(test)]
+mod open_tests {
+    use super::external_url_ok;
+
+    /// The refusal half of handing a URL to the desktop, **with nothing
+    /// launched**.
+    ///
+    /// There is deliberately no test here that calls `open_external`: it shells
+    /// out to the machine's real `xdg-open`, and a test run that opened a mail
+    /// window on the operator's desktop — which is exactly what the first
+    /// version of this did — is not a test. What can be decided without a side
+    /// effect is decided and pinned here; the launching half is what pressing
+    /// the button is for.
+    #[test]
+    fn an_empty_or_flag_shaped_url_is_never_handed_over() {
+        for bad in ["", "   ", "-e", "--version", " -oProxyCommand=x"] {
+            assert!(
+                external_url_ok(bad).is_none(),
+                "{bad:?} must be refused: it is empty, or a shell opener would \
+                 read it as an option"
+            );
+        }
+        // A real URL passes, and comes back trimmed.
+        for good in ["mailto:reports@example.org", "https://example.org/a?b=c"] {
+            assert_eq!(external_url_ok(good), Some(good));
+        }
+        assert_eq!(external_url_ok("  https://example.org  "), Some("https://example.org"));
     }
-    // A well-formed URL is handed to the platform, which here is xdg-open.
-    // Whether a *handler* exists is the handler's business — this only asserts
-    // that the opener was launched, which is what the function returns.
-    assert!(crate::download::open_external("mailto:nobody@example.invalid"));
 }

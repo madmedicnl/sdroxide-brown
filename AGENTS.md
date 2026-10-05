@@ -89,6 +89,16 @@ were complete.
   `/tmp/opencode/qsl_card_sample.png` (`cargo run -p sdroxide-ui --example
   qsl_card_probe`). Keep it — see the next rule, which is why it earns its
   place.
+- **A test that touches the machine it runs on is not a test.** `open_external`
+  (the desktop's link/URL opener, added 2026-10-05 after eframe turned out to
+  implement `open_url` **only in its web target**) was unit-tested by calling it
+  with a `mailto:` URL — which shelled out to the real `xdg-open`, so
+  **`cargo test` opened a mail window on the operator's desktop** in the middle of
+  a run. The guard is now split out as `external_url_ok`, which decides the same
+  thing and launches nothing, and that is what the test pins; the launching half
+  is what pressing the button is for. **When a function's whole job is a
+  side effect on the world, split the decision from the effect and test the
+  decision** — the effect cannot be asserted without doing it.
 - **Rendering an image and *looking at it* finds what tests do not.** The QSL
   card (`crates/sdroxide-ui/src/qsl_card.rs`) passed all nine of its unit tests
   while **three typed fields were missing from the output**, and the callsign
