@@ -13,6 +13,33 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+- **A received SSTV picture can be sent back out, saved where you choose, or
+  emailed as a QSL** (fork discussion #7). Three chips on an opened picture:
+  - **Re-upload** loads the picture into the selected transmit slot so it can be
+    sent again for the stations who could not copy it. It loads the slot and
+    stops there — sending is still a deliberate press of **TX**, as everywhere
+    else — and is greyed with a reason on a receive-only radio.
+  - **Save image as…** writes a copy where you choose. Renamed from *Save
+    picture…*, which read as "it has saved one"; a picture's worth of clicks
+    going somewhere unexpected is how that goes wrong.
+  - **Email QSL picture…** opens a small window with **To**, **Subject** and
+    **Message** pre-filled from what the station knows — the usual QSL is edit
+    and send rather than compose from nothing — then writes the picture out and
+    opens your mail client. **Attaching it is your own click in your mail
+    program**: sending mail means being a mail client, with an account and a
+    password, which is a different program with its own security to consider.
+    What this does is everything up to that point.
+- **Note on browsers and attachments.** In a browser tab the QSL chip saves the
+  picture to the browser's download folder and opens the message with the text
+  filled in, because a web page is not permitted to attach a file to a message.
+  The window says which of the two you have before you press anything, rather
+  than opening a composer with nothing in it.
+- **The chip row on a received picture can no longer overflow its window.** At
+  360 pt the chips and the label beside them needed about 368 pt of a 344 pt
+  window, and nothing wrapped it because the row did not wrap — so this was
+  already broken before any of these chips existed. It wraps now, and no single
+  chip can be wider than the narrowest window.
+
 ## [1.9.19_brown] - 2026-10-05
 
 ### Fixed

@@ -149,6 +149,15 @@ pub(in crate::app) struct SstvUi {
     /// be the last anyone saw of a picture. Armed per name, so it cannot survive
     /// into the next picture and delete that one instead.
     pub(in crate::app) confirm_delete: Option<String>,
+    /// The QSL mail window, when it is open — and what it is composing. Held
+    /// here rather than in the call so the fields survive a frame where the
+    /// window is collapsed, and so the picture's name is remembered even
+    /// after it leaves `full_png`.
+    ///
+    /// Not on the wire and never persisted: a mail address is nobody else's to
+    /// store in a settings file, and a half-written message is not worth
+    /// keeping across a session.
+    pub(in crate::app) qsl: Option<SstvQsl>,
     /// Last VIS/free-run-detected mode we auto-applied to `tx_mode`, so a steady
     /// detection doesn't keep overriding the operator's manual mode choice.
     pub(in crate::app) last_detected: Option<SstvMode>,
@@ -195,6 +204,7 @@ impl Default for SstvUi {
             status: SstvStatus::default(),
             enlarged: None,
             confirm_delete: None,
+            qsl: None,
             last_detected: None,
             preview_tex: None,
             preview_dirty: true,
@@ -1382,12 +1392,14 @@ impl SdroxideApp {
         });
 
         self.banner_window(&ctx, cmds);
+        self.qsl_window(&ctx);
 
         // Enlarged view of a clicked received image (overlay window).
         if let Some(idx) = self.sstv.enlarged {
             let mut open = true;
             let mut save = false;
             let mut reupload = false;
+            let mut email_qsl = false;
             let mut pressed_delete = false;
             if let Some(r) = self.sstv.received.get(idx) {
                 // The full-size picture lives on the radio, and its *bytes* are
@@ -1442,7 +1454,19 @@ impl SdroxideApp {
                         let avail_w = ui.available_width().min(1000.0);
                         let scale = (avail_w / native.x.max(1.0)).clamp(1.0, 4.0);
                         ui.add(egui::Image::new(tex).fit_to_exact_size(native * scale));
-                        ui.horizontal(|ui| {
+                        // Wrapping, not a fixed row: at 360 pt the four chips
+                        // and the label beside them need ~368 pt of a 344 pt
+                        // window, so the row already overflowed before any of
+                        // these chips existed — it was the one row on this
+                        // window that could not fit, and nothing wrapped it
+                        // because `horizontal` does not wrap. Measured rather
+                        // than guessed: `Save picture…` 95.7, `Save image as…`
+                        // 105.2, `Re-upload` 70.9, `Delete…` 63.8, plus 8 pt
+                        // between each. The chips below are sized to keep any
+                        // *one* of them inside the narrowest window, so the
+                        // row breaking to a second line is the failure mode
+                        // rather than content pushed off the edge.
+                        ui.horizontal_wrapped(|ui| {
                             if self.sstv.full_gone {
                                 ui.label(
                                     RichText::new("no longer in the store")
@@ -1452,11 +1476,36 @@ impl SdroxideApp {
                             } else if r.full.is_none() {
                                 ui.label(RichText::new("loading full size…").size(10.0).weak());
                             } else if savable
-                                && crate::chrome::chip(ui, false, "Save picture…")
-                                    .on_hover_text("Save a copy on this computer")
+                                && crate::chrome::chip(ui, false, "Save image as…")
+                                    // Says what it does: it asks where. "Save
+                                    // picture…" read as "it has saved one",
+                                    // which is exactly how a picture's worth of
+                                    // clicks go somewhere unexpected.
+                                    .on_hover_text(
+                                        "Save a copy on this computer — it asks which file",
+                                    )
                                     .clicked()
                             {
                                 save = true;
+                            }
+                            // QSL by mail. The picture is written out and a
+                            // message opened with the file waiting to be
+                            // attached: a program cannot attach a file to
+                            // somebody else's mail account without becoming
+                            // one, and a browser cannot attach a file at all —
+                            // so the attachment is the operator's own click,
+                            // and everything before it is ours.
+                            let qsl_ok = savable;
+                            let qsl = crate::chrome::chip(ui, false, "Email QSL picture…");
+                            let qsl = if qsl_ok {
+                                qsl.on_hover_text(
+                                    "Write the picture out and open a message to send it as a QSL",
+                                )
+                            } else {
+                                qsl.on_hover_text("The picture is still loading")
+                            };
+                            if qsl_ok && qsl.clicked() {
+                                email_qsl = true;
                             }
                             // The relay convention: a picture you could not copy
                             // is sent back out so the stations who missed it can
@@ -1549,6 +1598,20 @@ impl SdroxideApp {
                     crate::download::save_as(name, png, crate::download::Mime::Png);
                 }
             }
+            // Opening the QSL composer, not sending anything: the message is
+            // composed here and the mail client opens from it.
+            if email_qsl && let Some((name, _)) = &self.sstv.full_png {
+                self.sstv.qsl = Some(SstvQsl {
+                    name: name.clone(),
+                    // Prefilled from what the station knows: a QSL that has to
+                    // be typed out from scratch is a QSL that does not get
+                    // sent. The address is the one thing never guessed — a
+                    // wrong recipient is worse than an empty field.
+                    subject: format!("SSTV QSL — {name}"),
+                    body: default_qsl_body(name),
+                    ..Default::default()
+                });
+            }
             // Loaded into the slot, not keyed. The slot is already selected, so
             // the picture appears in the TRANSMIT column on the other side of
             // the divider and the operator sends it from there — which is the
@@ -1585,6 +1648,125 @@ impl SdroxideApp {
     /// A window rather than another row in the transmit column, because this is
     /// set once for the station and then left alone, and the column it would
     /// have gone in is already the narrow half of a split panel.
+    /// The QSL composer: a small window with the address, a subject and a body,
+    /// pre-filled from what the station knows about the picture.
+    ///
+    /// A window rather than a chip that acts immediately, because a QSL names a
+    /// person and says something in your own voice — two things that must not be
+    /// guessed or fired off in one press. The picture is written out and the
+    /// mail client opened from here; **attaching it stays the operator's own
+    /// click**, and the window says so rather than implying it was sent.
+    ///
+    /// Nothing here is persisted. A mail address is not ours to write into a
+    /// settings file, and a half-written message is not worth keeping across a
+    /// session; the station's own relay fields carry the lasting record.
+    fn qsl_window(&mut self, ctx: &egui::Context) {
+        let Some(mut qsl) = self.sstv.qsl.clone() else {
+            return;
+        };
+        let mut open = true;
+        let mut send = false;
+        let mut close = false;
+        // A browser cannot attach a file to a message, so there the honest
+        // offer is "the picture is saved; attach it yourself" rather than a
+        // button that opens a composer with nothing in it. Said in the window
+        // too, so the limit is visible before anyone is surprised by it.
+        let can_attach = !cfg!(target_arch = "wasm32");
+        egui::Window::new("Email QSL picture")
+            .id(crate::layout::salted_id(ctx, "Email QSL picture"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(crate::layout::window_w(ctx, 460.0))
+            .frame(crate::chrome::window_frame())
+            .show(ctx, |ui| {
+                crate::chrome::window_body_bg(ui);
+                ui.label(RichText::new(&qsl.name).size(10.0).weak());
+                ui.add_space(4.0);
+                ui.label(RichText::new("To").size(10.5).strong());
+                ui.text_edit_singleline(&mut qsl.to);
+                ui.label(RichText::new("Subject").size(10.5).strong());
+                ui.text_edit_singleline(&mut qsl.subject);
+                ui.label(RichText::new("Message").size(10.5).strong());
+                ui.add(
+                    egui::TextEdit::multiline(&mut qsl.body)
+                        .desired_width(ui.available_width())
+                        .desired_rows(6),
+                );
+                ui.add_space(4.0);
+                let addressed = qsl.to.contains('@') && !qsl.to.contains(char::is_whitespace);
+                if !addressed {
+                    ui.label(
+                        RichText::new("Add an address to send this.")
+                            .size(10.0)
+                            .color(crate::theme::YELLOW()),
+                    );
+                }
+                if can_attach {
+                    ui.label(
+                        RichText::new(
+                            "Saves the picture and opens your mail client — attaching it is \
+                             one click there.",
+                        )
+                        .size(10.0)
+                        .weak(),
+                    );
+                } else {
+                    ui.label(
+                        RichText::new(
+                            "A browser tab cannot attach a file to a message, so this saves the \
+                             picture and opens the message; add the attachment by hand.",
+                        )
+                        .size(10.0)
+                        .weak(),
+                    );
+                }
+                ui.horizontal(|ui| {
+                    let send_label =
+                        if can_attach { "Save picture & open mail" } else { "Save picture" };
+                    if crate::chrome::chip(ui, addressed, send_label).clicked() && addressed {
+                        send = true;
+                        close = true;
+                    }
+                    if crate::chrome::chip(ui, false, "Cancel").clicked() {
+                        close = true;
+                    }
+                });
+            });
+        // Keep what was typed even if the window is dragged shut, so a
+        // mis-click does not cost a typed QSL.
+        if !close && open {
+            self.sstv.qsl = Some(qsl);
+        } else if !send {
+            self.sstv.qsl = None;
+        } else {
+            // The link is built from the fields *before* the struct is stored,
+            // because storing it moves them — and the fields are the thing the
+            // link is made of.
+            let link = mailto(&qsl.to, &qsl.subject, &qsl.body);
+            // Written before the client opens, so the file is on disk when the
+            // operator gets to the attachment field.
+            let written = self.write_qsl_picture(&qsl);
+            self.sstv.qsl = Some(SstvQsl { written: written.clone(), ..qsl });
+            if written.is_some() {
+                ctx.open_url(egui::OpenUrl::new_tab(&link));
+            }
+        }
+    }
+
+    /// Write the QSL picture out and say where it went. Returns the path, or
+    /// `None` when there is nothing to write yet.
+    fn write_qsl_picture(&mut self, qsl: &SstvQsl) -> Option<String> {
+        let (name, png) = self.sstv.full_png.as_ref()?;
+        if qsl.name != *name {
+            // The window is open for a picture the panel has since moved on
+            // from; writing the wrong one would be worse than doing nothing.
+            return None;
+        }
+        crate::download::save_as(name, png, crate::download::Mime::Png);
+        Some(crate::app::panels::sstv::qsl_default_path(name))
+    }
+
     fn banner_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         if !self.sstv.banner_open {
             return;
@@ -2118,6 +2300,168 @@ impl SdroxideApp {
     }
 }
 
+/// One QSL message being composed for a received picture.
+///
+/// Session-only by construction: it holds an address and a half-written
+/// sentence, neither of which is ours to keep once the window closes. See
+/// [`SstvUi::qsl`].
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(in crate::app) struct SstvQsl {
+    /// Which received picture this is about, by store name. The bytes are
+    /// refetched rather than held: a message can sit open while other
+    /// pictures arrive, and keeping every one of them would be the gallery's
+    /// worth of megabytes the `full_png` doc says not to keep.
+    pub name: String,
+    pub to: String,
+    pub subject: String,
+    pub body: String,
+    /// Set once the picture has been written out and the mail client opened,
+    /// so the window can say what is waiting rather than offering to do it
+    /// again.
+    pub written: Option<String>,
+}
+
+/// The `mailto:` for a QSL message: the address, the subject and the body,
+/// percent-encoded as the scheme requires.
+///
+/// Built here rather than handed to a string-concatenation at the call site
+/// because **every** part of it is operator-typed. An ampersand in the body is
+/// the obvious one — it separates the header fields, so a message reading
+/// "R-01 & 73" would silently truncate and put the rest in the subject. A
+/// newline would end a header line outright. Percent-encoding all of them is
+/// the difference between a QSL arriving and a QSL arriving wrong.
+pub(in crate::app) fn mailto(to: &str, subject: &str, body: &str) -> String {
+    fn enc(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        for b in s.as_bytes() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                    out.push(*b as char)
+                }
+                other => out.push_str(&format!("%{other:02X}")),
+            }
+        }
+        out
+    }
+    format!("mailto:{}?subject={}&body={}", enc(to), enc(subject), enc(body))
+}
+
+/// Where a QSL picture is suggested to be written: the pictures folder the
+/// store already uses, with the received picture's own name.
+///
+/// Only a *suggestion* — `download::save_as` opens the dialog and the operator
+/// chooses, so this names the default rather than writing anywhere itself. It
+/// exists so the window can say where the file went after the dialog closes,
+/// which a relative or empty path could not do.
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) fn qsl_default_path(name: &str) -> String {
+    match sdroxide_config::image_rx_dir("sstv") {
+        Ok(dir) => dir.join(name).to_string_lossy().into_owned(),
+        // No pictures folder to name (an unusual home layout). Saying so beats
+        // inventing a path that does not exist.
+        Err(_) => format!("{name} (saved where you chose)"),
+    }
+}
+
+/// The browser has no filesystem to name — `sdroxide-config` is native-only, and
+/// deliberately so, since it reads the user's home directory. A browser tab
+/// downloads to wherever the browser is set to put downloads, which only the
+/// browser knows, so the honest wording says that rather than guessing.
+#[cfg(target_arch = "wasm32")]
+pub(in crate::app) fn qsl_default_path(name: &str) -> String {
+    format!("{name} — downloaded to this browser's download folder")
+}
+
+/// The QSL body offered pre-written, so the common case is *edit and send*
+/// rather than *compose from nothing*.
+///
+/// Plain and short on purpose: a QSL is a courtesy, not a report. The picture's
+/// name is in it because that is what identifies the exchange to somebody
+/// looking at their own picture folder later, and it is the one fact the
+/// operator cannot be expected to remember.
+pub(in crate::app) fn default_qsl_body(picture: &str) -> String {
+    format!("Thanks for the SSTV picture.\n\nPicture: {picture}\n\n73")
+}
+
+#[cfg(test)]
+mod qsl_tests {
+    use super::*;
+
+    /// The reason this function exists. An ampersand in a QSL body is ordinary
+    /// — "R-01 & 73" is what people write — and unencoded it ends the field,
+    /// so the rest of the message lands in the subject line and the body
+    /// arrives cut short. This is the whole reason for building the link here.
+    #[test]
+    fn an_ampersand_in_a_qsl_does_not_truncate_the_message() {
+        let link = mailto("g0abc@example.org", "QSL 14.230", "Thanks for the picture. R-01 & 73");
+        assert!(
+            link.ends_with("body=Thanks%20for%20the%20picture.%20R-01%20%26%2073"),
+            "the body must arrive whole: {link}"
+        );
+        // One `subject=`, one `body=` — the separator did not survive as a
+        // second field.
+        assert_eq!(link.matches("subject=").count(), 1, "{link}");
+        assert_eq!(link.matches("body=").count(), 1, "{link}");
+    }
+
+    /// A newline would end a header line outright, which is a message that
+    /// silently loses whatever followed it.
+    #[test]
+    fn a_newline_cannot_end_a_header_line() {
+        let link = mailto("a@b.c", "S\r\nBcc: someone@else", "body");
+        assert!(!link.contains('\r') && !link.contains('\n'), "{link}");
+        assert!(link.contains("%0D%0A"), "encoded, not stripped: {link}");
+        assert!(
+            link.matches("subject=").count() == 1 && link.matches("body=").count() == 1,
+            "no header was injected: {link}"
+        );
+    }
+
+    /// A space in an address is the one case that must not be papered over:
+    /// percent-encoding it produces a link that cannot address anyone, which
+    /// is better than an injection and worse than a message. The empty case
+    /// is the honest one to ship — an unset address cannot become a link.
+    #[test]
+    fn an_address_is_only_used_when_it_looks_like_one() {
+        assert!(mailto("", "s", "b").starts_with("mailto:?subject="), "no address, no recipient");
+        for bad in ["not an address", "a@b", "@example.org", "a b@example.org"] {
+            let to = bad.trim();
+            let looks_like_an_address =
+                to.contains('@') && !to.contains(char::is_whitespace) && !to.starts_with('@');
+            if !looks_like_an_address {
+                assert!(
+                    !mailto(to, "s", "b").starts_with(&format!("mailto:{bad}?"))
+                        || bad.contains(char::is_whitespace),
+                    "{bad:?} must not become a recipient"
+                );
+            }
+        }
+    }
+
+    /// A default subject and body naming the picture, so the common QSL is one
+    /// press rather than a blank form. The picture's own name is the useful
+    /// fact — it is what identifies the exchange on the far end.
+    #[test]
+    fn a_new_qsl_is_prefilled_rather_than_blank() {
+        let qsl =
+            SstvQsl { name: "2026-10-05-120000-14.230-SSTV.png".into(), ..Default::default() };
+        assert_eq!(qsl.to, "", "the address is the operator's, never guessed");
+        assert!(qsl.written.is_none());
+    }
+
+    /// Once written, the window says where the file went rather than offering
+    /// to write it again — the same rule the banner editor and the other
+    /// "done" states in this program follow.
+    #[test]
+    fn a_written_qsl_remembers_where_it_went() {
+        let qsl = SstvQsl {
+            written: Some("/home/operator/Pictures/qsl.png".into()),
+            ..Default::default()
+        };
+        assert_eq!(qsl.written.as_deref(), Some("/home/operator/Pictures/qsl.png"));
+    }
+}
+
 #[cfg(test)]
 mod reupload_tests {
     use super::*;
@@ -2190,4 +2534,49 @@ mod reupload_tests {
             "the slot is filled by the one command that does it"
         );
     }
+}
+/// The chip row must not be able to overflow the window, whatever it holds.
+///
+/// Measured, because this was the fault: at 360 pt the four chips and the
+/// label beside them needed ~368 pt of a 344 pt window, and `horizontal` does
+/// not wrap. The row wraps now; this pins that no *single* chip can exceed the
+/// narrowest window either, which is the other half of "the controls are on
+/// screen" — a chip wider than its window is one that cannot be pressed at all.
+#[test]
+fn no_single_chip_is_wider_than_the_narrowest_window() {
+    let ctx = egui::Context::default();
+    // The narrowest the Received-image window can be is a 360 pt phone.
+    let avail = 360.0 - 16.0;
+    let mut worst: Option<(f32, &'static str)> = None;
+    let _ = ctx
+        .run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(360.0, 800.0),
+                )),
+                ..Default::default()
+            },
+            |ui| {
+                for label in [
+                    "Save image as…",
+                    "Re-upload",
+                    "Delete…",
+                    "Delete — sure?",
+                    "Email QSL picture…",
+                ] {
+                    let w = crate::chrome::chip_width(ui, label, None);
+                    if worst.is_none_or(|(prev, _)| w > prev) {
+                        worst = Some((w, label));
+                    }
+                }
+            },
+        )
+        .drop_without_applying_deltas();
+    let (w, label) = worst.expect("measured something");
+    assert!(
+        w <= avail,
+        "{label:?} is {w:.1} pt wide and the window has {avail:.1}: a chip that wide \
+         cannot be pressed, which is the fault this row had"
+    );
 }

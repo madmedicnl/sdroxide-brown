@@ -4637,6 +4637,32 @@ one of the two.
   TX**) and it does not put the mode selection back to **Auto**.
 - Received images are saved as PNG under `~/.config/sdroxide-brown/sstv_rx/` and reload
   into the gallery next time.
+- **Sending one back out — Re-upload.** Open a received picture and **Re-upload**
+  loads it into the transmit slot you have selected, so you can send it again for
+  the stations who could not copy it and have them relay it onward. It loads the
+  slot and **stops there**: sending is still a deliberate press of **TX**, exactly
+  as it is for anything else, so a click inside a picture window can never key
+  the transmitter by accident. On a receive-only radio the chip is greyed and says
+  why — composing a picture is worth doing on a receiver, sending it is not.
+- **Saving a copy — Save image as….** Writes the picture where you choose. It
+  asks; the name says so, because "save picture" read as *it has saved one* and a
+  picture's worth of clicks going somewhere unexpected is how that happens.
+- **QSL by email — Email QSL picture….** Opens a small window with **To**, a
+  **Subject** and a **Message**, pre-filled from what the station knows: the
+  subject and body are written for you, so the usual QSL is *edit and send*
+  rather than *compose from nothing*. Pressing it writes the picture out and opens
+  your mail client.
+  **Attaching the picture is one click in your mail program, and the program
+  cannot do it for you** — that is not an omission to be worked around. Sending
+  mail means being a mail client: an account, a password and a server, which is a
+  different program with its own security to think about. What this does is
+  everything up to that point.
+  **In a browser tab it cannot go further still.** A web page is not allowed to
+  attach a file to a message, so there it saves the picture (to the browser's own
+  download folder) and opens the message with the text filled in; you add the
+  attachment yourself. The window says which of the two you have before you press
+  anything. Nothing typed in that window is remembered after you close it — an
+  address is nobody else's to keep in a settings file.
 - **Deleting.** Most of what a night on 20 m leaves behind is noise. **Right-click**
   a thumbnail and choose *Delete this picture*, or open one and use **Delete…** in
   the enlarged window — which asks a second time, because the file goes for good
