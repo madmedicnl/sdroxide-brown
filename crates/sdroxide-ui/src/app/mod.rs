@@ -967,6 +967,15 @@ pub struct SdroxideApp {
     /// The set the server last sent, kept so the settings row can offer "back
     /// to the profile's look" without another round trip.
     client_settings_stored: Option<sdroxide_types::ClientScreen>,
+    /// Control bindings the signed-in profile carries, held here because this
+    /// client has not adopted them yet — see
+    /// [`crate::app::frame::BindingsOffer`].
+    bindings_pending: Option<crate::app::frame::BindingsOffer>,
+    /// Set once a profile's bindings have been offered this session, so a
+    /// client that says no is not asked again on the next reconnect. Session
+    /// only, deliberately: the answer that matters is persisted (see
+    /// `client_share_bindings`), not this.
+    bindings_offer_asked: bool,
     /// What the last explicit save did, said where the operator pressed it. A
     /// control that saves silently is a control that cannot be trusted.
     client_settings_status: Option<String>,
@@ -1818,6 +1827,8 @@ impl SdroxideApp {
             show_logbook: false,
             client_settings_from: None,
             client_settings_stored: None,
+            bindings_pending: None,
+            bindings_offer_asked: false,
             client_settings_status: None,
             client_settings_pending: std::cell::Cell::new(None),
             known_calls: known_calls::KnownCallsState::default(),

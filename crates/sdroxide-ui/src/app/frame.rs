@@ -186,6 +186,11 @@ impl eframe::App for SdroxideApp {
         let ctx = ui.ctx().clone();
         let now = ctx.input(|i| i.time);
         self.konami.tick(ctx.input(|i| i.stable_dt).min(0.25));
+        // The profile's stored key bindings, offered when this client has not
+        // adopted them. Drawn before anything else so it is the first thing
+        // seen, and from `ctx` rather than `ui` because it is a modal — it has
+        // to be able to sit over the whole window, not inside one panel.
+        self.bindings_offer_ui(&ctx);
         // The rate every animation in the tree paces itself to. Published here,
         // before anything draws, so a change in Settings → UI reaches the
         // needle and the waterfall on the same frame it reaches the scheduler.
@@ -1506,16 +1511,41 @@ impl SdroxideApp {
                     // know now which profile to save it to.
                 }
                 RadioEvent::ClientBindings { profile, bindings } => {
-                    // Apply only when this client opted in to carrying its
-                    // bindings in the server profile — off by default, because
-                    // on a shared station the keyboard is shared. Applied and
-                    // written out at once, so the restored keys survive a
-                    // reload the same way a rebind does.
-                    if self.ui_settings.client_share_bindings {
-                        self.input.cfg = bindings;
-                        self.input.cfg.migrate();
-                        self.input.persist();
-                        self.client_settings_from = Some(profile);
+                    // Applied and written out at once, so the restored keys
+                    // survive a reload the same way a rebind does.
+                    let apply = |me: &mut Self| {
+                        me.input.cfg = bindings.clone();
+                        me.input.cfg.migrate();
+                        me.input.persist();
+                        me.client_settings_from = Some(profile.clone());
+                    };
+                    let action = bindings_action(
+                        self.ui_settings.client_share_bindings,
+                        bindings.keys.len(),
+                        self.bindings_offer_asked,
+                    );
+                    if action == BindingsAction::Apply {
+                        apply(self);
+                    } else if action == BindingsAction::Offer {
+                        // **Offer it, do not drop it.** This client has not
+                        // adopted the opt-in, which is the safe default on a
+                        // shared station — so the bindings are held back. But
+                        // holding them back *silently* is what made this look
+                        // broken: the profile had them, the server sent them,
+                        // the file on disk was right, and every session quietly
+                        // discarded them. Nothing told the operator anything.
+                        //
+                        // Why the flag can be false on a machine that meant to
+                        // opt in: it is client-local, and on the web it lives
+                        // in browser storage, which the same eviction that
+                        // dropped this operator's screen settings can empty.
+                        // Asking again is the correct response to that. Silence
+                        // never was.
+                        if !self.bindings_offer_asked {
+                            self.bindings_pending =
+                                Some(BindingsOffer { profile: profile.clone(), bindings });
+                            self.bindings_offer_asked = true;
+                        }
                     }
                 }
                 RadioEvent::ConnectionLost(e) => {
@@ -2274,7 +2304,133 @@ impl SdroxideApp {
                 .to_string(),
         });
     }
+}
 
+/// Control bindings the signed-in profile carries, offered rather than
+/// dropped when this client has not adopted the opt-in.
+///
+/// The same shape as [`SdroxideApp::client_settings_stored`]: kept so the
+/// question can be asked with the profile's name in it, and so accepting is
+/// a single click rather than a round trip.
+/// What to do with the control bindings a server just offered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) enum BindingsAction {
+    /// This client opted in: use them.
+    Apply,
+    /// Not opted in, but the profile has keys. **Ask** — do not drop them
+    /// in silence, which is what made this look broken.
+    Offer,
+    /// Not opted in and there is nothing to offer anyway.
+    Ignore,
+    /// Already offered this session; a client that said no is not asked again.
+    AlreadyAsked,
+}
+
+/// The decision, as a pure function so it can be pinned.
+///
+/// `opted_in` is `UiSettings::client_share_bindings`, which is *client-local*
+/// and on the web lives in browser storage — so the same eviction that hid an
+/// operator's screen settings can empty it. That is not a reason to stay
+/// silent; it is exactly the case where asking again is right.
+pub(in crate::app) fn bindings_action(opted_in: bool, keys: usize, asked: bool) -> BindingsAction {
+    if opted_in {
+        return BindingsAction::Apply;
+    }
+    if keys == 0 {
+        // Nothing to carry. Offering an empty set would be a question with no
+        // possible answer, and adopting it would clear the operator's keys.
+        return BindingsAction::Ignore;
+    }
+    if asked {
+        return BindingsAction::AlreadyAsked;
+    }
+    BindingsAction::Offer
+}
+
+#[derive(Clone)]
+pub(in crate::app) struct BindingsOffer {
+    /// Which profile they came from — a name, or `None` for the station
+    /// default.
+    pub profile: Option<String>,
+    pub bindings: sdroxide_types::InputSettings,
+}
+
+impl SdroxideApp {
+    /// The profile carries control bindings and this client has not said it
+    /// wants them. Ask, once, and act on the answer.
+    ///
+    /// Asking rather than applying is not a gesture at safety: adopting a
+    /// profile's keys *is* rebinding a shared keyboard, which is why the
+    /// opt-in exists and why it stays off by default. What was wrong before
+    /// was not the caution, it was the silence — the operator stored keys,
+    /// the server held them, and every session dropped them with nothing
+    /// said anywhere. One question, with the same warning the settings row
+    /// gives, and the answer is persisted so it is not asked twice.
+    pub(in crate::app) fn bindings_offer_ui(&mut self, ctx: &egui::Context) {
+        let Some(offer) = self.bindings_pending.clone() else { return };
+        let mut adopt = false;
+        let mut decline = false;
+        egui::Modal::new(egui::Id::new("client-bindings-offer")).show(ctx, |ui| {
+            ui.set_max_width(470.0);
+            ui.heading(
+                RichText::new("This profile carries keyboard bindings")
+                    .color(crate::theme::ALERT()),
+            );
+            ui.add_space(6.0);
+            ui.label(match &offer.profile {
+                Some(name) => format!(
+                    "The profile you signed in as ({name}) stores keyboard and mouse \
+                     bindings on the server, and this browser is not using them. That is \
+                     the safe default — on a station other people share, the keyboard is \
+                     shared too, and one login adopting another's PTT or Space is a real \
+                     hazard."
+                ),
+                None => String::from(
+                    "This station's default profile stores keyboard and mouse bindings on \
+                     the server, and this browser is not using them. That is the safe \
+                     default — on a station other people share, the keyboard is shared \
+                     too, and one login adopting another's PTT or Space is a real hazard.",
+                ),
+            });
+            ui.add_space(6.0);
+            ui.label(
+                "Use them here, or leave them. Either way you will be told which, and \
+                 nothing is changed without you choosing.",
+            );
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .button(
+                        RichText::new("Use this profile's bindings").color(crate::theme::ALERT()),
+                    )
+                    .clicked()
+                {
+                    adopt = true;
+                }
+                if ui.button("Keep mine (and stop asking)").clicked() {
+                    decline = true;
+                }
+            });
+        });
+        if adopt {
+            // The opt-in itself is persisted, so this is asked once and not
+            // again after a restart or an eviction.
+            self.ui_settings.client_share_bindings = true;
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+            self.input.cfg = offer.bindings;
+            self.input.cfg.migrate();
+            self.input.persist();
+            self.client_settings_from = Some(offer.profile);
+            self.client_settings_status =
+                Some("using the keyboard bindings stored for this profile".into());
+            self.bindings_pending = None;
+        } else if decline {
+            self.bindings_pending = None;
+        }
+    }
+}
+
+impl SdroxideApp {
     /// Put the profile's stored look back, discarding local changes to it.
     pub(in crate::app) fn revert_screen_to_profile(&mut self) {
         match self.client_settings_stored.clone() {
@@ -2436,7 +2592,42 @@ impl SdroxideApp {
 mod tests {
     use sdroxide_types::{Band, Mode};
 
-    use super::{digi_split, qsy_clears_decodes};
+    use super::{BindingsAction, bindings_action, digi_split, qsy_clears_decodes};
+
+    /// The reported bug, in one line: a profile's control bindings reached the
+    /// server and were written to disk correctly, survived a restart, and were
+    /// then **discarded at sign-in with nothing said** — because the opt-in that
+    /// authorises using them is client-local, and in a browser it lives in
+    /// storage the same eviction can empty.
+    ///
+    /// So the case that matters is not "opted in" and not "declined". It is
+    /// "the flag is false because it was lost", and the only correct answer to
+    /// that is to ask.
+    #[test]
+    fn stored_bindings_are_offered_rather_than_dropped() {
+        // The lost flag: not opted in, but there are keys → offer.
+        assert_eq!(bindings_action(false, 25, false), BindingsAction::Offer);
+        // Deliberately declined, same session → do not nag.
+        assert_eq!(bindings_action(false, 25, true), BindingsAction::AlreadyAsked);
+        // A fresh session asks again, which is what makes "keep mine" mean
+        // "this session" rather than "never, silently".
+        assert_eq!(bindings_action(false, 25, false), BindingsAction::Offer);
+    }
+
+    /// Opted in — the path that always worked, and the one the report's author
+    /// was told to check. Unchanged.
+    #[test]
+    fn an_opted_in_client_still_just_applies_them() {
+        assert_eq!(bindings_action(true, 25, false), BindingsAction::Apply);
+        assert_eq!(bindings_action(true, 0, true), BindingsAction::Apply);
+    }
+
+    /// An empty set is never offered: there would be no question with a possible
+    /// answer, and adopting it would wipe the operator's own keys.
+    #[test]
+    fn an_empty_binding_set_is_not_offered() {
+        assert_eq!(bindings_action(false, 0, false), BindingsAction::Ignore);
+    }
 
     /// The reported bug: 20 m to 40 m left the previous band's decodes in the
     /// list, because the only thing that cleared it was a mode change and the
