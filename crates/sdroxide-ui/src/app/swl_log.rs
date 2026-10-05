@@ -595,7 +595,21 @@ impl SdroxideApp {
         }
         let subject = reception_report_subject(entry);
         let Some(link) = reception_report_mailto(to, &subject, &body) else { return };
-        ctx.open_url(egui::OpenUrl::new_tab(&link));
+        // **The report goes on the clipboard whatever happens.** This program's
+        // own `open_url` does nothing on the desktop — eframe only implements
+        // that command in its web target — and even where it does work, the
+        // handler is another process that may be missing entirely. A reception
+        // report the listener typed and then lost because no mail client
+        // answered is the whole failure this avoids: pasting it is one key, and
+        // it is on the clipboard either way.
+        ctx.copy_text(body.clone());
+        if !crate::download::open_external(&link) {
+            // Said rather than assumed: the clipboard is the fallback and the
+            // operator has to know it is the fallback.
+            self.swl_report_note =
+                Some("Report copied to the clipboard — paste it into your mail program. No mail handler could be opened."
+                    .into());
+        }
     }
 
     fn swl_filter_row(&mut self, ui: &mut egui::Ui) {

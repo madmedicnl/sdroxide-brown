@@ -652,6 +652,9 @@ pub struct SdroxideApp {
     /// listener wants a station to see, and their standing note. Its own file
     /// beside the log — see [`sdroxide_config::load_swl_report`].
     pub(in crate::app) swl_report: sdroxide_types::SwlReportPrefs,
+    /// What the last **MAIL REPORT…** press did, said plainly. None until one is
+    /// pressed; some until the next entry opens.
+    pub(in crate::app) swl_report_note: Option<String>,
     /// Where the Settings row's file picker leaves the path it chose.
     pub(in crate::app) swl_report_pick: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// The reception log window's own state: open, the entry being edited, and
@@ -1725,6 +1728,7 @@ impl SdroxideApp {
             qso_log: load_qso_log(storage),
             swl_log: load_swl_log(storage),
             swl_report: load_swl_report(),
+            swl_report_note: None,
             swl_report_pick: std::sync::Arc::new(std::sync::Mutex::new(None)),
             show_swl: false,
             swl_edit: None,

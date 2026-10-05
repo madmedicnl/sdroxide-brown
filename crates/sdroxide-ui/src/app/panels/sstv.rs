@@ -158,6 +158,8 @@ pub(in crate::app) struct SstvUi {
     /// store in a settings file, and a half-written message is not worth
     /// keeping across a session.
     pub(in crate::app) qsl: Option<SstvQsl>,
+    /// What the last send press did, when it could not open a mail handler.
+    pub(in crate::app) qsl_note: Option<String>,
     /// Last VIS/free-run-detected mode we auto-applied to `tx_mode`, so a steady
     /// detection doesn't keep overriding the operator's manual mode choice.
     pub(in crate::app) last_detected: Option<SstvMode>,
@@ -205,6 +207,7 @@ impl Default for SstvUi {
             enlarged: None,
             confirm_delete: None,
             qsl: None,
+            qsl_note: None,
             last_detected: None,
             preview_tex: None,
             preview_dirty: true,
@@ -1714,6 +1717,12 @@ impl SdroxideApp {
             .show(ctx, |ui| {
                 crate::chrome::window_body_bg(ui);
                 ui.label(RichText::new(&qsl.name).size(10.0).weak());
+                // What the last send actually did. A button that worked and a
+                // button that quietly did nothing look identical until the
+                // operator waited for a mail window that never came.
+                if let Some(note) = self.sstv.qsl_note.as_deref() {
+                    ui.label(RichText::new(note).size(10.0).color(crate::theme::YELLOW()));
+                }
                 ui.add_space(4.0);
                 ui.label(RichText::new("To").size(10.5).strong());
                 ui.text_edit_singleline(&mut qsl.to);
@@ -1807,12 +1816,24 @@ impl SdroxideApp {
             // because storing it moves them — and the fields are the thing the
             // link is made of.
             let link = mailto(&qsl.to, &qsl.subject, &qsl.body);
+            let body = qsl.body.clone();
             // Written before the client opens, so the file is on disk when the
             // operator gets to the attachment field.
             let written = self.write_qsl_picture(&qsl);
             self.sstv.qsl = Some(SstvQsl { written: written.clone(), ..qsl });
             if written.is_some() {
-                ctx.open_url(egui::OpenUrl::new_tab(&link));
+                // eframe drops `open_url` on the desktop, so the message was never
+                // opened in the native build. The picture is already saved by
+                // this point and the text goes on the clipboard regardless, so
+                // nothing is lost when there is no mail handler either.
+                ctx.copy_text(body);
+                if !crate::download::open_external(&link) {
+                    self.sstv.qsl_note = Some(
+                        "Picture saved and the message copied — paste it into your mail \
+                         program. No mail handler could be opened."
+                            .into(),
+                    );
+                }
             }
         }
     }

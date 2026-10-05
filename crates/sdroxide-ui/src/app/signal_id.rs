@@ -147,7 +147,11 @@ fn profile_row(ui: &mut egui::Ui, p: &SignalProfile) {
                         .on_hover_text(format!("Open {url}"))
                         .clicked()
                 {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+                    // `ctx.open_url` is dropped by eframe on the desktop, so
+                    // this link has never opened anything in the native build.
+                    if !crate::download::open_external(&url) {
+                        tracing::warn!(%url, "no handler for the sigidwiki page");
+                    }
                 }
             });
             ui.label(RichText::new(p.summary).size(11.0));

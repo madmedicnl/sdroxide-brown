@@ -861,7 +861,15 @@ impl Help {
                 if let Some(anchor) = href.strip_prefix('#') {
                     self.go_to(anchor.to_string());
                 } else {
-                    ctx.open_url(egui::OpenUrl::new_tab(href));
+                    // A cross-reference link in the manual's own HELP window.
+                    // eframe drops `open_url` on the desktop, so this went
+                    // nowhere in the native build; `open_external` is the route
+                    // that works there. The window stays open either way — it is
+                    // the manual, and dismissing it to follow a link from it is
+                    // a nuisance.
+                    if !crate::download::open_external(&href) {
+                        tracing::warn!(%href, "no handler for this help link");
+                    }
                 }
             }
         });

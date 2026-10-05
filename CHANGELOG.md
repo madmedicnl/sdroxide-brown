@@ -13,6 +13,22 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Buttons that open a link now open it on the desktop.** eframe implements
+  `open_url` **only in its web target** — the native backend never reads the
+  command, so `Context::open_url` was silently dropped. Nothing this program
+  opened with it did anything in the desktop build: the reception report and the
+  SSTV picture's send button, the signal-identification window's sigidwiki links,
+  and the manual's own cross-reference links in **HELP**. This is not a Wayland or
+  compositor matter — there was no native handler to reach in the first place.
+  A real opener is used now (`xdg-open`, `open`, `start`), and an empty or
+  `-`-leading URL is refused rather than passed to a shell.
+- **A reception report is never lost to a missing mail handler.** Both send paths
+  now put the text on the **clipboard** whatever happens and say so when the mail
+  client could not be opened, because the report is the thing the operator typed
+  and losing it to a silent no-op is the failure worth designing against.
+
 - **A received SSTV picture can be sent back out, saved where you choose, or
   emailed as a QSL** (fork discussion #7). Three chips on an opened picture:
   - **Re-upload** loads the picture into the selected transmit slot so it can be

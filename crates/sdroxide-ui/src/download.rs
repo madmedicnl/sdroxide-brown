@@ -396,6 +396,58 @@ pub fn share_file(_name: &str, _data: &[u8], _mime: Mime) -> bool {
     false
 }
 
+/// Hand a URL to whatever the desktop has registered for it — a mail client, a
+/// browser — and say whether it was handed over.
+///
+/// **This exists because `egui`'s own `open_url` does nothing on the desktop.**
+/// `Context::open_url` queues an `OutputCommand`, and eframe implements that
+/// command **only in its web target** (`eframe/src/web/app_runner.rs`); the
+/// native backend never reads it, so the command is dropped without a sound.
+/// That is why a *Share* or *MAIL REPORT* button did nothing at all on a
+/// desktop — and why the signal-identification window's sigidwiki links and the
+/// manual's own cross-reference links have never opened anything either. It is
+/// not a Wayland or compositor problem; there is simply no native handler.
+///
+/// Returns whether the platform's opener was **launched**. That is the most
+/// that can be known here: the handler is another process and whether it showed
+/// a window is its own business. So a caller that must not lose the content
+/// keeps a copy of it rather than trusting this.
+pub fn open_external(url: &str) -> bool {
+    // A leading `-` would be read as a flag by every one of these openers.
+    if url.trim().is_empty() || url.starts_with('-') {
+        return false;
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::window().is_some_and(|w| w.open_with_url(url).is_ok())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // `xdg-open` rather than `gio open`: it is the one every desktop
+        // implements, and on a tiling compositor there is no portal to ask.
+        // `gio` is used when present because it resolves the handler the same
+        // way but honours a running `dbus`-backed handler faster.
+        let launched = std::process::Command::new("xdg-open")
+            .arg(url)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .is_ok();
+        launched
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg(url).spawn().is_ok()
+    }
+    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "linux"), not(target_os = "macos")))]
+    {
+        // Windows: `start` is a `cmd` builtin, and the empty pair of quotes is
+        // the *window title* — without it a quoted URL becomes the title and
+        // nothing opens.
+        std::process::Command::new("cmd").args(["/c", "start", ""]).arg(url).spawn().is_ok()
+    }
+}
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
@@ -466,4 +518,15 @@ mod tests {
         assert_eq!(read.assumed, Some("Windows-1252"));
         assert_eq!(read.text, "<NAME:5>Jörg <QTH:9>Jyväskylä <EOR>");
     }
+}
+#[test]
+fn an_empty_or_flag_shaped_url_is_never_handed_over() {
+    // The opener shells out, and a leading `-` would be read as an option.
+    for bad in ["", "   ", "-e", "--version"] {
+        assert!(!crate::download::open_external(bad), "{bad:?} must be refused");
+    }
+    // A well-formed URL is handed to the platform, which here is xdg-open.
+    // Whether a *handler* exists is the handler's business — this only asserts
+    // that the opener was launched, which is what the function returns.
+    assert!(crate::download::open_external("mailto:nobody@example.invalid"));
 }
