@@ -249,7 +249,31 @@ fn listing_a_store_always_answers_and_names_its_directory() {
         assert!(l.entries.len() as u32 <= sdroxide_types::IMAGE_PAGE_MAX, "the page cap holds");
         assert!(l.entries.len() as u32 <= l.total, "a page is never bigger than the store");
     }
-    assert!(listings[1].entries.len() <= 8, "an explicit count is honoured");
+    // Matched by kind, never by position. Each `ImageList` is answered from its
+    // own spawned thread, so two of them land in whatever order they finish —
+    // asking for the wefax charts second does not make their listing arrive
+    // second. This test read `listings[1]` as "the one asked for with count 8",
+    // which is only true when the threads happen to agree, so it passed against
+    // an empty store and failed against a real one: eleven received SSTV
+    // pictures answered the *first* command, were the second listing to arrive,
+    // and `11 <= 8` failed. The store's size is not something a test may
+    // depend on, and the assertion is about the count we asked for.
+    let wefax = listings.iter().find(|l| l.kind == ImageKind::Wefax).expect("the wefax listing");
+    assert!(wefax.entries.len() <= 8, "an explicit count is honoured");
+    let sstv = listings.iter().find(|l| l.kind == ImageKind::Sstv).expect("the sstv listing");
+    // The two must be told apart, or "the wefax listing" above is the sstv one
+    // and the whole test is checking the wrong store's arithmetic. This is the
+    // assertion that would have caught the original fault on a store of any
+    // size: the two listings are only interchangeable while both are short.
+    assert_ne!(
+        wefax.dir, sstv.dir,
+        "the two listings name different stores, so matching by kind is what separates them"
+    );
+    // Deliberately NOT asserted here: that the sstv page honours `u32::MAX` as
+    // "the page cap". That is `image_store::page`'s own arithmetic and it is
+    // pinned there over a 200-picture store; asserting it here would only be
+    // true while this operator's store is smaller than the cap, which is
+    // exactly the mistake that made the original assertion meaningless.
 }
 
 /// A delete is answered whatever it names, and the answer is the gallery's cue
