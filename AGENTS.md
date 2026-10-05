@@ -492,8 +492,8 @@ key down and up **inside one 50 ms block** and pins *where* the silence starts �
 the property a per-block read cannot have. Its pair
 `the_plain_manual_block_still_keys_for_its_whole_length` pins the straight
 path, so the two distinguish each other rather than both passing on anything.
-22 CW tests + 3. `skim_window` flakes under a parallel run and passes alone, as
-it has before.
+22 CW tests + 3. `skim_window` is genuinely red, not a flake — see the build
+and test section.
 
 **The bench: PASSED (2026-10-02), and the setting is not the one to assume.**
 CH55x `1209:c550` "-Yuan-3key" (raw contacts, no iambic of its own, which is why
@@ -3269,8 +3269,24 @@ window set ever grows past one.
   2500 Hz reference bandwidth every FT8 figure is quoted in; the floor lands
   near −24 dB (a decode's own reported −21 dB). Slow and a judgement rather
   than an assertion, hence `#[ignore]`d. The other flakes under a full
-  workspace run but pass alone: `sdroxide-deepcw`, `sdroxide-radio --test
-  skim_window`, and the `sdroxide-tci`/`icomnet_source` ones above.
+  workspace run but pass alone: `sdroxide-deepcw`, and the
+  `sdroxide-tci`/`icomnet_source` ones above.
+
+  **`skim_window` is NOT one of those — it is genuinely red, alone and in a
+  full run** (measured 2026-10-05, and identically on `v1.9.16_brown`,
+  `v1.9.17_brown` and `v1.9.18_brown`, so it predates every commit in the
+  1.9.19 release and is not a regression from any of them). Do not read its
+  failure as this session's work and do not "fix" it on release day. The
+  failure names its own half: the station on 14.060 MHz **is** spotted,
+  hundreds of times, at the right frequency — so the window-following the
+  test exists to check works — but never with `callsign == Some("W1AW")`, so
+  it is the skimmer's CW *decode* that is not producing the callsign. An
+  earlier note here claimed it "flakes under a parallel run and passes
+  alone"; that was wrong, and it is corrected above because a false claim
+  about a known-flaky test costs the next session an hour of bisecting
+  nothing. The CW path it needs (`keyed_cw` builds a real `CwTx` envelope)
+  has no off-air recording to check against, so this wants a diagnosis of
+  its own, not a release-day patch.
 
 ## The bench
 
