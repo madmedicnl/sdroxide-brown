@@ -5,7 +5,7 @@
 //! configuration; in the browser there is no filesystem, so the same state
 //! lives in eframe's storage (or, where it is bundled data, nowhere at all).
 
-use sdroxide_types::{QsoRecord, RecordingJob, SwlEntry};
+use sdroxide_types::{QsoRecord, RecordingJob, SwlEntry, SwlReportPrefs};
 
 // ── Logbook persistence (native: config-dir JSON; wasm: eframe storage) ──────
 #[cfg(not(target_arch = "wasm32"))]
@@ -40,6 +40,34 @@ pub(in crate::app) fn load_swl_log(_storage: Option<&dyn eframe::Storage>) -> Ve
 pub(in crate::app) fn load_swl_log(storage: Option<&dyn eframe::Storage>) -> Vec<SwlEntry> {
     storage.and_then(|s| eframe::get_value(s, "swl_log")).unwrap_or_default()
 }
+
+/// The report preferences — **native only, and that is the whole of the split**.
+///
+/// `picture` is a path on this machine's disk, and a browser tab has no disk to
+/// name. So in the browser the report carries no picture and the Settings row
+/// says so, rather than storing a string that could never resolve to a file.
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) fn load_swl_report() -> SwlReportPrefs {
+    sdroxide_config::load_swl_report()
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(in crate::app) fn load_swl_report() -> SwlReportPrefs {
+    SwlReportPrefs::default()
+}
+
+/// Persist the report preferences; see [`load_swl_report`] for the native-only
+/// split and why.
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) fn persist_swl_report(prefs: &SwlReportPrefs) {
+    if let Err(e) = sdroxide_config::save_swl_report(prefs) {
+        eprintln!("failed to save reception-report settings: {e}");
+    }
+}
+
+/// Nothing to persist in the browser — see [`load_swl_report`].
+#[cfg(target_arch = "wasm32")]
+pub(in crate::app) fn persist_swl_report(_prefs: &SwlReportPrefs) {}
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(in crate::app) fn persist_swl_log(log: &[SwlEntry]) {

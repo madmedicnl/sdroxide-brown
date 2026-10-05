@@ -22,18 +22,47 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   - **Save image as…** writes a copy where you choose. Renamed from *Save
     picture…*, which read as "it has saved one"; a picture's worth of clicks
     going somewhere unexpected is how that goes wrong.
-  - **Email QSL picture…** opens a small window with **To**, **Subject** and
-    **Message** pre-filled from what the station knows — the usual QSL is edit
-    and send rather than compose from nothing — then writes the picture out and
-    opens your mail client. **Attaching it is your own click in your mail
-    program**: sending mail means being a mail client, with an account and a
-    password, which is a different program with its own security to consider.
-    What this does is everything up to that point.
-- **Note on browsers and attachments.** In a browser tab the QSL chip saves the
-  picture to the browser's download folder and opens the message with the text
-  filled in, because a web page is not permitted to attach a file to a message.
-  The window says which of the two you have before you press anything, rather
-  than opening a composer with nothing in it.
+  - **Share picture…** sends someone the picture. In a **browser** it hands the
+    picture to the device's own share sheet, so WhatsApp, Telegram, Signal and
+    Mail are one tap away with the picture *in* the message — a `mailto:` on a
+    phone opens a blank message with nothing in it, which is not sharing a
+    picture. Everywhere else it saves the picture and opens a message with a
+    short reception note and room for your own sentence.
+    SSTV has no QSL audience: the stations on it are amateurs and 11 m operators,
+    reached through QRZ and the DX communities, so this is a friend being sent a
+    funny picture rather than a report to a station.
+- **Note on browsers and attachments.** Where the share sheet is not available
+  the picture is saved and a message opens with the text filled in, because a web
+  page is not permitted to attach a file to a message. The window says which of
+  the two you have before you press anything, rather than opening a composer with
+  nothing in it.
+- **A reception report you can mail to the station (SWL log).** A new **MAIL
+  REPORT…** in the LISTEN window's entry form writes the reception report and opens
+  it in your mail client. It is available when the entry carries an email address,
+  which is what a **known station** means here — one the schedule holds a report
+  contact for, filled in when you log from the schedule or land on a scheduled
+  frequency. Otherwise the chip is greyed and says why: a report with nowhere to go
+  is not a report.
+  The report is built from the form **as it stands**, so a SINPO you improved and
+  then mailed without saving still goes out as you typed, and from the same
+  conversion SAVE uses so the two cannot disagree. **A field you left blank is
+  left out entirely** — never blanked, never dashed — and an unjudged reception
+  states no figures at all rather than five defaulted ones nobody heard. A
+  transmission marked **Pirate** is reported plainly, as a fact the station can act
+  on.
+  **It sends nothing.** Two new settings under **Settings → UI** (SWL section) say
+  what a report carries: **Report picture** — a path on this computer, your own
+  card or a photograph, one image used for every report — and **Report note**,
+  your standing note. The picture is written out and named in the message, and
+  attaching it (or a soundclip from **REC**'s 30-second quick clip) is your own
+  click: a program cannot put a file in a message without being a mail client,
+  which is a different program with its own security to consider. Both settings
+  are optional; a plain-text report is a perfectly good report.
+  The picture setting is a **file path**, so it lives in its own
+  `swl_report.json` beside the reception log rather than in a config that travels
+  to a browser tab or a second station — a path is not an identity, and
+  `swl_id` is the part of a report that is. The settings row is absent in a
+  browser tab for the same reason.
 - **A QSL card you can print.** The picture goes out with the exchange beside it —
   from, to, date, frequency, mode, both reports, your grid, the sent callsign set
   down the picture's edge and your own line at the foot — laid out as one image,

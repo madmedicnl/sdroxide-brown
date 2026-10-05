@@ -503,3 +503,28 @@ mod tests {
         assert!(!text.contains("Reported by:"), "{text}");
     }
 }
+
+/// The listener's own preferences for mailing a reception report to a
+/// broadcaster — what the report carries besides the reception itself.
+///
+/// **Local to this machine and not on the wire.** `picture` is a path to a file
+/// on the operator's disk: their own card, a photograph, whatever they want a
+/// station to see. That is nobody else's to relay to a browser tab or a second
+/// station, so it lives beside the reception log in `swl_report.json` rather
+/// than in a config that travels (`NetworkConfig::swl_id` is the *identity*,
+/// and it is on the wire; a file path is not an identity).
+///
+/// Both default to empty, and both are genuinely optional: a reception report is
+/// a courtesy, and a plain-text one is a perfectly good report. Nothing here is
+/// required for the report to be sent.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SwlReportPrefs {
+    /// Absolute path to the picture a report carries. Empty = none, and the
+    /// report goes as text.
+    pub picture: String,
+    /// The listener's standing note, pre-filled into every report — who they
+    /// are, what they are listening on, anything a station asks for once rather
+    /// than per letter. A convenience, never a secret: this is a plain file.
+    pub message: String,
+}

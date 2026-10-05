@@ -4647,35 +4647,24 @@ one of the two.
 - **Saving a copy — Save image as….** Writes the picture where you choose. It
   asks; the name says so, because "save picture" read as *it has saved one* and a
   picture's worth of clicks going somewhere unexpected is how that happens.
-- **QSL by email — Email QSL picture….** Opens a small window with **To**, a
-  **Subject** and a **Message**, pre-filled from what the station knows: the
-  subject and body are written for you, so the usual QSL is *edit and send*
-  rather than *compose from nothing*. Pressing it writes the picture out and opens
-  your mail client.
+- **Sending someone the picture — Share picture….** SSTV has no QSL audience: the
+  stations on it are amateurs and 11 m operators, reached through QRZ and the
+  online DX communities, so this is a friend being sent a funny picture — which
+  in France, where SSTV is a busy mode, is most of the fun of it.
+  **In a browser it hands the picture to the phone's own share sheet**, so
+  WhatsApp, Telegram, Signal, Mail and everything else you already have are in
+  one list, with the picture *in* the message rather than as a file you then have
+  to go and find. One tap.
+  **Everywhere else it saves the picture and opens a message** to send it from,
+  with **To**, **Subject** and a **Message** pre-filled — a short reception note
+  (where and when it was heard, and the reports you type) and room for your own
+  sentence, so the usual case is *edit and send* rather than *compose from
+  nothing*.
   **Attaching the picture is one click in your mail program, and the program
-  cannot do it for you** — that is not an omission to be worked around. Sending
-  mail means being a mail client: an account, a password and a server, which is a
-  different program with its own security to consider. What this does is
+  cannot do it for you.** That is not an omission to be worked around: sending
+  mail means being a mail client, with an account, a password and a server, which
+  is a different program with its own security to consider. What this does is
   everything up to that point.
-  **What is written is not the bare photograph but a QSL card**: the picture with
-  the exchange laid out beside it — from, to, date, frequency, mode, both
-  reports, your grid, your callsign set down the picture's left edge, and your own
-  line at the foot — as one image, laid out like the radio-postcard eQSLs the 11 m
-  community already sends. It is the form you can print and pin up, and it is
-  what you attach. Your callsign, grid, frequency and mode come from the station's
-  own settings; the rest is what you type in the window.
-  **Anything you leave blank is simply not drawn** — a card never reports a report
-  nobody gave, so a short card is a true one. A value too long for its column is
-  shortened and marked with a rule under it, because a value that did not fit is
-  one you will want to go and check. The card is saved beside the picture it was
-  made from, under its own name, so the two sit together and a card never
-  overwrites the received picture it came from.
-  **In a browser tab it cannot go further still.** A web page is not allowed to
-  attach a file to a message, so there it saves the card (to the browser's own
-  download folder) and opens the message with the text filled in; you add the
-  attachment yourself. The window says which of the two you have before you press
-  anything. Nothing typed in that window is remembered after you close it — an
-  address is nobody else's to keep in a settings file.
 - **Deleting.** Most of what a night on 20 m leaves behind is noise. **Right-click**
   a thumbnail and choose *Delete this picture*, or open one and use **Delete…** in
   the enlarged window — which asks a second time, because the file goes for good
@@ -15233,6 +15222,40 @@ logged. **REPORT** writes that reception out as a text report to save and send �
 the numbers, the **received-at** locator and the aerial, signed with your report
 identity — and names the program there as **sdroxide_SWL**, so a broadcaster can
 tell it apart from the amateur build.
+
+**MAIL REPORT…** in the entry form is the same report, written and opened in your
+mail client instead of saved as a file. It is available when the form carries an
+email address — which is what a **known station** means here: one the schedule
+holds a report contact for, filled in by **+ NEW** or by **LOG** on a SCHEDULE
+row. Where the schedule has no address, the chip is greyed and says so, because a
+reception report with nowhere to go is not a reception report.
+The report itself is built from the form **as it stands**, so a SINPO you have
+improved and then mailed without pressing SAVE still goes out as you typed it,
+and it is generated from exactly the same conversion SAVE uses, so the two cannot
+disagree. **Every field you left blank is left out entirely** rather than blanked
+or dashed: a report reading `Grid: —` is a line the station has to interpret, and
+one reading `Grid:` with nothing after it looks like an empty string rather than
+an unknown. An unjudged reception states no figures at all, rather than five
+defaulted ones nobody heard.
+The subject names the station and the date and nothing else — it goes to a
+broadcast engineer filing it by date, not to a contest logger. A transmission you
+marked **Pirate** is reported plainly, as a fact the station can act on.
+**It sends nothing.** The picture you configured in Settings is written out and
+named in the body, and the message opens with the report ready; attaching it — and
+a soundclip, if you cut one with **REC**'s 30-second quick clip — is your own
+click in your mail program. A program cannot put a file in a message without
+being a mail client, with an account and a password and a server, which is a
+different program with its own security to consider. This does everything up to
+that point and nothing beyond it.
+Two settings under **Settings → UI**, in the SWL section, decide what a report
+carries: **Report picture** (a path on this computer — your own card, a
+photograph, whatever you want the station to see; one image, used for every
+report) and **Report note** (your standing note — who you are, what you listen
+on, anything a station asks once rather than per letter). Both are optional and
+genuinely so: a plain-text report is a perfectly good report, so leaving them
+empty breaks nothing. The picture row is absent in a **browser tab**, because the
+setting names a file on this computer and there is no such thing there — it is
+left out rather than shown dead.
 
 A reception is not finished when it is heard: an SWL's loop is *hear → report →
 await QSL*, and the log records the whole of it. **report sent** stamps the day

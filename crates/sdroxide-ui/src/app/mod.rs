@@ -27,6 +27,7 @@ pub(in crate::app) mod contest;
 #[cfg(all(not(target_arch = "wasm32"), target_os = "linux"))]
 pub(in crate::app) mod cw_key;
 pub(in crate::app) mod drm;
+pub(in crate::app) mod enigma;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
 pub(in crate::app) mod hd;
@@ -50,7 +51,6 @@ pub(in crate::app) mod scanner;
 pub(in crate::app) mod schedule;
 pub(in crate::app) mod settings;
 pub(in crate::app) mod signal_id;
-pub(in crate::app) mod enigma;
 pub(in crate::app) mod solar;
 pub(in crate::app) mod spectrum;
 pub(in crate::app) mod speech;
@@ -80,8 +80,8 @@ use self::panels::rf_paint::RfPaintUi;
 use self::panels::sstv::SstvUi;
 use self::persist::{
     load_alerts_settings, load_broadcast_favourites, load_broadcast_stations, load_morse_progress,
-    load_qso_log, load_recording_jobs, load_speech_settings, load_swl_log, load_ui_settings,
-    recordings_dir_for_display,
+    load_qso_log, load_recording_jobs, load_speech_settings, load_swl_log, load_swl_report,
+    load_ui_settings, recordings_dir_for_display,
 };
 use self::settings::servers::TciServerStatus;
 use self::settings::{SatEditState, SettingsTab, TestOutcome};
@@ -648,6 +648,12 @@ pub struct SdroxideApp {
     /// The listener's reception log (`swl_log.json`) — separate from the QSO
     /// log on purpose. See [`crate::app::swl_log`].
     pub(in crate::app) swl_log: Vec<sdroxide_types::SwlEntry>,
+    /// What a reception report carries besides the reception: the picture the
+    /// listener wants a station to see, and their standing note. Its own file
+    /// beside the log — see [`sdroxide_config::load_swl_report`].
+    pub(in crate::app) swl_report: sdroxide_types::SwlReportPrefs,
+    /// Where the Settings row's file picker leaves the path it chose.
+    pub(in crate::app) swl_report_pick: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// The reception log window's own state: open, the entry being edited, and
     /// the row the REPORT button acts on.
     pub(in crate::app) show_swl: bool,
@@ -1718,6 +1724,8 @@ impl SdroxideApp {
             text_tx: String::new(),
             qso_log: load_qso_log(storage),
             swl_log: load_swl_log(storage),
+            swl_report: load_swl_report(),
+            swl_report_pick: std::sync::Arc::new(std::sync::Mutex::new(None)),
             show_swl: false,
             swl_edit: None,
             swl_selected: None,
@@ -2562,8 +2570,7 @@ mod tests {
     fn a_manually_logged_contest_contact_reaches_the_logbook() {
         // An empty config directory, or the app loads the operator's real
         // logbook and the assertion below counts their 291 contacts.
-        let dir = std::env::temp_dir()
-            .join(format!("sdroxide-contest-log-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("sdroxide-contest-log-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
@@ -2664,4 +2671,3 @@ mod tests {
         phone_frame("411x914", egui::vec2(411.0, 914.0));
     }
 }
-

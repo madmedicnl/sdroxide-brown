@@ -295,6 +295,107 @@ pub fn save_as(name: &str, data: &[u8], mime: Mime) {
     let _ = web_sys::Url::revoke_object_url(&url);
 }
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::{JsCast as _, JsValue};
+
+/// A browser `File` built from bytes, or `None` if the browser cannot make one.
+#[cfg(target_arch = "wasm32")]
+fn share_file_handle(name: &str, data: &[u8], mime: Mime) -> Option<web_sys::File> {
+    // `File::new_with_blob_sequence_and_options` takes *blob parts*, so the
+    // bytes go in as one `ArrayBuffer`-bearing part rather than as a finished
+    // Blob — which is also why no intermediate Blob is needed.
+    let parts = js_sys::Array::new();
+    parts.push(&js_sys::Uint8Array::from(data).buffer());
+    let opts = web_sys::FilePropertyBag::new();
+    opts.set_type(mime.as_str());
+    opts.set_last_modified(js_sys::Date::now());
+    web_sys::File::new_with_blob_sequence_and_options(&parts, name, &opts).ok()
+}
+
+/// The share payload for one file: `{ files: [File], title }`.
+///
+/// Built once and used by both [`can_share_file`] and [`share_file`], so the
+/// question "can this browser share a file?" is asked of exactly the object
+/// that would be shared. Asking it of a hand-rolled probe is how a share button
+/// ends up offering a sheet that then refuses.
+#[cfg(target_arch = "wasm32")]
+fn share_payload(name: &str, data: &[u8], mime: Mime) -> Option<js_sys::Object> {
+    let file = share_file_handle(name, data, mime)?;
+    let files = js_sys::Array::new();
+    files.push(&file);
+    let payload = js_sys::Object::new();
+    js_sys::Reflect::set(&payload, &JsValue::from_str("files"), &files).ok()?;
+    let _ = js_sys::Reflect::set(&payload, &JsValue::from_str("title"), &JsValue::from_str(name));
+    Some(payload)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn navigator_property(win: &web_sys::Window, what: &str) -> Option<js_sys::Function> {
+    let nav = js_sys::Reflect::get(win.as_ref(), &JsValue::from_str("navigator")).ok()?;
+    js_sys::Reflect::get(&nav, &JsValue::from_str(what))
+        .ok()
+        .filter(|f| f.is_function())
+        .and_then(|f| f.dyn_into::<js_sys::Function>().ok())
+}
+
+/// Whether this browser can hand a **file** to the operating system's share
+/// sheet — which is what makes WhatsApp, Telegram and Signal one tap away
+/// instead of a download the operator then has to find and attach.
+///
+/// The test is `navigator.canShare`, not whether `navigator.share` exists: the
+/// API is present in browsers that refuse files, and a share button that offers
+/// a sheet which then does nothing is exactly the control this fork does not
+/// ship. It is asked of the same payload [`share_file`] would hand over.
+#[cfg(target_arch = "wasm32")]
+pub fn can_share_file() -> bool {
+    let Some(win) = web_sys::window() else { return false };
+    // An empty picture: `canShare` is asking about file support, not about this
+    // particular PNG, and an empty one keeps the question cheap.
+    let Some(payload) = share_payload("share.png", &[], Mime::Png) else { return false };
+    let Some(can_share) = navigator_property(&win, "canShare") else { return false };
+    can_share.call1(&JsValue::NULL, &payload).ok().and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
+/// Hand a picture to the operating system's share sheet.
+///
+/// **This is the whole of feature 1 on a phone.** A `mailto:` on Android opens a
+/// blank message with nothing attached, which is not sharing a picture with a
+/// friend — it is three more steps and a filing system. `navigator.share` puts
+/// the picture *in* the message, so WhatsApp, Telegram, Signal, Mail and
+/// everything else the phone already has appear in the one list the operator
+/// uses for everything else.
+///
+/// Returns whether the share sheet was opened. A browser that refuses — no
+/// `File`, no `navigator.share`, or the operator dismissing the sheet — returns
+/// `false`, and the caller falls back to saving the picture, which always works.
+///
+/// **Must be called from the click itself.** A share without a user gesture is
+/// refused by every browser, and refused *silently*, so a share started from a
+/// timer or a later frame would appear to do nothing at all.
+#[cfg(target_arch = "wasm32")]
+pub fn share_file(name: &str, data: &[u8], mime: Mime) -> bool {
+    let Some(win) = web_sys::window() else { return false };
+    let Some(payload) = share_payload(name, data, mime) else { return false };
+    let Some(share) = navigator_property(&win, "share") else { return false };
+    // The returned promise settles when the sheet closes, which is not
+    // something the click needs to wait for; what matters is that the call was
+    // accepted, which is what `is_ok` says.
+    share.call1(&JsValue::NULL, &payload).is_ok()
+}
+
+/// Native: there is no share sheet to hand a file to, so this is always false
+/// and the caller saves the picture and opens the mail client instead.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn can_share_file() -> bool {
+    false
+}
+
+/// Native counterpart of [`share_file`] — see above.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn share_file(_name: &str, _data: &[u8], _mime: Mime) -> bool {
+    false
+}
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;

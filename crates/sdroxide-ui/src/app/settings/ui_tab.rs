@@ -38,6 +38,8 @@ pub(in crate::app) fn settings_ui_tab(
     profile_action: &std::cell::Cell<Option<ProfileAction>>,
     profile_from: Option<&Option<String>>,
     profile_status: Option<&String>,
+    report: &mut sdroxide_types::SwlReportPrefs,
+    report_pick: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
 ) {
     use sdroxide_types::{ChromeStyle, FontSize, LayoutMode, UiSettings, UiTheme};
     ui.label(RichText::new("Display").size(14.0).strong().color(crate::theme::CYAN()));
@@ -421,6 +423,61 @@ pub(in crate::app) fn settings_ui_tab(
             ui.end_row();
         }
 
+        // ── Reception reports ──
+        // What a mailed reception report carries besides the reception itself.
+        // Both optional and both genuinely so: a plain-text report is a
+        // perfectly good report, so leaving these empty breaks nothing.
+        //
+        // Native-only, because the picture is a **path on this machine's disk**
+        // and a browser tab has no disk to name. Storing a string there could
+        // never resolve to a file, so the row is left out rather than shown
+        // dead — the same rule the rest of this crate follows for paths.
+        if !cfg!(target_arch = "wasm32") {
+            ui.label("Report picture").on_hover_text(
+                "The picture a reception report carries when you mail it to a broadcaster — \
+                 your own card, a photograph, whatever you want the station to see. One \
+                 image for the station, used for every report.\n\nLeave it unset and the \
+                 report goes as plain text, which is a perfectly good report.",
+            );
+            // Whatever the picker thread found, taken once and cleared so it is
+            // applied exactly once.
+            if let Ok(mut inbox) = report_pick.lock()
+                && let Some(picked) = inbox.take()
+            {
+                report.picture = picked;
+            }
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut report.picture)
+                        .desired_width(240.0)
+                        .hint_text("none — the report goes as text"),
+                );
+                if crate::chrome::chip(ui, false, "Choose…")
+                    .on_hover_text("Pick the picture on this computer")
+                    .clicked()
+                {
+                    pick_report_picture(report_pick);
+                }
+                if !report.picture.is_empty()
+                    && crate::chrome::chip(ui, false, "Clear").clicked()
+                {
+                    report.picture.clear();
+                }
+            });
+            ui.label("Report note").on_hover_text(
+                "Your standing note, pre-filled into every reception report — who you are, \
+                 what you listen on, anything a station asks once rather than per letter. \
+                 Plain text in a plain file: not a secret.",
+            );
+            crate::chrome::field(
+                ui,
+                egui::TextEdit::multiline(&mut report.message)
+                    .desired_width(380.0)
+                    .desired_rows(3)
+                    .hint_text("optional — e.g. \"Details on request\""),
+            );
+        }
+
         ui.label("Cities on maps").on_hover_text(
             "Draw the world's cities — a dot per place, with its name beside it \
              where there is room — on the flat maps: FT8/WSPR, APRS, ADS-B and \
@@ -705,4 +762,37 @@ pub(in crate::app) fn speech_settings(
         )
         .weak(),
     );
+}
+
+/// Open a file dialog for the report picture, off the UI thread.
+///
+/// `rfd`'s dialog is blocking, so doing it here would freeze the frame loop for
+/// as long as the operator takes to choose. The path comes back through the
+/// inbox rather than a channel, because there is exactly one string and the
+/// window that asked for it is the one that reads it.
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) fn pick_report_picture(
+    inbox: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
+) {
+    let inbox = inbox.clone();
+    std::thread::Builder::new()
+        .name("sdroxide-report-pick".into())
+        .spawn(move || {
+            if let Some(path) =
+                rfd::FileDialog::new().add_filter("Image", &["png", "jpg", "jpeg"]).pick_file()
+            {
+                if let Ok(mut g) = inbox.lock() {
+                    *g = Some(path.to_string_lossy().into_owned());
+                }
+            }
+        })
+        .ok();
+}
+
+/// The browser cannot name a file on this computer, so there is nothing to pick
+/// — see where the row is drawn.
+#[cfg(target_arch = "wasm32")]
+pub(in crate::app) fn pick_report_picture(
+    _inbox: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
+) {
 }

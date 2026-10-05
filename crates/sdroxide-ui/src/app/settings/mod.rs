@@ -172,6 +172,11 @@ pub(in crate::app) struct SettingsIo<'a> {
     /// `SdroxideApp::rx_site_edit`.
     rx_site: &'a mut Option<sdroxide_types::RxSite>,
     audio_pick: &'a mut Option<(bool, Option<String>)>,
+    /// What a reception report carries, buffered until Apply — see
+    /// `SdroxideApp::swl_report`.
+    swl_report: &'a mut sdroxide_types::SwlReportPrefs,
+    /// Where the report-picture row's file picker leaves the path it chose.
+    swl_report_pick: &'a std::sync::Arc<std::sync::Mutex<Option<String>>>,
     hpsdr_discover: &'a mut bool,
     /// The name being typed in the Profiles tab's save box. Owned on the app:
     /// the dialog lives across taps of the tab bar, and a half-typed name is
@@ -1140,6 +1145,9 @@ impl SdroxideApp {
         let mut midi_rescan = false;
         let mut sat_edit = self.sat_cfg_edit.clone();
         let mut sat_ui = std::mem::take(&mut self.sat_ui);
+        // Same reason, and the same pattern: `settings_body` borrows `&self`, so
+        // a field it has to edit is taken out and put back below.
+        let mut swl_report = std::mem::take(&mut self.swl_report);
         let mut sat_sub_refresh = false;
         let sat_subs = self.sat_sub_status.clone();
         let mut bc_reload = false;
@@ -1233,6 +1241,8 @@ impl SdroxideApp {
                             ranges: &mut ranges,
                             rx_site: &mut rx_site,
                             audio_pick: &mut audio_pick,
+                            swl_report: &mut swl_report,
+                            swl_report_pick: &self.swl_report_pick,
                             hpsdr_discover: &mut hpsdr_discover,
                             profile_name: &mut profile_name,
                             digi_reseed: &mut digi_reseed,
@@ -1418,6 +1428,13 @@ impl SdroxideApp {
         if let Some(channel) = relay_test {
             cmds.push(Command::TestRelay { channel });
         }
+        // Persisted on the way back only if it changed, so a settings session that
+        // opens and closes without touching the report does not rewrite the
+        // file for nothing.
+        if swl_report != self.swl_report {
+            crate::app::persist::persist_swl_report(&swl_report);
+        }
+        self.swl_report = swl_report;
         self.sat_ui = sat_ui;
         if self.sat_cfg_seeded && sat_edit != self.sat_cfg_edit {
             // Written straight out, like the input bindings: there is no APPLY
@@ -3091,6 +3108,8 @@ impl SdroxideApp {
                     &self.client_settings_pending,
                     self.client_settings_from.as_ref(),
                     self.client_settings_status.as_ref(),
+                    io.swl_report,
+                    io.swl_report_pick,
                 );
                 ui.add_space(10.0);
                 ui.separator();

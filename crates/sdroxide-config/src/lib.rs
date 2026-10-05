@@ -2047,6 +2047,23 @@ pub fn save_swl_log(log: &[sdroxide_types::SwlEntry]) -> Result<(), ConfigError>
     save_json("swl_log.json", &log)
 }
 
+/// The listener's reception-report preferences (`swl_report.json`) — the picture
+/// a report carries and their standing note.
+///
+/// Its own file beside the log rather than a field in `Settings` or
+/// `NetworkConfig`, for one reason: `picture` is a **path on this machine**, and
+/// neither of those travels to a browser tab or a second station. A file path is
+/// not an identity, and `swl_id` is the part of a report that is.
+pub fn load_swl_report() -> sdroxide_types::SwlReportPrefs {
+    load_json::<sdroxide_types::SwlReportPrefs>("swl_report.json")
+}
+
+/// Persist the report preferences. See [`load_swl_report`] for the file's own
+/// name and why it is separate.
+pub fn save_swl_report(prefs: &sdroxide_types::SwlReportPrefs) -> Result<(), ConfigError> {
+    save_json("swl_report.json", prefs)
+}
+
 /// Network cockpit config (spot feeds, callsign lookup, uploads; credentials).
 pub fn load_network_config() -> sdroxide_types::NetworkConfig {
     load_json("net.json")

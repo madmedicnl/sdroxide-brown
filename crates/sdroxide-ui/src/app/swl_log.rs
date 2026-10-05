@@ -530,7 +530,7 @@ impl SdroxideApp {
                 });
                 if self.swl_edit.is_some() {
                     ui.add_space(4.0);
-                    self.swl_entry_form(ui);
+                    self.swl_entry_form(ui, ctx);
                 }
                 ui.add_space(2.0);
                 self.swl_filter_row(ui);
@@ -559,6 +559,45 @@ impl SdroxideApp {
     /// The reception log's controls, drawn as the list's own header: what to
     /// show, and the way to save the whole log. The band and day choices come
     /// from the log itself, so a filter can never offer one that shows nothing.
+    /// Write the reception report out and open it in the operator's mail client.
+    ///
+    /// **It sends nothing.** A `mailto:` cannot carry a file, so the picture the
+    /// listener configured is written to disk first and the message opens with
+    /// its name in the body; attaching it is the operator's own click, which is
+    /// also where they can add a soundclip. This program does everything up to
+    /// that point and nothing beyond it — the alternative is to become a mail
+    /// client with an account and a password, which is a different program with
+    /// its own security to consider.
+    fn mail_reception_report(&mut self, entry: &SwlEntry, to: &str, ctx: &egui::Context) {
+        if !report_address_is_usable(to) {
+            // Unreachable through the UI, which greys the chip; here it is the
+            // second gate, because a report delivered to a stranger is worse
+            // than no report.
+            return;
+        }
+        let mut body = reception_report_body(entry, &self.my_call(), &self.swl_report.message);
+        let picture = self.swl_report.picture.trim().to_string();
+        if !picture.is_empty() {
+            // Named in the body whether or not the file is still there. A line
+            // saying "attach: /gone/photo.png" tells the listener exactly what
+            // is missing, which a silently absent line would not.
+            let present = std::path::Path::new(&picture).exists();
+            body.push_str("\n\n");
+            body.push_str(&format!(
+                "{}\n{}",
+                if present {
+                    "Attached: (attach this file)"
+                } else {
+                    "Picture (this file is gone):"
+                },
+                picture
+            ));
+        }
+        let subject = reception_report_subject(entry);
+        let Some(link) = reception_report_mailto(to, &subject, &body) else { return };
+        ctx.open_url(egui::OpenUrl::new_tab(&link));
+    }
+
     fn swl_filter_row(&mut self, ui: &mut egui::Ui) {
         let mut bands: Vec<sdroxide_types::Band> =
             self.swl_log.iter().map(|e| sdroxide_types::Band::containing(e.freq_hz)).collect();
@@ -829,9 +868,10 @@ impl SdroxideApp {
     }
 
     /// The reception entry form.
-    fn swl_entry_form(&mut self, ui: &mut egui::Ui) {
+    fn swl_entry_form(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let mut save = false;
         let mut cancel = false;
+        let mut mail_report = false;
         let mut heard_now = false;
         {
             let f = self.swl_edit.as_mut().unwrap();
@@ -1031,6 +1071,36 @@ impl SdroxideApp {
                         },
                     );
                     ui.add_space(6.0);
+                    // ── Mail the reception report ──
+                    // Greyed, with the reason, where it cannot work — which is
+                    // the house rule rather than a refusal the operator has to
+                    // discover. Three ways it cannot: no address on the form
+                    // (which is the *unknown station* case), an address that is
+                    // not one address, or no reception to report.
+                    let to = f.email.trim().to_string();
+                    let usable = report_address_is_usable(&to);
+                    let why = match (to.is_empty(), usable) {
+                        (true, _) => {
+                            "This station has no email address — look it up in the SCHEDULE \
+                             window, or type one here, and this becomes available.\n\nA \
+                             reception report is a courtesy a station reads and answers with a \
+                             QSL card; without an address there is nowhere to send it."
+                        }
+                        (false, false) => {
+                            "That email address is not one address, so it is not \
+                             used — a report delivered to a stranger who never heard the station \
+                             is worse than none."
+                        }
+                        (false, true) => {
+                            "Write the reception report and open it in your mail client.\n\nThe \
+                             picture and the soundclip are yours to attach there — this program \
+                             cannot put a file in a message."
+                        }
+                    };
+                    let report = crate::chrome::chip(ui, usable, "MAIL REPORT…").on_hover_text(why);
+                    if usable && report.clicked() {
+                        mail_report = true;
+                    }
                     ui.horizontal(|ui| {
                         if crate::chrome::chip(ui, true, "SAVE").clicked() {
                             save = true;
@@ -1047,6 +1117,19 @@ impl SdroxideApp {
                 f.heard_at = now_unix().max(0) as u64;
                 f.smeter_dbm = s;
             }
+        }
+        // **The report is built from the form as it stands, not from a saved
+        // entry.** A listener who has typed a better SINPO and then mailed it
+        // without pressing SAVE expects the report to carry what they typed —
+        // and `to_entry()` is exactly the same conversion SAVE uses, so the two
+        // cannot drift.
+        // The form is converted and taken first, because building the report
+        // needs `&mut self` (the station's own callsign and the configured
+        // picture) while the form is only borrowed.
+        if mail_report
+            && let Some(f) = self.swl_edit.as_ref().map(|f| (f.to_entry(), f.email.clone()))
+        {
+            self.mail_reception_report(&f.0, &f.1, ctx);
         }
         if save && let Some(f) = self.swl_edit.take() {
             let mut entry = f.to_entry();
@@ -1247,5 +1330,401 @@ mod tests {
         assert_eq!(reopened.qsl_received_unix, Some(1_790_000_000));
         f.report_sent_unix = None;
         assert!(f.to_entry().report_sent_unix.is_none(), "unticking clears it");
+    }
+}
+
+/// The reception report a listener mails to a broadcaster.
+///
+/// **Plain text, and only what the listener actually entered.** A report is read
+/// by a station engineer deciding whether to send a QSL card, and every line in
+/// it is either something they will act on or something they will distrust. A
+/// line reading `Grid: —` or `Antenna: unknown` is worse than the line's
+/// absence, so **an empty field is left out entirely** rather than blanked or
+/// filled with a dash.
+///
+/// This is the whole feature and it is deliberately not clever: it composes text,
+/// it does not send anything, and the operator reads it before it goes.
+pub(in crate::app) fn reception_report_body(
+    entry: &SwlEntry,
+    listener: &str,
+    standing_note: &str,
+) -> String {
+    let mut out: Vec<String> = Vec::new();
+    let station = entry.station.trim();
+    if !station.is_empty() {
+        out.push(format!("Station: {station}"));
+    }
+    out.push(format!("Date/Time (UTC): {}", utc_text(entry.heard_at_unix.max(0) as u64)));
+    if entry.freq_hz > 0.0 {
+        // Whole kilohertz, as the log stores it — a broadcast is not known to
+        // better than that, and a report quoting more decimals than the log
+        // holds would be a number the listener cannot later reproduce.
+        out.push(format!("Frequency: {:.1} kHz", entry.freq_hz / 1e3));
+    }
+    out.push(format!("Mode: {}", entry.mode.label()));
+    let report: Option<String> = entry.report.map(|r| format!("{} {}", r.label(), r.digits()));
+    let lang = entry.language.trim();
+    let site = entry.site.trim();
+    let grid = entry.recv_grid.trim();
+    let ant = entry.antenna.trim();
+    // The four the station asks for by name, in the order a printed form asks
+    // them: what it was, how it sounded, where it was heard, on what.
+    match (report.clone(), lang.is_empty(), site.is_empty(), grid.is_empty(), ant.is_empty()) {
+        (Some(r), false, false, false, false) => out.push(format!(
+            "Reception: {r} · Language: {lang} · Site: {site} · Grid: {grid} · Antenna: {ant}"
+        )),
+        _ => {
+            if let Some(r) = report {
+                out.push(format!("Reception: {r}"));
+            }
+            if !lang.is_empty() {
+                out.push(format!("Language: {lang}"));
+            }
+            if !site.is_empty() {
+                out.push(format!("Site: {site}"));
+            }
+            if !grid.is_empty() {
+                out.push(format!("Receiver location: {grid}"));
+            }
+            if !ant.is_empty() {
+                out.push(format!("Antenna: {ant}"));
+            }
+        }
+    }
+    if !listener.trim().is_empty() {
+        out.push(format!("Received by: {}", listener.trim()));
+    }
+    if entry.pirate {
+        // Said plainly rather than as an accusation in parentheses: a listener
+        // reporting an unlicensed transmission is telling the station something
+        // useful, and the station decides what it means.
+        out.push("This transmission appears to be unlicensed.".to_string());
+    }
+    if let Some(db) = entry.smeter_dbm {
+        out.push(format!("S-meter: {} dBm", db.round() as i32));
+    }
+    if !entry.notes.trim().is_empty() {
+        out.push(format!("Notes: {}", entry.notes.trim()));
+    }
+    if !standing_note.trim().is_empty() {
+        out.push(String::new());
+        out.push(standing_note.trim().to_string());
+    }
+    out.join("\n")
+}
+
+/// The subject line for a report: the station and when it was heard.
+///
+/// No report count and no call sign, deliberately — this goes to a broadcast
+/// engineer, not to a contest logger, and the date is what they file it under.
+pub(in crate::app) fn reception_report_subject(entry: &SwlEntry) -> String {
+    let station = entry.station.trim();
+    let (y, mo, d) = {
+        let (y, mo, d, _h, _mi, _s) = sdroxide_types::utc_ymd_hms(entry.heard_at_unix as i64);
+        (y, mo, d)
+    };
+    match station.is_empty() {
+        true => format!("Reception report — {y:04}-{mo:02}-{d:02}"),
+        false => format!("Reception report — {station} — {y:04}-{mo:02}-{d:02}"),
+    }
+}
+
+/// The `mailto:` for a reception report.
+///
+/// The address is **not** put in the link by default: an empty recipient is a
+/// link that cannot address anyone, which is safe, where a wrong one is a report
+/// delivered to a stranger. The caller decides whether to include it, and this
+/// returns `None` when it is not one this can vouch for — see
+/// [`report_address_is_usable`].
+pub(in crate::app) fn reception_report_mailto(
+    to: &str,
+    subject: &str,
+    body: &str,
+) -> Option<String> {
+    if !report_address_is_usable(to) {
+        return None;
+    }
+    Some(format!(
+        "mailto:{}?subject={}&body={}",
+        mailto_encode(to),
+        mailto_encode(subject),
+        mailto_encode(body)
+    ))
+}
+
+/// Whether `to` is an address this will put in a link.
+///
+/// Deliberately strict, because the cost of being wrong is a reception report
+/// delivered to somebody who never heard the station: a space (two addresses
+/// joined), a missing `@`, a leading `@`, or a comma (a list, which `mailto:`
+/// would treat as one recipient). Everything else is left alone — an address
+/// this rejects is an address a listener cannot correct from here.
+pub(in crate::app) fn report_address_is_usable(to: &str) -> bool {
+    let t = to.trim();
+    !t.is_empty()
+        && t.contains('@')
+        && !t.contains(char::is_whitespace)
+        && !t.contains(',')
+        && !t.starts_with('@')
+        && !t.ends_with('@')
+        && !t.contains("..")
+}
+
+/// Percent-encode for a `mailto:` field.
+///
+/// **Every** part of a report is operator-typed and a report is full of the
+/// characters that break the scheme: `&` separates the header fields, so a
+/// reception report reading "SINPO 4 3 3 4 4, best 4 4 3 4 4 & thanks" would
+/// silently truncate and put the remainder in the subject line. A newline would
+/// end a header outright.
+pub(in crate::app) fn mailto_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char)
+            }
+            other => out.push_str(&format!("%{other:02X}")),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod report_tests {
+    use super::*;
+
+    /// A complete reception, the case a station engineer would actually receive.
+    fn full() -> SwlEntry {
+        SwlEntry {
+            id: 1,
+            heard_at_unix: 1_790_622_960, // 2026-09-28 19:16 UTC
+            station: "Radio Example".into(),
+            freq_hz: 3_730_000.0,
+            mode: Mode::Am,
+            language: "English".into(),
+            report: Some(SignalReport::Sinpo(Sinpo { s: 4, i: 3, n: 3, p: 4, o: 4 })),
+            smeter_dbm: Some(-62.0),
+            site: "Tamsui".into(),
+            email: "reports@example.org".into(),
+            address: "P.O. Box 123".into(),
+            recv_grid: "IO93WQ".into(),
+            antenna: "80 m dipole".into(),
+            notes: "Familiar interval signal.".into(),
+            pirate: false,
+            report_sent_unix: None,
+            qsl_received_unix: None,
+        }
+    }
+
+    /// The whole reception is in the report: a station decides whether to send a
+    /// QSL card from exactly these facts, and any one of them missing is a
+    /// reason not to reply.
+    #[test]
+    fn a_full_reception_reaches_the_station() {
+        let body = reception_report_body(&full(), "A Listener", "");
+        for want in [
+            "Station: Radio Example",
+            "Date/Time (UTC)",
+            "Frequency: 3730.0 kHz",
+            "Mode: AM",
+            "SINPO 4 3 3 4 4",
+            "English",
+            "Tamsui",
+            "IO93WQ",
+            "80 m dipole",
+            "A Listener",
+        ] {
+            assert!(body.contains(want), "the report is missing {want:?}:\n{body}");
+        }
+        assert!(!body.contains("unlicensed"), "not a pirate");
+    }
+
+    /// **The house rule this is built to honour: an empty field is left out, not
+    /// blanked.** A report reading `Grid: —` is a line the station has to
+    /// interpret, and one reading `Grid:` with nothing after it is worse — it
+    /// looks like the listener's grid was an empty string rather than unknown.
+    #[test]
+    fn an_unfilled_field_is_left_out_of_the_report_entirely() {
+        let mut e = full();
+        e.recv_grid = String::new();
+        e.site = String::new();
+        e.antenna = String::new();
+        e.notes = String::new();
+        let body = reception_report_body(&e, "A Listener", "");
+        for absent in ["Grid", "Site", "Antenna", "Notes"] {
+            assert!(
+                !body.contains(absent),
+                "{absent} was not filled and must not appear at all:\n{body}"
+            );
+        }
+        // The lines that *were* filled are all still there.
+        assert!(body.contains("SINPO 4 3 3 4 4"), "{body}");
+        assert!(body.contains("Tamsui".replace("Tamsui", "English").as_str()), "{body}");
+    }
+
+    /// A pirate is reported as a fact, not as an accusation the report softens.
+    #[test]
+    fn an_unlicensed_transmission_is_reported_plainly() {
+        let mut e = full();
+        e.pirate = true;
+        let body = reception_report_body(&e, "", "");
+        assert!(body.contains("unlicensed"), "{body}");
+    }
+
+    /// The S-meter is quoted because a station asks how strong it was, and it is
+    /// rounded: the log holds a float from a meter that reads in whole units.
+    #[test]
+    fn the_s_meter_reads_as_a_whole_number() {
+        let mut e = full();
+        e.smeter_dbm = Some(-61.6);
+        assert!(reception_report_body(&e, "", "").contains("S-meter: -62 dBm"));
+        e.smeter_dbm = None;
+        assert!(!reception_report_body(&e, "", "").contains("S-meter"));
+    }
+
+    /// The listener's standing note goes on the end, after a blank line, so the
+    /// reception itself reads as a block.
+    #[test]
+    fn the_listener_note_sits_after_the_reception() {
+        let body = reception_report_body(&full(), "A Listener", "Details on request.");
+        let reception_at = body.find("Antenna:").expect("the reception is there");
+        let note_at = body.find("Details on request.").expect("the note is there");
+        assert!(note_at > reception_at, "the note comes last:\n{body}");
+        assert!(body.contains("\n\nDetails"), "separated by a blank line:\n{body}");
+    }
+
+    /// An empty note changes nothing about the reception block — it must not
+    /// leave a stray blank line where it would have been.
+    #[test]
+    fn no_note_leaves_no_gap() {
+        let body = reception_report_body(&full(), "A Listener", "   ");
+        assert!(!body.trim_end().ends_with("\n"), "{body:?}");
+        assert!(!body.contains("\n\n"), "no double blank line:\n{body}");
+    }
+
+    /// **The reason this exists.** A reception report is full of `&`, commas and
+    /// newlines — "SINPO 4 3 3 4 4, best 4 4 3 4 4 & thanks" is what a listener
+    /// writes. Unencoded, `&` ends the header field and the rest of the report
+    /// lands in the subject line, so the station receives a truncated report and
+    /// never knows.
+    #[test]
+    fn an_ampersand_in_a_report_does_not_truncate_it() {
+        let mut e = full();
+        e.notes = "Best on 3955 kHz & again after 2100".into();
+        let link = reception_report_mailto(
+            "reports@example.org",
+            "Reception report",
+            &reception_report_body(&e, "", ""),
+        )
+        .expect("an address");
+        assert_eq!(link.matches("subject=").count(), 1, "the separator leaked: {link}");
+        assert_eq!(link.matches("body=").count(), 1, "{link}");
+        assert!(link.contains("%26"), "the ampersand is encoded: {link}");
+        // The `&` between `subject=` and `body=` is the scheme's own separator
+        // and is the only bare one allowed — so this checks the body *alone*,
+        // which is where an unencoded ampersand in the report would show up.
+        let body_part = link.split_once("&body=").expect("a body field").1;
+        assert!(
+            !body_part.contains('&'),
+            "no bare ampersand survives inside the body: {body_part}"
+        );
+        assert!(
+            body_part.contains("3955%20kHz%20%26%20again"),
+            "the note arrives whole: {body_part}"
+        );
+    }
+
+    /// A newline would end a header line outright, and a report is written in
+    /// lines — so this is not an exotic input, it is every multi-line report.
+    #[test]
+    fn a_multiline_report_stays_one_body() {
+        let body = reception_report_body(&full(), "A Listener", "");
+        assert!(body.contains('\n'), "a report is several lines");
+        let enc = mailto_encode(&body);
+        assert!(!enc.contains('\n') && !enc.contains('\r'), "newlines are encoded");
+        assert!(enc.contains("%0A"), "encoded as %0A, not stripped");
+    }
+
+    /// **A wrong recipient is worse than none.** The cost of guessing here is a
+    /// reception report delivered to a stranger who never heard the station, so
+    /// anything that is not plainly one address is refused.
+    #[test]
+    fn an_address_that_is_not_one_address_is_refused() {
+        for bad in [
+            "",
+            "   ",
+            "reports",
+            "reports@",
+            "@example.org",
+            "a@b.example, c@d.example",
+            "two words@example.org",
+            "a@b..example.org",
+            "a b",
+        ] {
+            assert!(!report_address_is_usable(bad), "{bad:?} must not become a recipient");
+            assert!(
+                reception_report_mailto(bad, "s", "b").is_none(),
+                "{bad:?} must not produce a link"
+            );
+        }
+        // And the ones that are fine still work.
+        for good in ["reports@example.org", "rti@bbc.co.uk", "a.b+c@sub.example.org"] {
+            assert!(report_address_is_usable(good), "{good:?} is a valid address");
+            assert!(reception_report_mailto(good, "s", "b").is_some());
+        }
+    }
+
+    /// The subject names the station and the date, and nothing else — no report
+    /// count, no call sign. It goes to a broadcast engineer filing it by date.
+    #[test]
+    fn the_subject_names_the_station_and_the_date() {
+        let subject = reception_report_subject(&full());
+        assert!(subject.starts_with("Reception report — Radio Example — "), "{subject}");
+        assert!(subject.contains("2026-09-28"), "{subject}");
+        // An un-named station still gets a usable subject.
+        let mut e = full();
+        e.station = String::new();
+        assert!(reception_report_subject(&e).starts_with("Reception report — 2026-"));
+    }
+
+    /// The report is generated from a **saved** entry, so what went out and what
+    /// is in the log cannot disagree.
+    #[test]
+    fn the_report_is_built_from_the_entry_that_was_logged() {
+        let form = SwlEditForm {
+            station: "Radio Example".into(),
+            freq_khz: "3730".into(),
+            judged: true,
+            sinpo: true,
+            s: 4,
+            i: 3,
+            n: 3,
+            p: 4,
+            o: 4,
+            site: "Tamsui".into(),
+            recv_grid: "io93wq".into(),
+            antenna: "80 m dipole".into(),
+            ..Default::default()
+        };
+        let entry = form.to_entry();
+        assert_eq!(entry.freq_hz, 3_730_000.0, "kHz became Hz");
+        let body = reception_report_body(&entry, "", "");
+        assert!(body.contains("Radio Example"), "{body}");
+        assert!(body.contains("3730.0 kHz"), "{body}");
+        assert!(body.contains("SINPO 4 3 3 4 4"), "{body}");
+        assert!(body.contains("IO93WQ"), "the grid is filed in capitals: {body}");
+    }
+
+    /// An unjudged reception says nothing about quality — the listener declined
+    /// to grade it, and inventing a default grade would put five figures in a
+    /// station's records that nobody ever heard.
+    #[test]
+    fn an_unjudged_reception_states_no_figures() {
+        let form = SwlEditForm { station: "X".into(), judged: false, ..Default::default() };
+        let entry = form.to_entry();
+        assert!(entry.report.is_none(), "not judged means no report");
+        let body = reception_report_body(&entry, "", "");
+        assert!(!body.contains("SINPO") && !body.contains("SIO"), "{body}");
     }
 }
