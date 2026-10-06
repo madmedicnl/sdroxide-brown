@@ -725,12 +725,42 @@ rather than edges"*; **#559** carries only third parties (phsdv, kevin2008-01).
 Our upstream **#621** (Olivia) has **0 comments** four days on — per the standing
 rule, silence is not a prompt to re-ping.
 
-**The five `CONFLICTING` PRs are the one piece of real work here**, and the
-rebases are allowed (§"Keeping up with upstream"). Read each thread before
-rebasing: if he has commented on the old head, the post-force-push comment has to
-say how the rebase answers him, not merely that it happened. **#626 first** — it
-is the engine half of the shipped CW keyer (§10) and the only one where being
-behind is user-visible.
+**#626 is rebased and `MERGEABLE` (2026-10-06), and its review is NOT answered.**
+Branch `upstream-pr/cw-key-engine` is now `d74bae94`, force-pushed with
+`--force-with-lease`. Three conflicts, all append-at-tail, and one of them was
+a **version collision**: upstream's own #604 had already taken
+`PROTO_VERSION` 173, so the contribution moves to **174** with the `v173` history
+note kept above it. `cw_key_mode` sits after `ft8_depth`, not before it.
+`cargo fmt` clean; the four affected crates green.
+
+**The maintainer listed six blockers on 2026-10-03 and none are fixed** — and the
+branch now being `CLEAN` is exactly the trap, because a mergeable PR reads as
+ready. They are: a paddle press from idle never starts an over
+(`set_cw_contacts` does not key TX the way `key_down` does, so the tests that
+call `fill_tx_block` directly hide it); nothing releases a held paddle on client
+disconnect; the keyer is never disarmed (`abort_tx`, `set_straight(false)`,
+config changes), straight keying goes dead after a paddle has been used, and on a
+CAT rig it arms before the refusal; mode B loses the trailing element on a
+mid-element squeeze release; a tap is latched only in `poll`, so press-and-
+release in one batch is lost; and **the code/out text buffers grow unbounded on
+the audio thread**. That last one is the one not to merge past. A comment saying
+all of this, and that the rebase fixes none of it, is on the PR.
+
+**The other four conflicting PRs (#597, #554, #545, #537) are deliberately left
+alone.** With the maintainer silent, a rebase is a force-push that changes
+`updatedAt` and shows up as activity on a queue nobody is reading. #626 earned it
+because it carries functionality already shipped on our `main`; a JTTY or UVPacket
+draft does not, and re-pushing those would be adding to the backlog faster than it
+drains. **Revisit only when he answers something.**
+
+**A trap hit on the way, worth keeping.** The rebase resolved three conflicts by
+hand and the resolutions were **not committed before the force-push** — the branch
+went up with two doc-comment lines at column 0 and a `pub use` list wrapped the way
+I typed it. `cargo fmt --check` is what CI runs, so that was a broken push, caught
+only by re-checking the *remote* content afterwards rather than the working tree.
+Fixed in a follow-up commit and re-pushed. **The house rule "compile the committed
+tree, not just the working one" is not only about merges** — it is about anything
+you are about to publish.
 
 **Upstream issues to read** are only those we have a PR for: #608→#611,
 #609→#612, #585→#613 — **all three now merged**, so that list is empty. We are
