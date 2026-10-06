@@ -1794,8 +1794,20 @@ impl SdroxideApp {
                     );
                 }
                 ui.horizontal(|ui| {
-                    let send_label =
-                        if can_attach { "Save picture & open mail" } else { "Save picture" };
+                    // The label says what the button does, and it does the same
+                    // thing on **both** platforms: writes the picture out and
+                    // opens a mail composer. What `can_attach` changes is only
+                    // what happens next — a browser cannot pre-attach the file,
+                    // so the operator adds it by hand — and that is the
+                    // tooltip's job to say, not the label's.
+                    //
+                    // It used to read "Save picture" in a browser, which
+                    // *understated* it: the composer still opened, because the
+                    // send below runs `open_external` either way. A button that
+                    // does more than it says is the same fault as one that does
+                    // less — the operator gets a mail window they did not ask
+                    // for and cannot account for.
+                    let send_label = "Save picture & open mail";
                     if crate::chrome::chip(ui, addressed, send_label).clicked() && addressed {
                         send = true;
                         close = true;
