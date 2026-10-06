@@ -3099,6 +3099,59 @@ and a manual pick.
     radio only tunes 0–1 GHz, so the `SetVfo` was **refused** and the test was
     measuring the initial dial, not the rule. 6 m is inside the range.
 
+## Replaying a recording (fork-only, picked up 2026-10-06 — **scoped, not built**)
+
+Fork discussion **#10**, asked as *"replay a recorded signal — for example an
+Olivia signal, to find its mode and decipher it."* Answered there; recorded here
+because the shape of it is not what the request suggests, and the next session
+should not start by building the wrong thing.
+
+**The capability is already there, per mode, and it is only a test hook.** Every
+decoder that can read a real signal can already read a **WAV file from disk**:
+Olivia, ACARS, ALE, DRM, FSK441, HD Radio, HFDL and NRSC5 each take a path from
+`SDROXIDE_<MODE>_SAMPLE` and assert on the *content* of a genuine recording. That
+is how the real-world verification is done — not a fiction. But every one of them
+is an `#[ignore]`d test reading an environment variable, so **an operator cannot
+reach any of it.**
+
+**What is missing is not a decoder, it is an audio file source — and the one file
+source we have is the wrong kind.** `FileSource`
+(`crates/sdroxide-radio/src/source.rs:1849`) plays a raw CF32 or I/Q WAV, looped
+and real-time paced. That is an **I/Q** input, which is what ADS-B, AIS, HFDL and
+VDL2 want. Olivia and every other text mode is fed from the **demodulated audio**
+tap (`on_rx_audio`), and **there is no audio-file source in the tree at all.**
+So the shape of the work is:
+
+1. **`AudioFileSource`**, mirroring `FileSource` — a mono/stereo WAV (and MP3, or
+   whatever `rfd` hands back) paced into the audio tap, with the sample rate read
+   from the header the way `FileSource` already reads its own. This is the piece
+   that unlocks *every* text mode from a recording at once, and it is the one
+   worth doing.
+2. **Reachability.** `FileSource` is reachable **only from `--file` on the command
+   line** — there is no config or `Backend` path to it, so "replay a recording"
+   is currently a launch flag rather than a control. If this becomes a `Backend`
+   it is a wire change and takes a `PROTO_VERSION` bump; if it is a per-radio
+   source field, it is `#[serde(default)]` and no bump. **Decide this before
+   writing code.**
+3. **The mode question, which is the honest half of his request.** Decoding a
+   file for a mode you named is nearly free once (1) exists. *"Find its mode"* is
+   signal classification — a different and much larger piece, with a different
+   failure mode, because it must be right about a recording that is weak, clipped
+   or off-frequency. **Do not ship a guesser.** The useful middle path: our own
+   recordings already carry UTC, frequency and mode in the filename, so a file we
+  made can be opened knowing what it is, and only a foreign `.wav` needs the
+   guesser. That covers most real cases with none of the risk.
+
+**Unverified, and worth ten minutes to check before designing anything:** an
+operator's *I/Q* capture replayed through `--file` may already reach a text mode,
+because the engine demodulates a wideband source into audio. If that works, the
+recording side of this needs nothing at all and only the *UI* is missing. There is
+no I/Q capture on this bench to try it with, so it stays a question rather than a
+claim — and answering it first could shrink this from a feature to a button.
+
+**Fit for this fork: total.** Upstream has no recording replay and no audience
+for it; this is the listener asking for the tool their own receiver should have.
+
 ## The signal-identification guide (fork-only, 2026-09-25)
 
 A listener tool, opened by the **SIG ID** chip in the LISTEN window — and, in
