@@ -13,6 +13,69 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [1.9.21_brown] - 2026-10-06
+
+A panadapter station can decode again, a phone can reach its scope, and the
+browser stops losing the screen when it sleeps.
+
+### A transceiver's audio reaches the decoders again
+
+Reported upstream as **#640** by ct7cht, on a TS-440 with a DigiRig for CAT and
+RX audio and an RTL-SDR on the 45 MHz IF as a panadapter — and **the fault was
+ours too, in all four places they found**. Where an attached receiver paints the
+picture and the transceiver supplies the audio, there is **no main audio chain at
+all**, and that turned out to be the one configuration in which the digital modes
+could not hear anything:
+
+- The stage that takes the transceiver's audio and hands it to the decoders sat
+  behind a check for a main chain, in both the sequential and the pooled path,
+  with its own early return when there was no main to read an output rate from.
+  **The main chain is now the only conditional part**, and the rate falls back to
+  the engine's configured output rate. FT8 and CW decode from a DigiRig again.
+- The digital **channel analyzer was created with no main to feed it from** and
+  chosen by frame selection anyway, so FT8 showed a seeded, frozen 3.7 kHz window
+  with the live wide panadapter sitting behind it. It now requires a main chain.
+- **And the test was asserting the frozen behaviour.** The panadapter test
+  harness built its engine with every default, which means no audio — and no
+  audio means no main chain — so the file had been running exactly this broken
+  configuration while claiming to test an ordinary station. It builds a real
+  station now, and the no-main case has its own test, verified to fail against
+  the old code.
+
+### The scope on a phone
+
+- **A phone held sideways gets its spectrum back.** Hiding the spectrum was
+  decided by *"the tier is a phone"*, but the reason is about a narrow window —
+  *"a spectrum trace in a 360 pt-wide window…"* — and a phone in landscape is
+  **852 pt wide**. The rule is now about the width, read from the window, so a
+  rotation follows it.
+- **And the phone's layer switches now do something.** `SHOW WATERFALL` was drawn
+  inside a block skipped on exactly the tier that needed it, and the panadapter
+  overrode the operator's choice on top. The waterfall-only view is now a
+  *default*: hiding the waterfall is how a phone reaches the scope, which is the
+  trade the SPEC popup offers on every other screen. Showing both at once on a
+  narrow window is deliberately not done yet — that is the landscape rework.
+- **A menu chip that opens a window no longer leaves the menu stacked over it.**
+  `MEM`, `GRID`, `⚙ SETTINGS` and `? HELP` all did, because the popup closed only
+  on a click outside itself.
+
+### The browser stops losing the screen
+
+- **The client asks the browser to keep its storage.** Sleeping the phone and
+  coming back to default settings was the browser evicting this site's storage —
+  where the client keeps its whole screen — and it had already cost one operator
+  his control bindings on a different thread. It should have been asked for from
+  the start. A browser can refuse, so saving the screen to the profile remains the
+  other answer, and the settings row says which is in force.
+- **In a browser the send button says it opens the mail**, because it does. It
+  read "Save picture" while saving *and* opening a mail composer, with a tooltip
+  that already admitted it.
+
+**Not fixed:** the 1.9.17 phone crash is untouched, and the landscape *layout*
+for a short wide screen is still open. No Olivia transmission has yet been copied
+by fldigi or MultiPSK — the probe stays the way to settle that.
+
+
 ## [1.9.20_brown] - 2026-10-06
 
 The CW keyer review, and the end of the one thing on Olivia nobody had been able
