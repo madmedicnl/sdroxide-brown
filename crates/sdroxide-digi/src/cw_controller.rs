@@ -37,7 +37,9 @@ use std::time::SystemTime;
 
 use sdroxide_deepcw::{Tuner, Worker};
 use sdroxide_dsp::{CwKeyer, CwRx, CwSelfRx, CwTx, IambicMode, MonoResampler};
-use sdroxide_types::{CwEngine, CwKeyMode, CwStatus, DigiConfig, DigiStatus, Mode, QsoStep, TranscriptLine};
+use sdroxide_types::{
+    CwEngine, CwKeyMode, CwStatus, DigiConfig, DigiStatus, Mode, QsoStep, TranscriptLine,
+};
 
 use crate::DigiEngine;
 use crate::controller::DigiAction;
@@ -892,6 +894,27 @@ impl DigiEngine for CwController {
             self.straight_held_samples = 0;
             self.tx_watchdog = false;
         }
+        // …and it must also let go of the **paddle**. Lifting the transmitter's
+        // key is not the same thing: the keyer generates its elements from
+        // `keyer_dot`/`keyer_dah`, so a paddle left closed after an abort kept
+        // the keyer running — it would start the next over by itself, with no
+        // press, and on a rig where the lost-key-up cap does not apply that is
+        // an endless keyed carrier. An abort is the operator stopping, so the
+        // contacts go with it.
+        //
+        // The keyer itself stays armed: it is a setting, not a transmission, and
+        // a real iambic keyer is never "disarmed" between words. Disengaging it
+        // is what left the chip lit and the transmit box locked the note above
+        // describes.
+        if self.keyer_dot || self.keyer_dah {
+            self.keyer_dot = false;
+            self.keyer_dah = false;
+            if let Some(keyer) = self.keyer.as_mut() {
+                keyer.reset();
+            }
+            self.keyer_keys.clear();
+            self.status_dirty = true;
+        }
         if let Some(cat) = self.cat.as_mut() {
             let sending = cat.sending_since.is_some();
             cat.clear();
@@ -1046,13 +1069,38 @@ impl DigiEngine for CwController {
         self.keyer_dot = dot;
         self.keyer_dah = dah;
         if self.keyer.is_none() {
-            self.arm_keyer_impl();
-            if !self.straight {
-                // A rig that keys itself refuses the hand-key path, and the
-                // panel says so rather than leaving a dead KEY chip. Record the
-                // refusal where the panel can see it and leave the keyer down.
+            // A rig that keys itself refuses the hand-key path, and the panel
+            // says so rather than leaving a dead KEY chip. The refusal is
+            // decided **before** the keyer is built, not after: arming first
+            // left a keyer standing on a rig that will never key it, held down
+            // by whatever contact arrived, with the only code that releases a
+            // key being the straight path this rig just refused. Nothing could
+            // ever free it.
+            //
+            // `set_straight` refuses on exactly this condition, so it is the
+            // same decision, asked first.
+            if self.cat.is_some() {
+                self.status_dirty = true;
                 return;
             }
+            self.arm_keyer_impl();
+        }
+        // A paddle press from idle starts the over, exactly as `key_down` does
+        // for a straight key — and it cannot wait for the transmit path to
+        // notice, because the keyer branch that starts an over runs only while
+        // `fill_tx_block` is already being filled. Without this, a first press
+        // from idle never keyed at all: the over was one event late, so the
+        // keyer's first element was generated but nothing was there to carry it.
+        if (dot || dah) && !self.tx_active {
+            self.set_tx_active(true);
+        }
+        if dot || dah {
+            // A fresh press is the operator keying again, so it restarts the
+            // idle countdown and clears the watchdog from a key that was dropped
+            // before — the same two lines `key_down` sets, and for the same
+            // reason: this is an operator action, not a decode.
+            self.idle_samples = 0;
+            self.tx_watchdog = false;
         }
         // Releasing both contacts ends the over's keying without switching the
         // keyer off: the operator has lifted the paddle, not disarmed the key.
@@ -1122,6 +1170,75 @@ mod tests {
     /// until the operator changed mode and back and rebuilt the controller.
     /// Reported from the field against CW on a HackRF, where a half-duplex
     /// key-up is refused often enough to hit within a couple of overs.
+    ///
+    /// A paddle press **from idle** must start the over.
+    ///
+    /// The keyer branch in `fill_tx_block` does start an over — but only while
+    /// the transmit path is already being filled, which never happens on the
+    /// first press. The maintainer found this on #626 and the reason it hid is
+    /// the reason this test exists: every keyer test drove `fill_tx_block`
+    /// directly, so the one event that starts an over, a *command* arriving,
+    /// was never exercised. This drives `set_cw_contacts` and nothing else.
+    #[test]
+    fn a_paddle_press_from_idle_starts_an_over() {
+        let mut c = CwController::new(cfg(), 48_000.0, None);
+        fn keys(c: &mut CwController) -> bool {
+            c.poll(SystemTime::now(), 14_030_000.0).iter().any(|a| matches!(a, DigiAction::KeyTx))
+        }
+        assert!(!c.tx_active, "starts idle");
+        c.set_cw_contacts(true, false);
+        assert!(c.tx_active, "a first paddle press must start the over");
+        assert!(keys(&mut c), "and the transmitter must key");
+    }
+
+    /// The same press must restart a stopped over, or the second paddle press
+    /// in a session would do nothing at all.
+    #[test]
+    fn a_paddle_press_starts_every_over_not_only_the_first() {
+        let mut c = CwController::new(cfg(), 48_000.0, None);
+        c.set_cw_contacts(true, false);
+        assert!(c.tx_active);
+        c.set_cw_contacts(false, false);
+        c.set_tx_active(false);
+        assert!(!c.tx_active, "released and stopped");
+        c.set_cw_contacts(false, true);
+        assert!(c.tx_active, "a later press must start a new over");
+    }
+
+    /// An abort must **let go of the paddle**, not only of the transmitter's key.
+    ///
+    /// The keyer generates from `keyer_dot`/`keyer_dah`, so a contact left
+    /// closed after an abort kept it running: it would begin the next over with
+    /// no press at all. And the lost-key-up cap deliberately does not apply to a
+    /// keyer — holding a paddle *should* send indefinitely — so that is an
+    /// endless keyed carrier, not a truncated one.
+    #[test]
+    fn an_abort_releases_the_paddle_it_was_holding() {
+        let mut c = CwController::new(cfg(), 48_000.0, None);
+        c.set_cw_contacts(true, false);
+        assert!(c.tx_active);
+        c.abort_tx();
+        assert!(!c.keyer_dot && !c.keyer_dah, "abort must release both contacts");
+        // And nothing may re-key without a fresh press.
+        let mut out = [0.0f32; 2048];
+        c.fill_tx_block(&mut out);
+        assert!(!c.tx_active, "nothing must restart the over on its own");
+    }
+
+    /// A rig that keys itself must refuse **before** the keyer is built.
+    ///
+    /// Arming first left a keyer standing on a rig that will never key it, held
+    /// by whatever contact arrived, and the only code that releases a key is the
+    /// straight path this rig has just refused — so nothing could ever free it.
+    #[test]
+    fn a_self_keying_rig_never_gets_a_keyer_built() {
+        let mut c = CwController::new(cfg(), 48_000.0, Some(50));
+        c.set_cw_contacts(true, false);
+        assert!(c.keyer.is_none(), "the keyer must not be armed on a refusing rig");
+        assert!(!c.straight, "and the hand-key path stays refused");
+        assert!(!c.tx_active, "a refused rig must not be keyed");
+    }
+
     #[test]
     fn a_refused_key_up_does_not_wedge_the_transmitter() {
         let mut c = CwController::new(cfg(), 48_000.0, None);
@@ -1759,7 +1876,8 @@ mod tests {
     /// Nothing goes out until the operator says to transmit — the panel's TX
     /// button means the same thing on both routes.
     #[test]
-    fn text_typed_out_of_transmit_waits() {        let mut c = CwController::new(cfg(), 48_000.0, Some(50));
+    fn text_typed_out_of_transmit_waits() {
+        let mut c = CwController::new(cfg(), 48_000.0, Some(50));
         let t0 = SystemTime::now();
         c.set_tx_text("CQ DE W1AW ".into());
         assert!(keyed(&c.poll(t0 + Duration::from_secs(1), 0.0)).is_empty());
