@@ -42,10 +42,17 @@
 //! **Start tones are now transmitted.** fldigi brackets every transmission with a
 //! pair of tones at the band edges — see [`TONE_DURATION`] — and gates them on
 //! `olivia_start_tones`, whose default is **true**, so a default fldigi
-//! transmission carries them. We emitted bare back-to-back blocks, and our
-//! receiver never noticed because its block-grid lock free-runs; a real decoder
-//! looking for a frame may never lock on us at all. `fldigi::send_tones()` is the
-//! model, reproduced exactly.
+//! transmission carries them and matching it is the right thing to send.
+//!
+//! **They are not how fldigi acquires a frame, and an earlier note here said
+//! they were.** `olivia_start_tones` is read only in `send_tones()`, which the
+//! transmit path calls; the receiver never consults it and free-runs a
+//! correlator bank over 17 frequency offsets by block phase
+//! (`FreqOffsets = 2 * SyncMargin + 1`, `SyncIntegLen = 4`). Our receiver has
+//! always free-run the same way, which is why every loopback passed without
+//! them. Sending them is correct for interop fidelity; believing they are the
+//! reason a decoder would copy nothing sent this note after a mechanism that
+//! does not exist.
 //!
 //! Still absent, and not a regression: the **tail** (fldigi's stop tones plus a
 //! short silence) and any **frequency search** beyond the caller's tone bank

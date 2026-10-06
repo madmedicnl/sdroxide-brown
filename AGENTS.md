@@ -315,6 +315,19 @@ another station.** The open items, in the order they will bite:
    `text_modem.rs`, deliberately not smuggled in with the start tones. Full
    geometry, the exact source lines and the five tests (each verified to fail
    against the broken version) are in `OLIVIA-HANDOVER.md`.
+
+   **And the reason this was on the list was wrong, which matters more than the
+   feature.** The note claimed the tones are "how fldigi finds a frame at all".
+   **They are not.** `olivia_start_tones` is read only inside `send_tones()`,
+   which the transmit path calls; fldigi's *receiver* never consults it and
+   free-runs a correlator bank over `FreqOffsets = 2·SyncMargin + 1` = **17**
+   frequency offsets by block phase, integrating `SyncIntegLen = 4` FEC blocks —
+   the same free-running strategy ours has always used. So "we sent no sync
+   tones" was never a reason a fldigi decoder might copy nothing, and the real
+   suspects are the tail and the things nobody has tested. **The tones are still
+   right to send** — default on, and the mode's bracket — but do not let this
+   entry imply they were the blocker. This is the second time an inherited claim
+   in this file was the actual bug; the Olivia polarity one is the first.
 2. ~~**No on-air proof of the polarity.**~~ **GONE — supplied by a third party,
    2026-10-05, and it settles item 2 completely.** See the entry below; read it
    before touching polarity again.

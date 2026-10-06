@@ -56,11 +56,22 @@ could supply.
 (see below). In the order the rest will bite:
 
 1. ~~**No sync tones.**~~ **START TONES NOW SENT; the tail is still missing.**
-   fldigi brackets every transmission with a pair of tones at the band edges,
-   and that is how it finds a frame at all. Our receiver never needed them
-   because its block-grid lock free-runs — which is exactly why the loopbacks
-   passed while a real decoder may never lock, and why the omission had nothing
-   to do with polarity.
+   fldigi brackets every transmission with a pair of tones at the band edges.
+   **Correcting an overstatement this file used to make:** it said the tones are
+   "how fldigi finds a frame at all", and **they are not.** `olivia_start_tones`
+   occurs only in the *transmit* path — line 107 sits inside `send_tones()`,
+   which is called only from the two TX sites — and the receiver never
+   references it. fldigi's receiver free-runs exactly like ours: a correlator
+   bank over `FreqOffsets = 2 * SyncMargin + 1` = **17** frequency offsets by
+   `BlockPhases`, integrating `SyncIntegLen = 4` FEC blocks (`pj_mfsk.h`,
+   `olivia.cxx`). **So start tones are not the frame-acquisition mechanism, and
+   "we had none" was never the reason a fldigi decoder might copy nothing.**
+   Sending them is still right — they are on by default and they are the mode's
+   bracket — but the remaining suspects are the tail and the things nobody has
+   tested, and this note should not send the next session after a mechanism that
+   does not exist. Our own receiver never needed them for the same reason: its
+   block-grid lock free-runs, which is why every loopback passed and the
+   omission went unnoticed.
    - **What is sent now**, reproduced from `olivia::send_tones()`
      (`src/olivia/olivia.cxx`): `TONE_DURATION = SCBLOCKSIZE * 16` = **8192**
      samples in **four** quarters of `SR4` = 2048, alternating low/high/low/high
