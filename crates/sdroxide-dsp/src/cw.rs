@@ -1747,6 +1747,11 @@ enum Phase {
 ///
 /// `now` is a monotonic timebase in seconds; `poll` is safe to call at any rate
 /// and catches up across missed transitions.
+/// Bound on the keyer's decoded-character queue. Comfortably longer than any
+/// word, so nothing real is dropped in normal use; a keyer left armed with
+/// nobody reading cannot grow without end.
+const OUT_CAP: usize = 256;
+
 pub struct CwKeyer {
     mode: IambicMode,
     dit_s: f64,
@@ -1855,11 +1860,28 @@ impl CwKeyer {
         }
     }
 
+    /// Queue a decoded character, keeping the queue bounded.
+    ///
+    /// `out` is a read-back convenience, not the keyer's output — the elements
+    /// go out through [`CwKeyer::poll`] whether or not anybody ever reads this.
+    /// So a caller that keys for hours without calling [`Self::take_text`] used
+    /// to grow it without limit, **on the audio thread**, which is the one place
+    /// a slow allocation cannot be tolerated. The cap drops from the front, the
+    /// same way the transmit read-back does, so what survives is the most recent
+    /// text rather than the oldest.
+    fn push_out(&mut self, c: char) {
+        self.out.push_back(c);
+        if self.out.len() > OUT_CAP {
+            let drop = self.out.len() - OUT_CAP;
+            self.out.drain(..drop);
+        }
+    }
+
     fn start_mark(&mut self, start: f64, el: CwElement) {
         // A word break is owed only once the next character actually begins, so
         // the text does not end in a dangling space.
         if self.space_owed {
-            self.out.push_back(' ');
+            self.push_out(' ');
             self.space_owed = false;
             self.char_since_space = false;
         }
@@ -1924,7 +1946,7 @@ impl CwKeyer {
         let gap = now - prev;
         if !self.code.is_empty() && gap >= self.char_gap_s {
             if let Some(c) = morse_decode(&self.code) {
-                self.out.push_back(c);
+                self.push_out(c);
             }
             self.code.clear();
             self.char_since_space = true;
