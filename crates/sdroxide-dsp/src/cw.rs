@@ -1829,6 +1829,27 @@ impl CwKeyer {
     ///
     /// `poll` calls this too, so the per-sample path is unchanged.
     pub fn contact(&mut self, dit: bool, dah: bool) {
+        // **Mode B is full squeeze memory**, and that is a statement about
+        // *falling* edges, not rising ones. Squeezing and then letting go of one
+        // paddle while the other stays down has to leave that paddle remembered,
+        // or the squeeze quietly degenerates: without this, releasing the dah
+        // mid-element leaves `lat_dah` false, so after the next dit the keyer
+        // finds neither paddle available and sends dits for ever, and the trailing
+        // dah the operator squeezed for is simply not there.
+        //
+        // The condition is "released *while the other is still down*", which is
+        // what makes it a squeeze rather than an ordinary release — releasing
+        // both ends the squeeze and must not latch anything. Mode A is
+        // deliberately excluded: its memory lasts only while the opposite
+        // paddle is held, which is the whole difference between A and B.
+        if self.mode == IambicMode::B {
+            if self.dit && !dit && dah {
+                self.lat_dit = true;
+            }
+            if self.dah && !dah && dit {
+                self.lat_dah = true;
+            }
+        }
         if dit && !self.dit {
             self.lat_dit = true;
         }
@@ -2562,6 +2583,51 @@ mod keyer_tests {
             k.poll(*t, dit, dah);
             *t += 0.001;
         }
+    }
+
+    /// Squeezing and then letting go of one paddle mid-element: mode B must
+    /// still send the element that paddle was squeezed for, mode A must not.
+    ///
+    /// This is the whole difference between the two modes, and it is a claim
+    /// about the **release**, not the press — which is why it is easy to get
+    /// backwards. The maintainer asked for exactly this test on #626, and it
+    /// fails without the falling-edge latch in [`CwKeyer::contact`]: mode B
+    /// degenerated into dits for ever and the trailing dah was never sent.
+    #[test]
+    fn mode_b_remembers_a_paddle_released_mid_squeeze_and_mode_a_does_not() {
+        // Dit at 20 wpm is 60 ms, dah 180 ms. Squeeze, let the leading element
+        // start, then drop the dah while the dit stays down.
+        fn sends(mode: IambicMode) -> String {
+            let mut k = CwKeyer::new(20.0);
+            k.set_iambic(mode);
+            let mut t = 0.0;
+            // A dah on its own first, so that the latch the squeeze would
+            // otherwise leave set is **consumed** by sending it. Squeeze from
+            // idle cannot tell the two modes apart: the press has latched the
+            // dah either way, so the trailing dah goes out even without memory,
+            // and the test passes for the wrong reason.
+            run(&mut k, &mut t, 0.250, false, true);
+            // Long enough for a character gap, so the dah is flushed as its own
+            // character and its latch really is cleared before the squeeze.
+            run(&mut k, &mut t, 0.600, false, false);
+            run(&mut k, &mut t, 0.250, true, true); // squeeze: dit against dah
+            run(&mut k, &mut t, 0.200, true, false); // release dah, keep dit
+            run(&mut k, &mut t, 1.200, false, false); // let it settle
+            k.take_text()
+        }
+        let a = sends(IambicMode::A);
+        let b = sends(IambicMode::B);
+        // The claim is about *elements*, and `take_text` hands back decoded
+        // characters, so re-encode: what matters is whether a dah went out.
+        let elements = |t: &str| -> String { t.chars().filter_map(morse_encode).collect() };
+        let (ae, be) = (elements(&a), elements(&b));
+        assert_ne!(ae, be, "the two modes must differ, or the test says nothing");
+        assert_eq!(
+            be.matches('-').count(),
+            ae.matches('-').count() + 1,
+            "mode B must send exactly one more dah than mode A — the one it \
+             remembered: A {ae:?}, B {be:?}"
+        );
     }
 
     #[test]
