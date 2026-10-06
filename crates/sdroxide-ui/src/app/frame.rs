@@ -1431,6 +1431,9 @@ impl SdroxideApp {
                 }
             }
         }
+        // And the automatic half: with a signed-in profile, the screen keeps
+        // itself in step. See `auto_save_screen`.
+        self.auto_save_screen(now);
         // Answers to the settings dialog's device questions. Drained here
         // rather than in the dialog: they come from another machine, so one can
         // land in the frame after it was closed, and an answer left in the
@@ -2392,6 +2395,49 @@ impl SdroxideApp {
     /// server every client shares the station default, so one operator moving
     /// the theme would move it for whoever signs in next. An explicit action
     /// says who decided it, and the row says afterwards what it did.
+    /// Keep the signed-in profile's copy of the screen in step with what the
+    /// operator is actually using, so the next session — on this device or
+    /// another — comes back as they left it, **without a button being
+    /// pressed**.
+    ///
+    /// **This is the fork's answer to "store everything on the server, not in
+    /// the browser"** (fork discussion #4 and #9). The argument is Kevin's and
+    /// it is the right one: browser storage cannot be depended on — `persist()`
+    /// behaves differently in every browser (Chrome refuses it silently,
+    /// Firefox prompts), so it works for one person and not the next — and a
+    /// session kept there cannot be reset by anyone who is not standing in
+    /// front of that device. On the server it can: it is a file, and the person
+    /// who runs the station can put a good one back over SSH. That is what
+    /// makes a station *administrable*, and it is why the screen belongs there.
+    ///
+    /// **Only with a real signed-in profile, and that restriction is the whole
+    /// reason the button used to be manual.** A server with no password has one
+    /// shared `default` bucket, so storing as we go would let one operator's
+    /// theme become the next one's. A login is one person, so it is safe there
+    /// and only there.
+    fn auto_save_screen(&mut self, now: f64) {
+        if !matches!(self.client_settings_from, Some(Some(_))) {
+            return;
+        }
+        // Debounced: dragging the theme picker is one write, not sixty.
+        if now - self.client_save_last < CLIENT_AUTO_SAVE_S {
+            return;
+        }
+        let mut screen = sdroxide_types::ClientScreen::from_settings(&self.ui_settings);
+        screen.center_on_vfo = self.view.center_on_vfo;
+        screen.fft_size = self.view.fft_size;
+        if self.client_settings_stored == Some(screen) {
+            return;
+        }
+        self.client_save_last = now;
+        let profile = self.client_settings_from.clone().flatten();
+        self.ctrl.send_client_settings(profile, screen);
+        self.client_settings_stored = Some(screen);
+        // Deliberately no `client_settings_status`: this happens on its own, and
+        // a row that announces a save every few seconds is a row nobody reads.
+        // The manual buttons still say what they did.
+    }
+
     pub(in crate::app) fn save_screen_to_profile(&mut self) {
         let profile = self.client_settings_from.clone().flatten();
         let mut screen = sdroxide_types::ClientScreen::from_settings(&self.ui_settings);
@@ -2409,6 +2455,12 @@ impl SdroxideApp {
         });
     }
 }
+
+/// How often the automatic profile save may write, in seconds.
+///
+/// Long enough that dragging a slider through its values is one write, short
+/// enough that closing a tab right after a change still has it stored.
+const CLIENT_AUTO_SAVE_S: f64 = 2.0;
 
 /// Control bindings the signed-in profile carries, offered rather than
 /// dropped when this client has not adopted the opt-in.

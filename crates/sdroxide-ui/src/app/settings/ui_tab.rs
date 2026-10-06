@@ -259,14 +259,20 @@ pub(in crate::app) fn settings_ui_tab(
         ui.label("Screen follows your profile").on_hover_text(
             "When you are a remote client of `sdroxide --server`, the *look* of \
              this screen — theme, layout, waterfall and spectrum, fonts, Simple \
-             UI, the map layers — can be kept with the profile you \
-             signed in as, so it comes back on any machine instead of starting \
-             from defaults.\n\n\
-             **Saved when you press the button, not on every change.** On a \
-             server with no password every client is the same profile, so \
-             storing as you go would let one operator's theme become the next \
-             one's. Nothing that belongs to the machine is ever stored, and a \
-             local radio is unaffected.",
+             UI, the map layers, the panadapter's own view — is kept with the \
+             profile you signed in as, so it comes back on any machine instead \
+             of starting from defaults.\n\n\
+             **Saved on the server, and saved as you go while you are signed \
+             in** — there is nothing to press. That is deliberate: browser \
+             storage cannot be relied on, because `persist()` behaves \
+             differently in every browser, and a session kept there cannot be \
+             reset by anyone who is not at that device. A profile on the server \
+             is a file the station's operator can put back.\n\n\
+             On a server with **no password** every client is the same profile, \
+             so nothing is written unless you press the button below — one \
+             operator's theme must not become the next one's. Nothing that \
+             belongs to the machine is ever stored, and a local radio is \
+             unaffected.",
         );
         ui.horizontal(|ui| {
             if ui.button("Save to profile").clicked() {

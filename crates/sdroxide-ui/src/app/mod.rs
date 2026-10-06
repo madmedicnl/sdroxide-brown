@@ -978,6 +978,10 @@ pub struct SdroxideApp {
     /// a profile name, or `None` for the station default. `None` also before
     /// any has arrived, which the Settings label reads as "not using any".
     client_settings_from: Option<Option<String>>,
+    /// When the screen was last pushed to the profile by the **automatic**
+    /// save, so a theme being dragged through its options is one write and not
+    /// sixty. See `SdroxideApp::auto_save_screen`.
+    client_save_last: f64,
     /// The set the server last sent, kept so the settings row can offer "back
     /// to the profile's look" without another round trip.
     client_settings_stored: Option<sdroxide_types::ClientScreen>,
@@ -1845,6 +1849,7 @@ impl SdroxideApp {
             flags: Default::default(),
             show_logbook: false,
             client_settings_from: None,
+            client_save_last: 0.0,
             client_settings_stored: None,
             bindings_pending: None,
             bindings_offer_asked: false,
