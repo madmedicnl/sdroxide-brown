@@ -1747,6 +1747,16 @@ enum Phase {
 ///
 /// `now` is a monotonic timebase in seconds; `poll` is safe to call at any rate
 /// and catches up across missed transitions.
+///
+/// The decoded characters accumulate in [`CwKeyer::take_text`] until somebody
+/// asks for them. That is a read-back convenience, and the cap below is what
+/// stops a caller that never asks from growing it for the life of the session —
+/// on the audio thread, where a keyer can be armed indefinitely.
+/// Bound on the keyer's decoded-character queue. Comfortably longer than any
+/// word, so nothing real is dropped in normal use; a keyer left armed with
+/// nobody reading cannot grow without end.
+const OUT_CAP: usize = 256;
+
 pub struct CwKeyer {
     mode: IambicMode,
     dit_s: f64,
@@ -1846,7 +1856,6 @@ impl CwKeyer {
         matches!(self.phase, Phase::Mark { .. })
     }
 
-
     /// The element a squeeze starts with when the keyer is idle, if either
     /// paddle is down. A squeeze starts with a dit, as it does on a real keyer.
     fn starting_element(&self) -> Option<CwElement> {
@@ -1863,7 +1872,7 @@ impl CwKeyer {
         // A word break is owed only once the next character actually begins, so
         // the text does not end in a dangling space.
         if self.space_owed {
-            self.out.push_back(' ');
+            self.push_out(' ');
             self.space_owed = false;
             self.char_since_space = false;
         }
@@ -1926,10 +1935,27 @@ impl CwKeyer {
 
     fn emit_char(&mut self) {
         if let Some(c) = morse_decode(&self.code) {
-            self.out.push_back(c);
+            self.push_out(c);
         }
         self.code.clear();
         self.char_since_space = true;
+    }
+
+    /// Queue a decoded character, keeping the queue bounded.
+    ///
+    /// `out` is a read-back convenience, not the keyer's output — the elements
+    /// go out through [`CwKeyer::poll`] whether or not anybody ever reads this.
+    /// So a caller that keys for hours without calling [`Self::take_text`] used
+    /// to grow it without limit, **on the audio thread**, which is the one place
+    /// a slow allocation cannot be tolerated. The cap drops from the front, the
+    /// same way the transmit read-back does, so what survives is the most recent
+    /// text rather than the oldest.
+    fn push_out(&mut self, c: char) {
+        self.out.push_back(c);
+        if self.out.len() > OUT_CAP {
+            let drop = self.out.len() - OUT_CAP;
+            self.out.drain(..drop);
+        }
     }
 
     fn finalize_gaps(&mut self, now: f64) {
@@ -2595,6 +2621,29 @@ mod keyer_tests {
         run(&mut k, &mut t, 0.8, false, false);
         assert_eq!(k.take_text(), "T");
     }
+    /// The decoded-character queue is a read-back convenience, so a caller that
+    /// keys for a long time without ever asking for the text must not grow it
+    /// without bound. Nothing in production calls `take_text` — the transmit
+    /// read-back decodes the monitor tone instead — so before the cap this queue
+    /// grew on the audio thread for as long as the keyer stayed armed.
+    #[test]
+    fn the_decoded_queue_is_bounded_when_nobody_reads_it() {
+        let mut k = CwKeyer::new(20.0);
+        let mut t = 0.0;
+        // Ten minutes of steady E at 20 wpm, never drained.
+        for _ in 0..600 {
+            run(&mut k, &mut t, 0.010, true, false);
+            run(&mut k, &mut t, 0.5, false, false);
+        }
+        let text = k.take_text();
+        assert!(
+            text.len() <= OUT_CAP,
+            "queue grew to {} characters with nobody reading it",
+            text.len()
+        );
+        // It must still be *useful*: the most recent characters survive.
+        assert!(text.ends_with('E'), "queue kept {} ...", &text[text.len().saturating_sub(16)..]);
+    }
 }
 
 #[cfg(test)]
@@ -2635,10 +2684,7 @@ mod manual_timeline_tests {
         let env = envelope(&out);
         let voiced = env.iter().filter(|p| **p > TONE).count();
         let silent = env.iter().filter(|p| **p < SILENT).count();
-        assert!(
-            voiced > 0 && silent > 0,
-            "the tone starts and stops inside one block: {env:?}"
-        );
+        assert!(voiced > 0 && silent > 0, "the tone starts and stops inside one block: {env:?}");
         // *Where* the silence starts is the claim, not how much of it there
         // is: the ramp is 5 ms either side of the edge, so the tone must go
         // quiet within a chunk or two of the key going up. Read once per block
