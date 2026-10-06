@@ -211,6 +211,14 @@ pub struct OliviaTx {
     cur_pos: usize,
     cur_done: Option<usize>,
     framing: u8,
+    /// The closing bracket, built when the message runs out: fldigi's stop tones
+    /// and then a short silence. `None` while there is nothing to close yet.
+    tail: Option<Vec<f32>>,
+    tail_pos: usize,
+    /// The bracket goes out once. Without this the "message is out" condition
+    /// stays true after it has been played, so a caller that asks for more
+    /// audio — which the loopback flushes do — gets the bracket again, for ever.
+    tail_done: bool,
 }
 
 impl OliviaTx {
@@ -227,6 +235,9 @@ impl OliviaTx {
             cur_pos: 0,
             cur_done: None,
             framing: FRAMING_START,
+            tail: None,
+            tail_pos: 0,
+            tail_done: false,
         }
     }
 
@@ -248,8 +259,13 @@ impl OliviaTx {
     pub fn total_chars(&self) -> usize {
         self.total_chars
     }
+    /// True once the message **and** its closing bracket have been played out.
+    ///
+    /// The bracket is part of the transmission, not an optional grace: a decoder
+    /// that integrates four FEC blocks of the tail to find the frame end would
+    /// otherwise run off the end of what we sent.
     pub fn drained(&self) -> bool {
-        self.q.is_empty() && self.cur_pos >= self.cur.len()
+        self.q.is_empty() && self.cur_pos >= self.cur.len() && !self.tail_pending()
     }
 
     pub fn clear(&mut self) {
@@ -259,8 +275,43 @@ impl OliviaTx {
         self.cur_done = None;
         self.total_chars = 0;
         self.sent_chars = 0;
-        // A new transmission is bracketed with its own start tones.
+        // A new transmission is bracketed with its own start tones, and the
+        // closing bracket belongs to the one that just ended.
         self.framing = FRAMING_START;
+        self.tail = None;
+        self.tail_pos = 0;
+        self.tail_done = false;
+    }
+
+    /// Whether the closing bracket is still waiting to be drained.
+    ///
+    /// The caller needs this: it stops asking for audio the moment the last
+    /// character is out, so tones generated into the block buffer after that
+    /// would never be played. See [`Self::next_block`].
+    pub fn tail_pending(&self) -> bool {
+        self.tail.is_some()
+    }
+
+    /// fldigi's closing bracket: the stop tones again, then a short silence.
+    ///
+    /// `send_tones()` a second time (`postamblesent`), then `SCBLOCKSIZE`
+    /// samples of zeros (`olivia.cxx`).
+    fn build_tail(&mut self) {
+        let (low, high) = self.g.edge_hz();
+        let mut t = Vec::with_capacity(TONE_DURATION + FLDIGI_SCBLOCK);
+        for q in 0..TONE_DURATION / TONE_QUARTER {
+            let start = t.len();
+            let hz = if q % 2 == 0 { low } else { high };
+            self.tonegen.emit(hz, TONE_QUARTER, OUT_AMP, &mut t);
+            for i in 0..TONE_EDGE {
+                let w = 0.5 * (1.0 - (std::f64::consts::PI * i as f64 / TONE_EDGE as f64).cos());
+                t[start + i] *= w as f32;
+                t[start + TONE_QUARTER - 1 - i] *= w as f32;
+            }
+        }
+        t.resize(TONE_DURATION + FLDIGI_SCBLOCK, 0.0);
+        self.tail = Some(t);
+        self.tail_pos = 0;
     }
 
     /// fldigi's start tones, into `cur`. See [`TONE_DURATION`].
@@ -295,8 +346,7 @@ impl OliviaTx {
             let hz = if q % 2 == 0 { low } else { high };
             self.tonegen.emit(hz, TONE_QUARTER, OUT_AMP, &mut self.cur);
             for i in 0..TONE_EDGE {
-                let w = 0.5
-                    * (1.0 - (std::f64::consts::PI * i as f64 / TONE_EDGE as f64).cos());
+                let w = 0.5 * (1.0 - (std::f64::consts::PI * i as f64 / TONE_EDGE as f64).cos());
                 self.cur[start + i] *= w as f32;
                 self.cur[start + TONE_QUARTER - 1 - i] *= w as f32;
             }
@@ -383,12 +433,40 @@ impl OliviaTx {
         let mut n = 0;
         while n < out.len() {
             if self.cur_pos >= self.cur.len() {
+                // The closing bracket, once the message is out and TX has been
+                // released. It has to be *generated* here rather than appended
+                // to the message, because the caller stops asking for audio the
+                // moment `sent_chars` reaches `total_chars` — anything still
+                // sitting in the block buffer at that point is never drained.
+                if let Some(tail) = self.tail.take() {
+                    let take = (tail.len() - self.tail_pos).min(out.len() - n);
+                    out[n..n + take].copy_from_slice(&tail[self.tail_pos..self.tail_pos + take]);
+                    self.tail_pos += take;
+                    n += take;
+                    // Only re-queue what has not been played yet, and mark the
+                    // bracket spent once it has all been played.
+                    if self.tail_pos < tail.len() {
+                        self.tail = Some(tail);
+                    } else {
+                        self.tail_done = true;
+                    }
+                    continue;
+                }
                 if let Some(ci) = self.cur_done.take() {
                     self.sent_chars = ci + 1;
                 }
                 if self.framing == FRAMING_START {
                     self.build_start_tones();
                     self.framing = FRAMING_DATA;
+                } else if !self.tail_done
+                    && self.q.is_empty()
+                    && self.sent_chars >= self.total_chars
+                    && self.total_chars > 0
+                {
+                    self.build_tail();
+                    // The bracket does not go through `cur`; hand straight back
+                    // to the tail branch that drains it.
+                    continue;
                 } else {
                     self.build_block();
                 }
@@ -854,8 +932,11 @@ mod tests {
             for chunk in audio.chunks(512) {
                 got.push_str(&rx.process(chunk));
             }
-            let score = got.matches("Wikipedia").count() * 100 + got.matches("encyclopedia").count();
-            if score > best.matches("Wikipedia").count() * 100 + best.matches("encyclopedia").count() {
+            let score =
+                got.matches("Wikipedia").count() * 100 + got.matches("encyclopedia").count();
+            if score
+                > best.matches("Wikipedia").count() * 100 + best.matches("encyclopedia").count()
+            {
                 best = got;
             }
             hz += 5.0;
@@ -924,10 +1005,7 @@ mod tests {
         assert!((high - 2000.0).abs() < 1e-9, "high edge {high}");
         // …and they sit strictly outside the outermost data tones.
         assert!(g.tone_hz(0) > low, "lowest data tone inside the low edge");
-        assert!(
-            g.tone_hz(tones - 1) < high,
-            "highest data tone inside the high edge"
-        );
+        assert!(g.tone_hz(tones - 1) < high, "highest data tone inside the high edge");
 
         let t = start_tones_of(tones, bw);
         let flat = TONE_QUARTER - 2 * TONE_EDGE;
@@ -993,15 +1071,90 @@ mod tests {
             guard += 1;
         }
         assert_eq!(tx.sent_chars(), 2, "sent_chars overshot past the message");
-        // `drained` means *played out*, not "queued": the block carrying the last
-        // character still has samples to give.
+        // `drained` cannot be waited on here: `next_block` always produces
+        // audio, so once the closing bracket is spent it goes on making idle
+        // blocks for ever. Drive the bracket out and ask about *it*.
         let mut guard = 0;
-        while !tx.drained() && guard < 4_000 {
+        while (tx.tail_pending() || !tx.q.is_empty()) && guard < 8_000 {
             let mut b = [0.0f32; 1024];
             tx.next_block(&mut b);
             guard += 1;
         }
-        assert!(tx.drained(), "did not drain");
+        assert!(!tx.tail_pending(), "the bracket never finished");
+        assert_eq!(tx.sent_chars(), 2, "the bracket counted as sent text");
+        assert_eq!(tx.total_chars(), 2, "and it changed the message length");
+    }
+
+    /// A transmission is **closed** as well as opened.
+    ///
+    /// fldigi sends `send_tones()` again at the end and then `SCBLOCKSIZE`
+    /// samples of silence. This is not decoration: fldigi's receiver integrates
+    /// `SyncIntegLen` FEC blocks, so a decoder finding the end of the frame is
+    /// looking at exactly this.
+    ///
+    /// The property that matters is not the tones themselves but that they are
+    /// ever *played*. The caller stops asking for audio the moment
+    /// `sent_chars` reaches `total_chars`, so anything generated after that sits
+    /// in the buffer and is never drained — an interop feature that could not be
+    /// heard. `drained()` is what the caller asks, so it has to mean the bracket
+    /// too.
+    #[test]
+    fn a_transmission_ends_with_its_own_bracket() {
+        let mut tx = OliviaTx::new(8000.0, 1500.0, 32, 1000.0);
+        tx.push_text("CQ");
+        assert!(!tx.tail_pending(), "no bracket before anything has been sent");
+        let mut buf = [0.0f32; 2048];
+        let mut guard = 0;
+        while tx.sent_chars() < tx.total_chars() && guard < 4_000 {
+            tx.next_block(&mut buf);
+            guard += 1;
+        }
+        assert!(!tx.drained(), "the message is out but the bracket is still owed");
+
+        // Now render what follows. `next_block` always produces audio, so this
+        // cannot wait on `drained()` — it is asked after the **bracket** is gone.
+        let mut first = Vec::new();
+        let mut guard = 0;
+        while !tx.tail_pending() && guard < 4_000 {
+            tx.next_block(&mut buf);
+            guard += 1;
+        }
+        assert!(tx.tail_pending(), "the bracket was never generated");
+        let mut silence_at = None;
+        while tx.tail_pending() && guard < 8_000 {
+            if first.is_empty() {
+                first.extend_from_slice(&buf);
+            }
+            tx.next_block(&mut buf);
+            if !tx.tail_pending() {
+                // The call that finished the bracket: what it left is the
+                // silence fldigi sends after its stop tones.
+                silence_at = Some(buf.len());
+            }
+            guard += 1;
+        }
+        assert!(!tx.tail_pending(), "the bracket never finished");
+        assert!(silence_at.is_some(), "the bracket never ended");
+        // It is the stop tones: the same alternating band-edge pair as the start.
+        let flat = TONE_QUARTER - 2 * TONE_EDGE;
+        let want = (flat as f64 * 1000.0 / 8000.0).round() as usize;
+        assert_eq!(crossings(flat_middle(&first, 0)), want, "not the stop tones");
+
+        // And it goes out **once**. The "message is out" condition is still true
+        // afterwards, so without a spent marker every further call would emit the
+        // bracket again, for ever.
+        let mut after = 0usize;
+        for _ in 0..64 {
+            tx.next_block(&mut buf);
+            after += buf.len();
+            if tx.tail_pending() {
+                break;
+            }
+        }
+        assert!(
+            !tx.tail_pending(),
+            "the bracket re-armed after it had been played ({after} samples)"
+        );
     }
 
     /// Every transmission is bracketed, so clearing re-arms the tones rather
@@ -1023,9 +1176,7 @@ mod tests {
         tx.next_block(&mut again);
 
         let digest = |t: &[f32]| -> u64 {
-            t.iter().fold(0u64, |h, v| {
-                h.wrapping_mul(31).wrapping_add(v.to_bits() as u64)
-            })
+            t.iter().fold(0u64, |h, v| h.wrapping_mul(31).wrapping_add(v.to_bits() as u64))
         };
         assert_eq!(
             digest(&first),

@@ -82,6 +82,15 @@ impl TxModem {
             }
         }
     }
+    /// Olivia closes a transmission with tones of its own; the other modes end
+    /// when their characters do. Only Olivia has a tail.
+    fn tail_pending(&self) -> bool {
+        match self {
+            TxModem::Olivia(m) => m.tail_pending(),
+            _ => false,
+        }
+    }
+
     fn sent_chars(&self) -> usize {
         match self {
             TxModem::Psk(m) => m.sent_chars(),
@@ -225,10 +234,17 @@ impl TextModemController {
         }
     }
 
-    /// True while we should keep generating TX audio: actively transmitting, or
-    /// still flushing already-queued characters after TX was released.
+    /// True while we should keep generating TX audio: actively transmitting,
+    /// still flushing already-queued characters after TX was released, or —
+    /// Olivia only — still playing the bracket that closes the transmission.
+    ///
+    /// That last clause is the whole reason this is a contract and not a
+    /// detail. Olivia's closing tones are generated *after* the last character
+    /// is out, and the caller stopped asking for audio the moment
+    /// `sent_chars` reached `total_chars`, so without it the bracket was built
+    /// and never played: an interop feature that could never be heard.
     fn producing(&self) -> bool {
-        self.tx_active || self.tx.sent_chars() < self.tx.total_chars()
+        self.tx_active || self.tx.sent_chars() < self.tx.total_chars() || self.tx.tail_pending()
     }
 
     fn build_status(&self) -> DigiStatus {
