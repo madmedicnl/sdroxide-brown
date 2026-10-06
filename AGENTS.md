@@ -24,6 +24,37 @@
 > ALE-mode build; the experimental-release recipe below is still the one to use
 > when a build needs to name it (the older pre-release tag has been removed).
 
+## Session 2026-10-06: the notes were a release behind, and Olivia is settled
+
+**Two corrections to this file, both found by running the standing routine
+rather than by reading it.** The queue section claimed "nineteen open, all
+`CLEAN`"; the discussions section named three threads where there are thirteen;
+and the newest release documented was 1.9.18. All three are now fixed above.
+
+**`v1.9.19_brown` is tagged, pushed and released — CI green, one run, no
+re-tag.** `Cargo.toml` is at `1.9.19`, the tag is on `origin`, and the release
+workflow completed `success`. It carries the **SSTV Re-upload chip** (discussion
+**#7**: load a received picture into the transmit slot and send it back out for
+the stations who could not copy it — "a card is what a broadcaster sends back",
+in the same spirit as dropping the QSL card below). That is the functional
+half; the operational half matters more and is the trap the queue section now
+names: **two users are reporting bugs as "persistant on 1.9.18" that 1.9.19
+fixes**, and neither can be told "fixed" until we know which build they run.
+
+**The Olivia polarity question is closed**, and not by us. See §3 — Kevin sent
+a capture whose text MultiPSK had already shown, and our decoder reads it on his
+own radio. The open item that remains is the *opposite* direction: whether a real
+fldigi can copy *our* transmission, which is the sync-tones work and is
+untouched.
+
+**One genuine bug fixed upstream this week, and the fork's note about it was
+wrong.** `decode_snapshot` on the 0.13 base was recorded here as "a pre-existing
+fixture mismatch on this box, not ours". It was a real portability bug —
+fixtures pinning `f32::to_bits()` make the last bit of a float a property of
+the compiler and the platform libm. Reported as **#579**, fixed by **#581**
+(`f6323dca`) after jl1nie measured several architectures himself. The full
+entry is in the subtract section; the lesson is the one worth keeping.
+
 ## Session 2026-10-04, later: 1.9.18_brown, and what the release gate is for
 
 `v1.9.18_brown` is tagged and pushed (run `37238357892`). Three functional
@@ -84,11 +115,11 @@ were complete.
   `/tmp/opencode/fst4w-scratch/fst4w_probe.rs`. **An untracked file in
   `examples/` is not free** — `cargo test`, `cargo build --examples` and
   `--all-targets` all read it, and it is invisible to `git status` as a change.
-  The counter-example is `crates/sdroxide-ui/examples/qsl_card_probe.rs`, which
-  is **committed and meant to be there**: it writes a sample QSL card to
-  `/tmp/opencode/qsl_card_sample.png` (`cargo run -p sdroxide-ui --example
-  qsl_card_probe`). Keep it — see the next rule, which is why it earns its
-  place.
+  The shape to prefer is a committed probe that is **meant** to be there — one
+  that writes a sample of something the program draws, so the drawing can be
+  looked at. (`crates/sdroxide-ui/examples/qsl_card_probe.rs` was exactly that,
+  until the QSL card it drew was deleted on 2026-10-05 — see the note below for
+  the rule it was kept for.)
 - **A test that touches the machine it runs on is not a test.** `open_external`
   (the desktop's link/URL opener, added 2026-10-05 after eframe turned out to
   implement `open_url` **only in its web target**) was unit-tested by calling it
@@ -99,18 +130,18 @@ were complete.
   is what pressing the button is for. **When a function's whole job is a
   side effect on the world, split the decision from the effect and test the
   decision** — the effect cannot be asserted without doing it.
-- **Rendering an image and *looking at it* finds what tests do not.** The QSL
-  card (`crates/sdroxide-ui/src/qsl_card.rs`) passed all nine of its unit tests
-  while **three typed fields were missing from the output**, and the callsign
-  down the strip read `44DC` instead of `19DCG044`. Both were layout, neither
-  was arithmetic, and no assertion about buffer sizes, colours or encoding
-  could see them: the tests asked *whether a card came out*, never *where the
-  ink landed*. The two tests that now guard it (`every_field_typed_reaches_the_
-  card`, `the_whole_callsign_lands_on_the_strip`) count dark-pixel **bands** in
-  the rendered output, and both were verified to fail against the broken layout.
+- **Rendering an image and *looking at it* finds what tests do not.** A QSL card
+  built on 2026-10-05 passed all nine of its unit tests while **three typed fields
+  were missing from the output**, and the callsign down the strip read `44DC`
+  instead of `19DCG044`. Both were layout, neither was arithmetic, and no
+  assertion about buffer sizes, colours or encoding could see them: the tests
+  asked *whether a card came out*, never *where the ink landed*. Only rendering
+  it and looking found either. The card itself was **deleted the same evening**
+  (a QSL card is what a broadcaster sends *back*, not something we compose — see
+  the board), so there is no code guarding this now; the rule is what is kept.
   The general shape: **for anything drawn rather than computed, render it and
-  look at it** — and if the drawing is not worth looking at from a test, an
-  `examples/` probe that writes a file is nearly free.
+  look at it**, and when tests do guard it, count dark-pixel **bands** in the
+  output rather than asserting on a buffer.
 - **A new fork-only crate must be formatted when it is added.**
   `sdroxide-enigma` was committed unformatted (both `lib.rs` and a 100-line
   `ROTORS` table). The 2026-09-29 sweep made "every fork-only file is clean"
@@ -184,12 +215,13 @@ v1.9.13 was the first release to run that line at all. Fixed with a checkout of
 **`gh run rerun --failed` cannot recover a workflow bug**: a re-run executes the
 workflow *as it stood at the tag*, so a fix has to ship under a new tag.
 
-### 3. Olivia: FIXED, both directions, on `main` (2026-10-03) — one check left
+### 3. Olivia: receive FIXED and proven on the air; transmit unproven
 
-**Read this before touching Olivia.** It was "not the Olivia protocol" and is
-now the real thing in both directions. `sdroxide-dsp/src/olivia.rs` is still
-upstream's file (`4ab061fe`), but the fork has since rewritten the transform,
-the scrambler, the interleave **and the transmitter**. `5464e7a9` on `main`
+**Read this before touching Olivia.** It was "not the Olivia protocol" and the
+**receive** path is now the real thing, proven on a listener's own radio.
+`sdroxide-dsp/src/olivia.rs` is still upstream's file (`4ab061fe`), but the
+fork has since rewritten the transform, the scrambler, the interleave **and the
+transmitter**. `5464e7a9` on `main`
 (merged from the now-deleted `fork/olivia`) is the transmit half; `cd668ab5` is
 the receive half. Background, because the diagnosis is the useful part:
 
@@ -271,12 +303,35 @@ another station.** The open items, in the order they will bite:
    lock free-runs — which is precisely why the loopbacks pass while a real
    decoder may never lock. **This is the most likely reason a real fldigi decoder
    copies nothing, and it has nothing to do with polarity.**
-2. **No on-air proof of the polarity.** The decisive cheap test is not an over on
-   the air: capture a real fldigi/MultiPSK transmission on the RSP1 and compare
-   its per-symbol tone stream against ours for known text. That settles polarity
-   *and* shows the sync-tone frame we would have to add, and it needs nobody to
-   answer us.
+2. ~~**No on-air proof of the polarity.**~~ **GONE — supplied by a third party,
+   2026-10-05, and it settles item 2 completely.** See the entry below; read it
+   before touching polarity again.
 3. No frequency search, where fldigi searches ±8 tone spacings.
+
+**Read this before working on Olivia again: our receiver is now proven on the
+air, and our *transmitter* is not.** Those are opposite directions, and only the
+first has been shown. Fork discussion **#5** ("Olivia decoding", Kevin): he
+captured a real Olivia signal that MultiPSK copied, **with the text MultiPSK
+showed**, and our decoder reads it on his machine —
+
+> `32/1000 → "Wikipedia, the free encyclopedia that anyone can edit"`
+
+at 32 dB in 1000, i.e. a genuinely weak signal, not a strong one. That is the
+capture item 2 above asked for, it came from somebody with no stake in our
+reasoning about fldigi's source, and it is a **user-reported success on his own
+radio**, which no test in this tree can be. Polarity, the scrambler, the
+interleaver and the Walsh butterfly are settled; the earlier `cq_swnet.wav`
+recording settled them from our side and this confirms it from the air.
+
+**What that does *not* prove, and the distinction is the whole point:** our
+receiver locking on a real signal is the *receive* direction. It says nothing
+about whether a real fldigi decoder can copy *our* transmission, which is item 1
+— sync tones and a tail — and item 1 is untouched. Our block-grid lock free-runs,
+so we can read a signal that has no sync tones while emitting a signal that has
+none; both can be true at once, and only the second one is what "interop" means
+to a station on the air. **Do not report this as "Olivia works"**: what is proven
+is that we *receive* Olivia correctly. Nobody has yet decoded our transmission
+with fldigi, and that is the remaining open item.
 
 **On-air material, keep it.** `/tmp/opencode/cq_swnet.wav` is the one that
 decodes: 8 kHz mono, 50.9 s, Olivia 16/500, comb 1243.75 + k·31.25 Hz, 256
@@ -605,33 +660,55 @@ The operator's instruction, after a session lost a lot of time to 90-second poll
 loops: **check a run once per finished task, not in a loop.** A tag push is
 followed by other work; the run is checked when the next thing finishes.
 
-## The standing queue and how to check it (updated 2026-10-01)
+## The standing queue and how to check it (re-measured 2026-10-06)
 
 **Our open upstream PRs are the whole queue.** Track only these. Everything
 else on the upstream tracker belongs to the maintainer — do not triage or reply
 to new upstream issues we have no PR for.
 
-Nineteen open at this writing, all `CLEAN` and mergeable. **Five have since
-merged upstream (#613, #596, #572, #568, #561)** — see the 2026-10-02 session
-notes; their fork copies are reconciled in `8c398189`.
+**Eight open, re-measured 2026-10-06 — and five of the eight are `CONFLICTING`.**
+The earlier "nineteen open, all `CLEAN` and mergeable" is stale in both halves.
 
-- **#613** grid tracker — worked Maidenhead squares on a map. Upstream gets the
-  grid tracker only; the CB country mode stays on the fork.
-- **#612** LimeSDR Mini lower TX rates (issue #609).
-- **#611** NAVTEX AFC tracking (issue #608).
-- The rest of the queue: **#604** FT8 decode depth · **#603** contest logger ·
-  **#598** 2G ALE (draft) · **#597** JTTY · **#596** digi message buttons ·
-  **#586** FT8 signal subtraction · **#572** CW key as audio ·
-  **#569** CW keyer (draft) · **#626** CW engine side (draft) ·
-  **#568** Morse trainer · **#561** FSK441 TX ·
-  **#559** band-menu captions · **#557** recording silence split · **#554**
-  UVPacket (draft) · **#545** (tr)uSDX nG (draft) · **#537** band openings.
+| PR | | state | draft |
+|---|---|---|---|
+| **#626** | CW: iambic keyer on the engine, sending contacts | **CONFLICTING** | draft |
+| **#597** | Digi: JTTY | **CONFLICTING** | ready |
+| **#554** | UVPacket (draft) | **CONFLICTING** | draft |
+| **#545** | (tr)uSDX nG (draft) | **CONFLICTING** | draft |
+| **#537** | Band openings | **CONFLICTING** | ready |
+| **#598** | 2G ALE (draft) | MERGEABLE | draft |
+| **#559** | band-menu captions | MERGEABLE | ready |
+| **#557** | recording silence split | MERGEABLE | ready |
 
-**#573 is off this queue: superseded**, and do not rebase it — the panel and
-settings half it carried now stays on the fork (§10).
+**Eight of the queue have landed upstream and are already in our `main`** —
+verified by merge-commit ancestry (`git merge-base --is-ancestor <merge_sha>
+main`), *not* by the divergence count, which reads 0 and would have hidden it
+entirely: **#613** grid tracker (2026-10-01) · **#572** CW key as audio (10-01) ·
+**#568** Morse trainer (10-01) · **#561** FSK441 TX (10-01) · **#611** NAVTEX
+AFC (10-03) · **#612** LimeSDR Mini rates (10-03) · **#604** FT8 decode depth
+(10-03) · **#586** FT8 signal subtraction (10-03). **So every "the fork's copy
+drops out when these land" note below is now spent, not pending.** #603 and #569
+closed unmerged, which is what the notes already said of both (withdrawn;
+superseded by #626).
+
+**No maintainer ask is waiting on us.** All four open PRs carrying comments were
+answered and his last word on each is a confirmation: **#537** (2026-09-28)
+*"Both logic flaws fixed in `d9612883` — and thanks, they were real"*; **#557**
+(09-28) the hidden-tab gate tick, addressed in `c9d6589c`; **#626** *"The shape
+is right: the keyer belongs in the engine, contacts are the right thing to send
+rather than edges"*; **#559** carries only third parties (phsdv, kevin2008-01).
+Our upstream **#621** (Olivia) has **0 comments** four days on — per the standing
+rule, silence is not a prompt to re-ping.
+
+**The five `CONFLICTING` PRs are the one piece of real work here**, and the
+rebases are allowed (§"Keeping up with upstream"). Read each thread before
+rebasing: if he has commented on the old head, the post-force-push comment has to
+say how the rebase answers him, not merely that it happened. **#626 first** — it
+is the engine half of the shipped CW keyer (§10) and the only one where being
+behind is user-visible.
 
 **Upstream issues to read** are only those we have a PR for: #608→#611,
-#609→#612, #585→#613. Older mappings are in "Keeping up with upstream". We are
+#609→#612, #585→#613 — **all three now merged**, so that list is empty. We are
 also engaged with, but have no PR yet: **#577** K3 I.F. panadapter (diagnosis
 posted, awaiting the reporter), **#576** IC-7851 RTTY (awaiting rig details),
 **#595** Perseus SDR (needs a scope decision), **#592** Windows (blocked on a
@@ -648,10 +725,40 @@ failing DLL name or a Windows/Radeon repro).
 4. New upstream issues: look only at ones we have not seen, or ones we already
    have a PR connected to. Skip the rest without comment.
 
-**Fork Discussions to watch:** **#4** "Settings saved to the saved profile"
-(kevin2008-01) — the client-screen feature; active, watch for follow-ups.
-**#3** "Over heating" — resolved (another program's SoapySDR, not us), no
-action. **#2** welcome thread.
+**Fork Discussions, re-counted 2026-10-06 — there are thirteen, not three.**
+This is the support channel now that downloads are growing, so answer here
+rather than opening an upstream issue. Issues are disabled on the fork, so a
+discussion is the only place a user can be answered.
+
+- **#4** "Settings saved to the saved profile" (kevin2008-01, 22 comments) —
+  the client-screen feature, which **is fixed** (see the store section below).
+  Kevin reports it *"Persistant on 1.9.18"* and asks for key/mouse/page
+  assignments to be saveable per profile — which already exists behind
+  Settings → UI → "Screen settings on" = **On the server** plus the bindings
+  opt-in. **Both his reports are on a release that predates the fix; 1.9.19
+  carries it.** Needs a reply that says which build to run, not "fixed".
+- **#5** "Olivia decoding" (10 comments) — **resolved, and it is the best
+  evidence in the fork**: Kevin sent a known-text capture our decoder reads
+  correctly (§3). Worth keeping the thread for that reason alone.
+- **#8** "FT8/FT4/FT2 problem 1.9.18" (6) — Kevin closed it himself:
+  *"Thx fixed. Tried it on another machine, it works fine."* No action.
+- **#9** "UI phone problem" (3) — Kevin: *"Persistant on 1.9.18"* with a fresh
+  screenshot. Same trap as #4: the responsive phone menu is in 1.9.19. **The
+  phone *crash* is still open and must never be described as fixed** — ask for
+  the browser console output if it recurs on 1.9.19.
+- **#7** SSTV relay (5) — answered: the **Re-upload** chip shipped in 1.9.19.
+- **#13** non-upstream build targets (armhf &c) · **#12** AI-assisted upstream
+  dependency PRs · **#11** ESP32 as an RX · **#10** replay recorded audio —
+  **all new, zero comments, no answer yet.**
+- **#3** "Over heating" — resolved (another program's SoapySDR, not us).
+  **#6** "My help for testing" · **#2** welcome thread.
+
+**The trap worth naming, because it is the same one as the QSL card and #573.**
+Kevin says "persistant" against a version, and the honest answer is which build
+carries the fix. Telling a user his report is fixed when he is running the
+release *before* the fix teaches him that our "fixed" is worth nothing — and he
+has already had to say "persistant" twice. **Ask which build he is on before
+answering, and name the tag that carries the change.**
 
 ## What this repository is
 
@@ -3525,15 +3632,77 @@ His three tests, on both bases: `short_buffers_do_not_panic` and
 0.0 dB) and pass with the fix; `full_slot_output_is_pinned` passes on both,
 which is its whole point. Tier A+B on the 0.11 base: **103 test binaries, 0
 failures**. On the 0.13 base the same suite introduces no new failures —
-`decode_snapshot` fails, but it fails **identically on clean `main`**, and the
-decode output was diffed between `main` and the branch and is byte-identical
-(pre-existing fixture mismatch on this box, not ours). SIC-specific gates green
+`decode_snapshot` failed there, but that failure was **a real upstream bug,
+reported by us and now fixed** (see the `decode_snapshot` entry below); it was
+never "a fixture mismatch on this box". SIC-specific gates green
 on the 0.11 base: `qso3_full_parity_meets_wsjtx_golden_floor`, the three
 `sic_early_*` tests, `ft4_subtract_pipeline`. Fork side:
 `cargo check --workspace --all-targets` silent, `cargo test -p sdroxide-digi
 --release` green (513 in the main binary).
 
-**Exposure is FT8 only in practice.** FT8's dispatched slot is 15.0 s = 180 000
+### The `decode_snapshot` failure was an upstream bug, and it is fixed
+
+The one test that failed on the 0.13 base was **not** a quirk of this box, and
+an earlier note here said so wrongly ("pre-existing fixture mismatch on this
+box, not ours"). It was a genuine portability bug in mfsk-core's own test, found
+because our box is one of the machines it breaks on.
+
+**What it was.** `decode_snapshot`'s fixtures pin `f32::to_bits()` for `freq_hz`,
+`dt_sec`, `snr_db` and `sync_score` and compare with `==`, so the last bit of a
+float becomes a property of the *compiler's* codegen and the *platform's* libm
+rather than of the decoder. On this box (CachyOS, glibc 2.44, Ryzen 7 7435HS)
+seven tests fail: `ft4_request_shapes`, `ft8_request_shapes`,
+`iq_receiver_rows`, `q65_request_shapes`, `via_decoder::{ft4,ft8,q65}`. Same
+messages, same order, every integer field identical. Re-measured in strict mode,
+the deviation is **four rows across four fixtures** — wider than the original
+report claimed, which had diffed `ft8_default` alone and called it "two `snr_db`
+rows":
+
+| fixture | row | column | fixture → now |
+|---|---|---|---|
+| `ft8_default` | 4 | `snr_db` | −9.148531 → −9.148533 (2 ULP) |
+| `ft4_default` | 5 | **`freq_hz`** | 1909.7092 → 1909.7094 |
+| `q65_30a_averaged` | 0 | `snr_db` | −20.01653 → −20.016531 (1 ULP) |
+| `iq_direct_ft8` | 14 | `snr_db` | −0.09790039 → −0.097904205 |
+
+All four sit far inside `Tol` (the worst is `freq_hz` 1.9e-4 Hz against a
+5e-3 Hz limit, ~26× margin), so this changes nothing about the fix — but it does
+mean **"freq_hz is always identical here" was an over-read of one fixture**, and
+the note is worth having right before anyone compares a machine against it.
+
+**Why it was worth filing rather than ignoring.** The obvious read is "our
+toolchain, our problem", and that read is wrong twice: by jl1nie's measurement
+1.98.1 and 1.99.0 give byte-identical output on both the Zen 2 and the M5, and
+the SNR path calls `f32::log10`/`powf`, which are **platform libm**, not
+repository code — Apple against glibc differ on 5.9 % of `log10` inputs. The same
+reasoning as the Olivia polarity entry applies — the answer was in the artifact
+only a second machine could supply.
+
+**Reported as [#579](https://github.com/jl1nie/mfsk-core/issues/579), fixed by
+jl1nie in [#581](https://github.com/jl1nie/mfsk-core/pull/581)** (`f6323dca`,
+merged 2026-10-05, into 0.13.1). **He wrote the fix himself** after we offered
+to send data, because he wanted the limits to come from his own measurements on
+several architectures — which is the right call and worth remembering as the
+shape of a good response: take the credit for the diagnosis, keep the work. Rows
+are compared within `Tol` (`freq_hz` 5e-3 Hz, `dt_sec` 1e-5 s, `snr_db` 0.1 dB,
+`sync_score` 1e-3 relative, `hard_errors` ±2, each 2.5-5× the largest measured
+gap); messages, row count, order and `pass` stay exact;
+`MFSK_SNAPSHOT_STRICT=1` restores bit-exactness and is deliberately **not** set
+in CI, because "a runner image that updates its glibc" is exactly the failure.
+
+**Verified here (2026-10-05):** `main` at `f6323dca` gives **15 passed, 0
+failed**, `MFSK_SNAPSHOT_REPORT=1` prints nothing (every column inside `Tol`),
+and `MFSK_SNAPSHOT_STRICT=1` fails the same seven tests with the same 2-ULP
+`snr_db` row — so the tolerance is what fixed it, not a coincidence. Our
+`rust-toolchain.toml` pin is **not** honoured on this box (Arch's rustc, no
+rustup), so that run used 1.99.0, which is a second independent machine behind
+the "toolchain is not the variable" claim. Probe hashes and `ldd --version`
+(glibc **2.44**, against their 2.35 reference) posted to #579 at his request.
+
+**For the fork, the practical consequence: our vendored 0.11 copy is
+unaffected** — `vendor/mfsk-core/tests/decode_snapshot.rs` does not exist on
+that base at all, so the test cannot be failing there — and a future re-vendor
+to 0.13+ should *not* treat `decode_snapshot` as a known-bad local failure. FT8's dispatched slot is 15.0 s = 180 000
 samples (`mode.rs:848`) against `nframe` = 79 × 1920 = 151 680, so a slot has
 to be **> 0.7 s short** to reach this at all, and `check_slot_arrived_whole`
 only *warns* at 0.95 (`controller.rs:772`) without suppressing the dispatch —
