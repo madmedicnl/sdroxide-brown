@@ -1122,6 +1122,15 @@ impl DigiEngine for CwController {
             }
             self.arm_keyer_impl();
         }
+        // Latch the edges **here**, where a change of contact is an event, rather
+        // than leaving it to the next per-sample poll: the transmit path polls
+        // about every millisecond, so a tap whose press and release both arrive
+        // inside one engine loop would be sampled only in its released state and
+        // lost. It goes after the arming above because on a first press there
+        // was no keyer to latch into until that line ran.
+        if let Some(keyer) = self.keyer.as_mut() {
+            keyer.contact(dot, dah);
+        }
         // A paddle press from idle starts the over, exactly as `key_down` does
         // for a straight key — and it cannot wait for the transmit path to
         // notice, because the keyer branch that starts an over runs only while
@@ -1274,6 +1283,34 @@ mod tests {
         assert!(c.keyer.is_none(), "the keyer must not be armed on a refusing rig");
         assert!(!c.straight, "and the hand-key path stays refused");
         assert!(!c.tx_active, "a refused rig must not be keyed");
+    }
+
+    /// A tap must not be lost when press and release arrive between two polls.
+    ///
+    /// The transmit path polls the keyer about every millisecond, so a tap
+    /// whose two commands land inside one engine loop is sampled only in its
+    /// released state. The latch is what carries the edge to a poll that does
+    /// happen — and the edge has to be latched where the change is an *event*,
+    /// not where it is sampled.
+    #[test]
+    fn a_tap_survives_press_and_release_between_two_polls() {
+        let mut c = CwController::new(cfg(), 48_000.0, None);
+        // Press and release with nothing rendered in between: no poll can ever
+        // see the contact closed.
+        c.set_cw_contacts(true, false);
+        c.set_cw_contacts(false, false);
+        // Enough audio for the element *and* its gap: at 20 wpm a dit is 60 ms,
+        // and the read-back only prints a character once the gap that ends it
+        // has been seen.
+        let mut out = [0.0f32; 2048];
+        for _ in 0..16 {
+            c.fill_tx_block(&mut out);
+        }
+        assert!(
+            c.sent_text.contains('E'),
+            "a tap is one dit and must send its character: got {:?}",
+            c.sent_text
+        );
     }
 
     /// The straight key must still work after a paddle has been used.
