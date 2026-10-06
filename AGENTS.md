@@ -3918,6 +3918,16 @@ body as a follow-up rather than bundled.
   There is no `cargo-audit`/`cargo-deny` config; if one is added, those two
   GHSA ids go in its ignore list with that note, or the same reasoning goes
   upstream where the dependency is shared.
+- **`rustls` 0.23.43 → 0.23.45 (`0ebd2082`, 2026-10-06), and it was a real one.**
+  `GHSA-2mjx-qc3c-rqvc` — TLS 1.3 handshake messages accepted across encryption
+  level boundaries, vulnerable `>= 0.23.13, < 0.23.45`. Reached through
+  **ewebsock** (the `wss://` remote client) and **ureq** via `sdroxide-config`,
+  so it was a protocol-boundary bug on a link we do not control, not a
+  not-used dismissal like the tract pair. **The lesson is the one worth
+  keeping:** the alert showed up in the *push output*, which is the only place
+  it is ever visible — nothing in the tree mentions it, and all three of these
+  had gone unread. `gh api repos/<owner>/<repo>/dependabot/alerts` lists them; a
+  lockfile-only bump is the fix, and the watcher is not installed.
 
 ## The screen-settings store: the cause is found, and it is FIXED (2026-10-02, last)
 
