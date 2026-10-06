@@ -599,7 +599,7 @@ key down and up **inside one 50 ms block** and pins *where* the silence starts �
 the property a per-block read cannot have. Its pair
 `the_plain_manual_block_still_keys_for_its_whole_length` pins the straight
 path, so the two distinguish each other rather than both passing on anything.
-22 CW tests + 3. `skim_window` is genuinely red, not a flake — see the build
+22 CW tests + 3. `skim_window` is load-sensitive, not red — see the build
 and test section.
 
 **The bench: PASSED (2026-10-02), and the setting is not the one to assume.**
@@ -3541,21 +3541,41 @@ window set ever grows past one.
   workspace run but pass alone: `sdroxide-deepcw`, and the
   `sdroxide-tci`/`icomnet_source` ones above.
 
-  **`skim_window` is NOT one of those — it is genuinely red, alone and in a
-  full run** (measured 2026-10-05, and identically on `v1.9.16_brown`,
-  `v1.9.17_brown` and `v1.9.18_brown`, so it predates every commit in the
-  1.9.19 release and is not a regression from any of them). Do not read its
-  failure as this session's work and do not "fix" it on release day. The
-  failure names its own half: the station on 14.060 MHz **is** spotted,
-  hundreds of times, at the right frequency — so the window-following the
-  test exists to check works — but never with `callsign == Some("W1AW")`, so
-  it is the skimmer's CW *decode* that is not producing the callsign. An
-  earlier note here claimed it "flakes under a parallel run and passes
-  alone"; that was wrong, and it is corrected above because a false claim
-  about a known-flaky test costs the next session an hour of bisecting
-  nothing. The CW path it needs (`keyed_cw` builds a real `CwTx` envelope)
-  has no off-air recording to check against, so this wants a diagnosis of
-  its own, not a release-day patch.
+  **`skim_window` is load-sensitive, not red — and the note that called it red
+  was itself the error.** Re-measured 2026-10-06:
+
+  - Unloaded, this machine: **passes in ~9 s against a 45 s deadline, 12 of 13
+    runs.** The thirteenth hit the deadline.
+  - Under load (twelve busy loops on a 16-core box): **3 of 3 runs fail**, every
+    one at the full 45 s.
+
+  And it is the *same code*. `crates/sdroxide-radio/tests/skim_window.rs` is
+  **byte-identical** between `v1.9.18_brown` and now, and the skimmer's source
+  is unchanged too — so the tag it was called "genuinely red" on behaves exactly
+  as this one does. **The earlier note saying it "flakes under a parallel run and
+  passes alone" was right, and the correction that replaced it was wrong.** That
+  correction cost this session the hour it was written to save.
+
+  **Why it flakes, and it is not the decoder.** The skimmer takes IQ over a
+  **bounded channel and drops what it cannot keep up with** — the test's own
+  comment says so. Carrier energy survives dropped IQ; character decode does
+  not. So under CPU pressure the station is still spotted and the callsign never
+  arrives, which is the exact shape the failure reports: on a failing run,
+  **~110 spots, every one at 14.0599–14.0600 MHz, and not one with a callsign.**
+
+  **So window-following works.** Those spots can only exist if the window moved
+  onto the view and stayed there, which is what the test exists to check. What
+  fails is the claim the test attaches to the *text decode*, and that belongs to
+  the skimmer's own tests rather than to a window-placement one — coupling the
+  two is why this fails in any parallel workspace run.
+
+  **No fix is recorded here, deliberately.** More headroom for the worker, or a
+  larger channel, does nothing under sustained saturation, and lowering the
+  test's 400 kHz span would weaken the premise it was chosen for. The defensible
+  change is to split the assertion — a spot at the right frequency as the window
+  test, the callsign as a separate strict one — and weakening an assertion is not
+  something to do on the way past. **Read a failure here as "the machine was
+  busy", not as the skimmer being broken.**
 
 ## The bench
 

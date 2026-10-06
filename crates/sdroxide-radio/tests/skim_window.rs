@@ -11,6 +11,15 @@
 //! keyed well away from the hardware centre, the client says what it is looking
 //! at, and a spot has to come back with the callsign on it — which it can only
 //! do if the window was placed on the view, mixed onto it, and left there.
+//!
+//! **This test needs a quiet machine, and that is a property of the chain and
+//! not of the decode.** The skimmer is fed IQ over a bounded channel and drops
+//! what it cannot keep up with, so under CPU load the carrier is still spotted
+//! (energy survives the drops) while the callsign never is (keying does not).
+//! Measured 2026-10-06: twelve of thirteen runs pass in ~9 s unloaded; three of
+//! three fail at the full 45 s deadline under twelve busy loops on a 16-core
+//! box. A failure here is not evidence that the skimmer is broken — see
+//! AGENTS.md, "Build and test", before bisecting anything.
 
 use std::f64::consts::TAU;
 use std::sync::{Arc, Mutex};
@@ -203,9 +212,15 @@ fn a_station_on_the_visible_part_of_a_wide_span_is_skimmed() {
         std::thread::sleep(Duration::from_millis(50));
     }
     panic!(
-        "the station on {:.3} MHz was never spotted — the front end is centred on {:.3} MHz, so \
-         the skim window has to have followed the view to reach it. Spots seen: {seen:?}",
+        "no spot on {:.3} MHz carried the callsign: the front end is centred on {:.3} MHz, so \
+         the skim window has to have followed the view to reach it. {} spot(s) were seen. **If \
+         those are at the right frequency and only the callsign is missing, this is the \
+         load-sensitivity described in AGENTS.md, not a broken skimmer** — the skimmer takes IQ \
+         over a bounded channel and drops what it cannot keep up with, carrier energy survives \
+         the drops and character decode does not, so a busy machine spots the station and never \
+         decodes it. Re-run it on a quiet machine first. Spots: {seen:?}",
         STATION / 1e6,
         DEV_CENTER / 1e6,
+        seen.len(),
     );
 }
