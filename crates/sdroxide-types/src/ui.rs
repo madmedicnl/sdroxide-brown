@@ -561,11 +561,15 @@ pub struct UiSettings {
     /// dial by exactly the step. A dial already on the grid moves by the step,
     /// so only the first press from an untidy frequency differs.
     ///
-    /// Off by default, and deliberately so: the step buttons move by exactly
-    /// the step, and a press that lands somewhere else is a second, invisible
-    /// edit — see `tune_step_row`. On, it is the touch-screen habit of tidying a
-    /// dial left anywhere before working down a band (issue #422). Only
-    /// meaningful with [`Self::tune_step_buttons`].
+    /// **On** by default. It shipped off, on the argument that the step buttons
+    /// move by exactly the step and a press that lands somewhere else is a
+    /// second, invisible edit — see `tune_step_row`. That is the tidy-dial
+    /// argument, and the untidy dial is the one that hurts: a frequency typed
+    /// or panned to lands on 27 265 436 and every press after that carries the
+    /// odd 436 Hz around the band. On, the first press tidies it and the rest
+    /// move by the step as usual, which is the touch-screen habit it was added
+    /// for (issue #422, and asked for again as a default on a phone — fork
+    /// discussion #9). Only meaningful with [`Self::tune_step_buttons`].
     pub tune_step_round_first: bool,
     /// Whether the waterfall's history is drawn through a smoothing filter.
     ///
@@ -852,7 +856,7 @@ impl Default for UiSettings {
             // 1 kHz: the round step the operators who asked for this tune in,
             // on a band where the stations sit 3 kHz apart.
             tune_step_hz: 1_000.0,
-            tune_step_round_first: false,
+            tune_step_round_first: true,
             spectrum_detail: SpectrumDetail::Auto,
             spectrum_gradient: true,
             gradient_top: [64, 0, 0],   // dark red
@@ -1049,6 +1053,22 @@ pub struct ClientScreen {
     pub smeter_style: SmeterStyle,
     pub map_cities: bool,
     pub simple_ui: bool,
+    /// Keep the tuned frequency in the middle of the panadapter.
+    ///
+    /// **Carried here as a plain value, not as part of `UiSettings`**, because
+    /// the panadapter's own settings live in the client's `ViewState` — which
+    /// this crate cannot name. `from_settings` cannot see it, so it fills the
+    /// default and the client overwrites it from the view it has; the same
+    /// number comes back and the client puts it into the view again. The point
+    /// is that a profile can hold it at all: reported as settings that "are
+    /// never remembered" (fork discussion #9), because the browser's own copy
+    /// is cleared when a phone sleeps and nothing carried them to the server.
+    pub center_on_vfo: bool,
+    /// The panadapter FFT size — `ViewState::fft_size`, carried for the same
+    /// reason as [`Self::center_on_vfo`].
+    pub fft_size: u32,
+    /// Whether the first press of the step row tidies the dial onto the step.
+    pub tune_step_round_first: bool,
 }
 
 impl Default for ClientScreen {
@@ -1084,6 +1104,11 @@ impl ClientScreen {
             smeter_style: s.smeter_style,
             map_cities: s.map_cities,
             simple_ui: s.simple_ui,
+            // The panadapter's own, filled by the client from its `ViewState`
+            // — see the field. Defaults here are the view's own.
+            center_on_vfo: true,
+            fft_size: 4096,
+            tune_step_round_first: s.tune_step_round_first,
         }
     }
 
@@ -1114,6 +1139,7 @@ impl ClientScreen {
         s.smeter_style = self.smeter_style;
         s.map_cities = self.map_cities;
         s.simple_ui = self.simple_ui;
+        s.tune_step_round_first = self.tune_step_round_first;
     }
 }
 

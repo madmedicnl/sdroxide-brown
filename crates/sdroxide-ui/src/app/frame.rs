@@ -1506,6 +1506,8 @@ impl SdroxideApp {
                         // find the picker, which is exactly how it reached a
                         // tester on three releases.
                         settings.apply_to(&mut self.ui_settings);
+                        self.view.center_on_vfo = settings.center_on_vfo;
+                        self.view.fft_size = settings.fft_size;
                         self.client_settings_stored = Some(settings);
                     }
                     // `has_stored == false` is a name-only offer: the profile
@@ -2297,7 +2299,12 @@ impl SdroxideApp {
     /// says who decided it, and the row says afterwards what it did.
     pub(in crate::app) fn save_screen_to_profile(&mut self) {
         let profile = self.client_settings_from.clone().flatten();
-        let screen = sdroxide_types::ClientScreen::from_settings(&self.ui_settings);
+        let mut screen = sdroxide_types::ClientScreen::from_settings(&self.ui_settings);
+        // `from_settings` cannot see these — they are the panadapter's own, in
+        // `ViewState`, which this crate owns and `sdroxide-types` does not. So
+        // the client fills them here and puts them back on the way in.
+        screen.center_on_vfo = self.view.center_on_vfo;
+        screen.fft_size = self.view.fft_size;
         self.ctrl.send_client_settings(profile.clone(), screen);
         self.client_settings_stored = Some(screen);
         self.client_settings_status = Some(match &profile {
@@ -2438,6 +2445,8 @@ impl SdroxideApp {
         match self.client_settings_stored.clone() {
             Some(stored) => {
                 stored.apply_to(&mut self.ui_settings);
+                self.view.center_on_vfo = stored.center_on_vfo;
+                self.view.fft_size = stored.fft_size;
                 crate::app::persist::persist_ui_settings(&self.ui_settings);
                 self.client_settings_status =
                     Some("back to the look stored for this profile".into());

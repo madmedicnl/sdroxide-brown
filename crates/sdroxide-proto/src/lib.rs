@@ -1709,7 +1709,17 @@ use sdroxide_types::{
 /// the window. `input.json` is self-describing JSON, so a stored binding naming
 /// the removed action would fail the whole struct; the loader now keeps the
 /// bindings it can read and names the ones it drops. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 193;
+/// v194: `ClientScreen` gains three fields on its tail — `center_on_vfo`
+/// (bool), `fft_size` (u32) and `tune_step_round_first` (bool). These are the
+/// panadapter's *view* settings, which live in the client's `ViewState` and
+/// were therefore never carried by a profile: a phone that lost its browser
+/// storage lost them for good, and no server copy could bring them back
+/// (fork discussion #9 — "CT and FFT are never remembered"). `ClientScreen`
+/// rides `ServerMsg::ClientSettings` whole, so this is the same appended-fields
+/// break as every version before it. The first two are filled by the client
+/// from `ViewState`, since `sdroxide-types` cannot name that type. A downstream
+/// (fork) change, appended last.
+pub const PROTO_VERSION: u16 = 194;
 const VERSION_BYTE: u8 = 0x13;
 
 #[derive(Debug, thiserror::Error)]
