@@ -2187,7 +2187,7 @@ pub struct DigiConfig {
     /// behaviour otherwise.
     #[serde(default)]
     pub text_macros: Vec<CwMacro>,
-/// FT8: how hard the decoder works for weak signals — see [`Ft8Depth`].
+    /// FT8: how hard the decoder works for weak signals — see [`Ft8Depth`].
     /// The plain single-pass result is always emitted first whatever this says,
     /// so it governs only the extra, subtracting batch.
     #[serde(default)]
@@ -2405,7 +2405,7 @@ impl Default for DigiConfig {
             fst4_period: crate::Fst4Period::P60,
             q65_mode: crate::Q65Mode::A30,
             fsk441_period: crate::Fsk441Period::P30,
-ft8_depth: Ft8Depth::default(),
+            ft8_depth: Ft8Depth::default(),
             cw_key_mode: CwKeyMode::IambicB,
         }
     }
