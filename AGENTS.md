@@ -2924,6 +2924,16 @@ note and were rendered from a separate HTML source; leave them alone.)
    same version rather than an upgrade. **The Windows `UpgradeCode` is
    fixed** (see "The Windows installer is its own product"), so a new version
    is what an upgrade keys on — re-tagging the same version does not.
+**The entry's shape: `### Fixed` / `### Added` / `### Changed` / `### Not
+proven`.** The 1.9.20 and 1.9.21 entries were written as thematic prose instead —
+that style came in with those two and is not this changelog's, so it read as a
+revert. And the last heading is **`Not proven`, never `Not fixed`**: everything
+in a build has passed its tests or it would not be in the build, so *"not fixed"*
+asserts a breakage that is usually not there. A feature that is present,
+tested and simply untried on the air is **not proven**; a bug that was reported
+and never reproduced here is **not proven** too. The operator's framing, and it
+is the right one: *"we are not shipping something knowingly broken."*
+
 1b. **Write the changelog entry** — in `CHANGELOG.md`, rename `## [Unreleased]`
    to `## [X.Y.Z_brown] - <date>` (the date the tag will carry) and add a fresh
    empty `## [Unreleased]` above it; commit. `release.yml` uses that section as

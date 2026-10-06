@@ -25,7 +25,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   in pure Rust; DAB+ hands its Access Units to the same **faad2** the DRM
   receiver already carries. `Mode::Dab` is appended to the mode enum and the
   whole thing is behind one switch, `sdroxide_dab::DAB_ENABLED`.
-  **It is experimental and not proven on air** — see *Not fixed* — and the
+  **It is experimental and not proven on air** — see *Not proven* — and the
   chip's hover says what it takes: about **3 Msps** of front-end bandwidth
   before there is any audio, because at the 1.536 MHz an ensemble occupies the
   receiver sits on its ADC floor and drops samples, and a DAB decode needs a
@@ -64,29 +64,31 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   the 1.9.21 entry below for the four faults behind the first and the two
   behind the second.
 
-### Not fixed
+### Not proven
 
-- **DAB is not proven on air.** Live, the lane syncs and decodes **no FIBs**,
-  so no ensemble and no audio, while the same signal replayed from a file
+- **DAB has not been proven on air.** Live, the lane syncs and decodes **no
+  FIBs**, so no ensemble and no audio, while the same signal replayed from a file
   decodes completely — 207 frames, 2484 FIBs and 16 services on a captured
-  channel 7D. That puts the fault in the engine's front end in front of the
-  decoder, not in the decoder, and the next experiment is written down. It is
-  enabled anyway so it can be tried, and it is the one thing in this release
-  that is not finished.
-- **The landscape layout for a short wide screen** is still open. A phone held
-  sideways now gets its spectrum, but the panel under it is built for a tall
-  screen and wants reflowing rather than fixing.
+  channel 7D. That places it in the engine's front end in front of the decoder
+  rather than in the decoder, and the next experiment is written down. It ships
+  enabled so it can be tried, and it is the one part of this release that is not
+  finished.
+- **The landscape layout is not done.** A phone held sideways gets its spectrum
+  now, but the panel under it is built for a tall screen and wants reflowing
+  rather than fixing.
 - **No Olivia transmission has been copied by another program.** The receive
   side is proven on the air; the transmit side is not, and the probe that
-  settles it (`olivia_tx_probe`, which writes exactly what we would send) has
-  not been run through fldigi or MultiPSK.
-- **The 1.9.17 phone crash is still open**, and has never been reproduced on
-  the bench. If it recurs, the browser console output is what is needed.
-- **The skimmer does not read a callsign off a CW signal** in its own test. The
+  settles it — which writes exactly what we would send — has not been run
+  through fldigi or MultiPSK.
+- **The 1.9.17 phone crash has never been reproduced here.** Two regression
+  tests drive a whole frame off-screen at the two reported geometries and pass,
+  so the layout is sound at those sizes and that says nothing about the crash.
+  If it recurs, the browser console output is what is needed.
+- **The skimmer's CW callsign is unproven under load** rather than wrong. The
   station is spotted at the right frequency — so the window-following works —
-  but the callsign never arrives. It is load-sensitive rather than broken: it
-  passes unloaded and fails under load, because the skimmer drops IQ it cannot
-  keep up with. Left alone rather than patched blind.
+  and the callsign decodes on an idle machine. Under load the skimmer drops the
+  IQ it cannot keep up with, and character decode does not survive that where
+  carrier energy does.
 
 ## [1.9.21_brown] - 2026-10-06
 
@@ -146,7 +148,7 @@ could not hear anything:
   read "Save picture" while saving *and* opening a mail composer, with a tooltip
   that already admitted it.
 
-**Not fixed:** the 1.9.17 phone crash is untouched, and the landscape *layout*
+**Not proven:** the 1.9.17 phone crash has never been reproduced, and the landscape *layout*
 for a short wide screen is still open. No Olivia transmission has yet been copied
 by fldigi or MultiPSK — the probe stays the way to settle that.
 
@@ -214,7 +216,7 @@ a smaller version of the same code.
 - Olivia's transmitter no longer reports a start tone as sent text, and a
   configuration write that changes nothing the keyer sends no longer disturbs it.
 
-**Not fixed, and not claimed to be:** the 1.9.17 phone crash is still open, and
+**Not proven, and not claimed otherwise:** the 1.9.17 phone crash has never been reproduced, and
 no Olivia transmission has yet been copied by fldigi or MultiPSK — the probe is
 how that gets answered, and it is answered off the air.
 
@@ -341,7 +343,7 @@ how that gets answered, and it is answered off the air.
   transform is now sized from the frame rather than from the buffer that
   happened to be handed in.
 
-### Not fixed
+### Not proven
 
 - **The 1.9.17 phone crash is still open.** The *layout* fault behind it is
   addressed (see the phone entry above), but the crash itself has never been
