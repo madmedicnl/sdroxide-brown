@@ -13,6 +13,74 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [1.9.20_brown] - 2026-10-06
+
+The CW keyer review, and the end of the one thing on Olivia nobody had been able
+to test. Six defects the maintainer found in the engine-side CW keyer are fixed,
+**all six of which were live in this build too** — the review was written against
+a smaller version of the same code.
+
+- **A paddle press from idle now starts an over.** It did not: the keyer's first
+  element was generated and there was nothing to carry it. `set_cw_contacts` had
+  **no test at all**, which is why it went unnoticed — every keyer test drove the
+  block renderer, the one path that cannot show this. A press also restarts the
+  idle countdown and clears the transmit watchdog, as it always should have.
+- **A client that disconnects mid-press no longer keys a carrier by itself.**
+  The straight key and the paddle are different things — one is a down *edge*,
+  the other is *closed contacts* — and only one was being released. Because the
+  lost-key-up cap deliberately does not apply to a keyer (holding a paddle
+  *should* send indefinitely), that was not a truncated over; it was a carrier
+  keyed by a client that no longer existed.
+- **An abort releases the contacts it was holding**, so the keyer cannot begin
+  the next over with no press at all. The keyer itself stays armed: it is a
+  setting, not a transmission, and a real iambic keyer is never "disarmed"
+  between words. Turning **hand-keying off** — the KEY chip, or a change of speed
+  or iambic mode — *does* now put it down, which is what stops the straight key
+  going dead once a paddle has been used.
+- **A rig that keys itself is refused before the keyer is built**, not after.
+  Arming first left a keyer standing on a rig that will never key it, held by
+  whatever contact arrived, with the only code that releases a key being the
+  straight path that rig had just refused.
+- **A quick tap is no longer lost.** A press is an event and the keyer is
+  sampled once per audio sample, so a press and release arriving together — a
+  tap, which is the element a CW operator sends most often — was sampled only in
+  its released state. The edge is now latched where the change happens, and a
+  transmitted reset clears it so an abort cannot re-key what it released.
+- **Iambic mode B is full squeeze memory**, which turns out to be a claim about
+  the *release* and not the press. Letting go of one paddle mid-squeeze now
+  leaves it remembered, so the trailing element is sent instead of the squeeze
+  degenerating into dits for ever. Mode A is deliberately unchanged.
+
+### Olivia can be tested without an over
+
+- **Olivia's opening bracket is transmitted**: the pair of band-edge tones fldigi
+  brackets every transmission with, on by default there, followed by one idle
+  character. The tones sit **half a tone spacing outside** the tone bank, so they
+  bracket it, each quarter is ramped so the four tone changes do not click, and
+  the length comes from fldigi's own block size rather than from our sample rate.
+- **And so is its closing bracket** — the same tones again, then a short
+  silence. This needed a change to when the transmit path stops asking for audio,
+  because anything generated after the last character was never played at all.
+- **A probe writes out exactly what we would send.**
+  `cargo run -p sdroxide-dsp --example olivia_tx_probe -- "CQ CQ DE W1AW" out.wav`
+  Open that in **fldigi** or **MultiPSK** and what it decodes is what a station
+  would have copied — with nobody's air time spent and nobody else needed at the
+  other end. **Receiving was already confirmed off the air** (discussion #5);
+  this is how the other direction gets tested.
+
+### Housekeeping
+
+- **The QSL card is gone.** A card is what a broadcaster sends *back*; composing
+  one duplicated the half of the loop we already had, and did it on the wrong
+  side of it.
+- Olivia's transmitter no longer reports a start tone as sent text, and a
+  configuration write that changes nothing the keyer sends no longer disturbs it.
+
+**Not fixed, and not claimed to be:** the 1.9.17 phone crash is still open, and
+no Olivia transmission has yet been copied by fldigi or MultiPSK — the probe is
+how that gets answered, and it is answered off the air.
+
+
 ### Fixed
 
 - **Buttons that open a link now open it on the desktop.** eframe implements
