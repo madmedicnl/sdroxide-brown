@@ -5344,9 +5344,12 @@ impl SdroxideApp {
         // capability flag for it, and inventing one would mean a wire-format
         // change for something the frames themselves already answer.
         let has_wide = self.wide_frame.is_some();
-        // A phone draws the waterfall alone, so the two chips that choose what
-        // else is drawn have nothing to control there.
-        let picks_layers = !crate::layout::tier(ui.ctx()).waterfall_only();
+        // A narrow window draws the waterfall alone, so the two chips that
+        // choose what else is drawn have nothing to control — until the
+        // operator hides the waterfall, at which point the spectrum is what is
+        // drawn and its chip belongs on the strip again.
+        let picks_layers =
+            !crate::layout::panadapter_waterfall_only(ui.ctx()) || !self.view.waterfall_visible();
         let simple = self.ui_settings.simple_ui;
         if !simple {
             self.solar_button(ui, extra);
@@ -5451,11 +5454,15 @@ impl SdroxideApp {
     /// Its own function because the DISP menu has to inline it rather than
     /// open it as a popup, for the reason given on [`Self::skimmer_controls`].
     fn panadapter_controls(&mut self, ui: &mut egui::Ui) {
-        // A phone draws the waterfall alone: there is no spectrum line to
-        // switch on, to peak-hold, or to slow down, so its box is left out —
-        // and the detail row, which sizes both layers, moves into the box that
-        // is still there rather than going with it.
-        let picks_layers = !crate::layout::tier(ui.ctx()).waterfall_only();
+        // A narrow window draws the waterfall alone — see
+        // `layout::panadapter_waterfall_only` — so the spectrum's own controls
+        // are left out there. **But only while the waterfall is what is being
+        // drawn**: hiding it is the operator asking for the spectrum, and that
+        // is the one way a phone can reach it, so the spectrum's box comes back
+        // with it rather than staying hidden and leaving the switch with
+        // nothing to control.
+        let waterfall_only = crate::layout::panadapter_waterfall_only(ui.ctx());
+        let picks_layers = !waterfall_only || !self.view.waterfall_visible();
         let w = panadapter_group_w(ui);
         let mut cfg = self.ui_settings;
         if picks_layers {
@@ -5510,17 +5517,21 @@ impl SdroxideApp {
             });
         }
         crate::chrome::menu_group(ui, "Waterfall", w, |ui| {
-            if picks_layers {
-                let on = self.view.waterfall_visible();
-                if crate::chrome::chip(ui, on, "SHOW WATERFALL")
-                    .on_hover_text(
-                        "Draw the scrolling waterfall below the spectrum. Switched off, the \
-                         spectrum line takes the whole height.",
-                    )
-                    .clicked()
-                {
-                    self.view.set_waterfall_visible(!on);
-                }
+            // Drawn on every tier, phones included, and that is the point: on a
+            // narrow window this chip is the **only** way to the spectrum —
+            // switch the waterfall off and it takes the whole height. Leaving
+            // it inside `picks_layers` put it out of reach on exactly the tier
+            // that needs it, so the layer switch was advertised nowhere and the
+            // spectrum could not be reached at all.
+            let on = self.view.waterfall_visible();
+            if crate::chrome::chip(ui, on, "SHOW WATERFALL")
+                .on_hover_text(
+                    "Draw the scrolling waterfall below the spectrum. Switched off, the \
+                     spectrum line takes the whole height.",
+                )
+                .clicked()
+            {
+                self.view.set_waterfall_visible(!on);
             }
             speed_row(
                 ui,

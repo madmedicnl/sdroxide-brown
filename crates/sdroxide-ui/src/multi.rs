@@ -311,7 +311,7 @@ impl MultiApp {
     ///
     /// The split is this same layout in columns side by side, and the phone
     /// layout is deliberately the least this program draws — the waterfall and
-    /// nothing else (`layout::Tier::waterfall_only`). Three of those columns in
+    /// nothing else (`layout::panadapter_waterfall_only`). Three of those columns in
     /// a 360 pt window are 116 pt each: not three radios, but the phone layout
     /// clipped to a sliver, with the frequency readout truncated, the S-meter
     /// unreadable and a radio name wrapped to one letter per line (discussion

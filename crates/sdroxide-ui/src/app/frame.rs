@@ -686,7 +686,8 @@ impl eframe::App for SdroxideApp {
             // sharing it with an empty strip. Never on a phone, which draws the
             // waterfall alone and ignores the layer switches (see
             // `spectrum_view::show_ext`), so they cannot empty its screen.
-            let layers = tier.waterfall_only() || self.view.panadapter_visible();
+            let layers = crate::layout::panadapter_waterfall_only(ui.ctx())
+                || self.view.panadapter_visible();
             let show_wf = (!phone || on_waterfall) && layers;
             let show_panel = !phone || !on_waterfall;
 
@@ -894,7 +895,7 @@ impl eframe::App for SdroxideApp {
             // module's WIDE chip on. Never on a phone: 96 pt of strip is a
             // quarter of the height there, taken from the waterfall being
             // listened to for a band view nothing is tuned to.
-            if !tier.waterfall_only()
+            if !crate::layout::panadapter_waterfall_only(ui.ctx())
                 && self.view.wide_waterfall
                 && let Some(wide) = self.wide_frame.clone()
             {
@@ -925,7 +926,8 @@ impl eframe::App for SdroxideApp {
             // As on the digital path above: no layers, no panadapter. In a mode
             // with nothing under it that leaves the pane empty, which is what
             // switching both off asks for.
-            let layers = tier.waterfall_only() || self.view.panadapter_visible();
+            let layers = crate::layout::panadapter_waterfall_only(ui.ctx())
+                || self.view.panadapter_visible();
             let (wf_h, panel_h, show_wf, show_panel) = if !cw_mode {
                 (ui.available_height(), 0.0, layers, false)
             } else if phone {

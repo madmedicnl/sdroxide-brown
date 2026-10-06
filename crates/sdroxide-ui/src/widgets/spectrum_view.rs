@@ -1301,8 +1301,18 @@ pub fn show_ext(
     // third of its height. The operator's own layer switches and
     // `spectrum_fraction` are only overridden here, never written, so a wider
     // window gets back exactly the split it was left with.
-    let waterfall_only = crate::layout::tier(ui.ctx()).waterfall_only();
-    let frac = if waterfall_only { 0.0 } else { view.effective_spectrum_fraction() };
+    let waterfall_only = crate::layout::panadapter_waterfall_only(ui.ctx());
+    // **The waterfall-only default is a default, not a veto.** Hiding the
+    // waterfall is the operator asking for the spectrum — the trade the SPEC
+    // popup offers on every other tier ("switched off, the spectrum line takes
+    // the whole height") — and on a narrow window it is the *only* way to see
+    // one. Overriding it there meant the switch was offered nowhere and did
+    // nothing wherever it was reachable.
+    let frac = if waterfall_only && view.waterfall_visible() {
+        0.0
+    } else {
+        view.effective_spectrum_fraction()
+    };
     let usable = rect.height() - scale_h();
     let spec_h = if frac <= 0.0 { 0.0 } else { (usable * frac).max(40.0).min(usable.max(0.0)) };
     let spec_rect = Rect::from_min_size(rect.min, vec2(rect.width(), spec_h));
