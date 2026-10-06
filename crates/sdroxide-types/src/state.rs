@@ -594,6 +594,17 @@ pub struct RadioState {
     /// than a local guess. Appended last: postcard numbers fields by position.
     #[serde(default)]
     pub gain_by_band: bool,
+    /// How the DAB / DAB+ receiver behaves, and whether it can run at all.
+    ///
+    /// Here rather than only in `dab.json` for the reason [`Self::adsb`] is: a
+    /// remote client edits it, and the engine's reply is this field coming back
+    /// changed. It is also where the engine says no — a front end handing over
+    /// demodulated audio, or one too narrow to hold a 1.5 MHz ensemble, cannot
+    /// feed this decoder, and [`crate::DabSettings::OFF`] arriving back is how
+    /// the panel learns that. Appended last: postcard numbers fields by
+    /// position.
+    #[serde(default)]
+    pub dab: crate::DabSettings,
 }
 
 impl Default for RadioState {
@@ -641,6 +652,7 @@ impl Default for RadioState {
             qo100: crate::Qo100Settings::default(),
             vdl2: crate::Vdl2Settings::default(),
             ais: crate::AisSettings::default(),
+            dab: crate::DabSettings::default(),
             rx_antenna: false,
             // Available until the engine says otherwise: it is the one that
             // knows, and it says so in the first state it sends.

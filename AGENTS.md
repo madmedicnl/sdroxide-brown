@@ -1120,10 +1120,15 @@ quick-start** in EN/NL/FR/IT (`docs/listening-quickstart.*`, PDFs regenerated
 with the pandoc + headless-Edge pipeline in "Regenerating the quick-start PDFs"),
 linked from the README beside the CB/FT8/SSTV ones.
 
-**What is left for the listener side:** nothing is queued. The one headline gap
-is **DAB/DAB+** (ROADMAP Phase 3), the broadcast band a European listener will
-ask about — still waiting on the upstream library split
-(`xoolive/desperado#52`), nothing to do here yet.
+**What is left for the listener side:** nothing is queued. **DAB/DAB+**
+(ROADMAP Phase 3) was built and then **withdrawn from the shipped build on
+2026-10-01**: the sync/FIC/service list work, but the DAB+ audio path fails on
+faad2 (`FAAD_DECODE_ERROR` on ~every Access Unit, all services) where the
+reference `dabradio` decoder takes the same frames via fdk-aac — which cannot be
+linked into a GPL build. The code stays in the tree marked not-shipped
+(`sdroxide_dab::DAB_ENABLED = false`, the mode off the band menu); the full
+diagnosis and the licence-shaped options for finishing it are in
+[`ROADMAP.md`](ROADMAP.md) under DAB. Do not re-derive them.
 
 ## Repository layout and how to work on it
 

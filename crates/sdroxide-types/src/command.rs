@@ -1183,6 +1183,7 @@ pub enum Command {
         rx: RxId,
         mode: Mode,
     },
+
     /// Turn the per-band front-end gain memory on or off (issue #605). Appended
     /// for the usual reason. The stored table lives in the session; this is the
     /// switch that decides whether a band change recalls from it.
@@ -1243,6 +1244,13 @@ pub enum Command {
     ///
     /// Appended for the usual reason — postcard numbers variants by position.
     SetDigiContest(crate::ContestMode),
+
+    /// How the DAB / DAB+ receiver behaves — the channel and the service to
+    /// play.
+    ///
+    /// Appended last, for the usual reason — postcard numbers variants by
+    /// position.
+    SetDabConfig(crate::DabSettings),
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.

@@ -1719,7 +1719,16 @@ use sdroxide_types::{
 /// break as every version before it. The first two are filled by the client
 /// from `ViewState`, since `sdroxide-types` cannot name that type. A downstream
 /// (fork) change, appended last.
-pub const PROTO_VERSION: u16 = 194;
+/// v195: the **DAB / DAB+ receiver**. `Mode::Dab` is appended to that enum,
+/// `RadioState` gains `dab` (`DabSettings`) on its **tail**, and there are new
+/// `Command::SetDabConfig` and `ServerMsg::DabStatus` — all appended last.
+/// `RadioState` rides whole, so a v194 peer reads the extra bytes as the start
+/// of the next field. A downstream (fork) addition.
+///
+/// The branch this came from numbered it 187, but `main` had already spent 187
+/// on the ALC/per-band-gain work and 188 on the client screen, so the whole
+/// change moves up rather than renumbering anything already shipped.
+pub const PROTO_VERSION: u16 = 195;
 const VERSION_BYTE: u8 = 0x13;
 
 #[derive(Debug, thiserror::Error)]
@@ -2236,6 +2245,12 @@ pub enum ServerMsg {
     ///
     /// Appended last, for the usual reason.
     KnownCalls(Option<sdroxide_types::KnownCallsReply>),
+
+    /// `RadioEvent::DabStatus`: the DAB ensemble, its services and the decode
+    /// counters — a snapshot, sent as the FIC fills in and on change.
+    ///
+    /// Appended last, for the usual reason.
+    DabStatus(Box<sdroxide_types::DabStatus>),
 }
 
 /// What [`ServerMsg::ClientSettings`] carries.

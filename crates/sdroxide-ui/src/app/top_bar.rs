@@ -7488,6 +7488,21 @@ const OLIVIA_UNCONFIRMED: &str = "OLIVIA — receive works, transmit untested ag
      been copied by fldigi or MultiPSK and one sign convention differs from fldigi's source — \
      so check the first over rather than expecting an answer.";
 
+/// The DAB chip's hover.
+///
+/// **The bandwidth is the whole note.** A DAB Mode I ensemble occupies about
+/// 1.536 MHz, and that is the *floor*: at it the front end — the SDRplay in
+/// particular — sits on its ADC floor and drops samples, and an OFDM decode
+/// needs a continuous stream, so one splice stops sync and there is no audio at
+/// all. `sdroxide_dab::DAB_GOOD_RATE_HZ` (3.072 Msps) is where it stops being
+/// marginal. Said here rather than in a manual, because this is where an
+/// operator chooses the mode and this is the first thing that will go wrong.
+const DAB_EXPERIMENTAL: &str = "DAB / DAB+ — experimental. It needs about 3 Msps of bandwidth \
+     at the front end before there is any audio: at the 1.536 MHz an ensemble occupies the \
+     receiver is at its ADC floor and drops samples, and a DAB decode needs a continuous \
+     stream, so the ensemble never locks and you hear nothing. Open the radio's sample rate to \
+     3 Msps or more first — and not 3.2 on an SDRplay, which snaps to 2 and is the floor again.";
+
 fn mode_band_chip(
     ui: &mut egui::Ui,
     cur: Mode,
@@ -7518,7 +7533,11 @@ fn mode_band_chip(
     } else {
         resp
     };
-    let resp = if m == Mode::Olivia { resp.on_hover_text(OLIVIA_UNCONFIRMED) } else { resp };
+    let resp = match m {
+        Mode::Olivia => resp.on_hover_text(OLIVIA_UNCONFIRMED),
+        Mode::Dab => resp.on_hover_text(DAB_EXPERIMENTAL),
+        _ => resp,
+    };
     if resp.clicked() {
         cmds.push(Command::SetMode { rx: RxId::Main, mode: m });
     }
@@ -7551,6 +7570,7 @@ fn mode_listen_chip(
     let resp = match station_why {
         Some(why) => resp.on_disabled_hover_text(why),
         None if m == Mode::Olivia => resp.on_hover_text(OLIVIA_UNCONFIRMED),
+        None if m == Mode::Dab => resp.on_hover_text(DAB_EXPERIMENTAL),
         None => resp,
     };
     if resp.clicked() {
@@ -7908,7 +7928,7 @@ pub(in crate::app) fn band_mode_menu(
                 // signals all the same, and this is where an operator looks for
                 // one.
                 for m in
-                    Mode::DIGITAL.into_iter().chain([Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl])
+                    Mode::DIGITAL.into_iter().chain([Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab])
                 {
                     mode_band_chip(ui, mode, m, band, state, cmds);
                 }
@@ -7951,7 +7971,7 @@ pub(in crate::app) fn band_mode_menu(
             crate::chrome::menu_caption(ui, "Digital");
             ui.horizontal_wrapped(|ui| {
                 for m in
-                    Mode::DIGITAL.into_iter().chain([Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl])
+                    Mode::DIGITAL.into_iter().chain([Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab])
                 {
                     mode_listen_chip(ui, mode, m, state, cmds);
                 }
