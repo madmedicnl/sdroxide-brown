@@ -808,6 +808,40 @@ because two of them were *silently* wrong rather than conflicting:
 - And the merge **duplicated a match arm** (`SetGainByBand`, present on both
   sides) — the one the gate caught, as an unreachable pattern.
 
+**First job tomorrow, and it is half-done: the 32-bit ARM build.** Fork
+discussion #13 — ipaddr42 wants a decode node on older ARM hardware (Debian 13
+armhf, `ARMv7-A + VFPv3`), and every ARM artifact this project publishes is
+64-bit `aarch64`. A probe lives at `.github/workflows/armv7-probe.yml`
+(`workflow_dispatch`, its own workflow **on purpose**: `create release` needs
+every build job, so a target expected to fail must not be able to fail a
+release). It has run twice and failed both times, and **the two failures are the
+whole finding**:
+
+- **The Rust cross-compiles fine.** The second run downloaded and compiled
+  hundreds of crates for `armv7-unknown-linux-gnueabihf` before stopping, so the
+  decoder crates — the thing to fear — were not reached and are not the wall.
+- **It stops at `alsa-sys`**, the sound-card binding:
+  *"pkg-config has not been configured to support cross-compilation."* An amd64
+  runner has no armhf `libasound`. Hand-rolling it inside a `run:` step was tried
+  and **did not take** — the log shows the cross toolchain installing and **no
+  `libasound2-dev` at all**, no fetch from `ports.ubuntu.com`, and
+  `PKG_CONFIG_ALLOW_CROSS` never reaching the build script. Two iterations
+  established that and no more; do not spend a third on the same approach.
+- **The fix is a sysroot, not more apt.** `cross-rs/cross` (a container with a
+  complete target sysroot) or the build inside `debian:armhf`. **Whether that
+  then reaches the vendored C and fails there is still unknown, and is still the
+  answer to his question.**
+
+The reply to him is **drafted and unsent** — it owns two real errors of ours (the
+Pi 1 is **ARMv6** and was listed as ARMv7; and we answered a performance question
+he had not asked, when he had already conceded the unknown), accepts his spec,
+and says the one thing he cannot know: **SoapySDR is droppable with
+`--no-default-features`, and the rest of the vendored C — faad2, dream, nrsc5,
+xng, rade — is not behind a feature**, so that is where a 32-bit build will
+break. It also tells him plainly that these replies are written with an AI
+assistant, because the operator is in heavy treatment for PTSD and is not sharp
+at the moment, and he had noticed. **He decides when that goes.**
+
 **Deferred to the next session, deliberately:** the **DAB MOT slideshow** (the
 station images the ensemble broadcasts). Everything needed is already in place —
 `dabradio` decodes it (`PadExtractor::extract_all_from_au` → `PadData::Mot`), the
