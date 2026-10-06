@@ -61,7 +61,7 @@ jobs:
             echo "AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar"
           } >> "$GITHUB_ENV"
 
-      - name: Build (cat: no SoapySDR, no rtl_433)
+      - name: Build (cat - no SoapySDR, no rtl_433)
         run: |
           cargo build --release --locked \
             --target armv7-unknown-linux-gnueabihf \
