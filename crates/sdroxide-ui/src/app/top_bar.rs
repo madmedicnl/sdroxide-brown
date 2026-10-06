@@ -1431,8 +1431,10 @@ impl SdroxideApp {
             let mode = self.state.rx[0].mode;
             let (state, caps) = (&self.state, self.caps.as_ref());
             let stated = self.radio_cfg.as_ref().is_some_and(|c| !c.freq_ranges_rx.is_empty());
-            let atsmini =
-                self.radio_cfg.as_ref().is_some_and(|c| c.backend == sdroxide_types::Backend::AtsMini);
+            let atsmini = self
+                .radio_cfg
+                .as_ref()
+                .is_some_and(|c| c.backend == sdroxide_types::Backend::AtsMini);
             crate::chrome::menu_group(ui, "Band", w, |ui| {
                 band_mode_menu(
                     ui,
@@ -1500,32 +1502,52 @@ impl SdroxideApp {
             // EXTRAS — what is left once band, mode, the radio and the decode
             // windows have a group of their own.
             crate::chrome::menu_group(ui, "Extras", w, |ui| {
+                // **Every chip in this group opens a window, so the menu gets
+                // out of its way.** `popup_body` closes the popup on a click
+                // *outside*, and a click on a chip in here is not outside — so
+                // the menu was left standing over the settings (or memories, or
+                // grid, or manual) window it had just opened, which is the
+                // "windows overlapping" report from a phone.
+                //
+                // Closed here rather than by switching the popup to
+                // `CloseOnClick`: this menu also carries the band and mode
+                // groups, and those are things an operator picks several of in
+                // a row. The rule is about *opening a window*, so it belongs to
+                // the group that does that and not to the popup.
+                let mut opened = false;
                 ui.horizontal_wrapped(|ui| {
                     if crate::chrome::chip(ui, self.show_memories, "MEM")
                         .on_hover_text("Memory channels")
                         .clicked()
                     {
                         self.show_memories = !self.show_memories;
+                        opened = true;
                     }
                     if crate::chrome::chip(ui, self.show_grid, "GRID")
                         .on_hover_text("Grid tracker — worked Maidenhead squares on a map")
                         .clicked()
                     {
                         self.show_grid = !self.show_grid;
+                        opened = true;
                     }
                     if crate::chrome::chip(ui, self.show_settings, "⚙ SETTINGS")
                         .on_hover_text("Settings — device gains, antennas, audio devices")
                         .clicked()
                     {
                         self.show_settings = !self.show_settings;
+                        opened = true;
                     }
                     if crate::chrome::chip(ui, self.help.open, "? HELP")
                         .on_hover_text("User manual (F1)")
                         .clicked()
                     {
                         self.help.open = !self.help.open;
+                        opened = true;
                     }
                 });
+                if opened {
+                    ui.close();
+                }
             });
         });
     }
@@ -2667,10 +2689,8 @@ impl SdroxideApp {
                     .id_salt("band-dock-scroll")
                     .show(ui, |ui| {
                         let mode = self.state.rx[0].mode;
-                        let stated = self
-                            .radio_cfg
-                            .as_ref()
-                            .is_some_and(|c| !c.freq_ranges_rx.is_empty());
+                        let stated =
+                            self.radio_cfg.as_ref().is_some_and(|c| !c.freq_ranges_rx.is_empty());
                         let atsmini = self
                             .radio_cfg
                             .as_ref()
@@ -3302,11 +3322,8 @@ impl SdroxideApp {
                 // the chip and the fill *breathes*, so "armed, waiting" and
                 // "recording now" are told apart at a glance without the label.
                 let lit = audio || iq;
-                let fill = if lit {
-                    rec_chip_fill(ui.input(|i| i.time))
-                } else {
-                    crate::theme::ALERT()
-                };
+                let fill =
+                    if lit { rec_chip_fill(ui.input(|i| i.time)) } else { crate::theme::ALERT() };
                 let rec = crate::chrome::chip_accent(ui, lit, "REC", fill, Color32::WHITE)
                     .on_hover_text(hover);
                 if auto && !lit {
@@ -3826,10 +3843,7 @@ impl SdroxideApp {
                         clip_label(secs)
                     )
                 };
-                if crate::chrome::chip(ui, armed || pending, label)
-                    .on_hover_text(hint)
-                    .clicked()
-                {
+                if crate::chrome::chip(ui, armed || pending, label).on_hover_text(hint).clicked() {
                     // A clip is one span, not a squelch run: disarm the gate,
                     // and drop any longer deadline it replaces. Running
                     // already, the span starts now; idle, the recording is
@@ -7493,11 +7507,7 @@ fn mode_band_chip(
     } else {
         resp
     };
-    let resp = if m == Mode::Olivia {
-        resp.on_hover_text(OLIVIA_UNCONFIRMED)
-    } else {
-        resp
-    };
+    let resp = if m == Mode::Olivia { resp.on_hover_text(OLIVIA_UNCONFIRMED) } else { resp };
     if resp.clicked() {
         cmds.push(Command::SetMode { rx: RxId::Main, mode: m });
     }
@@ -8413,7 +8423,8 @@ mod tests {
     /// The three a phone keeps on the row. The ☰'s own width is measured the
     /// same way as any other label: the glyph is narrow, so the chip is a
     /// 13 pt pad a side plus it.
-    const P_MENU_PHONE: [(&str, f32, f32); 3] = [("RX", 44.1, 18.1), ("DISP", 57.1, 31.1), ("☰", 43.0, 17.0)];
+    const P_MENU_PHONE: [(&str, f32, f32); 3] =
+        [("RX", 44.1, 18.1), ("DISP", 57.1, 31.1), ("☰", 43.0, 17.0)];
     const P_PTT_W: f32 = 59.2;
     const P_TEXT: f32 = 14.5;
     /// Every gap on the strip: the `item_spacing` [`SdroxideApp::top_bar`] sets
@@ -8432,8 +8443,11 @@ mod tests {
             _ => true,
         };
         let menu = P_MENU_PHONE.iter().filter(|(l, ..)| keep(l)).map(|&(_, w, _)| w).collect();
-        let text =
-            P_MENU_PHONE.iter().filter(|(l, ..)| keep(l)).map(|&(_, _, t)| t).fold(0.0f32, f32::max);
+        let text = P_MENU_PHONE
+            .iter()
+            .filter(|(l, ..)| keep(l))
+            .map(|&(_, _, t)| t)
+            .fold(0.0f32, f32::max);
         (menu, text)
     }
 
