@@ -150,8 +150,30 @@ mod web {
         |url: &str, id: u32, ctx: &eframe::egui::Context| radio_tab(url, id, ctx)
     }
 
+    /// Ask the browser to keep this origin's storage rather than treat it as
+    /// evictable.
+    ///
+    /// **This is what "the phone slept and everything came back default" is.**
+    /// The client keeps its whole screen in the browser — theme, layout, chip
+    /// choices, the reception log — and a browser may clear "best-effort"
+    /// storage whenever it wants the room. The eviction is silent: the next
+    /// load simply finds nothing, so the operator sees the defaults and
+    /// reasonably reads that as the program having forgotten them. It has been
+    /// reported twice on the phone, as the bindings and then as the theme.
+    ///
+    /// `persist()` asks for the bucket that is *not* cleared. It can be
+    /// refused — Chrome grants it on engagement, Safari not at all unless the
+    /// page is installed — which is why nothing depends on the answer, and why
+    /// a profile can also hold the screen on the server. The promise is
+    /// deliberately dropped: the request is the whole of what this does.
+    fn keep_storage() {
+        let Some(window) = web_sys::window() else { return };
+        let _ = window.navigator().storage().persist();
+    }
+
     pub fn run() {
         console_error_panic_hook::set_once();
+        keep_storage();
 
         wasm_bindgen_futures::spawn_local(async {
             let window = web_sys::window().expect("window");
