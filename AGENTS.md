@@ -733,18 +733,45 @@ a **version collision**: upstream's own #604 had already taken
 note kept above it. `cw_key_mode` sits after `ft8_depth`, not before it.
 `cargo fmt` clean; the four affected crates green.
 
-**The maintainer listed six blockers on 2026-10-03 and none are fixed** — and the
-branch now being `CLEAN` is exactly the trap, because a mergeable PR reads as
-ready. They are: a paddle press from idle never starts an over
-(`set_cw_contacts` does not key TX the way `key_down` does, so the tests that
-call `fill_tx_block` directly hide it); nothing releases a held paddle on client
-disconnect; the keyer is never disarmed (`abort_tx`, `set_straight(false)`,
-config changes), straight keying goes dead after a paddle has been used, and on a
-CAT rig it arms before the refusal; mode B loses the trailing element on a
-mid-element squeeze release; a tap is latched only in `poll`, so press-and-
-release in one batch is lost; and **the code/out text buffers grow unbounded on
-the audio thread**. That last one is the one not to merge past. A comment saying
-all of this, and that the rebase fixes none of it, is on the PR.
+**All six of the maintainer's blockers are FIXED on `main` (2026-10-06)** — and
+that ordering is the point. They were not upstream chores: **every one of the six
+was a live bug on our own `main` too**, which is only visible if you check our
+tree rather than the PR. Six commits, `53a184f2` … `ec0a4db8`, every test
+verified to fail against the broken version.
+
+| his wording | what it actually was, here |
+|---|---|
+| buffers grow unbounded on the audio thread | worse: `CwKeyer::out` was **never drained by anything** — `take_text` is called only from tests, so every keyed character pushed onto a queue no code path could pop, for as long as the keyer stayed armed |
+| a press from idle never starts an over | `set_cw_contacts` had **no test at all** — it appeared only in its definition and the trait's default. Every keyer test drove `fill_tx_block`, which is exactly the path that cannot show this |
+| nothing releases a held paddle on disconnect | `CwKey` is a down *edge* and the keyer is driven by *closed contacts*; releasing one never released the other, and the lost-key-up cap deliberately does not apply to a keyer — so a departed client keyed a carrier by itself |
+| the keyer is never disarmed | the keyer is not a mode of its own, so a keyer left standing with `straight` off meant **no** hand-keying at all; the cure was changing mode and back |
+| mode B loses the trailing element on a squeeze release | mode B's memory is a claim about the **falling** edge, and `contact` latched rising edges only |
+| a tap is latched only in `poll` | a press is an **event** and `poll` is a **sampler**; a tap inside one engine loop was sampled only in its released state |
+
+**Two of his six were misread as "disarm the keyer", and disarming is wrong.**
+An abort must **release the contacts**, not disarm: a keyer is a setting, not a
+transmission, and `abort_tx`'s own comment records that disengaging the mode on
+abort is what left the chip lit, the transmit box locked and Space dead.
+Disarming is reserved for `set_straight(false)` and a config change, which *are*
+the operator saying they are done hand-keying.
+
+**There is no reference program, and that is worth knowing before the next
+search.** Checked for how the others do it: **fldigi has no software iambic
+keyer at all** (external Winkeyer / ICOM / FT991 / NanoIO only — very likely why
+he wanted ours engine-side, there was nothing on his side to copy), **JS8Call has
+none**, and **flrig's "CW keyer" is a DTR/RTS keyline**, not a paddle keyer.
+Every "iambic keyer" repo on GitHub is an Arduino/Pico toy with no transmit
+lifecycle. So these six are his engineering judgement, not conformance to a
+convention, and the design was ours to set from the start.
+
+**A lesson from the squeeze test, because the first version of it was green for
+the wrong reason.** Squeezing *from idle* cannot tell mode A from mode B: the
+press latches the dah either way, so the trailing dah goes out even with no
+memory at all. It only bites once the latch is **consumed first** — a dah on its
+own, a character gap to flush it, then the squeeze and its mid-element release.
+The same trap as the Olivia polarity: a test that passes before and after a fix
+is testing nothing, and the only way to know is to remove the fix and watch it
+fail.
 
 **The other four conflicting PRs (#597, #554, #545, #537) are deliberately left
 alone.** With the maintainer silent, a rebase is a force-push that changes
