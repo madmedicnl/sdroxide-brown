@@ -24,6 +24,85 @@
 > ALE-mode build; the experimental-release recipe below is still the one to use
 > when a build needs to name it (the older pre-release tag has been removed).
 
+## Session 2026-10-06, later: #640, the phone tier, and a test that tested the wrong thing
+
+**Upstream #640 is fixed here, and our fork had all four of its faults.** ct7cht
+reported and diagnosed it on a TS-440 with a DigiRig (CAT + RX audio) and an
+RTL-SDR on the 45 MHz IF as a panadapter, and sent a patch that works on their
+hardware. Every part was present in our engine:
+
+1. **`finish_audio` sat behind `self.main.is_some()`** in both paths, with its own
+   unconditional `return` when there was no main to take an `out_rate` from. But
+   **no main *is* the panadapter configuration** — the attached receiver paints
+   the picture and the transceiver supplies the audio — so the one function that
+   had to run was the one skipped, and FT8 and CW decoded silence. The main chain
+   is now the only conditional part, and `out_rate` falls back to the engine's
+   configured `audio_out_rate`.
+2. **The channel analyzer was created for a digital mode with no main to feed it
+   from** (`main.channel_iq()`), and frame selection prefers it — so FT8 showed a
+   seeded, frozen 3.7 kHz window with the live wide panadapter sitting behind it.
+   `want_channel` now requires `self.main.is_some()`.
+3. `run_audio`'s early return, and the pooled path's gate — the same fault as (1)
+   seen from the two callers.
+
+**The lesson worth more than the fix: the test was asserting the broken
+behaviour.** `crates/sdroxide-radio/tests/cw_panadapter.rs` built its engine with
+`EngineConfig::default()`, which has **no audio — and no audio means no `main`
+chain at all** (`Engine::new`'s `None => (None, None, …)`). So the entire file
+had been running #640's configuration while its doc claimed to test an ordinary
+station, and `the_digital_modes_keep_their_channel_view` was passing on a frame
+that can only be *frozen*. The assertion was right and the harness was wrong. It
+now builds a real chain (an unread ring, the `skim_window` idiom) and the no-main
+case got its own test, **verified to fail against the unfixed code** — reporting
+`3700 Hz`, which is the number to remember.
+
+**So: a harness that takes every default is not testing the program, it is
+testing the defaults.** An `EngineConfig::default()` reads like "nothing
+special", and it is in fact one of the two configurations this engine has
+(`audio: Some` / `audio: None`), with materially different behaviour — including
+whether the panadapter works at all. When a test's subject is a *station*, build
+the station.
+
+## The phone panadapter: the waterfall-only default was about the width
+
+Kevin's #9 point 3 (*"the scope display is still missing in phone mode"*) and
+point 2 (landscape) are the same fault. `Tier::Phone` decided the panadapter's
+layers, and **`tier_for` is right that a phone in landscape is a phone**
+(`852x393`, with a test saying so) — so the tier cannot tell the two apart, while
+the reason for the waterfall-only default only holds for one of them: *"a
+spectrum trace in a 360 pt-wide window…"*. A phone held sideways is **852 pt
+wide** and lost its spectrum for a reason written about a window half its size.
+
+`layout::panadapter_waterfall_only(ctx)` is now `tier == Phone && width < 600`,
+read from the window so a rotation changes it. Its pure half,
+`panadapter_waterfall_only_for(tier, width)`, is tested beside `tier_for` and was
+**verified to fail against the tier-only version**.
+
+**And the phone's layer switches did not do nothing — they were unreachable.**
+`SHOW WATERFALL` was drawn inside `picks_layers`, which is false on exactly the
+tier that needs it, and the panadapter forced `frac = 0.0` on top. The default is
+now a *default*: hiding the waterfall is the operator asking for the spectrum —
+the trade the SPEC popup offers everywhere else — and that is how a phone reaches
+the scope. Showing **both** at once on a narrow window is deliberately not done:
+it needs the phone's default to be persisted rather than derived, which is the
+landscape rework and wants a screen to look at.
+
+## Two smaller ones from the same report
+
+- **The browser evicts the site's storage and the client keeps its screen there**
+  (Kevin's #9 point 7: sleep the phone, get the defaults back, with no password
+  prompt — because the login is in the same store read on a different path).
+  `navigator.storage.persist()` is now asked for at startup (`crates/sdroxide-web`).
+  **This is the half that could have been prevented**: the same eviction had
+  already cost this operator his control bindings, and the answer then was "save
+  the screen to the profile" — a workaround for a problem we were causing. Both
+  stay: the request where the browser grants it, the profile where it refuses.
+- **A phone menu chip that opens a window left the menu stacked over it**, because
+  the popup closes on a click *outside* and a chip is not outside. `MEM`, `GRID`,
+  `⚙ SETTINGS` and `? HELP` all do it. Closed from the group rather than by
+  switching the popup to `CloseOnClick`, because the same menu carries the band
+  and mode chips, which are picked several in a row.
+
 ## Session 2026-10-06: the notes were a release behind, and Olivia is settled
 
 **Two corrections to this file, both found by running the standing routine
