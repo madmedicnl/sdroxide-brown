@@ -1809,7 +1809,18 @@ impl CwKeyer {
     /// Advance to `now` with the two current paddle states, and answer whether
     /// the key is down over this instant. Completed characters collect in
     /// [`Self::take_text`].
-    pub fn poll(&mut self, now: f64, dit: bool, dah: bool) -> bool {
+    /// Record a change of the two contacts, latching the edges.
+    ///
+    /// Separate from [`Self::poll`] because a paddle press is an *event* and
+    /// `poll` is a sampler: the transmit path polls once per output sample, so
+    /// a press and release that both arrive between two polls — a quick tap, or
+    /// two commands inside one engine loop — would leave `poll` seeing only the
+    /// released state, and the tap would vanish. The latch is what survives to
+    /// the poll that does happen, so a caller that learns of a change from a
+    /// command says so here immediately rather than waiting to be sampled.
+    ///
+    /// `poll` calls this too, so the per-sample path is unchanged.
+    pub fn contact(&mut self, dit: bool, dah: bool) {
         if dit && !self.dit {
             self.lat_dit = true;
         }
@@ -1818,6 +1829,10 @@ impl CwKeyer {
         }
         self.dit = dit;
         self.dah = dah;
+    }
+
+    pub fn poll(&mut self, now: f64, dit: bool, dah: bool) -> bool {
+        self.contact(dit, dah);
 
         loop {
             match self.phase {
@@ -1851,9 +1866,13 @@ impl CwKeyer {
     /// The element a squeeze starts with when the keyer is idle, if either
     /// paddle is down. A squeeze starts with a dit, as it does on a real keyer.
     fn starting_element(&self) -> Option<CwElement> {
-        if self.dit {
+        // The **latch** counts as well as the current contact. A tap is the
+        // press and release both having happened between two polls, so by the
+        // time a poll runs, both contacts read released and only the latch can
+        // say an element is owed.
+        if self.dit || self.lat_dit {
             Some(CwElement::Dit)
-        } else if self.dah {
+        } else if self.dah || self.lat_dah {
             Some(CwElement::Dah)
         } else {
             None
@@ -1984,6 +2003,12 @@ impl CwKeyer {
         self.out.clear();
         self.space_owed = false;
         self.char_since_space = false;
+        // The latches too. They are a record of a press that has *not* been
+        // sent yet, so leaving them set across a reset made the keyer start an
+        // element out of a contact the caller had already released — an abort
+        // would re-key the transmitter it had just released.
+        self.lat_dit = false;
+        self.lat_dah = false;
     }
 }
 
