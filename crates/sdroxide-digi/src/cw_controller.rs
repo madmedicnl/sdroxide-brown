@@ -323,6 +323,19 @@ impl CwController {
         self.set_straight(true);
     }
 
+    /// Put the iambic keyer down: drop it, and let go of both contacts.
+    ///
+    /// Used where the operator or the engine has said hand-keying is over — the
+    /// KEY chip going off, a config change — and **not** on an abort, which
+    /// releases the contacts but leaves the keyer standing. See `abort_tx` for
+    /// why that distinction matters.
+    fn disarm_keyer(&mut self) {
+        self.keyer = None;
+        self.keyer_dot = false;
+        self.keyer_dah = false;
+        self.keyer_keys.clear();
+    }
+
     /// Poll the keyer once per sample of the block about to be rendered, and
     /// answer whether the key was already down at its first sample — which is
     /// what starts the over.
@@ -927,8 +940,18 @@ impl DigiEngine for CwController {
         }
         self.rx.set_speed_lock(cfg.cw_speed_lock.then_some(cfg.cw_wpm));
         self.tx.set_params(cfg.cw_pitch_hz as f64, cfg.cw_wpm, cfg.cw_farnsworth_wpm);
+        // Anything that changes how the keyer sends has to put the keyer down
+        // with it. A keyer is built with the speed and the iambic mode it was
+        // armed at, so a config change that alters either leaves the old one
+        // running — the operator changes the speed and the paddle still sends
+        // at the old one, with nothing on screen saying so. Speed and
+        // `cw_key_mode` are the two that change what it generates.
+        let keyer_moved = cfg.cw_wpm != self.cfg.cw_wpm || cfg.cw_key_mode != self.cfg.cw_key_mode;
         let engine_moved = cfg.cw_engine != self.cfg.cw_engine;
         self.cfg = cfg;
+        if keyer_moved {
+            self.disarm_keyer();
+        }
         if engine_moved {
             self.set_engine();
         }
@@ -1021,6 +1044,20 @@ impl DigiEngine for CwController {
     fn set_straight(&mut self, on: bool) {
         if self.cat.is_some() || on == self.straight {
             return;
+        }
+        // Turning the hand-key path **off** disarms the keyer with it. The
+        // keyer is not a separate mode: it is driven from inside this one, so
+        // leaving it armed here stranded every hand-key route. `key_down`
+        // returns early when `straight` is false, and the transmit path takes
+        // the keyer branch whenever a keyer exists — so a keyer left standing
+        // with `straight` off meant **no** hand-keying at all, and the operator
+        // had to change mode and back to get their straight key out again.
+        //
+        // This is the deliberate disarm, and it is a different thing from an
+        // abort: an abort stops a transmission, this is the operator saying
+        // they are done hand-keying altogether.
+        if !on {
+            self.disarm_keyer();
         }
         self.straight = on;
         self.straight_held_samples = 0;
@@ -1302,6 +1339,53 @@ mod tests {
         assert!(c.keyer.is_none(), "the keyer must not be armed on a refusing rig");
         assert!(!c.straight, "and the hand-key path stays refused");
         assert!(!c.tx_active, "a refused rig must not be keyed");
+    }
+
+    /// The straight key must still work after a paddle has been used.
+    ///
+    /// The keyer is driven from inside the hand-key path, so it is not a mode of
+    /// its own: `key_down` returns early when `straight` is false, and the
+    /// transmit path takes the keyer branch whenever a keyer exists. Leaving a
+    /// keyer standing with `straight` off therefore meant **no** hand-keying at
+    /// all, and the only cure was changing mode and back — the same dead end the
+    /// refused-key-up test above records for the transmitter latch.
+    #[test]
+    fn the_straight_key_survives_a_paddle_having_been_used() {
+        let mut c = CwController::new(cfg(), 48_000.0, None);
+        c.set_cw_contacts(true, false);
+        assert!(c.keyer.is_some(), "a paddle press arms the keyer");
+
+        // KEY chip off, then on again: the straight key's own path.
+        c.set_straight(false);
+        c.set_straight(true);
+        assert!(c.keyer.is_none(), "turning hand-keying off must disarm the keyer");
+
+        c.key_down(true);
+        assert!(c.tx.held(), "the straight key must key again afterwards");
+    }
+
+    /// A config change that alters what the keyer sends must put it down with
+    /// the old setting. A keyer is built with the speed and iambic mode it was
+    /// armed at, so without this the operator changes the speed and the paddle
+    /// goes on sending at the old one, with nothing on screen saying so.
+    #[test]
+    fn a_config_change_puts_the_keyer_down_with_the_old_setting() {
+        let mut c = CwController::new(cfg(), 48_000.0, None);
+        c.set_cw_contacts(true, false);
+        assert!(c.keyer.is_some());
+
+        let mut faster = c.cfg.clone();
+        faster.cw_wpm += 5.0;
+        c.set_config(faster);
+        assert!(c.keyer.is_none(), "a speed change must disarm the keyer");
+
+        // And one that changes nothing the keyer sends must leave it alone.
+        c.set_cw_contacts(true, false);
+        assert!(c.keyer.is_some());
+        let mut same = c.cfg.clone();
+        same.cw_pitch_hz += 10.0;
+        c.set_config(same);
+        assert!(c.keyer.is_some(), "a pitch change does not alter what the keyer sends");
     }
 
     #[test]
