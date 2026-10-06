@@ -46,19 +46,44 @@ jobs:
         with:
           key: linux-armv7-cat
 
-      # The GNU cross toolchain, and the `cc` crate's per-target variables so
-      # the vendored C is cross-compiled with it rather than with the host gcc.
-      # The linker is set for Rust's own link of the final binary.
-      - name: Cross toolchain
+      # The GNU cross toolchain, the target's own library headers, and the `cc`
+      # crate's per-target variables so the vendored C is cross-compiled with it
+      # rather than with the host gcc.
+      #
+      # **The first run failed here, one step short of the interesting part.**
+      # Not a decoder: `alsa-sys`'s build script refused with *"pkg-config has
+      # not been configured to support cross-compilation"*, because the ARM
+      # `libasound` headers were not present. ALSA is not optional in this tree
+      # — the sound-card path links it everywhere — so the answer is the
+      # target's own development package into a multiarch sysroot, and
+      # pkg-config pointed at it.
+      - name: Cross toolchain and the target's ALSA
         run: |
+          sudo dpkg --add-architecture armhf
+          # Ubuntu's main archive carries only the host architecture; 32-bit ARM
+          # lives on the port, and the default sources have to be pinned back to
+          # amd64 or apt asks the main archive for armhf and finds nothing.
+          sudo sed -i 's/^Architectures:.*/Architectures: amd64/' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          sudo tee /etc/apt/sources.list.d/armhf.sources > /dev/null <<'EOF'
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: noble noble-updates
+          Components: main universe
+          Architectures: armhf
+          EOF
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf cmake
+            gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf cmake \
+            libasound2-dev:armhf
           {
             echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc"
             echo "CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc"
             echo "CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++"
             echo "AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar"
+            echo "PKG_CONFIG_ALLOW_CROSS=1"
+            echo "PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig"
+            echo "PKG_CONFIG_SYSROOT_DIR=/"
           } >> "$GITHUB_ENV"
 
       - name: Build (cat - no SoapySDR, no rtl_433)
