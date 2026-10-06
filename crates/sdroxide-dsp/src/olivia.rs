@@ -39,9 +39,21 @@
 //! and the `0xE257E6D0291574EC` scrambler with its 13-bit-per-character
 //! rotation and the `(character + symbol) mod log2(tones)` interleave.
 //!
-//! Still absent, and not a regression: no explicit sync-tone/tail framing and no
-//! frequency search beyond the caller's tone bank centre — real recordings have
-//! decoded without them because the block-grid lock below finds the alignment.
+//! **Start tones are now transmitted.** fldigi brackets every transmission with a
+//! pair of tones at the band edges — see [`TONE_DURATION`] — and gates them on
+//! `olivia_start_tones`, whose default is **true**, so a default fldigi
+//! transmission carries them. We emitted bare back-to-back blocks, and our
+//! receiver never noticed because its block-grid lock free-runs; a real decoder
+//! looking for a frame may never lock on us at all. `fldigi::send_tones()` is the
+//! model, reproduced exactly.
+//!
+//! Still absent, and not a regression: the **tail** (fldigi's stop tones plus a
+//! short silence) and any **frequency search** beyond the caller's tone bank
+//! centre. The tail cannot simply be appended inside [`OliviaTx`]: the caller
+//! stops asking for audio the moment `sent_chars` reaches `total_chars`
+//! (`text_modem.rs`), so tones generated into the block buffer would never be
+//! drained. That needs a change to the transmit-active contract in the digi
+//! engine, which is deliberately not smuggled in here.
 use std::collections::VecDeque;
 
 use crate::mfsk::{ToneGen, gray, tone_bank_mags, ungray};
@@ -51,6 +63,22 @@ const OUT_AMP: f32 = 0.5;
 const BLOCK: usize = 64;
 /// Timing sub-phases searched per symbol.
 const SUBPHASES: usize = 16;
+
+/// fldigi's sound-card block size — `SCBLOCKSIZE` in `src/include/sound.h`.
+const FLDIGI_SCBLOCK: usize = 512;
+/// One quarter of the start/stop tones. fldigi derives these from its own block
+/// size rather than from the sample rate or the symbol rate: `TONE_DURATION` is
+/// `SCBLOCKSIZE * 16` and `SR4` is a quarter of it (`src/include/olivia.h`).
+const TONE_QUARTER: usize = FLDIGI_SCBLOCK * 4;
+/// Total length of the start tones — `SCBLOCKSIZE * 16`, i.e. 8192 samples.
+const TONE_DURATION: usize = TONE_QUARTER * 4;
+/// The raised-cosine edge `ampshape` puts at each end of every tone quarter —
+/// `SR4 / 8` samples, or 256.
+const TONE_EDGE: usize = TONE_QUARTER / 8;
+
+/// Not yet bracketed with a tail — see the module note.
+const FRAMING_START: u8 = 0;
+const FRAMING_DATA: u8 = 1;
 
 /// Olivia's scrambling sequence. The Walsh function carrying character `c` in a
 /// block is scrambled with this 64-bit pattern, consumed one bit per symbol
@@ -94,6 +122,18 @@ impl Geom {
 
     fn tone_hz(&self, k: usize) -> f64 {
         self.base_hz + k as f64 * self.spacing
+    }
+
+    /// fldigi's start/stop tone pair: the two band edges, `txbasefreq ∓
+    /// bandwidth/2` in `olivia::send_tones()`. The tone bank runs from
+    /// `base_hz` to `base_hz + (tones-1) * spacing`, so the edges sit **half a
+    /// tone spacing outside** it on each side and the pair brackets the bank
+    /// exactly.
+    fn edge_hz(&self) -> (f64, f64) {
+        (
+            self.base_hz - self.spacing / 2.0,
+            self.base_hz + self.tones as f64 * self.spacing - self.spacing / 2.0,
+        )
     }
 }
 
@@ -163,6 +203,7 @@ pub struct OliviaTx {
     cur: Vec<f32>,
     cur_pos: usize,
     cur_done: Option<usize>,
+    framing: u8,
 }
 
 impl OliviaTx {
@@ -178,6 +219,7 @@ impl OliviaTx {
             cur: Vec::new(),
             cur_pos: 0,
             cur_done: None,
+            framing: FRAMING_START,
         }
     }
 
@@ -210,6 +252,49 @@ impl OliviaTx {
         self.cur_done = None;
         self.total_chars = 0;
         self.sent_chars = 0;
+        // A new transmission is bracketed with its own start tones.
+        self.framing = FRAMING_START;
+    }
+
+    /// fldigi's start tones, into `cur`. See [`TONE_DURATION`].
+    ///
+    /// `olivia::send_tones()` writes `TONE_DURATION` samples as four equal
+    /// quarters of `SR4`, alternating between the two band edges — low, high,
+    /// low, high, with the lower edge first unless fldigi's `reverse` is set
+    /// (we have no reverse). Two details are not cosmetic:
+    ///
+    /// - **The phase is carried across quarters.** [`ToneGen`] keeps it, so a
+    ///   change of tone is a phase change rather than a step.
+    /// - **Every quarter is ramped at both ends.** fldigi's `ampshape` is 1.0
+    ///   except over `SR4/8` samples at each end, where it is a raised cosine;
+    ///   without it each of the four tone changes is a discontinuity, and three
+    ///   clicks inside one frame is a spectral splatter the receiver sees as
+    ///   noise.
+    ///
+    /// fldigi then puts exactly one idle character into the transmitter, with
+    /// the comment "Olivia Transmitter class requires at least character". It is
+    /// pushed here with **no** source index so it never counts as sent text: it
+    /// is the frame a receiver locks to, not a character of the message.
+    fn build_start_tones(&mut self) {
+        self.cur.clear();
+        self.cur_pos = 0;
+        self.cur_done = None;
+        // fldigi zeroes `preamblephase` before each pair it sends, so a burst
+        // begins at a known phase rather than wherever the last one ended.
+        self.tonegen.reset_phase();
+        let (low, high) = self.g.edge_hz();
+        for q in 0..TONE_DURATION / TONE_QUARTER {
+            let start = self.cur.len();
+            let hz = if q % 2 == 0 { low } else { high };
+            self.tonegen.emit(hz, TONE_QUARTER, OUT_AMP, &mut self.cur);
+            for i in 0..TONE_EDGE {
+                let w = 0.5
+                    * (1.0 - (std::f64::consts::PI * i as f64 / TONE_EDGE as f64).cos());
+                self.cur[start + i] *= w as f32;
+                self.cur[start + TONE_QUARTER - 1 - i] *= w as f32;
+            }
+        }
+        self.q.push_front((0, None));
     }
 
     fn build_block(&mut self) {
@@ -294,7 +379,12 @@ impl OliviaTx {
                 if let Some(ci) = self.cur_done.take() {
                     self.sent_chars = ci + 1;
                 }
-                self.build_block();
+                if self.framing == FRAMING_START {
+                    self.build_start_tones();
+                    self.framing = FRAMING_DATA;
+                } else {
+                    self.build_block();
+                }
             }
             out[n] = self.cur[self.cur_pos];
             self.cur_pos += 1;
@@ -786,5 +876,159 @@ mod tests {
         let msg = "TEST OLIVIA";
         let got = run(8, 250.0, msg);
         assert!(got.contains(msg), "decoded {got:?} did not contain {msg:?}");
+    }
+
+    // ───────────────────────── start / stop tone framing ─────────────────────────
+
+    /// The audio a fresh transmitter emits before any data block: exactly the
+    /// start tones, and nothing else.
+    fn start_tones_of(tones: usize, bw: f64) -> Vec<f32> {
+        let mut tx = OliviaTx::new(8000.0, 1500.0, tones, bw);
+        let mut out = vec![0.0f32; TONE_DURATION];
+        assert_eq!(tx.next_block(&mut out), TONE_DURATION);
+        out
+    }
+
+    /// Upward zero crossings, which is how a pure tone's frequency is read back
+    /// without assuming anything about phase.
+    fn crossings(x: &[f32]) -> usize {
+        x.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count()
+    }
+
+    /// The flat middle of one quarter, with the ramped edges left off — the
+    /// edges are near zero and would undercount.
+    fn flat_middle(t: &[f32], q: usize) -> &[f32] {
+        let s = q * TONE_QUARTER + TONE_EDGE;
+        &t[s..s + (TONE_QUARTER - 2 * TONE_EDGE)]
+    }
+
+    /// The start tones are two tones at the **band edges**, alternating — and the
+    /// edges are half a tone spacing outside the outermost data tone, so the
+    /// pair brackets the tone bank rather than sitting inside it. This is the
+    /// placement most easily got wrong, and a decoder that is looking for the
+    /// bracket would simply not find it.
+    #[test]
+    fn the_start_tones_bracket_the_tone_bank() {
+        let (tones, bw) = (32usize, 1000.0f64);
+        let g = Geom::new(8000.0, 1500.0, tones, bw);
+        let (low, high) = g.edge_hz();
+        // 1500 +/- bw/2: the edges are exactly the band edges.
+        assert!((low - 1000.0).abs() < 1e-9, "low edge {low}");
+        assert!((high - 2000.0).abs() < 1e-9, "high edge {high}");
+        // …and they sit strictly outside the outermost data tones.
+        assert!(g.tone_hz(0) > low, "lowest data tone inside the low edge");
+        assert!(
+            g.tone_hz(tones - 1) < high,
+            "highest data tone inside the high edge"
+        );
+
+        let t = start_tones_of(tones, bw);
+        let flat = TONE_QUARTER - 2 * TONE_EDGE;
+        // One cycle is rate/hz samples, so a flat run of `flat` samples crosses
+        // zero `flat * hz / rate` times. 1000 Hz and 2000 Hz at 8 kHz.
+        for (q, hz) in [(0usize, 1000.0), (1, 2000.0), (2, 1000.0), (3, 2000.0)] {
+            let want = (flat as f64 * hz / 8000.0).round() as usize;
+            let got = crossings(flat_middle(&t, q));
+            assert!(
+                got.abs_diff(want) <= 2,
+                "quarter {q} at {hz} Hz crossed {got} times, wanted about {want}"
+            );
+        }
+    }
+
+    /// Each quarter is ramped at both ends. Without it, each of the four tone
+    /// changes is a step discontinuity — three clicks inside one frame, which a
+    /// receiver sees as splatter rather than as a clean bracket.
+    #[test]
+    fn each_start_tone_quarter_is_ramped_at_both_ends() {
+        let t = start_tones_of(32, 1000.0);
+        for q in 0..TONE_DURATION / TONE_QUARTER {
+            let s = q * TONE_QUARTER;
+            let first = t[s].abs();
+            let last = t[s + TONE_QUARTER - 1].abs();
+            let mid = t[s + TONE_QUARTER / 2].abs();
+            assert!(first < 1e-6, "quarter {q} starts at {first}, not at zero");
+            assert!(last < 1e-6, "quarter {q} ends at {last}, not at zero");
+            assert!(
+                mid > 0.4 && mid <= OUT_AMP + 1e-6,
+                "quarter {q} peaks at {mid}, wanted full amplitude"
+            );
+        }
+    }
+
+    /// The tone phase is carried across quarters, so a tone change is a phase
+    /// change and not a jump in the waveform.
+    #[test]
+    fn the_start_tones_are_phase_continuous_across_a_tone_change() {
+        let t = start_tones_of(32, 1000.0);
+        // At the seam the ramp takes each end to zero, so the samples either side
+        // of the boundary are both near zero and the step between them is small.
+        for q in 1..TONE_DURATION / TONE_QUARTER {
+            let seam = q * TONE_QUARTER;
+            let step = (t[seam - 1] - t[seam]).abs();
+            assert!(step < 1e-6, "quarter {q} seam steps by {step}");
+        }
+    }
+
+    /// fldigi puts exactly one idle character in after the start tones — "the
+    /// Olivia Transmitter class requires at least character" — and it must not
+    /// show up as a character of the message. If it did, the UI would colour a
+    /// sent prefix green that nobody typed, and `sent_chars` would overshoot.
+    #[test]
+    fn the_idle_character_after_the_start_tones_is_not_sent_text() {
+        let mut tx = OliviaTx::new(8000.0, 1500.0, 32, 1000.0);
+        tx.push_text("AB");
+        assert_eq!(tx.total_chars(), 2, "the idle character must not be counted");
+        let mut guard = 0;
+        while tx.sent_chars() < tx.total_chars() && guard < 4_000 {
+            let mut b = [0.0f32; 1024];
+            tx.next_block(&mut b);
+            guard += 1;
+        }
+        assert_eq!(tx.sent_chars(), 2, "sent_chars overshot past the message");
+        // `drained` means *played out*, not "queued": the block carrying the last
+        // character still has samples to give.
+        let mut guard = 0;
+        while !tx.drained() && guard < 4_000 {
+            let mut b = [0.0f32; 1024];
+            tx.next_block(&mut b);
+            guard += 1;
+        }
+        assert!(tx.drained(), "did not drain");
+    }
+
+    /// Every transmission is bracketed, so clearing re-arms the tones rather
+    /// than leaving the next one opening straight into data.
+    ///
+    /// Compared as a cheap digest rather than by equality: two 8192-sample
+    /// buffers dumped into an assertion failure bury the one number that matters.
+    #[test]
+    fn a_clear_re_arms_the_start_tones() {
+        let mut tx = OliviaTx::new(8000.0, 1500.0, 32, 1000.0);
+        let mut first = vec![0.0f32; TONE_DURATION];
+        tx.next_block(&mut first);
+        tx.push_text("CQ");
+        let mut mid = vec![0.0f32; TONE_DURATION];
+        tx.next_block(&mut mid);
+
+        tx.clear();
+        let mut again = vec![0.0f32; TONE_DURATION];
+        tx.next_block(&mut again);
+
+        let digest = |t: &[f32]| -> u64 {
+            t.iter().fold(0u64, |h, v| {
+                h.wrapping_mul(31).wrapping_add(v.to_bits() as u64)
+            })
+        };
+        assert_eq!(
+            digest(&first),
+            digest(&again),
+            "after a clear the next transmission must open with the same tones"
+        );
+        assert_ne!(
+            digest(&mid),
+            digest(&first),
+            "the middle of a transmission must not be the start tones"
+        );
     }
 }

@@ -20,6 +20,15 @@ impl ToneGen {
         ToneGen { rate, phase: 0.0 }
     }
 
+    /// Start again from phase zero.
+    ///
+    /// Needed where a burst is specified to begin at a known phase rather than
+    /// wherever the previous burst happened to leave it — Olivia's start tones,
+    /// where `olivia::send_tones()` zeroes `preamblephase` before each pair.
+    pub fn reset_phase(&mut self) {
+        self.phase = 0.0;
+    }
+
     /// Append `n` samples of a sine at `hz` (phase-continuous) scaled by `amp`.
     /// A raised-cosine ramp of `ramp` samples is applied at the very start/end of
     /// the whole transmission by the caller; within a stream tones just abut.

@@ -52,21 +52,64 @@ could supply.
 
 ## What is NOT done
 
-**Nothing has ever been transmitted to another station.** In the order it will
-bite:
+**Nothing has ever been transmitted to another station.** Item 2 is now closed
+(see below). In the order the rest will bite:
 
-1. **No sync tones and no tail.** We emit bare back-to-back 64-symbol blocks.
-   Real Olivia brackets every transmission with sync tones, and that is how
-   fldigi finds a frame at all. Our receiver does not need them because its
-   block-grid lock free-runs — which is exactly why the loopbacks pass while a
-   real decoder may never lock. **This is the most likely reason a real fldigi
-   decoder copies nothing, and it has nothing to do with polarity.**
-2. **No on-air proof of the polarity.** The decisive cheap test is not an over on
-   the air: capture a real fldigi/MultiPSK transmission on the RSP1 and compare
-   its per-symbol tone stream against ours for known text. That settles polarity
-   *and* shows the sync-tone frame we would have to add, and it needs nobody to
-   answer us.
-3. No frequency search, where fldigi searches ±8 tone spacings.
+1. ~~**No sync tones.**~~ **START TONES NOW SENT; the tail is still missing.**
+   fldigi brackets every transmission with a pair of tones at the band edges,
+   and that is how it finds a frame at all. Our receiver never needed them
+   because its block-grid lock free-runs — which is exactly why the loopbacks
+   passed while a real decoder may never lock, and why the omission had nothing
+   to do with polarity.
+   - **What is sent now**, reproduced from `olivia::send_tones()`
+     (`src/olivia/olivia.cxx`): `TONE_DURATION = SCBLOCKSIZE * 16` = **8192**
+     samples in **four** quarters of `SR4` = 2048, alternating low/high/low/high
+     at `txbasefreq ∓ bandwidth/2`. `SCBLOCKSIZE` is 512
+     (`src/include/sound.h`); the quarters come from `src/include/olivia.h`, and
+     **not** from the sample rate — so the burst is 8192 samples whatever the
+     audio rate is.
+   - fldigi gates it on `olivia_start_tones`, **default true** ("Send
+     start/stop tones"), so a default transmission carries them.
+   - **The edges sit half a tone spacing outside the outermost data tone.** Our
+     bank runs `base_hz … base_hz + (tones-1)*spacing`, so the edges are
+     `base_hz - spacing/2` and `base_hz + tones*spacing - spacing/2`. For
+     32 tones at 1500 Hz centre / 1000 Hz bandwidth that is exactly
+     **1000 Hz and 2000 Hz**. `Geom::edge_hz` is the one place this is decided.
+   - Two details that are not cosmetic: fldigi's `ampshape` ramps `SR4/8` = 256
+     samples at **both ends of every quarter** (a raised cosine), and the tone
+     phase is **zeroed at the start of each burst** (`preamblephase = 0`) but
+     carried *across* quarters. Drop the ramp and each of the four tone changes
+     is a click — three splatter bursts inside one frame.
+   - fldigi then puts **exactly one idle character** in after the tones ("the
+     Olivia Transmitter class requires at least character"). It is pushed with
+     **no source index**, so it is a frame to lock to and never a character of
+     the message — `total_chars`/`sent_chars` do not see it.
+   - Pinned by `the_start_tones_bracket_the_tone_bank` (placement, read back by
+     zero-crossing count), `each_start_tone_quarter_is_ramped_at_both_ends`,
+     `the_start_tones_are_phase_continuous_across_a_tone_change`,
+     `the_idle_character_after_the_start_tones_is_not_sent_text` and
+     `a_clear_re_arms_the_start_tones`. Each was verified to **fail** against the
+     broken version — moving the tones inside the bank fails the first, deleting
+     the ramp fails the second and the third.
+   - **What is still missing: the tail.** fldigi sends the same `send_tones()`
+     again at the end (`postamblesent`) and then `SCBLOCKSIZE` samples of
+     silence. **It cannot simply be appended inside `OliviaTx`**: the caller
+     stops asking for audio the moment `sent_chars` reaches `total_chars`
+     (`text_modem.rs`), so tones written into the block buffer would never be
+     drained. This needs a change to the transmit-active contract in the digi
+     engine — deliberately not smuggled in alongside the start tones.
+3. **No frequency search**, where fldigi searches ±8 tone spacings — its
+   `SyncMargin = 8` (`src/olivia/olivia.cxx`), giving
+   `FreqOffsets = 2 * SyncMargin + 1` = 17 candidate offsets (`pj_mfsk.h`).
+2. ~~**No on-air proof of the polarity.**~~ **CLOSED 2026-10-05** — fork
+   discussion #5: kevin2008-01 sent a capture whose text MultiPSK had already
+   shown, and our decoder reads it on his own radio at 32/1000
+   (`"Wikipedia, the free encyclopedia that anyone can edit"`). See AGENTS.md §3.
+   The polarity was already settled from our side by `cq_swnet.wav`; this
+   confirms it from the air, from somebody with no stake in our reasoning.
+   **Keep the distinction: our *receiver* is proven, our *transmitter* is not.**
+   Nobody has yet decoded our transmission with fldigi, and item 1's tail is
+   part of what that would need.
 
 The mode's doc, the Olivia settings row and the mode-chip hover all say this in
 the operator's words rather than promising an answer that may not come.

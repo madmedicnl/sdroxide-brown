@@ -297,12 +297,24 @@ air recording could supply.**
 **Still not done, and the next thing to do: nothing has ever been transmitted to
 another station.** The open items, in the order they will bite:
 
-1. **No sync tones and no tail.** We emit bare back-to-back 64-symbol blocks.
-   Real Olivia brackets every transmission with sync tones, and that is how fldigi
-   finds a frame at all. Our receiver does not need them because its block-grid
-   lock free-runs — which is precisely why the loopbacks pass while a real
-   decoder may never lock. **This is the most likely reason a real fldigi decoder
-   copies nothing, and it has nothing to do with polarity.**
+1. ~~**No sync tones.**~~ **START TONES NOW SENT (2026-10-06); the tail is the
+   part still missing.** fldigi brackets every transmission with a pair of tones
+   at the band edges and gates them on `olivia_start_tones`, **default true**, so
+   a default fldigi transmission carries them and a decoder may be looking for
+   exactly that. `fldigi::send_tones()` is reproduced: 8192 samples in four
+   quarters of 2048, alternating low/high at `centre ∓ bandwidth/2` — half a
+   tone spacing **outside** the outermost data tone, so the pair brackets the
+   bank — each quarter ramped over 256 samples at both ends, phase zeroed at the
+   burst start and carried across quarters. One idle character follows, pushed
+   with **no** source index so it is never counted as sent text. Length comes
+   from fldigi's own `SCBLOCKSIZE` (512) and is **not** a function of the sample
+   rate. `Geom::edge_hz` is the only place the placement is decided.
+   **The tail is a separate job**: the caller stops asking for audio the moment
+   `sent_chars` reaches `total_chars`, so tones written into the block buffer
+   would never be drained — it needs a change to the transmit-active contract in
+   `text_modem.rs`, deliberately not smuggled in with the start tones. Full
+   geometry, the exact source lines and the five tests (each verified to fail
+   against the broken version) are in `OLIVIA-HANDOVER.md`.
 2. ~~**No on-air proof of the polarity.**~~ **GONE — supplied by a third party,
    2026-10-05, and it settles item 2 completely.** See the entry below; read it
    before touching polarity again.
