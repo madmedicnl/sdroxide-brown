@@ -115,7 +115,7 @@ pub const BANNER_PLACEHOLDERS: [(&str, &str); 3] = [
 
 /// The single font used for the header and the message overlay
 /// (ChakraPetch-SemiBold, already bundled OFL for the UI's own text).
-pub(crate) fn message_font() -> Option<FontRef<'static>> {
+fn message_font() -> Option<FontRef<'static>> {
     const RAW: &[u8] = include_bytes!("../assets/fonts/ChakraPetch-SemiBold.ttf");
     FontRef::try_from_slice(RAW).ok()
 }
@@ -248,7 +248,7 @@ pub fn claim_message(
     cmd
 }
 
-pub(crate) fn put(img: &mut [u8], w: usize, h: usize, x: i32, y: i32, r: u8, g: u8, b: u8) {
+fn put(img: &mut [u8], w: usize, h: usize, x: i32, y: i32, r: u8, g: u8, b: u8) {
     if x < 0 || y < 0 || x >= w as i32 || y >= h as i32 {
         return;
     }
@@ -258,7 +258,7 @@ pub(crate) fn put(img: &mut [u8], w: usize, h: usize, x: i32, y: i32, r: u8, g: 
     img[i + 2] = b;
 }
 
-pub(crate) fn blend(img: &mut [u8], w: usize, h: usize, x: i32, y: i32, r: u8, g: u8, b: u8, a: f32) {
+fn blend(img: &mut [u8], w: usize, h: usize, x: i32, y: i32, r: u8, g: u8, b: u8, a: f32) {
     if x < 0 || y < 0 || x >= w as i32 || y >= h as i32 {
         return;
     }
@@ -426,7 +426,7 @@ fn draw_message(
     }
 }
 
-pub(crate) fn text_width(text: &str, font: &FontRef<'static>, scale: PxScale) -> f32 {
+fn text_width(text: &str, font: &FontRef<'static>, scale: PxScale) -> f32 {
     let scaled = font.as_scaled(scale);
     let mut width = 0.0;
     let mut prev = None;
@@ -446,20 +446,16 @@ pub(crate) fn text_width(text: &str, font: &FontRef<'static>, scale: PxScale) ->
 /// the gradient or rainbow runs over (the picture's), so the same call draws
 /// every variant.
 #[derive(Clone, Copy)]
-pub(crate) enum Ink {
+enum Ink {
     Solid([u8; 3]),
     Gradient([u8; 3], [u8; 3]),
     Rainbow,
 }
 
 impl Ink {
-    /// A single flat colour — the QSL card's ink, which has no gradients.
-    pub(crate) fn plain(c: [u8; 3]) -> Self {
-        Self::Solid(c)
-    }
 
     /// The colour at pixel column `x`, over a run `span` wide.
-    pub(crate) fn at(self, x: f32, span: f32) -> (u8, u8, u8) {
+    fn at(self, x: f32, span: f32) -> (u8, u8, u8) {
         let span = span.max(1.0);
         match self {
             Ink::Solid(c) => (c[0], c[1], c[2]),
@@ -497,7 +493,7 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (u8, u8, u8) {
     (to(r), to(g), to(b))
 }
 
-pub(crate) fn draw_text(
+fn draw_text(
     img: &mut [u8],
     w: usize,
     h: usize,

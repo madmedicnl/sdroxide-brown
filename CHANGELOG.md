@@ -79,16 +79,6 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   to a browser tab or a second station — a path is not an identity, and
   `swl_id` is the part of a report that is. The settings row is absent in a
   browser tab for the same reason.
-- **A QSL card you can print.** The picture goes out with the exchange beside it —
-  from, to, date, frequency, mode, both reports, your grid, the sent callsign set
-  down the picture's edge and your own line at the foot — laid out as one image,
-  the way the radio-postcard eQSLs the 11 m community already sends are. Your
-  callsign, grid, frequency and mode come from the station's own settings; the
-  rest is what you type in the QSL window. **A field you leave blank is not
-  drawn**, so a card never reports a report nobody gave, and a value too long for
-  its column is shortened with a rule under it rather than silently cut. The card
-  is written beside the picture it came from, under its own name, so it never
-  overwrites the received picture it was made from.
 - **The chip row on a received picture can no longer overflow its window.** At
   360 pt the chips and the label beside them needed about 368 pt of a 344 pt
   window, and nothing wrapped it because the row did not wrap — so this was
