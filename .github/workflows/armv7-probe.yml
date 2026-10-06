@@ -1,0 +1,78 @@
+name: armv7 probe
+
+# **A probe, not a release target.** 32-bit ARM (`armhf` / Debian's
+# `ARMv7-A + VFPv3`) has been asked for by a listener who wants a decode node on
+# older ARM hardware (fork discussion #13), and the honest position is that
+# **this tree has never been built for it**: every ARM artifact this project
+# publishes is 64-bit `aarch64`, and aarch64 taught us what a new architecture
+# costs — a rustc codegen pathology put six release jobs to sleep for six hours
+# with nothing written, which is why every build step is pinned to 1.98.1.
+#
+# So the build is the answer to his question. It either produces a binary or
+# names the crate that will not cross-compile, and both are worth having.
+#
+# **Deliberately its own workflow rather than a matrix entry in `release.yml`.**
+# `create release` needs every build job, so a target that is *expected* to fail
+# the first time must not be able to fail a release. When this goes green and
+# has run on someone's hardware, folding it into the release matrix is the right
+# next step — and only then.
+#
+# `--no-default-features` is the build he asked for: no SoapySDR (the whole
+# point — its C dependencies are the reason 32-bit ARM is awkward) and no
+# rtl_433. What it does **not** remove is the other vendored C, because it is
+# not behind a feature: faad2 and dream (DRM), nrsc5 (HD Radio), xng (HFDL) and
+# rade_c (RADE) are pulled unconditionally by their decoder crates. **That is
+# where this will break if it breaks**, and the `cc` variables below are what
+# give it a chance.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  armv7:
+    name: linux-armv7 (cat)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@1.98.1
+        with:
+          targets: armv7-unknown-linux-gnueabihf
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-armv7-cat
+
+      # The GNU cross toolchain, and the `cc` crate's per-target variables so
+      # the vendored C is cross-compiled with it rather than with the host gcc.
+      # The linker is set for Rust's own link of the final binary.
+      - name: Cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf cmake
+          {
+            echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc"
+            echo "CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc"
+            echo "CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++"
+            echo "AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar"
+          } >> "$GITHUB_ENV"
+
+      - name: Build (cat: no SoapySDR, no rtl_433)
+        run: |
+          cargo build --release --locked \
+            --target armv7-unknown-linux-gnueabihf \
+            -p sdroxide --no-default-features
+
+      - name: What came out
+        run: |
+          file target/armv7-unknown-linux-gnueabihf/release/sdroxide
+          ls -la target/armv7-unknown-linux-gnueabihf/release/sdroxide
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdroxide-linux-armv7-cat
+          path: target/armv7-unknown-linux-gnueabihf/release/sdroxide
