@@ -13,6 +13,81 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [2.0.0_brown] - 2026-10-06
+
+### Added
+
+- **DAB / DAB+ — the digital broadcast band, and the reason for the version.**
+  Band III and L-band (174–240 MHz), decoded from its own wideband window like
+  ADS-B rather than the narrow tap the text modes use, with a **CHANNEL** row, a
+  **SCAN** that walks all 38 Band III blocks and remembers the ones carrying an
+  ensemble, and the service list. DAB (not DAB+) is MPEG-1 Layer II and decodes
+  in pure Rust; DAB+ hands its Access Units to the same **faad2** the DRM
+  receiver already carries. `Mode::Dab` is appended to the mode enum and the
+  whole thing is behind one switch, `sdroxide_dab::DAB_ENABLED`.
+  **It is experimental and not proven on air** — see *Not fixed* — and the
+  chip's hover says what it takes: about **3 Msps** of front-end bandwidth
+  before there is any audio, because at the 1.536 MHz an ensemble occupies the
+  receiver sits on its ADC floor and drops samples, and a DAB decode needs a
+  continuous stream. It also warns against 3.2 on an SDRplay, which snaps to 2
+  and is the floor again.
+- **The panadapter's own settings now travel in the profile.** `center_on_vfo`
+  (the CTR chip), the FFT size and the step-snap were kept only in the client,
+  so they were lost with it. They are carried in the profile now, which is what
+  "CT and FFT are never remembered" was actually about (fork discussion #9).
+
+### Changed
+
+- **Settings are stored on the server, not in the browser.** The screen now
+  saves itself to the signed-in profile as you change it — nothing to press —
+  so a new session, on this device or another, comes back as you left it. The
+  reason is the one the operator gave and it is the right one: browser storage
+  cannot be depended on, because `persist()` behaves differently in every
+  browser, and a session kept there cannot be reset by anyone who is not
+  standing at that device. A profile on the server is a file, and the person
+  who runs the station can put a good one back. **The manual buttons stay**: a
+  server with **no password** has one shared profile, so nothing is written
+  there unless you press the button — one operator's theme must not become the
+  next one's.
+- **CTR and "First press snaps to the step" are on by default.** Both shipped
+  off, with reasons that are still true but are the second-order ones. A dial
+  that scrolls out of the window while a band is being worked is the everyday
+  complaint, and a frequency panned to lands on 27 265 436 with every press
+  after it carrying the odd 436 Hz around the band. Both are one chip from
+  being turned off again.
+
+### Fixed
+
+- **A panadapter station can decode again, and the phone can reach its scope.**
+  Both were fixed in `1.9.21_brown` and are repeated here only because that
+  release was cut the same day; if you are coming straight from 1.9.20, read
+  the 1.9.21 entry below for the four faults behind the first and the two
+  behind the second.
+
+### Not fixed
+
+- **DAB is not proven on air.** Live, the lane syncs and decodes **no FIBs**,
+  so no ensemble and no audio, while the same signal replayed from a file
+  decodes completely — 207 frames, 2484 FIBs and 16 services on a captured
+  channel 7D. That puts the fault in the engine's front end in front of the
+  decoder, not in the decoder, and the next experiment is written down. It is
+  enabled anyway so it can be tried, and it is the one thing in this release
+  that is not finished.
+- **The landscape layout for a short wide screen** is still open. A phone held
+  sideways now gets its spectrum, but the panel under it is built for a tall
+  screen and wants reflowing rather than fixing.
+- **No Olivia transmission has been copied by another program.** The receive
+  side is proven on the air; the transmit side is not, and the probe that
+  settles it (`olivia_tx_probe`, which writes exactly what we would send) has
+  not been run through fldigi or MultiPSK.
+- **The 1.9.17 phone crash is still open**, and has never been reproduced on
+  the bench. If it recurs, the browser console output is what is needed.
+- **The skimmer does not read a callsign off a CW signal** in its own test. The
+  station is spotted at the right frequency — so the window-following works —
+  but the callsign never arrives. It is load-sensitive rather than broken: it
+  passes unloaded and fails under load, because the skimmer drops IQ it cannot
+  keep up with. Left alone rather than patched blind.
+
 ## [1.9.21_brown] - 2026-10-06
 
 A panadapter station can decode again, a phone can reach its scope, and the

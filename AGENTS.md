@@ -764,6 +764,62 @@ The operator's instruction, after a session lost a lot of time to 90-second poll
 loops: **check a run once per finished task, not in a loop.** A tag push is
 followed by other work; the run is checked when the next thing finishes.
 
+## Session 2026-10-06, end of day: 2.0.0, DAB, and where upstream now sits
+
+**Two standing directions changed today, both by the operator, and both supersede
+anything above that says otherwise.**
+
+1. **Upstream is now secondary. The fork is the focus.** Upstream PRs are not the
+   queue any more and new work does not go there — *"we'll be leaving upstream for
+   what it is and fork is our main focus. just occasionally check on the issues
+   there if there's something relevant for us."* So: **check the upstream tracker
+   occasionally for anything that touches this fork, and nothing else** — no
+   triage, no replies, no new PRs. The existing open PRs are left as they are
+   (they are listed in the queue section, which is still true about their state,
+   just no longer the day's work).
+2. **Settings are stored on the server, not in the browser.** Kevin's argument on
+   fork discussion #4, and the operator agreed with it. It is a good argument and
+   it is his: *"network managers store everything on the servers… reliability.
+   Whatever the user does to their session, the server returns the same thing"* —
+   and the half browser storage can never have, **you can reset a session from
+   somewhere else** (he overwrites `radio.json`/`session.json`/`config.toml` over
+   SSH). He also measured that browser storage cannot be depended on: `persist()`
+   refuses silently in Chrome and prompts in Firefox, and even at `persisted() ===
+   true` his theme still did not survive a restart while his bindings did — which
+   is a client *read* fault, not eviction.
+
+So `2.0.0_brown` carries the **DAB / DAB+ receiver** (merged from the week-old
+`fork/dab`, enabled, experimental) and **the profile's screen saving itself**
+while signed in. Both are described in the release entry; the DAB merge's three
+conflict resolutions are worth keeping in mind for the next stale-branch merge,
+because two of them were *silently* wrong rather than conflicting:
+
+- **`PROTO_VERSION` 194 → 195.** The branch had numbered its DAB change **187**
+  and its ALC/band-gain change 188 — but `main` had already spent 187 on the ALC
+  work and 188 on the client screen. **Check the register against `main` before
+  trusting a branch's number.**
+- **`Command::SetDabConfig` and `ServerMsg::DabStatus` moved to the tail.** The
+  branch had the command mid-enum, before `SetGainByBand`.
+- **`RadioState::dab` moved to the tail.** The branch had inserted it **after
+  `ais`, mid-struct**, which shifts every field below it on a struct that rides
+  the wire whole — and its own doc comment claimed it was on the tail. **It
+  auto-merged cleanly. `git merge-tree` showed no conflict. Append-only is not
+  something a merge protects; it has to be checked by reading the field order.**
+- And the merge **duplicated a match arm** (`SetGainByBand`, present on both
+  sides) — the one the gate caught, as an unreachable pattern.
+
+**Deferred to the next session, deliberately:** the **DAB MOT slideshow** (the
+station images the ensemble broadcasts). Everything needed is already in place —
+`dabradio` decodes it (`PadExtractor::extract_all_from_au` → `PadData::Mot`), the
+Access Units are the same ones `take_pcm` hands to faad2, `image` is already a UI
+dependency with png+jpeg, and the SSTV pane has the bytes→texture pattern. It was
+left because it is **not tiny**: it wants its **own** wire pair rather than a
+field on `DabStatus` (that snapshot is sent several times a second and an image
+is tens of kilobytes), and it **cannot be verified without a DAB+ capture whose
+service actually broadcasts a slideshow** — the Nancy capture is the candidate
+and `dash-lab` is not on this box. The DLS (station text) comes from the same
+call and belongs in the same right-hand column.
+
 ## The standing queue and how to check it (re-measured 2026-10-06)
 
 **Our open upstream PRs are the whole queue.** Track only these. Everything
@@ -2839,9 +2895,13 @@ note and were rendered from a separate HTML source; leave them alone.)
 > download link to one is a 404, and the README's `releases/latest` links point
 > at the newest release.
 
-> **Version scheme (2026-09-30): step `Cargo.toml` for a real release.** The
-> operator wants to stay on 1.9.x until **DAB** is done, and never drift into
-> 2.0. `Cargo.toml` takes **only three numbers** — cargo rejects `1.9.8.1` — so
+> **Version scheme (2026-09-30): step `Cargo.toml` for a real release.**
+> **Amended 2026-10-06: the 1.9.x ceiling is spent — DAB landed, and `2.0.0_brown`
+> is the milestone release it was being held for.** The rule was *"stay on 1.9.x
+> until DAB is done, and never drift into 2.0"*, and DAB is now merged (experimental,
+> not proven on air — see the DAB entry below), so the version steps to 2.0.0
+> deliberately rather than by accident. Everything else about the scheme stands.
+> `Cargo.toml` takes **only three numbers** — cargo rejects `1.9.8.1` — so
 > the two roles are split: **a real release bumps the crate version** (1.9.8 →
 > **1.9.9**; the Windows MSI and the macOS bundle take their version from
 > `Cargo.toml`, so an upgrade has to step it), and **only a quick re-cut of the
