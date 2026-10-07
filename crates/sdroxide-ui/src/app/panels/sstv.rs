@@ -1524,13 +1524,29 @@ impl SdroxideApp {
                             if qsl_ok && qsl.clicked() {
                                 let bytes = self.sstv.full_png.clone();
                                 if let Some((name, png)) = bytes {
-                                    if !crate::download::share_file(
-                                        &name,
-                                        &png,
-                                        crate::download::Mime::Png,
-                                    ) {
-                                        // The sheet refused, or the browser has no
-                                        // File. Fall back rather than do nothing.
+                                    // **Only ask for the sheet where the browser
+                                    // said it can take a file.** `navigator.share`
+                                    // returns a *promise*, and the call reports
+                                    // only that the promise was created — a
+                                    // rejection (files unsupported, no user
+                                    // gesture, operator dismissed) is invisible
+                                    // to it. So a click that "shared" and showed
+                                    // nothing is exactly what happened on both
+                                    // platforms (fork discussion #16). This is
+                                    // the same `canShare` answer the hover text
+                                    // already uses, and where it is no, the
+                                    // composer opens instead of doing nothing.
+                                    //
+                                    // The call still comes *inside* the click:
+                                    // every browser refuses a share with no user
+                                    // gesture, and refuses it silently.
+                                    if !direct
+                                        || !crate::download::share_file(
+                                            &name,
+                                            &png,
+                                            crate::download::Mime::Png,
+                                        )
+                                    {
                                         email_qsl = true;
                                     }
                                 }

@@ -3354,7 +3354,7 @@ pub(in crate::app) fn settings_icomnet_tab(
                     .button("Copy diagnostic report")
                     .on_hover_text(
                         "Copies this radio's last session — its handshake and CI-V trace — \
-                         to the clipboard, for a bug report. This radio's, not the station's: \
+                         to the clipboard (or to a file, in a browser that will not let a page copy), for a bug report. This radio's, not the station's: \
                          with two Icoms on the LAN each tab answers about its own address.",
                     )
                     .clicked()
@@ -3788,7 +3788,7 @@ pub(in crate::app) fn settings_pluto_tab(
                 if ui
                     .button("Copy diagnostic report")
                     .on_hover_text(
-                        "Copies the last session's protocol trace to the clipboard, for a \
+                        "Copies the last session's protocol trace to the clipboard (or to a file, in a browser that will not let a page copy), for a \
                          bug report.",
                     )
                     .clicked()
@@ -4020,7 +4020,7 @@ pub(in crate::app) fn settings_smartsdr_tab(
                 if ui
                     .button("Copy diagnostic report")
                     .on_hover_text(
-                        "Copies the last session's protocol trace to the clipboard, for a \
+                        "Copies the last session's protocol trace to the clipboard (or to a file, in a browser that will not let a page copy), for a \
                          bug report.",
                     )
                     .clicked()
@@ -5275,7 +5275,7 @@ pub(in crate::app) fn settings_elad_tab(
             if ui
                 .button("Copy diagnostic report")
                 .on_hover_text(
-                    "Copies the last session's trace to the clipboard, for a bug \
+                    "Copies the last session's trace to the clipboard (or to a file, in a browser that will not let a page copy), for a bug \
                      report: every command exchanged with the device, and the \
                      first bytes of the sample stream.",
                 )
@@ -5567,7 +5567,7 @@ pub(in crate::app) fn settings_airspyhf_tab(
             if ui
                 .button("Copy diagnostic report")
                 .on_hover_text(
-                    "Copies the last session's trace to the clipboard, for a bug \
+                    "Copies the last session's trace to the clipboard (or to a file, in a browser that will not let a page copy), for a bug \
                      report: every command exchanged with the receiver, and the \
                      first bytes of the sample stream.",
                 )

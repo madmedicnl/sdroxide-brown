@@ -936,7 +936,27 @@ impl SdroxideApp {
             A::Test(kind, result) => self.set_test_outcome(kind, TestOutcome::Done(result)),
             // Straight to the clipboard, which is what the button that asked
             // for it promised — from here it goes into a bug report.
-            A::Report(_, text) => ctx.copy_text(text),
+            //
+            // **Except in a browser.** A page cannot always reach
+            // `navigator.clipboard` — it needs a secure context and a live user
+            // gesture, and a refused write is *silent* — which is exactly "the
+            // button greys out and nothing happens" (fork discussion #16, Kevin
+            // on a phone and on the Windows web client). The SAVE chips'
+            // download is the path that works everywhere, so that is what a
+            // report becomes on the web, and the hover says so.
+            A::Report(_, text) => {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let _ = ctx;
+                    crate::download::save_as(
+                        "sdroxide-diagnostic.txt",
+                        text.as_bytes(),
+                        crate::download::Mime::Text,
+                    );
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                ctx.copy_text(text);
+            }
             // The far end does not answer device questions. Said once, remembered
             // for the session: the controls that ask grey out with a reason
             // instead of each one having to discover it for itself.
