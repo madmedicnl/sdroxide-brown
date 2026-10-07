@@ -4997,6 +4997,36 @@ body as a follow-up rather than bundled.
 
 ## House rules
 
+- **A measurement that disagrees with a report is the first suspect, not the
+  last.** Before writing a fix for a reported fault, put it through four questions
+  in this order, and stop at the first "no":
+  1. **Is it visible?** The reporter's words, taken literally. "The outline
+     extends beyond the edge" is a paint past the window; "the layout is wrong" is
+     a guess about cause. Ask for the screenshot rather than inferring a mechanism.
+  2. **Does the instrument measure the thing reported?** An oracle that counts
+     geometry counts ink nobody can see — a transparent rect overhung at every size
+     and was reported as a border that failed to close. Transparent is not drawn;
+     ask what is drawn.
+  3. **Does anything already in the tree have a number, and does it disagree?** The
+     thing that knows the arithmetic is the instrument; the thing that merely looks
+     wrong is the symptom. `angled_frame` knew the width each panel was offered
+     *and* the rectangle it took, and the question had been "which row is too wide"
+     when the answer was "nothing inside is too wide — the background is".
+  4. **Is something else fighting the fix?** A fix that is correct and changes
+     nothing means a *second* cause is in play, and the way to find it is the
+     one-click experiment that isolates the other combatant, not a third
+     implementation attempt.
+- **A passing test is evidence about the test, not about the program.** Every
+  version of this has shipped green: nine tests on a QSL card while three typed
+  fields were missing from the rendered image; a sweep whose 6 pt tolerance existed
+  only to clear the fault it was supposed to catch; a bisect whose first two steps
+  were clean and whose third would have been too. When a fault survives a test,
+  **the test and the tolerance are suspects before the code is.** And a tolerance
+  that was added to accommodate a known fault is not a passing test — it is the
+  fault, written down, and it should be the next thing removed.
+- **For anything drawn rather than computed, render it and look at it.** Numbers
+  prove where the ink is; only looking proves it is *there*. A test can assert a
+  buffer's size, a colour, a width and still pass on a panel with nothing in it.
 - Keep changes CB- and listener-first: when a choice is between a ham workflow
   and a CB or listening one, this fork takes the CB/listening one. CB is a
   two-way service, so "CB-first" means using the band in full — transmit and
