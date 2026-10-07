@@ -9,6 +9,9 @@ crossbeam-channel.workspace = true
 futures-util = "0.3.34"
 mime_guess = "2.0.5"
 opus = "0.4.0"
+# Only ever built with `arm-no-simd` above — reached so that cargo will unify
+# `opusic-sys`'s `no-simd` feature into the `opus` build. See that feature.
+opusic-sys = { version = "0.7.5", optional = true }
 rtrb.workspace = true
 rust-embed = { version = "8.12.0", features = ["interpolate-folder-path"], optional = true }
 sdroxide-proto = { path = "../sdroxide-proto" }
@@ -46,3 +49,19 @@ tokio = { version = "1.53.1", features = ["test-util"] }
 
 [features]
 embed-web = ["dep:rust-embed"]
+# A cross build for a **no-NEON 32-bit ARM** baseline. Debian's `armhf` is
+# ARMv7-A + VFPv3, and NEON is *not* part of that baseline — so a build that
+# needs it can die with SIGILL on hardware that is otherwise perfectly well
+# supported (fork discussion #13, ipaddr42).
+#
+# Opus is the crate that bites: it builds its runtime-detected NEON intrinsics
+# under cross-compilation without giving them `-mfpu=neon`, which is a hard
+# compile error ("target specific option mismatch"), and its build script
+# exposes no env var to turn them off — only this feature. `no-simd` is the
+# other half of the same switch (`OPUS_DISABLE_INTRINSICS=ON`), and it is the
+# correct build for that baseline rather than a workaround: there is no NEON
+# there to detect.
+#
+# Off by default and harmless to every other build: with the feature off,
+# `opusic-sys` is not even a dependency of this crate.
+arm-no-simd = ["dep:opusic-sys", "opusic-sys/no-simd"]

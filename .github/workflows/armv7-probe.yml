@@ -37,6 +37,20 @@ name: armv7 probe
 # build script. That is a sysroot problem, so it gets a sysroot: `cross` runs
 # the build in a container whose image already carries a complete armhf sysroot,
 # and `Dockerfile.cross-armv7` adds the one library the tree needs on top of it.
+#
+# **`cross` cleared that and then stopped in the vendored C, in `opus`:**
+#
+#     silk/arm/biquad_alt_neon_intr.c: error: inlining failed in call to
+#     'always_inline' 'vadd_s32': target specific option mismatch
+#
+# NEON intrinsics compiled without `-mfpu=neon`. The obvious fix — hand the
+# build `-mfpu=neon-vfpv4` — is **wrong here**, and that is the point of this
+# probe: Debian's `armhf` is ARMv7-A + VFPv3 and NEON is *not* part of that
+# baseline, so a NEON build can die with SIGILL on hardware that is otherwise
+# supported. Opus's own switch for this is `OPUS_DISABLE_INTRINSICS`, which its
+# build script exposes only as the `no-simd` feature, so the build turns it on
+# through `sdroxide-server/arm-no-simd` — off by default, and the only thing
+# that pulls `opusic-sys` into that crate at all.
 
 on:
   workflow_dispatch:
@@ -70,7 +84,8 @@ jobs:
         run: |
           cross build --release --locked \
             --target armv7-unknown-linux-gnueabihf \
-            -p sdroxide --no-default-features
+            -p sdroxide --no-default-features \
+            --features sdroxide-server/arm-no-simd
 
       - name: What came out
         run: |
