@@ -13,6 +13,43 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+### Added
+
+- **A sign-in cookie: sign in once, and the station remembers you.** The sign-in
+  card in the browser now offers **12 HOURS** or **1 DAY**, and the *station* keeps
+  the result rather than the page: a signed cookie, unreadable by the page's own
+  script, sent automatically on every connection after it. Three radios on one
+  station are three connections, so this is the difference between being asked
+  three times and once — across the other radios, the 3D solar view, and a browser
+  reload or restart. **Settings → General → Signed-in station** names the station
+  and carries **SIGN OUT**, which asks the station to take the cookie back, because
+  an `HttpOnly` cookie is deliberately unreadable by the page and a button that
+  cannot do the thing must not be offered. No protocol change: it rides HTTP
+  headers (`POST /signin`, `POST /signout`), never the postcard socket.
+
+### Changed
+
+- **The browser no longer keeps your station password.** It keeps a signed cookie
+  instead, so there is no copy of the password in local storage. Where a station
+  is too old to hand one out, the page falls back to the old store *and says so* on
+  that settings row rather than quietly holding the password. The station signs the
+  cookie with the credentials it is already configured with, so there is no new
+  secret file, and **changing the password signs every browser out at once**.
+- **A cookie is a bearer token**, so the dwell is the operator's own choice and the
+  default is the shorter one: 12 hours, with a day offered beside it rather than
+  chosen for them.
+
+### Not proven
+
+- **Not driven in a browser here.** The server half is asserted end to end — a
+  station of three radios, one sign-in, and no second prompt, plus the four things
+  that must keep asking (no cookie, a wrong password, sign-out's `Max-Age=0`, the
+  dwell carried through) — and the client's half is unit-tested on its pure parts
+  (the HTTP address the station is asked at, including behind a reverse-proxy
+  prefix; the card's default dwell surviving the next frame). The `fetch` itself,
+  the cookie appearing in a real browser, and **SIGN OUT** on a phone are untried
+  by hand.
+
 ## [2.0.1_brown] - 2026-10-07
 
 **A pre-release for testing.** Everything here is small and targeted; the two

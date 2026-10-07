@@ -1064,6 +1064,94 @@ to test it. Our side has not measured it, and `sdroxide-adsb` at a steady 99.9 %
 is a single-thread bottleneck in *our* decoder, so it is ours to check before it
 is the firmware's.
 
+### Built (2026-10-07, later): **the sign-in cookie** — one password, one station
+
+The operator's question, and the right shape for it: *"can't we make a cookie
+that keeps the login open? … the user has to accept a 12 or 24h cookie."*
+**Built**, and it needs **no `PROTO_VERSION` bump** — which was not obvious in
+advance and is the reason the design below is the one it is.
+
+**Why HTTP and not a socket message.** A cookie is set with a response header,
+and axum's WebSocket upgrade spends its response headers *before*
+`auth::challenge` has read a password — so a card on the socket cannot give one
+out, however it is asked for. Hence `POST /signin` over plain HTTP
+(`crates/sdroxide-server/src/signin.rs`): the client posts the credentials once
+when the operator presses SIGN IN, the station answers `Set-Cookie`, and every
+connection after it — every radio, `/solar-ws`, every reload — carries the cookie
+on its own upgrade and skips `challenge()` entirely (`auth::challenge` grew an
+`already` argument; the three routes read the cookie from `HeaderMap`).
+
+**No new secret file, and that is the load-bearing decision.** The signing key is
+derived from the credentials the server was *already* configured with
+(`session_cookie::key`). So: nothing new to store, back up or lose, and
+**changing the password invalidates every cookie at once** — which is what an
+operator who changes their password means, and what a separate stored secret
+would have to be taught to do anyway. A station with no password configured has
+no key, so this can never be a way in the password was not.
+
+**HMAC-SHA256 written out** over `sha2` (already in the tree via rustls) with a
+`subtle` comparison. `hmac` is not in `Cargo.lock`, so adding it would have meant
+a fetch; eight lines against a crate the build already has is the better trade,
+and the construction is fixed by RFC 2104.
+
+**Two bugs the tests caught, both worth keeping:**
+
+- **SIGN OUT would have signed you in for twelve hours.** `clear_cookie` routed
+  through `set_cookie`, which *clamps* `hours` — and `0` clamps to the twelve-hour
+  dwell. So the button meant to end a session handed back one lasting half a day.
+  Caught by a test asserting what the string actually says, not what it was meant
+  to. `clear_cookie` is now written out on its own with `Max-Age=0`.
+- **The dwell was the default, not an override.** `settle` runs every frame, so
+  setting `self.dwell` there put the twelve-hour default back over an operator
+  who had just tapped **1 DAY** — silently halving what they chose. Now guarded
+  on the station actually changing.
+
+**One test failed with the report's own words**, which is the best possible
+confirmation: `one_sign_in_covers_every_radio_on_the_station` — three radios, one
+`/signin`, all three connections — panics on the unfixed code with
+`/ws asked for a password it already had: AuthRequired`. That is Kevin's bug, not
+a paraphrase of it. Beside it, the four things that must keep asking:
+`without_a_cookie_it_still_asks`, `a_wrong_password_buys_no_cookie`,
+`signing_out_expires_the_cookie`, `the_cookie_carries_the_dwell_that_was_asked_for`
+(five ports, 39481–39485, because the turnstile is server-wide state).
+
+**Two things the client half had to get right, both now unit-tested on native:**
+
+- **The HTTP address.** `signin_url` turns `wss://host` into `https://host/signin`,
+  and **keeps a reverse-proxy path prefix** — `wss://host/shack` must ask
+  `https://host/shack/signin`, or the password goes to the proxy root, whose 404
+  reads to the operator as a station refusing a correct password. My first test
+  expected the prefix to be stripped; the code was right and the test was wrong,
+  which is why the prefix case is pinned now.
+- **`HttpOnly` means the page cannot sign itself out**, so **SIGN OUT** is an
+  endpoint. It lives on the new **Settings → General → Signed-in station** row
+  (drawn whenever `peer_url()` is `Some`, so the browser — where the cookie is
+  the whole mechanism — is the case it was designed for) and says what it does:
+  the station forgets this device; **the connection you are on stays up**.
+
+**The fallback, which is the part that keeps an old station working.** A station
+too old to answer `/signin` would break the card's promise, so the page falls back
+to the old password store and **names that station** on the settings row rather
+than holding a password quietly (`cookie_fallback_stations`). Native is untouched:
+no cookie store exists, so **Remember on this device** and `remote_login.json`
+remain, and SIGN OUT clears it.
+
+**It masks a bug we have still not found.** The report's two live suspects were
+the empty station key (which `!self.station.is_empty()` then skips in silence)
+and Chrome's save-password popup. The cookie removes the password field that
+would cause the popup, and covers the other — so **the empty-key guard is still
+unfixed and still worth fixing.** A feature that quietly covers an unexplained
+report is how the next one gets misread.
+
+**Honest limits.** Same-origin only in practice (fine behind caddy, which is one
+host; a client on another origin needs `SameSite=None; Secure` and runs into
+Chrome's third-party-cookie rules). Revocation is expiry or a password change —
+no device list, no sign-out-everywhere, because that is a server-side session
+store. **Not driven in a browser here**: the server half is end-to-end tested,
+the client's pure half is unit-tested, the `fetch` and a real cookie on a phone
+are not. Told to Kevin as "next release, I will post when it is on a
+pre-release" — fork discussion #16, comment `18797670`.
+
 ### Narrowing the two open items — the steps, so this is not re-derived
 
 **Item 3, the 3-radio tab-close flicker** (fork discussion #16, Kevin; browser
