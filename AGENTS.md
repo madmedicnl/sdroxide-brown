@@ -143,9 +143,13 @@ would build), installed binary 2.0.2_brown matching `Cargo.toml`, and
 
 ### Parked deliberately, with the reason
 
-10. **The 2 pt page overflow** — cosmetic, reproduced by an oracle that is already
-    in the tree. Chase it during the bench weeks, when there is a screen to look
-    at rather than a number to argue with.
+10. ~~**The 2 pt page overflow**~~ **FIXED (2026-10-07), and it was never the
+    chip row** — see the item 1b section below for the whole thing. The ink that
+    went off-screen was the top bar's *background*, painted by egui's `Panel`
+    frame fill 2 pt past the window's edge at every size; the band is now painted
+    from inside the panel with a painter clipped to the window. The sweep is
+    strict at half a point and the ignored strict test is **un-ignored and
+    passing**.
 11. **The empty station-key guard** — real, masked by the sign-in cookie, harmless
     while masked. Pick it up when something actually depends on it.
 12. **Olivia transmit interop** — needs somebody with an fldigi on the other end.
@@ -1355,11 +1359,50 @@ possible causes in one question:
    closes and re-notices, which is churn with no reopen involved.
 6. Whichever it is, **the step-2 test is the guard** — land it with the fix.
 
-**Item 1b, the 2 pt page overflow** (`#16`, present with *one* radio at 360 and
-1920, so not the strip: the page's background `Rect` is 0..362 in a 360 window
-and its right border is therefore painted off-screen). **Do not use `sed` on
-`engine.rs`/`top_bar.rs` for any of this** — a bare indentation-anchored pattern
-cost a day's work today by rewriting an unrelated `1.0` in the TUNE path.
+**Item 1b, the 2 pt page overflow — FIXED, and the bisect below was looking in the
+wrong place** (`#16`, present with *one* radio at 360 and 1920, so not the strip:
+the page's background `Rect` is 0..362 in a 360 window and its right border is
+therefore painted off-screen). **Do not use `sed` on `engine.rs`/`top_bar.rs` for
+any of this** — a bare indentation-anchored pattern cost a day's work today by
+rewriting an unrelated `1.0` in the TUNE path.
+
+**What actually happened, because the steps below are wrong and that is worth
+keeping.** Steps 1 and 2 were both run and both came back clean: the strip
+planners sum correctly at every width, and instrumenting `angled_frame` showed
+every panel's *content* comfortably inside the window — 8..352 pt in a 360 pt one.
+Step 3, bisecting a row, would have found nothing, because no row was too wide.
+
+The recorder was still the right idea, only the question was slightly wrong. It
+asked what a panel was *pinned* to; the thing that needed asking was what the
+panel *painted*, and the answer was egui's own: **`egui::Panel`'s frame fill
+reaches ~2 pt past the window's right edge at every size**, regardless of what is
+inside it. That is the top bar's background, which is why the border was missing
+on two different panels and in both a phone and a desktop browser — one paint,
+everywhere.
+
+**The fix, and it is one place.** The band is now painted from inside the panel,
+through a painter clipped to the window, rather than by the panel's frame; the
+frame keeps its inner margin and carries no fill. Its height is only known after
+layout, so it uses the paint-slot trick [`angled_frame`] already uses for the
+gradient fill — reserve a `Shape::Noop`, set it once the panel's rect is known.
+
+**Two corrections to the oracle itself, both of which were reporting things that
+were not faults:**
+
+- It counted **fully transparent** rects. egui keeps painting transparent ones — a
+  frame with no fill, a reserved slot — and one of them overhung at every size, so
+  the oracle called it ink that no operator could ever see. It now asks for
+  **ink, not geometry**: a rect with a transparent fill and no stroke is skipped.
+- The sweep's **6 pt tolerance** existed only to clear this one 2–4 pt remainder,
+  so it was letting through a fault that was never the strip's. It is now **0.5**,
+  which is what a hairline stroke spends, and `nothing_is_drawn_wider_than_the_window`
+  is **un-ignored and passing** — it was written for exactly this moment.
+
+**The lesson, and it is the same one as the CTR/SSTV note:** instrument the thing
+that knows the arithmetic, not the thing that merely looks wrong, and check
+whether a reported fault is *visible* before chasing its geometry. Kevin's report
+was precise — the outline extends beyond the edge — and taken literally it is not a
+row at all.
 
 1. **Turn it into a pure-function assertion before touching any drawing.**
    `plan_short_strip` (`top_bar.rs:309`) is pure and already has a test helper
