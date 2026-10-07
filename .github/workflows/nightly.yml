@@ -1,6 +1,7 @@
 name: Nightly
 
-# A rolling weekly build of `main`.
+# A rolling build of `main`, every evening, carrying **only the platforms people
+# actually downloaded** from the last release (see the `wanted` step below).
 #
 # Rather than duplicate the ~900-line release workflow, this moves a `nightly`
 # tag to the branch head and dispatches `release.yml` against it. The release
@@ -13,13 +14,18 @@ name: Nightly
 # is pushed there: this builds the remote `main`, not any local checkout.
 on:
   schedule:
-    # Mondays at 03:00 UTC. Weekly rather than a rolling nightly: the program is
-    # near settled, so most nights rebuild an unchanged tree — fourteen platform
-    # builds and thirty-odd assets for nothing. The step below skips even that
-    # when `main` has not moved. GitHub's scheduler is best-effort — a busy
-    # queue can delay it by minutes, and it skips a run if one is already going
-    # (see the concurrency group below).
-    - cron: '0 3 * * 1'
+    # Every evening, 18:00 UTC — about 20:00 where the operator is, so a
+    # nightly is there when he gets to it and when the testers who asked for
+    # one are awake. The *frequency* is the operator's standing decision
+    # (AGENTS.md, "The release rhythm"): nightly, Friday release at noon,
+    # patch release only for a serious bug. The reason a nightly may be worth
+    # running every evening where a weekly one was not is that it now builds
+    # only what somebody downloaded, so an evening build is a few jobs rather
+    # than fourteen.
+    #
+    # GitHub's scheduler is best-effort — a busy queue can delay it by minutes,
+    # and it skips a run if one is already going (see the concurrency group).
+    - cron: '0 18 * * *'
   # For a build on demand, from the Actions tab or
   # `gh workflow run nightly.yml`. A manual run always builds, whether the
   # branch moved or not.
@@ -70,8 +76,71 @@ jobs:
           # Force, because the tag moves every week; that is what makes it
           # "nightly" rather than a growing pile of tags.
           git push --force origin nightly
+      - name: Which platforms did anyone actually download?
+        id: wanted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The last few real releases, and what was taken from them — not just
+          # the newest, because a release is published and then downloaded over
+          # the days after it. Counting only the latest would mean the nightly
+          # in the evening a Friday release is cut sees a count of nearly zero
+          # and builds almost nothing, which is the opposite of what the rule is
+          # for. `nightly` itself is excluded: it is this workflow's own output
+          # and would make the counts self-referential.
+          tags=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq '[.[] | select(.draft == false and .tag_name != "nightly")][:3][].tag_name')
+          if [ -z "$tags" ]; then
+            echo "no release to learn from — building everything"
+            echo 'wanted=[]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          assets=""
+          for tag in $tags; do
+            echo "reading download counts from $tag"
+            assets="$assets
+            $(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" \
+              --jq '.assets[] | "\(.name) \(.download_count)"')"
+          done
+
+          # The floor is two entries whatever the counts say, and that is the
+          # whole point of a floor:
+          #
+          # * `linux-x86_64` — the bench this fork is developed on, and the one a
+          #   platform that stops being built stops being tested on. A platform
+          #   quietly dies by never being built again.
+          # * `linux-aarch64-compat` — the one build no *release* publishes, and
+          #   which the nightly used to carry for that reason: it is the only
+          #   way anybody gets that artifact. Dropping it here would quietly
+          #   delete it, so it is named rather than left to a download count that
+          #   can never be non-zero, since nothing published has it.
+          wanted='["linux-x86_64", "linux-aarch64-compat"]'
+          for label in linux-x86_64 linux-aarch64 windows-x86_64 macos-x86_64 macos-aarch64; do
+            case "$label" in linux-x86_64) continue ;; esac
+            count=$(printf '%s\n' "$assets" | awk -v l="$label" '$1 ~ l { n += $2 } END { print n + 0 }')
+            if [ "$count" -gt 0 ]; then
+              echo "  $label: $count downloads over the last few releases"
+              wanted=$(printf '%s' "$wanted" | sed "s/\]/, \"$label\"]/")
+            else
+              echo "  $label: nobody has downloaded it — skipping"
+            fi
+          done
+          echo "wanted=$wanted" >> "$GITHUB_OUTPUT"
+
       - name: Start the release workflow on it
         if: steps.tag.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref nightly
+          WANTED: ${{ steps.wanted.outputs.wanted }}
+        run: |
+          # `wanted` is the release workflow's own narrowing input, and an empty
+          # list there means "build all of them". A Friday release and a patch
+          # release never pass it, so nothing a tester installs is ever
+          # narrowed — this is the nightly's ceiling and nothing else's.
+          if [ -n "$WANTED" ] && [ "$WANTED" != "[]" ]; then
+            echo "nightly: $WANTED"
+            gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref nightly \
+              -f wanted="$WANTED" -f variants='["cat"]' 
+          else
+            gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref nightly
+          fi

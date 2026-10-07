@@ -18,6 +18,17 @@ on:
         required: false
         default: ''
         type: string
+      # Build only these package variants, as a JSON list — `["cat"]` or
+      # `["soapy"]`, or both. Empty builds both, which is what every release and
+      # every untargeted dispatch does. The nightly passes `["cat"]`: it is the
+      # one a tester can run without installing PothosSDR first, so a nightly
+      # that spent half its jobs on Soapy builds would be paying twice over for
+      # the same evening.
+      variants:
+        description: 'Package variants to build (JSON list; empty = both)'
+        required: false
+        default: ''
+        type: string
       # Instrument the aarch64 final link: a step-level deadline on the build, a
       # memory sampler running beside it, and the runner's own view of the
       # stalled process if it does stall. Inert unless asked for.
@@ -154,6 +165,15 @@ jobs:
           else
             wanted='null'
             variants='["soapy", "cat"]'
+          fi
+          # A named variant list overrides whichever branch above chose, which is
+          # how the nightly keeps the Soapy builds out without a second input
+          # that had to agree with this one. Validated for the same reason
+          # `wanted` is: a typo here would build nothing and still go green.
+          if [[ -n "${{ inputs.variants }}" ]]; then
+            variants='${{ inputs.variants }}'
+            jq -e 'type == "array" and length > 0' <<<"$variants" > /dev/null \
+              || { echo "::error::variants must be a non-empty JSON list"; exit 1; }
           fi
           # An include-only matrix: one job per entry, and no cross product to
           # filter down afterwards.

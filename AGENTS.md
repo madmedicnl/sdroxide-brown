@@ -3718,6 +3718,41 @@ that cannot transmit — because the ham RX strip has no room for another chip (
 desktop-strip two-row test pins it) and a listener's log is the reception one.
 The same EQ is also on the LISTEN window's Tone row.
 
+## The release rhythm (decided 2026-10-07, and it is a decision, not a habit)
+
+The operator's own words, kept because the reasoning is the whole point: *"we'll
+be more mindful instead of riding the wind."* Three rungs, and what each is for:
+
+| When | What | Why |
+| --- | --- | --- |
+| **Every evening** | a **nightly**, carrying **only the builds people actually downloaded from the last release** | room to test. Fourteen platform builds and thirty-odd assets for nobody is not a nightly, it is a cost |
+| **Every Friday, cut at noon** | a **normal release**, so it is downloadable in the afternoon | testers get something real to play with while there is still a day in front of them |
+| **In between, only if a serious bug appears** | a **patch release** — `2.0.3_brown` — cut then and there | a Friday's wait is a scheduled thing; a real fault is not |
+
+**What this is actually for**, and it is not "more releases": the three of them
+give testers **time** — time to test what is out, time to play radio, and us time
+to do the same — which is what a program like this needs more of than features.
+Expectations are managed by the calendar rather than by surprise: a tester knows
+a Friday build is the one to try, and knows a nightly is tonight's changes only.
+The week before, releases came out when something looked ready, which is the
+wind.
+
+**Two consequences to keep in mind, and they cut in opposite directions:**
+
+- **A nightly may build nothing at all** if nobody has downloaded a platform. That
+  is the point, and the consequence is that **a platform nobody downloads stops
+  being covered**, so the mapping keeps a floor of `linux-x86_64` — the bench we
+  test on ourselves — whatever its count says.
+- **The narrowing is for nightlies only.** A Friday release and a patch release
+  build the **full matrix**, so no platform can disappear from anything anybody
+  installs. If the nightly ever looked like it was about to become the only
+  thing being built, that would be the day to stop.
+
+**Nothing here changes the standing rules further up**: never re-cut a tag, a
+release notes entry is `Fixed` / `Added` / `Changed` / **`Not proven`**, and a
+release day is still `cargo check --workspace --all-targets` **silent** plus
+`cargo test --release --workspace` before the tag is cut.
+
 ## Regenerating the quick-start PDFs
 
 `docs/cb-quickstart.{en,nl,fr,it}.md`,
@@ -3829,14 +3864,40 @@ enough that one job should never depend on every file succeeding, and the
 `--clobber` re-runs that followed deleted and re-created assets until they too
 failed.
 
-Nightlies are separate: `.github/workflows/nightly.yml` runs Mondays at
-03:00 UTC (and by hand), moves the `nightly` tag to `main` and dispatches the
-same release workflow against it. A scheduled run whose `main` has not moved
-since the last one is skipped — no point rebuilding an unchanged tree — so a
-quiet week builds nothing; a manual dispatch always builds. `release.yml`
-publishes a `nightly` ref as a **pre-release** with a dated title, so
-`/releases/latest` and the README's stable download links keep pointing at a
-tagged release rather than at last week's build.
+Nightlies are separate, and their shape is the operator's standing decision (see
+**The release rhythm** above): `.github/workflows/nightly.yml` runs **every
+evening at 18:00 UTC** (and by hand), moves the `nightly` tag to `main` and
+dispatches the same release workflow against it. A scheduled run whose `main`
+has not moved since the last one is skipped — no point rebuilding an unchanged
+tree — and a manual dispatch always builds. `release.yml` publishes a `nightly`
+ref as a **pre-release** with a dated title, so `/releases/latest` and the
+README's stable download links keep pointing at a tagged release rather than at
+last night's build.
+
+**What a nightly builds, and why it is not all fourteen** (2026-10-07): the
+**only platforms anybody has downloaded from the last three releases**, read from
+their asset download counts, plus a **floor of `linux-x86_64` and
+`linux-aarch64-compat`**. Three details that are the difference between this
+working and not:
+
+- **Three releases, not one.** A release is published and then downloaded over the
+  days after it; counting only the newest would have made the nightly in the
+  evening a Friday release was cut build almost nothing. Measured against our own
+  releases the difference is stark — the latest release alone said "2 downloads",
+  the three-release window said 28 Windows, 2 Apple-silicon and 1 Intel Mac.
+- **The floor.** `linux-x86_64` is the bench this fork is developed on, and a
+  platform that stops being built stops being tested. `linux-aarch64-compat` is
+  named for a different reason: it is the one build **no release publishes**, and
+  the nightly is the only way anybody gets that artifact, so it can never be left
+  to a download count that is permanently zero.
+- **`cat` only.** A new `variants` input on `release.yml` keeps the nightly off
+  the Soapy builds, which it has never needed: `cat` is the one a tester can run
+  without installing PothosSDR first.
+
+Both inputs are validated in `targets` as non-empty JSON, because a typo in a
+dispatch input would otherwise produce an empty matrix and a green run that
+built nothing. **A release — Friday or patch — never passes either one, so
+nothing anybody installs is narrowed by any of this.
 
 ## The Morse trainer (offered upstream as #568)
 
