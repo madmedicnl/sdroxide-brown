@@ -7927,9 +7927,13 @@ pub(in crate::app) fn band_mode_menu(
                 // has its own lane, no QSO and no transmitter. They are digital
                 // signals all the same, and this is where an operator looks for
                 // one.
-                for m in
-                    Mode::DIGITAL.into_iter().chain([Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab])
-                {
+                for m in Mode::DIGITAL.into_iter().chain([
+                    Mode::Adsb,
+                    Mode::Vdl2,
+                    Mode::Ais,
+                    Mode::Hfdl,
+                    Mode::Dab,
+                ]) {
                     mode_band_chip(ui, mode, m, band, state, cmds);
                 }
             });
@@ -7970,9 +7974,13 @@ pub(in crate::app) fn band_mode_menu(
             ui.add_space(6.0);
             crate::chrome::menu_caption(ui, "Digital");
             ui.horizontal_wrapped(|ui| {
-                for m in
-                    Mode::DIGITAL.into_iter().chain([Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab])
-                {
+                for m in Mode::DIGITAL.into_iter().chain([
+                    Mode::Adsb,
+                    Mode::Vdl2,
+                    Mode::Ais,
+                    Mode::Hfdl,
+                    Mode::Dab,
+                ]) {
                     mode_listen_chip(ui, mode, m, state, cmds);
                 }
             });
@@ -8783,6 +8791,42 @@ mod tests {
                 p.cell2_w
             );
         }
+    }
+
+    /// **The sweep** (fork discussion #16, item 1b). The test above checks the
+    /// sum at *one* width, 564, the narrowest short window; this checks it at
+    /// every width the strip can be drawn at. The arithmetic is a free function
+    /// of measured numbers, so a width that does not add up is a bug in the
+    /// arithmetic and nothing to do with egui.
+    ///
+    /// It is worth knowing *how* this can fail, because it narrows the search:
+    /// `grid_w` is `(avail - box_w - ptt - gaps - 4).max(grid_min)`, so the
+    /// total is `max(avail - 4, box_w + ptt + gaps + grid_min)`. It can only
+    /// overflow when the box, the PTT and the grid's **minimums** together want
+    /// more than the row — never by a rounding of the slack.
+    #[test]
+    fn the_short_strip_adds_up_at_every_width() {
+        let mut bad: Vec<String> = Vec::new();
+        // 600 is the narrowest viewport the tablet tier dresses, which is the
+        // only range this planner is used in — below it the phone tier draws a
+        // different strip entirely, and it is not this arithmetic. Sweeping
+        // under that finds only that the plan does not add up for a screen it
+        // is never given.
+        for w in (600..=1400).step_by(4) {
+            // Less the top panel's 8+8 and angled_frame's 10+10, as
+            // `a_phone_strip` computes and `short_strip` is handed.
+            let avail = w as f32 - 36.0;
+            for (tx, sub) in [(true, false), (true, true), (false, false)] {
+                let p = a_short_strip(avail, tx, sub);
+                let ptt = if tx { T_PTT_W } else { 0.0 };
+                let gaps = if tx { 16.0 } else { 8.0 };
+                let total = p.box_w + ptt + gaps + p.grid_w;
+                if total > avail + 0.5 {
+                    bad.push(format!("avail {avail:.0} (tx={tx} sub={sub}): {total:.0}"));
+                }
+            }
+        }
+        assert!(bad.is_empty(), "the short strip overflows at:\n  {}", bad.join("\n  "));
     }
 
     /// The screen the strip was drawn for: 1280x720. The readout reaches its
