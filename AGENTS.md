@@ -884,15 +884,38 @@ Three walls down in order, each one a whole run:
 3. `rade_c`'s cmake ExternalProject — `patch` was not in the image
    (`sh: 1: patch: not found`), added to `Dockerfile.cross-armv7`.
 
-**The remaining wall is the link, and it is one crate.**
-Run 37597717686 compiled every crate and died at the final link:
+**IT BUILDS (2026-10-07 10:33, run 37606994024).** Four walls, each one a
+whole run, and every one of them a *packaging* wall rather than the code:
 
-    libsdroxide_rade-....rlib: error adding symbols: file format not recognized
+    sdroxide: ELF 32-bit LSB pie executable, ARM, EABI5, for GNU/Linux 3.2.0
 
-That crate builds its own opus through cmake (`build_opus-prefix`,
-`-L .../build_opus/.libs`), and something on that path produces objects the
-linker will not mix. **Next thing to look at**, and the answer to ipaddr42 is
-now one link error away rather than four walls.
+1. `alsa-sys` — a real armhf sysroot via `cross` (runs 37577495536).
+2. `opus` NEON intrinsics — opusic-sys's `no-simd`, reached through a gated
+   `sdroxide-server/arm-no-simd` feature. **Never "fix" it with
+   `-mfpu=neon-vfpv4`**: Debian armhf is VFPv3 and NEON is not in that baseline,
+   so a NEON build can SIGILL on supported hardware.
+3. `rade_c`'s cmake ExternalProject needed `patch`, which was not in the image.
+4. **The one that took three tries: `rade_c` built its nested opus with the
+   *host* compiler.** `BuildOpus.cmake` passes
+   `--host=${CMAKE_C_COMPILER_TARGET}` to autotools only when that variable is
+   set, and CMake does not infer it because the wrapper CMake runs natively —
+   so opus configured as a native build. Three separate faults came out of that
+   one gap, in order: a mixed armhf/x86-64 rlib (*"file format not recognized"*
+   at the final link), then `configure: error: cannot run C compiled programs`
+   once the compiler was right but `--host` still empty. Two things had to be
+   true: the un-suffixed `CC`/`CXX`/`AR`/`RANLIB`/`LD` **whitelisted through
+   `Cross.toml`'s `[build.env] passthrough`** (cross passes only a whitelist into
+   the container, so naming them on the step did nothing), *and* the autotools
+   triple — `arm-linux-gnueabihf`, **not** the Rust target triple — passed in as
+   `CMAKE_C_COMPILER_TARGET`. `crates/sdroxide-rade/build.rs` forwards it; unset
+   on every native build, where nothing changes.
+
+**The probe stays a probe.** Its own header says folding it into the release
+matrix waits until it "has run on someone's hardware", and that has not
+happened yet. The binary is attached to the `v2.0.1_brown` **pre-release** by
+hand instead (`sdroxide-v2.0.1_brown-linux-armv7-cat.tar.gz`), which carries no
+CI risk — a job that can fail in front of `create release` is a job that can
+fail a release. When ipaddr42 reports it runs, fold it in.
 
 **2.0.1_brown is cut as a pre-release** (tag pushed, `gh release create
 --prerelease`, workflow 37600454169). It carries the strip scroll fix, the SSTV
