@@ -967,7 +967,14 @@ impl SdroxideApp {
             },
             |s| s.audio_hz,
         );
-        focus_hz(mode, self.state.active_freq_hz(), audio_hz, self.ui_settings.cw_qrg)
+        let audio_front_end = self.caps.as_ref().is_some_and(|c| c.audio_mode);
+        focus_hz(
+            mode,
+            self.state.active_freq_hz(),
+            audio_hz,
+            self.ui_settings.cw_qrg,
+            audio_front_end,
+        )
     }
 
     /// Center the view on the tuned frequency after big jumps (band change,
@@ -1133,7 +1140,29 @@ fn refit_on_window_growth(audio_mode: bool, prev_rate: f64, new_rate: f64, view_
 ///
 /// `audio_hz` is unsigned — the distance from the dial — and
 /// [`Mode::on_air_hz`] puts it on whichever sideband the mode rides there.
-fn focus_hz(mode: Mode, dial_hz: f64, audio_hz: f32, cw_qrg: bool) -> f64 {
+fn focus_hz(mode: Mode, dial_hz: f64, audio_hz: f32, cw_qrg: bool, audio_front_end: bool) -> f64 {
+    // **SSTV's picture is not on the dial — on a front end that only has
+    // demodulated audio.** The dial there sits on the suppressed carrier and the
+    // picture is 1200-2300 Hz of audio to one side, so "what must stay on
+    // screen" is the picture, not the carrier: without this the window is
+    // centred on the carrier however narrow it is made, which is what the first
+    // attempt did and the screenshots showed — an empty centre line with the
+    // picture either side of it.
+    //
+    // **Only a demod-audio source.** On an SDR the operator tunes the dial
+    // *onto the picture* — that is what the RSP1's own SSTV view shows — so
+    // shifting the focus for them would move a view they had already placed.
+    //
+    // Kept here rather than as a `standard_tone_offset_hz` because this is a
+    // **view** question, not a logging or transmit one: the contact's frequency
+    // for SSTV is the dial, and `on_air_hz` is the answer the log reads.
+    if audio_front_end && mode.is_sstv() {
+        return if mode.is_lower_sideband_at(dial_hz) {
+            dial_hz - SSTV_TONE_HZ
+        } else {
+            dial_hz + SSTV_TONE_HZ
+        };
+    }
     let on_cursor = mode.holds_standard_tones() || (mode == Mode::Cw && cw_qrg);
     if on_cursor { mode.on_air_hz(dial_hz, audio_hz) } else { dial_hz }
 }
@@ -1171,7 +1200,7 @@ mod tests {
     use super::WIDER_THAN_PASSBAND;
     use super::{
         AutoFit, FIT_ARRIVED_DB, FIT_MIN_GAP_S, FIT_SETTLE_S, FIT_STEP_S, average_in,
-        base_fft_for_rate, fit_due, glide_step, levels_drifted, pick_levels,
+        base_fft_for_rate, fit_due, focus_hz, glide_step, levels_drifted, pick_levels,
         refit_on_window_growth, saturated_bins, slack_viewport, sstv_audio_window,
     };
 
@@ -1191,6 +1220,17 @@ mod tests {
         assert_eq!(c, 3_728_250.0, "80 m is LSB for SSTV");
         // Every other mode keeps the window it would have had.
         assert!(sstv_audio_window(Mode::Ft8, 14_074_000.0).is_none());
+        // **And the view must be centred there too.** The first attempt at this
+        // narrowed the window and left it on the carrier, which is what the
+        // screenshots showed: the picture either side of an empty centre line.
+        assert_eq!(focus_hz(Mode::Sstv, 27_700_000.0, 0.0, false, true), 27_701_750.0);
+        assert_eq!(focus_hz(Mode::Sstv, 3_730_000.0, 0.0, false, true), 3_728_250.0);
+        // A mode that really is worked on the dial is untouched...
+        assert_eq!(focus_hz(Mode::Ft8, 14_074_000.0, 0.0, false, true), 14_074_000.0);
+        // ...and **an SDR keeps its own dial**, because there the operator put
+        // the dial where they wanted it (the RSP1's SSTV view is fitted by
+        // hand and centres on the picture by itself).
+        assert_eq!(focus_hz(Mode::Sstv, 3_730_000.0, 0.0, false, false), 3_730_000.0);
     }
 
     /// The "levels are hiding everything" test: a slice that is *all* at one
@@ -1524,7 +1564,7 @@ mod focus_tests {
     #[test]
     fn rtty_anchors_on_the_tone_pair_not_the_dial() {
         let dial = 14_080_000.0;
-        let pair = focus_hz(Mode::Rtty, dial, sdroxide_types::RTTY_CENTER_HZ, false);
+        let pair = focus_hz(Mode::Rtty, dial, sdroxide_types::RTTY_CENTER_HZ, false, false);
         assert_eq!(pair, dial + 2210.0, "the window was anchored on the dial");
         // A 1 kHz window centred on the pair holds it; centred on the dial it
         // would not have held it at all.
@@ -1536,7 +1576,7 @@ mod focus_tests {
     #[test]
     fn a_nudged_rtty_offset_carries_the_anchor() {
         let dial = 7_040_000.0;
-        assert_eq!(focus_hz(Mode::Rtty, dial, 1000.0, false), dial + 1000.0);
+        assert_eq!(focus_hz(Mode::Rtty, dial, 1000.0, false, false), dial + 1000.0);
     }
 
     /// NAVTEX holds its tone by convention exactly as RTTY does — the assigned
@@ -1544,7 +1584,10 @@ mod focus_tests {
     #[test]
     fn navtex_anchors_on_its_tone_too() {
         let dial = 518_000.0 - f64::from(sdroxide_types::NAVTEX_TONE_HZ);
-        assert_eq!(focus_hz(Mode::Navtex, dial, sdroxide_types::NAVTEX_TONE_HZ, false), 518_000.0);
+        assert_eq!(
+            focus_hz(Mode::Navtex, dial, sdroxide_types::NAVTEX_TONE_HZ, false, false),
+            518_000.0
+        );
     }
 
     /// DSC's channel frequencies are the centre of *its* tone pair too, so the
@@ -1553,7 +1596,10 @@ mod focus_tests {
     #[test]
     fn dsc_anchors_on_its_tone_too() {
         let dial = 2_187_500.0 - f64::from(sdroxide_types::DSC_TONE_HZ);
-        assert_eq!(focus_hz(Mode::Dsc, dial, sdroxide_types::DSC_TONE_HZ, false), 2_187_500.0);
+        assert_eq!(
+            focus_hz(Mode::Dsc, dial, sdroxide_types::DSC_TONE_HZ, false, false),
+            2_187_500.0
+        );
     }
 
     /// The modes that pick a slot inside a sub-band stay on the dial. FT8's
@@ -1564,7 +1610,11 @@ mod focus_tests {
     fn the_slotted_modes_stay_on_the_dial() {
         let dial = 14_074_000.0;
         for m in [Mode::Ft8, Mode::Ft4, Mode::Js8, Mode::Psk, Mode::Olivia] {
-            assert_eq!(focus_hz(m, dial, 1500.0, false), dial, "{m:?} chased its own tone offset");
+            assert_eq!(
+                focus_hz(m, dial, 1500.0, false, false),
+                dial,
+                "{m:?} chased its own tone offset"
+            );
         }
     }
 
@@ -1574,8 +1624,12 @@ mod focus_tests {
     #[test]
     fn cw_anchors_where_its_readout_reads() {
         let dial = 14_030_000.0;
-        assert_eq!(focus_hz(Mode::Cw, dial, 700.0, false), dial, "cw_qrg off moved the window");
-        assert_eq!(focus_hz(Mode::Cw, dial, 700.0, true), dial + 700.0);
+        assert_eq!(
+            focus_hz(Mode::Cw, dial, 700.0, false, false),
+            dial,
+            "cw_qrg off moved the window"
+        );
+        assert_eq!(focus_hz(Mode::Cw, dial, 700.0, true, false), dial + 700.0);
     }
 
     /// The analog modes are on their dial and the offset is meaningless there,
@@ -1585,7 +1639,7 @@ mod focus_tests {
         let dial = 14_200_000.0;
         for m in [Mode::Usb, Mode::Lsb, Mode::Am, Mode::Nfm] {
             for qrg in [false, true] {
-                assert_eq!(focus_hz(m, dial, 700.0, qrg), dial, "{m:?} moved off its dial");
+                assert_eq!(focus_hz(m, dial, 700.0, qrg, false), dial, "{m:?} moved off its dial");
             }
         }
     }
@@ -1597,6 +1651,9 @@ mod focus_tests {
     #[test]
     fn carrier_centred_rtty_stays_on_its_carrier() {
         let dial = 145_500_000.0;
-        assert_eq!(focus_hz(Mode::RttyFm, dial, sdroxide_types::RTTY_CENTER_HZ, false), dial);
+        assert_eq!(
+            focus_hz(Mode::RttyFm, dial, sdroxide_types::RTTY_CENTER_HZ, false, false),
+            dial
+        );
     }
 }
