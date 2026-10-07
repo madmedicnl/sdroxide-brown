@@ -126,6 +126,27 @@ fn a_dial_already_on_an_sstv_frequency_is_not_moved() {
     assert_eq!(dial_after(&[tune(SSTV_20M), sstv()]), SSTV_20M);
 }
 
+/// **The detune, reported** (fork discussion #7, Kevin). An operator receiving
+/// an SSTV picture a little below the band's calling frequency selected SSTV to
+/// decode it; the rule moved the dial onto the published frequency and left
+/// their picture off the passband centre — "completely shifted to the left",
+/// and "audio present · no SSTV header yet". A dial already inside the mode's
+/// own activity is the operator being where the station is.
+///
+/// 20 m's frequency is used here because it is the one entry in the table with
+/// no region mask, so the case does not depend on the station's region. The
+/// reported one was 80 m, 1.5 kHz below 3.7300 — `3_728_500.0` — which the same
+/// rule holds.
+#[test]
+fn a_dial_inside_the_sstv_segment_is_left_alone() {
+    for off in [-1_500.0_f64, -2_900.0, 2_000.0] {
+        let listening = SSTV_20M + off;
+        assert_eq!(dial_after(&[tune(listening), sstv()]), listening, "{off} Hz off");
+    }
+    // Outside the segment the rule still rescues, which is what it is for.
+    assert_eq!(dial_after(&[tune(SSTV_20M + 40_000.0), sstv()]), SSTV_20M);
+}
+
 /// Re-selecting the mode already in force is not a change, so it must not move
 /// the dial either — otherwise standing in SSTV and pressing the chip again
 /// would retune under the operator's feet.
