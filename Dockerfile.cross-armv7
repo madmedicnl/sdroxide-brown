@@ -1,0 +1,18 @@
+# The armhf build image for `.github/workflows/armv7-probe.yml`.
+#
+# `cross`'s own image already carries a complete armhf sysroot, which is the
+# whole reason it is used here — two hand-rolled attempts to assemble one with
+# `dpkg --add-architecture` on the runner did not take (see the workflow's note).
+# The tree needs one library the base image does not ship: ALSA, which
+# `alsa-sys` links unconditionally for the sound-card path.
+#
+# The fallback in the second line is deliberate: some cross images have the
+# target architecture registered and some do not, so ask for the target one and
+# fall back to whatever the image's apt resolves by default.
+FROM ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:main
+
+RUN dpkg --add-architecture armhf || true; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends libasound2-dev:armhf \
+    || apt-get install -y --no-install-recommends libasound2-dev; \
+    rm -rf /var/lib/apt/lists/*
