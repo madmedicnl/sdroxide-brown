@@ -1465,14 +1465,19 @@ discussion is the only place a user can be answered.
   and he installed **2.0.1**, not the 2.0.2 he now wants. **Ask a fresh-install
   reporter "is the waterfall alive?" before anything else.**
 - **#14 ATS Mini / RadioScript** (kevin2008-01, Ideas, 0 comments) — **on
-  research, not building**, see the section above. He reverse-engineered a third
+  research and NOT OURS TO BUILD**: hjberndt's RadioScript firmware is closed
+  source with **no licence**, so nothing may be copied from it or reimplemented,
+  and the operator rules that way. It is also the most popular firmware for those
+  boards, which is why expect this question often. He reverse-engineered a third
   ESP32/Si4732 firmware (hjberndt's RadioScript) and attached it; four findings
   out of the image are in that section, the important one being **a TCP server on
   8081**, which turns his missing bridge script into ~15 lines of BASIC on the
   radio and answers his *"does a script need an open browser tab?"* (`/run`).
-  **We already support this class** — `Backend::AtsMini` speaks the *stock*
+  **We already support this class** — `Backend::AtsMini` (MIT) speaks the *stock*
   firmware, so the prior question is which firmware his board runs. Answered in
-  comment `18800333`, and told plainly that the board is not an SDR.
+  comment `18800333`, and told plainly that the board is not an SDR and that the
+  only licence-clean path is a **documented** interface from the developer's own
+  side. The firmware binary must never be committed.
 - **#13** non-upstream build targets (armhf &c) — **the armv7 build now exists**
   and is attached to `v2.0.1_brown` as
   `sdroxide-v2.0.1_brown-linux-armv7-cat.tar.gz`; it has not yet run on his
@@ -3311,7 +3316,30 @@ It is session-only and never persisted. "New" is
 `LogIndex::novelty(..).new_call` for now; wiring in `check-dupe.php` is the
 follow-up.
 
-### ON RESEARCH, not building: the ATS Mini and its RadioScript firmware (2026-10-07)
+### ON RESEARCH, and NOT OURS TO BUILD: the ATS Mini's RadioScript firmware
+
+**The constraint, and it is not a technical one: hjberndt's RadioScript firmware is
+closed source with no licence of any kind.** No licence means the author retains
+every right, so there is nothing here we may copy, bundle, ship, link or
+reimplement — and the operator's ruling (2026-10-07) is that the fork treats it
+that way. It is also, by his account, **the most popular firmware for these
+boards** because it decodes CW, RTTY and WEFAX on the device itself, which is
+precisely why he keeps it: *"that developer keeps full control of his firmware and
+knows and uses the full limits of that tiny device."* That is a good outcome for
+the hardware and not something for us to route around.
+
+**So this section is a record, not a plan.** Everything below was read out of an
+image Kevin attached to fork discussion #14; **the image is not in this tree**
+(it is third-party firmware, unlicensed, and must never be committed), and
+nothing here is to be built, adapted or reimplemented against. Keep the URL and
+the findings so the next person asking is answered in a minute instead of an
+afternoon — and so nobody mistakes this for groundwork for a feature.
+
+**What is licence-clean, and the whole of it:** the **stock**
+`esp32-si4732/ats-mini` firmware, which is **MIT**, which `Backend::AtsMini`
+already speaks, and which is what the fork's ATS Mini support is built and
+bench-measured against. If a control path to *that* firmware is wanted, it is
+already there.
 
 **The operator's ruling: research only, and expect a lot of questions about it**
 because the board is cheap and popular. The reason is not scepticism about Kevin's
@@ -3402,10 +3430,23 @@ no heartbeat in it, which is already better than the WebSocket guess. The third
 question is now a different and prior one: **which firmware is on the board**,
 because the stock one is what `Backend::AtsMini` already speaks.
 
-**If it ever is built**, the shape is small and fork-only: a second ATS-style
-source profile over plain TCP — not a new `Backend` variant, not an I/Q lane, and
-on that reading **no `PROTO_VERSION` bump**, which he also guessed correctly. Say
-so only as a shape; it is not scheduled.
+**The boundary, stated once so it is not re-litigated.** There is exactly one way
+this becomes ours, and it does not involve his firmware: **the developer himself
+publishes a documented control interface** — his firmware can open a TCP server
+(`tcpbegin`, port 8081) and answer lines of BASIC, so an owner-friendly
+CAT-like surface is well within reach for him — and we then write *our* side
+against **that documented interface**. A second ATS-style source profile over
+plain TCP: no new `Backend`, no I/Q lane, and on that reading no
+`PROTO_VERSION` bump, which Kevin also guessed correctly. Until such an interface
+exists and is documented, there is nothing to build, and the answer to the next
+person who asks is the two sentences above.
+
+**One thing that is genuinely worth saying to a requester**, because it is what
+this board *is* rather than what anyone hopes: the CW, RTTY and WEFAX decoding
+happens **on the radio**, not here. It has no I/Q and no audio sdroxide can
+digitise differently. What an sdroxide client could add is the operator's
+surround — tuning, band and memory management, the SWL log, the schedule — not
+decoding.
 
 ### The ATS Mini (SWL extras, fork-only)
 
