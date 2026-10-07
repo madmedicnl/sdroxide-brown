@@ -100,6 +100,11 @@ jobs:
           AR: arm-linux-gnueabihf-ar
           RANLIB: arm-linux-gnueabihf-ranlib
           LD: arm-linux-gnueabihf-ld
+          # Autotools triple, not the Rust one: rade_c's CMake passes
+          # this to its ExternalProject opus `configure --host=`, and
+          # with it empty configure tries to run the cross-built test
+          # programs. See crates/sdroxide-rade/build.rs.
+          CMAKE_C_COMPILER_TARGET: arm-linux-gnueabihf
         run: |
           cross build --release --locked \
             --target armv7-unknown-linux-gnueabihf \

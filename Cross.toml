@@ -16,4 +16,4 @@ dockerfile = "Dockerfile.cross-armv7"
 # only a whitelist of the host environment into the container, so naming them on
 # the step was not enough. This is the whitelist.
 [build.env]
-passthrough = ["CC", "CXX", "AR", "RANLIB", "LD", "NM", "STRIP"]
+passthrough = ["CC", "CXX", "AR", "RANLIB", "LD", "NM", "STRIP", "CMAKE_C_COMPILER_TARGET"]

@@ -33,11 +33,27 @@ fn main() {
 
     // Always Release: the neural encoder/decoder is unusably slow unoptimized,
     // including under a plain `cargo build`.
-    let dst = cmake::Config::new(&wrapper)
-        .define("RADE_C_DIR", rade_c.to_string_lossy().as_ref())
-        .profile("Release")
-        .build_target("rade_static")
-        .build();
+    let mut cmake = cmake::Config::new(&wrapper);
+    cmake.define("RADE_C_DIR", rade_c.to_string_lossy().as_ref()).profile("Release");
+    // **Cross-compiling: `rade_c`'s CMake needs the target triple.** Its
+    // `BuildOpus.cmake` passes `--host=${CMAKE_C_COMPILER_TARGET}` to the
+    // ExternalProject's autotools `configure`, and only when that variable is
+    // set — CMake does not infer it, because our wrapper CMake runs natively on
+    // the build machine. With it empty, autotools treats the build as native,
+    // compiles a test program with the cross compiler and tries to **run** it:
+    //
+    //     configure: error: cannot run C compiled programs.
+    //
+    // The value has to be an autotools triple (`arm-linux-gnueabihf`), which is
+    // not the Rust target triple, so it is passed in rather than derived: an
+    // environment variable of the same name, set by the cross build. Nothing is
+    // done when it is unset, which is every native build.
+    if let Ok(triple) = std::env::var("CMAKE_C_COMPILER_TARGET") {
+        if !triple.is_empty() {
+            cmake.define("CMAKE_C_COMPILER_TARGET", triple);
+        }
+    }
+    let dst = cmake.build_target("rade_static").build();
 
     let build = dst.join("build");
     // ExternalProject's default layout for rade_c's `build_opus` target, which
