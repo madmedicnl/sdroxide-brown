@@ -1207,11 +1207,39 @@ that was miscalculated**; it is something painted at a fixed position or with a
 hardcoded inset. That rules out sizing as the mechanism and is where the next
 session should start.
 
-**The measurement to take**, and it is the same shape as the oracle that found the
-2 pt border fault: drive one frame with `band_docked = true`,
-`band_dock_visible = true` and the mode on SSTV, and print the two rects — the
-bottom operating panel's and the dock's — plus every shape whose rect crosses
-the dock's left edge. A shape crossing it names itself; nothing else will.
+**MEASURED (2026-10-07), and the dock is innocent.** A probe test drove one
+desktop frame at 1920×1080 with `band_docked = true`, `band_dock_visible = true`
+and `mode = SSTV`, printing every shape rect:
+
+| window | dock rect | dock width | operating panel right edge | **overlap** |
+|---|---|---|---|---|
+| 1920 | 1641…1920 | 279 | 1680 | **39.0** |
+| 1600 | 1321…1600 | 279 | 1360 | **39.0** |
+| 1400 | 1121…1400 | 279 | 1160 | **39.0** |
+
+**egui reserves the column correctly.** `ui.available_width()` immediately after
+`band_dock_panel` is **1640**, and 1640 + 280 = 1920 — so the dock is placed and
+the centre knows about it. The dock is **not** the fault and neither is
+`PanelState`.
+
+**The operating panel overdraws by a constant 40 pt** (the 39 measured plus the
+stroke): it paints `0…1680` where the centre is `0…1640`, and the panadapter
+above it measures `0…1624`, so the two are not even the same width. Constant at
+every window width, which is the operator's observation reproduced exactly.
+
+**And the path is not the one to expect**: SSTV does **not** reach the digital
+branch's `let width = ui.available_width()` at `frame.rs:1014` — an instrumented
+trace at that line **never fires** for SSTV. It goes through the earlier branch at
+`frame.rs:724`, whose `allocate_ui(vec2(width, panel_h))` at `:930` is the rect
+that overlaps. So a fix aimed at the digital branch would not touch this.
+
+**What is left to find**, and it is one question: what makes `ui.available_width()`
+read **1680** at `frame.rs:724` when the trace immediately after the dock reads
+**1640**. Something between `:520` and `:724` widens the column back — a
+`set_max_width`, an `allocate_new_ui`, or a panel shown in between. The probe is
+still in the working tree, uncommitted, in the `#[cfg(test)]` block at the bottom
+of `crates/sdroxide-ui/src/app/mod.rs` (`probe_dock_and_operating_panel_rects`,
+reads `DOCK_W`); `frame.rs` has been reverted to clean.
 
 ### NEW, and it outranks the two above: **a sign-in prompt per radio** (Kevin, 2026-10-07)
 
