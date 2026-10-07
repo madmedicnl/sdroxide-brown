@@ -13,6 +13,19 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+### Added
+
+- **A complete uninstallation list**, in the README and as manual **§ 9.5**.
+  Asked for on [fork discussion #17](https://github.com/madmedicnl/sdroxide-brown/discussions/17):
+  every path an installation puts on the machine, so "is anything left behind?"
+  has a written answer. Three things it says plainly: the Debian package installs
+  **no systemd service** (so a purge cannot leave one running), writes **nothing
+  to `/etc` or `/var`**, and creates **no configuration** — the program makes
+  `~/.config/sdroxide-brown` on its first run, and that directory is the other
+  half of a complete removal. The same section notes the one thing worth knowing
+  after any clean install: there is **no radio configured yet**, so nothing can
+  decode until one is added.
+
 ## [2.0.2_brown] - 2026-10-07
 
 **A pre-release built around one report**: a station of three radios was asked

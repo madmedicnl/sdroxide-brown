@@ -12207,7 +12207,7 @@ spoken announcements below them under `[speech]`:
   window size and is what you want; **Desktop**, **Tablet**, **Small screen**
   and **Phone** force it, to see how the compact strips look without a phone to
   hand, or to keep the menus in a small desktop window rather than a strip
-  wrapped over three rows. See [9.5](#95-phones-and-tablets) for what each one
+  wrapped over three rows. See [9.6](#96-phones-and-tablets) for what each one
   shows.
 
   **Small screen** is Tablet with everything pulled in — the single-row strip
@@ -12277,7 +12277,7 @@ spoken announcements below them under `[speech]`:
 - **Waterfall palette** — the waterfall colour scheme (see
   [2.8](#28-the-display-and-fft-controls) and the [appendix](#waterfall-colour-schemes)).
 - **Tuning buttons** — the **−** / step / **+** row under the control strip on a
-  phone or tablet ([9.5](#95-phones-and-tablets)), with the step it is currently
+  phone or tablet ([9.6](#96-phones-and-tablets)), with the step it is currently
   set to shown beside the box. Never drawn on a desktop.
 - **Waterfall smoothing** — on by default. Every screen pixel is blended with
   the bins and rows around it, which is what makes a signal look continuous
@@ -12322,7 +12322,7 @@ spoken announcements below them under `[speech]`:
   so a Large interface with a Small waterfall font still has larger frequency
   labels than a Medium one. Bear in mind that **Large** leaves the window fewer
   points to lay out in, so a small window may drop to the tablet control strip
-  ([9.5](#95-phones-and-tablets)) — force **Layout: Desktop** above if you would
+  ([9.6](#96-phones-and-tablets)) — force **Layout: Desktop** above if you would
   rather keep the full strip.
 - **Cities on maps** — draw the world's cities on the flat maps: FT8/WSPR
   ([3.2](#32-ft8-ft4-and-ft2)), APRS, ADS-B and AIS. A dot per place, sized by
@@ -14708,7 +14708,53 @@ or the page will load and then fail to connect.
 Serving through HTTPS this way is also what gets the browser to hand over audio
 and the microphone ([9.3](#93-audio-needs-a-secure-context)).
 
-### 9.5 Phones and tablets
+### 9.5 Removing an installation completely
+
+Asked for on [fork discussion #17](https://github.com/madmedicnl/sdroxide-brown/discussions/17),
+and here it is so nobody has to ask again.
+
+The Debian package (`sdroxide`, or `sdroxide-soapysdr`) owns **exactly** this,
+and every line of it goes with the package:
+
+| Path | What |
+| --- | --- |
+| `/usr/bin/sdroxide` | the binary — client and server are the same program |
+| `/usr/share/applications/sdroxide.desktop` | the desktop menu entry |
+| `/usr/lib/udev/rules.d/60-sdroxide-*.rules` | nine dongle rules, so no root is needed |
+| `/usr/share/icons/hicolor/*/apps/sdroxide-brown.{png,svg}` | the icon, in nine sizes |
+| `/usr/share/sdroxide/voices/` | the speech voice, for spoken announcements |
+| `/usr/share/doc/sdroxide/` | README, `copyright`, and four licence notices |
+
+```sh
+sudo apt purge sdroxide-soapysdr      # or sdroxide — removes every path above
+rm -rf ~/.config/sdroxide-brown      # every setting, logbook and recording it wrote
+```
+
+Three things worth stating plainly, because "is anything left behind?" is the
+real question:
+
+- **No systemd service is installed**, so a purge cannot leave one running or
+  enabled. A unit you wrote yourself is yours to disable and delete.
+- **Nothing is written to `/etc` or `/var`**, and the installer creates no
+  configuration at all: the program makes `~/.config/sdroxide-brown` on its
+  first run. That directory — settings, the station roster, the logbook, the
+  reception log, memories, recordings, the solar cache — is the other half of a
+  complete removal. `SDROXIDE_CONFIG_DIR` puts it elsewhere if you have set that.
+- **The portable tarball** adds nothing outside the folder you unpacked it into,
+  except `~/.local/share/applications/sdroxide.desktop` and its icon if you ran
+  `install-desktop-entry.sh`; `./install-desktop-entry.sh --uninstall` removes
+  both. **The Arch package** installs the same paths as the `.deb`.
+
+Not ours to remove: your reverse proxy, your own scripts and backups, and any
+other program using `libsoapysdr0.8`. The RX-888 firmware is inside the binary
+rather than in a file of its own, so there is nothing to delete for it either.
+
+**A fresh installation has no radio in it.** No `radios.json`, no `radio.json`,
+no per-radio folder — so there is nothing listening and nothing can decode until
+one is added at **Settings → General → Radio** ([6.2](#62-radio-choosing-and-configuring-the-rig)).
+That is the first thing to check after any clean install.
+
+### 9.6 Phones and tablets
 
 The control strip is eight boxes of a fixed width. On a desktop they sit in a
 row; on a narrow screen they cannot shrink, only wrap, so the strip would eat

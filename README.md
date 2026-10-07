@@ -326,6 +326,41 @@ Without `embed-web`, `--server` still serves native `--connect` clients; pass
 
 </details>
 
+### Uninstalling completely
+
+Asked for, and answered once and for all here (fork discussion #17). The
+`.deb`/`AUR` package owns exactly this, and every line of it goes with the
+package:
+
+| Path | What |
+|---|---|
+| `/usr/bin/sdroxide` | the binary — client and server are the same program |
+| `/usr/share/applications/sdroxide.desktop` | the desktop menu entry |
+| `/usr/lib/udev/rules.d/60-sdroxide-*.rules` | 9 dongle rules, so no root is needed |
+| `/usr/share/icons/hicolor/*/apps/sdroxide-brown.{png,svg}` | the icon, nine sizes |
+| `/usr/share/sdroxide/voices/` | the speech voice, for spoken announcements |
+| `/usr/share/doc/sdroxide/` | README, `copyright` and the four licence notices |
+
+```sh
+sudo apt purge sdroxide-soapysdr      # or sdroxide — removes every path above
+rm -rf ~/.config/sdroxide-brown      # every setting, logbook and recording it wrote
+```
+
+Three things worth stating plainly, because "is anything left?" is the question:
+
+- **No systemd service is installed**, so a purge cannot leave one running or
+  enabled. If you created a unit yourself, it is yours to disable and delete.
+- **Nothing is written to `/etc` or `/var`**, and no configuration is created by
+  the installer — the program makes `~/.config/sdroxide-brown` on first run, and
+  that directory is the other half of a complete removal.
+- **The tarball** adds nothing outside the folder you unpacked it into, except
+  `~/.local/share/applications/sdroxide.desktop` and its icon if you ran
+  `install-desktop-entry.sh` — `./install-desktop-entry.sh --uninstall` removes
+  both.
+
+Not ours to remove: your reverse proxy, your own scripts and backups, and any
+other program using `libsoapysdr0.8`.
+
 ## Running
 
 ```sh
