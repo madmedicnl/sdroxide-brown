@@ -9,6 +9,66 @@ here. General-purpose work goes upstream (see "Relationship to upstream").
 Ordered by value to a listener, not by effort. Each phase is meant to stand on
 its own.
 
+## Toward 2.5 — the plan as of 2026-10-07
+
+The first four phases are done and are history; this is what the fork is for
+next, and it is a much shorter list than the phases above. It comes out of a
+week in which almost nothing was invented and almost everything came from one
+tester's reports, which is the right way round and worth saying out loud.
+
+**The three things being built this month:**
+
+1. **The ATS Mini as a second control surface** — the cheap, popular Si4732
+   board. We already speak the stock firmware (`Backend::AtsMini`); this adds the
+   scripting firmware's **documented serial command set**, so a board whose
+   owner prefers that firmware can be tuned from sdroxide as well. It is small,
+   fork-only, needs no protocol change, and — the reason it is first — it can be
+   **proven on our own bench before it is released.** The radio is not an SDR:
+   it hands over demodulated audio and there is no I/Q, so every wideband feature
+   stays out of reach on it, and that is a property of the silicon rather than a
+   gap in the work.
+2. **DAB's MOT slideshow and DLS** — the station images and the station text the
+   ensemble already broadcasts. Everything needed is in place; it wants its own
+   message pair rather than a field, because a snapshot goes out several times a
+   second and an image does not. Not yet verifiable: it needs a capture of an
+   ensemble whose service actually broadcasts one.
+3. **DMR** — asked for, honestly unscoped. It is a VHF/UHF mode, so it needs a
+   front end that reaches there, and the hard part is the AMBE+2 voice codec. It
+   fits the wideband-lane machinery we already have for ADS-B, AIS and DAB.
+
+**Also on the list, in no particular order:** **FST4W**, the last of the WSJT
+suite we lack (the mode inventory against WSJT-X is in `FST4W-HANDOVER.md`).
+
+**Deliberately off the list, and why — recorded so it is not re-litigated:**
+
+- **The three-radio tab-close flicker.** Undiagnosed, and it needs one answer
+  from the reporter that we do not have. It will be caught by our own bench
+  testing with three radios attached, which is where a bug that only appears at
+  three tabs belongs in the first place.
+- **The 2 pt page overflow** (the missing right border). Cosmetic, reproduced by
+  an oracle that is already in the tree, and it will be chased during the bench
+  testing weeks when there is a screen to look at rather than a number.
+- **The empty station-key guard.** A real fault, masked by the sign-in cookie,
+  and harmless while it stays masked. To be picked up when there is time — with
+  the sign that something actually depends on it, not before.
+- **"Some phones crash, others do not."** Dropped. If it is a phone and not the
+  page, no amount of work here will find it, and the only honest route is a
+  desktop browser reproduction.
+- **DAB audio at 2.5 Msps.** Working, and the program says why: it warns that the
+  front end is at its floor and to widen the window to 3.1 Msps or more. A
+  warning that names the fix is the feature.
+- **Olivia transmit interop.** Nobody outside can decode our Olivia yet, and no
+  amount of reading our own code will prove it. It needs somebody with an
+  fldigi on the other end. If that is you, it is the single most useful
+  observation anyone could send us.
+- **The Pluto / ADS-B 100 % CPU.** Real, predates every version, and outside what
+  our bench can reproduce — we have no Pluto. Open to anybody who has one.
+
+**And the one that is not a feature at all:** we still cannot drive a browser
+here. That is how the sign-in-per-radio bug reached a release, and it will happen
+again unless the operator's own browser testing becomes part of the cycle. It is
+the most valuable thing on this page.
+
 ## Phase 1 — the listener's identity
 
 **Done.** **SWL mode** now hides the transmit controls *and* swaps the
