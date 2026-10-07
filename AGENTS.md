@@ -1233,38 +1233,34 @@ trace at that line **never fires** for SSTV. It goes through the earlier branch 
 `frame.rs:724`, whose `allocate_ui(vec2(width, panel_h))` at `:930` is the rect
 that overlaps. So a fix aimed at the digital branch would not touch this.
 
-**FOUND, and it is neither the dock nor the layout.** An instrumented trace at
-the width read settles it:
+**CORRECTION to the note below this line, and the earlier claim was wrong.**
+It said "a child overruns its own allocation by 40 pt". That is **not** what is
+happening, and the shape dump says so: the panel's **frame and its content agree**
+on 1680 — the frame is `0…1680` and the content ends at **1670**, exactly a 10 pt
+inner margin. An overrunning child would sit inside the 1640 allocation and stick
+out; here the whole panel was laid out at 1680, so the `allocate_ui` that produced
+it was **handed 1680**.
 
-```
-TRACE 724: avail_w=1640.0  max_rect=[[0 0] - [1920 1080]]
-```
+What is established:
 
-The panel's **allocation is correct** — 1640, exactly the column egui reserved —
-and nothing between `:520` and `:724` widens it (a sweep for `set_max_width`,
-`allocate_new_ui`, `Panel::` and `Sides` in that range returns one hit, in the
-unrelated error branch). So the 1680-wide rect is **painted from inside the
-panel**: a child draws ~40 pt beyond its own 1640 allocation, opaquely, and egui
-does not clip child content. The usual cause is a `horizontal` row of chips whose
-`min_width`s exceed the row — egui does not shrink a widget below its minimum, so
-the row and its frame run over.
+- `width` is traced at `ui.available_width()` = **1640** at `frame.rs:724`, and
+  **never reassigned** anywhere in `:724…:924` (swept).
+- The allocation is `ui.allocate_ui(egui::vec2(width, panel_h))` at `frame.rs:924`
+  → `operating_panel` (`:2368`) → for SSTV, `image_panel`
+  (`panels/sstv.rs:595`), which computes its own columns from
+  `ui.available_size()` (sstv.rs:676).
+- **A structural oddity worth noting:** `image_panel` is the only panel
+  `operating_panel` calls **without** `panel_h`, and it is the one that lays out
+  its own width.
 
-**The operator's three answers, and each one confirms it:**
-
-1. **The cursor in the overlap is the resize cursor and resizing works.** The
-   covered strip is the side panel's own resize handle, on its inner edge — egui
-   resolved the *cursor* to the dock while the *ink* went to the panel. "You can
-   see it, you can't click it, but you can drag it."
-2. **Border and content both**, chips half-hidden under the panel: the panel is
-   painted *after* the dock and wins.
-3. It has been there "from the beginning" — **not a regression**, so nobody needs
-   to bisect commits to date it; it dates from the dock itself.
-
-**Where the fix belongs, and where it must not:** inside `digi_panel`'s shared
-layout (both SSTV and FT8 reach it, which is why the fault looks identical in
-either), on the row that overruns — not a clamp on the width at `:724`, and not
-anything in the dock. Clamping would hide the second cause, which is exactly how
-the first subtract patch silenced a panic and shipped a wrong answer.
+**The one question left:** the `ui` handed to `image_panel` reports **1680**
+available when the parent allocation was traced at 1640. Note egui's own
+distinction, which is probably the key: at `:724` `ui.available_width()` was
+**1640** while `ui.max_rect()` was the **whole window**
+(`max_rect=[[0 0] - [1920 1080]]`). So the dock's reserve lives in
+`available_width`/`available_size`, **not** in `max_rect` — and anything that
+sizes itself from `max_rect` (or from an `available_size` taken before the dock
+took its share) gets the un-reserved width. That is the line to pull next.
 
 **Not done, and it is the next thing:** the overrunning row is not yet
 identified. The probe is still uncommitted in the `#[cfg(test)]` block at the
