@@ -940,6 +940,11 @@ mod tests {
             (circles, texts)
         }
 
+        // Whole-frame tests take this too: a frame reads the app's own
+        // `map_cities` and publishes it, so one of those running beside this
+        // would put the flag back between the two draws below and the second
+        // would see the first one's cities still on the map.
+        let _guard = crate::multi::frame_test_lock();
         theme::set_map_cities(true);
         let (with_circles, with_texts) = draw_counted();
         assert!(with_texts > 0, "no city names were drawn to begin with");

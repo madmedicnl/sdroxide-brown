@@ -34,7 +34,9 @@ use sdroxide_types::{Command, LoginTarget, LookupProvider, NetworkConfig, Upload
 
 use self::alerts::alerts_settings;
 use self::controls::settings_controls_tab;
-use self::general::{cb_plan_combo, device_combo, region_combo, remote_access_settings, signed_in_station};
+use self::general::{
+    cb_plan_combo, device_combo, region_combo, remote_access_settings, signed_in_station,
+};
 use self::net::{
     broadcast_stations_settings, net_heading, net_row, net_secret, operator_identity_note,
     settings_freedv_tab,

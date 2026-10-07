@@ -13,6 +13,20 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Closing a radio tab at three radios no longer makes it come back.** Fork
+  discussion #16: *"With exactly 2 radio tabs: no problem. With three radio tabs
+  open, closing the tab for station 3 while viewing station 1 causes a continuous
+  screen flicker"* — the flicker was the tab reappearing, once a frame, under the
+  operator's cursor. Two faults, both now pinned by tests: a radio this shell
+  started with had never entered the record of radios it had already opened, so a
+  closed one was offered straight back; and a station's roster is the same in
+  every tab, so one radio nobody was looking at was offered once per tab and was
+  dialled twice at a time. What still opens is what should: a radio the station
+  **adds later** arrives as before, which is the test that stops this being
+  "fixed" by not opening peer radios at all.
+
 ### Added
 
 - **A complete uninstallation list**, in the README and as manual **§ 9.5**.

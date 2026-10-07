@@ -20,9 +20,9 @@
 //! - [`widgets`] — the row and station-card widgets several panels draw
 
 mod acars;
-pub(in crate::app) mod ale;
 pub(in crate::app) mod adsb;
 pub(in crate::app) mod ais;
+pub(in crate::app) mod ale;
 pub(in crate::app) mod aprs;
 pub(in crate::app) mod atchat;
 pub(in crate::app) mod cw;
@@ -31,6 +31,7 @@ pub(in crate::app) mod decodes;
 pub(in crate::app) mod dsc;
 pub(in crate::app) mod fsq;
 pub(in crate::app) mod js8;
+pub(in crate::app) mod jtty;
 pub(in crate::app) mod macros;
 mod navtex;
 pub(in crate::app) mod packet;
@@ -40,7 +41,6 @@ pub(in crate::app) mod rf_paint;
 pub(in crate::app) mod setup;
 pub(in crate::app) mod sstv;
 pub(in crate::app) mod text_modem;
-pub(in crate::app) mod jtty;
 pub(in crate::app) mod uvpacket;
 pub(in crate::app) mod vdl2;
 pub(in crate::app) mod wefax;

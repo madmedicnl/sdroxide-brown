@@ -226,11 +226,8 @@ impl MorseState {
             self.key_error = Some("no paddle found — connect one, then reopen this pane".into());
             return;
         };
-        let setup = KeySetup {
-            pitch_hz: self.pitch_hz,
-            reverse: self.key_reverse,
-            ..KeySetup::default()
-        };
+        let setup =
+            KeySetup { pitch_hz: self.pitch_hz, reverse: self.key_reverse, ..KeySetup::default() };
         match CwKeySource::start(&path, setup) {
             Ok(s) => {
                 self.key_error = None;

@@ -2643,6 +2643,12 @@ mod tests {
     /// quietly resolves to the desktop tier guards nothing phone-shaped, and
     /// that is not a failure anyone would see.
     fn phone_frame(tag: &str, size: egui::Vec2) {
+        // A whole frame writes process-global theme state — the map-cities
+        // setting is published off the app's own settings on every frame — so
+        // these are serialised against each other and against the shell's frame
+        // tests. See [`crate::multi::FRAME_TEST_LOCK`], and the worldmap test
+        // that was failing in roughly one run in four without it.
+        let _guard = crate::multi::frame_test_lock();
         assert_eq!(
             crate::layout::tier_for(size, sdroxide_types::LayoutMode::Auto),
             crate::layout::Tier::Phone,

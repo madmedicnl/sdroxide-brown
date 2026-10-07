@@ -405,10 +405,7 @@ mod tests {
         let mut status = std::collections::HashMap::new();
         record_upload_outcome(&mut status, 7, UploadTarget::Log11Dx, false);
         record_upload_outcome(&mut status, 7, UploadTarget::Eqsl, true);
-        assert_eq!(
-            status[&7],
-            vec![(UploadTarget::Log11Dx, false), (UploadTarget::Eqsl, true)]
-        );
+        assert_eq!(status[&7], vec![(UploadTarget::Log11Dx, false), (UploadTarget::Eqsl, true)]);
         // The retry succeeds: the failure goes, it does not accumulate.
         record_upload_outcome(&mut status, 7, UploadTarget::Log11Dx, true);
         assert_eq!(status[&7], vec![(UploadTarget::Log11Dx, true), (UploadTarget::Eqsl, true)]);

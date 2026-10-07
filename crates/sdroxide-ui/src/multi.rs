@@ -254,6 +254,23 @@ impl MultiApp {
             t.app.set_focused_flag(i == 0);
         }
         let panes = vec![tabs[0].id];
+        // A radio this shell started with has been here before, so it goes into
+        // the same record as one dialled at runtime.
+        //
+        // Without it, closing such a tab offered it straight back: every
+        // remaining tab of the station still lists it, `open` no longer holds
+        // its address because it is closed, and `peers_opened` — which only
+        // ever learned about radios *this* shell dialled — had never heard of
+        // it. That is fork discussion #16's *"closing the tab for station 3
+        // while viewing station 1 causes a continuous screen flicker"* with
+        // three radios, and the flicker is this tab reappearing once a frame
+        // under the operator's cursor.
+        //
+        // The operator's close is a decision about *this screen*, so it is the
+        // one thing the station is not asked about — and a radio the station
+        // adds later still arrives, because its address has never been in here.
+        let peers_opened: std::collections::HashSet<String> =
+            tabs.iter().filter_map(|t| t.app.peer_url()).collect();
         MultiApp {
             tabs,
             focused: 0,
@@ -263,7 +280,7 @@ impl MultiApp {
             wgpu: cc.wgpu_render_state.clone(),
             pending_add: None,
             pending_preset: None,
-            peers_opened: std::collections::HashSet::new(),
+            peers_opened,
             station_radio,
             #[cfg(not(target_arch = "wasm32"))]
             fitted: false,
@@ -1061,11 +1078,19 @@ impl MultiApp {
         }
         let open: std::collections::HashSet<String> =
             self.tabs.iter().filter_map(|t| t.app.peer_url()).collect();
+        // Every tab of a station was told the same roster, so a radio nobody is
+        // looking at is listed once per tab. Collected through a seen-set
+        // rather than by filtering a list afterwards, because the filter is
+        // where the duplication used to survive: it compared each entry against
+        // `open` and `peers_opened` and neither of those ever held the *other*
+        // tab's identical entry. One radio, one dial.
+        let mut offered = std::collections::HashSet::new();
         let wanted: Vec<sdroxide_types::PeerRadio> = self
             .tabs
             .iter()
             .flat_map(|t| t.app.peer_radios())
             .filter(|p| !open.contains(&p.url) && !self.peers_opened.contains(&p.url))
+            .filter(|p| offered.insert(p.url.clone()))
             .collect();
 
         for peer in wanted {
@@ -1514,6 +1539,29 @@ impl eframe::App for MultiApp {
     }
 }
 
+/// A one-at-a-time lock for tests that drive whole frames.
+///
+/// A frame writes **process-global** state: `frame.rs` reads the map-cities
+/// setting off the app and publishes it to [`crate::theme`] every frame, so a
+/// test that draws frames cannot run beside a test that asserts on that
+/// setting — not even when both are individually correct, and not even by
+/// accident. It is not theoretical: driving 120 frames here made
+/// `cities_can_be_turned_off_and_take_their_names_with_them` fail in about one
+/// run in four, on the *second* of its two assertions, because the flag had
+/// been put back between its two draws.
+///
+/// Held across whole frames, never across an await, and poisoned locks are
+/// taken anyway: a test that panicked has already reported itself, and the
+/// next one should not die of the fallout.
+#[cfg(test)]
+pub(crate) static FRAME_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// The same lock, held for as long as the caller needs it.
+#[cfg(test)]
+pub(crate) fn frame_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    FRAME_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[cfg(test)]
 mod split_tests {
     use super::*;
@@ -1632,6 +1680,10 @@ mod split_tests {
     /// It is a sweep rather than one case because the failures have only ever
     /// been at particular radio counts on particular tiers.
     fn widest_paint(width: f32, height: f32, radios: usize) -> f32 {
+        // Whole-frame driver: takes the frame lock so it cannot run beside a
+        // test asserting on process-global theme state. See
+        // [`FRAME_TEST_LOCK`].
+        let _guard = frame_test_lock();
         let dir = std::env::temp_dir().join(format!(
             "sdroxide-layout-{}-{}-{radios}",
             width as u32,
@@ -1661,10 +1713,225 @@ mod split_tests {
             )),
             ..Default::default()
         };
-        let out = ctx.run_ui(input, |ui| {
+        let mut out = ctx.run_ui(input, |ui| {
             eframe::App::ui(&mut multi, ui, &mut eframe::Frame::_new_kittest());
         });
-        widest_page_rect(&out.shapes)
+        let widest = widest_page_rect(&out.shapes);
+        // Same deliberate drop as the tab-close loop: nothing here can upload
+        // a texture, and an unapplied delta left to the destructor is a panic.
+        out.textures_delta.clear();
+        widest
+    }
+
+    /// One station for both tests below, so the two halves cannot drift apart.
+    const STATION: &str = "ws://station.test:4950";
+
+    /// The station's radios as every connection to it was told — the same
+    /// three, at the same addresses, which is why closing one leaves the others
+    /// still carrying its address.
+    type Roster = std::rc::Rc<std::cell::RefCell<Vec<sdroxide_types::PeerRadio>>>;
+
+    fn station_roster() -> Roster {
+        std::rc::Rc::new(std::cell::RefCell::new(
+            [1u32, 2, 3]
+                .into_iter()
+                .map(|id| sdroxide_types::PeerRadio {
+                    id,
+                    name: format!("RADIO {id}"),
+                    named: true,
+                    url: format!("{STATION}/ws/{id}"),
+                })
+                .collect(),
+        ))
+    }
+
+    /// A tab for radio `id` of [`STATION`], carrying that station's roster.
+    ///
+    /// The roster is shared rather than copied per tab, because a station
+    /// announcing a radio is something that reaches all its connections at
+    /// once; a test that could grow one tab's roster would be describing a
+    /// station with one honest connection.
+    /// `radio` is the station's number for it, `tab_id` is this screen's own id
+    /// for the tab — two different numbers, because a connection's tab id is
+    /// numbered from [`REMOTE_TAB_ID_BASE`] while the radio it shows is the
+    /// station's id 3. Adding the base to an already-allocated id is an
+    /// overflow, which is what the first version of this did.
+    fn peer_tab(tab_id: u32, radio: u32, roster: &Roster, extra: &Announced) -> RadioTab {
+        RadioTab {
+            id: tab_id,
+            name: format!("RADIO {radio}"),
+            enabled: true,
+            ctrl: Box::new(PeerController { radio, roster: roster.clone(), extra: extra.clone() })
+                as Box<dyn RadioController>,
+        }
+    }
+
+    /// The radio a station announces later, or 0 while it has not. Test state
+    /// carried on the controller rather than pushed through the app, because the
+    /// production side has no reason to hold it and a test-only method on
+    /// [`SdroxideApp`] would be a hook nobody asked for.
+    type Announced = std::rc::Rc<std::cell::Cell<u32>>;
+
+    /// A controller that behaves like a connection to somebody else's station:
+    /// it has an address, it knows the station's other radios, and it has not
+    /// been closed over there.
+    ///
+    /// The trait's defaults all say "I am a radio on this machine", which is
+    /// the one shape the reopen path never sees — so a test built on them would
+    /// be green on a configuration that cannot happen in the report.
+    struct PeerController {
+        radio: u32,
+        roster: Roster,
+        extra: Announced,
+    }
+
+    impl RadioController for PeerController {
+        fn send(&mut self, _cmd: sdroxide_types::Command) {}
+        fn poll_event(&mut self) -> Option<sdroxide_types::RadioEvent> {
+            None
+        }
+        fn engine_is_remote(&self) -> bool {
+            true
+        }
+        fn peer_url(&self) -> Option<String> {
+            Some(format!("{STATION}/ws/{}", self.radio))
+        }
+        fn peer_radios(&self) -> Vec<sdroxide_types::PeerRadio> {
+            let mut peers = self.roster.borrow().clone();
+            let announced = self.extra.get();
+            if announced != 0 {
+                peers.push(sdroxide_types::PeerRadio {
+                    id: announced,
+                    name: format!("RADIO {announced}"),
+                    named: true,
+                    url: format!("{STATION}/ws/{announced}"),
+                });
+            }
+            peers
+        }
+    }
+
+    /// Three connection tabs on one station, plus a dialer that counts how many
+    /// times it was used — because "the count stayed at two" is weaker than
+    /// "nothing was dialled": a reopen that failed to attach would satisfy the
+    /// first on its own.
+    fn three_peer_tabs(ctx: &egui::Context) -> (MultiApp, Announced, Announced) {
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let roster = station_roster();
+        let announced: Announced = std::rc::Rc::new(std::cell::Cell::new(0));
+        let tabs: Vec<RadioTab> = (1..=3u32)
+            .map(|radio| peer_tab(REMOTE_TAB_ID_BASE + radio, radio, &roster, &announced))
+            .collect();
+        let dialled: Announced = std::rc::Rc::new(std::cell::Cell::new(0));
+        let counter = dialled.clone();
+        let live = announced.clone();
+        let remote: RemoteFactory = Box::new(move |url, id, _ctx| {
+            counter.set(counter.get() + 1);
+            let radio = url.rsplit('/').next().and_then(|n| n.parse().ok()).unwrap_or(0);
+            Ok(peer_tab(id, radio, &roster, &live))
+        });
+        let multi = MultiApp::new(&cc, tabs, Some(Box::new(|| Err("test".into()))), Some(remote));
+        assert_eq!(multi.tabs.len(), 3, "the reported case needs three radios");
+        (multi, dialled, announced)
+    }
+
+    /// One headless frame, on a clock that moves — the shell's own repaint
+    /// requests are 120 ms and 250 ms, so a 50 ms step crosses both.
+    fn frame(multi: &mut MultiApp, ctx: &egui::Context, at: f64) {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1400.0, 800.0),
+            )),
+            time: Some(at),
+            predicted_dt: 0.05,
+            ..Default::default()
+        };
+        let mut out =
+            ctx.run_ui(raw, |ui| eframe::App::ui(multi, ui, &mut eframe::Frame::_new_kittest()));
+        // There is no renderer here, so the frame's textures are dropped on
+        // purpose — which has to be said rather than left to the drop check.
+        out.textures_delta.clear();
+    }
+
+    /// Config directory for a test, so nothing reads or writes the operator's.
+    fn tab_test_config(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("sdroxide-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        dir
+    }
+
+    /// **The three-tab close, and the guard for it** (fork discussion #16:
+    /// *"With exactly 2 radio tabs: no problem. With three radio tabs open,
+    /// closing the tab for station 3 while viewing station 1 causes a
+    /// continuous screen flicker"*).
+    ///
+    /// Two tabs cannot show it and one cannot, so the case is three — and the
+    /// three is the mechanism, not a detail: a station's radios each have a
+    /// connection, so the tabs behind the one on screen are the ones being
+    /// offered the station's roster. Close a tab and every remaining tab still
+    /// lists it.
+    ///
+    /// The assertion is **the count, every frame**, because a tab that comes
+    /// back is the churn and it is invisible to anything that looks only at the
+    /// end state. Hence 120 frames rather than one: the reopen happens on a
+    /// later frame than the close, and a test that stopped at the close would
+    /// have watched the whole thing and seen nothing.
+    #[test]
+    fn closing_one_of_three_radio_tabs_leaves_it_closed() {
+        let _guard = frame_test_lock();
+        let _dir = tab_test_config("tabclose");
+        let ctx = egui::Context::default();
+        let (mut multi, dialled, _announced) = three_peer_tabs(&ctx);
+
+        // Close the third tab's while looking at the first, exactly as reported.
+        multi.focus_tab(0, &ctx);
+        multi.close_tab(2, &ctx);
+        assert_eq!(multi.tabs.len(), 2, "the close did not take");
+
+        for f in 0..120u32 {
+            frame(&mut multi, &ctx, f64::from(f) * 0.05);
+            assert_eq!(
+                multi.tabs.len(),
+                2,
+                "frame {f}: a closed radio came back (fork discussion #16)"
+            );
+        }
+        assert_eq!(dialled.get(), 0, "something dialled the closed radio again");
+    }
+
+    /// **The other half, and the reason the test above could not be "fixed" by
+    /// doing nothing.** A radio the station adds *afterwards* must still open:
+    /// that is what `open_peer_radios` is for, and the two cases are the same
+    /// code path with one thing between them — a radio already on screen when
+    /// the session started, against one that has never been here.
+    ///
+    /// Without this, "the closed tab stays closed" passes just as well against a
+    /// shell that never opens a peer's radio at all, which is how this fault
+    /// gets papered over instead of fixed.
+    #[test]
+    fn a_radio_the_station_adds_later_still_opens() {
+        let _guard = frame_test_lock();
+        let _dir = tab_test_config("tabadd");
+        let ctx = egui::Context::default();
+        let (mut multi, _dialled, announced) = three_peer_tabs(&ctx);
+        frame(&mut multi, &ctx, 0.0);
+        assert_eq!(multi.tabs.len(), 3, "nothing has been announced yet");
+
+        // The station announces a fourth radio: every connection's roster grows,
+        // and the shell is to open it — once.
+        announced.set(4);
+        frame(&mut multi, &ctx, 0.05);
+        assert_eq!(multi.tabs.len(), 4, "a radio announced after the session started did not open");
+
+        // …and it stays open, because a peer's radio is not a candidate to be
+        // re-opened every frame either.
+        for f in 1..20u32 {
+            frame(&mut multi, &ctx, 0.05 + f64::from(f) * 0.05);
+            assert_eq!(multi.tabs.len(), 4, "frame {f}: the count crept");
+        }
     }
 
     /// The sweep: every size and radio count, and how far past the window the
@@ -1762,6 +2029,7 @@ mod split_tests {
     #[test]
     #[ignore = "prints, does not assert"]
     fn what_paints_past_the_edge() {
+        let _guard = frame_test_lock();
         let (w, h, radios) = (360.0_f32, 800.0_f32, 1usize);
         let dir = std::env::temp_dir().join(format!("sdroxide-shapes-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

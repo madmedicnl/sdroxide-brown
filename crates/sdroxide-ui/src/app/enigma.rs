@@ -87,7 +87,8 @@ impl EnigmaState {
         while self.rotors.len() < n {
             // The M4's fourth slot is a thin wheel (Beta = 8); the standard
             // wheels fill the moving slots. Default to the historical pair.
-            let next = if self.rotors.len() + 1 == n && n == 4 { 8 } else { self.rotors.len() as usize };
+            let next =
+                if self.rotors.len() + 1 == n && n == 4 { 8 } else { self.rotors.len() as usize };
             self.rotors.push(next.min(ROTORS.len() - 1));
             self.rings.push(0);
             self.starts.push(0);
@@ -253,7 +254,10 @@ impl SdroxideApp {
             ui.label(RichText::new("UKW").size(11.0).color(LEGEND_DIM));
             for (i, r) in REFLECTORS.iter().enumerate() {
                 if ui
-                    .selectable_label(self.enigma.reflector == i, RichText::new(r.name).color(LEGEND))
+                    .selectable_label(
+                        self.enigma.reflector == i,
+                        RichText::new(r.name).color(LEGEND),
+                    )
                     .clicked()
                 {
                     self.enigma.reflector = i;
@@ -274,13 +278,16 @@ impl SdroxideApp {
                     );
                     // Rotor picker.
                     egui::ComboBox::from_id_salt(("rotor", i))
-                        .selected_text(RichText::new(ROTORS[self.enigma.rotors[i]].name).color(LEGEND))
+                        .selected_text(
+                            RichText::new(ROTORS[self.enigma.rotors[i]].name).color(LEGEND),
+                        )
                         .width(64.0)
                         .show_ui(ui, |ui| {
                             for (ri, r) in ROTORS.iter().enumerate() {
                                 // A thin wheel only belongs in the M4's leftmost
                                 // slot; a standard wheel never does.
-                                let slot_is_thin_left = i == 0 && self.enigma.variant == Variant::M4;
+                                let slot_is_thin_left =
+                                    i == 0 && self.enigma.variant == Variant::M4;
                                 if r.thin != slot_is_thin_left {
                                     continue;
                                 }
@@ -289,7 +296,8 @@ impl SdroxideApp {
                         });
                     // The window: the start letter, on a brass drum.
                     let start = self.enigma.starts[i];
-                    let win = face_chip(ui, &(b'A' + start).to_string().to_uppercase(), false, 40.0);
+                    let win =
+                        face_chip(ui, &(b'A' + start).to_string().to_uppercase(), false, 40.0);
                     // Clicking the window advances the wheel one — the operator
                     // setting Grundstellung by hand.
                     if win.clicked() {
@@ -361,10 +369,14 @@ impl SdroxideApp {
             self.enigma.encipher();
         }
         ui.label(
-            RichText::new(if self.enigma.output.is_empty() { "—".into() } else { self.enigma.output.clone() })
-                .size(15.0)
-                .monospace()
-                .color(BRASS),
+            RichText::new(if self.enigma.output.is_empty() {
+                "—".into()
+            } else {
+                self.enigma.output.clone()
+            })
+            .size(15.0)
+            .monospace()
+            .color(BRASS),
         );
         ui.horizontal(|ui| {
             if ui.button("CLEAR").clicked() {
