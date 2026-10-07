@@ -875,6 +875,30 @@ DAB); the codec is the work.
 
 **03:37-ish: the armv7 first job was picked up and re-dispatched with `cross`.**
 
+**`cross` worked — the wall is `opus`, and it is a flag, not a dead end.**
+Run 37577495536 (2026-10-07 05:50) with `Cross.toml` +
+`Dockerfile.cross-armv7`: checkout, toolchain, cache and `cargo install cross`
+all green, and the build got **past `alsa-sys` and past every Rust crate** to the
+vendored C. It died in **`opus`**, building `silk/arm/biquad_alt_neon_intr.c`:
+
+    error: inlining failed in call to 'always_inline' 'vadd_s32':
+           target specific option mismatch
+    gmake[2]: *** [...silk/arm/biquad_alt_neon_intr.c.o] Error 1
+
+That is the classic "NEON intrinsics compiled without NEON enabled": the opus
+build is not getting `-mfpu=neon`. **The fix is compiler flags**, not a port —
+`CFLAGS_armv7_unknown_linux_gnueabihf`/`CXXFLAGS_…` with
+`-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard` (and the cmake equivalent if
+opus is built through the `cmake` crate, which `CFLAGS` may not reach).
+**So the answer to ipaddr42 is now concrete and good news: the tree cross-builds
+32-bit, ALSA included; the vendored C needs its NEON flags given to it.**
+
+Note `opus` is the dependency to look at first — it is not one of the five
+named in the workflow's header (faad2, dream, nrsc5, xng, rade_c).
+
+**Do not re-try the hand-rolled multiarch apt.** Two attempts are recorded above;
+`cross` is what worked, and the two files it needs are in the tree now.
+
 **Branch `fork/responsive-layout`: the layout bug class, and the oracle for it.**
 The operator's call, and the evidence is three reports from three unrelated
 panels — Kevin's *"3 radio = bug de décalage"*, *"the boundary line is missing,
