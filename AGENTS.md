@@ -1166,6 +1166,53 @@ to SDRs.
 the RSP1 whatever the tab looks like. An 80 m "SS9900v" screenshot with a 3.6 kHz
 span was read as the rig for an hour; it could not have been.
 
+### Upstream #643 (filed upstream by accident, reproducible here): the dock is tucked under the operating panel
+
+siliconburner reported it against upstream; the operator reproduces it on our build
+and is the one with the screenshot. **The SSTV or FT8 bottom panel goes over the
+edge of the docked Bands & Modes panel, and the dock is partly tucked away.**
+
+**Two of my own wrong turns here, both worth keeping**, because they are the
+2026-10-07 house rule failing in new costumes:
+
+1. I claimed the screenshot proved it was upstream's build, from the window title
+   reading `sdroxide — Xegu (CAT)`. **The fork hardcodes that string** —
+   `"sdroxide — {}"` at `app/mod.rs:1997` and `app/frame.rs:1502` — and
+   `FLAVOR` is only the startup title, overwritten once a rig is attached. I had
+   not traced the string to its source.
+2. I then claimed it from the SSTV path `…\sdroxide\sdroxide\config\sstv_rx`
+   against our `…\sdroxide-brown\…`. **That path is a stored setting**
+   (`store_where(&self.sstv.dir)` — the saved directory, not the live
+   `config_dir()`), so it carries whatever an earlier install wrote and says
+   nothing about which build is running.
+
+Both times I inferred a conclusion from a number I had not traced, and **the
+decisive evidence was in the screenshot the whole time**: the dock is present at
+all, and the mode list contains **OLIVIA**. Upstream's build has neither.
+
+**What the code already rules out**, read on 2026-10-07:
+
+- **Draw order is correct.** `band_dock_panel` is a `Panel::right` shown at
+  `frame.rs:520`, well before the operating panel, so egui reserves the column
+  for the centre.
+- **The panel's width is not stale.** `let width = ui.available_width()` is read
+  inside the digital branch (`frame.rs:1008`), *after* the dock.
+
+**And what the operator's observation rules out**, which is the useful part: the
+overlap is a **constant** — it does not change with a resize of the main window
+nor with a resize of the dock itself. So it is **not** proportional to the dock's
+width, the window's width or the panel's width, and it is **not** egui's
+remembered `PanelState` for the resizable dock. **A constant offset is not a width
+that was miscalculated**; it is something painted at a fixed position or with a
+hardcoded inset. That rules out sizing as the mechanism and is where the next
+session should start.
+
+**The measurement to take**, and it is the same shape as the oracle that found the
+2 pt border fault: drive one frame with `band_docked = true`,
+`band_dock_visible = true` and the mode on SSTV, and print the two rects — the
+bottom operating panel's and the dock's — plus every shape whose rect crosses
+the dock's left edge. A shape crossing it names itself; nothing else will.
+
 ### NEW, and it outranks the two above: **a sign-in prompt per radio** (Kevin, 2026-10-07)
 
 Comment `18796013`, in the same #16 thread, opening with *"New bug => it's
