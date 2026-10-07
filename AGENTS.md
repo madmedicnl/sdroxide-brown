@@ -3358,77 +3358,83 @@ select, one controller at a time). So fork discussion **#14** is **not a new dev
 class**: it is a *second firmware for the same board*, and the question that
 decides whether any of it is our work at all is which one the board is running.
 
-**The attachment.** Discussion #14 carries
-`https://github.com/user-attachments/files/33118374/targetMiniRadioScript32.zip`
-— one file, a 1.4 MB ESP32-S3 application image. **Not to be committed**: it is
-third-party firmware. Keep the URL. Local copy at
-`/tmp/opencode/ats/extracted/targetMiniRadioScript32.bin`.
+**Sources, and what may be read from them.** The developer's own page
+(`http://www.hjberndt.de/soft/espbasic/espRadioScript.html`, read 2026-10-07 —
+note it is **http**; the https upgrade fails) is the reference for all of this, and
+Kevin's discussion **#14** post is the other half of it. Discussion #14 also
+carries a firmware image
+(`https://github.com/user-attachments/files/33118374/targetMiniRadioScript32.zip`,
+a 1.4 MB ESP32-S3 application image). **It is third-party firmware and is not to
+be committed, quoted from or worked against** — the reason this section now points
+at the publisher's documentation instead of at strings lifted out of the binary is
+precisely that the answer turned out to be *documented*, which is both cleaner to
+use and clean to publish. What the image *was* good for is one identification
+that the page confirms: ESP32-S3, esp-idf v4.4.5, `RadioScript esp32-S3
+hjberndt.de, based on ESPBasic8266 3.0.Alpha 69`.
 
 What it is, confirmed rather than assumed: ESP32-S3 (`e9 03` image header,
 `xtensa-esp32s3-elf` build paths), **esp-idf v4.4.5**, and
 `RadioScript esp32-S3 hjberndt.de, based on ESPBasic8266 3.0.Alpha 69`. Kevin's
 identification is right.
 
-**How it was read, because it is the reusable part:** `strings -n 8` for the
-version and the JS; and the BASIC keyword/function table is one **contiguous
-NUL-separated run** in flash, so dumping a byte range and splitting on NUL
-gives the entire language surface at once — the whole table between `0x12300`
-and `0x12b40` is 152 tokens. That is how the items below were found; the
-WebSocket framing was confirmed from both sides (the firmware's own C strings at
-`0x116ae` and the embedded `editor.js` at `0x17eaa`).
+**The licence picture, one layer deeper, and it decides everything.** There are
+three pieces here and only one of them is licence-clean:
 
-**Findings Kevin's post does not have, all read out of the binary:**
+| Piece | Licence |
+|---|---|
+| `esp32-si4732/ats-mini` — the stock ATS Mini firmware, **MIT**, which `Backend::AtsMini` speaks | **MIT** — ours to use |
+| The board itself — Sunnygold's design, open hardware on oshwhub | **CC BY-NC-SA 3.0** — open to read and non-commercially remix; not a software licence |
+| The RadioScript interpreter — mmiscool's `esp8266Basic` (hjberndt's build extends it; his own pages link the source "auf Github") | **no licence file at all**, so all rights reserved by default |
 
-1. **A TCP server, on port 8081.** `tcpbegin` / `server` / `tcpreply` /
-   `tcpbranch` / `ontcp`, with the literal `Server startet at port 8081`. There is
-   also `udpbegin`/`onudp`/`udpreply` and `onserial`/`serial2*`. **So the missing
-   bridge script is about fifteen lines of BASIC on the radio itself** — it does
-   not need the WebSocket GUI-event trick at all, and it cannot be argued about
-   latency the same way. Our side would be a plain-TCP source, which we already
-   have one of.
-2. **Headless is a documented capability, not an open question.** `/run`,
-   `/stop` and `/debug` are HTTP endpoints beside `/edit`, `/vars`, `/filemng`.
-   His open question *"does a script need an open browser tab to keep running"*
-   is answered by the firmware: `curl /run`.
-3. **Two GUI paths, not one.** `onevent` fires `guievent:<name>:<value>` and
-   `onchange` fires `guichange~<name>~<value>~<id>`; they are **separate script
-   entry points**. His table lists only the second, so a bridge built from the
-   post alone would be driving half the widget set.
-4. **A debugger, server-side**: `cmd:run`, `cmd:stop`, `cmd:pause`,
-   `cmd:continue` and a `speed` setting ("Setting the debugger speed to"). This is
-   also the proof that scripts execute **on the ESP**, not in the browser.
-5. **The tuner surface is much larger than posted**: `rx.freq`, `rx.rssi`,
-   `rx.snr`, `rx.vol`, `rx.af`, `rx.am`, `rx.fm`, `rx.lsb`, `rx.usb`, `rx.ssb`,
-   `rx.stereo`, `rx.pty`, `rx.ta`, `rx.station`, `rx.date`, `rx.time`, and
-   `rx.get` / `rx.set` / `rx.cmd`; verbs `radioon`, `volume`, `volup`/`voldn`,
-   `frequp`/`freqdn` (plus the misspelled `freqencyup`/`freqencydown`), `seek`,
-   `seekup`/`seekdn`/`seekdown`, `bfo`, `setmode`, `notone`.
-6. **A full language**: `for/next`, `do/loop while|until`, `while/wend`,
-   `if/then/else/endif`, `gosub`/`goto`/`return`, `DIM` and arrays, `MID$`,
-   case-insensitive comparison, and event branches for timer, touch, serial,
-   serial2, udp, tcp and websock.
-7. **The radio draws its own UI**, so an S-meter and a dial are script-side:
-   `textbox`, `passwordbox`, `slider` (`minval`/`maxval`), `meter`
-   (`lowval`/`highval`/`optimumval`), `dropdown`, `listbox`, `imagebutton`,
-   `colorpicker`, `datetimepicker`, `filepicker`, and `wprint` for raw HTML.
-8. **It has a filesystem and a network of its own**: LittleFS with `/filemng` and
-   `/uploads/`, `http`/`HTTP` verbs, `jscall`, `wifiapsta`, `reboot`, `memclear`,
-   and a **Telegram bot** (`tg.begin(`, `tg.send(`) — so the radio can message
-   the operator by itself.
-9. **Two things he did not raise, and both are worth saying out loud:**
-   **`formatFlash`** is a client message that **erases the device** ("This will
-   delete all the files and settings"), and its HTTP replies carry
-   **`Access-Control-Allow-Origin: *`** — so any page a browser on that LAN
-   visits can talk to the radio, not just the operator's own. On a shared or guest
-   network that is a real consideration, and it argues for the board living on a
-   trusted segment or being reached through the station.
+So the **language's own interpreter source is unlicensed too**, which is the fact
+that closes the door nobody had noticed: we may not fork the interpreter, patch
+it, or derive a firmware from it, at either layer. The developer's caution about
+his tools is worth keeping in mind as an attitude rather than a rule — *"Werkzeuge
+können nützlich sein, aber in falschen Händen auch Schaden anrichten"*.
 
-**Still unknown, and his three stand except the first.** The frequency unit
-`setfrequency`/`rx.freq` expects cannot be read out of strings — he was right —
-and the round-trip latency is still a bench measurement, though the TCP path has
-no heartbeat in it, which is already better than the WebSocket guess. The third
-question is now a different and prior one: **which firmware is on the board**,
-because the stock one is what `Backend::AtsMini` already speaks.
+**What is nevertheless open to us, and it is the whole answer.** Three things,
+none of which touches anybody's code:
+
+1. **The radio's own hardware and the stock firmware are open** — and we already
+   support the stock one.
+2. **The language is documented.** His pages publish a command reference
+   (`esp32Script`) and dozens of worked **examples in plain text**, including a
+   browser front end that drives the whole radio in FM/AM/SSB with no cable, and
+   a "command & response" low-level example that queries the chip. Reading a
+   published specification is not reimplementation, and **a script is its author's
+   own work** — the licence attaches to the interpreter's source, not to the
+   language's syntax nor to programs written in it.
+3. **The developer has already documented a control interface on the serial
+   port**, in his own words: *"Über die serielle Schnittstelle steht der gesamte
+   Befehlssatz dieser espRadioScript32-Sprache zur Verfügung, wenn kein Programm
+   ausgeführt wird"* — the entire command set is available over the serial
+   interface when no program is running.
+
+**So the route I said did not exist, does — and it is the route he documented
+rather than one we reverse-engineered.** A client that speaks that serial command
+set is implementing a published interface, not reading his firmware. Nothing of
+his is redistributed by us; an owner who wants his board in sdroxide flashes
+whatever firmware they like themselves, which is their decision about their own
+hardware and not ours.
+
+**The practical shape, which is small and fork-only.** The board is
+ESP32-S3 + Si4732 with a **USB-C serial port** (an Espressif VID/PID, flashing
+and control over the same cable) and a 320×170 display. A short RadioScript on
+the radio that answers a few lines over that serial port — frequency, mode,
+volume, and the existing `rx.rssi` for a meter — is **plain text the owner can
+read line by line**, and sdroxide's side is a second ATS-style source profile over
+plain TCP or serial: no new `Backend`, no I/Q lane, and on that reading no
+`PROTO_VERSION` bump. **Nothing has been built and nothing is scheduled**; this is
+the shape, recorded so that if the operator ever says yes it is not re-derived.
+
+**Three honest limits, from his own documentation rather than from us.** WiFi is
+assumed throughout and *"eine schlechte WiFi-Verbindung zur Programmierzeit
+verursacht unkontrollierte Hänger"* — hence the serial route, which does not.
+Some ATS Mini boards ship an ESP32-S3-WROOM with **no WiFi antenna fitted, only a
+connector**, and one must be attached before the browser can program the radio at
+all. And he says plainly of the scripting firmware that debugging is slow, that
+bugs are to be treated as features until reproduced, and that use is at one's own
+risk.
 
 **The boundary, stated once so it is not re-litigated.** There is exactly one way
 this becomes ours, and it does not involve his firmware: **the developer himself
