@@ -65,9 +65,10 @@ suite we lack (the mode inventory against WSJT-X is in `FST4W-HANDOVER.md`).
   our bench can reproduce — we have no Pluto. Open to anybody who has one.
 
 **And the one that is not a feature at all:** we still cannot drive a browser
-here. That is how the sign-in-per-radio bug reached a release, and it will happen
-again unless the operator's own browser testing becomes part of the cycle. It is
-the most valuable thing on this page.
+here. One real bug got through that way — a sign-in prompt per radio, which we
+apologised for and fixed in the next build, at the cost to a reporter of a few
+extra sighs. It is worth closing the gap because that is the only way to catch
+the next one, not because the last one was anyone's fault.
 
 ## Phase 1 — the listener's identity
 

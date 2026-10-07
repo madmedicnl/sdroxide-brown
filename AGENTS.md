@@ -46,6 +46,13 @@ and it is against us.** The whole of it, in order:
    and the tests that exist exercise [`LoginForm`]'s logic — a unit test on a
    form is not a test of a sign-in. The cookie removes the dependency on the
    broken path, but it does not close the gap, and the gap is now named.
+
+   **Scale it, though.** It was a bug, we got it wrong, we said so in his own
+   thread and fixed it in the next build. Nobody was hurt and nobody lost
+   anything but a few extra sighs, and the note above is here because the
+   *shape* of it is worth remembering — not as a case against us. Do not let a
+   lesson harden into a grievance: he volunteered the testing, and the reply he
+   got was a fix, not an excuse.
 2. **He answered the question the operator's bet would have got wrong.** His own
    `/radios` output lists three paths on one host, so it is one station, not
    three — and the operator's recollection of "three machines" was not what his
@@ -75,6 +82,16 @@ building.** He is setting a station up and has the coming stretch free, so new
 work is manual verification of what is already in the tree rather than new
 features — and Kevin has been told to expect less news, which is the honest way
 to keep a tester who has already done us a great deal.
+
+**And the conditions were constrained on both sides, which the record should not
+hide.** Two radios on the bench and no Pluto, no browser to drive, one pair of
+hands on this side, and the operator's week shared with treatment — under which
+he has not been able to listen properly or get a single FT8 contact through for
+over a week, and still a great deal got built and shipped. What came out of that
+is a shared result, not a favour granted to the project: his calls on the licence
+question, on keeping the radio simple, and on saying no to things that only
+looked urgent are the reason any of it is shippable. **Gratitude runs both ways
+here, and the ledger above is not a list of what we owe.**
 
 
 **Upstream #640 is fixed here, and our fork had all four of its faults.** ct7cht
