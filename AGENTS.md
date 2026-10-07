@@ -875,26 +875,29 @@ DAB); the codec is the work.
 
 **03:37-ish: the armv7 first job was picked up and re-dispatched with `cross`.**
 
-**`cross` worked — the wall is `opus`, and it is a flag, not a dead end.**
-Run 37577495536 (2026-10-07 05:50) with `Cross.toml` +
-`Dockerfile.cross-armv7`: checkout, toolchain, cache and `cargo install cross`
-all green, and the build got **past `alsa-sys` and past every Rust crate** to the
-vendored C. It died in **`opus`**, building `silk/arm/biquad_alt_neon_intr.c`:
+**`cross` + `no-simd` + `patch` → the build now reaches the final link.**
+Three walls down in order, each one a whole run:
+1. `alsa-sys` — a real armhf sysroot via `cross` (run 37577495536).
+2. `opus` NEON intrinsics — opusic-sys's `no-simd` feature, reached through a
+   gated `sdroxide-server/arm-no-simd` feature. **Do not "fix" it with
+   `-mfpu=neon-vfpv4`**: Debian armhf is VFPv3 and NEON is not in that baseline.
+3. `rade_c`'s cmake ExternalProject — `patch` was not in the image
+   (`sh: 1: patch: not found`), added to `Dockerfile.cross-armv7`.
 
-    error: inlining failed in call to 'always_inline' 'vadd_s32':
-           target specific option mismatch
-    gmake[2]: *** [...silk/arm/biquad_alt_neon_intr.c.o] Error 1
+**The remaining wall is the link, and it is one crate.**
+Run 37597717686 compiled every crate and died at the final link:
 
-That is the classic "NEON intrinsics compiled without NEON enabled": the opus
-build is not getting `-mfpu=neon`. **The fix is compiler flags**, not a port —
-`CFLAGS_armv7_unknown_linux_gnueabihf`/`CXXFLAGS_…` with
-`-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard` (and the cmake equivalent if
-opus is built through the `cmake` crate, which `CFLAGS` may not reach).
-**So the answer to ipaddr42 is now concrete and good news: the tree cross-builds
-32-bit, ALSA included; the vendored C needs its NEON flags given to it.**
+    libsdroxide_rade-....rlib: error adding symbols: file format not recognized
 
-Note `opus` is the dependency to look at first — it is not one of the five
-named in the workflow's header (faad2, dream, nrsc5, xng, rade_c).
+That crate builds its own opus through cmake (`build_opus-prefix`,
+`-L .../build_opus/.libs`), and something on that path produces objects the
+linker will not mix. **Next thing to look at**, and the answer to ipaddr42 is
+now one link error away rather than four walls.
+
+**2.0.1_brown is cut as a pre-release** (tag pushed, `gh release create
+--prerelease`, workflow 37600454169). It carries the strip scroll fix, the SSTV
+dial hold and the two browser fixes — and **not** the armv7, deliberately: a
+failing build job fails the release, which is the "would break something" case.
 
 **Do not re-try the hand-rolled multiarch apt.** Two attempts are recorded above;
 `cross` is what worked, and the two files it needs are in the tree now.
