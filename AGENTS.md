@@ -3454,6 +3454,113 @@ digitise differently. What an sdroxide client could add is the operator's
 surround — tuning, band and memory management, the SWL log, the schedule — not
 decoding.
 
+### DECIDED (2026-10-07): the ATS Mini RadioScript goes on the bench this week
+
+**The operator has one of these boards himself** — *"That little radio got me
+started in SWL again in the first place"* — and he runs hjberndt's firmware
+because it decodes CW, RTTY and WEFAX on the device, which is the whole point of
+that firmware for him. **So we do not need Kevin for the first testing at all.**
+We have the hardware; he only has to confirm or deny what we find once there is
+something to confirm, which is a far better use of his bench than being the first
+tester again.
+
+*"I would really love this too. we could really really test this on the bench
+before any release."* That is the shape this fork prefers, and it is why this
+item is worth the week: it is the one piece of work outstanding that can be
+**proven before a release rather than after it**, it is fork-only, it is small,
+it needs no browser, and it answers a question that will be asked repeatedly.
+
+**What was told to Kevin**, in discussion #14 (the two earlier replies there
+were deleted — see below — and this is the only answer that stands): we will look
+at it and test it this week on our own board, and we will come back to him when
+there is a beta to confirm or deny. Thanks for the pointer.
+
+**The licence boundary is unchanged and is not negotiable**: nothing of
+hjberndt's or mmiscool's is copied, bundled or reimplemented, and the firmware
+image stays out of the tree. The client is built against the **developer's own
+published documentation** — the command reference linked as *espScript32ReferenzH*
+and the worked examples he publishes as plain text — which is the one route that
+needs nobody's permission. A **script on the radio is the owner's own work**, and
+that is what makes this testable: plain text the operator can read line by line,
+with the firmware untouched.
+
+**The design fork, unresolved, and it is the first thing to settle on the bench:**
+the documented serial command set is available *"when no program is running"*, so
+either we speak it directly and the radio is not running its on-device decoder
+(the operator loses the feature he actually wants), **or a short script answers a
+few lines on serial while doing the decoding itself** — one program at a time, so
+the script is the one that has to do both. The second is what makes this worth
+doing and it is a RadioScript problem before it is an sdroxide one.
+
+### The reference, read (2026-10-07): what a client would actually send
+
+His **command reference** is `espScript32ReferenzH.htm` (linked from the main
+page as *espScript32ReferenzH*, German, ~118 000 characters, "powered by
+mmiscool's ESP8266Basic", H. Berndt 2024/25). It has a **Radio Interface** section
+for exactly this board, and it is the whole basis for a client. What it settles:
+
+- **The hardware it covers: Si4732 on an ESP32-S3 LILYGO, 320x170 colour
+  display, rotary encoder, backlight LED and encoder button.** FM stereo
+  64–108 MHz with RDS, and **AM/SSB 150 kHz – 30 MHz** — so longwave, medium and
+  short wave are in range, which is why this is an SWL board and not just an FM
+  novelty.
+- **Frequency units, which was one of Kevin's three open questions and is
+  answered in the open**: *"mit Frequenzangabe entscheidet der Wert darüber ob AM
+  oder FM eingestellt wird: `RX 88.8` oder `RX 5955`"*. **A decimal is MHz (FM), an
+  integer is kHz (AM/SSB).** No capture needed; `RX`/`Freq` takes the value and the
+  value decides the band.
+- **Mode is three commands, not one**: `AM`, `USB`, `LSB` — with the documented
+  caveat that the frequency should be set in the AM range first, and that `USB`
+  and `LSB` load the SSB patch. **There is no power-off command**; the radio is
+  switched with GPIO (`PinOut`) if you want it off.
+- **`BFO` spans −16383 Hz to +16383 Hz** — a 32 kHz SSB window, which is a dial
+  offset and nothing more. No bandwidth or filter control, no AGC, no squelch, no
+  band concept at all: one command covers 150 kHz–30 MHz, which is *simpler* than
+  the stock firmware's band-cycling we already speak.
+- **Read-back is a script-side function, and this is the fork, answered**:
+  `Rx.Freq()`, `Rx.RSSI()`, `Rx.SNR()`, `Rx.AM()/FM()/SSB()`, and the RDS set
+  (`Rx.Station()` = 8-character station name, `Rx.Text()` = up to 64 characters of
+  radiotext). His own published example `Simple3Radio.txt` reads them back exactly
+  this way — `f = rx.freq()` after a `FreqUp`, `v = rx.vol()` after a `VolUp`.
+
+**So the shape is now concrete, and the constraint is the interesting part.**
+Writing to the radio needs **no script at all**: `RX`, `Freq`, `Vol`, `AM`/`USB`/
+`LSB`, `BFO`, `FreqUp`/`FreqDn`, `SeekUP`/`SeekDN` are commands, and the serial
+port carries the whole command set when no program is running. **Reading it back
+does** — a meter needs a few lines that print the values. And **only one program
+runs at a time**, so if the operator wants the board's own RTTY/CW decoding *and*
+a meter, **one script has to do both**. That is the first thing to settle on the
+bench, and it is a RadioScript problem before it is an sdroxide one.
+
+**What our side would be.** A second ATS-style control source over plain serial
+(or TCP 8081), not a new `Backend` and not an I/Q lane — so no `PROTO_VERSION`
+bump. The audio half is already solved and is the one Kevin is already running on
+his Zastone: the board's headphone jack into a sound card's line-in, sdroxide in
+demod-audio mode. The command set sdroxide needs is short: frequency, mode,
+volume, and one read for the meter — plus `Rx.Station()`/`Rx.Text()`, which are
+RDS extras a listener would actually want.
+
+**The honest unknown, and it is a bench question rather than a research one:**
+whether the serial command set echoes anything useful when a program *is* running.
+If it does not, the bridge script is the only route to a meter, which is fine —
+it is plain text — but it decides whether the operator's decoder and our control
+can coexist.
+
+### Deleted answers on #14, and why that is also the record
+
+Two replies were posted there and **both were deleted at the operator's
+instruction**, and the instruction was right. The first was a blueprint — the
+implementation shape read out of the firmware image — and posting *how to build
+against* a closed, unlicensed product is not the same as answering a question.
+It was the right analysis and the wrong place to leave it.
+
+What replaced it is better in every way, and it is in the section above: the
+answer turned out to be **documented** by the publisher, so the note cites his
+pages instead of describing his internals. **That is the general shape to keep**
+— when the answer to "how would we support X" is on X's own website, link to it;
+do not publish a dissection of X's binary, and do not treat having read one as a
+licence to write against it.
+
 ### The ATS Mini (SWL extras, fork-only)
 
 A cheap, ubiquitous SWL receiver — ESP32-S3 + **Si4732**, firmware
