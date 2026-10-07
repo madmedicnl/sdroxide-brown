@@ -1011,6 +1011,59 @@ to SDRs.
 the RSP1 whatever the tab looks like. An 80 m "SS9900v" screenshot with a 3.6 kHz
 span was read as the rig for an hour; it could not have been.
 
+### NEW, and it outranks the two above: **a sign-in prompt per radio** (Kevin, 2026-10-07)
+
+Comment `18796013`, in the same #16 thread, opening with *"New bug => it's
+asking for a session password for each radio station. Radio 1 = session password
++ popup warning / Radio 2 = … / Radio 3 = … This is way too much! It ruins the
+user experience."* He has **three** radios on one passworded server (WOLF = id 0,
+HACK RF = id 2, PLUTO = id 3), so this is the first report from somebody for
+whom three radios is the normal case.
+
+**The design already says this cannot happen, and that is why it needs naming
+rather than a fix.** `login.rs`'s module docs are explicit: *"A station serves
+each of its radios on a connection of its own, and asks each one for a password —
+so a client holding a whole station would face one sign-in per radio. It does
+not: an answer a station has accepted is kept for as long as the program runs
+(`SESSION_LOGINS`) and offered to every other connection to that same station."*
+The machinery behind that claim, all read on 2026-10-07 and **all apparently
+sound**, which is why the report is a question and not a patch:
+
+- `login::station_key` strips the radio off, so `/ws`, `/ws/2` and `/ws/3` all
+  key the station the same (`rest[..rest.rfind("/ws")]`) — and `wss://` contains
+  no `/ws`, checked, so a secure URL does not shift it.
+- `SESSION_LOGINS` is written from `LoginForm::settle` on the accepted
+  transition (`was_checking`), guarded only by `!self.station.is_empty()`.
+- `session_answer` offers it **once per connection and ahead of** the stored
+  sign-in; `answerable` also re-offers after a *"come back"*, which is not a
+  refusal (`is_auth_busy`).
+- `multi.rs:1359` polls `poll_auth` for **hidden** tabs too, precisely so the
+  tabs behind the one on screen can let themselves in.
+
+**So the two live suspects are both "the key was empty or wrong when the answer
+was accepted",** which the `!self.station.is_empty()` guard then *silently
+skips* — a tab whose `ctrl.peer_url()` is `None` yields
+`station_key() == String::new()` (`app/mod.rs:2233`), nothing is recorded, and
+every following tab finds an empty map and draws the card. That is one line of
+guard doing the damage quietly, which is the shape of bug this file keeps
+finding. The other is that the prompt is **not ours at all**: "popup warning"
+is what Chrome's password manager says, and a card we fill silently could be
+provoking it once per connection.
+
+**Ask, do not guess** — one message, and he answers well and attaches
+screenshots: is the prompt **our** sign-in card (Username / Password / REMEMBER /
+SIGN IN) or a **Chrome popup** ("Save password?"); does ticking **remember**
+make it stop for good; and does it appear at start-up as the three tabs open, or
+later. That answers both suspects at once, because a Chrome popup that survives
+*remember* is not ours and ours that survives it is the empty-key path.
+
+**Also in that comment, and unanswered:** *"Pluto is still using 100% of the CPU.
+This bug has never been fixed in any version."* He has the thread to it — the
+Tezuka firmware **0.3.23** release adds an `sdroyxde` package — and he offered
+to test it. Our side has not measured it, and `sdroxide-adsb` at a steady 99.9 %
+is a single-thread bottleneck in *our* decoder, so it is ours to check before it
+is the firmware's.
+
 ### Narrowing the two open items — the steps, so this is not re-derived
 
 **Item 3, the 3-radio tab-close flicker** (fork discussion #16, Kevin; browser
@@ -1018,11 +1071,24 @@ only, server unaffected, two tabs fine and three flickering). Cheapest and most
 decisive first, and **step 1 needs a human** because it splits the three
 possible causes in one question:
 
-1. **Ask him three things** — not a guess, one message: does the *tab come back*
-   (count 3 → 2 → 3), or does the screen only flash? Does it stop on its own if
-   left alone for ~30 s? Is there anything repeating in the browser console?
-   Those separate tab churn from a repaint storm from a console error loop, and
-   each has a different fix.
+1. ~~**Ask him three things**~~ **ANSWERED (2026-10-07, comment `18796013`).**
+   - *"The flashing continues Radio 3 / Radio 1"* — so it is the strip he
+     described and **2.0.0's scrollable strip did not change it**. He has not
+     tried 2.0.1 yet ("I'll download version 2.0.x tomorrow morning").
+   - *"I haven't tried it"* (the 30 s question) — **so "a countdown settles, a
+     redraw loop never does" is still open.**
+   - *"There is no console in Chrome on Android"* — and he is right, there is not;
+     a desktop-client reproduction is the only route to that evidence, so do not
+     ask a phone user for it again.
+   - **"some phones it crashes, others it doesn't"** — new, and it splits the
+     three causes again: a *crash* is not a flicker. Treat "it crashes on some
+     phones" as its own item and ask which.
+   - Always radio 3 closed while viewing radio 1; he re-confirmed the pairing.
+
+   **Still worth asking once, cheaply:** whether the tab *reappears* (count
+   3 → 2 → 3) or only the screen flashes. He answered "the flashing continues"
+   without separating them, and that one question is what splits step 3 from
+   step 4. Ask it with the 2.0.1 result in hand.
 2. **Reproduce without a browser.** The multi-radio harness now exists
    (`eframe::CreationContext::_new_kittest`). Build a `MultiApp` with
    `remote: Some(factory)` and three tabs, close one, then run ~120 frames on a
