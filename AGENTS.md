@@ -874,10 +874,49 @@ audio. It fits the wideband-lane machinery the fork already has (ADS-B, AIS,
 DAB); the codec is the work.
 
 **03:37-ish: the armv7 first job was picked up and re-dispatched with `cross`.**
-The two hand-rolled attempts are recorded above; `Cross.toml` +
-`Dockerfile.cross-armv7` give the build a real armhf sysroot, run 37577495536.
-If that reaches the **vendored C** and fails there, *that* is the answer to
-ipaddr42's question — and it is the expected place for a 32-bit build to break.
+
+**Branch `fork/responsive-layout`: the layout bug class, and the oracle for it.**
+The operator's call, and the evidence is three reports from three unrelated
+panels — Kevin's *"3 radio = bug de décalage"*, *"the boundary line is missing,
+the outline extends beyond the edge"*, and the tab strip cut off. One mechanism:
+a row laid out wider than the window. Nothing caught them because the only
+render test we had (`phone_crash_regression_*`) asserts a frame does not
+*panic*, and the strip was overflowing the whole time while it passed.
+
+- **The oracle works and is the deliverable.**
+  `multi.rs`'s `page_overflow` drives a real `MultiApp` (via
+  `eframe::CreationContext::_new_kittest`, which is what made a multi-radio
+  render harness possible at all) at 320/360/411/768/1250/1920 with 1–3 radios
+  and asks **how wide the page container got**. It measures `Shape::Rect`
+  backgrounds anchored at the left edge — *not* the widest shape, because a
+  scrolled strip paints tabs past the window on purpose and clips them.
+- **FIXED — the strip.** Three radios on a phone overflowed by 47–220 pt; the
+  page went to 407–583. It is a horizontal scroll area now
+  (`MultiApp::radio_strip_scrolled`), and the sweep reads 362 everywhere.
+  **A wrapped row does not fix it and the reason is worth keeping: a tab is a
+  `scope`, and egui *squeezes* a scope rather than wrapping it** — the third tab
+  folded its own name one letter per line, kept its own min width and stayed on
+  the row. The strip got *wider* (602), not narrower. Do not retry the wrap.
+- **NOT FIXED — the other half.** A top-bar chip row is a couple of points
+  wider than its panel, egui grows the panel, and the page is **2 pt over at
+  360 and 4 at 1920 with one radio** — so it is not the strip. The panel's right
+  border is painted off-screen and there is no line to close it. The strict,
+  **ignored** `nothing_is_drawn_wider_than_the_window` is the record; the active
+  `the_strip_does_not_push_the_page_past_the_window` is the same sweep with a
+  6 pt tolerance and is the guard for the class that is fixed.
+- **Items 4 and 5 attempted, on the branch, not verified in a browser.** *Copy
+  diagnostic* wrote to the clipboard via `ctx.copy_text`, which a page cannot
+  always do (secure context + live gesture, and a refusal is silent) — on the
+  web it writes a file now, through the SAVE chips' download. *Share picture*
+  returned `is_ok()` on `navigator.share`, which reports only that the promise
+  was made, so a rejected share looked like success and the fallback never ran;
+  it is gated on `can_share_file()` now. **No browser was driven here** — this
+  is Kevin's to confirm.
+- **Item 3 (the 3-radio tab-close flicker) is NOT solved.** The obvious lead —
+  that closing a remote tab re-opens it via `open_peer_radios` — is wrong:
+  `peers_opened` is deliberately never cleared on close (see its doc). The
+  report stands: with three tabs, closing station 3 while viewing station 1
+  flickers, client-side only, and it is the next thing to look at.
 
 **Deferred to the next session, deliberately:** the **DAB MOT slideshow** (the
 station images the ensemble broadcasts). Everything needed is already in place —
