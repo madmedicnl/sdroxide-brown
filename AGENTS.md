@@ -968,6 +968,69 @@ render test we had (`phone_crash_regression_*`) asserts a frame does not
   report stands: with three tabs, closing station 3 while viewing station 1
   flickers, client-side only, and it is the next thing to look at.
 
+### Narrowing the two open items — the steps, so this is not re-derived
+
+**Item 3, the 3-radio tab-close flicker** (fork discussion #16, Kevin; browser
+only, server unaffected, two tabs fine and three flickering). Cheapest and most
+decisive first, and **step 1 needs a human** because it splits the three
+possible causes in one question:
+
+1. **Ask him three things** — not a guess, one message: does the *tab come back*
+   (count 3 → 2 → 3), or does the screen only flash? Does it stop on its own if
+   left alone for ~30 s? Is there anything repeating in the browser console?
+   Those separate tab churn from a repaint storm from a console error loop, and
+   each has a different fix.
+2. **Reproduce without a browser.** The multi-radio harness now exists
+   (`eframe::CreationContext::_new_kittest`). Build a `MultiApp` with
+   `remote: Some(factory)` and three tabs, close one, then run ~120 frames on a
+   stepping clock and assert `tabs.len()` stays 2. If it flaps, the bug is
+   caught here and step 1 was only a nicety.
+3. **If the count flaps**, it is the peer-reopen path. Instrument
+   `open_peer_radios` (`multi.rs:~1064`) to log `wanted` and `peers_opened` per
+   frame. **The suspect is that tabs created at startup from the server roster
+   never enter `peers_opened`** — only peers opened *by that function* do — so a
+   closed one is offered again. Note `peers_opened` is *deliberately* never
+   cleared on close (see its doc), so the fix is to seed it for the initial tabs
+   or to keep an explicit "the operator closed this" set. **That is a design
+   decision, so measure before choosing.**
+4. **If the count does NOT flap**, it is a repaint storm, and there are only two
+   per-frame repaint requests in the shell: `multi.rs:1372` (`poll_auth` →
+   `after_ms(120)`) and `multi.rs:1397` (`poll_reconnect` → `after_ms(250)`).
+   Log which one fires and **on which tab**. `poll_reconnect` redials on a
+   countdown, so a banner flapping every 250 ms is literally a
+   "disconnect/reconnect loop" — and the question is then why closing tab 3
+   dropped *another* tab's link (look at `shutdown_ctrl` and anything shared:
+   the spot feed, the station's one connection).
+5. **Check the `while` loop at `multi.rs:1051`** — it closes every tab whose
+   `peer_removed()` is true and posts a notice each time. Log `peer_removed()`
+   per tab per frame around the close: if a *remaining* tab reports it, the loop
+   closes and re-notices, which is churn with no reopen involved.
+6. Whichever it is, **the step-2 test is the guard** — land it with the fix.
+
+**Item 1b, the 2 pt page overflow** (`#16`, present with *one* radio at 360 and
+1920, so not the strip: the page's background `Rect` is 0..362 in a 360 window
+and its right border is therefore painted off-screen). **Do not use `sed` on
+`engine.rs`/`top_bar.rs` for any of this** — a bare indentation-anchored pattern
+cost a day's work today by rewriting an unrelated `1.0` in the TUNE path.
+
+1. **Turn it into a pure-function assertion before touching any drawing.**
+   `plan_short_strip` (`top_bar.rs:309`) is pure and already has a test helper
+   (`a_short_strip`, `top_bar.rs:8752`). Add a sweep: for `avail` from 320 to
+   1920, assert `box_w + ptt_w + gaps + grid_w <= avail`. **If that fails, the
+   arithmetic is the bug** and no egui knowledge is needed. Do the same for the
+   desktop planner, since 1920 is a different code path (+4 there, +2 at 360 —
+   do not assume one fix covers both).
+2. **If the plans sum correctly**, the overflow is inside a chip. Instrument
+   `angled_frame` (`chrome.rs:29`, test-only) to compare `ui.min_rect().width()`
+   *after* `add(ui)` against the `w` it pinned. That says row or child.
+3. **Then bisect the row** by drawing it with pieces removed and watching the
+   overshoot — `what_paints_past_the_edge` (`multi.rs`) already prints the widest
+   shapes, so each bisect is one run.
+4. **The acceptance test already exists and is ignored**:
+   `nothing_is_drawn_wider_than_the_window` (`multi.rs`). Un-ignore it with the
+   fix; the active `the_strip_does_not_push_the_page_past_the_window` is the
+   6 pt-tolerance guard for the class that is done.
+
 **Deferred to the next session, deliberately:** the **DAB MOT slideshow** (the
 station images the ensemble broadcasts). Everything needed is already in place —
 `dabradio` decodes it (`PadExtractor::extract_all_from_au` → `PadData::Mot`), the
