@@ -93,6 +93,89 @@ question, on keeping the radio simple, and on saying no to things that only
 looked urgent are the reason any of it is shippable. **Gratitude runs both ways
 here, and the ledger above is not a list of what we owe.**
 
+---
+
+## The open queue, as of 2026-10-07 (v2.0.2_brown shipped)
+
+The whole of it, in the order a session should pick it up. **Housekeeping, done
+this evening: working tree clean, `main` in step with `origin`, no untracked
+files** (so no scratch probe parked in an `examples/` folder, which `--workspace`
+would build), installed binary 2.0.2_brown matching `Cargo.toml`, and
+`v2.0.2_brown` a pre-release with `v2.0.0_brown` correctly still "latest".
+
+### Ours, and do these next
+
+1. **Browser-verify the 2.0.x browser fixes.** The highest-value item on the page
+   and the one that closes the gap Kevin's report proved: the **Copy diagnostic**
+   download, the **share picture** gate, the **sign-in cookie** (12 h / 1 day /
+   not this time) and the **scrolling radio strip**. All four are unit-tested and
+   none has been seen in a browser. Needs a passworded multi-radio server and the
+   operator's own browser — nothing else is worth doing first.
+2. **The ATS Mini's documented serial control surface.** Research is finished: the
+   command reference is read, the units and the command set are known, and the
+   licence boundary is settled. Next is a sketch of the client (an ATS-style
+   source over serial or TCP, no new `Backend`, no `PROTO_VERSION` bump) plus the
+   RadioScript meter script for the bench. **Not started, and nothing should be
+   until the operator picks up the board.**
+3. **DAB at 3.1 Msps on the RSP1.** Our own warning says the front end is at its
+   floor at 2.5 Msps. We have a wideband receiver on the bench: either it confirms
+   the warning or it finds something, and it is an hour.
+
+### Open, and waiting on a reply
+
+4. **#4 bindings** — offered two fixes (wording on the CONTROLS page, or the
+   default for his own profile); awaiting his choice.
+5. **#5 auto-clear the decodes on a frequency change** — offered as an
+   off-by-default setting, because clearing them by default loses decodes; awaiting
+   whether he wants it automatic at all.
+6. **#6 "none" versus "All"** — asked which of the three `ALL` chips he meant
+   rather than renaming the wrong one; awaiting a screenshot or a panel name.
+7. **#10 recorder replay** — asked which mode he wants first. The missing piece is
+   an audio-file source that reads the UTC/frequency/mode stamp out of the
+   filename; the naming is already there.
+8. **#13 armv7** — built and attached to `v2.0.1_brown`; awaiting ipaddr42's
+   report from his own hardware, and only then fold it into the release matrix.
+9. **The three-radio tab-close flicker** — still needs his answer to one question
+   (does the tab *count* flap, or only the screen flash). **It is also testable
+   without hardware**: the `MultiApp` harness with three tabs and a stepping clock
+   exists, and the three-tab test was never written. That test is the guard for
+   whichever cause it turns out to be.
+
+### Parked deliberately, with the reason
+
+10. **The 2 pt page overflow** — cosmetic, reproduced by an oracle that is already
+    in the tree. Chase it during the bench weeks, when there is a screen to look
+    at rather than a number to argue with.
+11. **The empty station-key guard** — real, masked by the sign-in cookie, harmless
+    while masked. Pick it up when something actually depends on it.
+12. **Olivia transmit interop** — needs somebody with an fldigi on the other end.
+    It is the single most useful observation anyone could send us, and no amount
+    of reading our own code substitutes for it.
+13. **The Pluto / ADS-B 100 % CPU** — real and predates every version, and outside
+    what our bench can reproduce. Open to anybody who has a Pluto.
+
+### On the month list, unscheduled
+
+14. **DAB's MOT slideshow and DLS** — wants its own message pair rather than a
+    field, and a capture of an ensemble that actually broadcasts one.
+15. **DMR** — asked for, honestly unscoped: VHF/UHF, and the AMBE+2 codec is the
+    work. Fits the wideband-lane machinery we already have.
+16. **FST4W** — the verdict is recorded and it is **do not ship as wired**; see
+    `FST4W-HANDOVER.md` for the diagnosis and `fork/fst4w-wiring`.
+
+### Branches worth knowing about, so nobody re-derives them
+
+- `fork/esp-sdr-protocol` — two commits, unmerged: the ESP-SDR IQ-over-Wi-Fi
+  protocol, written against its own specification. **A different device class from
+  the ATS Mini**, which has no I/Q at all. Fork discussion **#11**.
+- `fork/fst4w-wiring` — the FST4W investigation, ending in the do-not-ship verdict.
+  Its submodule-pointer commit is **redundant**: `main` already sits at
+  `cb340709`, with `audio.len().max(nframe)` in `subtract.rs` and
+  `subtract_short_buffer.rs` present. Checked, so nobody wonders again.
+- `local/agents-notes` — a superseded rewrite of this file. Nothing in it to keep.
+- `upstream-pr/*` — eleven stale branches, left **on purpose**: upstream is
+  secondary now and nothing is being re-cut for it. Do not rebase them.
+
 
 **Upstream #640 is fixed here, and our fork had all four of its faults.** ct7cht
 reported and diagnosed it on a TS-440 with a DigiRig (CAT + RX audio) and an
