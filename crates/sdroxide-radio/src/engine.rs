@@ -13515,6 +13515,31 @@ impl Engine {
     ///   inside a broadcast band leaves the dial where it is: the rule moves a
     ///   receiver to the right spot in the band it is already on, it does not
     ///   decide which band the operator wanted.
+    /// How far the dial may sit from one of a mode's published frequencies and
+    /// still count as *already there* — see [`Self::conventional_dial_for`].
+    ///
+    /// One hertz for the slotted modes: they are decoded in a narrow window, so
+    /// a dial that is not on the frequency is wrong and moving it is a rescue.
+    /// A mode worked by ear is the opposite case — the station is wherever the
+    /// station is, and a rule that drags the dial onto a calling frequency while
+    /// the operator is receiving something a kilohertz away is not a rescue but
+    /// a detune.
+    fn dial_hold_hz(mode: Mode) -> f64 {
+        if mode.is_sstv() {
+            // 3 kHz: an SSTV picture occupies about that much, and the segment
+            // around the calling frequency is worked either side of it.
+            3_000.0
+        } else if mode == Mode::Olivia {
+            // Olivia is worked in the 500 Hz and 1 kHz sub-bands around its
+            // published centres.
+            1_000.0
+        } else {
+            // The slotted modes and WSPR: a hertz, as the rule has always been
+            // for them.
+            1.0
+        }
+    }
+
     fn conventional_dial_for(&self, rx: RxId, mode: Mode) -> Option<f64> {
         if rx != RxId::Main || self.state.rx[0].mode == mode {
             return None;
@@ -13547,7 +13572,19 @@ impl Engine {
             return None;
         }
         let dial = self.state.active_freq_hz();
-        if sdroxide_types::digi_channels(mode).iter().any(|c| (c.dial_hz - dial).abs() < 1.0) {
+        // **A dial already in the mode's own activity is never moved** — and
+        // "in the mode's activity" is not "within a hertz of a published
+        // frequency". That was the rule, and it detuned a receiving operator:
+        // listening to an SSTV picture ~1.5 kHz off the 80 m calling frequency,
+        // selecting SSTV moved the dial to 3.7300 and left the signal off the
+        // passband centre — "the signal is completely shifted to the left",
+        // "audio present · no SSTV header yet", and a picture that only decoded
+        // when the signal faded up (fork discussion #7, Kevin). The width is
+        // per mode because it has to be: the slotted modes are decoded in a
+        // 50 Hz window and a dial a kilohertz off is genuinely wrong, while
+        // SSTV occupies three kilohertz and is worked wherever the station is.
+        let hold = Self::dial_hold_hz(mode);
+        if sdroxide_types::digi_channels(mode).iter().any(|c| (c.dial_hz - dial).abs() < hold) {
             return None;
         }
         let here = sdroxide_types::digi_channels_in(mode, Band::containing(dial));
@@ -17875,7 +17912,7 @@ impl Engine {
                 if mode.takes_digi_tx_audio() && (mode != Mode::Cw || self.caps.cw_audio_keyed) {
                     self.digi_tx_audio_level()
                 } else {
-                    1.0
+                    3_000.0
                 }
             } else {
                 self.state.tx.tune_drive.clamp(0.05, 1.0)
