@@ -1171,7 +1171,7 @@ fn focus_hz(mode: Mode, dial_hz: f64, audio_hz: f32, cw_qrg: bool, audio_front_e
 /// sync pulse is at 1200 and white at 2300, so the picture occupies 1200–2300
 /// and its centre is 1750. A protocol fact rather than a taste — every mode in
 /// the published SSTV set uses the same two frequencies.
-const SSTV_TONE_HZ: f64 = 1750.0;
+pub(in crate::app) const SSTV_TONE_HZ: f64 = 1750.0;
 
 /// The view span that holds that band with a little room either side.
 const SSTV_VIEW_SPAN_HZ: f64 = 1600.0;

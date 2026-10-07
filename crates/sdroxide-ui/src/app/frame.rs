@@ -757,6 +757,17 @@ impl eframe::App for SdroxideApp {
                             .layout(egui::Layout::top_down(egui::Align::Min)),
                     );
                     spec_ui.shrink_clip_rect(spec_area);
+                    // **SSTV on a demod-audio front end.** Its view is anchored
+                    // on the picture rather than on the tone it happens to be
+                    // carrying, and CTR has to centre on that anchor — with the
+                    // dial as the anchor it dragged the window back to the
+                    // carrier every frame, which is exactly what the operator
+                    // saw when clicking CTR moved the view. The picture's centre
+                    // is the band's 1750 Hz, signed by the side the mode rides
+                    // (SSTV is LSB on 160/80/40 m), and it is a *view* anchor
+                    // only: the logged frequency stays the dial.
+                    let sstv_picture =
+                        self.caps.as_ref().is_some_and(|c| c.audio_mode) && mode.is_sstv();
                     spectrum_view::show_ext(
                         &mut spec_ui,
                         &mut self.view,
@@ -775,7 +786,11 @@ impl eframe::App for SdroxideApp {
                         // transmit filter. There a click tunes the dial so the
                         // signal lands on the pair, exactly as CW does.
                         Some(spectrum_view::AudioCursor {
-                            hz: audio_hz,
+                            hz: if sstv_picture {
+                                side * crate::app::spectrum::SSTV_TONE_HZ as f32
+                            } else {
+                                audio_hz
+                            },
                             // A click sets the digital TX offset in the modes
                             // that have one. It does not on a listening source
                             // with no transmitter: there is no offset to set,
@@ -794,7 +809,7 @@ impl eframe::App for SdroxideApp {
                             // so a click-tune zoomed in tighter than that left
                             // the dial off the picture and the re-centring
                             // carried the signal away with it.
-                            center_on_cursor: mode.holds_standard_tones(),
+                            center_on_cursor: mode.holds_standard_tones() || sstv_picture,
                         }),
                         if matches!(mode, Mode::Ft8 | Mode::Ft2) {
                             self.digi_status
