@@ -2039,7 +2039,16 @@ impl TabBar {
                     // switched when the pointer landed on the padding *around*
                     // its name.
                     ui.style_mut().interaction.selectable_labels = false;
-                    add(ui)
+                    // **A tab's contents belong on one line.** The strip around
+                    // it is a `horizontal_wrapped` row, and a tab that is
+                    // allowed to wrap *inside itself* defeats it: a tab asked
+                    // to fit 41 pt of remaining room did not report that it did
+                    // not fit — it folded its name one letter per line, kept a
+                    // min width of its own, and pushed the strip past the
+                    // window (fork discussion #16). Laid out on one line the tab
+                    // says what it really needs, and the row wraps it to the
+                    // next line instead of squeezing it.
+                    ui.horizontal(|ui| add(ui)).inner
                 })
                 .inner
         });

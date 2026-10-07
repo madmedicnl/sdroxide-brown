@@ -844,6 +844,13 @@ at the moment, and he had noticed. **He decides when that goes.**
 
 ## Session 2026-10-07: DAB is confirmed in the field, and DMR is asked for
 
+**Standing note on the phone, from the operator (2026-10-07).** Kevin uses his
+phone daily and keeps it — the operator would prefer he worked on a tablet for
+screen size, but *"he does love his phone ;)"*. So the phone is not a tier to
+tolerate: it is the screen most of our field feedback comes from, and its layout
+deserves the same care as the desktop. **Do not treat "works on a tablet" as an
+answer to a phone report.**
+
 **DAB works on somebody else's hardware — the first field confirmation.** Fork
 **issue #15** ("DAB -RAdio", **dig647**, 2026-10-06): he asked whether DAB radio
 could be implemented at all, the reply was that it would be in 2.0.0_brown with

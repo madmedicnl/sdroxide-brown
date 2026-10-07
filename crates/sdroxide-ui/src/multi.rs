@@ -678,6 +678,51 @@ impl MultiApp {
         }
     }
 
+    /// The radio strip, made to fit whatever window it is drawn in.
+    ///
+    /// A tab carries its radio's name, its LINK switch, its mute and its split
+    /// toggle, so it is a wide thing — three of them are ~580 pt, and a phone
+    /// is 360. The strip used to be laid out free to grow, so it did: the tabs
+    /// ran past the right edge, and because the strip is what sets the page's
+    /// width, every panel under it followed them off the screen (fork
+    /// discussion #16 — Kevin's "3 radio = bug de décalage" and the borders
+    /// that "do not close").
+    ///
+    /// Laying the strip out as a wrapped row does not fix it: a tab is a
+    /// `scope`, and egui *squeezes* a scope rather than wrapping it — the third
+    /// tab folded its own name one letter per line and kept its place on the
+    /// row. So the strip scrolls instead, which is what every other tab bar on
+    /// a phone does and preserves every control rather than hiding some at a
+    /// width the operator did not choose.
+    ///
+    /// Desktop and tablet are untouched: their tabs fit, so the scroll area
+    /// never has anything to scroll and draws no bar.
+    fn radio_strip_scrolled(
+        &self,
+        ui: &mut egui::Ui,
+        pane: usize,
+        shown: &[u32],
+        splittable: bool,
+        actions: &mut Vec<StripAction>,
+    ) {
+        egui::ScrollArea::horizontal().id_salt("radio-strip").show(ui, |ui| {
+            self.strip_row(ui, pane, shown, splittable, actions);
+        });
+    }
+
+    /// One strip: every radio's controls in a box of their own, then the "+"
+    /// chip. `pane` is the split column the strip sits on (0 in the single
+    /// view), so a name click knows which pane it re-assigns. Closing a radio
+    /// is deliberately absent — that lives in Settings → Radio, behind a
+    /// dialog, not one stray click away on the main window.
+    ///
+    /// `shown` is the set of radios actually on screen, which is not always
+    /// `self.panes`: a split the viewport cannot draw shows the focused radio
+    /// alone ([`MultiApp::split_plan`]). Reading the stored panes instead would
+    /// mark every *other* radio as "already open in another split view", grey
+    /// its name chip and make it unreachable — a phone with three radios would
+    /// be able to look at exactly one of them and no way to change which.
+    /// `splittable` is whether the ⊞ may act here at all.
     /// One strip: every radio's controls in a box of their own, then the "+"
     /// chip. `pane` is the split column the strip sits on (0 in the single
     /// view), so a name click knows which pane it re-assigns. Closing a radio
@@ -1383,7 +1428,9 @@ impl eframe::App for MultiApp {
                             .fill(crate::theme::BG_DEEP())
                             .inner_margin(egui::Margin { left: 8, right: 8, top: 3, bottom: 0 }),
                     )
-                    .show(ui, |ui| self.strip_row(ui, 0, &shown, plan.splittable, &mut actions));
+                    .show(ui, |ui| {
+                        self.radio_strip_scrolled(ui, 0, &shown, plan.splittable, &mut actions);
+                    });
             }
             // A split that is not drawn is not a split: the focused radio takes
             // the window, and the stored panes are left untouched, so a window
@@ -1617,7 +1664,96 @@ mod split_tests {
         let out = ctx.run_ui(input, |ui| {
             eframe::App::ui(&mut multi, ui, &mut eframe::Frame::_new_kittest());
         });
-        out.shapes.iter().map(|cs| cs.shape.visual_bounding_rect().max.x).fold(0.0_f32, f32::max)
+        widest_page_rect(&out.shapes)
+    }
+
+    /// The sweep: every size and radio count, and how far past the window the
+    /// page container reached. One line per offending case.
+    fn page_overflow(slack: f32) -> Vec<String> {
+        const SIZES: &[(f32, f32)] = &[
+            (320.0, 800.0),
+            (360.0, 800.0),
+            (411.0, 914.0),
+            (768.0, 1024.0),
+            (1250.0, 800.0),
+            (1920.0, 1080.0),
+        ];
+        let mut worst = Vec::new();
+        for &(w, h) in SIZES {
+            for radios in 1..=3 {
+                let painted = widest_paint(w, h, radios);
+                if painted > w + slack {
+                    worst.push(format!("{w}x{h}, {radios} radios: page to {painted:.0} pt"));
+                }
+            }
+        }
+        worst
+    }
+
+    /// **The regression guard for the strip class** (fork discussion #16).
+    ///
+    /// Active, with a tolerance, because the sweep found **two** faults and
+    /// only one is fixed here:
+    ///
+    /// - **Fixed**: three radios on a phone overflowed by 47–220 pt. The strip
+    ///   was laid out free to grow, so it did, and because the strip sets the
+    ///   page's width every panel under it followed the tabs off the screen.
+    ///   It is a horizontal scroll area now ([`MultiApp::radio_strip_scrolled`])
+    ///   and the same sweep reads 362 everywhere instead of 407–583.
+    /// - **Not fixed**: a top-bar chip row is a couple of points too wide, so
+    ///   the page is 2 pt over at 360 and 4 at 1920 — present with **one**
+    ///   radio, so it is not the strip. The panel's right border lands
+    ///   off-screen and the outline does not close: the other half of Kevin's
+    ///   report. The strict, ignored `nothing_is_drawn_wider_than_the_window`
+    ///   below is the record of it.
+    ///
+    /// The tolerance sits just above that known remainder and no more. Past it,
+    /// the strip class is back.
+    const KNOWN_PAGE_OVERHANG: f32 = 6.0;
+
+    #[test]
+    fn the_strip_does_not_push_the_page_past_the_window() {
+        let worst = page_overflow(KNOWN_PAGE_OVERHANG);
+        assert!(
+            worst.is_empty(),
+            "a strip is widening the page again (fork discussion #16):\n  {}",
+            worst.join("\n  ")
+        );
+    }
+
+    /// The width of the widest **page container** in a frame's output.
+    ///
+    /// Deliberately not "the widest shape": a strip laid out as a scroll area
+    /// paints tabs that run past the window on purpose, and they are clipped
+    /// where the operator cannot see them. What is *never* legitimate is the
+    /// page itself — a panel background — being wider than the window, because
+    /// then its right border is painted off-screen and there is no line to
+    /// close the panel: exactly Kevin's "the boundary line is missing, the
+    /// outline extends beyond the edge of the display window".
+    ///
+    /// A background is a `Rect` that starts at the left edge. That is the whole
+    /// test, and it is why this is a shape question rather than a widget one.
+    fn widest_page_rect(shapes: &[egui::epaint::ClippedShape]) -> f32 {
+        fn widest(shape: &egui::Shape, seen: &mut f32) {
+            match shape {
+                egui::Shape::Rect(r) => {
+                    if r.rect.min.x < 1.0 {
+                        *seen = seen.max(r.rect.max.x);
+                    }
+                }
+                egui::Shape::Vec(v) => {
+                    for s in v {
+                        widest(s, seen);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut seen = 0.0_f32;
+        for cs in shapes {
+            widest(&cs.shape, &mut seen);
+        }
+        seen
     }
 
     /// Names the shape that paints past the right edge, so a failure of the
@@ -1626,7 +1762,7 @@ mod split_tests {
     #[test]
     #[ignore = "prints, does not assert"]
     fn what_paints_past_the_edge() {
-        let (w, h, radios) = (360.0_f32, 800.0_f32, 3usize);
+        let (w, h, radios) = (360.0_f32, 800.0_f32, 1usize);
         let dir = std::env::temp_dir().join(format!("sdroxide-shapes-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -1649,23 +1785,74 @@ mod split_tests {
             ..Default::default()
         };
         let out = ctx.run_ui(input, |ui| {
+            println!(
+                "ROOT ui max_rect {:?}  content_rect {:?}",
+                ui.max_rect(),
+                ui.ctx().content_rect()
+            );
             eframe::App::ui(&mut multi, ui, &mut eframe::Frame::_new_kittest());
         });
         let mut rows: Vec<_> =
             out.shapes.iter().map(|cs| (cs.shape.visual_bounding_rect(), cs.clip_rect)).collect();
+        rows.retain(|(b, _)| b.max.y < 165.0);
         rows.sort_by(|a, b| b.0.max.x.partial_cmp(&a.0.max.x).unwrap());
         println!("--- {w}x{h}, {radios} radios (screen right = {w}) ---");
-        for (b, clip) in rows.iter().take(12) {
+        for (b, _) in rows.iter().take(10) {
             println!(
-                "painted right {:>7.1}  x {:.0}..{:.0}  y {:.0}..{:.0}  {}  clip right {:.0}",
-                b.max.x,
+                "STRIP x {:>7.1}..{:<7.1} y {:>6.1}..{:<6.1} {}",
                 b.min.x,
                 b.max.x,
                 b.min.y,
                 b.max.y,
-                shape_kind_for_test(&out, b),
-                clip.max.x
+                shape_kind_for_test(&out, b)
             );
+        }
+        // Every left-anchored background, widest first — the page containers.
+        let mut pages: Vec<(f32, egui::Rect, String)> = Vec::new();
+        collect_left_rects(&out.shapes, &mut pages);
+        pages.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+        for (right, r, detail) in pages.iter().take(6) {
+            println!(
+                "PAGE  x {:>6.1}..{:<7.1} y {:>6.1}..{:<6.1} (over {:+.1})  {detail}",
+                r.min.x,
+                right,
+                r.min.y,
+                r.max.y,
+                right - w
+            );
+        }
+    }
+
+    fn collect_left_rects(
+        shapes: &[egui::epaint::ClippedShape],
+        out: &mut Vec<(f32, egui::Rect, String)>,
+    ) {
+        fn walk(s: &egui::Shape, out: &mut Vec<(f32, egui::Rect, String)>) {
+            match s {
+                egui::Shape::Rect(r) => {
+                    if r.rect.min.x < 1.0 {
+                        out.push((
+                            r.rect.max.x,
+                            r.rect,
+                            format!(
+                                "fill {:?} stroke {:.1} rounding {:.0}",
+                                r.fill.to_array(),
+                                r.stroke.width,
+                                r.corner_radius.nw as f32
+                            ),
+                        ));
+                    }
+                }
+                egui::Shape::Vec(v) => {
+                    for s in v {
+                        walk(s, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        for cs in shapes {
+            walk(&cs.shape, out);
         }
     }
 
@@ -1694,32 +1881,21 @@ mod split_tests {
             .unwrap_or("?")
     }
 
-    /// **Ignored, not passing.** It reproduces the reported overflow today —
-    /// run it with `--ignored` and it names every offending size and radio
-    /// count. It is ignored rather than asserted so this branch's suite stays
-    /// green while the strip is being fixed; **un-ignore it with the fix**, and
-    /// let it be the thing that proves the fix rather than the thing that was
-    /// deleted to make a build pass.
+    /// **Ignored, not passing.** When the sweep was written it caught two
+    /// faults; the strip one is fixed (see the active test above) and this one
+    /// is not: a top-bar chip row is a couple of points wider than the panel it
+    /// sits in, egui grows the panel to fit, and the page ends up 2 pt over at
+    /// 360 and 4 pt at 1920 — so the panel's right border is painted off-screen
+    /// and there is no line to close it. That is Kevin's *"the boundary line is
+    /// missing, the outline extends beyond the edge"*, and it is present with
+    /// **one** radio, which is why it is not the strip.
+    ///
+    /// Kept strict and ignored rather than folded into the tolerance above:
+    /// when the chip row is made to fit, this is the test that proves it.
     #[test]
-    #[ignore = "reproduces the reported overflow; un-ignore when the strip fits"]
+    #[ignore = "the top-bar chip row is a few points too wide; see the test's note"]
     fn nothing_is_drawn_wider_than_the_window() {
-        const SIZES: &[(f32, f32)] = &[
-            (320.0, 800.0),
-            (360.0, 800.0),
-            (411.0, 914.0),
-            (768.0, 1024.0),
-            (1250.0, 800.0),
-            (1920.0, 1080.0),
-        ];
-        let mut worst: Vec<String> = Vec::new();
-        for &(w, h) in SIZES {
-            for radios in 1..=3 {
-                let painted = widest_paint(w, h, radios);
-                if painted > w + 0.5 {
-                    worst.push(format!("{w}x{h}, {radios} radios: painted to {painted:.0} pt"));
-                }
-            }
-        }
+        let worst = page_overflow(0.5);
         assert!(
             worst.is_empty(),
             "layout wider than the window (a border that runs off the edge):\n  {}",
