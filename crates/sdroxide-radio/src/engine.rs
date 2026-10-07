@@ -17912,7 +17912,7 @@ impl Engine {
                 if mode.takes_digi_tx_audio() && (mode != Mode::Cw || self.caps.cw_audio_keyed) {
                     self.digi_tx_audio_level()
                 } else {
-                    3_000.0
+                    1.0
                 }
             } else {
                 self.state.tx.tune_drive.clamp(0.05, 1.0)
