@@ -81,6 +81,25 @@ jobs:
         run: cargo install cross --locked
 
       - name: Build (cat - no SoapySDR, no rtl_433)
+        # **The plain (un-suffixed) tool variables, and they are the point.**
+        # `rade_c`'s CMake builds its own opus in an `ExternalProject` that runs
+        # autotools `./configure`, and `BuildOpus.cmake` only passes
+        # `--host=${CMAKE_C_COMPILER_TARGET}` when CMake knows it is
+        # cross-compiling — which our wrapper CMake is not, since it runs on the
+        # runner. So that comes out empty, opus's configure falls back to the
+        # bare `cc`, and in the cross *container* `cc` is the host compiler: the
+        # rade rlib came back "file format not recognized" at the final link
+        # because it was a mix of armhf and x86-64 objects.
+        #
+        # `cross` sets the `_armv7_unknown_linux_gnueabihf`-suffixed ones, which
+        # cargo's own crates honour. Autotools does not read those, so the
+        # un-suffixed names are set here for the nested build.
+        env:
+          CC: arm-linux-gnueabihf-gcc
+          CXX: arm-linux-gnueabihf-g++
+          AR: arm-linux-gnueabihf-ar
+          RANLIB: arm-linux-gnueabihf-ranlib
+          LD: arm-linux-gnueabihf-ld
         run: |
           cross build --release --locked \
             --target armv7-unknown-linux-gnueabihf \
