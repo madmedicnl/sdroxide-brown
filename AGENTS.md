@@ -1233,13 +1233,45 @@ trace at that line **never fires** for SSTV. It goes through the earlier branch 
 `frame.rs:724`, whose `allocate_ui(vec2(width, panel_h))` at `:930` is the rect
 that overlaps. So a fix aimed at the digital branch would not touch this.
 
-**What is left to find**, and it is one question: what makes `ui.available_width()`
-read **1680** at `frame.rs:724` when the trace immediately after the dock reads
-**1640**. Something between `:520` and `:724` widens the column back — a
-`set_max_width`, an `allocate_new_ui`, or a panel shown in between. The probe is
-still in the working tree, uncommitted, in the `#[cfg(test)]` block at the bottom
-of `crates/sdroxide-ui/src/app/mod.rs` (`probe_dock_and_operating_panel_rects`,
-reads `DOCK_W`); `frame.rs` has been reverted to clean.
+**FOUND, and it is neither the dock nor the layout.** An instrumented trace at
+the width read settles it:
+
+```
+TRACE 724: avail_w=1640.0  max_rect=[[0 0] - [1920 1080]]
+```
+
+The panel's **allocation is correct** — 1640, exactly the column egui reserved —
+and nothing between `:520` and `:724` widens it (a sweep for `set_max_width`,
+`allocate_new_ui`, `Panel::` and `Sides` in that range returns one hit, in the
+unrelated error branch). So the 1680-wide rect is **painted from inside the
+panel**: a child draws ~40 pt beyond its own 1640 allocation, opaquely, and egui
+does not clip child content. The usual cause is a `horizontal` row of chips whose
+`min_width`s exceed the row — egui does not shrink a widget below its minimum, so
+the row and its frame run over.
+
+**The operator's three answers, and each one confirms it:**
+
+1. **The cursor in the overlap is the resize cursor and resizing works.** The
+   covered strip is the side panel's own resize handle, on its inner edge — egui
+   resolved the *cursor* to the dock while the *ink* went to the panel. "You can
+   see it, you can't click it, but you can drag it."
+2. **Border and content both**, chips half-hidden under the panel: the panel is
+   painted *after* the dock and wins.
+3. It has been there "from the beginning" — **not a regression**, so nobody needs
+   to bisect commits to date it; it dates from the dock itself.
+
+**Where the fix belongs, and where it must not:** inside `digi_panel`'s shared
+layout (both SSTV and FT8 reach it, which is why the fault looks identical in
+either), on the row that overruns — not a clamp on the width at `:724`, and not
+anything in the dock. Clamping would hide the second cause, which is exactly how
+the first subtract patch silenced a panic and shipped a wrong answer.
+
+**Not done, and it is the next thing:** the overrunning row is not yet
+identified. The probe is still uncommitted in the `#[cfg(test)]` block at the
+bottom of `crates/sdroxide-ui/src/app/mod.rs` (`probe_dock_and_operating_panel_rects`,
+reads `DOCK_W`); `frame.rs` is reverted clean. The way to finish it is the same
+oracle shape as the border fix: have the probe walk the panel's *shapes* and name
+the one crossing 1640, which points at the child instead of the panel.
 
 ### NEW, and it outranks the two above: **a sign-in prompt per radio** (Kevin, 2026-10-07)
 
