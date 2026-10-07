@@ -2686,4 +2686,41 @@ mod tests {
     fn phone_crash_regression_411x914() {
         phone_frame("411x914", egui::vec2(411.0, 914.0));
     }
+
+    /// Kevin's DAB report (discussion #16): *"Scanner doesn't stop on its own —
+    /// has to be stopped manually once it's done finding stations."*
+    ///
+    /// The sweep in `tick_dab_scan` is exhaustive by design — every Band III
+    /// block, a dwell each — so the question worth answering first is whether
+    /// it terminates **at all**, or whether the operator is watching a loop
+    /// that never ends. This drives the tick with a clock that steps past the
+    /// dwell and asserts the sweep hands back.
+    #[test]
+    fn the_dab_sweep_ends_by_itself() {
+        let dir = std::env::temp_dir().join(format!("sdroxide-dab-scan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.dab_scan = Some(crate::app::frame::DabScan { at: 0, since: None, found: Vec::new() });
+
+        let mut cmds = Vec::new();
+        // Generous: 38 blocks at the 3 s dwell is ~114 s, and the clock here
+        // steps a little over the dwell so the arithmetic cannot hide an
+        // off-by-one at the end.
+        let mut t = 0.0;
+        let mut ticks = 0;
+        while app.dab_scan.is_some() && ticks < 200 {
+            t += 3.1;
+            app.tick_dab_scan(&ctx, t, &mut cmds);
+            ticks += 1;
+        }
+        assert!(
+            app.dab_scan.is_none(),
+            "the scan still holds a block after {ticks} ticks ({t:.0} s) — it never ends"
+        );
+    }
 }

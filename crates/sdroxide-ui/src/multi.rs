@@ -1551,6 +1551,179 @@ mod split_tests {
         assert!(
             MultiApp::split_plan(egui::vec2(1920.0, 800.0), 3, LayoutMode::Phone).drawn == false
         );
-        assert!(MultiApp::split_plan(egui::vec2(768.0, 1024.0), 3, LayoutMode::Small).drawn);
+        assert!(MultiApp::split_plan(egui::vec2(768.0, 1024.0), 3, LayoutMode::Auto).drawn);
+    }
+
+    /// A controller that answers nothing — enough to build a shell over.
+    /// Deliberately the same shape as the app's own test mock.
+    #[derive(Default)]
+    struct SilentController;
+
+    impl RadioController for SilentController {
+        fn send(&mut self, _cmd: sdroxide_types::Command) {}
+        fn poll_event(&mut self) -> Option<sdroxide_types::RadioEvent> {
+            None
+        }
+    }
+
+    /// **The oracle for the layout bug class** (fork discussion #16, and Kevin's
+    /// three separate reports of it: the 2-radio right edge, the 3-radio offset,
+    /// the phone strip cut off).
+    ///
+    /// Every one of those is the same shape — a row laid out wider than the
+    /// window — and the reason nothing caught them is that there was no test
+    /// that asked the question. `phone_crash_regression_*` drives a frame and
+    /// asserts only that it did not panic; the strip was overflowing the whole
+    /// time and the test was green.
+    ///
+    /// The question is asked of the painted output, not of any widget: **how
+    /// far right did anything actually get drawn?** A shape whose bounding box
+    /// passes the screen's right edge is ink off the edge — which is exactly
+    /// what a border that "does not close" is, and what drags the page wide
+    /// enough for every panel to follow it.
+    ///
+    /// It is a sweep rather than one case because the failures have only ever
+    /// been at particular radio counts on particular tiers.
+    fn widest_paint(width: f32, height: f32, radios: usize) -> f32 {
+        let dir = std::env::temp_dir().join(format!(
+            "sdroxide-layout-{}-{}-{radios}",
+            width as u32,
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let tabs: Vec<RadioTab> = (0..radios)
+            .map(|i| RadioTab {
+                id: i as u32 + 1,
+                name: format!("RADIO {}", i + 1),
+                enabled: true,
+                ctrl: Box::new(SilentController) as Box<dyn RadioController>,
+            })
+            .collect();
+        let factory: RadioFactory = Box::new(|| Err("test".to_string()));
+        let mut multi = MultiApp::new(&cc, tabs, Some(factory), None);
+
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(width, height),
+            )),
+            ..Default::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            eframe::App::ui(&mut multi, ui, &mut eframe::Frame::_new_kittest());
+        });
+        out.shapes.iter().map(|cs| cs.shape.visual_bounding_rect().max.x).fold(0.0_f32, f32::max)
+    }
+
+    /// Names the shape that paints past the right edge, so a failure of the
+    /// sweep above says *what* rather than only *how far*. Not an assertion —
+    /// a diagnostic, run with `--nocapture`.
+    #[test]
+    #[ignore = "prints, does not assert"]
+    fn what_paints_past_the_edge() {
+        let (w, h, radios) = (360.0_f32, 800.0_f32, 3usize);
+        let dir = std::env::temp_dir().join(format!("sdroxide-shapes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let tabs: Vec<RadioTab> = (0..radios)
+            .map(|i| RadioTab {
+                id: i as u32 + 1,
+                name: format!("RADIO {}", i + 1),
+                enabled: true,
+                ctrl: Box::new(SilentController) as Box<dyn RadioController>,
+            })
+            .collect();
+        let factory: RadioFactory = Box::new(|| Err("test".to_string()));
+        let mut multi = MultiApp::new(&cc, tabs, Some(factory), None);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
+            ..Default::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            eframe::App::ui(&mut multi, ui, &mut eframe::Frame::_new_kittest());
+        });
+        let mut rows: Vec<_> =
+            out.shapes.iter().map(|cs| (cs.shape.visual_bounding_rect(), cs.clip_rect)).collect();
+        rows.sort_by(|a, b| b.0.max.x.partial_cmp(&a.0.max.x).unwrap());
+        println!("--- {w}x{h}, {radios} radios (screen right = {w}) ---");
+        for (b, clip) in rows.iter().take(12) {
+            println!(
+                "painted right {:>7.1}  x {:.0}..{:.0}  y {:.0}..{:.0}  {}  clip right {:.0}",
+                b.max.x,
+                b.min.x,
+                b.max.x,
+                b.min.y,
+                b.max.y,
+                shape_kind_for_test(&out, b),
+                clip.max.x
+            );
+        }
+    }
+
+    /// The kind of the shape whose bounding box is `b`, for the diagnostic.
+    fn shape_kind_for_test(out: &egui::FullOutput, b: &egui::Rect) -> &'static str {
+        fn name(s: &egui::Shape) -> &'static str {
+            match s {
+                egui::Shape::Noop => "Noop",
+                egui::Shape::Vec(v) => v.first().map(name).unwrap_or("Vec[]"),
+                egui::Shape::Circle(_) => "Circle",
+                egui::Shape::Ellipse(_) => "Ellipse",
+                egui::Shape::LineSegment { .. } => "LineSegment",
+                egui::Shape::Path(_) => "Path",
+                egui::Shape::Rect(_) => "Rect",
+                egui::Shape::Text(_) => "Text",
+                egui::Shape::Mesh(_) => "Mesh",
+                egui::Shape::QuadraticBezier(_) => "QuadraticBezier",
+                egui::Shape::CubicBezier(_) => "CubicBezier",
+                egui::Shape::Callback(_) => "Callback",
+            }
+        }
+        out.shapes
+            .iter()
+            .find(|cs| cs.shape.visual_bounding_rect() == *b)
+            .map(|cs| name(&cs.shape))
+            .unwrap_or("?")
+    }
+
+    /// **Ignored, not passing.** It reproduces the reported overflow today —
+    /// run it with `--ignored` and it names every offending size and radio
+    /// count. It is ignored rather than asserted so this branch's suite stays
+    /// green while the strip is being fixed; **un-ignore it with the fix**, and
+    /// let it be the thing that proves the fix rather than the thing that was
+    /// deleted to make a build pass.
+    #[test]
+    #[ignore = "reproduces the reported overflow; un-ignore when the strip fits"]
+    fn nothing_is_drawn_wider_than_the_window() {
+        const SIZES: &[(f32, f32)] = &[
+            (320.0, 800.0),
+            (360.0, 800.0),
+            (411.0, 914.0),
+            (768.0, 1024.0),
+            (1250.0, 800.0),
+            (1920.0, 1080.0),
+        ];
+        let mut worst: Vec<String> = Vec::new();
+        for &(w, h) in SIZES {
+            for radios in 1..=3 {
+                let painted = widest_paint(w, h, radios);
+                if painted > w + 0.5 {
+                    worst.push(format!("{w}x{h}, {radios} radios: painted to {painted:.0} pt"));
+                }
+            }
+        }
+        assert!(
+            worst.is_empty(),
+            "layout wider than the window (a border that runs off the edge):\n  {}",
+            worst.join("\n  ")
+        );
     }
 }
