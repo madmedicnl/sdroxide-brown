@@ -290,6 +290,24 @@ impl SdroxideApp {
     /// is right whenever the lane is centred on the receiver, which is the
     /// usual case.
     pub(in crate::app) fn zoom_out_window(&self) -> (f64, f64) {
+        // **SSTV on a demod-audio front end.** Every other mode on such a source
+        // wants the whole audio band — it is all there is to see. SSTV does not:
+        // the picture is a fixed 1200-2300 Hz band of audio and the dial sits on
+        // the carrier, so a view fitted to the whole band shows it as a sliver
+        // off to one side and, at the span this one was set to, half of it off
+        // the right edge (the operator's own screenshot, 2.0.1). Fit the mode's
+        // own band instead — the same "the mode decides the window" rule
+        // `conventional_dial_for` applies to the dial.
+        //
+        // Only on an audio-mode source: an SDR owner may well want the wide view
+        // to watch the band around the picture, and on such a front end the
+        // picture lands centred anyway because the dial is not the carrier.
+        if self.caps.as_ref().is_some_and(|c| c.audio_mode)
+            && let Some(window) =
+                sstv_audio_window(self.state.rx[0].mode, self.state.active_freq_hz())
+        {
+            return window;
+        }
         let dev_span = self.state.sample_rate;
         let stated = self.caps.as_ref().map_or(0.0, |c| c.wide_span_hz);
         let span = match self.wide_window() {
@@ -1120,14 +1138,60 @@ fn focus_hz(mode: Mode, dial_hz: f64, audio_hz: f32, cw_qrg: bool) -> f64 {
     if on_cursor { mode.on_air_hz(dial_hz, audio_hz) } else { dial_hz }
 }
 
+/// The SSTV picture's audio band, in hertz from the suppressed carrier: the
+/// sync pulse is at 1200 and white at 2300, so the picture occupies 1200–2300
+/// and its centre is 1750. A protocol fact rather than a taste — every mode in
+/// the published SSTV set uses the same two frequencies.
+const SSTV_TONE_HZ: f64 = 1750.0;
+
+/// The view span that holds that band with a little room either side.
+const SSTV_VIEW_SPAN_HZ: f64 = 1600.0;
+
+/// Where to put the view for SSTV on a front end that has only demodulated
+/// audio — `None` for every other mode, so the caller keeps its own answer.
+///
+/// The side is the band's, not a guess: SSTV rides the **lower** sideband on
+/// 160/80/40 m, and [`Mode::is_lower_sideband_at`] already knows that because
+/// the demodulator needs the same answer.
+fn sstv_audio_window(mode: Mode, dial_hz: f64) -> Option<(f64, f64)> {
+    if !mode.is_sstv() {
+        return None;
+    }
+    let centre = if mode.is_lower_sideband_at(dial_hz) {
+        dial_hz - SSTV_TONE_HZ
+    } else {
+        dial_hz + SSTV_TONE_HZ
+    };
+    Some((centre, SSTV_VIEW_SPAN_HZ))
+}
+
 #[cfg(test)]
 mod tests {
+    use super::Mode;
     use super::WIDER_THAN_PASSBAND;
     use super::{
         AutoFit, FIT_ARRIVED_DB, FIT_MIN_GAP_S, FIT_SETTLE_S, FIT_STEP_S, average_in,
         base_fft_for_rate, fit_due, glide_step, levels_drifted, pick_levels,
-        refit_on_window_growth, saturated_bins, slack_viewport,
+        refit_on_window_growth, saturated_bins, slack_viewport, sstv_audio_window,
     };
+
+    /// The SSTV view on a demod-audio front end. The picture is 1200-2300 Hz of
+    /// audio and the dial sits on the carrier, so the window belongs 1750 Hz to
+    /// the side — the upper sideband where SSTV uses it, the lower one on
+    /// 160/80/40 m, which is the band's answer and not ours to guess.
+    #[test]
+    fn the_sstv_view_sits_on_the_picture_not_the_carrier() {
+        // 11 m: USB, so the picture is above the dial. This is the reported
+        // case — 27.700 dial, picture off the right edge.
+        let (c, s) = sstv_audio_window(Mode::Sstv, 27_700_000.0).expect("SSTV answers");
+        assert_eq!(c, 27_701_750.0);
+        assert!(s >= 1_100.0, "the span must hold 1200-2300 Hz of picture: {s}");
+        // 80 m: SSTV rides the lower sideband there.
+        let (c, _) = sstv_audio_window(Mode::Sstv, 3_730_000.0).expect("SSTV answers");
+        assert_eq!(c, 3_728_250.0, "80 m is LSB for SSTV");
+        // Every other mode keeps the window it would have had.
+        assert!(sstv_audio_window(Mode::Ft8, 14_074_000.0).is_none());
+    }
 
     /// The "levels are hiding everything" test: a slice that is *all* at one
     /// end is a flat block and warrants the hint; anything with a signal in it
