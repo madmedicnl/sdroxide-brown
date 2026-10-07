@@ -842,6 +842,36 @@ break. It also tells him plainly that these replies are written with an AI
 assistant, because the operator is in heavy treatment for PTSD and is not sharp
 at the moment, and he had noticed. **He decides when that goes.**
 
+## Session 2026-10-07: DAB is confirmed in the field, and DMR is asked for
+
+**DAB works on somebody else's hardware — the first field confirmation.** Fork
+**issue #15** ("DAB -RAdio", **dig647**, 2026-10-06): he asked whether DAB radio
+could be implemented at all, the reply was that it would be in 2.0.0_brown with
+a bandwidth caveat, and on 2026-10-07 at 04:12 he came back *"ja sehr schön …
+sehr gute Arbeit"* and closed it. So the milestone release is the one that
+settled it, and the standing open item — "DAB syncs but decodes no FIBs" — is
+about **our live bench front end**, not about the decoder or the release.
+
+**Kevin is positive on the settings-on-server direction.** He left a **❤️** on
+the server-settings reply in discussion **#4** (the one that says the screen is
+ungated, saved on request, and the bindings behind an opt-in), plus 👍 on the
+SSTV reply (#7) and the recording-replay scope (#10). No new comments — these are
+reactions, which do not show in a comment listing; check them separately.
+
+**New request: DMR** (dig647, in the same #15: *"und DMR währe auch gut"*).
+Recorded as a request, **not scoped and not started**. Two things to tell him
+honestly when it is answered, and neither is a "no": DMR is a **VHF/UHF** mode
+(so only for a listener whose front end reaches there — the RSP1 does), and its
+hard part is the **AMBE+2 voice codec**, the same class of dependency as DAB's
+audio. It fits the wideband-lane machinery the fork already has (ADS-B, AIS,
+DAB); the codec is the work.
+
+**03:37-ish: the armv7 first job was picked up and re-dispatched with `cross`.**
+The two hand-rolled attempts are recorded above; `Cross.toml` +
+`Dockerfile.cross-armv7` give the build a real armhf sysroot, run 37577495536.
+If that reaches the **vendored C** and fails there, *that* is the answer to
+ipaddr42's question — and it is the expected place for a 32-bit build to break.
+
 **Deferred to the next session, deliberately:** the **DAB MOT slideshow** (the
 station images the ensemble broadcasts). Everything needed is already in place —
 `dabradio` decodes it (`PadExtractor::extract_all_from_au` → `PadData::Mot`), the
