@@ -24,7 +24,58 @@
 > ALE-mode build; the experimental-release recipe below is still the one to use
 > when a build needs to name it (the older pre-release tag has been removed).
 
-## Session 2026-10-06, later: #640, the phone tier, and a test that tested the wrong thing
+## Session 2026-10-07, end of day: **2.0.2_brown**, and a report that landed
+
+**`v2.0.2_brown` is tagged, pushed and installing** — `Cargo.toml` at `2.0.2`,
+the binary built and installed locally, release run `37664359497`. **It is not
+numbered 2.0.1 because `v2.0.1_brown` already exists** as a pre-release, and the
+house rule is that a tag is never re-cut: the cookie and the "NOT THIS TIME"
+answer are both *after* that tag, so they need a version of their own. Marked a
+pre-release, because it is the one built to be tested rather than announced.
+
+**Kevin's second comment is the most important field report this fork has had,
+and it is against us.** The whole of it, in order:
+
+1. **A sign-in per radio, confirmed as ours and as universal.** *"Each new
+   session requires entering a username and password, and re-entering them when
+   switching from radio 1 to radio 2… This happens to everyone, so it means you
+   don't test the versions you produce yourself. That's a shame; you'd save time
+   and effort."* That last sentence is **correct** and is recorded here as the
+   lesson rather than as an argument to answer: the client half of sign-in has
+   **never been driven in a browser against a passworded multi-radio station**,
+   and the tests that exist exercise [`LoginForm`]'s logic — a unit test on a
+   form is not a test of a sign-in. The cookie removes the dependency on the
+   broken path, but it does not close the gap, and the gap is now named.
+2. **He answered the question the operator's bet would have got wrong.** His own
+   `/radios` output lists three paths on one host, so it is one station, not
+   three — and the operator's recollection of "three machines" was not what his
+   own report said. Check the artefact before acting on a memory.
+3. **He declined the flicker question**, twice over: *"I wouldn't go to someone's
+   house to see what's displayed on their phone."* Fair, and a standing rule
+   from here: **do not ask a phone user for phone-only evidence.** A desktop
+   browser reproduction is the only route, or no route.
+4. **The Pluto/ADS-B thread at 99.9 % predates every version.** His words: *"All
+   versions of Oxide have been affected by this CPU bug since the beginning."*
+   Ours to measure before it is the firmware's — and he should not be sent off
+   to chase it. He offered the Tezuka 0.3.23 firmware; take the before/after
+   numbers if they arrive, nothing more.
+5. **FT8 stopped decoding on his machine and he blamed his own overlapped
+   installs** — probably right, and a clean install is the test.
+
+**What he was told**, in discussion #16 (comment `18799241`): the table of what
+one cookie buys and does not buy, that 2.0.2 is the pre-release to test, that
+**fewer updates are coming** while the operator tests the browser by hand, and
+that he is not being sent to investigate the Pluto thread. The credit is in the
+**README's acknowledgements** as well as the thread — three stations of his own,
+a full checklist in one pass, and a report that separated fixed from broken
+instead of rounding it up.
+
+**The standing shape for the next few days: the operator is testing, not
+building.** He is setting a station up and has the coming stretch free, so new
+work is manual verification of what is already in the tree rather than new
+features — and Kevin has been told to expect less news, which is the honest way
+to keep a tester who has already done us a great deal.
+
 
 **Upstream #640 is fixed here, and our fork had all four of its faults.** ct7cht
 reported and diagnosed it on a TS-440 with a DigiRig (CAT + RX audio) and an
@@ -1384,9 +1435,24 @@ discussion is the only place a user can be answered.
   phone *crash* is still open and must never be described as fixed** — ask for
   the browser console output if it recurs on 1.9.19.
 - **#7** SSTV relay (5) — answered: the **Re-upload** chip shipped in 1.9.19.
-- **#13** non-upstream build targets (armhf &c) · **#12** AI-assisted upstream
-  dependency PRs · **#11** ESP32 as an RX · **#10** replay recorded audio —
-  **all new, zero comments, no answer yet.**
+- **#16 "V 2.0.0 Full Report"** (kevin2008-01, the longest thread in the fork)
+  — **the support channel's most important thread, and the one to read first.**
+  He works a full checklist in one pass against three of his own radios (PlutoSDR,
+  HackRF, RTL-SDR on one Debian 13 box behind Caddy, from Chrome on Android as an
+  installed PWA and from a desktop browser) and separates fixed from broken rather
+  than rounding it up. Fixed and confirmed by him: the profile screen saving
+  itself, Ctrl+000 defaults, the bindings-adoption prompt, the settings-window
+  overlap, image save on Android, the PWA install, the two-radio desktop layout.
+  Open from it: the **sign-in per radio** (fixed by the cookie in 2.0.2, not yet
+  verified by him), the phone's missing right border, the three-radio tab-close
+  flicker, and the Pluto/ADS-B thread at 99.9 %. He answers well and attaches
+  screenshots — ask precisely, and believe him over a recollection.
+- **#13** non-upstream build targets (armhf &c) — **the armv7 build now exists**
+  and is attached to `v2.0.1_brown` as
+  `sdroxide-v2.0.1_brown-linux-armv7-cat.tar.gz`; it has not yet run on his
+  hardware, and the probe stays out of the release matrix until it has.
+  **#12** AI-assisted upstream dependency PRs · **#11** ESP32 as an RX ·
+  **#10** replay recorded audio.
 - **#3** "Over heating" — resolved (another program's SoapySDR, not us).
   **#6** "My help for testing" · **#2** welcome thread.
 
