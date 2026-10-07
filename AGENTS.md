@@ -1464,6 +1464,15 @@ discussion is the only place a user can be answered.
   install has no `radios.json`/`radio.json`/`radio-N/`, so nothing is listening —
   and he installed **2.0.1**, not the 2.0.2 he now wants. **Ask a fresh-install
   reporter "is the waterfall alive?" before anything else.**
+- **#14 ATS Mini / RadioScript** (kevin2008-01, Ideas, 0 comments) — **on
+  research, not building**, see the section above. He reverse-engineered a third
+  ESP32/Si4732 firmware (hjberndt's RadioScript) and attached it; four findings
+  out of the image are in that section, the important one being **a TCP server on
+  8081**, which turns his missing bridge script into ~15 lines of BASIC on the
+  radio and answers his *"does a script need an open browser tab?"* (`/run`).
+  **We already support this class** — `Backend::AtsMini` speaks the *stock*
+  firmware, so the prior question is which firmware his board runs. Answered in
+  comment `18800333`, and told plainly that the board is not an SDR.
 - **#13** non-upstream build targets (armhf &c) — **the armv7 build now exists**
   and is attached to `v2.0.1_brown` as
   `sdroxide-v2.0.1_brown-linux-armv7-cat.tar.gz`; it has not yet run on his
@@ -3301,6 +3310,102 @@ update rather than a panel so an unattended run survives switching pane or tab).
 It is session-only and never persisted. "New" is
 `LogIndex::novelty(..).new_call` for now; wiring in `check-dupe.php` is the
 follow-up.
+
+### ON RESEARCH, not building: the ATS Mini and its RadioScript firmware (2026-10-07)
+
+**The operator's ruling: research only, and expect a lot of questions about it**
+because the board is cheap and popular. The reason is not scepticism about Kevin's
+work, it is the thing people keep arguing with: **it is not an SDR dongle, however
+badly people want it to be.** The Si4732 is a demodulator and both firmwares hand
+over **demodulated audio** — there is no I/Q anywhere in it, and never will be. So
+every wideband feature this fork has (ADS-B, AIS, APRS, HFDL, VDL2, DAB, the
+panadapter's own view of the band) is **structurally unavailable**, not merely
+unimplemented. Answer it that way, and do not let a request become a feature.
+
+**We already support this class of device.** `Backend::AtsMini`
+("ATS Mini (Wi-Fi control, sound card)"), TCP `60000`, `atsmini.local`, the
+firmware's single-character command protocol and CSV telemetry — see the section
+above for its bench-measured quirks (band steps of 370–450 ms, no direct band
+select, one controller at a time). So fork discussion **#14** is **not a new device
+class**: it is a *second firmware for the same board*, and the question that
+decides whether any of it is our work at all is which one the board is running.
+
+**The attachment.** Discussion #14 carries
+`https://github.com/user-attachments/files/33118374/targetMiniRadioScript32.zip`
+— one file, a 1.4 MB ESP32-S3 application image. **Not to be committed**: it is
+third-party firmware. Keep the URL. Local copy at
+`/tmp/opencode/ats/extracted/targetMiniRadioScript32.bin`.
+
+What it is, confirmed rather than assumed: ESP32-S3 (`e9 03` image header,
+`xtensa-esp32s3-elf` build paths), **esp-idf v4.4.5**, and
+`RadioScript esp32-S3 hjberndt.de, based on ESPBasic8266 3.0.Alpha 69`. Kevin's
+identification is right.
+
+**How it was read, because it is the reusable part:** `strings -n 8` for the
+version and the JS; and the BASIC keyword/function table is one **contiguous
+NUL-separated run** in flash, so dumping a byte range and splitting on NUL
+gives the entire language surface at once — the whole table between `0x12300`
+and `0x12b40` is 152 tokens. That is how the items below were found; the
+WebSocket framing was confirmed from both sides (the firmware's own C strings at
+`0x116ae` and the embedded `editor.js` at `0x17eaa`).
+
+**Findings Kevin's post does not have, all read out of the binary:**
+
+1. **A TCP server, on port 8081.** `tcpbegin` / `server` / `tcpreply` /
+   `tcpbranch` / `ontcp`, with the literal `Server startet at port 8081`. There is
+   also `udpbegin`/`onudp`/`udpreply` and `onserial`/`serial2*`. **So the missing
+   bridge script is about fifteen lines of BASIC on the radio itself** — it does
+   not need the WebSocket GUI-event trick at all, and it cannot be argued about
+   latency the same way. Our side would be a plain-TCP source, which we already
+   have one of.
+2. **Headless is a documented capability, not an open question.** `/run`,
+   `/stop` and `/debug` are HTTP endpoints beside `/edit`, `/vars`, `/filemng`.
+   His open question *"does a script need an open browser tab to keep running"*
+   is answered by the firmware: `curl /run`.
+3. **Two GUI paths, not one.** `onevent` fires `guievent:<name>:<value>` and
+   `onchange` fires `guichange~<name>~<value>~<id>`; they are **separate script
+   entry points**. His table lists only the second, so a bridge built from the
+   post alone would be driving half the widget set.
+4. **A debugger, server-side**: `cmd:run`, `cmd:stop`, `cmd:pause`,
+   `cmd:continue` and a `speed` setting ("Setting the debugger speed to"). This is
+   also the proof that scripts execute **on the ESP**, not in the browser.
+5. **The tuner surface is much larger than posted**: `rx.freq`, `rx.rssi`,
+   `rx.snr`, `rx.vol`, `rx.af`, `rx.am`, `rx.fm`, `rx.lsb`, `rx.usb`, `rx.ssb`,
+   `rx.stereo`, `rx.pty`, `rx.ta`, `rx.station`, `rx.date`, `rx.time`, and
+   `rx.get` / `rx.set` / `rx.cmd`; verbs `radioon`, `volume`, `volup`/`voldn`,
+   `frequp`/`freqdn` (plus the misspelled `freqencyup`/`freqencydown`), `seek`,
+   `seekup`/`seekdn`/`seekdown`, `bfo`, `setmode`, `notone`.
+6. **A full language**: `for/next`, `do/loop while|until`, `while/wend`,
+   `if/then/else/endif`, `gosub`/`goto`/`return`, `DIM` and arrays, `MID$`,
+   case-insensitive comparison, and event branches for timer, touch, serial,
+   serial2, udp, tcp and websock.
+7. **The radio draws its own UI**, so an S-meter and a dial are script-side:
+   `textbox`, `passwordbox`, `slider` (`minval`/`maxval`), `meter`
+   (`lowval`/`highval`/`optimumval`), `dropdown`, `listbox`, `imagebutton`,
+   `colorpicker`, `datetimepicker`, `filepicker`, and `wprint` for raw HTML.
+8. **It has a filesystem and a network of its own**: LittleFS with `/filemng` and
+   `/uploads/`, `http`/`HTTP` verbs, `jscall`, `wifiapsta`, `reboot`, `memclear`,
+   and a **Telegram bot** (`tg.begin(`, `tg.send(`) — so the radio can message
+   the operator by itself.
+9. **Two things he did not raise, and both are worth saying out loud:**
+   **`formatFlash`** is a client message that **erases the device** ("This will
+   delete all the files and settings"), and its HTTP replies carry
+   **`Access-Control-Allow-Origin: *`** — so any page a browser on that LAN
+   visits can talk to the radio, not just the operator's own. On a shared or guest
+   network that is a real consideration, and it argues for the board living on a
+   trusted segment or being reached through the station.
+
+**Still unknown, and his three stand except the first.** The frequency unit
+`setfrequency`/`rx.freq` expects cannot be read out of strings — he was right —
+and the round-trip latency is still a bench measurement, though the TCP path has
+no heartbeat in it, which is already better than the WebSocket guess. The third
+question is now a different and prior one: **which firmware is on the board**,
+because the stock one is what `Backend::AtsMini` already speaks.
+
+**If it ever is built**, the shape is small and fork-only: a second ATS-style
+source profile over plain TCP — not a new `Backend` variant, not an I/Q lane, and
+on that reading **no `PROTO_VERSION` bump**, which he also guessed correctly. Say
+so only as a shape; it is not scheduled.
 
 ### The ATS Mini (SWL extras, fork-only)
 
