@@ -1003,7 +1003,9 @@ see and the picture is always 1.75 kHz to one side. An **SDR is not that** — t
 RSP1's own SSTV view has the operator placing the dial *on the picture* — so
 shifting their focus would move a view they had already chosen. Both are pinned:
 `sstv_audio_window`/`focus_hz` answer for an audio front end and keep the dial
-otherwise.
+otherwise — and the operator confirmed the SDR case as it is (2026-10-07): the
+RSP1's SSTV view is *meant* to stay where they put it, so do not extend the fit
+to SDRs.
 
 **Misreading to avoid:** the SS9900v is 10-12 m only, so a screenshot at 80 m is
 the RSP1 whatever the tab looks like. An 80 m "SS9900v" screenshot with a 3.6 kHz
