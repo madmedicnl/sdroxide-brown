@@ -15,6 +15,18 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ### Fixed
 
+- **The right border closes at every window width, including on a phone.** Fork
+  discussion #16: *"the right panel border does not close properly against the edge
+  of the screen — the boundary line is missing, the outline extends beyond the edge
+  of the display window"*, on two panels and in both a phone and a desktop browser.
+  It was **not** a row that would not fit: instrumenting the panel frame showed
+  every panel's content comfortably inside the window (8..352 pt of 360), while an
+  `egui::Panel`'s own **frame fill** painted 2 pt past the right edge at every
+  size. The top bar's background is now painted from inside the panel, through a
+  painter clipped to the window, so nothing can reach past it. The layout sweep
+  that recorded this — and that still carries a 6 pt tolerance for a fault that
+  was not the strip's — is now **strict at half a point**, and the ignored strict
+  test beside it has been un-ignored and passes.
 - **Closing a radio tab at three radios no longer makes it come back.** Fork
   discussion #16: *"With exactly 2 radio tabs: no problem. With three radio tabs
   open, closing the tab for station 3 while viewing station 1 causes a continuous

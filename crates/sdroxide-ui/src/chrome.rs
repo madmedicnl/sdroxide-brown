@@ -47,6 +47,10 @@ pub fn angled_frame<R>(ui: &mut Ui, accent: Color32, add: impl FnOnce(&mut Ui) -
     // into the slot afterwards, where it renders *under* the content.
     let grad_slot =
         (theme::window_style() == ChromeStyle::Gradient).then(|| ui.painter().add(Shape::Noop));
+    // The width the content is pinned to. Outside the closure because the test
+    // recorder below has to read it, and because a width derived from `avail`
+    // and a margin has no business being computed inside one.
+    let w = (avail - 2.0 * margin as f32).max(120.0);
     let inner = egui::Frame::new()
         .fill(if grad_slot.is_some() { Color32::TRANSPARENT } else { theme::PANEL() })
         .corner_radius(window_corner_radius())
@@ -55,7 +59,6 @@ pub fn angled_frame<R>(ui: &mut Ui, accent: Color32, add: impl FnOnce(&mut Ui) -
             // Pin to the panel width (both min and max) so wrapping happens at
             // the visible edge AND the frame — and its cut-corner border — spans
             // the full width even when the last row of content is short.
-            let w = (avail - 2.0 * margin as f32).max(120.0);
             ui.set_min_width(w);
             ui.set_max_width(w);
             add(ui)
@@ -64,7 +67,64 @@ pub fn angled_frame<R>(ui: &mut Ui, accent: Color32, add: impl FnOnce(&mut Ui) -
         ui.painter().set(slot, panel_gradient(inner.response.rect));
     }
     paint_cut_border(ui.painter(), inner.response.rect, accent, theme::BG_DEEP());
+    #[cfg(test)]
+    record_frame(ui.ctx(), avail, w, inner.response.rect);
     inner.inner
+}
+
+// What every [`angled_frame`] was given, and what it ended up painting.
+//
+// The layout oracle (`multi::split_tests`) can see that something painted past
+// the window's edge but not *what*: a shape carries a rectangle and no name.
+// This is the one place that knows both the width a panel was asked to occupy
+// and the rectangle it actually took, so a test can compare the two and, when
+// they disagree, say which panel and by how much.
+//
+// Test-only, and thread-local because a test drives frames on one thread and
+// the egui context is not shared across them anyway.
+#[cfg(test)]
+thread_local! {
+    static FRAME_SPANS: std::cell::RefCell<Vec<FrameSpan>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// One `angled_frame`'s arithmetic: the width available to it, the width it
+/// pinned its content to, the width it ended up occupying (content plus its
+/// own margins), and how far past the window's right edge that reaches.
+#[cfg(test)]
+pub(crate) struct FrameSpan {
+    pub available: f32,
+    pub pinned: f32,
+    pub outer: f32,
+    pub over: f32,
+    pub height: f32,
+}
+
+#[cfg(test)]
+fn record_frame(ctx: &egui::Context, available: f32, pinned: f32, rect: Rect) {
+    let edge = ctx.content_rect().right();
+    let over = rect.right() - edge;
+    // Only the panels that actually reach the edge are worth recording: a
+    // dialog in the middle of a window is allowed to be wherever it is, and
+    // recording those would bury the ones that are the question.
+    if over <= 0.0 && rect.right() < edge - 1.0 {
+        return;
+    }
+    FRAME_SPANS.with(|s| {
+        s.borrow_mut().push(FrameSpan {
+            available,
+            pinned,
+            outer: rect.width(),
+            over,
+            height: rect.height(),
+        })
+    });
+}
+
+/// The frames recorded since the last call, clearing the record.
+#[cfg(test)]
+pub(crate) fn take_frame_spans() -> Vec<FrameSpan> {
+    FRAME_SPANS.with(|s| std::mem::take(&mut *s.borrow_mut()))
 }
 
 /// The Gradient window style's fill for `rect`: the panel colour, lit a touch

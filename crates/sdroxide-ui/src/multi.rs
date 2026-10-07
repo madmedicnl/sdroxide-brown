@@ -1934,6 +1934,70 @@ mod split_tests {
         }
     }
 
+    /// **What asked for the width**, not just how far the ink went.
+    ///
+    /// `widest_paint` answers *how far* and this answers *which panel*, which is
+    /// the half a bisect needs: [`crate::chrome::angled_frame`] is the one place
+    /// that knows both the width it was offered and the rectangle it took, and
+    /// those two disagreeing is the whole fault.
+    ///
+    /// It is a test and not a diagnostic because the answer is not
+    /// interesting — a panel must not paint past the window, at any size, with
+    /// any number of radios. The recorded numbers are in the failure so the
+    /// offender is named rather than hunted for.
+    #[test]
+    fn no_panel_paints_past_the_window_edge() {
+        // The two geometries the oracle finds it at, and both with one radio,
+        // because the strip is not the cause (it has its own guard above).
+        for (w, h) in [(360.0_f32, 800.0_f32), (1920.0, 1080.0)] {
+            let _guard = frame_test_lock();
+            let dir = std::env::temp_dir().join(format!("sdroxide-spans-{w}"));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+            let ctx = egui::Context::default();
+            let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+            let tabs = vec![RadioTab {
+                id: 1,
+                name: "RADIO 1".into(),
+                enabled: true,
+                ctrl: Box::new(SilentController) as Box<dyn RadioController>,
+            }];
+            let mut multi = MultiApp::new(&cc, tabs, None, None);
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
+                time: Some(0.0),
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                eframe::App::ui(&mut multi, ui, &mut eframe::Frame::_new_kittest());
+            });
+            out.textures_delta.clear();
+
+            let over: Vec<String> = crate::chrome::take_frame_spans()
+                .into_iter()
+                .filter(|f| f.over > 0.0)
+                .map(|f| {
+                    format!(
+                        "{outer:.0}x{height:.0} panel, {over:.1} pt past the edge \
+                         (offered {available:.1}, pinned {pinned:.1})",
+                        outer = f.outer,
+                        height = f.height,
+                        over = f.over,
+                        available = f.available,
+                        pinned = f.pinned,
+                    )
+                })
+                .collect();
+            assert!(
+                over.is_empty(),
+                "{w}x{h}, one radio: a panel painted past the window (fork discussion #16):\n  {}",
+                over.join("\n  ")
+            );
+        }
+    }
+
     /// The sweep: every size and radio count, and how far past the window the
     /// page container reached. One line per offending case.
     fn page_overflow(slack: f32) -> Vec<String> {
@@ -1974,9 +2038,11 @@ mod split_tests {
     ///   report. The strict, ignored `nothing_is_drawn_wider_than_the_window`
     ///   below is the record of it.
     ///
-    /// The tolerance sits just above that known remainder and no more. Past it,
-    /// the strip class is back.
-    const KNOWN_PAGE_OVERHANG: f32 = 6.0;
+    /// The tolerance is half a point, which is what a hairline stroke spends on
+    /// the edge and nothing more. It used to sit at 6 pt to clear a known 2–4 pt
+    /// remainder that was **not** a strip row at all — see
+    /// [`Self::nothing_is_drawn_wider_than_the_window`], which now passes.
+    const KNOWN_PAGE_OVERHANG: f32 = 0.5;
 
     #[test]
     fn the_strip_does_not_push_the_page_past_the_window() {
@@ -2004,7 +2070,14 @@ mod split_tests {
         fn widest(shape: &egui::Shape, seen: &mut f32) {
             match shape {
                 egui::Shape::Rect(r) => {
-                    if r.rect.min.x < 1.0 {
+                    // Ink, not geometry: a rect nobody can see is not a border
+                    // that failed to close, and counting it makes the oracle
+                    // report faults that no operator could ever see. egui keeps
+                    // painting transparent rects — a panel frame with no fill,
+                    // a reserved slot — and one of them reaches two points past
+                    // the window edge at every size.
+                    let invisible = r.fill.a() == 0 && r.stroke.width <= 0.0;
+                    if r.rect.min.x < 1.0 && !invisible {
                         *seen = seen.max(r.rect.max.x);
                     }
                 }
@@ -2052,11 +2125,12 @@ mod split_tests {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
             ..Default::default()
         };
-        let out = ctx.run_ui(input, |ui| {
+        let mut out = ctx.run_ui(input, |ui| {
             println!(
-                "ROOT ui max_rect {:?}  content_rect {:?}",
+                "ROOT max_rect {:?} content_rect {:?} available_before_wrap {:?}",
                 ui.max_rect(),
-                ui.ctx().content_rect()
+                ui.ctx().content_rect(),
+                ui.available_rect_before_wrap(),
             );
             eframe::App::ui(&mut multi, ui, &mut eframe::Frame::_new_kittest());
         });
@@ -2064,6 +2138,10 @@ mod split_tests {
             out.shapes.iter().map(|cs| (cs.shape.visual_bounding_rect(), cs.clip_rect)).collect();
         rows.retain(|(b, _)| b.max.y < 165.0);
         rows.sort_by(|a, b| b.0.max.x.partial_cmp(&a.0.max.x).unwrap());
+        // No renderer here, so the frame's textures are dropped on purpose —
+        // which has to be said, or the drop check panics instead of printing
+        // the shapes this test exists to print.
+        out.textures_delta.clone().clear();
         println!("--- {w}x{h}, {radios} radios (screen right = {w}) ---");
         for (b, _) in rows.iter().take(10) {
             println!(
@@ -2089,6 +2167,11 @@ mod split_tests {
                 right - w
             );
         }
+        // Last use of the frame's output. No renderer here, so its textures are
+        // dropped on purpose — which has to be said, or the drop check panics
+        // here instead of letting the shapes print, which is the one thing this
+        // diagnostic is for.
+        out.textures_delta.clear();
     }
 
     fn collect_left_rects(
@@ -2149,19 +2232,29 @@ mod split_tests {
             .unwrap_or("?")
     }
 
-    /// **Ignored, not passing.** When the sweep was written it caught two
-    /// faults; the strip one is fixed (see the active test above) and this one
-    /// is not: a top-bar chip row is a couple of points wider than the panel it
-    /// sits in, egui grows the panel to fit, and the page ends up 2 pt over at
-    /// 360 and 4 pt at 1920 — so the panel's right border is painted off-screen
-    /// and there is no line to close it. That is Kevin's *"the boundary line is
-    /// missing, the outline extends beyond the edge"*, and it is present with
-    /// **one** radio, which is why it is not the strip.
+    /// **The strict version, and it now passes.**
     ///
-    /// Kept strict and ignored rather than folded into the tolerance above:
-    /// when the chip row is made to fit, this is the test that proves it.
+    /// It was written and ignored because the sweep behind it had caught two
+    /// faults, and the second one was not the strip at all: a top-bar chip row
+    /// two points wider than its panel, which grew the panel until the page was
+    /// 2 pt over at 360 and 4 pt at 1920, and the panel's right border went with
+    /// it. That is Kevin's *"the boundary line is missing, the outline extends
+    /// beyond the edge of the display window"*.
+    ///
+    /// **It was never the chip row.** Instrumenting `angled_frame` — the one
+    /// place that knows the width a panel was offered and the rectangle it took —
+    /// showed every panel comfortably inside the window (its content at 8..352
+    /// in a 360 pt one), while an `egui::Panel`'s own **frame fill** painted 2 pt
+    /// past the right edge at every size. So the ink that went off-screen was
+    /// the top bar's background, not a row that would not fit, and the fix is to
+    /// paint that background from inside the panel with a painter clipped to the
+    /// window rather than let the frame reach past it.
+    ///
+    /// Kept strict at half a point, which is the tolerance a hairline stroke and
+    /// a rounded corner can spend; the tolerance test above sits above the
+    /// remaining slop of the *layout*, and this one asks the question that
+    /// matters: is any ink off the edge.
     #[test]
-    #[ignore = "the top-bar chip row is a few points too wide; see the test's note"]
     fn nothing_is_drawn_wider_than_the_window() {
         let worst = page_overflow(0.5);
         assert!(

@@ -365,17 +365,49 @@ impl eframe::App for SdroxideApp {
         }
 
         {
-            egui::Panel::top(crate::layout::salted_id(&ctx, "topbar"))
-                .frame(
-                    egui::Frame::new()
-                        .fill(crate::theme::BG_DEEP())
-                        .inner_margin(egui::Margin::symmetric(8, 6)),
-                )
+            // The band behind the strip is painted **here** rather than by the
+            // panel's own frame fill, and that is the whole of item 1b from fork
+            // discussion #16 — Kevin's "the boundary line is missing, the outline
+            // extends beyond the edge of the display window".
+            //
+            // A `Panel`'s frame fills its rect *plus a couple of points past the
+            // window's right edge*, whatever the content inside it does: measured
+            // at 360 pt the frame's content sat at 8..352 — comfortably inside —
+            // while its fill was painted 0..362. Nothing inside the panel was
+            // too wide; the panel's background was simply drawn off-screen, which
+            // is the same shape of fault as a strip row that will not fit, and it
+            // costs the same: the right border lands somewhere the window cannot
+            // show it.
+            //
+            // So the frame carries no fill and the band is drawn from inside it,
+            // through a painter clipped to the window. Same ink, same place, and
+            // a clip rect that cannot be argued with.
+            let band = egui::Margin::symmetric(8, 6);
+            // A slot in the paint list, reserved before the strip is drawn and
+            // filled in afterwards — the same trick `angled_frame` uses for the
+            // gradient fill, and for the same reason: the band's height is only
+            // known once the panel has been laid out, and a painter's order is
+            // the order the shapes were added.
+            let mut band_slot = None;
+            let band_panel = egui::Panel::top(crate::layout::salted_id(&ctx, "topbar"))
+                .frame(egui::Frame::new().inner_margin(band))
                 .show(ui, |ui| {
+                    band_slot = Some(ui.painter().add(egui::Shape::Noop));
                     crate::chrome::angled_frame(ui, crate::theme::PINK(), |ui| {
                         self.top_bar(ui, &mut cmds);
                     });
                 });
+            if let Some(slot) = band_slot {
+                let window = ctx.content_rect();
+                ui.painter().set(
+                    slot,
+                    egui::Shape::rect_filled(
+                        band_panel.response.rect.intersect(window),
+                        egui::CornerRadius::ZERO,
+                        crate::theme::BG_DEEP(),
+                    ),
+                );
+            }
         }
         // A persistent radio-audio warning (input unavailable / mono-for-IQ)
         // rides above the panadapter with a dismiss button, so a silent RX
