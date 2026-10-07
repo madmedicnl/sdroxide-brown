@@ -1447,6 +1447,23 @@ discussion is the only place a user can be answered.
   verified by him), the phone's missing right border, the three-radio tab-close
   flicker, and the Pluto/ADS-B thread at 99.9 %. He answers well and attaches
   screenshots — ask precisely, and believe him over a recollection.
+- **#17 "Liste des fichiers installés sur un serveur"** (kevin2008-01, Ideas, 0
+  comments) — asked for **a complete list of the files an installation puts on
+  the machine**, so he could uninstall completely, then reported **FT8 decoding
+  nothing at all on the fresh install**. **Both answered** in comment `18800248`.
+  The list came out of `Cargo.toml`'s `[package.metadata.deb] assets`, the nine
+  `packaging/linux/60-sdroxide-*.rules`, the `PKGBUILD` and
+  `install-desktop-entry.sh` — and the three things worth keeping from it are
+  ones nobody had written down: **the Debian package installs no systemd service**
+  (so `apt purge` cannot leave one running — his `/etc/systemd/system/sdroxide.service`
+  came from his own **sdrversion** script, not from us), **nothing is written to
+  `/etc` or `/var`**, and the **installer creates no configuration** — the program
+  makes `~/.config/sdroxide-brown` on first run, which is the other half of a
+  complete removal. Now in the README's Installing section and manual §9.5, so
+  the thread cannot be the only copy. **His FT8 was not a decoder fault**: a fresh
+  install has no `radios.json`/`radio.json`/`radio-N/`, so nothing is listening —
+  and he installed **2.0.1**, not the 2.0.2 he now wants. **Ask a fresh-install
+  reporter "is the waterfall alive?" before anything else.**
 - **#13** non-upstream build targets (armhf &c) — **the armv7 build now exists**
   and is attached to `v2.0.1_brown` as
   `sdroxide-v2.0.1_brown-linux-armv7-cat.tar.gz`; it has not yet run on his
