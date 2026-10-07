@@ -14437,9 +14437,11 @@ let in on the strength of it — its other radios, the 3D solar view, and the
 browser after a reload or a restart. Another station is another door, and asks
 for itself, once.
 
-**In the browser the choice is how long: 12 hours or a day.** The card offers
-both, and the station — not the page — keeps the result: a signed cookie the
-page itself cannot read. That is why there is no copy of your password in the
+**In the browser the choice is how long — 12 hours, a day, or not at all.** The
+card offers all three, and **NOT THIS TIME** is a real answer: the station
+remembers nothing, you are asked again on the next connection, and nothing about
+that sign-in is kept on the device. Say yes to one of the others and the station
+— not the page — keeps the result: a signed cookie the page itself cannot read. That is why there is no copy of your password in the
 browser's storage any more, and why every other radio of the station opens
 without a field to fill. A cookie is a bearer token, so treat the day as a day:
 on somebody else's browser, **12 hours** is the tidier answer. The station signs

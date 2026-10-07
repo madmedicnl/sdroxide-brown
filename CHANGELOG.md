@@ -13,6 +13,13 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [2.0.2_brown] - 2026-10-07
+
+**A pre-release built around one report**: a station of three radios was asked
+for its username and password once per radio, per session, for everyone — not
+for one unusual setup. The sign-in cookie is the answer, and the "NOT THIS TIME"
+answer to it is in here too.
+
 ### Added
 
 - **A sign-in cookie: sign in once, and the station remembers you.** The sign-in

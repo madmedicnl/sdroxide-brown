@@ -495,6 +495,24 @@ A special shout-out to the **[Dutch CB Group](https://www.dutchcbgroup.nl/)** an
 are, and the reason the 11 m side of this fork exists at all. Thanks for the
 channels, the logs and the company.
 
+**Thank you to [Kevin](https://github.com/kevin2008-01) (F6KIM / Roy)** for the
+testing that made this fork measurably better, and for being blunt about it.
+Three stations of his own — a PlutoSDR, a HackRF and an RTL-SDR on one Debian
+box behind Caddy, reached from a phone as an installed PWA and from a desktop
+browser — went through a full checklist in one pass, and he came back with a
+report that separated what was fixed from what was still broken instead of
+rounding it up. That report is the reason the sign-in cookie exists, the reason
+the phone's tab strip scrolls, and the reason the image share button checks
+whether it can share before it claims it did. He also handed over a real Olivia
+signal — with the text another decoder had already read — which is what settled
+that mode's polarity, and he answered a page of questions about his own setup
+when answering them was the only way to move a bug forward.
+
+Testing a radio program on three radios at once is not a thing anyone does by
+accident, and doing it as a favour rather than as a job is worth more than the
+fixes it produced. If you have a station, a list, and the patience: the reports
+are what this fork is built on.
+
 Several of the listener's propagation tools were adapted from
 **[OpenHamClock](https://github.com/accius/openhamclock)** (MIT): the
 band-opening detector, the grey-line shading on the flat maps, the
