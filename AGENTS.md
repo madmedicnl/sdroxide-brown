@@ -968,6 +968,47 @@ render test we had (`phone_crash_regression_*`) asserts a frame does not
   report stands: with three tabs, closing station 3 while viewing station 1
   flickers, client-side only, and it is the next thing to look at.
 
+### The SSTV view on a demod-audio front end — fixed, and CTR was the bypass
+
+**Confirmed on the operator's bench (2026-10-07): "the crt is all fine now".**
+The report was that in SSTV on the **CRT SS9900v** the picture was squeezed into
+part of the waterfall and half off the right edge. It was, and it took three
+attempts because the first two each fixed half and were then **undone by
+something else**:
+
+1. The **span** — narrowed to the SSTV band (`zoom_out_window`). Screenshots
+   then showed the window centred on the *carrier* with the picture either side.
+2. The **focus** — `focus_hz` answered the picture instead of the dial. Still no
+   change on the radio that mattered.
+3. **CTR.** `center_on_vfo` re-centres the view on **the dial** every frame
+   (`spectrum_view.rs:2050`), and the only modes that escape it are the ones
+   whose signal sits off the dial — `AudioCursor::center_on_cursor`, built for
+   RTTY/NAVTEX/DSC. **SSTV is one of those and was not in the set**, so CTR put
+   the window back on the carrier and undid both fits. The cursor now anchors
+   SSTV at the picture centre (1750 Hz, signed by `is_lower_sideband_at`) and is
+   marked centre-on-cursor, reusing `SSTV_TONE_HZ` so the anchor and the window
+   cannot drift.
+
+**The lesson, and it is the same one as the Olivia polarity and the QSL card:**
+the thing doing the damage was *not* in the code the bug was reported against.
+Two fixes were written and both were correct and both did nothing, because a
+flag set on this very bench that morning (`center_on_vfo` default on, 2026-10-07)
+was fighting them. **What found it was the operator's one-click experiment** —
+*"clicking ctr and switching modes and back changed the view"*. Ask for the
+experiment that isolates the other combatant before writing the third fix.
+
+**Scope, and it is `DeviceCaps::audio_mode`:** the SS9900v is a **10-12 m**
+sound-card rig, so its dial is stuck on a suppressed carrier the operator cannot
+see and the picture is always 1.75 kHz to one side. An **SDR is not that** — the
+RSP1's own SSTV view has the operator placing the dial *on the picture* — so
+shifting their focus would move a view they had already chosen. Both are pinned:
+`sstv_audio_window`/`focus_hz` answer for an audio front end and keep the dial
+otherwise.
+
+**Misreading to avoid:** the SS9900v is 10-12 m only, so a screenshot at 80 m is
+the RSP1 whatever the tab looks like. An 80 m "SS9900v" screenshot with a 3.6 kHz
+span was read as the rig for an hour; it could not have been.
+
 ### Narrowing the two open items — the steps, so this is not re-derived
 
 **Item 3, the 3-radio tab-close flicker** (fork discussion #16, Kevin; browser
