@@ -3609,6 +3609,35 @@ contests rather than a replacement for FT8. It also asks more of your clock:
 with 24 ms symbols, timing that would pass unnoticed on FT8 will cost you
 decodes ([3.2.3](#323-working-stations)).
 
+> **WARNING — the clock that counts is the one decoding.** FT8, FT4 and FT2
+> cut the audio into fixed periods by the clock of the machine **running the
+> decoder**. On a station reached remotely (`--server`, a browser, the native
+> client) that is the **server**, not your phone or your PC. If the server's
+> clock is a couple of seconds out, **nothing decodes at all**: the waterfall
+> is full of signals, the audio sounds perfect, a phone app held to the
+> speaker decodes the same audio — and sdroxide's list stays empty, with no
+> error in the log. The `DT` figure on the station card cannot warn you either,
+> because it is measured from decodes and there are none.
+>
+> Check it on the server before anything else:
+>
+> ```
+> timedatectl
+> ```
+>
+> It must read `System clock synchronized: yes` and `NTP service: active`.
+> A minimal Linux install (a bare Debian server, for example) may have **no**
+> time service at all — `NTP service: n/a`. Install one and switch it on:
+>
+> ```
+> apt install systemd-timesyncd
+> timedatectl set-ntp true
+> systemctl restart sdroxide
+> ```
+>
+> Decodes appear within a minute or two. See also
+> [Troubleshooting](#14-troubleshooting).
+
 ![The FT8 operating panel](images/07-ft8-panel.png)
 
 #### 3.2.1 One-time setup: your callsign and grid
@@ -14305,6 +14334,12 @@ Set a username and password first — see
 [§ 7.3](#83-sign-in-who-may-operate-the-station). Without one the server is open
 to anyone who can reach the port, and says so in its log at startup.
 
+> **WARNING:** the timed digital modes (FT8, FT4, FT2, WSPR, JS8 …) are decoded
+> **on the server**, by the server's clock. Make sure it is synchronised
+> (`timedatectl` must say `System clock synchronized: yes`) — a server without
+> a time service decodes nothing in those modes, and says nothing about why
+> ([3.2](#32-ft8-ft4-and-ft2)).
+
 **A station with more than one radio** ([2.17](#217-running-more-than-one-radio))
 serves all of them from the one port. Every radio in the roster is opened —
 each with its own engine, exactly as the GUI would — and each is reachable in
@@ -16042,6 +16077,18 @@ The radio's capture device could not be opened. Common causes:
 - The device is in use by another program, or was unplugged. sdroxide shows a
   warning banner naming the device; use **Dismiss** to hide it after fixing the
   device.
+
+**FT8/FT4 decode nothing, yet the waterfall and the audio are fine.**
+Check the clock of the machine running the decoder — on a remote station, the
+**server**. A clock a couple of seconds out puts every fifteen-second period in
+the wrong place, and nothing decodes while everything else looks healthy: the
+signals are on the waterfall, you can hear them, a phone app held to the
+speaker decodes them, and the log shows no warning. Run `timedatectl` on that
+machine; it must say `System clock synchronized: yes`. If it says `no`, or
+`NTP service: n/a` (a minimal server install often has no time service), run
+`apt install systemd-timesyncd`, then `timedatectl set-ntp true`, and restart
+sdroxide. A system health script that checks the station should check this
+too: it is the one fault that leaves every other line green.
 
 **"A buffer underrun or overrun occurred", and FT8/FT4 will not decode.**
 The audio device is losing samples. The line in the diagnostics reads
