@@ -1733,7 +1733,13 @@ use sdroxide_types::{
 /// band's published SSTV frequency. `DigiConfig` rides whole in
 /// `SetDigiConfig`/`DigiStatus`, so this is the same appended-field break as
 /// v184. A downstream (fork) change, appended last.
-pub const PROTO_VERSION: u16 = 196;
+///
+/// v197: `NetworkConfig` gains `eqsl_qth_nickname` (String) on its tail — the
+/// eQSL QTH profile an upload is filed into, for an account that owns more than
+/// one (upstream issue #647). `NetworkConfig` rides `Command::SetNetworkConfig`
+/// whole, so this is the same appended-field break as every version before it.
+/// A downstream (fork) change, appended last.
+pub const PROTO_VERSION: u16 = 197;
 const VERSION_BYTE: u8 = 0x13;
 
 #[derive(Debug, thiserror::Error)]

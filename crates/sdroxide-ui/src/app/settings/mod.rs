@@ -3745,6 +3745,16 @@ impl SdroxideApp {
                     UploadTarget::Eqsl => {
                         net_row(ui, "eQSL user", &mut io.net_edit.eqsl.user, 140.0);
                         net_secret(ui, "eQSL pass", &mut io.net_edit.eqsl.password, 140.0);
+                        net_row(ui, "eQSL QTH", &mut io.net_edit.eqsl_qth_nickname, 140.0);
+                        ui.label(
+                            RichText::new(
+                                "Which QTH profile an upload is filed into — needed only \
+                                 when the account owns more than one, and left blank \
+                                 otherwise.",
+                            )
+                            .size(10.5)
+                            .color(crate::theme::gray(140)),
+                        );
                     }
                     UploadTarget::HamQth => {
                         // The *same* two fields as the lookup section above, not

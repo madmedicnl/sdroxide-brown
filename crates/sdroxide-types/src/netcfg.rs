@@ -376,6 +376,16 @@ pub struct NetworkConfig {
     /// wire requires.
     #[serde(default)]
     pub swl_id: String,
+
+    // ── eQSL upload target ──
+    /// The **QTH Nickname** an eQSL upload is filed under — which of the
+    /// account's QTH profiles it goes to (issue #647). eQSL only needs it when
+    /// the account owns more than one profile; otherwise it refuses the upload
+    /// rather than guessing. Empty means "do not send the field", which is what
+    /// a single-profile account wants. Appended last, as the wire requires —
+    /// `NetworkConfig` rides `SetNetworkConfig` whole.
+    #[serde(default)]
+    pub eqsl_qth_nickname: String,
 }
 
 impl Default for NetworkConfig {
@@ -412,6 +422,7 @@ impl Default for NetworkConfig {
             log11dx_api_token: String::new(),
             auto_upload_log11dx: false,
             swl_id: String::new(),
+            eqsl_qth_nickname: String::new(),
         }
     }
 }

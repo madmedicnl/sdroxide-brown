@@ -13,6 +13,13 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+- **eQSL uploads can name a QTH profile.** An eQSL account that owns more than
+  one QTH profile refuses an upload which does not say which one to file into
+  (upstream issue #647). Settings → Uploads → eQSL gains an optional **QTH
+  nickname** box, sent as eQSL's own `QTHNickname` field; left blank it sends
+  nothing, so a single-profile account is unchanged. `PROTO_VERSION` 196 → 197
+  (an appended `NetworkConfig` field), so client and server must both be
+  updated.
 - **The DAB bandwidth advice moved to the radio tab.** It warned about the
   front end's width from inside the decoder's panel, where acting on it meant
   leaving the mode and finding the sample-rate control. It now sits in the
