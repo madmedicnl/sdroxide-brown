@@ -1258,8 +1258,41 @@ not a panel overdrawing it, and not arithmetic that scales with any width — wh
 is why **no resize changed it** and why it is cut on *both* sides: a fixed
 minimum somewhere in the panel, not a miscalculated width.
 
-**Do not start from `dab_panel`, `image_panel`, `max_rect` or `operating_panel`.**
-Those were all reached by reasoning from a number that turned out to be false.
+**REPRODUCED, 2026-10-08, and it is SSTV-specific.** The operator's third
+screenshot is **SSTV in a narrow window**, and a probe driving SSTV at four
+widths finds the same shape:
+
+| window | dock left | SSTV panel right | **overlap** |
+|---|---|---|---|
+| 1920 | 1641 | 1680 | **39** |
+| 1280 | 1001 | 1048 | **47** |
+| 1100 | 821 | 980 | **159** |
+| 960 | 681 | 931 | **250** |
+
+At 960 the panel covers nearly the whole dock, which is the picture. At 1920 it
+is a few points, which is why "OPERATE is fine" and "LISTEN shows it" were both
+true at once — **they were the same fault at two window widths.**
+
+**And the "constant 39 pt" was the 1920 row of this table**, not a property. The
+earlier per-mode sweep only ever ran at 1920, so every mode looked constant and
+the arithmetic was read as a fixed offset. Nothing here is constant; it scales.
+
+**So `image_panel` is in scope after all** — `panels/sstv.rs:595`, the one panel
+`operating_panel` calls **without** `panel_h` and the only one that computes its
+own column widths from `ui.available_size()` (`:676`). It is being given the
+width it allocates itself from something wider than the allocation it was handed
+— at 960 that is 931 against a real column of 681.
+
+The reproduction is `probe_narrow_window_overflow` in the `#[cfg(test)]` block at
+the bottom of `crates/sdroxide-ui/src/app/mod.rs`, reading `DOCK_W` and `MODE`
+and printing every rect past the window edge. Uncommitted.
+
+**Still open, and it is now one function:** what `image_panel` sizes itself from.
+`avail = ui.available_size()` at `sstv.rs:676` should be the allocated width, so
+either the `ui` it receives is not the `allocate_ui` child, or the panel takes a
+second measurement somewhere in its four-column split
+(`left_w`/`tx_w`/`gallery_w`/`live_w`, `sstv.rs:684…706`) after something else has
+already widened the row.
 
 **The next step, and it is short:** drive one frame with **SSTV** (the deepest
 panel, and the one the report is really about) and **FT8** at **960 pt**, with
