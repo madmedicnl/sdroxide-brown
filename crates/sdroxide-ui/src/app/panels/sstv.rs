@@ -752,6 +752,31 @@ impl SdroxideApp {
                                         .color(crate::theme::CYAN()),
             );
                                 self.digi_freq_chip(ui, cmds);
+                                // Whether choosing SSTV moves the dial onto the
+                                // band's published frequency. Beside the picker
+                                // because the two answer the same question: where
+                                // the decoder listens.
+                                ui.add_enabled_ui(self.digi_cfg_seeded, |ui| {
+                                    let keep = self.digi_cfg_edit.sstv_keep_dial;
+                                    if crate::chrome::chip(ui, keep, "KEEP DIAL")
+                                        .on_hover_text(if keep {
+                                            "On: choosing SSTV leaves the dial where you tuned, \
+                                             so the decoder works on any frequency. The published \
+                                             SSTV frequencies are still in the ⇵ picker. Click to \
+                                             go back to landing on the band's SSTV frequency."
+                                        } else {
+                                            "Off: choosing SSTV moves the dial onto the band's \
+                                             SSTV frequency when you are more than 3 kHz from \
+                                             one. Click to keep the dial where you tuned instead, \
+                                             and decode SSTV on any frequency. Tuning after \
+                                             choosing SSTV is never undone either way."
+                                        })
+                                        .clicked()
+                                    {
+                                        self.digi_cfg_edit.sstv_keep_dial = !keep;
+                                        cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+                                    }
+                                });
                                 let auto_label = if self.sstv.auto {
                                     format!("Auto ({})", self.sstv.tx_mode.label())
                                 } else {
