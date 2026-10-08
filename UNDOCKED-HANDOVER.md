@@ -108,12 +108,17 @@ build a framework first.
    `(waterfall_h, panel_h)` summing to the area (`frame.rs`, the `digi_split` /
    panadapter region). Detached ⇒ `waterfall_h = 0` and the operating panel
    takes the whole column. This is the part worth a **pure test**.
-4. **The detached window.** When detached, `ctx.show_viewport_deferred(
-   panadapter_vid(radio_salt), ViewportBuilder::default()
-   .with_app_id("sdroxide-panadapter").with_title(…)
-   .with_inner_size(size)[.with_position(pos)], move |ui, _| draw the
-   panadapter)` — reusing the existing panadapter draw (`frame.rs` /
-   `widgets/spectrum_view.rs`), not a copy of it. **The `with_app_id` is not
+4. **The detached window — use `show_viewport_immediate`, not `_deferred`.**
+   `spectrum_view::show_ext` borrows `&mut self`'s fields (view, state, peaks,
+   smooth, trace cache, spec3d), and solar3d's `show_viewport_deferred` wants an
+   `Fn + Send + Sync + 'static` closure — which **cannot** borrow `self`, so it
+   would force the panadapter onto a published snapshot. Instead
+   `Context::show_viewport_immediate(id, builder, impl FnMut(&mut Ui,
+   ViewportClass))` (egui 0.36, `context.rs:4116`) is called in the **same
+   frame** and may borrow `self`, so the existing draw moves over nearly
+   unchanged. Build it with `ViewportBuilder::default().with_app_id(
+   "sdroxide-panadapter").with_title(…)`, and `with_inner_size` /
+   `with_position` from the persisted geometry. **The `with_app_id` is not
    decoration**: it is what a Wayland window rule matches on to float and place
    the window (see "Niri" below). solar3d sets only a title today; a detached
    window should carry its own id.
@@ -121,6 +126,33 @@ build a framework first.
    frame only (the solar3d pattern), so a drag is not undone each frame.
 6. **Native only.** `#[cfg(not(target_arch = "wasm32"))]` throughout the detach
    path; the browser keeps the panadapter in-window.
+
+**What the detached window contains (decided 2026-10-08).** Spectrum + waterfall
++ a **big centred frequency** readout over it (the `centred_waterfall_note`
+pattern), and optionally a compact S-level. The **tuning strip and the real
+S-meter stay in the main window** — one owner for controls, so a value can never
+disagree with itself across two windows, and the panadapter stays a *view*
+(click/drag tuning on it still works, it is the same widget).
+
+### Step 2 in practice — the extraction
+
+`frame.rs`'s panadapter block is a deeply nested closure (`ui.allocate_ui(
+vec2(width, wf_h), |ui| { … spectrum_view::show_ext(…) })`, roughly
+`frame.rs:765`–`:904`) capturing many locals (`mode`, `live`, `wf_tuning`,
+`atsmini`, `audio_hz`, `markers`, `ft8_spots`, `ft8_alpha`, `net_spots`,
+`net_alpha`, `clicked_spot`, `ism_labels`, `mem_marks`, `pan`, `show_panel`,
+`cmds`, `now`, `frame`) plus `self` fields. The work is to lift its body into
+`fn draw_panadapter(&mut self, ui, <those by-ref>)`, then call it from:
+
+- the main window, when **not** detached (`if show_wf && !detached`);
+- the immediate viewport, when detached — `ctx.show_viewport_immediate(vid,
+  builder, |ui, _| ui.allocate_ui(viewport_size, |ui|
+  self.draw_panadapter(…)))`.
+
+**Do that extraction as its own commit and land the main-window draw
+byte-identical first**, so a mistake in the move is visible before any of the
+viewport is wired. Only then add the toggle, the geometry persistence and
+`ViewportEvent::Close`.
 
 **The oracle.** The detached window itself cannot be asserted headlessly, so the
 test is the **main-window layout**: with the panadapter detached, the operating
