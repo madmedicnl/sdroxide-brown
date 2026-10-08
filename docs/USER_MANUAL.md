@@ -14900,6 +14900,18 @@ address in a tab still shows the tab. On Android it is installed as a web app
 and runs genuinely full screen, with no address bar and no status bar; on
 Samsung DeX it behaves as an ordinary desktop window.
 
+**A private or incognito window cannot install it, and that is the browser, not
+the program.** Chrome and Firefox both refuse to install an app from a private
+window — the option is simply not there in the menu — and no setting on the
+station changes that. It is worth saying plainly because it looks like something
+misconfigured: everything else in a private window works, and works normally.
+The one thing a private window does not keep is what the **browser** holds —
+your screen and your key bindings — so in one you sign in and the station
+supplies them instead of the device remembering them. That is the same path a
+profile on any other machine takes, and on this build the profile is held on the
+**station**, so a private window is in no way second class. It is only the
+installed icon that is unavailable.
+
 This needs the same **secure context** as audio
 ([9.3](#93-audio-needs-a-secure-context)). Over plain HTTP on the LAN a browser
 will offer a plain bookmark at best, so the two reasons to put the server behind

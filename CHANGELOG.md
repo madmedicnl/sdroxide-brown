@@ -37,6 +37,26 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   the block size and the jitter cannot reach it. A genuine starvation still comes
   out as silence rather than being papered over.
 
+- **DAB: a CLEAR chip for the channel list.** The CHANNELS list is what the
+  sweep found and it is remembered, so it only ever grows — every ensemble the
+  receiver has ever come across stays, with no way to remove one. That is the
+  right default for a listener and the wrong one with no way out, so `CLEAR`
+  forgets them and SCAN finds them again. The chip is offered **only** when the
+  list has something in it and **never during a sweep**, where stopping would
+  write the sweep's findings straight back over the clearing — so it cannot be
+  the inert control this fork keeps finding. (#18, "Add clear list".)
+
+### Changed
+
+- **Documented that a private window cannot install the app — the browser, not
+  the program.** Chrome and Firefox both refuse to install a web app from a
+  private/incognito window and no setting on the station changes that, which
+  makes it look like something misconfigured. Everything else works there; the
+  only thing a private window does not keep is what the *browser* holds, so in
+  one you sign in and the **station** supplies your screen and bindings instead.
+  That is the same path any other machine's profile takes on this build. Added
+  to §8's home-screen section rather than left as a report to answer.
+
 ### Changed
 
 - **The sign-in card asks one question: REMEMBER ME.** It offered **12 HOURS**,

@@ -13,6 +13,17 @@
 use eframe::egui::{self, RichText};
 use sdroxide_types::{Command, DabService, DabStatus};
 
+/// Is the **CLEAR** chip offered at all?
+///
+/// Split out so the rule can be pinned without a click: a chip drawn with
+/// nothing to clear, or drawn during a sweep where stopping would write the
+/// sweep's findings straight back over the clearing, is the inert control this
+/// fork keeps having to unpick. Both cases return false, so the chip is simply
+/// not there rather than sitting there doing nothing.
+fn dab_clear_offered(scanning: bool, found_len: usize) -> bool {
+    !scanning && found_len > 0
+}
+
 use crate::app::SdroxideApp;
 use crate::theme;
 
@@ -233,6 +244,30 @@ impl SdroxideApp {
                 });
                 cmds.push(Command::SetDabConfig(self.state.dab.clone()));
             }
+        }
+
+        // **Clear the list**, asked for on the fork's #18 as "Add clear list".
+        //
+        // The CHANNELS list is what the sweep found and it is *remembered*, so
+        // it only ever grows: every ensemble the receiver has ever come across
+        // stays, with nothing to remove one. That is the right default for a
+        // listener — re-scanning costs minutes — and the wrong one with no way
+        // out, so this is the way out.
+        //
+        // Two rules, both so the chip can never be the inert thing this fork
+        // keeps finding: it is **only offered when there is something to clear**,
+        // and it is **not offered during a sweep**, where stopping would write
+        // the sweep's findings straight back over the clearing. Pressing SCAN
+        // finds them again, which is why this needs no confirmation.
+        if dab_clear_offered(scanning, self.state.dab.found.len())
+            && crate::chrome::chip(ui, false, "CLEAR")
+                .on_hover_text("Forget the channels found so far. SCAN will find them again.")
+                .clicked()
+        {
+            self.state.dab.found.clear();
+            cmds.push(Command::SetDabConfig(self.state.dab.clone()));
+            self.client_settings_status =
+                Some("channel list cleared — SCAN will find them again".into());
         }
 
         let channels = dab_channel_choices(
@@ -519,5 +554,30 @@ mod tests {
         // Nothing decoded at all: silence, or a block with something else on
         // it, must not become a channel chip.
         assert!(!dab_block_has_multiplex(&status(vec![], None)));
+    }
+}
+
+#[cfg(test)]
+mod clear_list_tests {
+    use super::dab_clear_offered;
+
+    /// Kevin's "Add clear list" on the fork's #18. The CHANNELS list is
+    /// remembered and only ever grows, so it needs a way out — and the chip must
+    /// not exist when it has nothing to do.
+    #[test]
+    fn the_clear_chip_is_offered_only_when_there_is_something_to_clear() {
+        assert!(dab_clear_offered(false, 1), "one channel found: clear it");
+        assert!(dab_clear_offered(false, 38), "a full sweep's worth");
+        // Nothing to clear, so no chip — rather than a button that does nothing.
+        assert!(!dab_clear_offered(false, 0), "an empty list needs no CLEAR");
+    }
+
+    /// During a sweep the chip must be absent: stopping writes `scan.found`
+    /// straight into `state.dab.found`, so a clearing pressed mid-sweep would be
+    /// silently undone a moment later.
+    #[test]
+    fn the_clear_chip_is_absent_while_a_sweep_is_running() {
+        assert!(!dab_clear_offered(true, 12), "a clearing mid-sweep would be overwritten");
+        assert!(!dab_clear_offered(true, 0));
     }
 }
