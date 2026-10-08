@@ -13,7 +13,25 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
-### Fixed
+### Changed
+
+- **The sign-in card asks one question: REMEMBER ME.** It offered **12 HOURS**,
+  **1 DAY** and **NOT THIS TIME** in 2.0.2, and the two-clock choice was ours to
+  ask and the operator's to get right — the complaint behind this change was
+  being asked again every twelve hours on a station serving three radios. The
+  box starts ticked and means what it says; unticked it is a **session** cookie,
+  dropped by the browser when the window closes, so a shared machine is never
+  left signed in. A ticked one is kept for thirty days, which is what
+  "remember me" means, and how long it is honoured is now the station's business
+  rather than a number on the card.
+
+### Not proven
+
+- The cookie path is end-to-end tested and the card's own logic is unit-tested,
+  but **no browser was driven**: the checkbox itself, and a real cookie on a
+  phone, still need a hand.
+
+## Fixed
 
 - **The right border closes at every window width, including on a phone.** Fork
   discussion #16: *"the right panel border does not close properly against the edge
