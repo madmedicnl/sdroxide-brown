@@ -25,18 +25,30 @@ pub fn upload(
     }
 }
 
+/// The form fields an eQSL upload posts. Split out so the **QTH Nickname** can
+/// be asserted: eQSL refuses an upload from an account that owns more than one
+/// QTH profile unless the target profile is named, so the nickname is sent only
+/// when the operator has set one and left off entirely otherwise (issue #647).
+fn eqsl_form_fields<'a>(cfg: &'a NetworkConfig, adif: &'a str) -> Vec<(&'a str, &'a str)> {
+    let mut fields = vec![
+        ("EQSL_USER", cfg.eqsl.user.trim()),
+        ("EQSL_PSWD", cfg.eqsl.password.trim()),
+    ];
+    let qth = cfg.eqsl_qth_nickname.trim();
+    if !qth.is_empty() {
+        // eQSL's own spelling of the parameter.
+        fields.push(("QTHNickname", qth));
+    }
+    fields.push(("ADIFData", adif));
+    fields
+}
+
 fn upload_eqsl(cfg: &NetworkConfig, adif: &str) -> Result<String, String> {
     if cfg.eqsl.user.trim().is_empty() {
         return Err("eQSL username/password not set".into());
     }
-    let body = http::post_form(
-        "https://www.eqsl.cc/qslcard/importADIF.cfm",
-        &[
-            ("EQSL_USER", cfg.eqsl.user.trim()),
-            ("EQSL_PSWD", cfg.eqsl.password.trim()),
-            ("ADIFData", adif),
-        ],
-    )?;
+    let fields = eqsl_form_fields(cfg, adif);
+    let body = http::post_form("https://www.eqsl.cc/qslcard/importADIF.cfm", &fields)?;
     // eQSL returns HTML; success contains "Result: 1 out of 1 …". Errors carry
     // an "Error:" / "Warning:" line.
     let text = strip_html(&body);
@@ -819,6 +831,29 @@ mod tests {
     fn parses_qrz_response() {
         let kv = parse_kv("RESULT=OK&COUNT=1&LOGID=123");
         assert_eq!(kv.iter().find(|(k, _)| k == "RESULT").unwrap().1, "OK");
+    }
+
+    /// Issue #647: an eQSL account that owns several QTH profiles is refused
+    /// unless the upload names which one. The nickname goes out when set.
+    #[test]
+    fn an_eqsl_upload_sends_the_qth_nickname_when_it_is_set() {
+        let cfg = NetworkConfig { eqsl_qth_nickname: "Home".into(), ..Default::default() };
+        let f = eqsl_form_fields(&cfg, "ADIF");
+        assert!(
+            f.iter().any(|(k, v)| *k == "QTHNickname" && *v == "Home"),
+            "nickname missing: {f:?}"
+        );
+    }
+
+    /// And is left off entirely when blank, so a single-profile account — and
+    /// the payload shape from before this field existed — is unchanged.
+    #[test]
+    fn an_eqsl_upload_omits_a_blank_qth_nickname() {
+        for blank in ["", "   "] {
+            let cfg = NetworkConfig { eqsl_qth_nickname: blank.into(), ..Default::default() };
+            let f = eqsl_form_fields(&cfg, "ADIF");
+            assert!(!f.iter().any(|(k, _)| *k == "QTHNickname"), "{blank:?}: {f:?}");
+        }
     }
 
     #[test]
