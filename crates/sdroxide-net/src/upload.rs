@@ -48,6 +48,22 @@ fn eqsl_form_fields<'a>(cfg: &'a NetworkConfig, adif: &'a str) -> Vec<(&'a str, 
     fields
 }
 
+/// The `&QTHNickname=…` an eQSL URL appends when the operator has set one.
+///
+/// eQSL identifies an account by **callsign *and* QTH nickname**: an account
+/// with more than one attached profile answers "No such Username/Password
+/// found" to a correct password with the wrong nickname — or none — on the
+/// download and the login test as well as on the upload (issue #647). Empty
+/// when no nickname is set, so a single-profile account is unchanged.
+fn eqsl_qth_query(cfg: &NetworkConfig) -> String {
+    let qth = cfg.eqsl_qth_nickname.trim();
+    if qth.is_empty() {
+        String::new()
+    } else {
+        format!("&QTHNickname={}", urlencode(qth))
+    }
+}
+
 fn upload_eqsl(cfg: &NetworkConfig, adif: &str) -> Result<String, String> {
     if cfg.eqsl.user.trim().is_empty() {
         return Err("eQSL username/password not set".into());
@@ -663,9 +679,10 @@ fn test_eqsl(cfg: &NetworkConfig) -> Result<String, String> {
     // question is whether the login is accepted, not what is in the inbox, and
     // this keeps eQSL from building an ADIF file to answer it.
     let url = format!(
-        "https://www.eqsl.cc/qslcard/DownloadInBox.cfm?UserName={}&Password={}&RcvdSince=20991231",
+        "https://www.eqsl.cc/qslcard/DownloadInBox.cfm?UserName={}&Password={}&RcvdSince=20991231{}",
         urlencode(cfg.eqsl.user.trim()),
-        urlencode(cfg.eqsl.password.trim())
+        urlencode(cfg.eqsl.password.trim()),
+        eqsl_qth_query(cfg)
     );
     let page = http::get(&url)?;
     let text = strip_html(&page);
@@ -883,9 +900,10 @@ fn download_eqsl(cfg: &NetworkConfig) -> Result<Vec<QsoRecord>, String> {
     // eQSL's inbox download is two-step: the first call builds an .adi and
     // returns a page linking to it.
     let url = format!(
-        "https://www.eqsl.cc/qslcard/DownloadInBox.cfm?UserName={}&Password={}&RcvdSince=19700101",
+        "https://www.eqsl.cc/qslcard/DownloadInBox.cfm?UserName={}&Password={}&RcvdSince=19700101{}",
         urlencode(cfg.eqsl.user.trim()),
-        urlencode(cfg.eqsl.password.trim())
+        urlencode(cfg.eqsl.password.trim()),
+        eqsl_qth_query(cfg)
     );
     let page = http::get(&url)?;
     // Find the ".adi" link in the returned HTML.
@@ -1005,6 +1023,20 @@ mod tests {
             let f = eqsl_form_fields(&cfg, "ADIF");
             assert!(!f.iter().any(|(k, _)| *k == "QTHNickname"), "{blank:?}: {f:?}");
         }
+    }
+
+    /// The nickname rides the **download** and login-test URLs too, not only
+    /// the upload: eQSL identifies a multi-QTH account by callsign *and*
+    /// nickname, and answers "No such Username/Password found" for a correct
+    /// password with the wrong one on any of them.
+    #[test]
+    fn the_eqsl_qth_nickname_rides_the_download_url_too() {
+        let set = NetworkConfig { eqsl_qth_nickname: "Home".into(), ..Default::default() };
+        assert_eq!(eqsl_qth_query(&set), "&QTHNickname=Home");
+        assert_eq!(eqsl_qth_query(&NetworkConfig::default()), "", "no nickname, nothing sent");
+        let spaced = NetworkConfig { eqsl_qth_nickname: "My Home".into(), ..Default::default() };
+        let q = eqsl_qth_query(&spaced);
+        assert!(q.starts_with("&QTHNickname=") && !q.contains(' '), "encoded: {q}");
     }
 
     #[test]
