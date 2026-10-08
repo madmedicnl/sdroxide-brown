@@ -46,6 +46,27 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   write the sweep's findings straight back over the clearing — so it cannot be
   the inert control this fork keeps finding. (#18, "Add clear list".)
 
+- **Advisories can be dismissed for good.** Kevin's #18 is the real one: *"there
+  are already 10,000 security features and warnings… people are going to get fed
+  up and switch to something else."* Most of what he hit was not volume but
+  warnings that repeated or that contradicted something he had already done —
+  and those are fixed at the source rather than muted, because muting a wrong
+  warning leaves a wrong warning.
+
+  What is left is advice that stays true until the operator acts on it. An
+  advisory line now carries a **✕** that remembers the dismissal, so it is not
+  repeated on the next session either — the same sentence every morning is where
+  a warning teaches people to stop reading warnings.
+
+  **Only advice is dismissible, never state.** A line that reports something true
+  *now* — the front end overloading, the connection gone, transmit locked — must
+  not be dismissible, because it stops being true the moment the condition
+  clears and would leave a dead control behind. The set of dismissible advisories
+  is a short, named list (`UiSettings::ADVISORY_KEYS`) rather than whatever opts
+  in, and an unlisted name is **always shown** — silence by omission is the
+  dangerous direction, so a new call site keeps nagging until somebody decides it
+  is advice.
+
 ### Changed
 
 - **Documented that a private window cannot install the app — the browser, not
@@ -71,6 +92,11 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ### Not proven
 
+- **DAB audio has a field report that it works.** A user on the upstream tracker
+  reports DAB "works perfectly" on his setup, which is not known to us. It is
+  kept as a data point and not as proof: the queue fix is in, and whether his
+  receiver is one where the queue ever ran dry is exactly the thing we cannot
+  see from here.
 - **DAB audio has not been listened to.** The priming follows from the queue
   arithmetic and is unit-tested, but nobody has heard an ensemble come out of it;
   if it is still choppy the cause is elsewhere (the faad2 decode errors are the

@@ -792,6 +792,30 @@ pub struct UiSettings {
     /// another machine.
     #[serde(default)]
     pub client_bindings_declined: bool,
+    /// Advisories this operator has dismissed for good, as a bit over
+    /// [`UiSettings::ADVISORY_KEYS`].
+    ///
+    /// **Advice only, never state.** A warning that reports something true *now*
+    /// — the front end is overloading, the connection is gone, transmit is
+    /// locked — must not be dismissible, because it stops being true the moment
+    /// the condition clears and would leave a disabled control behind. What is
+    /// here is the other kind: "this will do badly unless you widen something",
+    /// which is true indefinitely and is answered by having read it once.
+    ///
+    /// Keyed by *identity* rather than by text, so a later warning about a
+    /// different number is still shown. Client-local like the flags above, and
+    /// deliberately not on [`crate::ClientScreen`]: whether you want to be told
+    /// again is a decision made on a machine.
+    ///
+    /// A bitmask rather than a set because `UiSettings` is `Copy` and a
+    /// collection is not — and because a bounded, **named** list is the better
+    /// design anyway: it makes "the things you may dismiss" a closed set that
+    /// can be read in one place, rather than whatever has opted in.
+    ///
+    /// State is never in it. If a line reports something true *now*, dismissing
+    /// it leaves a dead control behind the moment the condition clears.
+    #[serde(default)]
+    pub dismissed_advisories: u64,
 }
 
 /// Default for [`UiSettings::spot_colors`] — every kind on its stock tint.
@@ -847,6 +871,43 @@ where
     Ok(out)
 }
 
+impl UiSettings {
+    /// The advisories that may be dismissed for good, in bit order.
+    ///
+    /// Deliberately short. Every entry is a thing that is **advice** — true
+    /// until the operator acts, answered by having read it once — and nothing
+    /// that reports a live condition. Adding a name here is a decision that a
+    /// warning is safe to lose, which is exactly the decision that should be
+    /// made in one visible list rather than spread across call sites.
+    pub const ADVISORY_KEYS: &'static [&'static str] = &["dab-width"];
+
+    /// The bit an advisory's dismissal lives in, or `None` for a name that is
+    /// not in [`UiSettings::ADVISORY_KEYS`].
+    ///
+    /// `None` means **always shown**, and that is the safe answer: an unknown
+    /// key cannot be dismissed, so adding a call site without deciding whether
+    /// it should be dismissible leaves it nagging rather than muting it.
+    pub fn advisory_bit(key: &str) -> Option<u32> {
+        Self::ADVISORY_KEYS.iter().position(|k| *k == key).map(|i| i as u32)
+    }
+
+    /// Has this client dismissed `key`?
+    pub fn advisory_dismissed(&self, key: &str) -> bool {
+        match Self::advisory_bit(key) {
+            Some(bit) => self.dismissed_advisories & (1u64 << bit) != 0,
+            None => false,
+        }
+    }
+
+    /// Remember that this client has dismissed `key`. An unknown key is ignored,
+    /// which is the same safe direction as [`UiSettings::advisory_dismissed`].
+    pub fn dismiss_advisory(&mut self, key: &str) {
+        if let Some(bit) = Self::advisory_bit(key) {
+            self.dismissed_advisories |= 1u64 << bit;
+        }
+    }
+}
+
 impl Default for UiSettings {
     fn default() -> Self {
         UiSettings {
@@ -900,6 +961,7 @@ impl Default for UiSettings {
             solar3d_window: None,
             client_share_bindings: false,
             client_bindings_declined: false,
+            dismissed_advisories: 0,
         }
     }
 }
@@ -1274,5 +1336,47 @@ mod tests {
         // order: it is written out, not derived.
         assert!(LayoutMode::ALL.contains(&LayoutMode::Auto));
         assert_eq!(LayoutMode::ALL.len(), 5);
+    }
+}
+
+#[cfg(test)]
+mod advisory_tests {
+    use super::UiSettings;
+
+    /// The point of the whole exercise: dismissing one warning must not silence
+    /// another, and must survive the settings being written and read back.
+    #[test]
+    fn dismissing_one_advisory_leaves_the_others_alone() {
+        let mut s = UiSettings::default();
+        assert!(!s.advisory_dismissed("dab-width"), "shown until dismissed");
+        s.dismiss_advisory("dab-width");
+        assert!(s.advisory_dismissed("dab-width"), "dismissed for good");
+        assert_eq!(s.dismissed_advisories.count_ones(), 1, "exactly one bit, not the lot");
+    }
+
+    /// An unclassified name is **always shown**. Silence by omission is the
+    /// dangerous direction: a new call site must keep nagging until somebody
+    /// decides it is advice, rather than muting itself by accident.
+    #[test]
+    fn an_unknown_advisory_can_never_be_dismissed() {
+        let mut s = UiSettings::default();
+        assert_eq!(UiSettings::advisory_bit("something-new"), None);
+        s.dismiss_advisory("something-new");
+        assert!(!s.advisory_dismissed("something-new"), "dismissal ignored");
+        assert_eq!(s.dismissed_advisories, 0, "nothing recorded");
+    }
+
+    /// The list is the design decision, so it is pinned: it is short, it has no
+    /// duplicates, and every name fits its bit.
+    #[test]
+    fn the_dismissible_list_is_short_and_well_formed() {
+        let keys = UiSettings::ADVISORY_KEYS;
+        assert!(keys.len() <= 64, "a u64 bitmask holds 64 advisories");
+        for (i, key) in keys.iter().enumerate() {
+            assert_eq!(UiSettings::advisory_bit(key), Some(i as u32), "{key}");
+        }
+        for a in keys {
+            assert_eq!(keys.iter().filter(|k| *k == a).count(), 1, "{a} listed twice");
+        }
     }
 }

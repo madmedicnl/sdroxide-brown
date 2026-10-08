@@ -26,6 +26,64 @@ pub const MODULE_BORDER: f32 = 1.0;
 
 /// A panel with a pink border and cut corners (top-right + bottom-left),
 /// sitting on the darker page background.
+/// Should an advisory be shown at all?
+///
+/// Split out so the rule is pinned: an advisory is shown unless this client has
+/// dismissed **that** advisory, and dismissing one says nothing about any other.
+/// The key is the advisory's identity, never its text.
+pub fn advisory_shown(settings: &sdroxide_types::UiSettings, key: &str) -> bool {
+    !settings.advisory_dismissed(key)
+}
+
+/// An advisory line with a dismiss control, for **advice** and never for state.
+///
+/// Kevin's complaint on the fork's #18 was that the program nags: "there are
+/// already 10,000 security features and warnings". Most of what he actually hit
+/// was not volume but warnings that repeated, or that contradicted something he
+/// had already done — and those are fixed at the source rather than muted. This
+/// is for what is left: advice that stays true until he acts on it, and is
+/// answered by having read it once.
+///
+/// Dismissed for good rather than for the session, because the alternative is
+/// the same sentence again tomorrow, which is where a warning teaches people to
+/// stop reading warnings.
+///
+/// Returns **true if the operator dismissed it just now**, so the caller can
+/// persist; `chrome` is a widget module and has no business writing files.
+pub fn advisory(
+    ui: &mut egui::Ui,
+    settings: &mut sdroxide_types::UiSettings,
+    key: &str,
+    text: &str,
+    colour: Color32,
+) -> bool {
+    if !advisory_shown(settings, key) {
+        return false;
+    }
+    // Not a registered advisory: plain text, no ✕. Silence by omission is the
+    // safe direction — a call site that has not been classified keeps nagging
+    // rather than quietly muting itself.
+    let dismissible = sdroxide_types::UiSettings::advisory_bit(key).is_some();
+    let mut dismiss = false;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(egui::RichText::new(text).color(colour).size(11.0));
+        if !dismissible {
+            return;
+        }
+        dismiss = ui
+            .small_button("✕")
+            .on_hover_text(
+                "Hide this message for good. Nothing about your settings changes, and the \
+                 advice is in the manual.",
+            )
+            .clicked();
+    });
+    if dismiss {
+        settings.dismiss_advisory(key);
+    }
+    dismiss
+}
+
 pub fn angled_frame<R>(ui: &mut Ui, accent: Color32, add: impl FnOnce(&mut Ui) -> R) -> R {
     // A Frame measures its content with UNBOUNDED width to auto-size, and
     // `horizontal_wrapped` inside that pass never wraps (nothing to wrap
