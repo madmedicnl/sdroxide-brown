@@ -635,7 +635,12 @@ impl SdroxideApp {
         let cfg = &mut self.digi_cfg_edit;
         let mut changed = false;
         ui.add_space(6.0);
-        ui.horizontal(|ui| {
+        // Wrapped, not `horizontal`: this row sits inside the panel header, whose
+        // width is the column it is laid out in — an unwrapped row here grows the
+        // panel to whatever its content wants, which is issue #643: Olivia's caveat
+        // line alone is about a thousand points long, so the panel painted off the
+        // window and over the dock.
+        ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
             match mode {
                 Mode::Rtty | Mode::RttyFm => {

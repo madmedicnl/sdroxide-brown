@@ -2676,18 +2676,67 @@ mod tests {
         .drop_without_applying_deltas();
     }
 
-    /// #643: a **narrow window with no dock**, which is what the operator's
-    /// screenshots actually show — the panel laid out wider than the window and
-    /// cut on both sides. The dock is requested but has no room, so the column
-    /// is the whole window; anything past it is a child that will not shrink.
+    /// Drive one desktop frame with the band dock requested, and hand back its
+    /// shape rectangles — (rect, drawn) where drawn means an opaque fill or a
+    /// stroke, i.e. ink an operator can see — plus the dock column
+    /// the frame resolved to and the room the dock asked for. Shared by the
+    /// #643 probe and the regression test beside it.
+    fn panel_edge_frame(
+        mode: sdroxide_types::Mode,
+        w: f32,
+    ) -> (Vec<(egui::Rect, bool)>, Option<egui::Rect>, Option<f32>) {
+        let dir = std::env::temp_dir().join(format!("sdroxide-panel-edge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.band_docked = true;
+        app.band_dock_visible = true;
+        app.state.rx[0].mode = mode;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(w, 1080.0),
+            )),
+            ..Default::default()
+        };
+        let full = ctx.run_ui(input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest());
+        });
+        let rows: Vec<(egui::Rect, bool)> = full
+            .shapes
+            .iter()
+            .filter_map(|cs| match &cs.shape {
+                egui::Shape::Rect(r) if r.rect.width() > 20.0 && r.rect.height() > 20.0 => {
+                    Some((r.rect, r.fill.is_opaque() || r.stroke.width > 0.0))
+                }
+                _ => None,
+            })
+            .collect();
+        let dock_room = app.band_dock_room;
+        // The dock is the ink column hugging the window's right edge; the top
+        // bar spans the full width but starts at 0, so the half-width floor
+        // tells the two apart.
+        let dock = rows
+            .iter()
+            .filter(|(r, _)| r.max.x >= w - 0.5 && r.min.x > w * 0.4 && r.height() > 40.0)
+            .map(|(r, _)| *r)
+            .min_by(|a, b| a.min.x.partial_cmp(&b.min.x).unwrap_or(std::cmp::Ordering::Equal));
+        full.drop_without_applying_deltas();
+        (rows, dock, dock_room)
+    }
+
+    /// #643: drive one frame at a chosen window width (env `DOCK_W`, default
+    /// 960) and mode (env `MODE`, by its `Debug` name) and print the largest
+    /// shapes, flagging any ink past the window's right edge or across the
+    /// dock's left border.
     #[test]
     fn probe_narrow_window_overflow() {
         use crate::multi::frame_test_lock;
         let _guard = frame_test_lock();
-        let dir = std::env::temp_dir().join(format!("sdroxide-narrow-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
 
         let w: f32 = std::env::var("DOCK_W").ok().and_then(|v| v.parse().ok()).unwrap_or(960.0);
         // Any mode, by its `Debug` name, so a report naming a mode can be put
@@ -2702,33 +2751,27 @@ mod tests {
                     .copied()
             })
             .unwrap_or(sdroxide_types::Mode::Ft8);
-        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
-        let ctx = egui::Context::default();
-        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
-        app.band_docked = true;
-        app.band_dock_visible = true;
-        app.state.rx[0].mode = mode;
-        let size = egui::vec2(w, 1080.0);
-        let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-            ..Default::default()
-        };
-        let full = ctx.run_ui(input, |ui| {
-            app.ui(ui, &mut eframe::Frame::_new_kittest());
-        });
-        let mut rows: Vec<(egui::Rect, bool)> = full
-            .shapes
-            .iter()
-            .filter_map(|cs| match &cs.shape {
-                egui::Shape::Rect(r) if r.rect.width() > 20.0 && r.rect.height() > 20.0 => {
-                    Some((r.rect, r.fill.is_opaque()))
-                }
-                _ => None,
-            })
-            .collect();
+        let (mut rows, dock, dock_room) = panel_edge_frame(mode, w);
         rows.sort_by(|a, b| b.0.max.x.partial_cmp(&a.0.max.x).unwrap_or(std::cmp::Ordering::Equal));
-        println!("--- #643 probe: {mode:?} at {w:.0} pt, dock_room={:?}", app.band_dock_room);
+        println!("--- #643 probe: {mode:?} at {w:.0} pt, dock_room={dock_room:?}");
+        if let Some(d) = dock {
+            println!(
+                "  dock x {:7.1}..{:7.1} y {:7.1}..{:7.1}",
+                d.min.x, d.max.x, d.min.y, d.max.y
+            );
+        }
         for (r, ink) in rows.iter().take(10) {
+            let past_window = r.max.x > w + 1.0 || r.min.x < -1.0;
+            let crosses_dock = dock.is_some_and(|d| {
+                r.min.y < d.max.y && r.max.y > d.min.y && r.max.x > d.min.x + 0.5 && r.min.x < d.min.x - 0.5
+            });
+            let mark = if past_window {
+                "   <-- PAST THE WINDOW"
+            } else if crosses_dock {
+                "   <-- PAST THE DOCK"
+            } else {
+                ""
+            };
             println!(
                 "  {} x {:7.1}..{:7.1} (w {:6.1})  y {:7.1}..{:7.1}{}",
                 if *ink { "ink" } else { "clear" },
@@ -2737,10 +2780,55 @@ mod tests {
                 r.width(),
                 r.min.y,
                 r.max.y,
-                if r.max.x > w + 1.0 || r.min.x < -1.0 { "   <-- PAST THE WINDOW" } else { "" }
+                mark
             );
         }
-        full.drop_without_applying_deltas();
+    }
+
+    /// #643: the operating panel must stop at **both** edges of its column —
+    /// the window's right border and the docked Bands & Modes panel's left
+    /// border. The dock is drawn first and the panel after it, so ink past the
+    /// dock's edge is painted over it; that is the fault the operator's
+    /// screenshots show. Ink past the window edge is Olivia's (810 pt over at
+    /// 960). Only x is asserted: the y-overflow past the window's bottom edge
+    /// predates the report, is clipped by the toolkit, and is not this bug.
+    #[test]
+    fn the_operating_panel_stays_inside_its_column() {
+        use crate::multi::frame_test_lock;
+        let _guard = frame_test_lock();
+
+        for w in [960.0f32, 1280.0, 1920.0] {
+            for mode in [
+                sdroxide_types::Mode::Sstv,
+                sdroxide_types::Mode::SstvFm,
+                sdroxide_types::Mode::Rifp,
+                sdroxide_types::Mode::Olivia,
+                sdroxide_types::Mode::Ft8,
+            ] {
+                let (rows, dock, _) = panel_edge_frame(mode, w);
+                let ink: Vec<egui::Rect> =
+                    rows.iter().filter(|(_, drawn)| *drawn).map(|(r, _)| *r).collect();
+                for r in &ink {
+                    assert!(
+                        r.max.x <= w + 0.5 && r.min.x >= -0.5,
+                        "{mode:?} at {w:.0} pt: ink x {}..{} runs past the window",
+                        r.min.x,
+                        r.max.x
+                    );
+                }
+                if let Some(d) = dock {
+                    for r in &ink {
+                        let y_overlaps = r.min.y < d.max.y && r.max.y > d.min.y;
+                        if y_overlaps && r.max.x > d.min.x + 0.5 && r.min.x < d.min.x - 0.5 {
+                            panic!(
+                                "{mode:?} at {w:.0} pt: ink x {}..{} y {}..{} crosses the dock edge at {}",
+                                r.min.x, r.max.x, r.min.y, r.max.y, d.min.x
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Reproduce Kevin's phone crash report (discussion #9) at the geometry
