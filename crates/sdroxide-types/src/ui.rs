@@ -783,6 +783,15 @@ pub struct UiSettings {
     /// acknowledgement of the risk first. Fork-only.
     #[serde(default)]
     pub client_share_bindings: bool,
+    /// This client has already been **asked** about a profile's bindings and
+    /// said no. Without it the button reading "Keep mine (and stop asking)"
+    /// was the only one of the two answers that survived nothing: the opt-in
+    /// is persisted on *yes*, so a decline left the offer to come back next
+    /// session and on every radio of the station. Fork-only, and deliberately
+    /// client-local like the flag above, so a decline here never declines it on
+    /// another machine.
+    #[serde(default)]
+    pub client_bindings_declined: bool,
 }
 
 /// Default for [`UiSettings::spot_colors`] — every kind on its stock tint.
@@ -890,6 +899,7 @@ impl Default for UiSettings {
             start_swl: false,
             solar3d_window: None,
             client_share_bindings: false,
+            client_bindings_declined: false,
         }
     }
 }

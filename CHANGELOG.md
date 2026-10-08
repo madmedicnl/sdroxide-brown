@@ -13,6 +13,21 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+- **"Keep mine (and stop asking)" now actually stops asking.** The bindings
+  prompt offered *Use this profile's bindings* and *Keep mine (and stop
+  asking)*, and only the first one persisted anything — so the second was not an
+  answer, and the prompt came back on the next session and on every other radio
+  of the station. Reported as *"completely useless, serves no purpose, displays
+  all the time, already reported"* (#18). The decline is now persisted per
+  client, separately from the opt-in so that saying no is never read as yes.
+- **The DAB width warning no longer advises something that cannot work.** It
+  ended *"widen the receiver's window if it has the setting"* on every front
+  end, because the DAB window target is capped and `rate_for` takes the rung
+  nearest it — so **no** device rate reaches the margin, and the warning kept
+  showing after the rate had been raised (#18). It now asks whether widening
+  helps, and where it cannot it says the ceiling is the receiver's rather than
+  handing out advice that changes nothing.
+
 ### Changed
 
 - **The sign-in card asks one question: REMEMBER ME.** It offered **12 HOURS**,

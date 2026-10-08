@@ -1687,7 +1687,10 @@ impl SdroxideApp {
                         // dropped this operator's screen settings can empty.
                         // Asking again is the correct response to that. Silence
                         // never was.
-                        if !self.bindings_offer_asked {
+                        if bindings_should_offer(
+                            self.bindings_offer_asked,
+                            self.ui_settings.client_bindings_declined,
+                        ) {
                             self.bindings_pending =
                                 Some(BindingsOffer { profile: profile.clone(), bindings });
                             self.bindings_offer_asked = true;
@@ -2558,6 +2561,20 @@ pub(in crate::app) struct BindingsOffer {
     pub bindings: sdroxide_types::InputSettings,
 }
 
+/// Should this client be offered a profile's keyboard bindings?
+///
+/// Two different answers have to end the question for good, and only one used
+/// to: the opt-in persists when the operator says *yes*, so saying *no*
+/// persisted nothing and the offer came back on the next session and on every
+/// other radio of the station — the fork's #18, "displays all the time, already
+/// reported". Both are booleans now, so both answers stick.
+///
+/// Deliberately not a function of anything the *server* sends: this is a
+/// decision made on a machine, like the opt-in beside it.
+fn bindings_should_offer(already_asked_this_session: bool, declined: bool) -> bool {
+    !already_asked_this_session && !declined
+}
+
 impl SdroxideApp {
     /// The profile carries control bindings and this client has not said it
     /// wants them. Ask, once, and act on the answer.
@@ -2628,6 +2645,15 @@ impl SdroxideApp {
                 Some("using the keyboard bindings stored for this profile".into());
             self.bindings_pending = None;
         } else if decline {
+            // **"and stop asking" has to mean it.** Dropping the offer is not
+            // an answer: the yes branch persists the opt-in, so the no branch
+            // persisting nothing meant this offer came back on the next session
+            // and on every other radio of the station — which is the report on
+            // the fork's #18, "displays all the time, already reported".
+            self.ui_settings.client_bindings_declined = true;
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+            self.client_settings_status =
+                Some("keeping this device\'s own keyboard bindings; not asked again".into());
             self.bindings_pending = None;
         }
     }
@@ -2929,5 +2955,33 @@ mod tests {
         let (wf, panel) = digi_split(300.0, 21.0, 0.2, 34.0);
         assert!(panel <= 0.6 * 279.0 + 0.01, "floor {panel} ate the waterfall");
         assert!(wf > 0.0);
+    }
+}
+
+#[cfg(test)]
+mod bindings_offer_tests {
+    use super::bindings_should_offer;
+
+    /// The button said "and stop asking", so a no has to end it — for the rest
+    /// of the session *and* every session after, and on every radio of the
+    /// station. Before this, only the yes persisted.
+    #[test]
+    fn saying_no_stops_the_asking_for_good() {
+        assert!(bindings_should_offer(false, false), "a fresh client is asked once");
+        // Asked this session: not again.
+        assert!(!bindings_should_offer(true, false), "asked already this session");
+        // Said no: not on any later session, which is the half that was missing.
+        assert!(!bindings_should_offer(false, true), "declined, so never asked again");
+        assert!(!bindings_should_offer(true, true), "and still not on this one");
+    }
+
+    /// Saying no is not saying yes. A declined client must keep its own keys,
+    /// which is the whole reason the question exists, so the two must stay
+    /// separate flags rather than one tri-state that is easy to read backwards.
+    #[test]
+    fn declining_is_not_opting_in() {
+        let s = sdroxide_types::UiSettings::default();
+        assert!(!s.client_share_bindings, "the opt-in is off by default");
+        assert!(!s.client_bindings_declined, "and so is having been asked");
     }
 }

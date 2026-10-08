@@ -5252,6 +5252,58 @@ impl Drop for Engine {
     }
 }
 
+/// The rate the DAB window actually lands on, for a receiver running at
+/// `sample_rate`. The target is capped at `DAB_SAMPLE_RATE` — the width an
+/// ensemble needs — so this is what decides the window, not the device rate.
+fn dab_window_rate(sample_rate: f64) -> f64 {
+    let target = (sdroxide_dab::DAB_SAMPLE_RATE as f64).min(sample_rate);
+    Ddc::rate_for(sample_rate, target)
+}
+
+/// Would raising the receiver's rate give the DAB window the margin it wants?
+///
+/// `Ddc::rate_for` picks the rung *nearest* the target, and the target is
+/// capped, so on a front end whose rungs never reach `DAB_GOOD_RATE_HZ` the
+/// answer is **no at every setting**. That is the case the fork's #18 reported
+/// as a false alarm: the message kept telling the operator to widen after they
+/// had. Answering it here — rather than assuming widening helps — is what lets
+/// the warning be honest either way.
+fn dab_widening_helps(sample_rate: f64) -> bool {
+    const TRIALS: &[f64] = &[4_000_000.0, 6_000_000.0, 8_000_000.0, 10_000_000.0, 16_000_000.0];
+    let target = (sdroxide_dab::DAB_SAMPLE_RATE as f64).min(sample_rate);
+    TRIALS.iter().any(|cand| Ddc::rate_for(*cand, target) >= sdroxide_dab::DAB_GOOD_RATE_HZ)
+}
+
+/// The warning itself, for a receiver running at `sample_rate`. `None` when
+/// there is nothing to say.
+///
+/// Split out as a pure function so the *wording* can be asserted, which is the
+/// half the report was about: the old text always ended "widen the receiver's
+/// window if it has the setting", on front ends where widening does nothing.
+fn dab_degraded_message(sample_rate: f64) -> Option<String> {
+    let rate = dab_window_rate(sample_rate);
+    if rate >= sdroxide_dab::DAB_GOOD_RATE_HZ {
+        return None;
+    }
+    let good = sdroxide_dab::DAB_GOOD_RATE_HZ / 1e6;
+    let rate_msps = rate / 1e6;
+    if dab_widening_helps(sample_rate) {
+        Some(format!(
+            "this stream is {rate_msps:.3} Msps; at the bare width a DAB ensemble needs, \
+             the front end is at its floor and may drop samples, which stops OFDM sync. \
+             {good:.2} Msps or more gives it margin — widen the receiver's window if it \
+             has the setting."
+        ))
+    } else {
+        Some(format!(
+            "this stream is {rate_msps:.3} Msps and DAB wants {good:.2} Msps or more for \
+             margin. This front end's rate ladder cannot reach it at any setting, so \
+             widening will not change this — it is a property of the receiver, not \
+             something left unconfigured."
+        ))
+    }
+}
+
 impl Engine {
     fn run_audio(&mut self, iq: &[Complex32]) {
         let want_rec_main = self.recorder.is_some() && !self.caps.rx_audio_external;
@@ -11818,17 +11870,7 @@ impl Engine {
         if self.dab_unavailable().is_some() {
             return None;
         }
-        let rate = Ddc::rate_for(self.state.sample_rate, self.dab_target_rate_hz());
-        if rate >= sdroxide_dab::DAB_GOOD_RATE_HZ {
-            return None;
-        }
-        Some(format!(
-            "this stream is {:.3} Msps; at the bare width a DAB ensemble needs, the front \
-             end is at its floor and may drop samples, which stops OFDM sync. {:.1} Msps or \
-             more gives it margin — widen the receiver's window if it has the setting.",
-            rate / 1e6,
-            sdroxide_dab::DAB_GOOD_RATE_HZ / 1e6
-        ))
+        dab_degraded_message(self.state.sample_rate)
     }
 
     /// A down-converter for the DAB window, already mixed onto it, and the
@@ -18702,6 +18744,41 @@ mod rig_mode_class_tests {
         }
         // SSTV's FM twin has no sideband to follow the band with.
         assert_eq!(expected_rig_class(Mode::SstvFm, false, 7_171_000.0), rig_mode_class(Mode::Nfm));
+    }
+
+    /// Fork #18: the DAB warning advised widening the receiver even on a front
+    /// end where **no** setting widens the DAB window, so it kept telling the
+    /// operator to change something that could not move the number. Kevin
+    /// reported it still showing after raising the rate to 5 Msps.
+    ///
+    /// The window target is capped at `DAB_SAMPLE_RATE` and `rate_for` takes the
+    /// rung nearest that target, so the window never rises above the cap and
+    /// `DAB_GOOD_RATE_HZ` is unreachable at *any* device rate. If the arithmetic
+    /// assertions below ever fail, a front end has become able to widen the
+    /// window — and the wording is what would then have to change.
+    #[test]
+    fn dab_widening_is_only_advised_where_it_widens() {
+        // The reported setup: 5 Msps, window lands at 2.5.
+        assert_eq!(dab_window_rate(5_000_000.0), 2_500_000.0, "the window the report saw");
+
+        // The reported sentence, asserted on the message itself — this is the
+        // half that fails against the old wording.
+        let said = dab_degraded_message(5_000_000.0).expect("2.5 Msps is below the margin");
+        assert!(
+            !said.contains("widen the receiver"),
+            "still advises widening where no setting can widen it: {said}"
+        );
+        assert!(said.contains("cannot reach it at any setting"), "{said}");
+
+        // Same answer across the range of front ends, which is why this was a
+        // permanent nag rather than one mis-set control.
+        for rate in [1_000_000.0, 1_536_000.0, 2_000_000.0, 2_500_000.0, 3_000_000.0] {
+            assert!(!dab_widening_helps(rate), "{rate:.0} sps: claimed widening would help");
+            assert!(
+                dab_window_rate(rate) < sdroxide_dab::DAB_GOOD_RATE_HZ,
+                "{rate:.0} sps: the margin became reachable, re-check the wording"
+            );
+        }
     }
 }
 
