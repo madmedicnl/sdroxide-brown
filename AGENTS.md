@@ -24,6 +24,44 @@
 > ALE-mode build; the experimental-release recipe below is still the one to use
 > when a build needs to name it (the older pre-release tag has been removed).
 
+## Session 2026-10-08, later: PRs merged, DAB to the radio tab, eQSL QTH, release resilience
+
+**The open PRs are merged and the worktrees are gone.** #22 (SSTV KEEP DIAL),
+#23 (browser `remember` cookie — the wasm build), #24 (ADS-B noise floor);
+pr22/pr24 worktrees and their target dirs removed. Versioning quirks fixed in
+`348a2f7f` (the register is **v196** after #22, not the v189 the notes had
+said).
+
+**Kevin's DAB advice moved to the radio tab** (`5bef39e7`): the width warning
+left the decoder panel and now sits beside the sample-rate control in yellow,
+dismissible; the arithmetic (`dab_window_rate` / `dab_widening_helps`) and the
+DAB rate constants live in `sdroxide-types` so the browser client can reach
+them — **the first cut called `sdroxide-dsp` from the UI and broke the wasm
+build**, which the wasm check caught. `PROTO_VERSION` 195 → 196.
+
+**eQSL QTH nickname (upstream #647) — built, live-verified, offered upstream as
+#648.** `NetworkConfig::eqsl_qth_nickname` appended last (`PROTO_VERSION` 196 →
+197), a Settings → Uploads → eQSL box, and the nickname sent on the **upload,
+the login Test *and* the confirmation download** — eQSL identifies a multi-QTH
+account by callsign *and* nickname, so a *correct* password with the wrong or
+absent nickname is answered "No such Username/Password found" on the download
+too (the fork first shipped only the upload; the operator's Test-button hint
+found the other half). Verified live on the operator's own multi-profile
+account: **"works flawless"**. Fork `aa939ba4` + `f4b9d84b`; upstream #648 is
+the same change, so one drops out when the other lands.
+
+**The release no longer stops on one platform** (`ec010201`): `create release`
+runs with `!cancelled()` and the web-dist download is tolerant, so a failed
+build job — the macOS-ARM runner has done it three or four times — still
+publishes the platforms that built. The run ends red and the asset is visibly
+missing. `SDR Oxide Brown nightly 2026-10-08` is out; `2.0.2_brown` is built
+and installed locally.
+
+**Upstream is alive again** (a burst on 2026-10-08, 14:1x–14:4x): #600, #601,
+#615, #622, #635, #646, and **#640 fixed by the maintainer** — which supersedes
+our own **#645** (the same issue). #645 has no comments and is now redundant;
+close it rather than re-review it. **#648** (eQSL) is open.
+
 ## Session 2026-10-08, night: **#643 FIXED**, and the fork's browser build is broken
 
 **#643 is done, at the cause — commits `d7ebc0ec` (fix + probe + regression
