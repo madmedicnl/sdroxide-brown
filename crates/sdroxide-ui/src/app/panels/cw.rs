@@ -378,6 +378,15 @@ impl SdroxideApp {
         // contacts the software keyer turns into elements. Either way the
         // key-down becomes `CwKey` edges here and the controller keys the rig.
         let straight_chords = self.input.cw_straight_chords();
+        // A MIDI note bound to the straight key (#625). Unlike a keyboard key
+        // it cannot be a typist's, so its first press engages the mode itself,
+        // as the KEY chip below would.
+        let midi_down = self.input.cw_straight_midi_held();
+        if midi_down && !self.cw_straight && tx_ok && hand_key_ok && self.focused {
+            cmds.push(Command::DigiAbortTx);
+            cmds.push(Command::CwStraight(true));
+            self.cw_straight = true;
+        }
         let use_usb = self.digi_cfg_edit.cw_key_source == sdroxide_types::CwKeySource::Usb
             && self.digi_cfg_edit.cw_key_tx;
         #[cfg(all(not(target_arch = "wasm32"), target_os = "linux"))]
@@ -420,6 +429,9 @@ impl SdroxideApp {
                             && !ui.ctx().egui_wants_keyboard_input();
                         free && ui.input(|i| straight_key_held(i, &straight_chords))
                     };
+                    // A MIDI note is the operator's wherever the keyboard focus
+                    // sits, so it keys on top of either source.
+                    let down = down || midi_down;
                     if down != self.cw_key_down {
                         self.cw_key_down = down;
                         cmds.push(Command::CwKey(down));
