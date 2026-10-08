@@ -5257,17 +5257,17 @@ impl Drop for Engine {
 }
 
 /// The rate the DAB window actually lands on, for a receiver running at
-/// `sample_rate`. The arithmetic lives in `sdroxide-dsp` so the engine's
+/// `sample_rate`. The arithmetic lives in `sdroxide-types` so the engine's
 /// warning and the radio tab's advice read one ladder — see
-/// [`sdroxide_dsp::dab_window_rate`].
+/// [`sdroxide_types::dab_window_rate`].
 fn dab_window_rate(sample_rate: f64) -> f64 {
-    sdroxide_dsp::dab_window_rate(sample_rate)
+    sdroxide_types::dab_window_rate(sample_rate)
 }
 
 /// Would raising the receiver's rate give the DAB window the margin it wants?
-/// Delegates to [`sdroxide_dsp::dab_widening_helps`], shared with the UI.
+/// Delegates to [`sdroxide_types::dab_widening_helps`], shared with the UI.
 fn dab_widening_helps(sample_rate: f64) -> bool {
-    sdroxide_dsp::dab_widening_helps(sample_rate)
+    sdroxide_types::dab_widening_helps(sample_rate)
 }
 
 /// The warning itself, for a receiver running at `sample_rate`. `None` when

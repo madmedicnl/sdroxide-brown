@@ -4649,13 +4649,13 @@ impl SdroxideApp {
 /// belongs to the receiver, rather than handing out advice that changes
 /// nothing. Split out so the wording can be asserted.
 fn dab_rate_advice(sample_rate: f64) -> Option<String> {
-    let rate = sdroxide_dsp::dab_window_rate(sample_rate);
+    let rate = sdroxide_types::dab_window_rate(sample_rate);
     if rate >= sdroxide_types::DAB_GOOD_RATE_HZ {
         return None;
     }
     let good = sdroxide_types::DAB_GOOD_RATE_HZ / 1e6;
     let here = rate / 1e6;
-    Some(if sdroxide_dsp::dab_widening_helps(sample_rate) {
+    Some(if sdroxide_types::dab_widening_helps(sample_rate) {
         format!(
             "DAB / DAB+ wants a {good:.2} Msps lane for margin and this receiver gives \
              {here:.3} Msps. Raise the sample rate above — a wider front end is the only \

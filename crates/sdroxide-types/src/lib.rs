@@ -146,7 +146,7 @@ pub use command::{Command, KNOWN_CALLS_REPLY_MAX, KnownCallsReply};
 pub use contacts::FsqContact;
 pub use dab::{
     DAB_BAND_III, DAB_BANDWIDTH_HZ, DAB_GOOD_RATE_HZ, DAB_SAMPLE_RATE, DabService, DabSettings,
-    DabStatus, dab_channel_at,
+    DabStatus, dab_channel_at, dab_widening_helps, dab_window_rate, ddc_rate_for,
 };
 pub use contest::{
     ContestId, ContestScore, ContestSession, ContestSpec, Exchange, Multiplier, cabrillo_contest,

@@ -184,9 +184,60 @@ pub struct DabStatus {
     pub degraded: Option<String>,
 }
 
+/// The rate a digital down-converter's decimation ladder settles on, without
+/// building one — the pure arithmetic behind `sdroxide_dsp::Ddc::rate_for`,
+/// which calls this so the two are one.
+///
+/// It lives here, in a wasm-safe crate, because deciding whether a front end
+/// can serve DAB is arithmetic the **browser client** runs, and the DSP crate
+/// is native-only. `sdroxide-dsp` depends on this crate, so `Ddc` uses it too.
+pub fn ddc_rate_for(in_rate: f64, target_rate: f64) -> f64 {
+    let mut rate = in_rate;
+    while rate > target_rate * 8.0 {
+        rate /= 2.0;
+    }
+    rate / (rate / target_rate).round().max(1.0)
+}
+
+/// The rate a DAB lane's ladder actually lands on, for a receiver running at
+/// `device_rate`.
+///
+/// The window target is capped at [`DAB_SAMPLE_RATE`] — the width an ensemble
+/// needs — so what decides the lane is the ladder, not the device rate: a front
+/// end can be opened wider than the target and still hand the lane no more than
+/// [`ddc_rate_for`] picks.
+pub fn dab_window_rate(device_rate: f64) -> f64 {
+    let target = f64::from(DAB_SAMPLE_RATE).min(device_rate);
+    ddc_rate_for(device_rate, target)
+}
+
+/// Would raising the receiver's rate give the DAB lane the margin it wants?
+///
+/// [`ddc_rate_for`] picks the rung *nearest* the target and the target is
+/// capped, so on a front end whose ladder never reaches [`DAB_GOOD_RATE_HZ`]
+/// the answer is **no at every setting** — the case that made the old warning
+/// tell an operator to widen after they already had. Asked rather than assumed,
+/// so the advice can say the ceiling is the receiver's where it is.
+pub fn dab_widening_helps(device_rate: f64) -> bool {
+    const TRIALS: &[f64] = &[4_000_000.0, 6_000_000.0, 8_000_000.0, 10_000_000.0, 16_000_000.0];
+    let target = f64::from(DAB_SAMPLE_RATE).min(device_rate);
+    TRIALS.iter().any(|c| ddc_rate_for(*c, target) >= DAB_GOOD_RATE_HZ)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The report on the fork's #18: 5 Msps on an SDRplay lands the lane at
+    /// 2.5, and no setting widens it — the ladder is capped by the target.
+    #[test]
+    fn the_dab_lane_follows_the_ladder_not_the_device_rate() {
+        assert_eq!(dab_window_rate(5_000_000.0), 2_500_000.0, "the window the report saw");
+        for rate in [1_000_000.0, 2_048_000.0, 2_400_000.0, 5_000_000.0, 16_000_000.0] {
+            assert!(!dab_widening_helps(rate), "{rate:.0} sps: claimed widening would help");
+            assert!(dab_window_rate(rate) < DAB_GOOD_RATE_HZ, "{rate:.0} sps: margin reachable");
+        }
+    }
 
     #[test]
     fn the_channel_table_covers_band_iii() {
