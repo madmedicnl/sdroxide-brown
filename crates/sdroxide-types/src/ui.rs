@@ -522,6 +522,26 @@ pub struct Solar3dWindow {
     pub pos: Option<[f32; 2]>,
 }
 
+/// A module pulled out into its **own OS window**: where it last was, so
+/// reopening it — or the next start — puts it back rather than at a built-in
+/// size. The first user is the detached panadapter
+/// ([`UiSettings::panadapter_window`](crate::ui::UiSettings::panadapter_window));
+/// the type is kept general so the next detachable module reuses it.
+///
+/// The same shape and the same Wayland caveat as [`Solar3dWindow`]: a client is
+/// given no absolute window position, so `pos` is `None` there and the
+/// compositor places the window. The **app-id** the window carries
+/// (`sdroxide-panadapter`) is what a compositor rule matches on to float it and
+/// pin it to a monitor — see `UNDOCKED-HANDOVER.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct DetachedWindow {
+    /// Inner (drawing-area) size in points.
+    pub size: [f32; 2],
+    /// Outer (top-left) position in points; `None` on Wayland.
+    #[serde(default)]
+    pub pos: Option<[f32; 2]>,
+}
+
 /// User display preferences. All have defaults so a missing `[ui]` table loads.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -816,6 +836,21 @@ pub struct UiSettings {
     /// it leaves a dead control behind the moment the condition clears.
     #[serde(default)]
     pub dismissed_advisories: u64,
+    /// Draw the panadapter (spectrum + waterfall) in its **own OS window**
+    /// rather than the main one — the first slice of undocked mode
+    /// (`UNDOCKED-HANDOVER.md`). The main window hands that space back to the
+    /// operating panel and the decoders.
+    ///
+    /// **Native only.** The browser has no second window and keeps the
+    /// panadapter in-window, so the flag is ignored there. Machine-local and
+    /// deliberately not on the wire (`ClientScreen`): where a window sits is a
+    /// property of this screen, as [`Self::solar3d_window`]'s note says.
+    #[serde(default)]
+    pub panadapter_detached: bool,
+    /// Where that detached panadapter window last was. `None` until it has been
+    /// open once. See [`DetachedWindow`].
+    #[serde(default)]
+    pub panadapter_window: Option<DetachedWindow>,
 }
 
 /// Default for [`UiSettings::spot_colors`] — every kind on its stock tint.
@@ -963,6 +998,8 @@ impl Default for UiSettings {
             client_share_bindings: false,
             client_bindings_declined: false,
             dismissed_advisories: 0,
+            panadapter_detached: false,
+            panadapter_window: None,
         }
     }
 }

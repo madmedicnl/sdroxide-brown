@@ -93,12 +93,14 @@ WMs; carrying the detached geometry on the wire (decide when it matters).
 The single most-requested case, and the one that proves the pattern. Do not
 build a framework first.
 
-1. **State.** Add `UiSettings::panadapter_window: Option<DetachedWindow>` where
-   `DetachedWindow { size: [f32; 2], pos: Option<[f32; 2]> }` — appended last,
-   mirroring `Solar3dWindow`, and reused later for other modules. Plus a
-   `panadapter_detached: bool` (on `UiSettings` if it should persist/travel, on
-   the app if it is machine-local). **Appending to `UiSettings`/`ClientScreen`
-   is a `PROTO_VERSION` bump.**
+1. **State.** ✅ **Done (2026-10-08).** `DetachedWindow { size: [f32; 2], pos:
+   Option<[f32; 2]> }` and `UiSettings::{panadapter_detached, panadapter_window}`
+   are in `crates/sdroxide-types/src/ui.rs`, appended last, mirroring
+   `Solar3dWindow`. **No `PROTO_VERSION` bump**: `UiSettings` is local
+   `config.toml` and is *never* on the wire (it is `ClientScreen` that is — see
+   its own doc). A bump would only be owed if the flag were carried in
+   `ClientScreen` instead, which is the "does the detached geometry travel?"
+   decision left to later. Machine-local is the default and what landed.
 2. **The toggle.** A `DETACH` action in the panadapter's DISP row, with hover
    text saying where the window goes and the Wayland caveat. Turning it off (or
    closing the window — handle `ViewportEvent::Close`) re-attaches.
@@ -135,10 +137,12 @@ arithmetic (`waterfall_h == 0`).
   `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui`. The
   detach must not pull a native-only path into the browser build — the DAB
   radio-tab move (`5bef39e7`) broke exactly this and the check caught it.
-- **Wire:** `UiSettings` and `ClientScreen` ride the wire whole; an appended
-  field or a new `LayoutMode` variant is a `PROTO_VERSION` bump plus a register
-  line in `crates/sdroxide-proto/src/lib.rs`. `LayoutMode` is appended **before
-  `Auto`**.
+- **Wire:** only **`ClientScreen`** rides the wire, whole — `UiSettings` does
+  **not** (it is local `config.toml`; putting it on the wire is the trap its own
+  doc warns about). So a field added to `UiSettings` needs no bump; a
+  `ClientScreen` field or a new `LayoutMode` variant does — a `PROTO_VERSION`
+  bump plus a register line in `crates/sdroxide-proto/src/lib.rs`. `LayoutMode`
+  is appended **before `Auto`**.
 - **A new `LayoutMode` variant** is also a `ClientScreen` change and is
   validated by the "catch-all last" rule — read `Auto`'s own doc first.
 - **Multi-radio is the risk area.** Reuse the owner-cap/`keep_alive` model from
