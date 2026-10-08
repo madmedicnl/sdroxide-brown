@@ -13634,6 +13634,14 @@ impl Engine {
         if !(mode.is_slotted() || mode.is_wspr() || mode.is_sstv() || mode == Mode::Olivia) {
             return None;
         }
+        // SSTV's picture can be worked anywhere it is heard, so the operator may
+        // switch the rescue off (`DigiConfig::sstv_keep_dial`): choosing SSTV
+        // then leaves the dial where they tuned, and the published frequencies
+        // stay in the panel's picker. The slotted modes have no such switch — a
+        // dial off their frequency decodes nothing at all.
+        if mode.is_sstv() && self.digi_config.sstv_keep_dial {
+            return None;
+        }
         let dial = self.state.active_freq_hz();
         // **A dial already in the mode's own activity is never moved** — and
         // "in the mode's activity" is not "within a hertz of a published

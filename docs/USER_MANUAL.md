@@ -4569,8 +4569,16 @@ mode" lands you on the pictures rather than wherever the last mode left you. On
 (channel 23) and 27.375 (channel 37) as the in-band alternatives. This is the
 same rule the slotted digital modes and WSPR have always used, extended to SSTV
 and SSTV-FM; it only ever rescues a dial that is nowhere useful, because **a dial
-already sitting on one of the mode's own frequencies is never moved**. If you had
-deliberately tuned somewhere, you stay there.
+already sitting on one of the mode's own frequencies is never moved** — nor one
+within 3 kHz of it, or one you saved yourself with **⇵ FREQ** below.
+
+**To decode SSTV anywhere, light KEEP DIAL** beside the **⇵ FREQ** chip. With it
+on, choosing SSTV leaves the dial exactly where you tuned — a local net, a picture
+heard somewhere off the list — and the published frequencies stay one click away
+in the picker. It is remembered, and it covers SSTV and SSTV-FM only: FT8 and the
+other slotted modes still move, because off their frequency they decode nothing.
+Without it, the same is reached by choosing SSTV first and tuning afterwards — a
+dial moved once the mode is chosen is never moved back.
 
 The **⇵ FREQ** chip at the top left of the panel is where that frequency list
 lives: it shows the calling frequency and the alternates, tuning the dial when
