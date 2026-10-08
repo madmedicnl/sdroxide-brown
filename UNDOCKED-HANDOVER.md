@@ -34,7 +34,7 @@ repeatedly for the waterfall detached, and the fork has the mechanism already.
   mode is appended **before `Auto`**, which must stay last because it carries
   `#[serde(other)]`.
 
-## The known caveat, stated up front: Wayland
+## The known caveat, stated up front: Wayland, and **Niri**
 
 A Wayland client **cannot set its own window position**. `viewport().inner_rect`
 and `outer_rect` are `None` there (the solar3d notes record this) — only the
@@ -42,10 +42,41 @@ size comes back. So on Wayland "put it on monitor 2" is **best-effort**: size is
 exact, placement is the compositor's. X11, Windows and macOS return real
 geometry and honour a position. Say this in the UI copy rather than pretending.
 
-And a **tiling** compositor tilts a new toplevel instead of floating it. The
-operator wants it floating in tiling WMs eventually — that is a **later** item
-(see below), most likely a window rule the operator sets, not something the app
-can force.
+**Niri is the operator's WM, and it is already a named target** in the "3D
+window in the multi-radio shell" note (a remapped window is a *new* window to a
+tiling compositor like niri/sway, so `keep_alive` is what holds its place).
+Undocked mode meets Niri the same way, and the path is clearer than it looks:
+
+- A detached viewport is a **new toplevel**, and Niri **tiles** it like anything
+  else. To make it **float** — the operator's wish — is a Niri **window rule**,
+  not an app call:
+  ```kdl
+  window-rule {
+      match app-id="sdroxide-panadapter"
+      open-floating true
+      // and put it where the operator wants it:
+      // open-on-output "HDMI-A-1"
+      default-column-width { fixed 1200; }
+      default-window-height { fixed 720; }
+  }
+  ```
+- That is why the detached window must set **`with_app_id`** (and a title): it
+  is the only handle a compositor rule has. Niri can also match on **title**, so
+  even the 3D window (title only) is routable today — but a stable app-id is the
+  better key.
+- **`with_position` is ignored on Wayland/Niri.** Placement is `open-on-output`
+  / `open-on-workspace` in the operator's rule, which is *better* for the
+  "second monitor" case than anything the app could do.
+- **`with_window_level`** (always-on-top) is compositor-dependent; do not rely
+  on it. Niri floats and layers via its rules.
+- **Emit the window every frame.** Niri destroys a window that stops being
+  emitted and recompositor-places it on return — the `keep_alive` lesson, and
+  the reason a detached panadapter (like solar3d) must stay alive while its tab
+  is hidden.
+
+Net: the app's job is to **expose the identity and the size**; *floating and
+placing it on a chosen monitor is the operator's one-line rule*. That is the
+honest division, and what the manual should say.
 
 ## Scope
 
@@ -76,10 +107,14 @@ build a framework first.
    panadapter region). Detached ⇒ `waterfall_h = 0` and the operating panel
    takes the whole column. This is the part worth a **pure test**.
 4. **The detached window.** When detached, `ctx.show_viewport_deferred(
-   panadapter_vid(radio_salt), ViewportBuilder::default().with_title(…)
+   panadapter_vid(radio_salt), ViewportBuilder::default()
+   .with_app_id("sdroxide-panadapter").with_title(…)
    .with_inner_size(size)[.with_position(pos)], move |ui, _| draw the
    panadapter)` — reusing the existing panadapter draw (`frame.rs` /
-   `widgets/spectrum_view.rs`), not a copy of it.
+   `widgets/spectrum_view.rs`), not a copy of it. **The `with_app_id` is not
+   decoration**: it is what a Wayland window rule matches on to float and place
+   the window (see "Niri" below). solar3d sets only a title today; a detached
+   window should carry its own id.
 5. **Persist geometry.** Capture `inner_rect` / `outer_rect` on the rebuild
    frame only (the solar3d pattern), so a drag is not undone each frame.
 6. **Native only.** `#[cfg(not(target_arch = "wasm32"))]` throughout the detach
@@ -117,10 +152,12 @@ arithmetic (`waterfall_h == 0`).
   fix: "a shell-owned window manager with stable viewport ids and an explicit
   owner, emitted every frame regardless of focus". A general undocked mode is
   the natural home for it.
-- **Floating in tiling WMs** (the operator's stated wish): a tiling compositor
-  tiles a new toplevel; making it float is a **compositor window rule** the
-  operator sets (niri/sway `for_window`), not something a Wayland client can
-  assert. Worth documenting in the manual; not an app feature.
+- **Floating in tiling WMs** (the operator runs **Niri**): a tiling compositor
+  tiles a new toplevel; making it float, and pinning it to a monitor, is a
+  **Niri `window-rule`** the operator sets (see the Niri section above) — not
+  something a Wayland client can assert. The app's contribution is the
+  **app-id** the rule matches on. Worth a short manual section; not an app
+  feature.
 - **Whether the detached geometry travels** on `ClientScreen` (a remote client
   that wants its own arrangement) — a decision, not a default.
 
