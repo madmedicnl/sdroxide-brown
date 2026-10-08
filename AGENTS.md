@@ -82,8 +82,11 @@ header wrap stays (it is the #643 fix).
   the operator accepted it on that basis. If a report ever comes back from it,
   the untested half is the runtime of `crates/sdroxide-radio/tests/sstv_keep_dial.rs`.
 
-**Carried forward:** merge #23 if the operator says so; Kevin's DAB-advice →
-radio-tab move (four steps, `Ddc::rate_for` reachable via `sdroxide-dsp`);
+**Carried forward:** #23 and #24 are merged; Kevin's DAB-advice → radio-tab
+move is **done** (`5bef39e7`, 2026-10-08). The open items from #16/#18 stand —
+the phone's right border, the three-tab flicker, the Pluto CPU thread, and the
+still-untested runtime of the merged PRs (`sstv_keep_dial`, the ADS-B floor on
+a real Pluto);
 `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui` is now
 worth a slot in the pre-push routine whenever wasm-reachable code changes.
 
@@ -113,10 +116,13 @@ would block him. Do not "fix" this.
 **Kevin's #18, honestly.** Five of his six items are fixed. Two of them were
 **wrong warnings, not excess warnings** — one contradicted a setting he had
 already changed, one had a "stop asking" button that did not stop it. Fixed at
-source, not muted. **Not done: his own proposal — moving the DAB advice into
-the radio tab.** Agreed as the next step, not started. It was blocked before
-and the blocker does not exist: `sdroxide-ui` already depends on
-`sdroxide-dsp`, so `Ddc::rate_for` is reachable, and the change is four steps.
+source, not muted. **Done (`5bef39e7`, 2026-10-08): his own proposal — moving
+the DAB advice into the radio tab.** It now sits beside the sample-rate control
+in yellow and dismisses for good once read; the panel copy is gone. The blocker
+was never real: `sdroxide-ui` already depends on `sdroxide-dsp`. The arithmetic
+(`dab_window_rate` / `dab_widening_helps`) is shared in `sdroxide-dsp` and the
+constants in `sdroxide-types`, so the engine's warning and the radio tab cannot
+drift. #23 and #24 are also merged.
 Replies posted to #18 (twice) and #17, each saying what is in tonight's nightly.
 
 **#643 — the carried-over item, and next session's first job.** Reproduced and
