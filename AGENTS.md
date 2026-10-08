@@ -24,6 +24,88 @@
 > ALE-mode build; the experimental-release recipe below is still the one to use
 > when a build needs to name it (the older pre-release tag has been removed).
 
+## Session 2026-10-08, evening: the issue list, Kevin's #18, and #643 carried forward
+
+Worked the fork's issue list, then Kevin's **#18** ("the program nags").
+**Ended with #643 diagnosed but not fixed — that is the one thing carried
+forward.**
+
+**Shipped, on `main`, installed as 2.0.2_brown:**
+
+| commit | what |
+|---|---|
+| `76817a2f`…`19085f2f` | sign-in cookie + REMEMBER ME box (no 12 h / 1-day choice) |
+| `e4cc57c9` | bindings "stop asking" now stops asking; DAB width warning no longer advises the impossible |
+| `1eae73ab` | DAB audio queue priming |
+| `19085f2f` | DAB CLEAR chip; private windows documented |
+| `fb3a460f`, `78876a01` | dismissible advisories (✕, remembered) on DAB, AIS, ADS-B, VDL2 |
+
+**Upstream PR #645 is open and MERGEABLE** — the #640 audio/panadapter fix, two
+files, +85/−22, tested failing against the unfixed code.
+
+**`main` is protected: PR required, 1 approval, admins not enforced** —
+deliberate, because the operator pushes to `main` directly and enforcement
+would block him. Do not "fix" this.
+
+**Kevin's #18, honestly.** Five of his six items are fixed. Two of them were
+**wrong warnings, not excess warnings** — one contradicted a setting he had
+already changed, one had a "stop asking" button that did not stop it. Fixed at
+source, not muted. **Not done: his own proposal — moving the DAB advice into
+the radio tab.** Agreed as the next step, not started. It was blocked before
+and the blocker does not exist: `sdroxide-ui` already depends on
+`sdroxide-dsp`, so `Ddc::rate_for` is reachable, and the change is four steps.
+Replies posted to #18 (twice) and #17, each saying what is in tonight's nightly.
+
+**#643 — the carried-over item, and next session's first job.** Reproduced and
+SSTV-specific; Olivia, SSTV, SSTV-FM, RIFP, in both LISTEN and OPERATE
+(operator-confirmed). The full measurements are in the #643 section below —
+Olivia is a *different and larger* fault (at 960 it paints 0…1770, 810 pt past
+the window, so its width comes from a floor that binds only when the column is
+small). Read that section for the numbers; what follows is the plan:
+
+1. **Instrument `operating_panel`'s calls to `image_panel` (`frame.rs:2368`)
+   and `text_modem_panel`**, printing each panel's `max_rect` beside the
+   `allocate_ui` that made it. Two lines, one run — it names the bug or
+   eliminates both panels.
+2. **Fix it.** `digi_panel` does not overrun, so the difference is in how
+   those two are called.
+3. **Prove it:**
+   `MODE=Olivia DOCK_W=960 cargo test -p sdroxide-ui --release --lib probe_narrow -- --nocapture`.
+
+   **Fix the probe's gap first**: it reports rects past the *window* edge, so
+   it finds Olivia and misses the three image modes, which stay inside the
+   window and cover the *dock*. The regression test must check **both** edges
+   or it guards half of this.
+
+**Do not fix this with a clamp at the panel boundary.** Argued and rejected
+twice: it hides the cause and it would only catch the window case.
+
+**Corrections made this session — three times a measurement disagreed with a
+report and the measurement was wrong:**
+
+- Claimed #643 was upstream's build from the window title — the fork hardcodes
+  `sdroxide — {label}`.
+- Claimed it again from the SSTV save path — that is a persisted setting, not
+  the live `config_dir()`.
+- Called the overlap "constant 39 pt" — it was the 1920 row of a table from a
+  sweep that only ran at one width.
+
+Also: **`git checkout --` on a file being edited destroyed a whole fix** and it
+had to be redone — undo a scratch patch with the patch, not with checkout. And
+**two python insertions into `chrome.rs` silently did nothing** because they
+anchored on a string from a different file: no error, no change. Verify the
+edit landed, always.
+
+**Operator preference, standing: shorter replies.** Polite, personal, direct.
+No essays, no over-explaining, no restating the reasoning.
+
+**Do not** ship a fix to a tester's report without it being **verified failing
+against the unfixed code**. Never tell Kevin something is in a build when it
+isn't — say what is and what isn't.
+
+**Housekeeping:** tree clean, `main` pushed, 2.0.2_brown installed at
+`~/.cargo/bin/sdroxide`, workspace check silent, ~130 commits pushed.
+
 ## Session 2026-10-07, end of day: **2.0.2_brown**, and a report that landed
 
 **`v2.0.2_brown` is tagged, pushed and installing** — `Cargo.toml` at `2.0.2`,
@@ -1355,6 +1437,10 @@ That is where to look next, and it is above `image_panel`, not inside it. The
 `operating_panel` call at `frame.rs:2368` passes `panel_h` to every other mode
 and **not** to `image_panel`; whatever the branch does when `panel_h` is absent is
 the obvious first thing to read.
+
+**Superseded 2026-10-08:** the three-step plan in that evening's session
+section above (instrument the two panel calls, fix, prove with `probe_narrow`)
+replaces this one — it does not need a second harness and it names the panel.
 
 **The next step, and it is short:** drive one frame with **SSTV** (the deepest
 panel, and the one the report is really about) and **FT8** at **960 pt**, with
