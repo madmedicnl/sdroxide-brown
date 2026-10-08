@@ -2366,8 +2366,8 @@ mod tests {
         // checking is that it is a permutation of the enum, with nothing
         // dropped and nothing listed twice.
         // The last variant *by discriminant*, which is the one appended most
-        // recently — not the one that reads last in the picker. JTTY is the
-        // fork's (and the list's) last appended variant, after UVPacket.
+        // recently — not the one that reads last in the picker. ALE is the
+        // fork's (and the list's) last appended variant, after JTTY.
         let last = Mode::Ale as u8;
         for i in 0..=last {
             let present = Mode::ALL.iter().filter(|m| **m as u8 == i).count();

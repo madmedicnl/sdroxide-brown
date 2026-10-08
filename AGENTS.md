@@ -74,11 +74,13 @@ header wrap stays (it is the #643 fix).
   whenever `login.rs` or any wasm-only path is touched — the full workspace
   check cannot see it, and it is otherwise only caught by the tag/nightly CI's
   web job. **Recommend merging #23** (decision is the operator's).
-- **#22 (DRAFT) "SSTV: KEEP DIAL"** — `DigiConfig::sstv_keep_dial`, appended
-  last, `PROTO_VERSION` 195 → 196; its own body says the **engine tests were
-  not run** (that session could not build `rade_c`). De-risking it is one
-  `cargo test -p sdroxide-radio` in a worktree on the branch — ask before
-  doing it; it is a draft for a reason.
+- **#22 "SSTV: KEEP DIAL" — MERGED** (`153463f8`, 2026-10-08) at the
+  operator's word after a review, not a test run: `DigiConfig::sstv_keep_dial`
+  appended last, `PROTO_VERSION` 195 → 196. Its own body had said the **engine
+  tests were not run** (that session could not build `rade_c`); the review
+  cleared the wire, the engine placement, the chip and the test's shape, and
+  the operator accepted it on that basis. If a report ever comes back from it,
+  the untested half is the runtime of `crates/sdroxide-radio/tests/sstv_keep_dial.rs`.
 
 **Carried forward:** merge #23 if the operator says so; Kevin's DAB-advice →
 radio-tab move (four steps, `Ddc::rate_for` reachable via `sdroxide-dsp`);
@@ -2399,11 +2401,12 @@ merged code still calls everything `sdroxide`.
     that talk about the review, the fork, or a "first version"** — upstream code
     should read as if it were always there.
 - `PROTO_VERSION` in `crates/sdroxide-proto` is a fork superset of upstream's:
-  upstream is at **170**, the fork's `main` at **189**. The fork's extras are
+  the last upstream number folded in was **v170**, and the fork's `main` is now
+  at **196**. The fork's extras are
   the listener identity (`NetworkConfig::swl_id`, `RadioConfig::callsign`,
   `RadioConfig::hide_tx`), `Command::ResetModeDefaults`, and the per-radio
   additions — **the register's full story is in `crates/sdroxide-proto/src/lib.rs`,
-  which is the only place it is kept current**; the run of v171–v189 is
+  which is the only place it is kept current**; the run of v171–v196 is
   documented there, one entry per bump. Upstream's v157/158 (SSTV styling and
   the (tr)uSDX family), **v159 (NR2's three `NrLevel` variants)**, **v160
   (`CwStatus::rig_keys_itself`)** and **v165** (the band-decoder relay outputs,
@@ -2414,14 +2417,17 @@ merged code still calls everything `sdroxide`.
   `auto_idle_stop_min`, `SpotKind::HeardMe`, the (tr)uSDX nG family,
   `ServerMsg::BandOpenings`, DSC, UVPacket and the ATS Mini, with **v178**
   (`DigiStatus::tx_refused`, the FSK441 transmit review fix ported to `main`)
-  **v179** (the CW key's five appended `DigiConfig` fields) and **v180–v189**
+  **v179** (the CW key's five appended `DigiConfig` fields) and **v180–v196**
   (the wide CB grammar, the contest layouts, the decode depth, the per-radio
-  state, the ALC/gain switch, the client screen, the client bindings opt-in and
-  the KNOWN window's question-and-answer pair) on top. When
-  merging, keep the number ahead of upstream's and fold its new entries in
-  rather than dropping them — the 2026-09-25 merge (upstream v166–v170 inserted
-  under the fork's register, everything above renumbered) is the latest worked
-  example, after the 2026-09-23 and 2026-09-20 ones.
+  state, the ALC/gain switch, the client screen, the client bindings opt-in, the
+  KNOWN window's question-and-answer pair, the CW paddle contacts, the signed-in
+  profile, the contest layout command, the Retro Radio removal, the client
+  panadapter view fields, DAB and SSTV KEEP DIAL) on top.
+  **Upstream development has effectively stopped** (its last wire entry is
+  v170), so there is no longer a number to stay ahead of: append at the tail and
+  add a register line, and if upstream ever moves again, fold its new entries in
+  under ours as the 2026-09-25 merge did (the latest worked example, after the
+  2026-09-23 and 2026-09-20 ones).
 - Watch list:
   - `dividebysandwich/sdroxide` — upstream moves; merge regularly. Merging
     after each upstream release, or monthly, keeps the conflicts small; 46

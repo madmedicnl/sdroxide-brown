@@ -1723,11 +1723,11 @@ use sdroxide_types::{
 /// `RadioState` gains `dab` (`DabSettings`) on its **tail**, and there are new
 /// `Command::SetDabConfig` and `ServerMsg::DabStatus` — all appended last.
 /// `RadioState` rides whole, so a v194 peer reads the extra bytes as the start
-/// of the next field. A downstream (fork) addition.
+/// of the next field. A downstream (fork) addition. (The branch this came from
+/// numbered it 187, but `main` had already spent 187 on the ALC/per-band-gain
+/// work and 188 on the client screen, so the whole change moved up rather than
+/// renumbering anything already shipped.)
 ///
-/// The branch this came from numbered it 187, but `main` had already spent 187
-/// on the ALC/per-band-gain work and 188 on the client screen, so the whole
-/// change moves up rather than renumbering anything already shipped.
 /// v196: `DigiConfig` gains `sstv_keep_dial` (bool) on its tail — choosing SSTV
 /// leaves the dial where the operator tuned instead of moving it onto the
 /// band's published SSTV frequency. `DigiConfig` rides whole in
