@@ -5025,6 +5025,16 @@ window set ever grows past one.
 
 - `cargo build --release` — the full binary (needs the vendored submodules,
   `vendor/xng` among them now; see the README's Building section).
+- **A sandboxed build of the radio engine needs two hosts on the network.**
+  `sdroxide-rade` builds opus through `vendor/rade_c/cmake/BuildOpus.cmake`'s
+  CMake `ExternalProject`, which fetches the opus source from
+  **`github.com/xiph/opus`** and, during opus's own build, its DNN model data
+  (LPCNet/DRED) from **`media.xiph.org`**. A cloud/CI sandbox that allows one
+  and not the other stalls with a fetch error inside the nested opus build and
+  no mention of RADE — reported by a tester's Claude cloud session that could
+  not compile the radio engine because `media.xiph.org` was blocked. Allow both,
+  or build that crate where they are reachable. Nothing else in the tree
+  fetches at build time.
 - `cargo test --release --workspace` — everything. The `sdroxide` bin's
   `icomnet_source` tests flake now and then when the whole workspace runs at
   once and pass when that binary is run alone; re-run
