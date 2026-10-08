@@ -1052,7 +1052,13 @@ jobs:
   release:
     name: create release
     needs: [web, build]
-    if: github.ref_type == 'tag' || startsWith(github.ref_name, 'v')
+    # **Run even if a build job failed**, so the platforms that did build are
+    # still published. A flaky macOS-ARM runner has stopped this job three or
+    # four times with every other platform sitting finished and uploaded
+    # nowhere. `!cancelled()` rather than `always()`: a run somebody cancelled
+    # by hand should not publish a partial release. The missing platform is
+    # still visible — the run ends red and the release is missing that asset.
+    if: ${{ !cancelled() && (github.ref_type == 'tag' || startsWith(github.ref_name, 'v')) }}
     runs-on: ubuntu-latest
     steps:
       # The curated release notes are read out of `CHANGELOG.md` **at the tag**,
@@ -1074,10 +1080,15 @@ jobs:
           path: dist
           merge-multiple: true
       - uses: actions/download-artifact@v8
+        # Tolerant, so a failed wasm build does not take the whole release with
+        # it — the binary assets are the point, and the web client is one extra
+        # file. The zip step below is skipped when the artifact is absent.
+        continue-on-error: true
         with:
           name: web-dist
           path: web-dist
       - name: Zip standalone web client
+        if: ${{ hashFiles('web-dist/**') != '' }}
         run: |
           cd web-dist
           zip -r "../dist/sdroxide-web-$GITHUB_REF_NAME.zip" .
