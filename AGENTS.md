@@ -5437,6 +5437,33 @@ actually calls `subtract_tones_lpf`, which has no such guard. Said in the PR
 body as a follow-up rather than bundled.
 
 
+## Pull requests to this fork: clean and mergeable as opened (the maintainer's standing order, 2026-10-08)
+
+Kevin (kevin2008-01) opens pull requests here from Claude sessions. The
+maintainer's words: make each PR **clean and mergeable**, because that is what
+saves his compile time. So a PR is opened only when it can be merged as it
+stands, without him building, fixing or re-running anything:
+
+1. **Up to date with `main`, no conflict.** Bring `main` in with a **merge
+   commit** — that is fine, and there is no linear-history requirement: no
+   rebase, no force-push. He merges with a merge commit too.
+2. **It compiles, silently.** `cargo check --workspace --all-targets` with no
+   warnings, and `cargo check --release --target wasm32-unknown-unknown -p
+   sdroxide-ui` when any browser-reachable code is touched.
+3. **The touched crates' tests pass**, and a fix carries a test **verified to
+   fail on the unfixed code**.
+4. **`rustfmt --check` is clean** on every touched file.
+5. **One complete thing per PR** — not one commit. Work in as many commits as
+   you like and tidy them before opening.
+6. **If a check cannot be run, do not open the PR.** Say what blocked it and
+   what is needed. (#22 went up as a draft with its engine test unrun; that is
+   the case this rule exists to stop.) A sandbox build of the radio engine needs
+   both `github.com/xiph/opus` and `media.xiph.org` allowed — see the build note.
+
+**The split, agreed with the maintainer:** Kevin's PRs take the **browser / web
+server** side, where he is the heaviest user; the maintainer takes the **radio**
+side. A change that reaches into the radio engine is his unless he asks.
+
 ## House rules
 
 - **A measurement that disagrees with a report is the first suspect, not the
