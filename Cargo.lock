@@ -5131,6 +5131,7 @@ dependencies = [
  "num-complex",
  "sdroxide-dsp",
  "sdroxide-faad2",
+ "sdroxide-types",
  "thiserror 2.0.20",
  "tracing",
 ]

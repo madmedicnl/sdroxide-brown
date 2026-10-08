@@ -21,6 +21,7 @@ description = "DAB/DAB+ receiver, wrapping the `dabradio` decoder as a library."
 # and the SDR device front ends, and with them fdk-aac — our AAC is faad2.
 dabradio = { git = "https://github.com/madmedicnl/desperado.git", branch = "lib/split-dabradio", default-features = false }
 sdroxide-dsp.workspace = true
+sdroxide-types.workspace = true
 sdroxide-faad2.workspace = true
 num-complex.workspace = true
 thiserror.workspace = true

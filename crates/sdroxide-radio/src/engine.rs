@@ -5257,25 +5257,17 @@ impl Drop for Engine {
 }
 
 /// The rate the DAB window actually lands on, for a receiver running at
-/// `sample_rate`. The target is capped at `DAB_SAMPLE_RATE` — the width an
-/// ensemble needs — so this is what decides the window, not the device rate.
+/// `sample_rate`. The arithmetic lives in `sdroxide-dsp` so the engine's
+/// warning and the radio tab's advice read one ladder — see
+/// [`sdroxide_dsp::dab_window_rate`].
 fn dab_window_rate(sample_rate: f64) -> f64 {
-    let target = (sdroxide_dab::DAB_SAMPLE_RATE as f64).min(sample_rate);
-    Ddc::rate_for(sample_rate, target)
+    sdroxide_dsp::dab_window_rate(sample_rate)
 }
 
 /// Would raising the receiver's rate give the DAB window the margin it wants?
-///
-/// `Ddc::rate_for` picks the rung *nearest* the target, and the target is
-/// capped, so on a front end whose rungs never reach `DAB_GOOD_RATE_HZ` the
-/// answer is **no at every setting**. That is the case the fork's #18 reported
-/// as a false alarm: the message kept telling the operator to widen after they
-/// had. Answering it here — rather than assuming widening helps — is what lets
-/// the warning be honest either way.
+/// Delegates to [`sdroxide_dsp::dab_widening_helps`], shared with the UI.
 fn dab_widening_helps(sample_rate: f64) -> bool {
-    const TRIALS: &[f64] = &[4_000_000.0, 6_000_000.0, 8_000_000.0, 10_000_000.0, 16_000_000.0];
-    let target = (sdroxide_dab::DAB_SAMPLE_RATE as f64).min(sample_rate);
-    TRIALS.iter().any(|cand| Ddc::rate_for(*cand, target) >= sdroxide_dab::DAB_GOOD_RATE_HZ)
+    sdroxide_dsp::dab_widening_helps(sample_rate)
 }
 
 /// The warning itself, for a receiver running at `sample_rate`. `None` when

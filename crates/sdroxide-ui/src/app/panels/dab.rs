@@ -165,20 +165,11 @@ impl SdroxideApp {
         });
         if let Some(why) = &st.unavailable {
             ui.label(RichText::new(why).color(theme::ALERT()).size(11.0));
-        } else if let Some(why) = st.degraded.clone() {
-            // **Advice, so it can be dismissed** — unlike the `unavailable` line
-            // above it, which reports that the receiver cannot do this at all and
-            // is true until the front end changes. See [`crate::chrome::advisory`].
-            if crate::chrome::advisory(
-                ui,
-                &mut self.ui_settings,
-                "dab-width",
-                &why,
-                theme::YELLOW(),
-            ) {
-                crate::app::persist::persist_ui_settings(&self.ui_settings);
-            }
         }
+        // The width warning is **not here**: it was advice the operator had to
+        // hunt for in the panel, and it now lives in the radio tab beside the
+        // rate it is about, where it can be acted on. See
+        // [`crate::app::settings::mod`]'s radio tab and [`crate::chrome::advisory`].
         ui.add_space(4.0);
 
         let avail_h = (content_bottom - ui.cursor().top()).max(80.0);

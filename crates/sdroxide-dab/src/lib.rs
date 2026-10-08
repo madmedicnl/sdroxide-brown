@@ -54,21 +54,11 @@ pub use aac::AacDecoder;
 /// chip lists) to bring DAB back once the audio path is fixed.
 pub const DAB_ENABLED: bool = true;
 
-/// The rate the DAB Mode I OFDM front end is defined at, in samples/s.
-pub const DAB_SAMPLE_RATE: u32 = 2_048_000;
-
-/// How wide a lane a DAB ensemble occupies, in Hz — Mode I is ~1.536 MHz of
-/// occupied spectrum, so a front end opened narrower loses the outer carriers.
-pub const DAB_BANDWIDTH_HZ: f64 = 1_536_000.0;
-
-/// A rate the lane is comfortable at.
-///
-/// At the bare [`DAB_BANDWIDTH_HZ`] the front end is right at its ADC floor,
-/// where the SDRplay API in particular drops samples — and a DAB decode needs a
-/// *continuous* OFDM stream, so a splice stops sync. Twice the occupied width
-/// leaves the margin to deliver it cleanly. Not a refusal below this: a
-/// narrower-but-clean stream still decodes, exactly as ADS-B's rate note says.
-pub const DAB_GOOD_RATE_HZ: f64 = 3_072_000.0;
+/// Re-exported from [`sdroxide_types`], where the UI can reach them too: the
+/// window planning that decides whether a front end can serve DAB is arithmetic
+/// the browser client runs (`sdroxide_dsp::dab_window_rate`), and this decoder
+/// is native-only, so it cannot be their home.
+pub use sdroxide_types::{DAB_BANDWIDTH_HZ, DAB_GOOD_RATE_HZ, DAB_SAMPLE_RATE};
 
 #[derive(Debug, Error)]
 pub enum DabError {

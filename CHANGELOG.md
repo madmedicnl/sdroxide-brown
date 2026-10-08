@@ -13,6 +13,15 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+- **The DAB bandwidth advice moved to the radio tab.** It warned about the
+  front end's width from inside the decoder's panel, where acting on it meant
+  leaving the mode and finding the sample-rate control. It now sits in the
+  radio tab beside that control, in yellow, and dismisses for good once read —
+  at the operator's own suggestion (fork discussion #18). The wording is honest
+  about the ceiling: where the receiver's rate ladder cannot reach the ~3.07
+  Msps lane DAB wants at any setting, it says the ceiling is the receiver's
+  rather than suggesting a change that does nothing. The arithmetic is shared
+  with the engine's own warning, so the two cannot disagree.
 - **ADS-B no longer holds a CPU core at 100 % on an empty sky.** The decoder
   read the noise's lower quartile as its floor, which for real receiver noise
   is below the average noise sample, so ~40 % of all samples passed the first

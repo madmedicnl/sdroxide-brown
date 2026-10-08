@@ -57,6 +57,28 @@ pub const DAB_BAND_III: &[(&str, f64)] = &[
     ("13F", 239_200_000.0),
 ];
 
+/// The rate the DAB Mode I OFDM front end is defined at, in samples/s.
+///
+/// Kept here, not in the decoder, because the *window planning* that decides
+/// whether a front end can serve DAB is arithmetic the UI runs too — see
+/// `sdroxide_dsp::dab_window_rate` — and `sdroxide-dab` is a native-only
+/// decoder the browser client cannot depend on. `sdroxide-dab` re-exports
+/// these, so the engine, the decoder and the UI all read one value.
+pub const DAB_SAMPLE_RATE: u32 = 2_048_000;
+
+/// How wide a lane a DAB ensemble occupies, in Hz — Mode I is ~1.536 MHz of
+/// occupied spectrum, so a front end opened narrower loses the outer carriers.
+pub const DAB_BANDWIDTH_HZ: f64 = 1_536_000.0;
+
+/// A rate the lane is comfortable at.
+///
+/// At the bare [`DAB_BANDWIDTH_HZ`] the front end is right at its ADC floor,
+/// where the SDRplay API in particular drops samples — and a DAB decode needs a
+/// *continuous* OFDM stream, so a splice stops sync. Twice the occupied width
+/// leaves the margin to deliver it cleanly. Not a refusal below this: a
+/// narrower-but-clean stream still decodes.
+pub const DAB_GOOD_RATE_HZ: f64 = 3_072_000.0;
+
 /// The channel whose centre is nearest `hz`, as `(name, centre)`.
 pub fn dab_channel_at(hz: f64) -> Option<(&'static str, f64)> {
     DAB_BAND_III

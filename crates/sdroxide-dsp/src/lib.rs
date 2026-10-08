@@ -68,7 +68,7 @@ pub use cw::{
     CwDecoder, CwElement, CwKeyer, CwRx, CwSelfRx, CwTx, IambicMode, morse_decode,
     morse_encode, text_duration_s,
 };
-pub use ddc::Ddc;
+pub use ddc::{Ddc, dab_widening_helps, dab_window_rate};
 pub use decim::{Decimator, FirDecim, HalfbandDecim, RealFirDecim, lowpass_taps};
 pub use demod::{
     ComplexDcBlock, DcBlock, Demodulator, channel_target, channel_target_at, hd_radio_is_am,

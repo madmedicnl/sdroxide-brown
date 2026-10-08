@@ -80,6 +80,33 @@ impl Ddc {
     }
 }
 
+/// The rate a DAB lane's DDC actually lands on, for a receiver running at
+/// `device_rate`.
+///
+/// The DAB window target is capped at [`sdroxide_types::DAB_SAMPLE_RATE`] — the
+/// width an ensemble needs — so what decides the lane is the decimation ladder,
+/// not the device rate: a front end can be opened wider than the target and
+/// still hand the lane no more than [`Ddc::rate_for`] picks. Shared by the
+/// engine's warning and the radio tab's advice so the two cannot disagree.
+pub fn dab_window_rate(device_rate: f64) -> f64 {
+    let target = f64::from(sdroxide_types::DAB_SAMPLE_RATE).min(device_rate);
+    Ddc::rate_for(device_rate, target)
+}
+
+/// Would raising the receiver's rate give the DAB lane the margin it wants?
+///
+/// [`Ddc::rate_for`] picks the rung *nearest* the target and the target is
+/// capped, so on a front end whose ladder never reaches
+/// [`sdroxide_types::DAB_GOOD_RATE_HZ`] the answer is **no at every setting** —
+/// the case that made the old warning tell an operator to widen after they
+/// already had. Asked rather than assumed, so the advice can say the ceiling is
+/// the receiver's where it is.
+pub fn dab_widening_helps(device_rate: f64) -> bool {
+    const TRIALS: &[f64] = &[4_000_000.0, 6_000_000.0, 8_000_000.0, 10_000_000.0, 16_000_000.0];
+    let target = f64::from(sdroxide_types::DAB_SAMPLE_RATE).min(device_rate);
+    TRIALS.iter().any(|c| Ddc::rate_for(*c, target) >= sdroxide_types::DAB_GOOD_RATE_HZ)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
