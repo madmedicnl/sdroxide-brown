@@ -5073,6 +5073,26 @@ window set ever grows past one.
   not compile the radio engine because `media.xiph.org` was blocked. Allow both,
   or build that crate where they are reachable. Nothing else in the tree
   fetches at build time.
+
+  **In a Claude Code cloud session, allowing `github.com` is not enough.** The
+  session's proxy serves GitHub *git* reads (clone/fetch) but refuses the opus
+  **archive** URL with a 403 ("GitHub access to this repository is not enabled
+  for this session"). The way through, with `vendor/` untouched: fetch the
+  pinned commit by git, zip it, and point `OPUS_URL` at the zip through a
+  CMake toolchain file that `cmake-rs` reads from a **target-specific**
+  variable (plain `CMAKE_TOOLCHAIN_FILE` is not picked up):
+
+  ```sh
+  S=/path/to/scratch; C=940d4e5af64351ca8ba8390df3f555484c567fbb
+  git init -q $S/opus && git -C $S/opus fetch -q --depth 1 https://github.com/xiph/opus $C
+  git -C $S/opus archive --format=zip --prefix=opus-$C/ -o $S/opus.zip FETCH_HEAD
+  echo "set(OPUS_URL \"file://$S/opus.zip\" CACHE STRING \"\")" > $S/opus-local.cmake
+  export CMAKE_TOOLCHAIN_FILE_x86_64_unknown_linux_gnu=$S/opus-local.cmake
+  ```
+
+  Delete `target/*/build/sdroxide-rade-*/out` first if a failed configure is
+  cached. `soapysdr-sys` also needs `libsoapysdr-dev` from apt. Verified
+  2026-10-08: `sdroxide-rade` builds and the `sdroxide-radio` dial tests run.
 - `cargo test --release --workspace` — everything. The `sdroxide` bin's
   `icomnet_source` tests flake now and then when the whole workspace runs at
   once and pass when that binary is run alone; re-run
