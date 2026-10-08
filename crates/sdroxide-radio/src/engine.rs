@@ -2679,6 +2679,9 @@ struct Engine {
     /// 32 or 24 kHz — rebuilt when this moves.
     dab_monitor_in_rate: f64,
     /// De-interleaved channels of the last `take_pcm`, before resampling.
+    /// Whether the DAB speaker path has been given audio yet. Gates the
+    /// priming cushion on the first block only; see [`Engine::take_dab_audio_into`].
+    dab_audio_started: bool,
     dab_play_l: Vec<f32>,
     dab_play_r: Vec<f32>,
     /// Resampled DAB audio waiting to be played, drained to the mixer one paced
@@ -4256,6 +4259,7 @@ fn engine_thread(
         dab_monitor_rs: None,
         dab_monitor_rate: 0.0,
         dab_monitor_in_rate: 0.0,
+        dab_audio_started: false,
         dab_play_l: Vec::new(),
         dab_play_r: Vec::new(),
         dab_fifo_l: Vec::new(),
@@ -5302,6 +5306,23 @@ fn dab_degraded_message(sample_rate: f64) -> Option<String> {
              something left unconfigured."
         ))
     }
+}
+
+/// How much DAB audio must be queued before the speaker path is given any of
+/// it: one Access Unit of cushion on top of the block about to be asked for.
+/// One AU is 1152 samples per channel (24 ms at 48 kHz), and it is the largest
+/// step the producer ever makes, so it is the whole of the jitter.
+const DAB_PRIME_SAMPLES: usize = 1152;
+
+/// May the speaker path start playing DAB audio yet?
+///
+/// Split out so the priming rule can be pinned without an [`Engine`]: the
+/// property that matters is that the queue is asked to hold one block *plus*
+/// one Access Unit before the first sample goes out, and that a later shortfall
+/// is **not** gated — a real starvation must still be audible as silence rather
+/// than papered over.
+fn dab_audio_ready(fifo_len: usize, block: usize, fifo_r_len: usize) -> bool {
+    fifo_len >= block + DAB_PRIME_SAMPLES && fifo_r_len >= block + DAB_PRIME_SAMPLES
 }
 
 impl Engine {
@@ -17210,6 +17231,25 @@ impl Engine {
         if n == 0 || self.dab_fifo_l.is_empty() || self.dab_fifo_r.is_empty() {
             return false;
         }
+        // **Start with a cushion, and the rest of the smoothness follows.**
+        //
+        // The decoder hands over an Access Unit at a time — 1152 samples per
+        // channel, 24 ms — while this path drains exactly one block per engine
+        // iteration. Production and consumption agree on average and disagree
+        // every few milliseconds, so a queue that begins empty hovers around
+        // zero and each disagreement is a block of silence: Kevin's "choppy,
+        // fragmented, inaudible" on #18.
+        //
+        // Priming once fixes it because the queue's *mean* is then above the
+        // block size and the jitter — bounded by one Access Unit — can no longer
+        // reach it. Nothing after the first block is gated, so a genuine
+        // starvation still shows up as silence rather than being hidden.
+        if !self.dab_audio_started {
+            if !dab_audio_ready(self.dab_fifo_l.len(), n, self.dab_fifo_r.len()) {
+                return false;
+            }
+            self.dab_audio_started = true;
+        }
         let take = self.dab_fifo_l.len().min(self.dab_fifo_r.len()).min(n);
         if take == 0 {
             return false;
@@ -18744,6 +18784,32 @@ mod rig_mode_class_tests {
         }
         // SSTV's FM twin has no sideband to follow the band with.
         assert_eq!(expected_rig_class(Mode::SstvFm, false, 7_171_000.0), rig_mode_class(Mode::Nfm));
+    }
+
+    /// Fork #18, again, on the other half: DAB's audio arrived "choppy,
+    /// fragmented, inaudible". The queue is fed one Access Unit at a time and
+    /// drained one block per iteration, so it hovered around empty and every
+    /// disagreement between the two sizes was a block of silence.
+    ///
+    /// Pinned as the priming rule: hold one block **plus** one Access Unit
+    /// before the first sample goes out, so the jitter can no longer reach the
+    /// block being asked for.
+    #[test]
+    fn dab_audio_waits_for_a_cushion_before_it_starts() {
+        let block = 1024;
+        // An AU alone is not enough: it is the block about to be taken, too.
+        assert!(!dab_audio_ready(DAB_PRIME_SAMPLES, block, DAB_PRIME_SAMPLES), "AU only");
+        // Block plus the cushion is the start line, on both ears.
+        assert!(dab_audio_ready(block + DAB_PRIME_SAMPLES, block, block + DAB_PRIME_SAMPLES));
+        // **Both** planes, or the mixer gets a left with no right. A short right
+        // is what "a left pair with the wrong right" looked like.
+        assert!(
+            !dab_audio_ready(block + DAB_PRIME_SAMPLES, block, block),
+            "one ear full and the other short is not ready"
+        );
+        // The cushion is one AU, so it covers the producer's largest single step
+        // — the whole of the jitter it has to absorb.
+        assert_eq!(DAB_PRIME_SAMPLES, 1152, "one Access Unit per channel at 48 kHz");
     }
 
     /// Fork #18: the DAB warning advised widening the receiver even on a front

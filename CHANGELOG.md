@@ -28,6 +28,15 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   helps, and where it cannot it says the ceiling is the receiver's rather than
   handing out advice that changes nothing.
 
+- **DAB audio: the queue is primed before it plays.** The decoder hands over an
+  Access Unit at a time (1152 samples per channel, 24 ms) while the speaker path
+  drains exactly one block per iteration (10 ms), so a queue beginning empty
+  hovered around zero and every disagreement between the two sizes was a block
+  of silence — *"choppy, fragmented, inaudible"* (#18). One Access Unit of
+  cushion is now held before the first sample goes out; the mean is then above
+  the block size and the jitter cannot reach it. A genuine starvation still comes
+  out as silence rather than being papered over.
+
 ### Changed
 
 - **The sign-in card asks one question: REMEMBER ME.** It offered **12 HOURS**,
@@ -42,6 +51,10 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ### Not proven
 
+- **DAB audio has not been listened to.** The priming follows from the queue
+  arithmetic and is unit-tested, but nobody has heard an ensemble come out of it;
+  if it is still choppy the cause is elsewhere (the faad2 decode errors are the
+  obvious candidate) and the cushion will only have moved the symptom.
 - The cookie path is end-to-end tested and the card's own logic is unit-tested,
   but **no browser was driven**: the checkbox itself, and a real cookie on a
   phone, still need a hand.
