@@ -879,7 +879,8 @@ impl UiSettings {
     /// that reports a live condition. Adding a name here is a decision that a
     /// warning is safe to lose, which is exactly the decision that should be
     /// made in one visible list rather than spread across call sites.
-    pub const ADVISORY_KEYS: &'static [&'static str] = &["dab-width"];
+    pub const ADVISORY_KEYS: &'static [&'static str] =
+        &["dab-width", "ais-coverage", "adsb-coverage", "vdl2-coverage"];
 
     /// The bit an advisory's dismissal lives in, or `None` for a name that is
     /// not in [`UiSettings::ADVISORY_KEYS`].

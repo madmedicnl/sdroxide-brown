@@ -210,8 +210,20 @@ impl SdroxideApp {
         // Running, but on half the plan or too few samples a bit. Said out loud
         // because the symptom — vessels reporting at half the rate — is exactly
         // what a quiet sea looks like.
-        if let Some(why) = &st.degraded {
-            ui.label(RichText::new(why).size(10.5).color(theme::YELLOW()));
+        // **Advice, so it can be dismissed.** It reports that this receiver is
+        // only reaching part of the coverage, which stays true until the setup
+        // changes — unlike a live fault, which must never be dismissible. See
+        // [`crate::chrome::advisory`].
+        if let Some(why) = st.degraded.clone() {
+            if crate::chrome::advisory(
+                ui,
+                &mut self.ui_settings,
+                "ais-coverage",
+                &why,
+                theme::YELLOW(),
+            ) {
+                crate::app::persist::persist_ui_settings(&self.ui_settings);
+            }
         }
         // The one diagnosis nothing else in the program can make. A frequency
         // discriminator measures the carrier offset for free, and every ship

@@ -186,8 +186,20 @@ impl SdroxideApp {
         // Said out loud because the symptom — a short list — is exactly what a
         // quiet sky looks like, and the fix is one setting away on most
         // receivers.
-        if let Some(why) = &st.degraded {
-            ui.label(RichText::new(why).size(10.5).color(theme::YELLOW()));
+        // **Advice, so it can be dismissed.** It reports that this receiver is
+        // only reaching part of the coverage, which stays true until the setup
+        // changes — unlike a live fault, which must never be dismissible. See
+        // [`crate::chrome::advisory`].
+        if let Some(why) = st.degraded.clone() {
+            if crate::chrome::advisory(
+                ui,
+                &mut self.ui_settings,
+                "adsb-coverage",
+                &why,
+                theme::YELLOW(),
+            ) {
+                crate::app::persist::persist_ui_settings(&self.ui_settings);
+            }
         }
     }
 
