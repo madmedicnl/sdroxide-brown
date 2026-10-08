@@ -1277,6 +1277,45 @@ true at once — **they were the same fault at two window widths.**
 earlier per-mode sweep only ever ran at 1920, so every mode looked constant and
 the arithmetic was read as a fixed offset. Nothing here is constant; it scales.
 
+**CONFIRMED BY THE OPERATOR, and the sweep was right about the modes.** He tested
+it and the overlap is in exactly four — **Olivia, SSTV, SSTV-FM and RIFP** — and
+in **both** LISTEN and OPERATE. That is the per-mode sweep's list verbatim, so the
+correction above overreached: the sweep was wrong about *constancy*, not about
+*which modes*. His is the authority on the modes; ours on the widths.
+
+**And Olivia is far worse than the other three.** Driving the probe at 960 pt:
+
+| mode | painted width | vs a 960 pt window |
+|---|---|---|
+| **Olivia** | **0…1770** | **810 pt past the window** |
+| SSTV / SSTV-FM / RIFP | 0…931 | inside the window, but **over the dock** |
+
+So there are two things, and they are not the same size:
+
+- the **three image modes** (all of `Mode::is_image()`) overrun their *column* and
+  cover the dock, while staying inside the window;
+- **Olivia** overruns the *window*, which is a different order of fault and the
+  one worth finding first — 1770 pt of panel in a 960 pt window is not a
+  rounding, it is a width taken from somewhere that is not this ui.
+
+At 1920 Olivia does not overrun the window, so its width is not simply the window
+either. Whatever it is, it is only wrong at narrower widths — which points at a
+minimum or a clamp whose floor binds only when the column is small.
+
+**The two reads to do, in this order:**
+
+1. **Olivia's panel split** — the same question as SSTV's, on the panel behind
+   `Mode::is_text_modem()`. It is the largest overdraw in the tree and it leaves
+   the window, so a wrong floor there is the worst of the four.
+2. **Then the image modes**, which are one function (`image_panel`) and already
+   narrowed to "the `ui` it receives is ~21 pt narrower than its allocation".
+
+**A note on the probe**, so the next run is not misled: it reports rects **past
+the window edge**, which finds Olivia and misses the image modes — those stay
+inside the window and cover the *dock*. Both edges matter, and the fix's oracle
+should check the **dock's left edge** as well as the window's, or the guard it
+leaves behind will only catch one of the two.
+
 **So `image_panel` is in scope after all** — `panels/sstv.rs:595`, the one panel
 `operating_panel` calls **without** `panel_h` and the only one that computes its
 own column widths from `ui.available_size()` (`:676`). It is being given the

@@ -2690,10 +2690,18 @@ mod tests {
         unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
 
         let w: f32 = std::env::var("DOCK_W").ok().and_then(|v| v.parse().ok()).unwrap_or(960.0);
-        let mode = match std::env::var("MODE").ok().as_deref() {
-            Some("Sstv") => sdroxide_types::Mode::Sstv,
-            _ => sdroxide_types::Mode::Ft8,
-        };
+        // Any mode, by its `Debug` name, so a report naming a mode can be put
+        // into the probe without editing it first.
+        let want = std::env::var("MODE").ok();
+        let mode = want
+            .as_deref()
+            .and_then(|w| {
+                sdroxide_types::Mode::ALL
+                    .iter()
+                    .find(|m| format!("{m:?}") == w)
+                    .copied()
+            })
+            .unwrap_or(sdroxide_types::Mode::Ft8);
         let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
         let ctx = egui::Context::default();
         let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
