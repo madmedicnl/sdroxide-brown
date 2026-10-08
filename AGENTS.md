@@ -38,8 +38,8 @@
 **The open PRs are merged and the worktrees are gone.** #22 (SSTV KEEP DIAL),
 #23 (browser `remember` cookie — the wasm build), #24 (ADS-B noise floor);
 pr22/pr24 worktrees and their target dirs removed. Versioning quirks fixed in
-`348a2f7f` (the register is **v196** after #22, not the v189 the notes had
-said).
+`348a2f7f` (the register was **v196** after #22, not the v189 the notes had
+said; it is **v197** now that eQSL's field landed).
 
 **Kevin's DAB advice moved to the radio tab** (`5bef39e7`): the width warning
 left the decoder panel and now sits beside the sample-rate control in yellow,
@@ -2455,11 +2455,11 @@ merged code still calls everything `sdroxide`.
     should read as if it were always there.
 - `PROTO_VERSION` in `crates/sdroxide-proto` is a fork superset of upstream's:
   the last upstream number folded in was **v170**, and the fork's `main` is now
-  at **196**. The fork's extras are
+  at **197**. The fork's extras are
   the listener identity (`NetworkConfig::swl_id`, `RadioConfig::callsign`,
   `RadioConfig::hide_tx`), `Command::ResetModeDefaults`, and the per-radio
   additions — **the register's full story is in `crates/sdroxide-proto/src/lib.rs`,
-  which is the only place it is kept current**; the run of v171–v196 is
+  which is the only place it is kept current**; the run of v171–v197 is
   documented there, one entry per bump. Upstream's v157/158 (SSTV styling and
   the (tr)uSDX family), **v159 (NR2's three `NrLevel` variants)**, **v160
   (`CwStatus::rig_keys_itself`)** and **v165** (the band-decoder relay outputs,
@@ -2470,14 +2470,19 @@ merged code still calls everything `sdroxide`.
   `auto_idle_stop_min`, `SpotKind::HeardMe`, the (tr)uSDX nG family,
   `ServerMsg::BandOpenings`, DSC, UVPacket and the ATS Mini, with **v178**
   (`DigiStatus::tx_refused`, the FSK441 transmit review fix ported to `main`)
-  **v179** (the CW key's five appended `DigiConfig` fields) and **v180–v196**
+  **v179** (the CW key's five appended `DigiConfig` fields) and **v180–v197**
   (the wide CB grammar, the contest layouts, the decode depth, the per-radio
   state, the ALC/gain switch, the client screen, the client bindings opt-in, the
   KNOWN window's question-and-answer pair, the CW paddle contacts, the signed-in
   profile, the contest layout command, the Retro Radio removal, the client
-  panadapter view fields, DAB and SSTV KEEP DIAL) on top.
-  **Upstream development has effectively stopped** (its last wire entry is
-  v170), so there is no longer a number to stay ahead of: append at the tail and
+  panadapter view fields, DAB, SSTV KEEP DIAL and the eQSL QTH nickname) on top.
+  **Upstream moved again on 2026-10-08** — its own `PROTO_VERSION` is now
+  **173** (the WSPR-per-radio #615 work bumped it after the fork's last merge),
+  so it has *not* stopped at v170. The fork keeps its own numbering (`main` at
+  197); upstream's v171–v173 are upstream-only and are **not** folded in. Fold
+  them under the fork's register if a future merge needs to, exactly as the
+  2026-09-25 merge folded v166–v170 — and read `crates/sdroxide-proto/src/lib.rs`
+  first, it is the current one. Append at the tail and
   add a register line, and if upstream ever moves again, fold its new entries in
   under ours as the 2026-09-25 merge did (the latest worked example, after the
   2026-09-23 and 2026-09-20 ones).
