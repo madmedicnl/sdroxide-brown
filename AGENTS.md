@@ -367,16 +367,20 @@ would build), installed binary 2.0.2_brown matching `Cargo.toml`, and
 
 ### Branches worth knowing about, so nobody re-derives them
 
-- `fork/esp-sdr-protocol` — two commits, unmerged: the ESP-SDR IQ-over-Wi-Fi
-  protocol, written against its own specification. **A different device class from
-  the ATS Mini**, which has no I/Q at all. Fork discussion **#11**.
-- `fork/fst4w-wiring` — the FST4W investigation, ending in the do-not-ship verdict.
-  Its submodule-pointer commit is **redundant**: `main` already sits at
-  `cb340709`, with `audio.len().max(nframe)` in `subtract.rs` and
-  `subtract_short_buffer.rs` present. Checked, so nobody wonders again.
-- `local/agents-notes` — a superseded rewrite of this file. Nothing in it to keep.
-- `upstream-pr/*` — eleven stale branches, left **on purpose**: upstream is
-  secondary now and nothing is being re-cut for it. Do not rebase them.
+**Pruned 2026-10-09** (local and `origin`): the merged `ci/*`, `fork/*` and
+`fix/*` branches, the abandoned experiments `fork/esp-sdr-protocol` and
+`fork/fst4w-wiring`, `local/agents-notes`, the `claude/*` branches whose PRs are
+merged, and every `upstream-pr/*` branch whose PR is closed. The work is in
+`main` or in the PRs on GitHub; nothing was lost. Two are worth a pointer anyway:
+- **ESP-SDR IQ-over-Wi-Fi** (fork discussion **#11**) — an unmerged experiment,
+  and a *different device class from the ATS Mini* (it has I/Q; the Mini has
+  none). The branch is gone; the idea is not re-derivable from the tree.
+- **FST4W** — the do-not-ship verdict and its diagnosis are in
+  `FST4W-HANDOVER.md`; the branch is gone.
+- `upstream-pr/*` — **only the branches backing an OPEN upstream PR are kept**
+  (#648, #626, #598, #597, #559, #557, #554, #545, #537). Delete a branch when
+  its PR closes; do not keep dead ones "on purpose". Do not rebase one unless
+  the maintainer asks.
 
 
 **Upstream #640 is fixed here, and our fork had all four of its faults.** ct7cht
@@ -2385,24 +2389,21 @@ merged code still calls everything `sdroxide`.
 
 - `dividebysandwich/sdroxide` is the original. Fetch and merge rather than
   cherry-pick where possible, so the history stays recognisable.
-- Features useful to *anyone* (not just CB or SWL) are candidates to offer
-  upstream as pull requests rather than keep here — upstream is responsive and
-  merges them, often within a day. Most have now gone there: HD Radio, the CW
-  straight key, audible alerts, station profiles, AIS, the editor themes, the
-  USB sound-card backend, the 11 m band, EiBi broadcast labelling, decode
-  CSV/ADIF export, browser ADIF/CHIRP import, the step-row snap. So check
-  upstream before assuming a feature is only ours; the README's comparison
-  table is the current list of what is still fork-only.
-- Work general-purpose features **upstream-first** where that is practical:
-  branch from `upstream/main`, open the PR, then merge the result back here.
-  Building here and porting afterwards costs twice — the fork ends up with two
-  lineages of one feature until the next merge, and each merge is bigger for
-  it. **Superseded 2026-09-28 for anything new: do not open another upstream
-  PR** — the queue is long enough and this fork serves a different user group,
-  so most additions are theirs rather than general. See "Stop opening upstream
-  PRs" in the session notes at the top. The rule still describes how the
-  existing open PRs were built, and how a future *rebase* of one should be
-  done.
+- **The fork is first; upstream is a courtesy, and only when asked** (operator,
+  2026-10-09). Upstream has fallen too far behind to be the trunk we build on,
+  so new work is built here, on this fork, and shipped here. **Do not open an
+  upstream PR unless the operator asks for one** — when he does it is goodwill,
+  never the reason for a decision, and the "split before opening / lead with the
+  evidence" rules just below still apply.
+- **Merging upstream *into* the fork is separate, and still happens.** The
+  operator fetches and merges `upstream/main` to pick up its fixes (its
+  2026-10-08 burst is a good example — #640, #615, #600, #635, #622, #646,
+  #601, #625). That is plumbing, not contribution. (Earlier guidance to work
+  "upstream-first" is retired: most of the fork's general features already went
+  upstream — HD Radio, the CW straight key, audible alerts, station profiles,
+  AIS, the editor themes, the USB sound-card backend, the 11 m band, EiBi
+  labelling, decode CSV/ADIF export, ADIF/CHIRP import, the step-row snap. The
+  README's comparison table is what is still fork-only.)
 - **Open upstream PRs as one idea each, split before opening.** The maintainer
   has twice asked for a PR of ours to be split (**#507** and **#524**), and the
   pattern is consistent: he keeps the half whose correctness he can verify by
@@ -5104,6 +5105,14 @@ window set ever grows past one.
   stable` (a variant inserted rather than appended), the PROTO register, and
   the mode/band tables — every one of which has caught a careless merge edit,
   and none of which a reviewer would have found by eye.
+- **The radio crate's test set is the expensive one — prefer a single test
+  binary.** `cargo test -p sdroxide-radio` builds and links ~100 integration
+  test binaries, each carrying the whole engine (RADE, ADS-B, DAB, the vendored
+  C), so it is minutes of **linking** even when nothing changed — that is the
+  answer to "why is the test run so long when it compiles fine". Chasing one
+  thing, name its binary: `cargo test -p sdroxide-radio --test cw_panadapter`,
+  not the whole package. `cargo check --all-targets` only type-checks (seconds);
+  `cargo test` codegens and links, and that is what actually costs the time.
 - `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui` — the
   browser client, which shares the same UI code.
 - `cargo test -p sdroxide-digi --release -- --ignored --nocapture sensitivity`
