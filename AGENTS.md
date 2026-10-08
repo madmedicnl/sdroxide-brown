@@ -1233,6 +1233,42 @@ trace at that line **never fires** for SSTV. It goes through the earlier branch 
 `frame.rs:724`, whose `allocate_ui(vec2(width, panel_h))` at `:930` is the rect
 that overlaps. So a fix aimed at the digital branch would not touch this.
 
+**CORRECTION, 2026-10-08, and this one retires the whole section above.** The
+operator's own screenshots of the real station **contradict every measurement in
+it**, so none of it should be pursued. Three pictures, at two window sizes:
+
+- **FT8, OPERATE, 1920 wide, dock present** — the digi panel's right edge meets
+  the dock's left border cleanly. **No overlap at all.**
+- **SSTV, OPERATE, same window** — the chip row runs *just* past the dock by a
+  few points. Nothing like the 39 pt below.
+- **The real fault** — a **narrow window (~960 pt) with no dock at all**, where
+  the FT8 digi panel is laid out **wider than the window**: the map, the `Idle`
+  box and the `no messages` box run to the right edge with **no right border**,
+  and the left-hand filter chips are cut mid-word.
+
+**So the 39 pt was an artefact of the harness**, which forced a state the
+operator's station never reaches. That is the house rule firing on me a third
+time in a day: *a measurement that disagrees with a report has the measurement
+as the first suspect*. The probe set `state.rx[0].mode` directly and so only ever
+drove the OPERATE path, and the state it built was not the state on screen.
+
+**What is actually wrong, and it is a different mechanism:** a column laid out
+**wider than its own window when the dock is absent**. Not the dock being tucked,
+not a panel overdrawing it, and not arithmetic that scales with any width — which
+is why **no resize changed it** and why it is cut on *both* sides: a fixed
+minimum somewhere in the panel, not a miscalculated width.
+
+**Do not start from `dab_panel`, `image_panel`, `max_rect` or `operating_panel`.**
+Those were all reached by reasoning from a number that turned out to be false.
+
+**The next step, and it is short:** drive one frame with **SSTV** (the deepest
+panel, and the one the report is really about) and **FT8** at **960 pt**, with
+`band_docked = true` and `band_dock_room` returning `None` so no dock is drawn —
+then walk the panel's shapes for anything whose `rect.max.x` exceeds the window
+width. The oracle from the 2 pt border fix, aimed at the window edge rather than
+the column edge. A shape overhanging 960 names itself, and a phone-width sweep
+on the same test would catch the class rather than the instance.
+
 **CORRECTION to the note below this line, and the earlier claim was wrong.**
 It said "a child overruns its own allocation by 40 pt". That is **not** what is
 happening, and the shape dump says so: the panel's **frame and its content agree**
