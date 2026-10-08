@@ -2676,6 +2676,65 @@ mod tests {
         .drop_without_applying_deltas();
     }
 
+    /// #643: a **narrow window with no dock**, which is what the operator's
+    /// screenshots actually show — the panel laid out wider than the window and
+    /// cut on both sides. The dock is requested but has no room, so the column
+    /// is the whole window; anything past it is a child that will not shrink.
+    #[test]
+    fn probe_narrow_window_overflow() {
+        use crate::multi::frame_test_lock;
+        let _guard = frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-narrow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let w: f32 = std::env::var("DOCK_W").ok().and_then(|v| v.parse().ok()).unwrap_or(960.0);
+        let mode = match std::env::var("MODE").ok().as_deref() {
+            Some("Sstv") => sdroxide_types::Mode::Sstv,
+            _ => sdroxide_types::Mode::Ft8,
+        };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.band_docked = true;
+        app.band_dock_visible = true;
+        app.state.rx[0].mode = mode;
+        let size = egui::vec2(w, 1080.0);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+            ..Default::default()
+        };
+        let full = ctx.run_ui(input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest());
+        });
+        let mut rows: Vec<(egui::Rect, bool)> = full
+            .shapes
+            .iter()
+            .filter_map(|cs| match &cs.shape {
+                egui::Shape::Rect(r) if r.rect.width() > 20.0 && r.rect.height() > 20.0 => {
+                    Some((r.rect, r.fill.is_opaque()))
+                }
+                _ => None,
+            })
+            .collect();
+        rows.sort_by(|a, b| b.0.max.x.partial_cmp(&a.0.max.x).unwrap_or(std::cmp::Ordering::Equal));
+        println!("--- #643 probe: {mode:?} at {w:.0} pt, dock_room={:?}", app.band_dock_room);
+        for (r, ink) in rows.iter().take(10) {
+            println!(
+                "  {} x {:7.1}..{:7.1} (w {:6.1})  y {:7.1}..{:7.1}{}",
+                if *ink { "ink" } else { "clear" },
+                r.min.x,
+                r.max.x,
+                r.width(),
+                r.min.y,
+                r.max.y,
+                if r.max.x > w + 1.0 || r.min.x < -1.0 { "   <-- PAST THE WINDOW" } else { "" }
+            );
+        }
+        full.drop_without_applying_deltas();
+    }
+
     /// Reproduce Kevin's phone crash report (discussion #9) at the geometry
     /// Chrome Android gave: a 360 pt viewport, which crashed.
     #[test]
