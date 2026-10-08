@@ -13,6 +13,15 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+- **ADS-B no longer holds a CPU core at 100 % on an empty sky.** The decoder
+  read the noise's lower quartile as its floor, which for real receiver noise
+  is below the average noise sample, so ~40 % of all samples passed the first
+  check and ~98 000 false candidates a second were sliced at 2.4 Msps (~340 000
+  at 8 Msps). The floor is now the mean noise power the quartile implies. Worker
+  CPU on noise: ~90 % → ~8 % of a core at 2.4 Msps, ~280 % → ~22 % at 8 Msps.
+  Sensitivity is unchanged to the message at 2.4 and 4 Msps; at the very edge
+  (8 dB SNR) one or two DF17s in forty are lost. Measured on synthetic Gaussian
+  noise, not yet on a Pluto.
 - **SSTV can be decoded on any frequency: KEEP DIAL.** Choosing SSTV moved a
   dial more than 3 kHz from every published SSTV frequency onto the band's
   calling one, so a picture heard off the list could only be decoded by choosing
