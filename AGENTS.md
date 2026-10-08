@@ -1287,12 +1287,35 @@ The reproduction is `probe_narrow_window_overflow` in the `#[cfg(test)]` block a
 the bottom of `crates/sdroxide-ui/src/app/mod.rs`, reading `DOCK_W` and `MODE`
 and printing every rect past the window edge. Uncommitted.
 
-**Still open, and it is now one function:** what `image_panel` sizes itself from.
-`avail = ui.available_size()` at `sstv.rs:676` should be the allocated width, so
-either the `ui` it receives is not the `allocate_ui` child, or the panel takes a
-second measurement somewhere in its four-column split
-(`left_w`/`tx_w`/`gallery_w`/`live_w`, `sstv.rs:684…706`) after something else has
-already widened the row.
+**MEASURED, and the column arithmetic is NOT the culprit.** An instrumented trace
+at `sstv.rs:677` gives, for SSTV with the dock open:
+
+| window | `avail.x` | `left_w + tx_w + handle_w` | real column | painted panel |
+|---|---|---|---|---|
+| 1920 | **1620.0** | 1620.0 | 1641 | 0…1680 |
+| 1280 | **980.0** | 980.0 | 1001 | 0…1048 |
+| 960 | **660.0** | 660.0 | 681 | 0…931 |
+
+Two things fall out, and both close off the obvious suspects:
+
+- **The four-column split sums to `avail.x` exactly at every width**, so the
+  `.max(300.0)` / `.max(160.0)` floors on `left_w`, `tx_w` and `gallery_w` are
+  not overrunning anything. That theory is dead; do not spend time on it.
+- **But `avail.x` is ~21 pt *narrower* than the column the panel was actually
+  allocated** (1620 against 1641, 980 against 1001, 660 against 681) — so the
+  `ui` it receives is already short by something constant, **and the frame that
+  paints is wider than `avail.x` as well** (1680 against 1620 at 1920).
+
+So there are **two** widths in play that disagree with each other and with the
+allocation, and neither is the dock: what `ui.available_size()` reports here, and
+what the panel's own frame ends up painting. The `ui` reaching `image_panel` is
+therefore **not** the `allocate_ui` child from `frame.rs` — or something between
+them has taken its own measurement and re-laid-out the row.
+
+That is where to look next, and it is above `image_panel`, not inside it. The
+`operating_panel` call at `frame.rs:2368` passes `panel_h` to every other mode
+and **not** to `image_panel`; whatever the branch does when `panel_h` is absent is
+the obvious first thing to read.
 
 **The next step, and it is short:** drive one frame with **SSTV** (the deepest
 panel, and the one the report is really about) and **FT8** at **960 pt**, with
