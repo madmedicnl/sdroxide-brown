@@ -46,6 +46,12 @@ pub(in crate::app) struct SstvSlot {
 /// textures.
 const GALLERY_MAX: usize = 240;
 
+/// Points of row still needed beside the cursor before the TX-slant cluster
+/// can start on the current line: the `add_space` + separator + "TX slant"
+/// prefix measured ~69 and the ppm slider ~140 at a 960 pt window. Below
+/// this the cluster wraps to a fresh line instead (issue #643).
+const TX_TRIM_MIN_W: f32 = 230.0;
+
 /// A received-picture gallery entry.
 pub(in crate::app) struct SstvRecv {
     entry: ImageEntry,
@@ -688,16 +694,26 @@ impl SdroxideApp {
             Some(_) => (0.0, avail.x),
             None if self.swl_mode() => (avail.x, 0.0),
             None => {
+                // The three children (receive column, split handle, TX
+                // column) sit in the panel row with item spacing between
+                // them, so the split has to leave room for those two gaps —
+                // otherwise the columns sum to `avail.x` but the row lands
+                // `2 × spacing` past it and the whole panel grows over the
+                // dock (issue #643).
+                let sp = ui.spacing().item_spacing.x;
                 let tx = (avail.x * self.view.sstv_tx_fraction)
-                    .clamp(300.0, (avail.x - handle_w - 300.0).max(300.0));
-                ((avail.x - tx - handle_w).max(300.0), tx)
+                    .clamp(300.0, (avail.x - handle_w - 2.0 * sp - 300.0).max(300.0));
+                ((avail.x - tx - handle_w - 2.0 * sp).max(300.0), tx)
             }
         };
         // LIVE takes the rest of the receive side; the RECEIVED gallery width is a
-        // user-draggable fraction of it (min one thumbnail column).
+        // user-draggable fraction of it (min one thumbnail column). The LIVE /
+        // handle / RECEIVED row has the same two inter-item gaps as the panel
+        // row above, so both terms leave room for them (issue #643).
+        let sp = ui.spacing().item_spacing.x;
         let gallery_w = (left_w * self.view.sstv_gallery_fraction)
-            .clamp(150.0, (left_w - handle_w - 160.0).max(150.0));
-        let live_w = (left_w - gallery_w - handle_w).max(160.0);
+            .clamp(150.0, (left_w - handle_w - 2.0 * sp - 160.0).max(150.0));
+        let live_w = (left_w - gallery_w - handle_w - 2.0 * sp).max(160.0);
 
         ui.horizontal_top(|ui| {
             // A received thumbnail was clicked → enlarge it (applied after the row).
@@ -720,8 +736,8 @@ impl SdroxideApp {
                         .stroke(egui::Stroke::new(1.0, crate::theme::LINE_LIT()))
                         .inner_margin(egui::Margin { left: 8, right: 8, top: 6, bottom: 7 })
                         .show(ui, |ui| {
-                            ui.set_min_width(left_w - 16.0);
-                            ui.set_max_width(left_w - 16.0);
+                            ui.set_min_width(left_w - 18.0);
+                            ui.set_max_width(left_w - 18.0);
                             if rifp {
                                 self.rifp_controls(ui, cmds);
                                 return;
@@ -734,8 +750,33 @@ impl SdroxideApp {
                                         .size(12.0)
                                         .strong()
                                         .color(crate::theme::CYAN()),
-                                );
+            );
                                 self.digi_freq_chip(ui, cmds);
+                                // Whether choosing SSTV moves the dial onto the
+                                // band's published frequency. Beside the picker
+                                // because the two answer the same question: where
+                                // the decoder listens.
+                                ui.add_enabled_ui(self.digi_cfg_seeded, |ui| {
+                                    let keep = self.digi_cfg_edit.sstv_keep_dial;
+                                    if crate::chrome::chip(ui, keep, "KEEP DIAL")
+                                        .on_hover_text(if keep {
+                                            "On: choosing SSTV leaves the dial where you tuned, \
+                                             so the decoder works on any frequency. The published \
+                                             SSTV frequencies are still in the ⇵ picker. Click to \
+                                             go back to landing on the band's SSTV frequency."
+                                        } else {
+                                            "Off: choosing SSTV moves the dial onto the band's \
+                                             SSTV frequency when you are more than 3 kHz from \
+                                             one. Click to keep the dial where you tuned instead, \
+                                             and decode SSTV on any frequency. Tuning after \
+                                             choosing SSTV is never undone either way."
+                                        })
+                                        .clicked()
+                                    {
+                                        self.digi_cfg_edit.sstv_keep_dial = !keep;
+                                        cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+                                    }
+                                });
                                 let auto_label = if self.sstv.auto {
                                     format!("Auto ({})", self.sstv.tx_mode.label())
                                 } else {
@@ -853,6 +894,24 @@ impl SdroxideApp {
                                 }
 
                                 if !self.swl_mode() {
+                                    // Issue #643. Everything below sits inside
+                                    // `add_enabled_ui`, a scope, and a scope in
+                                    // a wrapping row takes its rect from the
+                                    // space left at the cursor. When the
+                                    // signal row has run to the right edge
+                                    // that space is zero-width, and inside the
+                                    // scope the wrap guard
+                                    // (`max_rect.left() < cursor.left()`) can
+                                    // never fire — both are the same point —
+                                    // so the slider expands the scope to the
+                                    // right instead of wrapping, growing the
+                                    // whole left column and pushing the panel
+                                    // over the band dock. Start a fresh line
+                                    // while what is left cannot hold the
+                                    // prefix and the slider.
+                                    if ui.available_size_before_wrap().x < TX_TRIM_MIN_W {
+                                        ui.end_row();
+                                    }
                                     ui.add_space(12.0);
                                     ui.separator();
                                     ui.label(RichText::new("TX slant").size(10.0).weak()).on_hover_text(
@@ -1122,13 +1181,21 @@ impl SdroxideApp {
                         .id_salt("sstv-transmit")
                         .auto_shrink([false, false])
                         .show_themed(ui, |ui| {
-                        let inner_w = tx_w - 16.0;
+                        let inner_w = tx_w - 18.0;
 
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 5.0;
+                            // Five fixed 70 pt thumbs are 370 pt with their
+                            // gaps — wider than a 300 pt TX column ever is,
+                            // so at a narrow window the row used to drag the
+                            // whole panel over the dock (issue #643). Shrink
+                            // to fit the width the row actually has; at any
+                            // width where 70 pt fits, this is 70 pt.
+                            let n = IMAGE_SLOTS as f32;
+                            let sw = ((ui.available_width() - 5.0 * (n - 1.0)) / n).clamp(40.0, 70.0);
+                            let size = egui::vec2(sw, sw * 54.0 / 70.0);
                             for i in 0..IMAGE_SLOTS {
                                 let sel = self.sstv.selected_slot == i;
-                                let size = egui::vec2(70.0, 54.0);
                                 let resp = if let Some(tex) =
                                     self.sstv.slot_thumbs.get(i).and_then(|t| t.as_ref())
                                 {
@@ -1249,8 +1316,8 @@ impl SdroxideApp {
                             .stroke(egui::Stroke::new(1.0, crate::theme::LINE_LIT()))
                             .inner_margin(2.0)
                             .show(ui, |ui| {
-                                ui.set_min_size(egui::vec2(inner_w, preview_h));
-                                ui.set_max_size(egui::vec2(inner_w, preview_h));
+                                ui.set_min_size(egui::vec2(inner_w - 6.0, preview_h));
+                                ui.set_max_size(egui::vec2(inner_w - 6.0, preview_h));
                                 ui.centered_and_justified(|ui| {
                                     if let Some(tex) = &self.sstv.preview_tex {
                                         ui.add(

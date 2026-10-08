@@ -22,6 +22,13 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   Sensitivity is unchanged to the message at 2.4 and 4 Msps; at the very edge
   (8 dB SNR) one or two DF17s in forty are lost. Measured on synthetic Gaussian
   noise, not yet on a Pluto.
+- **SSTV can be decoded on any frequency: KEEP DIAL.** Choosing SSTV moved a
+  dial more than 3 kHz from every published SSTV frequency onto the band's
+  calling one, so a picture heard off the list could only be decoded by choosing
+  the mode first and tuning afterwards. The new **KEEP DIAL** chip beside
+  **⇵ FREQ** in the SSTV panel leaves the dial where it was tuned. Off by
+  default; SSTV and SSTV-FM only. `PROTO_VERSION` 195 → 196 (an appended
+  `DigiConfig` field), so client and server must both be updated.
 - **"Keep mine (and stop asking)" now actually stops asking.** The bindings
   prompt offered *Use this profile's bindings* and *Keep mine (and stop
   asking)*, and only the first one persisted anything — so the second was not an

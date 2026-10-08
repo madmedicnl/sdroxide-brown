@@ -1728,7 +1728,12 @@ use sdroxide_types::{
 /// The branch this came from numbered it 187, but `main` had already spent 187
 /// on the ALC/per-band-gain work and 188 on the client screen, so the whole
 /// change moves up rather than renumbering anything already shipped.
-pub const PROTO_VERSION: u16 = 195;
+/// v196: `DigiConfig` gains `sstv_keep_dial` (bool) on its tail — choosing SSTV
+/// leaves the dial where the operator tuned instead of moving it onto the
+/// band's published SSTV frequency. `DigiConfig` rides whole in
+/// `SetDigiConfig`/`DigiStatus`, so this is the same appended-field break as
+/// v184. A downstream (fork) change, appended last.
+pub const PROTO_VERSION: u16 = 196;
 const VERSION_BYTE: u8 = 0x13;
 
 #[derive(Debug, thiserror::Error)]

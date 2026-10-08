@@ -635,7 +635,12 @@ impl SdroxideApp {
         let cfg = &mut self.digi_cfg_edit;
         let mut changed = false;
         ui.add_space(6.0);
-        ui.horizontal(|ui| {
+        // Wrapped, not `horizontal`: this row sits inside the panel header, whose
+        // width is the column it is laid out in — an unwrapped row here grows the
+        // panel to whatever its content wants, which is issue #643: Olivia's caveat
+        // line alone is about a thousand points long, so the panel painted off the
+        // window and over the dock.
+        ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
             match mode {
                 Mode::Rtty | Mode::RttyFm => {
@@ -722,24 +727,6 @@ impl SdroxideApp {
                             changed = true;
                         }
                     }
-                    // Said here, beside the two settings it is about: the
-                    // tone/bandwidth names are the real Olivia's, receiving is
-                    // confirmed off the air, and transmitting round-trips
-                    // through our own receiver. What is *not* proven is another
-                    // program copying us — one sign convention differs from
-                    // fldigi's source — so this says to check the first over
-                    // rather than waiting for an answer that may not come.
-                    ui.add_space(4.0);
-                    ui.label(
-                        RichText::new(
-                            "Receiving works — other stations' Olivia decodes (confirmed off the \
-                             air). Transmitting round-trips through our own receiver, but it has \
-                             not been copied by fldigi or MultiPSK, so check the first over \
-                             rather than expecting an answer.",
-                        )
-                        .size(10.0)
-                        .color(crate::theme::YELLOW()),
-                    );
                 }
                 Mode::Thor => {
                     cap(ui, "Mode");

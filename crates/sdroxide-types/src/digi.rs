@@ -2322,6 +2322,16 @@ pub struct DigiConfig {
     /// is a wire change (`PROTO_VERSION` 183 → 184).
     #[serde(default)]
     pub ft8_depth: Ft8Depth,
+    /// SSTV: leave the dial where it is when SSTV is selected, instead of
+    /// moving it onto the band's published SSTV frequency.
+    ///
+    /// Off by default, so choosing SSTV still lands a beginner on the calling
+    /// frequency. On, the decoder runs wherever the operator tuned — a local
+    /// net, a picture heard off the list — and the published frequencies stay
+    /// one click away in the panel's frequency picker. Appended last, so this
+    /// is a wire change (`PROTO_VERSION` 195 → 196).
+    #[serde(default)]
+    pub sstv_keep_dial: bool,
 }
 
 fn cw_default_tx_idle_s() -> f32 {
@@ -2521,6 +2531,7 @@ impl Default for DigiConfig {
             cw_key_tx: false,
             cb_wide_callsigns: false,
             ft8_depth: Ft8Depth::default(),
+            sstv_keep_dial: false,
         }
     }
 }
