@@ -1,31 +1,34 @@
 # Agent notes — SDR Oxide, the CB and SWL fork
 
-> **The CW keyer is BUILT (`353d136f`) and BENCHED — it works on the air.**
-> The CH55x `1209:c550` paddle keys the SS9900v over MCW/VOX, iambic, through
-> `origin/main`; the operator's verdict was `all works!`. Read §10 before
-> starting anything here — it says which half of it is settled, which claim in
-> the original handover was **wrong**, and **the one setting the rig must be
-> put in**, which is not the one you would assume. The user-facing half has
-> gone upstream as **#569** (keyer, draft) and **#626** (engine side +
-> `CwContacts`, draft); the USB source, settings tab and panel split stay here
-> and #573 is **superseded** — do not rebase it.
-> [`CW-HANDOVER.md`](CW-HANDOVER.md)
-> is the original design, kept for the seams it records. **ALE (issue #262) is otherwise
-> mid-flight — read [`ALE-HANDOVER.md`](ALE-HANDOVER.md)
-> first if you are continuing it.** It has the state, the exact capture/decode
-> **FST4W is planned, not built — read [`FST4W-HANDOVER.md`](FST4W-HANDOVER.md)
-> before starting it**: the mode-inventory against the WSJT suite (we also lack
-> **JT4** and **Echo**), why FST4W is the one that fits, and every integration
-> arm a new `Mode` needs.
-> **Undocked mode (detachable windows) is scoped, not started — read
-> [`UNDOCKED-HANDOVER.md`](UNDOCKED-HANDOVER.md)**: the detached-panadapter
-> first slice, the multi-viewport groundwork, and the Wayland placement caveat.
-> commands, the fixed RSP1 settings, and the next steps. Everything below is
-> the rest of the fork. Upstream ask is open: draft PR
-> [dividebysandwich/sdroxide#598](https://github.com/dividebysandwich/sdroxide/pull/598)
-> (proven RX core + TX primitive) and a comment on issue #262. ALE ships in the
-> ALE-mode build; the experimental-release recipe below is still the one to use
-> when a build needs to name it (the older pre-release tag has been removed).
+> **Fresh session, 2026-10-09. Start here.** `main` is green, the whole open
+> queue is merged (#22 SSTV KEEP DIAL, #23 the browser `remember` cookie, #24
+> the ADS-B noise floor), and `2.0.2_brown` is built and installed.
+> `PROTO_VERSION` is **197**.
+>
+> **The next project is undocked mode** (detachable windows — the waterfall on a
+> second monitor): read [`UNDOCKED-HANDOVER.md`](UNDOCKED-HANDOVER.md) top to
+> bottom — it is the fresh handover and it carries the todo list. Item 1 (the
+> state) is done; **item 2, extracting the panadapter draw out of `frame.rs`, is
+> the only risky step** and is deliberately on its own.
+>
+> **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
+> mid-flight — read it before touching ALE). **Phone UI**
+> ([`PHONE-UI-HANDOVER.md`](PHONE-UI-HANDOVER.md) — the 1.9.17 phone **crash is
+> still open**; never describe it as fixed). **FST4W**
+> ([`FST4W-HANDOVER.md`](FST4W-HANDOVER.md) — planned, not built; the verdict is
+> do not ship as wired). **Olivia** ([`OLIVIA-HANDOVER.md`](OLIVIA-HANDOVER.md)
+> — receive proven on the air; the open item is whether a real fldigi can copy
+> *our* transmission). The **CW keyer is built and benched** (`353d136f`, "all
+> works!"); its design is [`CW-HANDOVER.md`](CW-HANDOVER.md), its outcome is §10
+> below.
+>
+> **Every session, in order:** `git fetch upstream` and merge if it moved; read
+> the maintainer's comments on our open upstream PRs (answer only where he asked
+> something — silence is not a prompt to re-ping); check the fork's
+> **Discussions** (issues are disabled there, so it is the support channel); look
+> only at upstream issues we have a PR for. The current PR list and the rest of
+> the workflow are in "The standing queue and how to check it" below. A tag or a
+> nightly runs the full gate before it is cut — see "Cutting a release".
 
 ## Session 2026-10-08, later: PRs merged, DAB to the radio tab, eQSL QTH, release resilience
 

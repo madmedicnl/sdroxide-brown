@@ -1,13 +1,46 @@
-# Undocked mode — scope and first workflow
+# Undocked mode — START HERE (the next project)
 
-**Status: scoped, not started (2026-10-08).** A new layout where chosen modules
-live in their **own OS windows** — like GIMP's and SDRuno's detachable panels —
-so the main window can give its space to the controls and decoders while the
-waterfall sits on a second monitor.
+**This is the fresh-session starting point (2026-10-09).** Read it top to bottom.
+`main` is green, everything in the queue is merged, and the next piece of work
+is the one below.
 
-This is the gap it fills: today every `LayoutMode` (Desktop / Tablet / Small /
-Phone / Auto) stacks every module into the **one** window. Operators have asked
-repeatedly for the waterfall detached, and the fork has the mechanism already.
+A new layout where chosen modules live in their **own OS windows** — like GIMP's
+and SDRuno's detachable panels — so the main window can give its space to the
+controls and decoders while the waterfall sits on a second monitor. Today every
+`LayoutMode` (Desktop / Tablet / Small / Phone / Auto) stacks every module into
+the **one** window; operators have asked repeatedly for the waterfall detached,
+and the fork already has the mechanism (the solar3d viewport).
+
+## TODO (do these in order)
+
+- [x] **1. State.** `DetachedWindow` + `UiSettings::{panadapter_detached,
+      panadapter_window}` — landed (`21c204fa`). No wire bump (local config).
+- [ ] **2. Extract `draw_panadapter`.** Lift the panadapter block out of
+      `frame.rs`'s nested closure (`~765`–`904`) into `fn draw_panadapter(&mut
+      self, ui, <captured locals>)`, and call it from the main window
+      **unchanged**. Land it as its own commit with the main-window draw
+      byte-identical — that is the whole point of the step, so a mistake is
+      visible before any window is wired. `cargo test -p sdroxide-radio --test
+      cw_panadapter` and the panadapter render test must still pass.
+- [ ] **3. The `DETACH` toggle.** A control in the panadapter's DISP row, with
+      hover saying where the window goes and the Wayland caveat. Handle
+      `ViewportEvent::Close` re-attaching.
+- [ ] **4. The detached window.** `ctx.show_viewport_immediate(panadapter_vid,
+      ViewportBuilder::default().with_app_id("sdroxide-panadapter")
+      .with_title(…).with_inner_size(size)[.with_position(pos)], |ui, _|
+      self.draw_panadapter(ui, …))` — native only. **Immediate, not deferred**
+      (see step 4's note).
+- [ ] **5. The main window reclaims the space.** Detached ⇒ `waterfall_h = 0`,
+      the operating panel takes the column. Pure test on the split.
+- [ ] **6. Persist geometry** on the rebuild frame (the solar3d pattern).
+- [ ] **7. The overlay.** Big centred frequency over the detached panadapter;
+      optionally a compact S-level. Tuning strip and S-meter stay in the main
+      window (decided).
+- [ ] **8. Gate + install.** `cargo check --workspace --all-targets` silent,
+      `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui`,
+      the touched-crate tests, build + install.
+
+Everything below is the reference for those steps.
 
 ## What already exists (the groundwork — this is why it is not from scratch)
 
