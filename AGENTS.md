@@ -24,6 +24,67 @@
 > ALE-mode build; the experimental-release recipe below is still the one to use
 > when a build needs to name it (the older pre-release tag has been removed).
 
+## Session 2026-10-08, night: **#643 FIXED**, and the fork's browser build is broken
+
+**#643 is done, at the cause — commits `d7ebc0ec` (fix + probe + regression
+test) and `d3863556` (Olivia note removed), pushed.** The operator reviewed the
+running build: **"works perfectly"**.
+
+**What it actually was, because the plan above was still wrong.** Not `max_rect`
+vs `available_width`, not `image_panel` reading a stale width: **every Frame in
+the SSTV panel budgeted its content box to the whole allocation and forgot its
+own stroke.** egui's Frame outer rect = content + inner margins + stroke, so a
+frame asking for `size` inside an allocation of `size` grows 2 pt (1 pt stroke
+each side) every time — the row landed `0…692` past a dock at 681 in a 960 pt
+window. The budgets are now `size − 18` wide (16 pt margins + 2 pt stroke) and
+`size − 14` tall (12 + 2), the TX preview frame pays its own chrome separately,
+and Olivia's unwrapped header row (≈1000 pt of caveat text) is
+`horizontal_wrapped` — which is the *other* half: the mode that overran the
+**window** never touched a budget at all.
+
+**Fail-proofed exactly as the house rule asks.** The three budget groups were
+flipped back to their old numbers with a targeted script (asserted one match
+each, so no silent no-op) →
+`Sstv at 960 pt: ink x 0..692 crosses the dock edge at 681` → restored → pass.
+The regression test `the_operating_panel_stays_inside_its_column`
+(`crates/sdroxide-ui/src/app/mod.rs`) drives Sstv / SstvFm / Rifp / Olivia /
+Ft8 at 960 / 1280 / 1920 and checks **both** edges — the window's right and the
+dock's left — which is the probe-gap note this section's plan called out (the
+probe only reported past the window, so it found Olivia and missed the three
+image modes).
+
+**The `SDROXIDE_PANEL_TRACE` instrumentation is stripped** (grep clean across
+`sdroxide-ui`, the `trace_panel` helper in `frame.rs` deleted, `chrome.rs` back
+to byte-identical). Gate: `cargo check --workspace --all-targets` silent,
+`cargo test --release -p sdroxide-ui` — 751 passed, 0 failed.
+
+**The yellow Olivia caveat label is gone** from the mode panel (`d3863556`) —
+the operator's word: it isn't needed anymore. Nothing else changed there; the
+header wrap stays (it is the #643 fix).
+
+**The fork's own PRs, checked — and #23 covers a real break.** Both are
+`claude/*` branches, opened today against `madmedicnl/sdroxide-brown`:
+
+- **#23 (OPEN) "Browser sign-in: send `remember`, not hours" — MERGEABLE, and
+  its claim is verified true here.** `main` **does not compile for the wasm
+  target**: `login.rs:261 expected u32, found bool` — `96817d2` made
+  `remember_cookie` a `bool` and left the browser-only call passing it as
+  hours. Native builds never compile that line. Run
+  `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui`
+  whenever `login.rs` or any wasm-only path is touched — the full workspace
+  check cannot see it, and it is otherwise only caught by the tag/nightly CI's
+  web job. **Recommend merging #23** (decision is the operator's).
+- **#22 (DRAFT) "SSTV: KEEP DIAL"** — `DigiConfig::sstv_keep_dial`, appended
+  last, `PROTO_VERSION` 195 → 196; its own body says the **engine tests were
+  not run** (that session could not build `rade_c`). De-risking it is one
+  `cargo test -p sdroxide-radio` in a worktree on the branch — ask before
+  doing it; it is a draft for a reason.
+
+**Carried forward:** merge #23 if the operator says so; Kevin's DAB-advice →
+radio-tab move (four steps, `Ddc::rate_for` reachable via `sdroxide-dsp`);
+`cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui` is now
+worth a slot in the pre-push routine whenever wasm-reachable code changes.
+
 ## Session 2026-10-08, evening: the issue list, Kevin's #18, and #643 carried forward
 
 Worked the fork's issue list, then Kevin's **#18** ("the program nags").
@@ -1442,13 +1503,14 @@ the obvious first thing to read.
 section above (instrument the two panel calls, fix, prove with `probe_narrow`)
 replaces this one — it does not need a second harness and it names the panel.
 
-**The next step, and it is short:** drive one frame with **SSTV** (the deepest
-panel, and the one the report is really about) and **FT8** at **960 pt**, with
-`band_docked = true` and `band_dock_room` returning `None` so no dock is drawn —
-then walk the panel's shapes for anything whose `rect.max.x` exceeds the window
-width. The oracle from the 2 pt border fix, aimed at the window edge rather than
-the column edge. A shape overhanging 960 names itself, and a phone-width sweep
-on the same test would catch the class rather than the instance.
+**Resolved 2026-10-08, later session: #643 is FIXED** — see `## Session
+2026-10-08, night:` at the top. It was never `max_rect` vs `available_width`
+either: every Frame in the SSTV panel budgeted its content box to the whole
+allocation and forgot its own **stroke**, so the row grew 2 pt a frame until it
+landed past the dock. The regression test
+`the_operating_panel_stays_inside_its_column` checks **both** edges (window and
+dock-left, as this section's probe-gap note asked) and fails against the old
+budgets with `Sstv at 960 pt: ink x 0..692 crosses the dock edge at 681`.
 
 **CORRECTION to the note below this line, and the earlier claim was wrong.**
 It said "a child overruns its own allocation by 40 pt". That is **not** what is
