@@ -17,6 +17,9 @@
 > before starting it**: the mode-inventory against the WSJT suite (we also lack
 > **JT4** and **Echo**), why FST4W is the one that fits, and every integration
 > arm a new `Mode` needs.
+> **Undocked mode (detachable windows) is scoped, not started — read
+> [`UNDOCKED-HANDOVER.md`](UNDOCKED-HANDOVER.md)**: the detached-panadapter
+> first slice, the multi-viewport groundwork, and the Wayland placement caveat.
 > commands, the fixed RSP1 settings, and the next steps. Everything below is
 > the rest of the fork. Upstream ask is open: draft PR
 > [dividebysandwich/sdroxide#598](https://github.com/dividebysandwich/sdroxide/pull/598)
