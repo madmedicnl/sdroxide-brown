@@ -12,15 +12,18 @@
 > the only risky step** and is deliberately on its own.
 >
 > **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
-> mid-flight — read it before touching ALE). **Phone UI**
-> ([`PHONE-UI-HANDOVER.md`](PHONE-UI-HANDOVER.md) — the 1.9.17 phone **crash is
-> still open**; never describe it as fixed). **FST4W**
+> mid-flight — read it before touching ALE). **FST4W**
 > ([`FST4W-HANDOVER.md`](FST4W-HANDOVER.md) — planned, not built; the verdict is
 > do not ship as wired). **Olivia** ([`OLIVIA-HANDOVER.md`](OLIVIA-HANDOVER.md)
 > — receive proven on the air; the open item is whether a real fldigi can copy
 > *our* transmission). The **CW keyer is built and benched** (`353d136f`, "all
 > works!"); its design is [`CW-HANDOVER.md`](CW-HANDOVER.md), its outcome is §10
 > below.
+>
+> **Phone UI is delegated — off our list** (2026-10-09). The 1.9.17 phone
+> *crash* is real and this fork's own phone layouts are still documented in the
+> sections below, but the work is somebody else's now: do not pick it up, and do
+> not open a handover for it. Its old `PHONE-UI-HANDOVER.md` was removed.
 >
 > **Every session, in order:** `git fetch upstream` and merge if it moved; read
 > the maintainer's comments on our open upstream PRs (answer only where he asked
@@ -128,9 +131,9 @@ header wrap stays (it is the #643 fix).
 
 **Carried forward:** #23 and #24 are merged; Kevin's DAB-advice → radio-tab
 move is **done** (`5bef39e7`, 2026-10-08). The open items from #16/#18 stand —
-the phone's right border, the three-tab flicker, the Pluto CPU thread, and the
-still-untested runtime of the merged PRs (`sstv_keep_dial`, the ADS-B floor on
-a real Pluto);
+the three-tab flicker, the Pluto CPU thread, and the still-untested runtime of
+the merged PRs (`sstv_keep_dial`, the ADS-B floor on a real Pluto); the phone's
+right border is **delegated, off our list** (2026-10-09);
 `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui` is now
 worth a slot in the pre-push routine whenever wasm-reachable code changes.
 
