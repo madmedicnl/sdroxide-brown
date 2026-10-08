@@ -5106,7 +5106,7 @@ window set ever grows past one.
   the mode/band tables — every one of which has caught a careless merge edit,
   and none of which a reviewer would have found by eye.
 - **The radio crate's test set is the expensive one — prefer a single test
-  binary.** `cargo test -p sdroxide-radio` builds and links ~100 integration
+  binary.** `cargo test -p sdroxide-radio` builds and links **72** integration
   test binaries, each carrying the whole engine (RADE, ADS-B, DAB, the vendored
   C), so it is minutes of **linking** even when nothing changed — that is the
   answer to "why is the test run so long when it compiles fine". Chasing one
