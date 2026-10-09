@@ -87,13 +87,24 @@ with the app-id table and a **niri `window-rule`** example to float and pin the
 windows to monitors (the app cannot place a window on Wayland; that is the one
 thing the operator does, and it is documented rather than assumed).
 
+**The panadapter window is self-sufficient** (`f7e4674a`): the big frequency
+readout now has the **mode and signal level** under it (read-only, sharing the
+main window's meter), so the second monitor needs no glance at the first. And a
+**Dock all windows** chip in Settings → UI brings every window back at once.
+
 **The destination, so the next slice aims at it:** a user-arrangeable workspace
 in the SDRuno mould — each module (the panadapter, the control surface, the
-decoders, the scanner) in its own window, placed by the operator. Adding one is
-now: a `DetachableModule` variant, its `detached_spec`, and a `show_detached_module`
-arm. Good next modules: a decoder window (the decode list), the scanner — and a
-**Niri `window-rule`** sample for floating/placement on the operator's own
-machine, which the app exposes the app-ids for.
+decoders, the scanner) in its own window, placed by the operator. Adding a docked
+module is now: a `DetachableModule` variant, its `detached_spec`, a
+`show_detached_module` arm, and (if it is not always present) a
+`*_window_wanted` predicate — the registry, the shell and the Settings rows take
+care of the rest. The **next module** is the real design question: the **control
+surface** (SDRuno's "RX control") is the pair to the panadapter but lives in the
+top strip, whose rows are measured and packed, so it is the risky one; a
+**decoder window** (the decode list) is cleaner but its list is drawn from
+several mode panels; the **scanner** and the other tool windows are a different
+mechanism (egui windows, not docked panels) and would need extracting their
+bodies. Nothing else is owed.
 
 Everything below is the reference for those steps.
 
