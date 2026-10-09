@@ -763,145 +763,80 @@ impl eframe::App for SdroxideApp {
             let atsmini = self.atsmini_active();
             let wf_tuning = self.wf_tick(live, ui.ctx().pixels_per_point());
             if show_wf {
-                ui.allocate_ui(egui::vec2(width, wf_h), |ui| {
-                    let pan =
-                        spectrum_view::WindowPan::of(self.caps.as_ref(), self.state.center_hz)
-                            .with_outer(Some(self.zoom_out_window()), self.state.sample_rate);
-                    // The level slider takes a narrow column off the right of
-                    // the panadapter. `split` declines on a window too small to
-                    // spare it, and the picture then keeps every column.
-                    let area = ui.available_rect_before_wrap();
-                    let (spec_area, level) = match crate::widgets::level_slider::split(area) {
-                        Some((s, l)) => (s, Some(l)),
-                        None => (area, None),
-                    };
-                    // Reserve the panadapter's whole height in this layout
-                    // before drawing into a child: `new_child`'s allocations
-                    // are invisible to `allocate_ui`'s space accounting, so
-                    // without this the split handle and the panel below were
-                    // laid out as if the panadapter had taken no height at all
-                    // — which collapsed the waterfall to a sliver in the modes
-                    // that have a panel under it.
-                    ui.allocate_space(area.size());
-                    let mut spec_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(spec_area)
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    spec_ui.shrink_clip_rect(spec_area);
-                    // **SSTV on a demod-audio front end.** Its view is anchored
-                    // on the picture rather than on the tone it happens to be
-                    // carrying, and CTR has to centre on that anchor — with the
-                    // dial as the anchor it dragged the window back to the
-                    // carrier every frame, which is exactly what the operator
-                    // saw when clicking CTR moved the view. The picture's centre
-                    // is the band's 1750 Hz, signed by the side the mode rides
-                    // (SSTV is LSB on 160/80/40 m), and it is a *view* anchor
-                    // only: the logged frequency stays the dial.
-                    let sstv_picture =
-                        self.caps.as_ref().is_some_and(|c| c.audio_mode) && mode.is_sstv();
-                    spectrum_view::show_ext(
-                        &mut spec_ui,
-                        &mut self.view,
-                        &mut self.state,
-                        frame.as_ref(),
-                        &mut self.peaks,
-                        &mut self.spec_smooth,
-                        &mut self.trace_cache,
-                        &mut self.spec3d,
-                        // A click sets the tone offset in the modes that park
-                        // on an agreed dial and pick a signal inside the
-                        // sub-band. Not in RTTY: its tone pair is a standard
-                        // (2125/2295 Hz), stations are spread across the band
-                        // rather than stacked in one window, and dragging mark
-                        // and space onto each one in turn walks them out of the
-                        // transmit filter. There a click tunes the dial so the
-                        // signal lands on the pair, exactly as CW does.
-                        Some(spectrum_view::AudioCursor {
-                            hz: if sstv_picture {
-                                side * crate::app::spectrum::SSTV_TONE_HZ as f32
-                            } else {
-                                audio_hz
-                            },
-                            // A click sets the digital TX offset in the modes
-                            // that have one. It does not on a listening source
-                            // with no transmitter: there is no offset to set,
-                            // and a click is the only way to nudge the dial
-                            // inside the passband a hardware-demodulated radio
-                            // hands over — so it tunes, as it does in CW.
-                            click_sets_offset: !mode.holds_standard_tones() && !atsmini,
-                            // CW only for now: RTTY and WEFAX sit off their
-                            // dials too and could follow, but each wants
-                            // checking against real signals first.
-                            line_on_cursor: false,
-                            // Where the window is centred is a separate
-                            // question from where the tuning line is drawn,
-                            // and RTTY has already been checked on the air for
-                            // this one: its tone pair is 2210 Hz off the dial,
-                            // so a click-tune zoomed in tighter than that left
-                            // the dial off the picture and the re-centring
-                            // carried the signal away with it.
-                            center_on_cursor: mode.holds_standard_tones() || sstv_picture,
-                        }),
-                        if matches!(mode, Mode::Ft8 | Mode::Ft2) {
-                            self.digi_status
-                                .as_ref()
-                                .map(|s| s.config.dxped_mode)
-                                .unwrap_or_default()
-                        } else {
-                            sdroxide_types::DxpedMode::Normal
-                        },
-                        mode.is_slotted()
-                            && self
-                                .digi_status
-                                .as_ref()
-                                .map(|s| s.config.auto_tx_freq)
-                                .unwrap_or(true),
-                        mode.is_slotted()
-                            && self
-                                .digi_status
-                                .as_ref()
-                                .map(|s| s.config.hold_tx_freq)
-                                .unwrap_or(false),
-                        &markers,
-                        &ft8_spots,
-                        &ft8_alpha,
-                        &net_spots,
-                        &net_alpha,
-                        &mut clicked_spot,
-                        &ism_labels,
-                        &mem_marks,
-                        self.input.cfg.wheel,
-                        pan,
-                        wf_tuning,
-                        show_panel,
-                        &mut cmds,
-                    );
-                    // The ATS Mini tunes by stepping its own band cycle, so the
-                    // dial can be a beat ahead of the radio. It hands us audio
-                    // only, so the waterfall is where the eye already is: say it
-                    // here, centred, rather than under a dial the radio has not
-                    // reached.
-                    if self.atsmini_tuning && self.atsmini_active() {
-                        centred_waterfall_note(
-                            &spec_ui,
-                            spec_area,
-                            "tuning — the radio is catching up",
-                        );
-                    }
-                    if let Some(l) = level
-                        && crate::widgets::level_slider::show(ui, l, &mut self.view)
-                    {
-                        // A hand on the level is a manual override: the next
-                        // automatic fit would otherwise walk it back.
-                        self.view.auto_fit = false;
-                    }
-                    paint_panadapter_chrome(ui, area);
-                    if self.levels_hidden(now) && levels_hidden_chip(ui, spec_area) {
-                        self.view.auto_fit = true;
-                        self.fit_levels_now(now);
-                    }
+                // **SSTV on a demod-audio front end.** Its view is anchored on
+                // the picture rather than on the tone it happens to be carrying,
+                // and CTR has to centre on that anchor — with the dial as the
+                // anchor it dragged the window back to the carrier every frame,
+                // which is exactly what the operator saw when clicking CTR moved
+                // the view. The picture's centre is the band's 1750 Hz, signed
+                // by the side the mode rides (SSTV is LSB on 160/80/40 m), and
+                // it is a *view* anchor only: the logged frequency stays the
+                // dial.
+                let sstv_picture =
+                    self.caps.as_ref().is_some_and(|c| c.audio_mode) && mode.is_sstv();
+                // A click sets the tone offset in the modes that park on an
+                // agreed dial and pick a signal inside the sub-band. Not in
+                // RTTY: its tone pair is a standard (2125/2295 Hz), stations
+                // are spread across the band rather than stacked in one window,
+                // and dragging mark and space onto each one in turn walks them
+                // out of the transmit filter. There a click tunes the dial so
+                // the signal lands on the pair, exactly as CW does.
+                let cursor = Some(spectrum_view::AudioCursor {
+                    hz: if sstv_picture {
+                        side * crate::app::spectrum::SSTV_TONE_HZ as f32
+                    } else {
+                        audio_hz
+                    },
+                    // A click sets the digital TX offset in the modes that have
+                    // one. It does not on a listening source with no
+                    // transmitter: there is no offset to set, and a click is
+                    // the only way to nudge the dial inside the passband a
+                    // hardware-demodulated radio hands over — so it tunes, as it
+                    // does in CW.
+                    click_sets_offset: !mode.holds_standard_tones() && !atsmini,
+                    // CW only for now: RTTY and WEFAX sit off their dials too
+                    // and could follow, but each wants checking against real
+                    // signals first.
+                    line_on_cursor: false,
+                    // Where the window is centred is a separate question from
+                    // where the tuning line is drawn, and RTTY has already been
+                    // checked on the air for this one: its tone pair is 2210 Hz
+                    // off the dial, so a click-tune zoomed in tighter than that
+                    // left the dial off the picture and the re-centring carried
+                    // the signal away with it.
+                    center_on_cursor: mode.holds_standard_tones() || sstv_picture,
                 });
+                let dxped = if matches!(mode, Mode::Ft8 | Mode::Ft2) {
+                    self.digi_status.as_ref().map(|s| s.config.dxped_mode).unwrap_or_default()
+                } else {
+                    sdroxide_types::DxpedMode::Normal
+                };
+                let auto_tx_freq = mode.is_slotted()
+                    && self.digi_status.as_ref().map(|s| s.config.auto_tx_freq).unwrap_or(true);
+                let hold_tx_freq = mode.is_slotted()
+                    && self.digi_status.as_ref().map(|s| s.config.hold_tx_freq).unwrap_or(false);
+                self.draw_panadapter(
+                    ui,
+                    width,
+                    wf_h,
+                    frame.as_ref(),
+                    &mut cmds,
+                    cursor,
+                    dxped,
+                    auto_tx_freq,
+                    hold_tx_freq,
+                    &markers,
+                    &ft8_spots,
+                    &ft8_alpha,
+                    &net_spots,
+                    &net_alpha,
+                    &mut clicked_spot,
+                    &ism_labels,
+                    &mem_marks,
+                    show_panel,
+                    now,
+                    wf_tuning,
+                );
             }
             // Only between two things: with the panadapter switched off there
             // is nothing above the panel for the handle to divide, and a drag
@@ -1020,85 +955,28 @@ impl eframe::App for SdroxideApp {
                 center_on_cursor: self.ui_settings.cw_qrg,
             });
             if show_wf {
-                ui.allocate_ui(egui::vec2(width, wf_h), |ui| {
-                    let pan =
-                        spectrum_view::WindowPan::of(self.caps.as_ref(), self.state.center_hz)
-                            .with_outer(Some(self.zoom_out_window()), self.state.sample_rate);
-                    // The level slider's column, exactly as on the digital
-                    // path above.
-                    let area = ui.available_rect_before_wrap();
-                    let (spec_area, level) = match crate::widgets::level_slider::split(area) {
-                        Some((s, l)) => (s, Some(l)),
-                        None => (area, None),
-                    };
-                    // Reserve the panadapter's whole height in this layout
-                    // before drawing into a child: `new_child`'s allocations
-                    // are invisible to `allocate_ui`'s space accounting, so
-                    // without this the split handle and the panel below were
-                    // laid out as if the panadapter had taken no height at all
-                    // — which collapsed the waterfall to a sliver in the modes
-                    // that have a panel under it.
-                    ui.allocate_space(area.size());
-                    let mut spec_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(spec_area)
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    spec_ui.shrink_clip_rect(spec_area);
-                    spectrum_view::show_ext(
-                        &mut spec_ui,
-                        &mut self.view,
-                        &mut self.state,
-                        frame.as_ref(),
-                        &mut self.peaks,
-                        &mut self.spec_smooth,
-                        &mut self.trace_cache,
-                        &mut self.spec3d,
-                        cw_pitch,
-                        sdroxide_types::DxpedMode::Normal,
-                        false,
-                        // This waterfall is drawn for the non-slotted modes, so
-                        // there is no held FT8 transmit tone for a click to
-                        // disturb. The engine's own gate is the authority in any
-                        // case; this only decides whether the UI bothers asking.
-                        false,
-                        &[],
-                        &cw_spots,
-                        &cw_alpha,
-                        &net_spots,
-                        &net_alpha,
-                        &mut clicked_spot,
-                        &ism_labels,
-                        &mem_marks,
-                        self.input.cfg.wheel,
-                        pan,
-                        wf_tuning,
-                        show_panel,
-                        &mut cmds,
-                    );
-                    // The ATS Mini tunes by stepping its own band cycle, so the
-                    // dial can be a beat ahead of the radio. It hands us audio
-                    // only, so the waterfall is where the eye already is: say it
-                    // here, centred, rather than under a dial the radio has not
-                    // reached.
-                    if self.atsmini_tuning && self.atsmini_active() {
-                        centred_waterfall_note(
-                            &spec_ui,
-                            spec_area,
-                            "tuning — the radio is catching up",
-                        );
-                    }
-                    if let Some(l) = level
-                        && crate::widgets::level_slider::show(ui, l, &mut self.view)
-                    {
-                        self.view.auto_fit = false;
-                    }
-                    paint_panadapter_chrome(ui, area);
-                    if self.levels_hidden(now) && levels_hidden_chip(ui, spec_area) {
-                        self.view.auto_fit = true;
-                        self.fit_levels_now(now);
-                    }
-                });
+                self.draw_panadapter(
+                    ui,
+                    width,
+                    wf_h,
+                    frame.as_ref(),
+                    &mut cmds,
+                    cw_pitch,
+                    sdroxide_types::DxpedMode::Normal,
+                    false,
+                    false,
+                    &[],
+                    &cw_spots,
+                    &cw_alpha,
+                    &net_spots,
+                    &net_alpha,
+                    &mut clicked_spot,
+                    &ism_labels,
+                    &mem_marks,
+                    show_panel,
+                    now,
+                    wf_tuning,
+                );
             }
             if show_panel {
                 if !phone && show_wf {
@@ -1398,6 +1276,112 @@ pub(in crate::app) struct DabScan {
 const DAB_SCAN_DWELL_S: f64 = 3.0;
 
 impl SdroxideApp {
+    /// Draw the panadapter — spectrum, waterfall, level slider and the ATS
+    /// "catching up" note — into `ui`, filling `width × wf_h`.
+    ///
+    /// Shared by the digital path and the CW/analog path, and by the detached
+    /// viewport. Everything that differs between callers rides the parameters —
+    /// the audio cursor, the FT8 DXpedition shading, the transmit-tone gates and
+    /// the overlay spot sets — so the picture is identical wherever it is drawn
+    /// from. `panel_below` is `show_ext`'s bandplan-strip gate: whether the
+    /// mode's own panel is on screen under this.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_panadapter(
+        &mut self,
+        ui: &mut egui::Ui,
+        width: f32,
+        wf_h: f32,
+        frame: Option<&std::sync::Arc<sdroxide_types::SpectrumFrame>>,
+        cmds: &mut Vec<Command>,
+        cursor: Option<spectrum_view::AudioCursor>,
+        dxped: sdroxide_types::DxpedMode,
+        auto_tx_freq: bool,
+        hold_tx_freq: bool,
+        markers: &[f32],
+        skimmer: &[sdroxide_types::SkimmerSpot],
+        alpha: &[f32],
+        net_spots: &[Spot],
+        net_alpha: &[f32],
+        clicked_spot: &mut Option<Spot>,
+        ism: &[spectrum_view::IsmLabel],
+        mem: &[crate::widgets::memories::MemMark],
+        panel_below: bool,
+        now: f64,
+        wf_tuning: spectrum_view::WfTuning,
+    ) {
+        ui.allocate_ui(egui::vec2(width, wf_h), |ui| {
+            let pan = spectrum_view::WindowPan::of(self.caps.as_ref(), self.state.center_hz)
+                .with_outer(Some(self.zoom_out_window()), self.state.sample_rate);
+            // The level slider takes a narrow column off the right of the
+            // panadapter. `split` declines on a window too small to spare it,
+            // and the picture then keeps every column.
+            let area = ui.available_rect_before_wrap();
+            let (spec_area, level) = match crate::widgets::level_slider::split(area) {
+                Some((s, l)) => (s, Some(l)),
+                None => (area, None),
+            };
+            // Reserve the panadapter's whole height in this layout before
+            // drawing into a child: `new_child`'s allocations are invisible to
+            // `allocate_ui`'s space accounting, so without this the split handle
+            // and the panel below were laid out as if the panadapter had taken
+            // no height at all — which collapsed the waterfall to a sliver in
+            // the modes that have a panel under it.
+            ui.allocate_space(area.size());
+            let mut spec_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(spec_area)
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
+            );
+            spec_ui.shrink_clip_rect(spec_area);
+            spectrum_view::show_ext(
+                &mut spec_ui,
+                &mut self.view,
+                &mut self.state,
+                frame,
+                &mut self.peaks,
+                &mut self.spec_smooth,
+                &mut self.trace_cache,
+                &mut self.spec3d,
+                cursor,
+                dxped,
+                auto_tx_freq,
+                hold_tx_freq,
+                markers,
+                skimmer,
+                alpha,
+                net_spots,
+                net_alpha,
+                clicked_spot,
+                ism,
+                mem,
+                self.input.cfg.wheel,
+                pan,
+                wf_tuning,
+                panel_below,
+                cmds,
+            );
+            // The ATS Mini tunes by stepping its own band cycle, so the dial can
+            // be a beat ahead of the radio. It hands us audio only, so the
+            // waterfall is where the eye already is: say it here, centred,
+            // rather than under a dial the radio has not reached.
+            if self.atsmini_tuning && self.atsmini_active() {
+                centred_waterfall_note(&spec_ui, spec_area, "tuning — the radio is catching up");
+            }
+            if let Some(l) = level
+                && crate::widgets::level_slider::show(ui, l, &mut self.view)
+            {
+                // A hand on the level is a manual override: the next automatic
+                // fit would otherwise walk it back.
+                self.view.auto_fit = false;
+            }
+            paint_panadapter_chrome(ui, area);
+            if self.levels_hidden(now) && levels_hidden_chip(ui, spec_area) {
+                self.view.auto_fit = true;
+                self.fit_levels_now(now);
+            }
+        });
+    }
+
     /// Advance a DAB scan, if one is running.
     ///
     /// A scan is an act of the operator's, so it lives in the app rather than
