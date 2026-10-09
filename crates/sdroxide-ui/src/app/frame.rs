@@ -816,9 +816,8 @@ impl eframe::App for SdroxideApp {
             let layers = crate::layout::panadapter_waterfall_only(ui.ctx())
                 || self.view.panadapter_visible();
             // A detached panadapter is drawn into its own window and takes no
-            // room here: the operating panel gets the whole column. Native
-            // only, and only for a mode with a panel to reclaim the space.
-            let detached = layers && self.panadapter_detached(mode);
+            // room here: what the mode puts in the column gets the whole of it.
+            let detached = layers && self.panadapter_detached();
             let show_wf = !detached && (!phone || on_waterfall) && layers;
             let show_panel = !phone || !on_waterfall;
 
@@ -1032,11 +1031,15 @@ impl eframe::App for SdroxideApp {
             // switching both off asks for.
             let layers = crate::layout::panadapter_waterfall_only(ui.ctx())
                 || self.view.panadapter_visible();
-            // A detached panadapter takes no room here; only CW, of the analog
-            // modes, has a panel under it to reclaim the column.
-            let detached = layers && self.panadapter_detached(self.state.rx[0].mode);
+            // A detached panadapter takes no room here; the mode's own panel
+            // (CW's keyboard, or nothing in a voice mode) gets the column.
+            let detached = layers && self.panadapter_detached();
             let (wf_h, panel_h, show_wf, show_panel) = if !cw_mode {
-                (ui.available_height(), 0.0, layers, false)
+                if detached {
+                    (0.0, 0.0, false, false)
+                } else {
+                    (ui.available_height(), 0.0, layers, false)
+                }
             } else if phone {
                 self.digi_tabs(ui, Mode::Cw);
                 let on_wf =
@@ -1677,21 +1680,19 @@ impl SdroxideApp {
     }
 
     /// Whether the focused radio should draw its panadapter into its own window
-    /// this frame. Off on the browser (the panadapter stays in-window), off
-    /// when the mode has nothing in the main window to reclaim the column for,
-    /// and off for a radio that is not the focused one — there is one detached
-    /// window for the station, and it shows the focused radio's.
-    fn panadapter_detached(&self, mode: Mode) -> bool {
+    /// this frame. Off on the browser (the panadapter stays in-window) and off
+    /// for a radio that is not the focused one — there is one undocked window
+    /// for the station, and it shows the focused radio's. **Every mode** can be
+    /// undocked: the waterfall leaving is what the operator asked for, and what
+    /// is left in the main window is whatever that mode puts there.
+    fn panadapter_detached(&self) -> bool {
         #[cfg(target_arch = "wasm32")]
         {
-            let _ = mode;
             false
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self.ui_settings.panadapter_detached
-                && self.focused
-                && (mode.has_bottom_panel() || mode == Mode::Cw)
+            self.ui_settings.panadapter_detached && self.focused
         }
     }
 

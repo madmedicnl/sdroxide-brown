@@ -19,9 +19,13 @@ and the fork already has the mechanism (the solar3d viewport).
       path and the CW/analog path — lifted into one inherent
       `SdroxideApp::draw_panadapter`; the main-window draw is byte-identical
       (`747bfb82`). `cw_panadapter` and the render tests stayed green.
-- [x] **3. The `DETACH` toggle.** A chip in the DISP menu's **Window** group,
-      greyed in modes with no panel to reclaim the column, hover naming the
-      Wayland caveat. `close_requested` re-attaches.
+- [x] **3. The toggle, named "Undocked".** A **Settings → UI → Panadapter
+      window** picker — *Docked in this window* / *Undocked — its own window* —
+      with the Wayland caveat in its hover. Deliberately a settings choice
+      rather than a strip chip: it is a workspace arrangement kept for good, not
+      a mid-QSO control. Works in **every mode** (a voice mode leaves the main
+      window's column to whatever the mode has; a digital mode leaves its
+      operating panel). `close_requested` docks it again.
 - [x] **4. The detached window.** `show_viewport_immediate` (native only) with
       app-id `sdroxide-panadapter` and a stable title. Immediate, not deferred:
       the draw borrows `&mut self`. One window for the **station**, owned by
@@ -39,13 +43,22 @@ and the fork already has the mechanism (the solar3d viewport).
       installed as `2.0.2_brown`; a live run on niri opened the window with
       app-id `sdroxide-panadapter` and persisted its geometry.
 
-**Status (2026-10-09): the first slice is built, committed (`7e02e051`) and
-installed.** Not yet done, and the honest follow-ups: a **Niri `window-rule`**
-so the window floats and lands on the second monitor (the app exposes the
-app-id for it; position is Wayland-ignored); and multi-radio is by-owner only —
-switching to a radio whose mode has no panel closes the window (the flag is
-station-wide but the app-id is single, so this is the shell-owned-window-
-manager work noted below).
+**Status (2026-10-09): the first slice is built, committed and installed**, with
+the control moved to **Settings → UI → Panadapter window** and named
+**Undocked**, and working in every mode.
+
+**The destination, so the next slice aims at it:** a user-arrangeable workspace
+in the SDRuno mould — each module (the panadapter, the RX/control surface, the
+decoders, the scanner) in its own window, placed by the operator. The panadapter
+is the first *module*; the honest next steps are the two the "Later" section
+already names: **generalise `DetachedWindow` to a registry of detachable
+modules** (so a second window is a table entry, not a second method), and the
+**shell-owned window manager** (stable viewport ids and one explicit owner,
+emitted every frame regardless of focus) — which is also what fixes
+multi-radio, where today the single station-wide id means switching to a radio
+whose mode shows no panadapter closes the window. And a **Niri `window-rule`**
+for floating/placement on the operator's own machine, which the app exposes the
+app-id for.
 
 Everything below is the reference for those steps.
 
