@@ -264,6 +264,11 @@ fn empty_centre(ui: &egui::Ui) {
     p.galley(egui::pos2(area.center().x - hint_w / 2.0, top + name_h + 8.0), hint, dim);
 }
 
+/// See [`SdroxideApp::tool_window_egui`]: the id epoch that resets a tool
+/// window's remembered geometry when this window's bounding changes. Bump it
+/// whenever a tool window's default size or its body's height-filling changes.
+const TOOL_WINDOW_EPOCH: &str = "b1";
+
 /// The DETACH/DOCK chip a tool window wears at the top-right of its body. On the
 /// browser it is absent — there is no second window to move to.
 fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
@@ -2025,7 +2030,13 @@ impl SdroxideApp {
         let mut win_open = true;
         let mut detach = false;
         let resp = egui::Window::new(title)
-            .id(crate::layout::salted_id(ctx, id))
+            // The id carries an **epoch**, bumped when this window's bounding
+            // changed. egui remembers a window's size and eframe persists it
+            // (`persist_egui_memory` is on), so a tool window an older build grew
+            // to the whole screen — its body fills its height, and there was no
+            // `default_height` to bound it — would keep that size for good
+            // whatever default this build asks for. The epoch discards it once.
+            .id(crate::layout::salted_id(ctx, id).with(TOOL_WINDOW_EPOCH))
             .open(&mut win_open)
             .frame(crate::chrome::window_frame())
             .resizable(true)
@@ -2038,6 +2049,10 @@ impl SdroxideApp {
             // window"). The default is the size the tool asks for; the operator
             // can still resize it.
             .default_height(crate::layout::window_h(ctx, default_size[1]))
+            // …and a hard ceiling, so a size that survived the epoch (or any
+            // future runaway) cannot take the whole screen. Twice the tool's
+            // own height is room to grow without becoming a black wall.
+            .max_height(crate::layout::window_h(ctx, default_size[1]) * 2.0)
             .show(ctx, |ui| {
                 crate::chrome::window_body_bg(ui);
                 detach = tool_window_chip(ui, false);
