@@ -293,7 +293,7 @@ fn tool_window_title_button(
         egui::vec2(side, side),
     );
     let mut clicked = false;
-    egui::Area::new(win_id.with("title-btn")).fixed_pos(rect.min).order(egui::Order::Middle).show(
+    egui::Area::new(win_id.with("title-btn")).fixed_pos(rect.min).order(egui::Order::Foreground).show(
         ctx,
         |ui| {
             ui.set_min_size(rect.size());
