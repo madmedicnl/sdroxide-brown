@@ -12426,6 +12426,15 @@ frequency readout with the **mode and signal level** beneath it, so the second
 monitor says what you would otherwise glance back at the main window for. A
 **Dock all windows** button appears under the rows once anything is out.
 
+The **tool windows** — the scanner, the schedule, the logbook, the spots list,
+the signal-id guide and the rest — can go to their own windows too. Each carries
+a small **⇱ WINDOW** chip at its top-right: click it and the tool moves into its
+own OS window (where the chip reads **⇱ DOCK** to bring it back). Closing an
+undocked tool closes it, as the ✕ does when it is docked. A tool window is
+session-only, like its position inside the main window — where it sat is not
+remembered across a restart. Their app-ids are `sdroxide-tool-<name>` (e.g.
+`sdroxide-tool-scanner`, `sdroxide-tool-mail`), so one rule can float them all.
+
 **The app does not place the window on Wayland.** A Wayland client is given no
 absolute position, so on niri, sway or GNOME the window opens where the
 compositor tiles it. To float it and pin it to a monitor, give it a **window
@@ -12436,6 +12445,7 @@ rule** matching its application id:
 | Panadapter | `sdroxide-panadapter` |
 | Operating panel | `sdroxide-panel` |
 | Controls | `sdroxide-controls` |
+| Tool windows | `sdroxide-tool-<name>` |
 
 For **niri**, in `~/.config/niri/config.kdl` (use your own output names —
 `niri msg outputs`):

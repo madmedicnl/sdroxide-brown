@@ -128,28 +128,13 @@ impl crate::app::SdroxideApp {
             cmds.push(Command::MailList { folder: self.mail.folder, offset: 0, count: PAGE });
         }
 
-        // An `egui::Window` shrinks to its content, so `default_height` alone
-        // leaves an empty inbox drawn as a couple of lines. `min_height` keeps
-        // a floor, and `set_min_height` inside makes the content actually ask
-        // for the room — without that the window collapses again the moment a
-        // folder is empty.
-        let min_h = crate::layout::window_h(ctx, 520.0);
-        let mut open = self.mail.open;
-        egui::Window::new("MAIL")
-            .id(crate::layout::salted_id(ctx, "MAIL"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 860.0))
-            .default_height(crate::layout::window_h(ctx, 640.0))
-            .min_width(crate::layout::window_w(ctx, 420.0))
-            .min_height(min_h)
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                ui.set_min_height(min_h);
-                self.mail_body(ui, cmds);
-            });
-        self.mail.open = open;
+        // An empty inbox would otherwise draw as a couple of lines; a height
+        // floor keeps the window usable whichever way it is drawn.
+        let show = self.tool_window(ctx, "mail", "MAIL", [860.0, 640.0], true, |me, ui| {
+            ui.set_min_height(crate::layout::window_h(ui.ctx(), 520.0));
+            me.mail_body(ui, cmds);
+        });
+        self.mail.open = show;
     }
 
     fn mail_body(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {

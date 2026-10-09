@@ -155,22 +155,11 @@ fn dim_ink_text() -> RichText {
 impl SdroxideApp {
     /// The BANDS window: one row per band, forecast beside evidence.
     pub(in crate::app) fn bands_window(&mut self, ctx: &egui::Context) {
-        let mut open = self.show_bands;
-        let resp = egui::Window::new("BANDS")
-            .id(crate::layout::salted_id(ctx, "BANDS"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 520.0))
-            .default_height(crate::layout::window_h(ctx, 460.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.bands_body(ui)
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
-        self.show_bands = open;
+        let open = self.show_bands;
+        let show = self.tool_window(ctx, "bands", "BANDS", [520.0, 460.0], open, |me, ui| {
+            me.bands_body(ui);
+        });
+        self.show_bands = show;
         if self.show_bands {
             // The IBP beacon and its countdown move every second; keep painting
             // while the window is open rather than showing a stale slot.

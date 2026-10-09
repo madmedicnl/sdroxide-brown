@@ -34,19 +34,10 @@ impl SdroxideApp {
         if !self.show_contest {
             return;
         }
-        let mut open = self.show_contest;
-        egui::Window::new("CONTEST")
-            .id(crate::layout::salted_id(ctx, "CONTEST"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 660.0))
-            .default_height(crate::layout::window_h(ctx, 540.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.contest_body(ui, cmds);
-            });
-        self.show_contest = open;
+        let show = self.tool_window(ctx, "contest", "CONTEST", [660.0, 540.0], true, |me, ui| {
+            me.contest_body(ui, cmds);
+        });
+        self.show_contest = show;
     }
 
     fn contest_body(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {

@@ -143,6 +143,17 @@ pub(in crate::app) fn set_swl_active(on: bool) {
     SWL_ACTIVE.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
+/// Whether a tool window is undocked into its own OS window, and where that
+/// window last was. See [`SdroxideApp::tool_windows`].
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct ToolWindowState {
+    /// Drawn in its own OS window instead of the in-viewport egui window.
+    pub undocked: bool,
+    /// Where its window last was; `None` until it has been open once.
+    pub window: Option<sdroxide_types::DetachedWindow>,
+}
+
 pub struct SdroxideApp {
     ctrl: Box<dyn RadioController>,
     caps: Option<DeviceCaps>,
@@ -193,6 +204,12 @@ pub struct SdroxideApp {
     /// after the operator dismisses it; cleared when the mode has a panel again.
     #[cfg(not(target_arch = "wasm32"))]
     panel_undock_notice_mode: Option<sdroxide_types::Mode>,
+    /// Undocked **tool windows** — the scanner, the schedule, the logbook and the
+    /// rest — by their stable id. Session-only, like the in-viewport position
+    /// egui keeps for the same windows: a tool is transient, and where it sat
+    /// last run is not worth a config field per tool.
+    #[cfg(not(target_arch = "wasm32"))]
+    tool_windows: std::collections::BTreeMap<&'static str, ToolWindowState>,
     /// Dismissed the receive-only nudge this session. The nudge offers a
     /// receive-only radio the per-radio listening screen; an operator who has
     /// already said no must not be asked on every retune.
@@ -1585,6 +1602,8 @@ impl SdroxideApp {
             radio_notice: None,
             #[cfg(not(target_arch = "wasm32"))]
             panel_undock_notice_mode: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            tool_windows: std::collections::BTreeMap::new(),
             rx_only_nudge_dismissed: false,
             show_contest: false,
             contest: None,
@@ -2905,6 +2924,77 @@ mod tests {
         assert!(app.center_has_content(&ctx, Mode::Am));
         app.ui_settings.set_detached(M::Panadapter, true);
         assert!(!app.center_has_content(&ctx, Mode::Am));
+    }
+
+    /// The tool-window mechanism: a closed tool returns false and draws nothing;
+    /// an open tool stays open and docked by default; a tool marked undocked
+    /// stays undocked (the embedded-viewport harness draws no OS window, but the
+    /// state must round-trip).
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_tool_window_round_trips_its_docked_state() {
+        let dir = std::env::temp_dir().join(format!("sdroxide-toolwin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        crate::layout::set_tier(&ctx, crate::layout::Tier::Desktop);
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+
+        let run = |app: &mut SdroxideApp, open: bool| -> bool {
+            let mut out = false;
+            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+                out = app.tool_window(ui.ctx(), "t", "T", [300.0, 200.0], open, |_, _| {});
+            });
+            out
+        };
+
+        // Closed: draws nothing, returns false.
+        assert!(!run(&mut app, false));
+        // Open: stays open, and docked (undocked is off by default).
+        assert!(run(&mut app, true));
+        assert!(!app.tool_windows.get("t").is_some_and(|s| s.undocked));
+        // Undocked: the state survives the frame.
+        app.tool_windows.insert("t", ToolWindowState { undocked: true, window: None });
+        assert!(run(&mut app, true));
+        assert!(app.tool_windows.get("t").is_some_and(|s| s.undocked));
+    }
+
+    /// A whole frame with a tool open, docked and then undocked, runs without
+    /// panicking and keeps the tool open — the real call site (`fn ui`) rather
+    /// than `tool_window` on its own.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn an_undocked_tool_window_survives_a_whole_frame() {
+        let dir = std::env::temp_dir().join(format!("sdroxide-toolframe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.show_scanner = true;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1280.0, 800.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+        assert!(app.show_scanner, "a docked tool stays open");
+        app.tool_windows.insert("scanner", ToolWindowState { undocked: true, window: None });
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1280.0, 800.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+        assert!(app.show_scanner, "an undocked tool stays open");
+        assert!(app.tool_windows.get("scanner").is_some_and(|s| s.undocked));
     }
 
     /// Reproduce Kevin's phone crash report (discussion #9) at the geometry

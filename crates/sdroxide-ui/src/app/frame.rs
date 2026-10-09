@@ -12,6 +12,8 @@ use crate::time::now_unix;
 use crate::widgets::spectrum_view;
 
 use crate::app::SdroxideApp;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::app::ToolWindowState;
 use crate::app::net::auto_upload_adif;
 use crate::app::persist::persist_qso_log;
 use crate::app::settings::servers::TciServerStatus;
@@ -264,6 +266,29 @@ fn detached_status_line(mode: Mode, meters: Option<&sdroxide_types::Meters>) -> 
     }
 }
 
+/// The DETACH/DOCK chip a tool window wears at the top-right of its body. On the
+/// browser it is absent — there is no second window to move to.
+fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (ui, undocked);
+        false
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut clicked = false;
+        crate::chrome::row_tail(ui, |ui| {
+            let (label, hover) = if undocked {
+                ("⇱ DOCK", "Return this window into the main window")
+            } else {
+                ("⇱ WINDOW", "Move this window into its own OS window — put it on another monitor")
+            };
+            clicked = crate::chrome::chip(ui, false, label).on_hover_text(hover).clicked();
+        });
+        clicked
+    }
+}
+
 /// Everything about a module's **own OS window** that is not its contents: the
 /// ids, the app-id a Wayland rule matches on, the title and the opening size.
 /// One per [`DetachableModule`], from [`detached_spec`].
@@ -280,8 +305,9 @@ struct DetachedWindowSpec {
     /// settles instead of once per frame.
     settle_id: egui::Id,
     /// The Wayland/Windows app-id a compositor rule matches on to float and
-    /// place the window.
-    app_id: &'static str,
+    /// place the window. Owned, because a tool window's id is built at runtime
+    /// (`sdroxide-tool-<id>`).
+    app_id: String,
     title: String,
     default_size: [f32; 2],
     min_size: [f32; 2],
@@ -302,10 +328,27 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
         settle_id: egui::Id::new(format!("{app_id}-geom")),
-        app_id,
+        app_id: app_id.to_string(),
         title: format!("{} — {name}", sdroxide_version::FLAVOR),
         default_size,
         min_size: [360.0, 240.0],
+    }
+}
+
+/// The window spec for a **tool window** (the scanner, the schedule, the
+/// logbook …) undocked into its own OS window. Distinct from the module specs
+/// only in the id grammar — `sdroxide-tool-<id>` — so an operator's rule can
+/// target them as a group or one by one.
+#[cfg(not(target_arch = "wasm32"))]
+fn tool_spec(id: &str, title: &str, default_size: [f32; 2]) -> DetachedWindowSpec {
+    let app_id = format!("sdroxide-tool-{id}");
+    DetachedWindowSpec {
+        viewport_id: egui::ViewportId::from_hash_of(&app_id),
+        settle_id: egui::Id::new(format!("{app_id}-geom")),
+        app_id,
+        title: format!("{} — {title}", sdroxide_version::FLAVOR),
+        default_size,
+        min_size: [240.0, 160.0],
     }
 }
 
@@ -366,7 +409,7 @@ fn detached_viewport(
     ctx: &egui::Context,
     spec: &DetachedWindowSpec,
     seed: Option<sdroxide_types::DetachedWindow>,
-    mut draw: impl FnMut(&mut egui::Ui),
+    draw: impl FnOnce(&mut egui::Ui),
 ) -> DetachedOutcome {
     if ctx.embed_viewports() {
         return DetachedOutcome { close_requested: false, geometry: None };
@@ -375,7 +418,7 @@ fn detached_viewport(
     let mut builder = egui::ViewportBuilder::default()
         // The app-id is not decoration: it is the one handle a Wayland window
         // rule has to float this window and pin it to a monitor.
-        .with_app_id(spec.app_id)
+        .with_app_id(spec.app_id.clone())
         .with_title(spec.title.clone())
         .with_min_inner_size(spec.min_size);
     // Seed the size and place only on the frame the window is (re)built, so a
@@ -390,6 +433,10 @@ fn detached_viewport(
     }
     let mut close_requested = false;
     let mut geometry: Option<sdroxide_types::DetachedWindow> = None;
+    // `show_viewport_immediate` wants an `FnMut`; the draw is a one-shot, so it
+    // rides an `Option` and is taken on the frame it is drawn (and dropped
+    // un-called on a frame the window is only closing).
+    let mut draw = Some(draw);
     ctx.show_viewport_immediate(vid, builder, |ui, _class| {
         let ictx = ui.ctx();
         // `content_rect` is the inner size as the toolkit reports it — the only
@@ -412,7 +459,9 @@ fn detached_viewport(
             ictx.request_repaint_of(egui::ViewportId::ROOT);
             return;
         }
-        draw(ui);
+        if let Some(draw) = draw.take() {
+            draw(ui);
+        }
     });
     DetachedOutcome { close_requested, geometry }
 }
@@ -1807,6 +1856,133 @@ impl SdroxideApp {
                     }
                 });
             });
+    }
+
+    /// Draw a **tool window** — the scanner, the schedule, the logbook and the
+    /// rest — either as an egui window in this viewport (docked, the default) or
+    /// as its own OS window (undocked). Returns whether it is still open, so the
+    /// caller stores that back in its `show_*` flag.
+    ///
+    /// The undocked flag and the remembered geometry live in
+    /// [`SdroxideApp::tool_windows`], keyed by `id`. **Session-only**, like the
+    /// in-viewport positions egui keeps for the same windows: a tool is
+    /// transient, and where it sat last run is not worth a config field per tool.
+    ///
+    /// `body` receives `self` rather than capturing it, so this can be a method —
+    /// a closure that captured `self` could not also be called from a `&mut self`
+    /// method.
+    pub(in crate::app) fn tool_window(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        open: bool,
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
+        if !open {
+            return false;
+        }
+        self.dispatch_tool_window(ctx, id, title, default_size, body)
+    }
+
+    /// The tool as an egui window in this viewport. Returns
+    /// `(still_open, detach_clicked)`.
+    fn tool_window_egui(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> (bool, bool) {
+        let mut win_open = true;
+        let mut detach = false;
+        let resp = egui::Window::new(title)
+            .id(crate::layout::salted_id(ctx, id))
+            .open(&mut win_open)
+            .frame(crate::chrome::window_frame())
+            .resizable(true)
+            .default_width(crate::layout::window_w(ctx, default_size[0]))
+            .show(ctx, |ui| {
+                crate::chrome::window_body_bg(ui);
+                detach = tool_window_chip(ui, false);
+                body(self, ui);
+            });
+        if let Some(r) = &resp {
+            crate::chrome::paint_window_border(ctx, &r.response);
+        }
+        (win_open, detach)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn dispatch_tool_window(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
+        // No second window in the browser: always the in-viewport window.
+        self.tool_window_egui(ctx, id, title, default_size, body).0
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn dispatch_tool_window(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
+        let st = self.tool_windows.get(id).copied().unwrap_or_default();
+        if st.undocked {
+            self.tool_window_os(ctx, id, title, default_size, st.window, body)
+        } else {
+            let (open, detach) = self.tool_window_egui(ctx, id, title, default_size, body);
+            if detach {
+                self.tool_windows.insert(id, ToolWindowState { undocked: true, window: st.window });
+            }
+            open
+        }
+    }
+
+    /// The tool in its own OS window.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn tool_window_os(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        seed: Option<sdroxide_types::DetachedWindow>,
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
+        let spec = tool_spec(id, title, default_size);
+        let mut dock = false;
+        let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+            dock = tool_window_chip(ui, true);
+            body(self, ui);
+        });
+        // Settle-persist the geometry as the modules do, and treat a close as
+        // *closed*, not docked: the operator shut the tool, so it should not
+        // reappear in the main window.
+        let st = self.tool_windows.get(id).copied().unwrap_or_default();
+        let mut window = st.window;
+        if let Some(g) = outcome.geometry {
+            let last: Option<sdroxide_types::DetachedWindow> =
+                ctx.data(|d| d.get_temp(spec.settle_id));
+            if last == Some(g) || outcome.close_requested {
+                window = Some(g);
+            }
+            ctx.data_mut(|d| d.insert_temp(spec.settle_id, g));
+        }
+        let open = !outcome.close_requested;
+        let undocked = open && !dock;
+        self.tool_windows.insert(id, ToolWindowState { undocked, window });
+        open
     }
 
     /// Send a frame's commands, with the bookkeeping that must ride every route

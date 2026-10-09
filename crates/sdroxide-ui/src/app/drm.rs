@@ -104,25 +104,12 @@ impl SdroxideApp {
         if !self.show_drm {
             return;
         }
-        let mut open = self.show_drm;
-        let resp = egui::Window::new("DRM")
-            .id(crate::layout::salted_id(ctx, "DRM"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 420.0))
-            .default_height(crate::layout::window_h(ctx, 380.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.drm_body(ui)
-            });
-        if let Some(r) = &resp {
-            cmds.extend(r.inner.clone().unwrap_or_default());
-        }
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
-        self.show_drm = open;
+        let mut body_cmds = Vec::new();
+        let show = self.tool_window(ctx, "drm", "DRM", [420.0, 380.0], true, |me, ui| {
+            body_cmds = me.drm_body(ui);
+        });
+        cmds.extend(body_cmds);
+        self.show_drm = show;
     }
 
     fn drm_body(&mut self, ui: &mut egui::Ui) -> Vec<Command> {
