@@ -594,6 +594,23 @@ fn sstv_level_bar(ui: &mut egui::Ui, level: f32) {
     );
 }
 
+/// Split `total` into two columns by `frac` — the first gets `frac` of it — with
+/// each side's preferred minimum honoured, **scaled down together when they
+/// cannot both fit** so the pair never sums past `total`.
+///
+/// A fixed floor is what grew the image panel over its column when the column
+/// was narrow (issue #643): two columns each wanting 300 pt summed to more than
+/// the dock left, and the panel spilled over it. Scaling keeps the same
+/// preference where there is room and still fits where there is not.
+fn split_two(total: f32, frac: f32, min_first: f32, min_second: f32) -> (f32, f32) {
+    let total = total.max(0.0);
+    let wanted = min_first + min_second;
+    let scale = if wanted > total && wanted > 0.0 { total / wanted } else { 1.0 };
+    let (min_first, min_second) = (min_first * scale, min_second * scale);
+    let first = (total * frac).clamp(min_first, (total - min_second).max(min_first));
+    (first, total - first)
+}
+
 impl SdroxideApp {
     /// The image panel, shared by SSTV and RIFP: a live picture and a gallery
     /// on the left, a transmit compositor on the right, and a control strip
@@ -700,10 +717,19 @@ impl SdroxideApp {
                 // otherwise the columns sum to `avail.x` but the row lands
                 // `2 × spacing` past it and the whole panel grows over the
                 // dock (issue #643).
+                //
+                // Each column *wants* 300 pt, but the column can be narrower
+                // than that (a wide dock, a small window) and a fixed floor
+                // then sums past `avail.x` and overruns the dock again — so the
+                // floor is scaled to fit, in [`split_two`].
                 let sp = ui.spacing().item_spacing.x;
-                let tx = (avail.x * self.view.sstv_tx_fraction)
-                    .clamp(300.0, (avail.x - handle_w - 2.0 * sp - 300.0).max(300.0));
-                ((avail.x - tx - handle_w - 2.0 * sp).max(300.0), tx)
+                let (tx, left_w) = split_two(
+                    avail.x - handle_w - 2.0 * sp,
+                    self.view.sstv_tx_fraction,
+                    300.0,
+                    300.0,
+                );
+                (left_w, tx)
             }
         };
         // LIVE takes the rest of the receive side; the RECEIVED gallery width is a
@@ -711,9 +737,8 @@ impl SdroxideApp {
         // handle / RECEIVED row has the same two inter-item gaps as the panel
         // row above, so both terms leave room for them (issue #643).
         let sp = ui.spacing().item_spacing.x;
-        let gallery_w = (left_w * self.view.sstv_gallery_fraction)
-            .clamp(150.0, (left_w - handle_w - 2.0 * sp - 160.0).max(150.0));
-        let live_w = (left_w - gallery_w - handle_w - 2.0 * sp).max(160.0);
+        let (gallery_w, live_w) =
+            split_two(left_w - handle_w - 2.0 * sp, self.view.sstv_gallery_fraction, 150.0, 160.0);
 
         ui.horizontal_top(|ui| {
             // A received thumbnail was clicked → enlarge it (applied after the row).

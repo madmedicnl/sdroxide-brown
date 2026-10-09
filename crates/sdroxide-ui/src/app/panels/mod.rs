@@ -1002,9 +1002,13 @@ impl SdroxideApp {
         let avail = ui.available_size();
         let handle_w = 7.0;
         // Decode list takes a user-draggable fraction of the width; the QSO area
-        // gets the rest (each keeps a usable minimum).
+        // gets the rest (each keeps a usable minimum). The three children sit in
+        // the row with item spacing between them, so the split leaves room for
+        // those two gaps — otherwise the columns sum to `avail.x` but the row
+        // lands `2 × spacing` past it and the panel grows over the dock (#643).
+        let sp = ui.spacing().item_spacing.x;
         let left_w = (avail.x * self.view.digi_split_fraction)
-            .clamp(180.0, (avail.x - handle_w - 220.0).max(180.0));
+            .clamp(180.0, (avail.x - handle_w - 2.0 * sp - 220.0).max(180.0));
         ui.horizontal_top(|ui| {
             // Force a top-down layout: `allocate_ui` would otherwise inherit the
             // parent `horizontal_top` (left-to-right) and lay the rows out

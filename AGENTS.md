@@ -3496,27 +3496,27 @@ same row (a divider and its own hover keep it from reading as a filter — the
 operator asked for it there). The hovers are unchanged, so the distinction the
 suffix was there to draw is still said in words.
 
-**Later still, same day: no dropdown, and mode chips in rows of five.** The
-dropdown was **abandoned** and the mode chips put back, laid out in **rows of
-five, left-aligned** — the operator's call for a "trimmed" look, after the
-dropdown would not behave in the band popup (`7b6e5b66` the inline disclosure,
-`abdacd19` the `Popup::menu` submenu — both tried, both wrong; the operator's
-own words: *"it doesn't stay open"*). OPERATE is **Mode** (15 analog/voice/
-broadcast-demodulator chips) then **Digital** (`Mode::DIGITAL`) then **Wideband**;
-LISTEN is **Receive modes** (9) then **Digital** then **Wideband**. All through
-`mode_chip_grid`, `MODE_GRID_COLS = 5`, so it is five across where the width
-allows and fewer in the docked column.
+**Later still, same day: no dropdown, and the mode chips in aligned rows.** The
+dropdown was **abandoned** and the mode chips put back, laid out in **aligned
+columns** — the operator's "trimmed" look — through `mode_chip_grid`. OPERATE is
+**Mode** (15 analog/voice/broadcast-demodulator chips) then **Digital**
+(`Mode::DIGITAL`) then **Wideband**; LISTEN is **Receive modes** (9) then
+**Digital** then **Wideband**. `MODE_GRID_COLS = 5`, so it is five across where
+the width allows.
 
-**Do not put an `egui::Grid` in that menu.** A Grid laid the columns aligned but
-made the **docked** panel ask wider than it is, shoving the operating panel past
-the dock — `the_operating_panel_stays_inside_its_column` (the #643 guard) caught
-it, `Rifp at 960 pt … crosses the dock edge at 681`. `mode_chip_grid` therefore
-lays plain `ui.horizontal` rows, which cannot do that. (`band_pad`'s Grid is
-fine — it is the mode grids' width that did it.)
+**Do not use an `egui::Grid` there, and do not budget a cell from `chip_width`
+alone.** Both grew the **docked** column over the operating panel below it —
+`the_operating_panel_stays_inside_its_column` (the #643 guard) caught it,
+`Rifp at 960 pt … crosses the dock edge at 681`. `mode_chip_grid` lays
+fixed-width cells (`chip_width + MODE_GRID_CELL_SLACK`) in plain `ui.horizontal`
+rows instead, wrapping when even one column will not fit.
 
-The band-menu test helper is `click_in_band_mode_menu` / `…_filtered` again;
-`a_mode_the_station_cannot_run_is_offered_but_cannot_be_picked` drives HD Radio
-through it, as before the dropdown.
+**The docked column cannot be much wider than 280 pt — that is the constraint to
+remember.** The operating panels below are built for ~680 pt (the FT8 QSO pane
+runs on under ~677, the image panel's floors and the `digi_panel` split have been
+made to scale but the rest have not), so a wider dock squeezes them and they
+overrun the dock. A genuinely wide, five-across band menu wants to be its **own
+window** (SDRuno's separate control panel), not a docked column — the open item.
 
 **Fork-only on purpose — do not offer this upstream.** Upstream's band menu is a
 single flat band row: no `BandFilter`, no LISTEN/OPERATE tabs, no Primary-modes

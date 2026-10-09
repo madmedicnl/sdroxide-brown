@@ -7676,17 +7676,15 @@ fn mode_listen_chip(
 /// control.
 const WIDEBAND_MODES: [Mode; 5] = [Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab];
 
-/// A section of mode chips laid in **rows of five** — the operator's ask: a
-/// trimmed, left-aligned grid reads better than a ragged wrap.
+/// A section of mode chips laid in **rows of five**, left-aligned, in aligned
+/// columns — the operator's "trimmed" look.
 ///
-/// Plain `horizontal` rows rather than an `egui::Grid`: a Grid here asks the
-/// docked column wider than it is and shoves the operating panel out past the
-/// dock (the #643 regression test catches it). A row lays the same chips
-/// left-aligned and cannot do that.
-///
-/// Plain chips, not a dropdown: the operator's call, after the dropdown would not
-/// stay open inside the band popup and revealing it inline pushed a scrollbar
-/// onto the dock.
+/// Fixed-width cells in plain `ui.horizontal` rows, **not** an `egui::Grid`: a
+/// Grid here asked its container wider than it was and grew the docked column
+/// over the operating panel below it (the #643 guard caught it on RIFP and
+/// FT8). The cells are sized to the widest chip plus slack, and as many as fit
+/// go on a row (up to [`MODE_GRID_COLS`]); where none fit, a wrapped row
+/// reflows instead.
 fn mode_chip_grid(
     ui: &mut egui::Ui,
     cur: Mode,
@@ -7696,13 +7694,27 @@ fn mode_chip_grid(
     listen: bool,
     cmds: &mut Vec<Command>,
 ) {
-    let labels: Vec<&str> = modes.iter().map(|m| m.label()).collect();
-    let cols = chip_grid_cols(ui, &labels, 6.0, MODE_GRID_COLS).max(1);
+    let widest = modes
+        .iter()
+        .map(|m| crate::chrome::chip_width(ui, m.label(), None))
+        .fold(0.0_f32, f32::max);
+    let cell = widest + MODE_GRID_CELL_SLACK;
+    let cols = ((ui.available_width() / cell.max(1.0)).floor() as usize).clamp(1, MODE_GRID_COLS);
+    if cols < 2 {
+        ui.horizontal_wrapped(|ui| {
+            for &m in modes {
+                mode_chip(ui, cur, m, band, state, listen, cmds);
+            }
+        });
+        return;
+    }
     let mut start = 0;
     while start < modes.len() {
         ui.horizontal(|ui| {
             for &m in &modes[start..(start + cols).min(modes.len())] {
-                mode_chip(ui, cur, m, band, state, listen, cmds);
+                ui.allocate_ui(egui::vec2(cell, 0.0), |ui| {
+                    mode_chip(ui, cur, m, band, state, listen, cmds);
+                });
             }
         });
         start += cols;
@@ -7729,6 +7741,10 @@ fn mode_chip(
 
 /// The five-across the operator asked for.
 const MODE_GRID_COLS: usize = 5;
+/// Slack over the measured label width when budgeting a grid cell: the drawn
+/// chip is wider than [`crate::chrome::chip_width`] reports (its frame), and a
+/// grid that asks wider than its container grows the docked column (#643).
+const MODE_GRID_CELL_SLACK: f32 = 26.0;
 
 /// OPERATE's `Mode` section: the analog and voice modes, the broadcast
 /// demodulators (DRM, HD Radio) among them because that is what they are — a
