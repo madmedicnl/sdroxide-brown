@@ -43,12 +43,13 @@ and the fork already has the mechanism (the solar3d viewport).
       installed as `2.0.2_brown`; a live run on niri opened the window with
       app-id `sdroxide-panadapter` and persisted its geometry.
 
-**Status (2026-10-09): the first slice, then the second module and the shared
-helper, are built, committed and installed.** The control lives in **Settings →
-UI** (one row per module, named **Undocked**), and works in every mode.
+**Status (2026-10-09): the first slice, the second module, the shared helper
+and the shell-owned window manager are built, committed and installed.** The
+control lives in **Settings → UI** (one row per module, named **Undocked**), and
+works in every mode.
 
-**The module registry and the shared helper exist now** (the step the handover
-called "generalise to any detachable module"):
+**The module registry and the shared helper exist** (the step the handover called
+"generalise to any detachable module"):
 - `sdroxide_types::DetachableModule` (`Panadapter`, `Panel`) with
   `DetachedState { detached, window }`, held as an **array** in
   `UiSettings::detached` indexed by `module.index()` — an array and not a map
@@ -57,24 +58,27 @@ called "generalise to any detachable module"):
   `panadapter_window` keys migrate at load (`UiSettings::migrate_detached`).
 - `frame.rs`: `DetachedWindowSpec` + `detached_spec(module)` (ids, app-id,
   title, size), one free `detached_viewport(ctx, spec, seed, draw)` that owns
-  the whole multi-window plumbing, and
-  `SdroxideApp::handle_detached_outcome` owning the settle-persist and the
-  close-to-dock. A module's `show_detached_*` is now a few lines.
-- The split is the pure `column_split(wf_undocked, layers, panel_undocked, …)`,
-  so either part undocked hands its height to the other; a `draw_operating_panel`
-  is the shared body of the in-window panel and its window.
+  the whole multi-window plumbing, `panadapter_inputs()` so the panadapter draw
+  is self-contained, `column_split(...)` for the arithmetic, and
+  `dispatch_commands()` so a window's clicks are applied like the main
+  window's.
 - **Panel `app-id`: `sdroxide-panel`.** Panadapter: `sdroxide-panadapter`.
+
+**The shell owns the windows now** (the handover's "shell-owned window manager"):
+each frame `MultiApp` asks the focused radio's app which windows it wants
+(`SdroxideApp::detached_wanted`) and emits those, once, whatever pane or tab is
+on screen — so a radio or mode change can no longer tear a window down and have
+a tiling compositor re-place it. `show_detached_module` is the app's half (how
+to draw itself); the shell's is *whether the window exists*. The panel window is
+emitted even in a mode with no panel, showing a note, so its place is held.
 
 **The destination, so the next slice aims at it:** a user-arrangeable workspace
 in the SDRuno mould — each module (the panadapter, the control surface, the
-decoders, the scanner) in its own window, placed by the operator. Two modules
-now prove the pattern; the honest next steps are **more modules on the same
-array** (a decoder window, the scanner), and the **shell-owned window manager**
-(stable viewport ids and one explicit owner, emitted every frame regardless of
-focus) — which is also what fixes multi-radio, where today a single station-wide
-window per module means switching to a radio whose mode shows no module closes
-its window. And a **Niri `window-rule`** for floating/placement on the
-operator's own machine, which the app exposes the app-id for.
+decoders, the scanner) in its own window, placed by the operator. Adding one is
+now: a `DetachableModule` variant, its `detached_spec`, and a `show_detached_module`
+arm. Good next modules: a decoder window (the decode list), the scanner — and a
+**Niri `window-rule`** sample for floating/placement on the operator's own
+machine, which the app exposes the app-ids for.
 
 Everything below is the reference for those steps.
 
