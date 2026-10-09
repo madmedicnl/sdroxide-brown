@@ -3204,7 +3204,7 @@ mod tests {
         let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
         let ctx = egui::Context::default();
         let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
-        let mut frame = |app: &mut SdroxideApp| {
+        let frame = |app: &mut SdroxideApp| {
             let input = egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,
