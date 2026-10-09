@@ -1686,6 +1686,17 @@ pub struct Profile {
 /// The named profiles defined on this station. Station scope, like the band
 /// stacks: a profile is a way of working the station, not a thing a single
 /// radio owns.
+/// Saved window arrangements — SDRuno's workspaces. A list of independent
+/// records, so a workspace this build cannot read costs only itself and not the
+/// rest (see [`load_json_list`]).
+pub fn load_workspaces() -> Vec<sdroxide_types::Workspace> {
+    load_json_list("workspaces.json")
+}
+
+pub fn save_workspaces(workspaces: &Vec<sdroxide_types::Workspace>) -> Result<(), ConfigError> {
+    save_json("workspaces.json", workspaces)
+}
+
 pub fn load_profiles() -> Vec<Profile> {
     load_json_list("profiles.json")
 }

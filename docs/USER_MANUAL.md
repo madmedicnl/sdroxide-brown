@@ -12459,6 +12459,14 @@ frequency readout with the **mode and signal level** beneath it, so the second
 monitor says what you would otherwise glance back at the main window for. A
 **Dock all windows** button appears under the rows once anything is out.
 
+**Workspaces** save a whole arrangement and put it back: under the undocked
+rows, type a name and **SAVE CURRENT** to store which modules are in their own
+windows and where those windows are, then click a saved name to recall it. The
+**×** beside a name forgets it, and a name you save again replaces the earlier
+one. Up to ten — SDRuno's limit. A workspace is the window arrangement only;
+what is *on* is the station's, not the workspace's. They live in
+`workspaces.json` beside the rest of the configuration.
+
 The **tool windows** — the scanner, the schedule, the logbook, the spots list,
 the signal-id guide and the rest — can go to their own windows too. Each carries
 a small **⇱ WINDOW** chip at its top-right: click it and the tool moves into its

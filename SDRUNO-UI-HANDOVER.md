@@ -87,10 +87,12 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
    The shape to copy is the five that are done: extract the body, take the window
    through `self.tool_window(ctx, "<id>", "<Title>", [w, h], self.show_x, |me, ui|
    me.x_body(...))`, and keep the tail in the caller.
-6. **Workspace save/recall** — SDRuno records up to ten named workspaces
-   (Ctrl+W / SAVE WS). Ours persists geometry per module but has no named
-   workspaces and no "save the whole arrangement". A `UiSettings` list of named
-   window layouts is the shape.
+6. ~~**Workspace save/recall** — SDRuno records up to ten named workspaces.~~
+   **BUILT (2026-10-09)** — `sdroxide_types::Workspace`, a `workspaces.json` list,
+   and a **Workspaces** section on Settings → UI. See the note below. The one
+   piece of SDRuno's SAVE WS not done is the **Ctrl+W shortcut**: `Action` is on
+   the wire, so a new binding is a `PROTO_VERSION` bump for a convenience the
+   menu already offers. Add it deliberately, not in passing.
 
 ## The band keypad as built (2026-10-09) — and where it deliberately stops
 
@@ -230,6 +232,34 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
 - **Not done on purpose**, and the reason is in the TODO above: SPOTS and PUBLIC
   SDRS need their results carried back through the app, which is a decision about
   where a window's actions land, not a body extraction.
+
+## Workspaces as built (2026-10-09) — save and recall the arrangement
+
+- **`sdroxide_types::Workspace`**: a `name` and a `Vec<DetachedState>` (one slot
+  per module at save time). `capture(name, &UiSettings)` snapshots;
+  `apply(&mut UiSettings)` restores, leaving any module a shorter list does not
+  mention docked. `WORKSPACE_MAX = 10`, SDRuno's ten.
+- **A list of its own, not a `UiSettings` field.** `UiSettings` is `Copy` and the
+  whole UI passes it by value; a `Vec` in it would take that away everywhere to
+  add one screen's worth of arrangements. So workspaces live in `workspaces.json`
+  via `sdroxide_config::{load,save}_workspaces` (through `load_json_list`, so one
+  unreadable row costs only itself). `sdroxide-ui` reaches it through
+  `persist`, because `sdroxide-config` is native-only.
+- **The UI is on Settings → UI**, under the undocked rows it acts on: a name
+  field + **SAVE CURRENT**, and one chip per saved workspace (**×** to forget,
+  the name to apply). Applying sets `cfg.detached`, so the shell re-emits windows
+  next frame with no restart. Saving over an existing name replaces it rather
+  than making a duplicate.
+- **The clones-out / commits-back plumbing** matches `ui_edit`: the settings
+  window is drawn from `&self`, so the list and the name travel into `SettingsIo`
+  and are committed (and `workspaces.json` written) when the dialog closes with a
+  change.
+- **Tests**: `ui::tests::a_workspace_round_trips_the_arrangement` (including a
+  shorter list a newer build would carry) and
+  `sdroxide-config/tests/workspaces_round_trip.rs` (through the real loader, with
+  a bad row proving the list costs only itself).
+- **Not done**: the Ctrl+W shortcut — `Action` rides the wire, so it is a
+  `PROTO_VERSION` bump; the menu does the job meanwhile.
 
 ## House notes for whoever picks this up
 

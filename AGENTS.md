@@ -37,9 +37,14 @@
 > **Items 1–4 are built, so the window set is the SDRuno one**: the band keypad
 > (console), SP1 with its toolbar, AUX SP as a second spectrum, and the MAIN
 > window's own **🪟 WINDOWS** button on the radio-tab strip that opens each of
-> them by its SDRuno name. **The next items are 5 and 6**: the rest of the tool
-> windows (extract each body to `_body` and call `self.tool_window(...)`), then
-> named workspaces (SDRuno saves up to ten with Ctrl+W).
+> them by its SDRuno name. **Item 6, workspaces, is also built** — saved named
+> window arrangements in `workspaces.json`, edited on Settings → UI; the only
+> piece left is the Ctrl+W shortcut (a `PROTO_VERSION` bump, so deliberately not
+> done in passing). **Item 5 is part-done**: awards, logbook, grid tracker,
+> memories and the SWL log go through `self.tool_window`; the rest (SPOTS, PUBLIC
+> SDRS, SCHEDULE, RECORDINGS, voice keyer, per-mode setups) need their results or
+> captured `&mut` locals threaded, which is per-window work, not mechanical —
+> `SDRUNO-UI-HANDOVER.md` says which and why.
 >
 > **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
 > mid-flight — read it before touching ALE). **FST4W**

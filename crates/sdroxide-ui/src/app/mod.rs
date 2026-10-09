@@ -535,6 +535,14 @@ pub struct SdroxideApp {
     /// When the band/mode, FFT and skimmer popups opened (egui time), for their
     /// auto-fade.
     mode_popup_since: Option<f64>,
+    /// Saved window arrangements — SDRuno's **workspaces**. A list of its own
+    /// rather than a `UiSettings` field, because `UiSettings` is `Copy`; see
+    /// [`sdroxide_types::Workspace`]. Loaded from the shared `workspaces.json`.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    workspaces: Vec<sdroxide_types::Workspace>,
+    /// What is being typed into the next **SAVE CURRENT**.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    workspace_name: String,
     /// Which half of the band/mode menu was last shown (listen or operate).
     band_menu_tab: top_bar::BandMenuTab,
     /// Which slice of the spectrum the band menu's chips are narrowed to (HF,
@@ -1730,6 +1738,8 @@ impl SdroxideApp {
             show_voice: false,
             voice_name_edit: None,
             mode_popup_since: None,
+            workspaces: crate::app::persist::load_workspaces(),
+            workspace_name: String::new(),
             band_menu_tab: top_bar::BandMenuTab::Operate,
             band_filter: top_bar::BandFilter::default(),
             fft_popup_since: None,

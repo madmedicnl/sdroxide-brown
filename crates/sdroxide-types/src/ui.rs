@@ -617,6 +617,55 @@ impl DetachableModule {
     }
 }
 
+/// A named window arrangement — SDRuno's **workspace**. SDRuno keeps up to ten
+/// and recalls them by name; this is the same idea for our module windows: which
+/// of them are in their own OS windows, and where those windows are.
+///
+/// A **list of its own**, not a field in [`UiSettings`], and the reason is that
+/// `UiSettings` is `Copy`: the whole UI passes it around by value, and a `Vec`
+/// would take that away from every one of those sites to add one screen's worth
+/// of arrangements. The list lives in `workspaces.json`, reached through the
+/// same config store as the memories and the logbook.
+///
+/// A workspace is the arrangement only — the modules and their windows. What is
+/// *on* is what a station profile or a radio carries; a workspace is where the
+/// furniture is.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Workspace {
+    /// What the operator called it. Not an index: SDRuno recalls by name, and a
+    /// name survives a reorder.
+    pub name: String,
+    /// One slot per [`DetachableModule`] in `index()` order **at save time**. A
+    /// `Vec` rather than the fixed array because a workspace written by a build
+    /// with a module this one has not heard of must still load and apply the
+    /// modules it does know — the same tolerance [`UiSettings::detached`]'s
+    /// reader has, for the same reason.
+    pub slots: Vec<DetachedState>,
+}
+
+/// How many workspaces may be saved — SDRuno's ten. A cap rather than a
+/// refusal-at-save would be a memory growing without bound; ten named
+/// arrangements is already more than a station uses.
+pub const WORKSPACE_MAX: usize = 10;
+
+impl Workspace {
+    /// Snapshot the arrangement in `settings` under `name`.
+    pub fn capture(name: impl Into<String>, settings: &UiSettings) -> Self {
+        Self { name: name.into(), slots: settings.detached.to_vec() }
+    }
+
+    /// Put this arrangement back into `settings`, leaving any module the
+    /// workspace does not mention — a slot a newer or older build wrote —
+    /// docked.
+    pub fn apply(&self, settings: &mut UiSettings) {
+        let mut out = [DetachedState::default(); DetachableModule::COUNT];
+        for (slot, saved) in out.iter_mut().zip(self.slots.iter()) {
+            *slot = *saved;
+        }
+        settings.detached = out;
+    }
+}
+
 /// Whether one [`DetachableModule`] is undocked, and where its window last was.
 /// See [`UiSettings::detached`].
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
@@ -1526,6 +1575,35 @@ pub fn set_force_swl(on: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A workspace snapshots the arrangement and puts it back, and a slot it
+    /// does not carry leaves that module docked rather than half-restored.
+    #[test]
+    fn a_workspace_round_trips_the_arrangement() {
+        let mut s = UiSettings::default();
+        s.set_detached(DetachableModule::Panadapter, true);
+        s.set_detached(DetachableModule::Controls, true);
+        let saved = Workspace::capture("second monitor", &s);
+
+        let mut back = UiSettings::default();
+        saved.apply(&mut back);
+        assert!(back.is_detached(DetachableModule::Panadapter));
+        assert!(back.is_detached(DetachableModule::Controls));
+        assert!(!back.is_detached(DetachableModule::Panel), "a module it did not set stays docked");
+        assert!(!back.is_detached(DetachableModule::AuxPanadapter));
+        assert_eq!(back.detached, s.detached, "the whole arrangement, not a subset");
+
+        // A workspace written before a module existed carries a shorter list:
+        // the modules it does reach are restored, and the rest stay docked.
+        let short = Workspace {
+            name: "old".into(),
+            slots: vec![DetachedState { detached: true, window: None }],
+        };
+        let mut from_old = UiSettings::default();
+        short.apply(&mut from_old);
+        assert!(from_old.is_detached(DetachableModule::Panadapter));
+        assert!(!from_old.is_detached(DetachableModule::Controls));
+    }
 
     /// A `detached` list of **any** length loads, and a module the list does
     /// not reach simply starts docked.

@@ -852,3 +852,98 @@ pub(in crate::app) fn pick_report_picture(
     _inbox: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
 ) {
 }
+
+/// The **Workspaces** section: SDRuno's ten named arrangements. Save the current
+/// one, or put a saved one back.
+///
+/// A workspace is the window arrangement and nothing else — which modules are in
+/// their own OS windows and where those windows are. Save captures the
+/// arrangement as it stands; a name is a chip that puts it back. Editing the
+/// list here rather than behind a shortcut keeps it with the undocked rows it
+/// acts on: the same subject, one screen.
+///
+/// Native only, like the undocked rows above it — the browser has one window and
+/// nothing to arrange.
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) fn workspaces_section(
+    ui: &mut egui::Ui,
+    cfg: &mut sdroxide_types::UiSettings,
+    workspaces: &mut Vec<sdroxide_types::Workspace>,
+    name: &mut String,
+) {
+    use sdroxide_types::{WORKSPACE_MAX, Workspace};
+    ui.label(RichText::new("Workspaces").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.add_space(2.0);
+    ui.label(
+        RichText::new(
+            "A named window arrangement — which modules are in their own windows and where \
+             those windows are. Save the one you have, or put a saved one back. Up to ten.",
+        )
+        .size(11.0)
+        .weak(),
+    );
+    ui.add_space(6.0);
+
+    if workspaces.is_empty() {
+        ui.label(RichText::new("No workspaces saved yet.").size(11.0).weak());
+    }
+    let mut apply: Option<usize> = None;
+    let mut delete: Option<usize> = None;
+    for (i, ws) in workspaces.iter().enumerate() {
+        ui.horizontal(|ui| {
+            let out = ws.slots.iter().filter(|s| s.detached).count();
+            let chip =
+                crate::chrome::chip(ui, false, ws.name.as_str()).on_hover_text(if out == 0 {
+                    "Put this arrangement back — every module in the main window".to_string()
+                } else {
+                    format!("Put this arrangement back — {out} module(s) in their own window(s)")
+                });
+            if chip.clicked() {
+                apply = Some(i);
+            }
+            if crate::chrome::chip(ui, false, "×").on_hover_text("Forget this workspace").clicked()
+            {
+                delete = Some(i);
+            }
+        });
+    }
+
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        crate::chrome::field_sized(
+            ui,
+            egui::vec2(220.0, 0.0),
+            egui::TextEdit::singleline(name).hint_text("name this arrangement"),
+        );
+        let named = !name.trim().is_empty();
+        let full = workspaces.len() >= WORKSPACE_MAX;
+        let can_save = named && !full;
+        let save = crate::chrome::chip_enabled(ui, can_save, false, "SAVE CURRENT").on_hover_text(
+            if full {
+                format!("Ten workspaces is the limit SDRuno keeps; delete one first")
+            } else if named {
+                "Save the arrangement you have now under this name".to_string()
+            } else {
+                "Type a name first".to_string()
+            },
+        );
+        if save.clicked() {
+            let n = name.trim().to_string();
+            // Saving over an existing name replaces it rather than making a
+            // duplicate row the operator then has to tell apart.
+            if let Some(slot) = workspaces.iter_mut().find(|w| w.name == n) {
+                *slot = Workspace::capture(n, cfg);
+            } else {
+                workspaces.push(Workspace::capture(n, cfg));
+            }
+            name.clear();
+        }
+    });
+
+    if let Some(i) = delete {
+        workspaces.remove(i);
+    }
+    if let Some(i) = apply {
+        workspaces[i].apply(cfg);
+    }
+}

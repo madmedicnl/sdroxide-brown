@@ -257,6 +257,13 @@ pub(in crate::app) struct SettingsIo<'a> {
     pluto_copy_report: &'a mut bool,
     apply_iface: &'a mut bool,
     ui_edit: &'a mut sdroxide_types::UiSettings,
+    /// The saved window arrangements (SDRuno's workspaces), edited on the UI tab
+    /// and handed back to be persisted by the caller.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    workspaces: &'a mut Vec<sdroxide_types::Workspace>,
+    /// The name being typed for the next **SAVE CURRENT** on the UI tab.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    workspace_name: &'a mut String,
     /// Who may connect to this machine's server, or `None` where this client
     /// is in no position to say — a remote one, and every browser one. Those
     /// credentials are `config.toml` on the machine the radio is attached to,
@@ -1132,6 +1139,11 @@ impl SdroxideApp {
         let mut ranges = self.range_edit.clone();
         let mut rx_site = self.rx_site_edit.clone();
         let mut ui_edit = self.ui_settings;
+        // The workspaces are cloned out and handed back like `ui_edit`: the
+        // settings window is drawn from `&self`, so its changes travel through
+        // `io` and are committed by the caller.
+        let mut workspaces = self.workspaces.clone();
+        let mut workspace_name = self.workspace_name.clone();
         // Only where the engine is in this process: see `SettingsIo`.
         let owns_server = !self.ctrl.engine_is_remote();
         let mut access_edit = self.remote_access.clone();
@@ -1302,6 +1314,8 @@ impl SdroxideApp {
                             pluto_copy_report: &mut pluto_copy_report,
                             apply_iface: &mut apply_iface,
                             ui_edit: &mut ui_edit,
+                            workspaces: &mut workspaces,
+                            workspace_name: &mut workspace_name,
                             access_edit: owns_server.then_some(&mut access_edit),
                             #[cfg(not(target_arch = "wasm32"))]
                             remote_edit: &mut remote_edit,
@@ -1792,6 +1806,11 @@ impl SdroxideApp {
             // Live: fps + averaging flow to the engine via the spectrum-config
             // diff next frame; waterfall speed is read each frame. Persist too.
             self.ui_settings = ui_edit;
+            if workspaces != self.workspaces {
+                self.workspaces = workspaces;
+                crate::app::persist::save_workspaces(&self.workspaces);
+            }
+            self.workspace_name = workspace_name;
             persist_ui_settings(&self.ui_settings);
         }
         if &speech_edit != self.speech.settings() {
@@ -3164,6 +3183,15 @@ impl SdroxideApp {
                     io.swl_report,
                     io.swl_report_pick,
                 );
+                // Native only, like the undocked rows: the browser keeps every
+                // module in its one window and has nothing to arrange.
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    ui.add_space(10.0);
+                    ui.separator();
+                    ui.add_space(6.0);
+                    ui_tab::workspaces_section(ui, io.ui_edit, io.workspaces, io.workspace_name);
+                }
                 ui.add_space(10.0);
                 ui.separator();
                 ui.add_space(6.0);
