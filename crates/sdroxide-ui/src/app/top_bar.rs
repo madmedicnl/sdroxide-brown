@@ -2688,31 +2688,57 @@ impl SdroxideApp {
                     .auto_shrink([false, false])
                     .id_salt("band-dock-scroll")
                     .show(ui, |ui| {
-                        let mode = self.state.rx[0].mode;
-                        let stated =
-                            self.radio_cfg.as_ref().is_some_and(|c| !c.freq_ranges_rx.is_empty());
-                        let atsmini = self
-                            .radio_cfg
-                            .as_ref()
-                            .is_some_and(|c| c.backend == sdroxide_types::Backend::AtsMini);
-                        band_mode_menu(
-                            ui,
-                            &mut self.band_menu_tab,
-                            &mut self.band_filter,
-                            mode,
-                            &self.state,
-                            self.caps.as_ref(),
-                            stated,
-                            self.band_conditions.as_ref(),
-                            self.daylight,
-                            atsmini,
-                            cmds,
-                        );
+                        self.band_menu_body(ui, cmds);
                     });
             });
         if !visible {
             self.band_dock_visible = false;
         }
+    }
+
+    /// The band/mode selector's content, without its frame — shared by the
+    /// docked column and by [`Self::band_menu_fill`], so a change to the menu
+    /// reaches both.
+    pub(in crate::app) fn band_menu_body(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        let mode = self.state.rx[0].mode;
+        let stated = self.radio_cfg.as_ref().is_some_and(|c| !c.freq_ranges_rx.is_empty());
+        let atsmini =
+            self.radio_cfg.as_ref().is_some_and(|c| c.backend == sdroxide_types::Backend::AtsMini);
+        band_mode_menu(
+            ui,
+            &mut self.band_menu_tab,
+            &mut self.band_filter,
+            mode,
+            &self.state,
+            self.caps.as_ref(),
+            stated,
+            self.band_conditions.as_ref(),
+            self.daylight,
+            atsmini,
+            cmds,
+        );
+    }
+
+    /// The band/mode selector filling the whole content area — what stands in
+    /// for the panadapter and the panel when both are undocked, so the main
+    /// window is never left a black hole (the operator's second screenshot).
+    pub(in crate::app) fn band_menu_fill(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        egui::Frame::new()
+            .fill(crate::theme::BG_DEEP())
+            .inner_margin(egui::Margin::symmetric(14, 12))
+            .show(ui, |ui| {
+                ui.set_min_size(ui.available_size());
+                ui.label(
+                    RichText::new("BAND & MODE").size(12.0).strong().color(crate::theme::CYAN()),
+                );
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .id_salt("band-fill-scroll")
+                    .show(ui, |ui| {
+                        self.band_menu_body(ui, cmds);
+                    });
+            });
     }
 
     /// [`rx_rows`] against this radio: what the front end offers, what the

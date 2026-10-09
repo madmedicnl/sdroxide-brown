@@ -188,6 +188,11 @@ pub struct SdroxideApp {
     /// Persistent, non-fatal operator notice (e.g. radio audio input
     /// unavailable / mono card selected for IQ). Shown as a warning banner.
     radio_notice: Option<String>,
+    /// The mode for which the "your undocked panel has nowhere to go" notice has
+    /// already been raised. Set once per mode so the banner is not re-raised
+    /// after the operator dismisses it; cleared when the mode has a panel again.
+    #[cfg(not(target_arch = "wasm32"))]
+    panel_undock_notice_mode: Option<sdroxide_types::Mode>,
     /// Dismissed the receive-only nudge this session. The nudge offers a
     /// receive-only radio the per-radio listening screen; an operator who has
     /// already said no must not be asked on every retune.
@@ -1578,6 +1583,8 @@ impl SdroxideApp {
             retry_at: None,
             retry_backoff: RETRY_MIN_S,
             radio_notice: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            panel_undock_notice_mode: None,
             rx_only_nudge_dismissed: false,
             show_contest: false,
             contest: None,
@@ -2865,6 +2872,39 @@ mod tests {
         // Both present: the ordinary split, still summing to the usable height.
         let (wf, panel) = split(false, true, false, total, 9.0, 0.5, 24.0);
         assert!(wf > 0.0 && panel > 0.0 && (wf + panel - (total - 9.0)).abs() < 0.01);
+    }
+
+    /// The operator's screenshots: with the panadapter and the panel both
+    /// undocked, nothing is left in the main window's centre, so the band/mode
+    /// selector fills it (`band_menu_fill`) rather than a black hole. With
+    /// either one in-window, the centre is not empty.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_centre_is_empty_only_when_both_modules_are_undocked() {
+        use sdroxide_types::{DetachableModule as M, Mode};
+        let dir = std::env::temp_dir().join(format!("sdroxide-centre-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        crate::layout::set_tier(&ctx, crate::layout::Tier::Desktop);
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+
+        // A digital mode: a panel and a panadapter, both in-window by default.
+        assert!(app.center_has_content(&ctx, Mode::Ft8));
+        app.ui_settings.set_detached(M::Panadapter, true);
+        assert!(app.center_has_content(&ctx, Mode::Ft8), "the panel still fills it");
+        app.ui_settings.set_detached(M::Panel, true);
+        assert!(!app.center_has_content(&ctx, Mode::Ft8), "both undocked leaves it empty");
+
+        // A voice mode has no panel: the panadapter alone fills the centre,
+        // until it too is undocked.
+        app.ui_settings.set_detached(M::Panadapter, false);
+        assert!(app.center_has_content(&ctx, Mode::Am));
+        app.ui_settings.set_detached(M::Panadapter, true);
+        assert!(!app.center_has_content(&ctx, Mode::Am));
     }
 
     /// Reproduce Kevin's phone crash report (discussion #9) at the geometry

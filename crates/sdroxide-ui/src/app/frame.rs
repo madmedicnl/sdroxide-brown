@@ -648,6 +648,27 @@ impl eframe::App for SdroxideApp {
         // like the SWR latch, an operator who has said no is not asked again.
         let rx_only =
             !self.swl_mode() && self.caps.as_ref().is_some_and(|c| !c.is_transmit_capable());
+        // Say, once, that an undocked operating panel has nowhere to show in
+        // this mode — otherwise it silently does not appear when the operator
+        // switches to it. Raised once per mode, so dismissing it sticks until
+        // the mode changes; cleared when a mode with a panel comes back.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mode = self.state.rx[0].mode;
+            let unavailable = self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel)
+                && !(mode.has_bottom_panel() || mode == Mode::Cw);
+            if unavailable {
+                if self.panel_undock_notice_mode != Some(mode) {
+                    self.panel_undock_notice_mode = Some(mode);
+                    self.radio_notice = Some(format!(
+                        "No operating panel in {} — it is undocked, and this mode has none.",
+                        mode.label()
+                    ));
+                }
+            } else {
+                self.panel_undock_notice_mode = None;
+            }
+        }
         let notice = self.radio_notice.clone().or_else(|| {
             (rx_only && !self.rx_only_nudge_dismissed).then(|| {
                 "This radio is receive-only — it has no transmitter. Hide the transmit \
@@ -734,11 +755,17 @@ impl eframe::App for SdroxideApp {
         // the SPOTS list and the world map all do.
         self.refresh_broadcast_spots(now_unix());
         let mut clicked_spot: Option<Spot> = None;
+        // Whether the main window's centre will be empty this frame — both the
+        // panadapter and the panel in their own windows. Decided before the dock
+        // so the two agree: if the centre is empty the band/mode selector fills
+        // it (`band_menu_fill`), and the narrow dock is not also drawn.
+        let cur_mode = self.state.rx[0].mode;
+        let center_empty = !self.center_has_content(ui.ctx(), cur_mode);
         // A docked band/mode selector takes a column off the right of the
         // panadapter before either draws. Shown here, after the top bar and the
         // notices, so the column sits beside the waterfall rather than under the
         // chrome.
-        if self.band_docked && self.band_dock_visible {
+        if self.band_docked && self.band_dock_visible && !center_empty {
             self.band_dock_panel(ui, &mut cmds);
         }
         // Remaining space: the panadapter (+ FT8/FT4 operating panel).
@@ -775,7 +802,13 @@ impl eframe::App for SdroxideApp {
                 self.retry_backoff = super::RETRY_MIN_S;
                 self.reconnect_now();
             }
-        } else if self.state.rx[0].mode.has_bottom_panel() {
+        } else if center_empty {
+            // Both the panadapter and the panel are in their own windows, so
+            // there is nothing of the radio left to draw here. Fill the space
+            // with the band/mode selector rather than a black hole (the
+            // operator's screenshot of an all-black centre).
+            self.band_menu_fill(ui, &mut cmds);
+        } else if cur_mode.has_bottom_panel() {
             // Remember the voice-mode view once, so leaving FT8 can restore it
             // instead of leaving the panadapter zoomed to the sub-band.
             if self.view.pre_digi_view.is_none() {
@@ -1626,22 +1659,12 @@ impl SdroxideApp {
                 }
             }
             M::Panel => {
+                // Only reached for a mode that has a panel — the shell asks
+                // `panel_window_wanted`, which is false otherwise.
                 let mode = self.state.rx[0].mode;
-                let has_panel = mode.has_bottom_panel() || mode == Mode::Cw;
                 let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    if has_panel {
-                        let h = ui.available_height();
-                        self.draw_operating_panel(ui, &mut cmds, mode, h);
-                    } else {
-                        // The panel is undocked but this mode has none. Hold the
-                        // window — and its place — and say so, rather than
-                        // letting it die and be re-placed on the way back.
-                        centred_waterfall_note(
-                            ui,
-                            ui.max_rect(),
-                            "no operating panel in this mode",
-                        );
-                    }
+                    let h = ui.available_height();
+                    self.draw_operating_panel(ui, &mut cmds, mode, h);
                 });
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
                 self.dispatch_commands(cmds);
@@ -1797,11 +1820,12 @@ impl SdroxideApp {
     }
 
     /// The operating-panel window should exist this frame: undocked on the
-    /// focused radio. Emitted even in a mode with no panel — it then shows a
-    /// note — so the window and its place on a monitor never die.
+    /// focused radio **and** the mode has a panel to show. A mode with none —
+    /// a voice mode — gets no window at all; the operator is told why by the
+    /// notice banner rather than by an empty window sitting on a monitor.
     #[cfg(not(target_arch = "wasm32"))]
-    fn panel_window_wanted(&self) -> bool {
-        self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel) && self.focused
+    fn panel_window_wanted(&self, mode: Mode) -> bool {
+        self.panel_detached(mode)
     }
 
     /// Which of this radio's modules the shell should emit as their own windows
@@ -1820,8 +1844,22 @@ impl SdroxideApp {
         let mut want = [false; sdroxide_types::DetachableModule::COUNT];
         want[sdroxide_types::DetachableModule::Panadapter.index()] =
             self.panadapter_window_wanted(ctx);
-        want[sdroxide_types::DetachableModule::Panel.index()] = self.panel_window_wanted();
+        want[sdroxide_types::DetachableModule::Panel.index()] =
+            self.panel_window_wanted(self.state.rx[0].mode);
         want
+    }
+
+    /// Whether anything of this radio is drawn in the main window's centre this
+    /// frame — the panadapter in-window, or the mode's panel. When neither is,
+    /// the space is filled with the band/mode selector rather than left black
+    /// (the operator's screenshots of an undocked panadapter and panel).
+    pub(in crate::app) fn center_has_content(&self, ctx: &egui::Context, mode: Mode) -> bool {
+        let layers =
+            crate::layout::panadapter_waterfall_only(ctx) || self.view.panadapter_visible();
+        let pan_here = layers && !self.panadapter_window_wanted(ctx);
+        let panel_here =
+            (mode.has_bottom_panel() || mode == Mode::Cw) && !self.panel_detached(mode);
+        pan_here || panel_here
     }
 
     /// Advance a DAB scan, if one is running.
