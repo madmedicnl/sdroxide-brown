@@ -386,6 +386,29 @@ fn detached_viewport(
     DetachedOutcome { close_requested, geometry }
 }
 
+/// Everything the panadapter draw needs that is derived from the radio's state
+/// and the current mode, gathered by [`SdroxideApp::panadapter_inputs`].
+///
+/// The point is that [`SdroxideApp::draw_panadapter`] becomes self-contained:
+/// it is then callable from the main window *or* a detached window without the
+/// frame loop's branch having to compute a dozen locals first. The one thing
+/// that must still run before the draw — the sub-band view-fitting that sets
+/// `view.view_lo_hz` — stays in the frame loop, because it is state the draw
+/// reads rather than an argument to it.
+struct PanadapterInputs {
+    cursor: Option<spectrum_view::AudioCursor>,
+    dxped: sdroxide_types::DxpedMode,
+    auto_tx_freq: bool,
+    hold_tx_freq: bool,
+    markers: Vec<f32>,
+    skimmer: Vec<sdroxide_types::SkimmerSpot>,
+    alpha: Vec<f32>,
+    net_spots: Vec<Spot>,
+    net_alpha: Vec<f32>,
+    ism: Vec<spectrum_view::IsmLabel>,
+    mem: Vec<crate::widgets::memories::MemMark>,
+}
+
 impl eframe::App for SdroxideApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
@@ -705,18 +728,12 @@ impl eframe::App for SdroxideApp {
                     });
                 });
         }
-        // Network-spot overlay (shared by voice + digital panadapter paths). A
-        // clicked spot is captured here and pre-filled into a log entry below.
+        // A clicked spot is captured here and pre-filled into a log entry below.
         // The broadcast stations are refreshed first, before anything reads
-        // them: the overlay here, the SPOTS list and the world map all do.
+        // them: the panadapter's network overlay (built in `panadapter_inputs`),
+        // the SPOTS list and the world map all do.
         self.refresh_broadcast_spots(now_unix());
-        let (net_spots, net_alpha) = self.net_overlay(now_unix());
         let mut clicked_spot: Option<Spot> = None;
-        // Built once for both panadapter call sites: the same devices are
-        // labelled whichever layout is on screen.
-        let ism_labels = self.ism_overlay();
-        // Likewise the memory marks along the bottom of the waterfall.
-        let mem_marks = self.memory_overlay();
         // A docked band/mode selector takes a column off the right of the
         // panadapter before either draws. Shown here, after the top bar and the
         // notices, so the column sits beside the waterfall rather than under the
@@ -858,60 +875,6 @@ impl eframe::App for SdroxideApp {
                 self.view.view_hi_hz = sub_hi;
             }
             self.digi_view_fit = Some((mode, dial, center));
-            // Which side of the dial the mode's audio band is on. Every tone
-            // offset below is a distance from the dial and every marker is drawn
-            // at dial + offset, so on the bands where the mode rides the lower
-            // sideband (SSTV and RADE on 160/80/40 m) they all belong below it.
-            // Display only: the controllers go on reporting an offset as a
-            // width from the dial, whichever side they are being worked on.
-            let side = if mode.is_lower_sideband_at(dial) { -1.0 } else { 1.0 };
-            let audio_hz = side * self.digi_status.as_ref().map(|s| s.audio_hz).unwrap_or(1500.0);
-            // RTTY shows mark/space tuning lines; Olivia the tone-bank edges;
-            // PSK just the centre marker.
-            let markers: Vec<f32> = if mode == Mode::Rtty {
-                let sh = self.digi_status.as_ref().map(|s| s.config.rtty_shift_hz).unwrap_or(170.0);
-                vec![audio_hz - sh / 2.0, audio_hz + sh / 2.0]
-            } else if mode == Mode::Olivia {
-                let bw = self.digi_status.as_ref().map(|s| s.config.olivia_bw_hz).unwrap_or(1000.0);
-                vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
-            } else if mode == Mode::Thor {
-                let baud =
-                    self.digi_status.as_ref().map(|s| s.config.thor_mode.baud()).unwrap_or(15.625);
-                let bw = 18.0 * baud;
-                vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
-            } else if mode == Mode::Js8 {
-                // Worth showing: Turbo's 160 Hz footprint against Slow's 25 Hz
-                // is what decides whether a frequency is actually free.
-                let bw = self
-                    .digi_status
-                    .as_ref()
-                    .and_then(|s| s.js8.as_ref())
-                    .map_or(50.0, |j| j.speed.bandwidth_hz());
-                vec![audio_hz, audio_hz + bw]
-            } else if mode == Mode::Fsq {
-                let baud = self.digi_status.as_ref().map(|s| s.config.fsq_baud).unwrap_or(4.5);
-                let bw = 33.0 * baud;
-                vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
-            } else if mode == Mode::Hell {
-                let v =
-                    self.digi_status.as_ref().map(|s| s.config.hell_variant).unwrap_or_default();
-                let bw = v.bandwidth_hz() as f32;
-                vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
-            } else if mode == Mode::RfPaint {
-                // The painting band edges (300..3300 Hz).
-                vec![300.0, 3300.0]
-            } else if mode == Mode::Rade {
-                // The RADE V1 OFDM carriers, so the operator can see whether the
-                // signal is sitting inside the modem's window.
-                vec![side * 1062.0, side * 1876.0]
-            } else {
-                Vec::new()
-            };
-            // FT8 station callsign boxes (built before the &mut self borrows).
-            // Only the slotted modes have them — SSTV / RF Paint share the digi
-            // path but must not inherit FT8's overlay.
-            let (ft8_spots, ft8_alpha) =
-                if mode.is_slotted() { self.ft8_overlay() } else { (Vec::new(), Vec::new()) };
 
             let frame = self.frame.take();
             // A phone shows one of the three at a time, chosen by a row of
@@ -969,62 +932,9 @@ impl eframe::App for SdroxideApp {
             // radio (or any stalled stream) freezes instead.
             let live = frame.is_some() && now - self.last_spectrum_at < STREAM_STALE_S;
             self.note_panadapter_width(ui);
-            // Read here: the waterfall call below borrows `self`'s fields mutably.
-            let atsmini = self.atsmini_active();
             let wf_tuning = self.wf_tick(live, ui.ctx().pixels_per_point());
             if show_wf || detached {
-                // **SSTV on a demod-audio front end.** Its view is anchored on
-                // the picture rather than on the tone it happens to be carrying,
-                // and CTR has to centre on that anchor — with the dial as the
-                // anchor it dragged the window back to the carrier every frame,
-                // which is exactly what the operator saw when clicking CTR moved
-                // the view. The picture's centre is the band's 1750 Hz, signed
-                // by the side the mode rides (SSTV is LSB on 160/80/40 m), and
-                // it is a *view* anchor only: the logged frequency stays the
-                // dial.
-                let sstv_picture =
-                    self.caps.as_ref().is_some_and(|c| c.audio_mode) && mode.is_sstv();
-                // A click sets the tone offset in the modes that park on an
-                // agreed dial and pick a signal inside the sub-band. Not in
-                // RTTY: its tone pair is a standard (2125/2295 Hz), stations
-                // are spread across the band rather than stacked in one window,
-                // and dragging mark and space onto each one in turn walks them
-                // out of the transmit filter. There a click tunes the dial so
-                // the signal lands on the pair, exactly as CW does.
-                let cursor = Some(spectrum_view::AudioCursor {
-                    hz: if sstv_picture {
-                        side * crate::app::spectrum::SSTV_TONE_HZ as f32
-                    } else {
-                        audio_hz
-                    },
-                    // A click sets the digital TX offset in the modes that have
-                    // one. It does not on a listening source with no
-                    // transmitter: there is no offset to set, and a click is
-                    // the only way to nudge the dial inside the passband a
-                    // hardware-demodulated radio hands over — so it tunes, as it
-                    // does in CW.
-                    click_sets_offset: !mode.holds_standard_tones() && !atsmini,
-                    // CW only for now: RTTY and WEFAX sit off their dials too
-                    // and could follow, but each wants checking against real
-                    // signals first.
-                    line_on_cursor: false,
-                    // Where the window is centred is a separate question from
-                    // where the tuning line is drawn, and RTTY has already been
-                    // checked on the air for this one: its tone pair is 2210 Hz
-                    // off the dial, so a click-tune zoomed in tighter than that
-                    // left the dial off the picture and the re-centring carried
-                    // the signal away with it.
-                    center_on_cursor: mode.holds_standard_tones() || sstv_picture,
-                });
-                let dxped = if matches!(mode, Mode::Ft8 | Mode::Ft2) {
-                    self.digi_status.as_ref().map(|s| s.config.dxped_mode).unwrap_or_default()
-                } else {
-                    sdroxide_types::DxpedMode::Normal
-                };
-                let auto_tx_freq = mode.is_slotted()
-                    && self.digi_status.as_ref().map(|s| s.config.auto_tx_freq).unwrap_or(true);
-                let hold_tx_freq = mode.is_slotted()
-                    && self.digi_status.as_ref().map(|s| s.config.hold_tx_freq).unwrap_or(false);
+                let inputs = self.panadapter_inputs(now);
                 if detached {
                     #[cfg(not(target_arch = "wasm32"))]
                     self.show_detached_panadapter(
@@ -1032,18 +942,8 @@ impl eframe::App for SdroxideApp {
                         now,
                         frame.as_ref(),
                         &mut cmds,
-                        cursor,
-                        dxped,
-                        auto_tx_freq,
-                        hold_tx_freq,
-                        &markers,
-                        &ft8_spots,
-                        &ft8_alpha,
-                        &net_spots,
-                        &net_alpha,
+                        &inputs,
                         &mut clicked_spot,
-                        &ism_labels,
-                        &mem_marks,
                         wf_tuning,
                     );
                 } else {
@@ -1053,18 +953,8 @@ impl eframe::App for SdroxideApp {
                         wf_h,
                         frame.as_ref(),
                         &mut cmds,
-                        cursor,
-                        dxped,
-                        auto_tx_freq,
-                        hold_tx_freq,
-                        &markers,
-                        &ft8_spots,
-                        &ft8_alpha,
-                        &net_spots,
-                        &net_alpha,
+                        &inputs,
                         &mut clicked_spot,
-                        &ism_labels,
-                        &mem_marks,
                         show_panel,
                         now,
                         wf_tuning,
@@ -1130,7 +1020,6 @@ impl eframe::App for SdroxideApp {
                 );
                 ui.add_space(2.0);
             }
-            let (cw_spots, cw_alpha) = self.cw_overlay(now);
             let frame = self.frame.take();
             // As on the digital path: no fresh frames, no scroll.
             let live = frame.is_some() && now - self.last_spectrum_at < STREAM_STALE_S;
@@ -1180,20 +1069,8 @@ impl eframe::App for SdroxideApp {
                 (w, p, w > 0.0, p > 0.0)
             };
             let width = ui.available_width();
-            let cw_pitch = cw_mode.then(|| spectrum_view::AudioCursor {
-                hz: self.cw_pitch_hz(),
-                // A click tunes the dial so the signal lands on the cursor.
-                click_sets_offset: false,
-                // With the readout reading the signal, the tuning line follows
-                // it there — see `UiSettings::cw_qrg`.
-                line_on_cursor: self.ui_settings.cw_qrg,
-                // And so does the middle of the window: with the readout and
-                // the line both on the cursor, a window still centred on the
-                // dial would be the one thing left disagreeing. Off by
-                // default, with the setting.
-                center_on_cursor: self.ui_settings.cw_qrg,
-            });
             if show_wf || detached {
+                let inputs = self.panadapter_inputs(now);
                 if detached {
                     #[cfg(not(target_arch = "wasm32"))]
                     self.show_detached_panadapter(
@@ -1201,18 +1078,8 @@ impl eframe::App for SdroxideApp {
                         now,
                         frame.as_ref(),
                         &mut cmds,
-                        cw_pitch,
-                        sdroxide_types::DxpedMode::Normal,
-                        false,
-                        false,
-                        &[],
-                        &cw_spots,
-                        &cw_alpha,
-                        &net_spots,
-                        &net_alpha,
+                        &inputs,
                         &mut clicked_spot,
-                        &ism_labels,
-                        &mem_marks,
                         wf_tuning,
                     );
                 } else {
@@ -1222,18 +1089,8 @@ impl eframe::App for SdroxideApp {
                         wf_h,
                         frame.as_ref(),
                         &mut cmds,
-                        cw_pitch,
-                        sdroxide_types::DxpedMode::Normal,
-                        false,
-                        false,
-                        &[],
-                        &cw_spots,
-                        &cw_alpha,
-                        &net_spots,
-                        &net_alpha,
+                        &inputs,
                         &mut clicked_spot,
-                        &ism_labels,
-                        &mem_marks,
                         show_panel,
                         now,
                         wf_tuning,
@@ -1532,16 +1389,142 @@ pub(in crate::app) struct DabScan {
 const DAB_SCAN_DWELL_S: f64 = 3.0;
 
 impl SdroxideApp {
+    /// Everything the panadapter draw needs, gathered from `self` and the
+    /// current mode so the draw is self-contained (see [`PanadapterInputs`]).
+    /// Both frame-loop paths and the undocked window call this.
+    fn panadapter_inputs(&self, now: f64) -> PanadapterInputs {
+        let mode = self.state.rx[0].mode;
+        let dial = self.state.rx_freq_hz();
+        // Which side of the dial the mode's audio band is on. Every tone offset
+        // below is a distance from the dial and every marker is drawn at
+        // dial + offset, so on the bands where the mode rides the lower
+        // sideband (SSTV and RADE on 160/80/40 m) they all belong below it.
+        // Display only.
+        let side = if mode.is_lower_sideband_at(dial) { -1.0 } else { 1.0 };
+        let audio_hz = side * self.digi_status.as_ref().map(|s| s.audio_hz).unwrap_or(1500.0);
+        // RTTY shows mark/space tuning lines; Olivia the tone-bank edges; PSK
+        // just the centre marker.
+        let markers: Vec<f32> = if mode == Mode::Rtty {
+            let sh = self.digi_status.as_ref().map(|s| s.config.rtty_shift_hz).unwrap_or(170.0);
+            vec![audio_hz - sh / 2.0, audio_hz + sh / 2.0]
+        } else if mode == Mode::Olivia {
+            let bw = self.digi_status.as_ref().map(|s| s.config.olivia_bw_hz).unwrap_or(1000.0);
+            vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
+        } else if mode == Mode::Thor {
+            let baud =
+                self.digi_status.as_ref().map(|s| s.config.thor_mode.baud()).unwrap_or(15.625);
+            let bw = 18.0 * baud;
+            vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
+        } else if mode == Mode::Js8 {
+            // Worth showing: Turbo's 160 Hz footprint against Slow's 25 Hz is
+            // what decides whether a frequency is actually free.
+            let bw = self
+                .digi_status
+                .as_ref()
+                .and_then(|s| s.js8.as_ref())
+                .map_or(50.0, |j| j.speed.bandwidth_hz());
+            vec![audio_hz, audio_hz + bw]
+        } else if mode == Mode::Fsq {
+            let baud = self.digi_status.as_ref().map(|s| s.config.fsq_baud).unwrap_or(4.5);
+            let bw = 33.0 * baud;
+            vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
+        } else if mode == Mode::Hell {
+            let v = self.digi_status.as_ref().map(|s| s.config.hell_variant).unwrap_or_default();
+            let bw = v.bandwidth_hz() as f32;
+            vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
+        } else if mode == Mode::RfPaint {
+            // The painting band edges (300..3300 Hz).
+            vec![300.0, 3300.0]
+        } else if mode == Mode::Rade {
+            // The RADE V1 OFDM carriers, so the operator can see whether the
+            // signal is sitting inside the modem's window.
+            vec![side * 1062.0, side * 1876.0]
+        } else {
+            Vec::new()
+        };
+        // Station boxes: FT8's callsign overlay for the slotted modes, the CW
+        // skimmer for CW, nothing otherwise.
+        let (skimmer, alpha) = if mode == Mode::Cw {
+            self.cw_overlay(now)
+        } else if mode.is_slotted() {
+            self.ft8_overlay()
+        } else {
+            (Vec::new(), Vec::new())
+        };
+        let (net_spots, net_alpha) = self.net_overlay(now_unix());
+        let ism = self.ism_overlay();
+        let mem = self.memory_overlay();
+        // The tuning cursor: CW's pitch marker, or the digital mode's offset.
+        // Voice modes get none — there is no agreed dial to park a signal on.
+        let cursor = if mode == Mode::Cw {
+            Some(spectrum_view::AudioCursor {
+                hz: self.cw_pitch_hz(),
+                // A click tunes the dial so the signal lands on the cursor.
+                click_sets_offset: false,
+                // With the readout reading the signal, the tuning line follows
+                // it there — see `UiSettings::cw_qrg`.
+                line_on_cursor: self.ui_settings.cw_qrg,
+                center_on_cursor: self.ui_settings.cw_qrg,
+            })
+        } else if mode.has_bottom_panel() {
+            // **SSTV on a demod-audio front end.** Its view is anchored on the
+            // picture rather than on the tone it happens to be carrying, and CTR
+            // has to centre on that anchor — with the dial as the anchor it
+            // dragged the window back to the carrier every frame, which is
+            // exactly what the operator saw when clicking CTR moved the view.
+            // The picture's centre is the band's 1750 Hz, signed by the side the
+            // mode rides (SSTV is LSB on 160/80/40 m), and it is a *view* anchor
+            // only: the logged frequency stays the dial.
+            let sstv_picture = self.caps.as_ref().is_some_and(|c| c.audio_mode) && mode.is_sstv();
+            Some(spectrum_view::AudioCursor {
+                hz: if sstv_picture {
+                    side * crate::app::spectrum::SSTV_TONE_HZ as f32
+                } else {
+                    audio_hz
+                },
+                // A click sets the digital TX offset in the modes that have one.
+                // It does not on a listening source with no transmitter: a click
+                // is then the only way to nudge the dial inside the passband a
+                // hardware-demodulated radio hands over — so it tunes, as CW.
+                click_sets_offset: !mode.holds_standard_tones() && !self.atsmini_active(),
+                line_on_cursor: false,
+                center_on_cursor: mode.holds_standard_tones() || sstv_picture,
+            })
+        } else {
+            None
+        };
+        let dxped = if matches!(mode, Mode::Ft8 | Mode::Ft2) {
+            self.digi_status.as_ref().map(|s| s.config.dxped_mode).unwrap_or_default()
+        } else {
+            sdroxide_types::DxpedMode::Normal
+        };
+        let auto_tx_freq = mode.is_slotted()
+            && self.digi_status.as_ref().map(|s| s.config.auto_tx_freq).unwrap_or(true);
+        let hold_tx_freq = mode.is_slotted()
+            && self.digi_status.as_ref().map(|s| s.config.hold_tx_freq).unwrap_or(false);
+        PanadapterInputs {
+            cursor,
+            dxped,
+            auto_tx_freq,
+            hold_tx_freq,
+            markers,
+            skimmer,
+            alpha,
+            net_spots,
+            net_alpha,
+            ism,
+            mem,
+        }
+    }
+
     /// Draw the panadapter — spectrum, waterfall, level slider and the ATS
     /// "catching up" note — into `ui`, filling `width × wf_h`.
     ///
-    /// Shared by the digital path and the CW/analog path, and by the detached
-    /// viewport. Everything that differs between callers rides the parameters —
-    /// the audio cursor, the FT8 DXpedition shading, the transmit-tone gates and
-    /// the overlay spot sets — so the picture is identical wherever it is drawn
-    /// from. `panel_below` is `show_ext`'s bandplan-strip gate: whether the
-    /// mode's own panel is on screen under this.
-    #[allow(clippy::too_many_arguments)]
+    /// Shared by the digital path, the CW/analog path and the undocked window.
+    /// Everything mode-specific rides `inputs` (gathered by
+    /// [`Self::panadapter_inputs`]), so the picture is identical wherever it is
+    /// drawn from. `panel_below` is `show_ext`'s bandplan-strip gate: whether
+    /// the mode's own panel is on screen under this.
     fn draw_panadapter(
         &mut self,
         ui: &mut egui::Ui,
@@ -1549,18 +1532,8 @@ impl SdroxideApp {
         wf_h: f32,
         frame: Option<&std::sync::Arc<sdroxide_types::SpectrumFrame>>,
         cmds: &mut Vec<Command>,
-        cursor: Option<spectrum_view::AudioCursor>,
-        dxped: sdroxide_types::DxpedMode,
-        auto_tx_freq: bool,
-        hold_tx_freq: bool,
-        markers: &[f32],
-        skimmer: &[sdroxide_types::SkimmerSpot],
-        alpha: &[f32],
-        net_spots: &[Spot],
-        net_alpha: &[f32],
+        inputs: &PanadapterInputs,
         clicked_spot: &mut Option<Spot>,
-        ism: &[spectrum_view::IsmLabel],
-        mem: &[crate::widgets::memories::MemMark],
         panel_below: bool,
         now: f64,
         wf_tuning: spectrum_view::WfTuning,
@@ -1598,18 +1571,18 @@ impl SdroxideApp {
                 &mut self.spec_smooth,
                 &mut self.trace_cache,
                 &mut self.spec3d,
-                cursor,
-                dxped,
-                auto_tx_freq,
-                hold_tx_freq,
-                markers,
-                skimmer,
-                alpha,
-                net_spots,
-                net_alpha,
+                inputs.cursor,
+                inputs.dxped,
+                inputs.auto_tx_freq,
+                inputs.hold_tx_freq,
+                &inputs.markers,
+                &inputs.skimmer,
+                &inputs.alpha,
+                &inputs.net_spots,
+                &inputs.net_alpha,
                 clicked_spot,
-                ism,
-                mem,
+                &inputs.ism,
+                &inputs.mem,
                 self.input.cfg.wheel,
                 pan,
                 wf_tuning,
@@ -1641,25 +1614,14 @@ impl SdroxideApp {
     /// Draw the panadapter into its **own OS window** (native only), when the
     /// focused radio has the panadapter undocked.
     #[cfg(not(target_arch = "wasm32"))]
-    #[allow(clippy::too_many_arguments)]
     fn show_detached_panadapter(
         &mut self,
         ctx: &egui::Context,
         now: f64,
         frame: Option<&std::sync::Arc<sdroxide_types::SpectrumFrame>>,
         cmds: &mut Vec<Command>,
-        cursor: Option<spectrum_view::AudioCursor>,
-        dxped: sdroxide_types::DxpedMode,
-        auto_tx_freq: bool,
-        hold_tx_freq: bool,
-        markers: &[f32],
-        skimmer: &[sdroxide_types::SkimmerSpot],
-        alpha: &[f32],
-        net_spots: &[Spot],
-        net_alpha: &[f32],
+        inputs: &PanadapterInputs,
         clicked_spot: &mut Option<Spot>,
-        ism: &[spectrum_view::IsmLabel],
-        mem: &[crate::widgets::memories::MemMark],
         wf_tuning: spectrum_view::WfTuning,
     ) {
         use sdroxide_types::DetachableModule as M;
@@ -1677,18 +1639,8 @@ impl SdroxideApp {
                 h,
                 frame,
                 cmds,
-                cursor,
-                dxped,
-                auto_tx_freq,
-                hold_tx_freq,
-                markers,
-                skimmer,
-                alpha,
-                net_spots,
-                net_alpha,
+                inputs,
                 clicked_spot,
-                ism,
-                mem,
                 false,
                 now,
                 wf_tuning,
