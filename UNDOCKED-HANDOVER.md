@@ -102,14 +102,23 @@ window's own tier while it draws. The three big modules the work was aimed at �
 panadapter, panel, controls — are all detachable now.
 
 **The destination, so the next slice aims at it:** a user-arrangeable workspace
-in the SDRuno mould. The three docked modules are done; what is left is a
-different mechanism — turning the **tool windows** (scanner, schedule, logbook,
-spots, memories) from egui windows inside the main viewport into OS windows of
-their own, which needs each window's body extracted to draw into a `ui` first.
-Adding another docked module is now: a `DetachableModule` variant, its
-`detached_spec`, a `show_detached_module` arm, and a `*_window_wanted` predicate
-where it is not always present — the registry, the shell and the Settings rows
-take care of the rest.
+in the SDRuno mould. The three docked modules **and the tool windows** are
+detachable now:
+
+- Adding a docked **module**: a `DetachableModule` variant, its `detached_spec`,
+  a `show_detached_module` arm, and a `*_window_wanted` predicate where it is not
+  always present — the registry, the shell and the Settings rows do the rest.
+- Adding a **tool window**: extract its body to `fn <tool>_body(&mut self, ui, …)`
+  and call `self.tool_window(ctx, "<id>", "<Title>", [w, h], open, |me, ui| …)`
+  from its `*_window` method, storing the return back in its `show_*` flag. The
+  DETACH/DOCK chip, the OS window, the geometry and the close-vs-dock handling
+  are all in `tool_window`.
+  **Done (13):** scanner, DRM, morse, signal id, contest, bands, known stations,
+  RDS, HD Radio, Enigma, ISM, mail, satellite.
+  **Left (bodies inline in their `*_window`):** schedule, logbook, spots,
+  awards, grid tracker, public SDRs, recordings, SWL log, memories, voice keyer,
+  and the per-mode setup windows (VDL2, ADS-B, AIS, FSK/FSQ, SSTV, WEFAX) — each
+  just needs its closure body cut into a `_body` method. Nothing else is owed.
 
 Everything below is the reference for those steps.
 
