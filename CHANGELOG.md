@@ -13,6 +13,71 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [2.0.3_brown] - 2026-10-09
+
+**The undocked workspace.** The panadapter, the operating panel and the
+Controls can now each be pulled into a window of its own — SDRuno's shape, for
+the waterfall on a second monitor — with a second spectrum beside the first, a
+**WINDOWS** menu on the radio strip to open and arrange them, saved workspaces,
+and a new **Calm** theme. The second report behind discussion #18 — the DAB
+audio — is answered in it, and the first — the sign-in nag — was 2.0.2.
+
+### Added
+
+- **Undocked mode: a module in a window of its own.** The panadapter, the
+  mode's operating panel and the Controls strip can each leave the main window
+  for their own OS window — put the waterfall on a second monitor, the controls
+  on a third. Set each under Settings → UI → Undocked; closing a window docks it
+  again, and its size and place are remembered. The windows are owned by the
+  shell rather than by a radio, so changing radio or mode does not tear one down
+  and have a tiling compositor re-place it. On Wayland the operator decides where
+  a window goes: the manual has the app-id table (`sdroxide-panadapter`,
+  `-aux`, `-panel`, `-controls`) and a **niri `window-rule`** example to float
+  and pin them.
+- **The Controls console — SDRuno's RX control.** Undocking the Controls moves
+  the whole top strip (frequency, S-meter, receiver and transmitter controls)
+  into a window that is desktop-shaped whatever its own height, with the band
+  and mode selector beneath it and the band **keypad** down its left side.
+- **The band keypad.** SDRuno's calculator keypad: **Bands** and **MHz** above,
+  ten keys in calculator order (`7 8 9` / `4 5 6` / `1 2 3`, `0` centred under
+  them), **Clear** and **Enter** below, with the full band list beside it. Each
+  key names the band it goes to and the bands rise with the digits (`1` is
+  160 m, `9` is 11 m). In **MHz** the same keys type a frequency in kilohertz —
+  `14074` is 14.074 MHz — and **Enter** tunes it; a band the radio cannot
+  receive greys its key and says which range it published.
+- **MAIN SP's toolbar.** The undocked panadapter window gains SDRuno's header
+  bar: the frequency readout with the mode and signal level in a bar across the
+  top (instead of floating over the middle of the waterfall), a **DISP** chip
+  opening the layer menu, and a **DOCK** chip to send the window home.
+- **AUX SP — a second spectrum.** A second spectrum and waterfall in a window
+  of its own (`sdroxide-panadapter-aux`), the same receiver seen twice, with its
+  own toolbar and geometry.
+- **The WINDOWS menu on the radio strip.** SDRuno's MAIN is the window whose
+  buttons open the others; ours is the radio-tab strip, and it now carries a
+  **🪟 WINDOWS** chip that opens each module window by its SDRuno name (SP1,
+  SP2 (AUX), Operating panel, RX control), each a toggle, plus **DOCK ALL
+  WINDOWS** and **UNDOCK ALL WINDOWS**. Lit while any module is out. It acts on
+  the focused radio, and the browser — with one window — draws no such chip.
+- **Tool windows can go to their own OS window too.** Each carries a **⇱
+  WINDOW** chip that moves it out (the chip then reads **⇱ DOCK**): the scanner,
+  DRM, the Morse trainer, the signal-id guide, the contest logger, the bands
+  window, known stations, RDS, HD Radio, Enigma, ISM, mail, satellite, and the
+  awards, logbook, grid tracker, memories and SWL log. Their app-ids are
+  `sdroxide-tool-<name>`.
+- **Workspaces.** Save a whole window arrangement under a name and put it back:
+  Settings → UI → **Workspaces** (up to ten, SDRuno's limit), stored in
+  `workspaces.json`. Applying one re-docks and re-opens the modules with no
+  restart.
+- **The Calm theme.** A blue-ground, near-white scheme in the SDRuno mould, the
+  operator's request. `PROTO_VERSION` 197 → 198 (a `UiTheme` rides
+  `ClientScreen`, and adding a variant moves the catch-all `Default`'s
+  discriminant), so client and server must both be on 198.
+- **SSTV can be decoded on any frequency: KEEP DIAL.** Choosing SSTV moved a
+  dial more than 3 kHz from every published SSTV frequency onto the band's
+  calling one, so a picture heard off the list could only be decoded by choosing
+  the mode first and tuning afterwards. The new **KEEP DIAL** chip beside
+  **⇵ FREQ** in the SSTV panel leaves the dial where it was tuned. Off by
+  default; SSTV and SSTV-FM only. `PROTO_VERSION` 195 → 196.
 - **eQSL accounts with more than one QTH profile work.** eQSL identifies an
   account by callsign *and* QTH nickname, so a multi-profile account refused an
   upload that did not name one — and answered "No such Username/Password found"
@@ -20,163 +85,115 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   too (upstream issue #647). Settings → Uploads → eQSL gains an optional **QTH
   nickname** box, sent as eQSL's own `QTHNickname` field on the upload, the test
   and the download; left blank nothing is sent, so a single-profile account is
-  unchanged. `PROTO_VERSION` 196 → 197 (an appended `NetworkConfig` field), so
-  client and server must both be updated.
-- **The DAB bandwidth advice moved to the radio tab.** It warned about the
-  front end's width from inside the decoder's panel, where acting on it meant
-  leaving the mode and finding the sample-rate control. It now sits in the
-  radio tab beside that control, in yellow, and dismisses for good once read —
-  at the operator's own suggestion (fork discussion #18). The wording is honest
-  about the ceiling: where the receiver's rate ladder cannot reach the ~3.07
-  Msps lane DAB wants at any setting, it says the ceiling is the receiver's
-  rather than suggesting a change that does nothing. The arithmetic is shared
-  with the engine's own warning, so the two cannot disagree.
-- **ADS-B no longer holds a CPU core at 100 % on an empty sky.** The decoder
-  read the noise's lower quartile as its floor, which for real receiver noise
-  is below the average noise sample, so ~40 % of all samples passed the first
-  check and ~98 000 false candidates a second were sliced at 2.4 Msps (~340 000
-  at 8 Msps). The floor is now the mean noise power the quartile implies. Worker
-  CPU on noise: ~90 % → ~8 % of a core at 2.4 Msps, ~280 % → ~22 % at 8 Msps.
-  Sensitivity is unchanged to the message at 2.4 and 4 Msps; at the very edge
-  (8 dB SNR) one or two DF17s in forty are lost. Measured on synthetic Gaussian
-  noise, not yet on a Pluto.
-- **SSTV can be decoded on any frequency: KEEP DIAL.** Choosing SSTV moved a
-  dial more than 3 kHz from every published SSTV frequency onto the band's
-  calling one, so a picture heard off the list could only be decoded by choosing
-  the mode first and tuning afterwards. The new **KEEP DIAL** chip beside
-  **⇵ FREQ** in the SSTV panel leaves the dial where it was tuned. Off by
-  default; SSTV and SSTV-FM only. `PROTO_VERSION` 195 → 196 (an appended
-  `DigiConfig` field), so client and server must both be updated.
-- **"Keep mine (and stop asking)" now actually stops asking.** The bindings
-  prompt offered *Use this profile's bindings* and *Keep mine (and stop
-  asking)*, and only the first one persisted anything — so the second was not an
-  answer, and the prompt came back on the next session and on every other radio
-  of the station. Reported as *"completely useless, serves no purpose, displays
-  all the time, already reported"* (#18). The decline is now persisted per
-  client, separately from the opt-in so that saying no is never read as yes.
-- **The DAB width warning no longer advises something that cannot work.** It
-  ended *"widen the receiver's window if it has the setting"* on every front
-  end, because the DAB window target is capped and `rate_for` takes the rung
-  nearest it — so **no** device rate reaches the margin, and the warning kept
-  showing after the rate had been raised (#18). It now asks whether widening
-  helps, and where it cannot it says the ceiling is the receiver's rather than
-  handing out advice that changes nothing.
-
-- **DAB audio: the queue is primed before it plays.** The decoder hands over an
-  Access Unit at a time (1152 samples per channel, 24 ms) while the speaker path
-  drains exactly one block per iteration (10 ms), so a queue beginning empty
-  hovered around zero and every disagreement between the two sizes was a block
-  of silence — *"choppy, fragmented, inaudible"* (#18). One Access Unit of
-  cushion is now held before the first sample goes out; the mean is then above
-  the block size and the jitter cannot reach it. A genuine starvation still comes
-  out as silence rather than being papered over.
-
-- **DAB: a CLEAR chip for the channel list.** The CHANNELS list is what the
-  sweep found and it is remembered, so it only ever grows — every ensemble the
-  receiver has ever come across stays, with no way to remove one. That is the
-  right default for a listener and the wrong one with no way out, so `CLEAR`
-  forgets them and SCAN finds them again. The chip is offered **only** when the
-  list has something in it and **never during a sweep**, where stopping would
-  write the sweep's findings straight back over the clearing — so it cannot be
-  the inert control this fork keeps finding. (#18, "Add clear list".)
-
+  unchanged. `PROTO_VERSION` 196 → 197.
 - **Advisories can be dismissed for good.** Kevin's #18 is the real one: *"there
   are already 10,000 security features and warnings… people are going to get fed
   up and switch to something else."* Most of what he hit was not volume but
   warnings that repeated or that contradicted something he had already done —
-  and those are fixed at the source rather than muted, because muting a wrong
-  warning leaves a wrong warning.
-
-  What is left is advice that stays true until the operator acts on it. An
-  advisory line now carries a **✕** that remembers the dismissal, so it is not
-  repeated on the next session either — the same sentence every morning is where
-  a warning teaches people to stop reading warnings.
-
-  **Only advice is dismissible, never state.** A line that reports something true
-  *now* — the front end overloading, the connection gone, transmit locked — must
-  not be dismissible, because it stops being true the moment the condition
-  clears and would leave a dead control behind. The set of dismissible advisories
-  is a short, named list (`UiSettings::ADVISORY_KEYS`) rather than whatever opts
-  in, and an unlisted name is **always shown** — silence by omission is the
-  dangerous direction, so a new call site keeps nagging until somebody decides it
-  is advice.
+  and those are fixed at the source rather than muted. What is left is advice
+  that stays true until the operator acts on it, and an advisory line now carries
+  a **✕** that remembers the dismissal. **Only advice is dismissible, never
+  state** — a line that reports something true *now* must not be dismissible, or
+  it leaves a dead control behind the moment the condition clears.
+- **A complete uninstallation list**, in the README and as manual **§ 9.5**.
+  Every path an installation puts on the machine, so "is anything left behind?"
+  has a written answer: the Debian package installs **no systemd service**,
+  writes **nothing to `/etc` or `/var`**, and creates **no configuration** (the
+  program makes `~/.config/sdroxide-brown` on first run, which is the other half
+  of a complete removal). It also notes that a fresh install has **no radio
+  configured yet**, so nothing decodes until one is added.
 
 ### Changed
 
-- **Documented that a private window cannot install the app — the browser, not
-  the program.** Chrome and Firefox both refuse to install a web app from a
-  private/incognito window and no setting on the station changes that, which
-  makes it look like something misconfigured. Everything else works there; the
-  only thing a private window does not keep is what the *browser* holds, so in
-  one you sign in and the **station** supplies your screen and bindings instead.
-  That is the same path any other machine's profile takes on this build. Added
-  to §8's home-screen section rather than left as a report to answer.
+- **The digital modes are a real dropdown.** The band/mode menu's **DIGITAL**
+  control is now a dropdown rather than a chip that hid a popup — it shows the
+  mode in force when a digital one is chosen (pick FT8 and it says FT8) and
+  opens onto a **Digital** group and a **Wideband** group (ADS-B, VDL2, AIS,
+  HFDL, DAB). Modes grey where the station cannot run them and, on OPERATE, where
+  the band does not carry them. The operator's report: the chip read as a toggle,
+  and the modes looked like they were not there at all.
+- **The band filters read plain HF / VHF / UHF, and the clear-band chip ALL.**
+  The `BANDS` suffix came off the filter chips so they sit closer together, and
+  `ALL — no band` is plain `ALL`; the hover messages are unchanged.
+- **The sign-in card asks one question: REMEMBER ME.** The box starts ticked and
+  kept for thirty days; unticked it is a session cookie, dropped when the window
+  closes, so a shared machine is never left signed in. The two-clock 12 h/1 day
+  choice was ours to ask and the operator's to get right, and the complaint
+  behind the change was being asked again every twelve hours on a station
+  serving three radios.
+- **The DAB bandwidth advice moved to the radio tab.** It warned about the front
+  end's width from inside the decoder's panel, where acting on it meant leaving
+  the mode. It now sits beside the sample-rate control in yellow and dismisses
+  for good once read, and its wording is honest about the ceiling: where the
+  rate ladder cannot reach the ~3.07 Msps lane DAB wants, it says the ceiling is
+  the receiver's rather than suggesting a change that does nothing. The
+  arithmetic is shared with the engine's own warning, so the two cannot disagree.
+- **The DAB width warning no longer advises something that cannot work.** It
+  ended *"widen the receiver's window if it has the setting"* on every front end,
+  because the DAB window target is capped and `rate_for` takes the rung nearest
+  it — so **no** device rate reaches the margin.
+- **DAB audio: the queue is primed before it plays.** The decoder hands over an
+  Access Unit at a time (24 ms) while the speaker path drains one 10 ms block an
+  iteration, so a queue beginning empty hovered around zero and every
+  disagreement was a block of silence — *"choppy, fragmented, inaudible"*. One
+  Access Unit of cushion is now held before the first sample goes out. A genuine
+  starvation still comes out as silence rather than being papered over.
+- **DAB: a CLEAR chip for the channel list.** The CHANNELS list only ever grew;
+  `CLEAR` now forgets it and SCAN finds it again. The chip is offered only when
+  the list has something in it and never during a sweep, where stopping would
+  write the sweep's findings straight back over the clearing.
+- **ADS-B no longer holds a CPU core at 100 % on an empty sky.** The decoder
+  read the noise's lower quartile as its floor, which for real receiver noise is
+  below the average noise sample, so ~40 % of all samples passed the first check
+  and ~98 000 false candidates a second were sliced at 2.4 Msps. The floor is
+  now the mean noise power the quartile implies. Worker CPU on noise: ~90 % →
+  ~8 % of a core at 2.4 Msps, ~280 % → ~22 % at 8 Msps. Sensitivity is unchanged
+  to the message at 2.4 and 4 Msps; at the very edge one or two DF17s in forty
+  are lost.
+- **Documented that a private window cannot install the app.** Chrome and
+  Firefox both refuse to install a web app from a private/incognito window and
+  no setting on the station changes that; everything else works there, and the
+  station supplies the screen and bindings instead of the browser's store.
 
-### Changed
+### Fixed
 
-- **The sign-in card asks one question: REMEMBER ME.** It offered **12 HOURS**,
-  **1 DAY** and **NOT THIS TIME** in 2.0.2, and the two-clock choice was ours to
-  ask and the operator's to get right — the complaint behind this change was
-  being asked again every twelve hours on a station serving three radios. The
-  box starts ticked and means what it says; unticked it is a **session** cookie,
-  dropped by the browser when the window closes, so a shared machine is never
-  left signed in. A ticked one is kept for thirty days, which is what
-  "remember me" means, and how long it is honoured is now the station's business
-  rather than a number on the card.
+- **"Keep mine (and stop asking)" now actually stops asking.** The bindings
+  prompt offered *Use this profile's bindings* and *Keep mine (and stop
+  asking)*, and only the first persisted anything — so the second was not an
+  answer and the prompt came back next session and on every other radio of the
+  station. The decline is now persisted per client, separately from the opt-in,
+  so saying no is never read as yes.
+- **The right border closes at every window width, including on a phone.**
+  Discussion #16: *"the boundary line is missing, the outline extends beyond the
+  edge."* It was not a row that would not fit: an `egui::Panel`'s own frame fill
+  painted 2 pt past the right edge at every size. The top bar's background is
+  now painted from inside the panel through a painter clipped to the window, and
+  the layout sweep that recorded it is strict at half a point.
+- **Closing a radio tab at three radios no longer makes it come back.**
+  Discussion #16: closing station 3 while viewing station 1 flickered — the tab
+  reappearing once a frame. Two faults: a radio the shell started with had never
+  entered the record of radios already opened, so a closed one was offered
+  straight back; and a station's roster is the same in every tab, so an unwatched
+  radio was offered once per tab and dialled twice at a time.
 
 ### Not proven
 
-- **DAB audio has a field report that it works.** A user on the upstream tracker
-  reports DAB "works perfectly" on his setup, which is not known to us. It is
-  kept as a data point and not as proof: the queue fix is in, and whether his
-  receiver is one where the queue ever ran dry is exactly the thing we cannot
-  see from here.
+- **The undocked windows on a real second monitor.** The module windows, the
+  WINDOWS menu, the tool-window chips and the workspaces are built and
+  unit-tested, and the operator has run the build — but a full two-display
+  arrangement, and the Wayland window rules that place them, still want a bench
+  pass.
+- **The digital dropdown inside the top-bar popup.** It is exercised standalone
+  and in the console; a nested dropdown inside the band/mode popup is the one
+  path not seen running.
 - **DAB audio has not been listened to.** The priming follows from the queue
-  arithmetic and is unit-tested, but nobody has heard an ensemble come out of it;
-  if it is still choppy the cause is elsewhere (the faad2 decode errors are the
-  obvious candidate) and the cushion will only have moved the symptom.
-- The cookie path is end-to-end tested and the card's own logic is unit-tested,
-  but **no browser was driven**: the checkbox itself, and a real cookie on a
-  phone, still need a hand.
-
-## Fixed
-
-- **The right border closes at every window width, including on a phone.** Fork
-  discussion #16: *"the right panel border does not close properly against the edge
-  of the screen — the boundary line is missing, the outline extends beyond the edge
-  of the display window"*, on two panels and in both a phone and a desktop browser.
-  It was **not** a row that would not fit: instrumenting the panel frame showed
-  every panel's content comfortably inside the window (8..352 pt of 360), while an
-  `egui::Panel`'s own **frame fill** painted 2 pt past the right edge at every
-  size. The top bar's background is now painted from inside the panel, through a
-  painter clipped to the window, so nothing can reach past it. The layout sweep
-  that recorded this — and that still carries a 6 pt tolerance for a fault that
-  was not the strip's — is now **strict at half a point**, and the ignored strict
-  test beside it has been un-ignored and passes.
-- **Closing a radio tab at three radios no longer makes it come back.** Fork
-  discussion #16: *"With exactly 2 radio tabs: no problem. With three radio tabs
-  open, closing the tab for station 3 while viewing station 1 causes a continuous
-  screen flicker"* — the flicker was the tab reappearing, once a frame, under the
-  operator's cursor. Two faults, both now pinned by tests: a radio this shell
-  started with had never entered the record of radios it had already opened, so a
-  closed one was offered straight back; and a station's roster is the same in
-  every tab, so one radio nobody was looking at was offered once per tab and was
-  dialled twice at a time. What still opens is what should: a radio the station
-  **adds later** arrives as before, which is the test that stops this being
-  "fixed" by not opening peer radios at all.
-
-### Added
-
-- **A complete uninstallation list**, in the README and as manual **§ 9.5**.
-  Asked for on [fork discussion #17](https://github.com/madmedicnl/sdroxide-brown/discussions/17):
-  every path an installation puts on the machine, so "is anything left behind?"
-  has a written answer. Three things it says plainly: the Debian package installs
-  **no systemd service** (so a purge cannot leave one running), writes **nothing
-  to `/etc` or `/var`**, and creates **no configuration** — the program makes
-  `~/.config/sdroxide-brown` on its first run, and that directory is the other
-  half of a complete removal. The same section notes the one thing worth knowing
-  after any clean install: there is **no radio configured yet**, so nothing can
-  decode until one is added.
+  arithmetic and is unit-tested, but no one has confirmed an ensemble coming out
+  of it; a field report says it works on the reporter's setup, which is kept as
+  a data point and not as proof, since whether his receiver is one where the
+  queue ever ran dry is exactly what we cannot see from here.
+- The sign-in cookie path is end-to-end tested and the card's own logic is
+  unit-tested, but **no browser was driven**: the checkbox itself, and a real
+  cookie on a phone, still need a hand.
 
 ## [2.0.2_brown] - 2026-10-07
 
