@@ -69,8 +69,16 @@ each frame `MultiApp` asks the focused radio's app which windows it wants
 (`SdroxideApp::detached_wanted`) and emits those, once, whatever pane or tab is
 on screen — so a radio or mode change can no longer tear a window down and have
 a tiling compositor re-place it. `show_detached_module` is the app's half (how
-to draw itself); the shell's is *whether the window exists*. The panel window is
-emitted even in a mode with no panel, showing a note, so its place is held.
+to draw itself); the shell's is *whether the window exists*.
+
+**The vacated centre is filled, and a mode with no panel opens no window**
+(commit `24b6a3ce`, from the operator's screenshots). When both modules are
+undocked the main window centre was a black hole; now `center_has_content()`
+detects it and `band_menu_fill()` draws the band/mode selector there (the dock's
+body is shared as `band_menu_body`). And a voice mode no longer opens a
+placeholder panel window — `panel_window_wanted` requires a panel, and a
+one-per-mode dismissible notice names the mode instead ("No operating panel in
+AM …").
 
 **The destination, so the next slice aims at it:** a user-arrangeable workspace
 in the SDRuno mould — each module (the panadapter, the control surface, the
