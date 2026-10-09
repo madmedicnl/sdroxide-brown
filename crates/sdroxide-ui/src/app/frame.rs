@@ -279,15 +279,27 @@ fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
+        let (label, hover) = if undocked {
+            ("⇱ DOCK", "Return this window into the main window")
+        } else {
+            ("⇱ WINDOW", "Move this window into its own OS window — put it on another monitor")
+        };
+        // A **one-row** allocation, right-aligned — not `row_tail`. `row_tail`
+        // lays out `right_to_left(Align::Center)` over the whole available
+        // height, so once a window's area has settled it centres the chip and
+        // advances the cursor to the bottom, pushing every tool's body off the
+        // screen. The operator's trace was the proof: `after chip cursor_y=530`
+        // in a window whose body ends at 525. A row of the chip's own height is
+        // one the layout cannot fill vertically.
+        let size = egui::vec2(ui.available_width(), crate::chrome::chip_height(ui, None));
         let mut clicked = false;
-        crate::chrome::row_tail(ui, |ui| {
-            let (label, hover) = if undocked {
-                ("⇱ DOCK", "Return this window into the main window")
-            } else {
-                ("⇱ WINDOW", "Move this window into its own OS window — put it on another monitor")
-            };
-            clicked = crate::chrome::chip(ui, false, label).on_hover_text(hover).clicked();
-        });
+        ui.allocate_ui_with_layout(
+            size,
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                clicked = crate::chrome::chip(ui, false, label).on_hover_text(hover).clicked();
+            },
+        );
         clicked
     }
 }
@@ -2050,8 +2062,22 @@ impl SdroxideApp {
                 crate::layout::window_h(ctx, default_size[1]),
             ))
             .show(ctx, |ui| {
+                #[cfg(not(target_arch = "wasm32"))]
+                if std::env::var_os("SDROXIDE_WIN_TRACE").is_some() {
+                    eprintln!(
+                        "[win] {id}: body max={:?} avail={:.1}x{:.1} cursor_y={:.1}",
+                        ui.max_rect(),
+                        ui.available_width(),
+                        ui.available_height(),
+                        ui.cursor().min.y
+                    );
+                }
                 crate::chrome::window_body_bg(ui);
                 detach = tool_window_chip(ui, false);
+                #[cfg(not(target_arch = "wasm32"))]
+                if std::env::var_os("SDROXIDE_WIN_TRACE").is_some() {
+                    eprintln!("[win] {id}: after chip cursor_y={:.1}", ui.cursor().min.y);
+                }
                 body(self, ui);
             });
         if let Some(r) = &resp {
