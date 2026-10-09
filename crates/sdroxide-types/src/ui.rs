@@ -981,6 +981,12 @@ pub struct UiSettings {
     /// it leaves a dead control behind the moment the condition clears.
     #[serde(default)]
     pub dismissed_advisories: u64,
+    /// Ask the fork's GitHub Releases whether a **newer release** exists, once
+    /// at start-up, and show a banner if so. On by default; off means no
+    /// outbound call at all. Only full releases count — the nightly is a
+    /// pre-release, so it never triggers the banner.
+    #[serde(default = "default_true")]
+    pub check_for_updates: bool,
     /// Which modules are undocked into their own windows, and where those
     /// windows last were — one [`DetachedState`] per [`DetachableModule`], in
     /// `module.index()` order. An array rather than a map so `UiSettings` stays
@@ -1016,6 +1022,11 @@ pub struct UiSettings {
 }
 
 /// Default for [`UiSettings::spot_colors`] — every kind on its stock tint.
+/// `true` for a `#[serde(default)]` field that must default on, not off.
+fn default_true() -> bool {
+    true
+}
+
 fn default_spot_colors() -> [[u8; 3]; SpotKind::COUNT] {
     let mut out = [[0u8; 3]; SpotKind::COUNT];
     for kind in SpotKind::ALL {
@@ -1193,6 +1204,7 @@ impl Default for UiSettings {
             client_share_bindings: false,
             client_bindings_declined: false,
             dismissed_advisories: 0,
+            check_for_updates: true,
             detached: [DetachedState::default(); DetachableModule::COUNT],
             panadapter_detached_legacy: false,
             panadapter_window_legacy: None,

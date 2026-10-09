@@ -581,6 +581,9 @@ impl eframe::App for SdroxideApp {
             self.remember_ui_zoom(&ctx);
         }
         self.drain_events(&ctx, now);
+        // The update check answers on its own thread; pick it up cheaply.
+        #[cfg(not(target_arch = "wasm32"))]
+        self.update.poll();
         self.poll_adif_import();
         self.poll_settings_import();
         self.refresh_band_conditions(now);
@@ -829,6 +832,43 @@ impl eframe::App for SdroxideApp {
                                     self.radio_notice = None;
                                     self.rx_only_nudge_dismissed = true;
                                 }
+                            }
+                        });
+                    });
+                });
+        }
+        // **An update is available.** The fork's own GitHub Releases, so only a
+        // full release lands here — the nightly is a pre-release and asks
+        // nothing. Dismissed for the session; the check itself is the
+        // `check_for_updates` setting.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(tag) = self.update.latest.clone().filter(|_| !self.update_dismissed) {
+            let (wash, rule, mark, ink) = notice_banner_colors();
+            egui::Frame::new()
+                .fill(wash)
+                .stroke(egui::Stroke::new(1.0, rule))
+                .inner_margin(egui::Margin::symmetric(8, 5))
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new("⬆").size(15.0).color(mark));
+                        ui.label(
+                            RichText::new(format!(
+                                "SDR Oxide Brown {tag} is available — you are on {}.",
+                                sdroxide_version::VERSION
+                            ))
+                            .size(13.0)
+                            .color(ink),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("Dismiss").clicked() {
+                                self.update_dismissed = true;
+                            }
+                            if ui
+                                .button(RichText::new("Download").size(13.0))
+                                .on_hover_text("Opens the release page in your browser")
+                                .clicked()
+                            {
+                                crate::download::open_external(super::update::RELEASES_PAGE);
                             }
                         });
                     });
@@ -1747,6 +1787,52 @@ impl SdroxideApp {
         });
     }
 
+    /// One panadapter window's contents — SP1's or AUX SP's. The caller has
+    /// already put the right `self.view` in place (AUX swaps its own in around
+    /// this call), so the draw itself is shared.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn draw_detached_panadapter(
+        &mut self,
+        module: sdroxide_types::DetachableModule,
+        ctx: &egui::Context,
+        spec: &DetachedWindowSpec,
+        seed: Option<sdroxide_types::DetachedWindow>,
+        now: f64,
+        cmds: &mut Vec<Command>,
+    ) {
+        let live = self.frame.is_some() && now - self.last_spectrum_at < STREAM_STALE_S;
+        let wf_tuning = self.wf_tick(live, ctx.pixels_per_point());
+        let frame = self.frame.clone();
+        let inputs = self.panadapter_inputs(now);
+        let mut clicked_spot: Option<Spot> = None;
+        let outcome = detached_viewport(ctx, spec, seed, |ui| {
+            // The toolbar across the top, then the spectrum below it.
+            // `panel_below` is false: the operating panel is not under this
+            // window, so the band-plan strip may use the rest of the height.
+            self.sp1_toolbar(ui, module);
+            self.note_panadapter_width(ui);
+            let w = ui.available_width();
+            let h = ui.available_height();
+            self.draw_panadapter(
+                ui,
+                w,
+                h,
+                frame.as_ref(),
+                cmds,
+                &inputs,
+                &mut clicked_spot,
+                false,
+                now,
+                wf_tuning,
+            );
+        });
+        self.handle_detached_outcome(ctx, module, spec, outcome);
+        self.dispatch_commands(std::mem::take(cmds));
+        if let Some(spot) = clicked_spot {
+            self.prefill_from_spot(&spot);
+        }
+    }
+
     /// Draw one module into its **own OS window** (native only), from the
     /// focused radio's state.
     ///
@@ -1769,42 +1855,19 @@ impl SdroxideApp {
         match module {
             // SP1 and AUX SP are the same window drawn twice: one spectrum and
             // waterfall, its own toolbar, its own app-id, its own place on the
-            // desk. The second is a **second view of the same receiver** — both
-            // show one station's waterfall — which is what makes one shared
-            // draw correct for both.
-            M::Panadapter | M::AuxPanadapter => {
-                let live = self.frame.is_some() && now - self.last_spectrum_at < STREAM_STALE_S;
-                let wf_tuning = self.wf_tick(live, ctx.pixels_per_point());
-                let frame = self.frame.clone();
-                let inputs = self.panadapter_inputs(now);
-                let mut clicked_spot: Option<Spot> = None;
-                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    // The toolbar across the top, then the spectrum below it.
-                    // `panel_below` is false: the operating panel is not under
-                    // this window, so the band-plan strip may use the rest of the
-                    // height.
-                    self.sp1_toolbar(ui, module);
-                    self.note_panadapter_width(ui);
-                    let w = ui.available_width();
-                    let h = ui.available_height();
-                    self.draw_panadapter(
-                        ui,
-                        w,
-                        h,
-                        frame.as_ref(),
-                        &mut cmds,
-                        &inputs,
-                        &mut clicked_spot,
-                        false,
-                        now,
-                        wf_tuning,
-                    );
-                });
-                self.handle_detached_outcome(ctx, module, &spec, outcome);
-                self.dispatch_commands(cmds);
-                if let Some(spot) = clicked_spot {
-                    self.prefill_from_spot(&spot);
-                }
+            // desk. AUX is a second view of the same receiver, but not a mirror
+            // of it — the draw reads `self.view`, so AUX is drawn with its **own**
+            // view swapped in, and the two spectra can sit on different bands of
+            // zoom and different layer switches. (A `mem::swap` around the draw
+            // rather than a view parameter threaded through `draw_panadapter` and
+            // its callees; the operator's own complaint was that they mirrored.)
+            M::Panadapter => {
+                self.draw_detached_panadapter(module, ctx, &spec, seed, now, &mut cmds)
+            }
+            M::AuxPanadapter => {
+                std::mem::swap(&mut self.view, &mut self.aux_view);
+                self.draw_detached_panadapter(module, ctx, &spec, seed, now, &mut cmds);
+                std::mem::swap(&mut self.view, &mut self.aux_view);
             }
             M::Panel => {
                 // Only reached for a mode that has a panel — the shell asks

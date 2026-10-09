@@ -57,6 +57,9 @@ pub(in crate::app) mod speech;
 pub(in crate::app) mod spots;
 pub(in crate::app) mod swl_log;
 pub(in crate::app) mod top_bar;
+/// The update check — native only (a browser has no updater to point at).
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) mod update;
 pub(crate) mod util;
 pub(in crate::app) mod windows;
 pub(in crate::app) mod winlink;
@@ -174,6 +177,14 @@ pub struct SdroxideApp {
     /// the whole struct goes back on any change, the way the skimmer's does.
     scanner: sdroxide_types::ScannerConfig,
     view: ViewState,
+    /// The **AUX SP** window's own view — its zoom, its pan, its layers. The
+    /// panadapter draw reads `view`, so the AUX window is drawn with this
+    /// **swapped in** around it (see `show_detached_module`): that keeps two
+    /// spectra from mirroring each other without threading a view parameter
+    /// through the whole draw. Session-only for now — the main view's zoom is
+    /// persisted, this one is not yet.
+    #[cfg(not(target_arch = "wasm32"))]
+    aux_view: ViewState,
     peaks: spectrum_view::PeakHold,
     /// UI-side smoothing for the spectrum *line* (waterfall stays un-averaged).
     spec_smooth: spectrum_view::SpectrumSmooth,
@@ -548,6 +559,12 @@ pub struct SdroxideApp {
     /// What is being typed into the next **SAVE CURRENT**.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     workspace_name: String,
+    /// The startup update check, and whether its banner has been dismissed this
+    /// session. Native only; `None` while the check is off or still in flight.
+    #[cfg(not(target_arch = "wasm32"))]
+    update: update::UpdateCheck,
+    #[cfg(not(target_arch = "wasm32"))]
+    update_dismissed: bool,
     /// Which half of the band/mode menu was last shown (listen or operate).
     band_menu_tab: top_bar::BandMenuTab,
     /// Which slice of the spectrum the band menu's chips are narrowed to (HF,
@@ -1612,6 +1629,8 @@ impl SdroxideApp {
             mem_folders: Vec::new(),
             scanner: sdroxide_types::ScannerConfig::default(),
             view,
+            #[cfg(not(target_arch = "wasm32"))]
+            aux_view: ViewState::default(),
             peaks: spectrum_view::PeakHold::default(),
             spec_smooth: spectrum_view::SpectrumSmooth::default(),
             error: None,
@@ -1746,6 +1765,17 @@ impl SdroxideApp {
             mode_popup_since: None,
             workspaces: crate::app::persist::load_workspaces(),
             workspace_name: String::new(),
+            // Started here only where the operator has asked for it. Every
+            // radio tab asks on its own startup; a few requests an hour is
+            // nothing against the API's limit.
+            #[cfg(not(target_arch = "wasm32"))]
+            update: if ui_settings.check_for_updates {
+                update::UpdateCheck::start()
+            } else {
+                update::UpdateCheck::default()
+            },
+            #[cfg(not(target_arch = "wasm32"))]
+            update_dismissed: false,
             band_menu_tab: top_bar::BandMenuTab::Operate,
             band_filter: top_bar::BandFilter::default(),
             fft_popup_since: None,
