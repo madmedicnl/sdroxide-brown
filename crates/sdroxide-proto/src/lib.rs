@@ -1739,7 +1739,15 @@ use sdroxide_types::{
 /// one (upstream issue #647). `NetworkConfig` rides `Command::SetNetworkConfig`
 /// whole, so this is the same appended-field break as every version before it.
 /// A downstream (fork) change, appended last.
-pub const PROTO_VERSION: u16 = 197;
+///
+/// v198: `UiTheme` gains `Calm`, the blue/white SDRuno-style theme. A fieldless
+/// enum is encoded by discriminant, and the catch-all [`UiTheme::Default`] must
+/// stay the **last** variant for serde's `#[serde(other)]`, where a typo in a
+/// hand-edited config degrades to the default theme — so `Calm` is inserted
+/// before it and **`Default`'s discriminant moves 16 → 17**. `UiTheme` rides
+/// [`ClientScreen`]'s `theme` field, so this is a wire change: a v197 peer
+/// would read the moved `Default` as `Calm`. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 198;
 const VERSION_BYTE: u8 = 0x13;
 
 #[derive(Debug, thiserror::Error)]

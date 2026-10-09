@@ -3,7 +3,8 @@
 > **Fresh session, 2026-10-09. Start here.** `main` is green, the whole open
 > queue is merged (#22 SSTV KEEP DIAL, #23 the browser `remember` cookie, #24
 > the ADS-B noise floor), and `2.0.2_brown` is built and installed.
-> `PROTO_VERSION` is **197**.
+> `PROTO_VERSION` is **198** (the Calm theme moved `UiTheme::Default`'s
+> discriminant, a `ClientScreen` wire change).
 >
 > **The next project is undocked mode** (detachable windows — the waterfall on a
 > second monitor): read [`UNDOCKED-HANDOVER.md`](UNDOCKED-HANDOVER.md) top to

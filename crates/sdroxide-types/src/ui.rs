@@ -340,6 +340,14 @@ pub enum UiTheme {
     /// faint. For low vision, for glare, and for a display that has lost its
     /// contrast.
     HighContrast,
+    /// The SDRuno look: deep blue grounds, near-white ink, a single calm blue
+    /// accent. Named for how it reads rather than for the program it echoes.
+    ///
+    /// Declared before [`UiTheme::Default`] because the catch-all must stay
+    /// last, which means **`Default`'s discriminant moves** when a theme is
+    /// added — a `UiTheme` rides [`ClientScreen`], so this is the reason the
+    /// theme arrived with a `PROTO_VERSION` bump rather than a free change.
+    Calm,
     /// The classic navy/cyan/pink look. Declared last because serde demands
     /// the catch-all be the final variant: it also swallows an unrecognised
     /// value in a hand-edited config, so a typo degrades to the default theme
@@ -350,7 +358,7 @@ pub enum UiTheme {
 }
 
 impl UiTheme {
-    pub const ALL: [UiTheme; 17] = [
+    pub const ALL: [UiTheme; 18] = [
         UiTheme::Default,
         UiTheme::Light,
         UiTheme::HighContrast,
@@ -368,6 +376,7 @@ impl UiTheme {
         UiTheme::CatppuccinMocha,
         UiTheme::CatppuccinLatte,
         UiTheme::ModernMinimalist,
+        UiTheme::Calm,
     ];
 
     pub fn label(self) -> &'static str {
@@ -389,6 +398,7 @@ impl UiTheme {
             UiTheme::CatppuccinMocha => "Catppuccin mocha",
             UiTheme::CatppuccinLatte => "Catppuccin latte",
             UiTheme::ModernMinimalist => "Modern minimalist",
+            UiTheme::Calm => "Calm",
         }
     }
 
