@@ -1193,7 +1193,7 @@ impl SdroxideApp {
                 if crate::chrome::chip_sized(ui, false, RichText::new(&label).strong(), size)
                     .on_hover_text(
                         "How far one press moves the dial. Tap to take the next step: 10 Hz, \
-                         100 Hz, 500 Hz, 1, 2.5, 5, 9, 10 and 25 kHz. Turn the row off in \
+                         100 Hz, 500 Hz, 1, 2.5, 5, 6.25, 9, 10, 12.5 and 25 kHz. Turn the row off in \
                          Settings › UI.",
                     )
                     .clicked()

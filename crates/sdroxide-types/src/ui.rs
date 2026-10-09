@@ -1216,9 +1216,13 @@ impl UiSettings {
     /// The steps the tuning buttons cycle through, in hertz — from the 10 Hz
     /// that trims a carrier onto zero-beat up to the 25 kHz of an FM channel,
     /// by way of the AM broadcast spacings (9 kHz in Regions 1 and 3, 10 kHz in
-    /// Region 2) and the 5 kHz most shortwave broadcasters sit on.
-    pub const TUNE_STEPS_HZ: [f64; 9] =
-        [10.0, 100.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 9_000.0, 10_000.0, 25_000.0];
+    /// Region 2), the 5 kHz most shortwave broadcasters sit on, and the VHF/UHF
+    /// channel spacings — 6.25 kHz (dPMR, NXDN, PMR446 digital) and 12.5 kHz
+    /// (narrow FM, PMR446, DMR) — beside the 25 kHz wide channel (issue #28).
+    pub const TUNE_STEPS_HZ: [f64; 11] = [
+        10.0, 100.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 6_250.0, 9_000.0, 10_000.0, 12_500.0,
+        25_000.0,
+    ];
 
     /// The step after the current one, wrapping. A tap on the step button.
     pub fn next_tune_step(&self) -> f64 {
@@ -1228,18 +1232,15 @@ impl UiSettings {
     }
 
     /// The current step written the way a radio's own display would: "100 Hz",
-    /// "1 kHz", "12.5 kHz".
+    /// "1 kHz", "12.5 kHz", "6.25 kHz" — as many decimals as the step has, so
+    /// 6.25 kHz is not rounded to a 6.2 that is on no channel plan.
     pub fn tune_step_label(&self) -> String {
         let hz = self.tune_step_hz;
         if hz < 1_000.0 {
             return format!("{hz:.0} Hz");
         }
-        let khz = hz / 1_000.0;
-        if (khz - khz.round()).abs() < 1e-6 {
-            format!("{khz:.0} kHz")
-        } else {
-            format!("{khz:.1} kHz")
-        }
+        let khz = format!("{:.3}", hz / 1_000.0);
+        format!("{} kHz", khz.trim_end_matches('0').trim_end_matches('.'))
     }
 
     /// One module's undocked state, or the docked default if it has never been
@@ -1569,7 +1570,9 @@ mod tune_step_tests {
             (500.0, "500 Hz"),
             (1_000.0, "1 kHz"),
             (2_500.0, "2.5 kHz"),
+            (6_250.0, "6.25 kHz"),
             (9_000.0, "9 kHz"),
+            (12_500.0, "12.5 kHz"),
             (25_000.0, "25 kHz"),
         ] {
             ui.tune_step_hz = hz;
