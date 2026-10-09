@@ -92,25 +92,20 @@ impl super::SdroxideApp {
         if !self.known_calls.show {
             return;
         }
-        let mut open = self.known_calls.show;
-        let resp = egui::Window::new("KNOWN STATIONS")
-            .id(crate::layout::salted_id(ctx, "KnownCalls"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 560.0))
-            .default_height(crate::layout::window_h(ctx, 520.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.known_calls_body(ui);
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
         let was_open = self.known_calls.show;
-        self.known_calls.show = open;
+        let show = self.tool_window(
+            ctx,
+            "known-calls",
+            "KNOWN STATIONS",
+            [560.0, 520.0],
+            true,
+            |me, ui| {
+                me.known_calls_body(ui);
+            },
+        );
+        self.known_calls.show = show;
         // Reopening asks afresh, so the list is never the one from last time.
-        if open && !was_open {
+        if show && !was_open {
             self.known_calls.request();
         }
     }

@@ -11,6 +11,12 @@
 > state) is done; **item 2, extracting the panadapter draw out of `frame.rs`, is
 > the only risky step** and is deliberately on its own.
 >
+> **And the shape it is being built toward is SDRuno's** — a set of windows for
+> the spectrum, the receiver control, the scanner and so on. The window map and
+> the remaining todo are in [`SDRUNO-UI-HANDOVER.md`](SDRUNO-UI-HANDOVER.md);
+> the operator expects to **switch models when the work reaches MAIN SP** (the
+> panadapter window's toolbar), so that file says where the seam is.
+>
 > **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
 > mid-flight — read it before touching ALE). **FST4W**
 > ([`FST4W-HANDOVER.md`](FST4W-HANDOVER.md) — planned, not built; the verdict is

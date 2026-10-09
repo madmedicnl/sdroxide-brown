@@ -156,22 +156,10 @@ impl SdroxideApp {
         if !self.enigma.show {
             return;
         }
-        let mut open = self.enigma.show;
-        let resp = egui::Window::new("ENIGMA")
-            .id(crate::layout::salted_id(ctx, "Enigma"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 460.0))
-            .default_height(crate::layout::window_h(ctx, 640.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.enigma_body(ui);
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
-        self.enigma.show = open;
+        let show = self.tool_window(ctx, "enigma", "ENIGMA", [460.0, 640.0], true, |me, ui| {
+            me.enigma_body(ui);
+        });
+        self.enigma.show = show;
     }
 
     /// The faceplate: everything painted onto one green field.

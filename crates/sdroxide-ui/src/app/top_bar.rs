@@ -2688,31 +2688,57 @@ impl SdroxideApp {
                     .auto_shrink([false, false])
                     .id_salt("band-dock-scroll")
                     .show(ui, |ui| {
-                        let mode = self.state.rx[0].mode;
-                        let stated =
-                            self.radio_cfg.as_ref().is_some_and(|c| !c.freq_ranges_rx.is_empty());
-                        let atsmini = self
-                            .radio_cfg
-                            .as_ref()
-                            .is_some_and(|c| c.backend == sdroxide_types::Backend::AtsMini);
-                        band_mode_menu(
-                            ui,
-                            &mut self.band_menu_tab,
-                            &mut self.band_filter,
-                            mode,
-                            &self.state,
-                            self.caps.as_ref(),
-                            stated,
-                            self.band_conditions.as_ref(),
-                            self.daylight,
-                            atsmini,
-                            cmds,
-                        );
+                        self.band_menu_body(ui, cmds);
                     });
             });
         if !visible {
             self.band_dock_visible = false;
         }
+    }
+
+    /// The band/mode selector's content, without its frame — shared by the
+    /// docked column and by [`Self::band_menu_fill`], so a change to the menu
+    /// reaches both.
+    pub(in crate::app) fn band_menu_body(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        let mode = self.state.rx[0].mode;
+        let stated = self.radio_cfg.as_ref().is_some_and(|c| !c.freq_ranges_rx.is_empty());
+        let atsmini =
+            self.radio_cfg.as_ref().is_some_and(|c| c.backend == sdroxide_types::Backend::AtsMini);
+        band_mode_menu(
+            ui,
+            &mut self.band_menu_tab,
+            &mut self.band_filter,
+            mode,
+            &self.state,
+            self.caps.as_ref(),
+            stated,
+            self.band_conditions.as_ref(),
+            self.daylight,
+            atsmini,
+            cmds,
+        );
+    }
+
+    /// The band/mode selector filling the whole content area — what stands in
+    /// for the panadapter and the panel when both are undocked, so the main
+    /// window is never left a black hole (the operator's second screenshot).
+    pub(in crate::app) fn band_menu_fill(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        egui::Frame::new()
+            .fill(crate::theme::BG_DEEP())
+            .inner_margin(egui::Margin::symmetric(14, 12))
+            .show(ui, |ui| {
+                ui.set_min_size(ui.available_size());
+                ui.label(
+                    RichText::new("BAND & MODE").size(12.0).strong().color(crate::theme::CYAN()),
+                );
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .id_salt("band-fill-scroll")
+                    .show(ui, |ui| {
+                        self.band_menu_body(ui, cmds);
+                    });
+            });
     }
 
     /// [`rx_rows`] against this radio: what the front end offers, what the
@@ -7658,6 +7684,146 @@ fn atsmini_band_menu(ui: &mut egui::Ui, state: &RadioState, cmds: &mut Vec<Comma
     );
 }
 
+/// One band chip, from the menu's state — the same chip the band pad and
+/// the wrapped rows draw, so the two cannot drift.
+#[allow(clippy::too_many_arguments)]
+fn band_chip(
+    ui: &mut egui::Ui,
+    mode: Mode,
+    b: Band,
+    state: &RadioState,
+    caps: Option<&DeviceCaps>,
+    ranges_stated: bool,
+    conditions: Option<&sdroxide_solar::BandConditions>,
+    daylight: bool,
+    cmds: &mut Vec<Command>,
+) {
+    let digital = mode.is_digital();
+    // A band the station's own band plan does not give this region gets
+    // no button: 4 m is Region 1's alone and 1.25 m and 33 cm are the
+    // Americas', and offering an operator a button that tunes outside
+    // their own allocation — out of band, and with `tx_ham_only` set,
+    // straight into a transmit lockout — would be offering them
+    // something their licence has not got. (ALL, the bandless entry, is
+    // not drawn from here — it rides with the range chips above.)
+    if b.edges().is_none() {
+        return;
+    }
+    let std_hz = if digital { digi_freq_for_band(mode, b) } else { None };
+    let digi_hz = band_chip_dial(mode, b, std_hz);
+    // A radio that publishes no tuning range keeps every band button:
+    // `may_rx_span` reads an empty range list as "the driver didn't
+    // say", and greying out the whole bar would be a worse guess than
+    // offering a band the radio turns out not to reach. Any *overlap*
+    // is enough — a receiver that reaches into the band without
+    // reaching either end of it still has the band (issue #272).
+    let enabled = caps.is_none_or(|c| b.edges().is_none_or(|(lo, hi)| c.may_rx_span(lo, hi)));
+    let active = match std_hz {
+        Some(hz) => (state.active_freq_hz() - hz).abs() < 500.0,
+        None => state.band == b,
+    };
+    // The published forecast, where there is one — including the three
+    // stand-in bands (160 m, 60 m, 11 m), which read the nearest
+    // published group and say so, in the tooltip, in the same breath
+    // as the word. Colour only: the chip still says what band it is. A
+    // band with no verdict of any kind — 6 m and up, the broadcast
+    // span — looks exactly as it did before.
+    let verdict = conditions.and_then(|c| c.verdict_for(b, daylight));
+    let tint = verdict
+        .map(|v| sdroxide_solar::BandRating::of(v.verdict))
+        .and_then(crate::app::bands::rating_color);
+    let resp =
+        crate::chrome::chip_enabled_tinted(ui, enabled, active, b.label(), tint, std_hz.is_some());
+    let resp = match verdict {
+        Some(v) => {
+            let hour = if daylight { "daytime" } else { "night" };
+            if v.derived {
+                resp.on_hover_text(format!(
+                    "{}: ≈{} ({hour}) — the published {} group's verdict, the \
+                     nearest stand-in; HAMQSL.com grades nothing for {} itself. \
+                     A forecast, not a measurement of your own path.",
+                    b.label(),
+                    v.verdict,
+                    v.group,
+                    b.label(),
+                ))
+            } else {
+                resp.on_hover_text(format!(
+                    "{}: {} ({hour}) — forecast by HAMQSL.com from the solar \
+                     indices, not a measurement of your own path.",
+                    b.label(),
+                    v.verdict,
+                ))
+            }
+        }
+        None => resp,
+    };
+    // A chip that cannot be pressed has to say why. A band greyed out
+    // with no explanation is what issue #272 was: an HF-plus-6 m
+    // transceiver whose receive range said HF, and one dead button with
+    // nothing on screen naming the range or where it came from.
+    let resp = if enabled {
+        resp
+    } else {
+        resp.on_disabled_hover_text(disabled_band_reason(b, caps, ranges_stated))
+    };
+    if resp.clicked() {
+        match digi_hz {
+            Some(hz) => cmds.push(Command::SetVfo { vfo: state.active_vfo, hz }),
+            None => cmds.push(Command::SetBand(b)),
+        }
+    }
+}
+
+/// SDRuno's band pad: the current tab's bands as a dense, aligned keypad rather
+/// than a wrapping row. The same chip as the list ([`band_chip`]) — the forecast
+/// tint and all — just laid out in fixed columns, so the band section reads as a
+/// pad instead of a sprawl of chips.
+#[allow(clippy::too_many_arguments)]
+fn band_pad(
+    ui: &mut egui::Ui,
+    mode: Mode,
+    bands: impl Iterator<Item = Band>,
+    state: &RadioState,
+    caps: Option<&DeviceCaps>,
+    ranges_stated: bool,
+    conditions: Option<&sdroxide_solar::BandConditions>,
+    daylight: bool,
+    cmds: &mut Vec<Command>,
+) {
+    // A fixed-column pad where there is room (the console, the fill); a wrapped
+    // row where there is not (the narrow dock, a popup). A plain `Grid` never
+    // shrinks — its columns size to content — so in a narrow column it asks for
+    // more width than it has and spills out. Wrapped rows reflow, so they cannot.
+    if ui.available_width() < 340.0 {
+        ui.horizontal_wrapped(|ui| {
+            for b in bands {
+                band_chip(ui, mode, b, state, caps, ranges_stated, conditions, daylight, cmds);
+            }
+        });
+        return;
+    }
+    let bands: Vec<Band> = bands.collect();
+    let spacing = 6.0_f32;
+    let cell_w = bands
+        .iter()
+        .map(|b| crate::chrome::chip_width(ui, b.label(), None))
+        .fold(0.0_f32, f32::max)
+        + spacing;
+    let cols = (((ui.available_width() + spacing) / cell_w.max(1.0)).floor() as usize).clamp(1, 6);
+    egui::Grid::new(ui.id().with("band-pad"))
+        .num_columns(cols)
+        .spacing(egui::vec2(spacing, 4.0))
+        .show(ui, |ui| {
+            for (i, b) in bands.into_iter().enumerate() {
+                band_chip(ui, mode, b, state, caps, ranges_stated, conditions, daylight, cmds);
+                if (i + 1) % cols == 0 {
+                    ui.end_row();
+                }
+            }
+        });
+}
+
 pub(in crate::app) fn band_mode_menu(
     ui: &mut egui::Ui,
     tab: &mut BandMenuTab,
@@ -7735,118 +7901,42 @@ pub(in crate::app) fn band_mode_menu(
     ui.add_space(4.0);
     let digital = mode.is_digital();
     {
-        // One band chip, drawn from the menu's state. A closure because the
-        // bands come in two runs below — the allocations first, the broadcast
-        // services together at the end — and both runs want exactly this chip.
-        let mut band_chip = |ui: &mut egui::Ui, b: Band| {
-            // A band the station's own band plan does not give this region gets
-            // no button: 4 m is Region 1's alone and 1.25 m and 33 cm are the
-            // Americas', and offering an operator a button that tunes outside
-            // their own allocation — out of band, and with `tx_ham_only` set,
-            // straight into a transmit lockout — would be offering them
-            // something their licence has not got. (ALL, the bandless entry, is
-            // not drawn from here — it rides with the range chips above.)
-            if b.edges().is_none() {
-                return;
-            }
-            let std_hz = if digital { digi_freq_for_band(mode, b) } else { None };
-            let digi_hz = band_chip_dial(mode, b, std_hz);
-            // A radio that publishes no tuning range keeps every band button:
-            // `may_rx_span` reads an empty range list as "the driver didn't
-            // say", and greying out the whole bar would be a worse guess than
-            // offering a band the radio turns out not to reach. Any *overlap*
-            // is enough — a receiver that reaches into the band without
-            // reaching either end of it still has the band (issue #272).
-            let enabled =
-                caps.is_none_or(|c| b.edges().is_none_or(|(lo, hi)| c.may_rx_span(lo, hi)));
-            let active = match std_hz {
-                Some(hz) => (state.active_freq_hz() - hz).abs() < 500.0,
-                None => state.band == b,
-            };
-            // The published forecast, where there is one — including the three
-            // stand-in bands (160 m, 60 m, 11 m), which read the nearest
-            // published group and say so, in the tooltip, in the same breath
-            // as the word. Colour only: the chip still says what band it is. A
-            // band with no verdict of any kind — 6 m and up, the broadcast
-            // span — looks exactly as it did before.
-            let verdict = conditions.and_then(|c| c.verdict_for(b, daylight));
-            let tint = verdict
-                .map(|v| sdroxide_solar::BandRating::of(v.verdict))
-                .and_then(crate::app::bands::rating_color);
-            let resp = crate::chrome::chip_enabled_tinted(
-                ui,
-                enabled,
-                active,
-                b.label(),
-                tint,
-                std_hz.is_some(),
-            );
-            let resp = match verdict {
-                Some(v) => {
-                    let hour = if daylight { "daytime" } else { "night" };
-                    if v.derived {
-                        resp.on_hover_text(format!(
-                            "{}: ≈{} ({hour}) — the published {} group's verdict, the \
-                             nearest stand-in; HAMQSL.com grades nothing for {} itself. \
-                             A forecast, not a measurement of your own path.",
-                            b.label(),
-                            v.verdict,
-                            v.group,
-                            b.label(),
-                        ))
-                    } else {
-                        resp.on_hover_text(format!(
-                            "{}: {} ({hour}) — forecast by HAMQSL.com from the solar \
-                             indices, not a measurement of your own path.",
-                            b.label(),
-                            v.verdict,
-                        ))
-                    }
-                }
-                None => resp,
-            };
-            // A chip that cannot be pressed has to say why. A band greyed out
-            // with no explanation is what issue #272 was: an HF-plus-6 m
-            // transceiver whose receive range said HF, and one dead button with
-            // nothing on screen naming the range or where it came from.
-            let resp = if enabled {
-                resp
-            } else {
-                resp.on_disabled_hover_text(disabled_band_reason(b, caps, ranges_stated))
-            };
-            if resp.clicked() {
-                match digi_hz {
-                    Some(hz) => cmds.push(Command::SetVfo { vfo: state.active_vfo, hz }),
-                    None => cmds.push(Command::SetBand(b)),
-                }
-            }
-        };
         match *tab {
             // The allocations, in bar order — 160 m up through 3 cm, with 11 m
             // where the frequencies put it.
             BandMenuTab::Operate => {
-                ui.horizontal_wrapped(|ui| {
-                    for b in Band::ALL
+                band_pad(
+                    ui,
+                    mode,
+                    Band::ALL
                         .into_iter()
                         .filter(|b| !b.is_listen_service() && *b != Band::Gen)
-                        .filter(|b| filter.admits(*b))
-                    {
-                        band_chip(ui, b);
-                    }
-                });
+                        .filter(|b| filter.admits(*b)),
+                    state,
+                    caps,
+                    ranges_stated,
+                    conditions,
+                    daylight,
+                    cmds,
+                );
             }
             // The listener's side: the broadcast and utility services, by
             // frequency the way a radio face orders them. ALL is not here: it
             // rides with the range chips above.
             BandMenuTab::Listen => {
-                ui.horizontal_wrapped(|ui| {
-                    for b in [Band::Lw, Band::Mw, Band::Sw, Band::Fm, Band::Air, Band::Mil]
+                band_pad(
+                    ui,
+                    mode,
+                    [Band::Lw, Band::Mw, Band::Sw, Band::Fm, Band::Air, Band::Mil]
                         .into_iter()
-                        .filter(|b| filter.admits(*b))
-                    {
-                        band_chip(ui, b);
-                    }
-                });
+                        .filter(|b| filter.admits(*b)),
+                    state,
+                    caps,
+                    ranges_stated,
+                    conditions,
+                    daylight,
+                    cmds,
+                );
                 // The metre bands themselves, under the broadcast services: a
                 // listener plans in 49 m and 41 m, and a shortcut that lands in
                 // the middle of one is what turns the name into a place. One
@@ -7938,23 +8028,27 @@ pub(in crate::app) fn band_mode_menu(
                 }
             });
             ui.add_space(6.0);
-            crate::chrome::menu_caption(ui, "Digital");
-            ui.horizontal_wrapped(|ui| {
-                // ADS-B, VDL2, AIS and HFDL ride along at the end of this row
-                // rather than in [`Mode::DIGITAL`] itself: that list is what the
-                // digi engine decodes and transmits, and none of these is — each
-                // has its own lane, no QSO and no transmitter. They are digital
-                // signals all the same, and this is where an operator looks for
-                // one.
-                for m in Mode::DIGITAL.into_iter().chain([
-                    Mode::Adsb,
-                    Mode::Vdl2,
-                    Mode::Ais,
-                    Mode::Hfdl,
-                    Mode::Dab,
-                ]) {
-                    mode_band_chip(ui, mode, m, band, state, cmds);
-                }
+            // The digital modes go behind one dropdown, SDRuno's DIGITAL button:
+            // three dozen chips on the face is the clutter the operator asked to
+            // be rid of, and a mode is picked once, not scanned.
+            let d_btn = crate::chrome::chip(ui, digital, "DIGITAL ▾").on_hover_text(
+                "Every mode the digi engine decodes and transmits, and the wideband decoders \
+                 (ADS-B, VDL2, AIS, HFDL, DAB) that have a lane of their own.",
+            );
+            crate::chrome::menu_popup(ui, &d_btn, |ui| {
+                crate::chrome::menu_group(ui, "Digital", 300.0, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for m in Mode::DIGITAL.into_iter().chain([
+                            Mode::Adsb,
+                            Mode::Vdl2,
+                            Mode::Ais,
+                            Mode::Hfdl,
+                            Mode::Dab,
+                        ]) {
+                            mode_band_chip(ui, mode, m, band, state, cmds);
+                        }
+                    });
+                });
             });
         }
         BandMenuTab::Listen => {
@@ -7991,17 +8085,25 @@ pub(in crate::app) fn band_mode_menu(
             // cannot drift, and the same "every band" rule: exploring is the
             // point, so the band does not grey a decoder out here.
             ui.add_space(6.0);
-            crate::chrome::menu_caption(ui, "Digital");
-            ui.horizontal_wrapped(|ui| {
-                for m in Mode::DIGITAL.into_iter().chain([
-                    Mode::Adsb,
-                    Mode::Vdl2,
-                    Mode::Ais,
-                    Mode::Hfdl,
-                    Mode::Dab,
-                ]) {
-                    mode_listen_chip(ui, mode, m, state, cmds);
-                }
+            // One dropdown, as on the OPERATE tab — the same list, so the two
+            // cannot drift.
+            let d_btn = crate::chrome::chip(ui, digital, "DIGITAL ▾").on_hover_text(
+                "Every digimode decode a listener reads, and the wideband decoders.",
+            );
+            crate::chrome::menu_popup(ui, &d_btn, |ui| {
+                crate::chrome::menu_group(ui, "Digital", 300.0, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for m in Mode::DIGITAL.into_iter().chain([
+                            Mode::Adsb,
+                            Mode::Vdl2,
+                            Mode::Ais,
+                            Mode::Hfdl,
+                            Mode::Dab,
+                        ]) {
+                            mode_listen_chip(ui, mode, m, state, cmds);
+                        }
+                    });
+                });
             });
         }
     }

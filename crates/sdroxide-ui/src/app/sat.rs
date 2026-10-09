@@ -600,22 +600,10 @@ impl SdroxideApp {
         // rather than inside the tab arm because `qo100_body` needs `&mut self`
         // and the state lives on `self`.
         let mut qo100 = std::mem::take(&mut self.qo100_win);
-        let mut open = self.show_sat;
-        let resp = egui::Window::new("SATELLITE")
-            .id(crate::layout::salted_id(ctx, "SATELLITE"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 480.0))
-            .default_height(crate::layout::window_h(ctx, 520.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.sat_body(ui, &mut win, &mut qo100, cmds)
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
-        self.show_sat = open;
+        let show = self.tool_window(ctx, "sat", "SATELLITE", [480.0, 520.0], true, |me, ui| {
+            me.sat_body(ui, &mut win, &mut qo100, cmds);
+        });
+        self.show_sat = show;
         self.sat_win = win;
         self.qo100_win = qo100;
     }

@@ -86,6 +86,56 @@ pub(in crate::app) fn settings_ui_tab(
         );
         ui.end_row();
 
+        // The **undocked** modules. A window arrangement, chosen once and kept,
+        // rather than something reached for mid-QSO — so it lives here with the
+        // other display settings. One row per [`DetachableModule`], so the next
+        // detachable module appears here for free. Native only: the browser
+        // keeps every module in its one window.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use sdroxide_types::DetachableModule;
+            for module in DetachableModule::ALL {
+                let mut on = cfg.is_detached(module);
+                ui.label(format!("{} window", module.label()));
+                ComboBox::from_id_salt(("ui-undocked", module))
+                    .selected_text(if on {
+                        "Undocked — its own window"
+                    } else {
+                        "Docked in this window"
+                    })
+                    .show_styled(ui, |ui| {
+                        ui.selectable_value(&mut on, false, "Docked in this window");
+                        ui.selectable_value(&mut on, true, "Undocked — its own window");
+                    })
+                    .response
+                    .on_hover_text(format!(
+                        "Undocked, this module moves into its own window and the main \
+                         window gives the space back to what is left — put the waterfall on \
+                         a second monitor, or the controls on a third. Closing its window \
+                         docks it again.\n\nOn Wayland the size comes back but the \
+                         compositor decides where a window goes: float it and pin it to a \
+                         monitor with a window rule matching app-id \"{}\".",
+                        module.app_id(),
+                    ));
+                cfg.set_detached(module, on);
+                ui.end_row();
+            }
+            // A single way back, shown only when something is out: dock every
+            // module at once, for after arranging windows on another monitor.
+            if DetachableModule::ALL.iter().any(|m| cfg.is_detached(*m)) {
+                ui.label("");
+                if crate::chrome::chip(ui, false, "DOCK ALL WINDOWS")
+                    .on_hover_text("Bring every undocked window back into this one.")
+                    .clicked()
+                {
+                    for m in DetachableModule::ALL {
+                        cfg.set_detached(m, false);
+                    }
+                }
+                ui.end_row();
+            }
+        }
+
         ui.label("Screen update rate");
         ComboBox::from_id_salt("ui-fps")
             .selected_text(format!("{} fps", cfg.frame_rate_fps))

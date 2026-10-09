@@ -52,30 +52,17 @@ impl SdroxideApp {
         if !self.show_ism {
             return;
         }
-        let mut open = self.show_ism;
         // Edited in place and sent whole on any change, as the skimmer's and the
         // scanner's are; the engine persists it and echoes it back, so there is
         // no apply step to get wrong.
         let mut cfg = self.state.ism;
-        let resp = egui::Window::new("ISM DEVICES")
-            .id(crate::layout::salted_id(ctx, "Ism"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            // Wide enough that a full weather station's readings fold onto two
-            // lines rather than five. It is resizable either way.
-            .default_width(crate::layout::window_w(ctx, 760.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.ism_body(ui, &mut cfg, cmds)
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
+        let show = self.tool_window(ctx, "ism", "ISM DEVICES", [760.0, 420.0], true, |me, ui| {
+            me.ism_body(ui, &mut cfg, cmds);
+        });
         if cfg != self.state.ism {
             cmds.push(Command::SetIsmConfig(cfg));
         }
-        self.show_ism = open;
+        self.show_ism = show;
     }
 
     fn ism_body(&mut self, ui: &mut egui::Ui, cfg: &mut IsmSettings, cmds: &mut Vec<Command>) {

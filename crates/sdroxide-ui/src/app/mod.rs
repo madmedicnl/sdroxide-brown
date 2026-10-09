@@ -143,6 +143,17 @@ pub(in crate::app) fn set_swl_active(on: bool) {
     SWL_ACTIVE.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
+/// Whether a tool window is undocked into its own OS window, and where that
+/// window last was. See [`SdroxideApp::tool_windows`].
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct ToolWindowState {
+    /// Drawn in its own OS window instead of the in-viewport egui window.
+    pub undocked: bool,
+    /// Where its window last was; `None` until it has been open once.
+    pub window: Option<sdroxide_types::DetachedWindow>,
+}
+
 pub struct SdroxideApp {
     ctrl: Box<dyn RadioController>,
     caps: Option<DeviceCaps>,
@@ -188,6 +199,17 @@ pub struct SdroxideApp {
     /// Persistent, non-fatal operator notice (e.g. radio audio input
     /// unavailable / mono card selected for IQ). Shown as a warning banner.
     radio_notice: Option<String>,
+    /// The mode for which the "your undocked panel has nowhere to go" notice has
+    /// already been raised. Set once per mode so the banner is not re-raised
+    /// after the operator dismisses it; cleared when the mode has a panel again.
+    #[cfg(not(target_arch = "wasm32"))]
+    panel_undock_notice_mode: Option<sdroxide_types::Mode>,
+    /// Undocked **tool windows** — the scanner, the schedule, the logbook and the
+    /// rest — by their stable id. Session-only, like the in-viewport position
+    /// egui keeps for the same windows: a tool is transient, and where it sat
+    /// last run is not worth a config field per tool.
+    #[cfg(not(target_arch = "wasm32"))]
+    tool_windows: std::collections::BTreeMap<&'static str, ToolWindowState>,
     /// Dismissed the receive-only nudge this session. The nudge offers a
     /// receive-only radio the per-radio listening screen; an operator who has
     /// already said no must not be asked on every retune.
@@ -1497,7 +1519,10 @@ impl SdroxideApp {
         // The look and the font sizes must be selected before `theme::apply`
         // reads them, or the first frame flashes the default theme at the
         // default scale.
-        let ui_settings = load_ui_settings(storage);
+        let mut ui_settings = load_ui_settings(storage);
+        // Fold a pre-map config's panadapter undock into the `detached` map, so
+        // an operator who had it open does not find it docked after the update.
+        ui_settings.migrate_detached();
         // Start in SWL mode when asked: either the stored preference or this
         // run's `--swl`. The per-radio switch can still turn it off for a
         // session (which clears this seed), but the next start honours the
@@ -1575,6 +1600,10 @@ impl SdroxideApp {
             retry_at: None,
             retry_backoff: RETRY_MIN_S,
             radio_notice: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            panel_undock_notice_mode: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            tool_windows: std::collections::BTreeMap::new(),
             rx_only_nudge_dismissed: false,
             show_contest: false,
             contest: None,
@@ -2684,6 +2713,7 @@ mod tests {
     fn panel_edge_frame(
         mode: sdroxide_types::Mode,
         w: f32,
+        detached: bool,
     ) -> (Vec<(egui::Rect, bool)>, Option<egui::Rect>, Option<f32>) {
         let dir = std::env::temp_dir().join(format!("sdroxide-panel-edge-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -2696,6 +2726,10 @@ mod tests {
         app.band_docked = true;
         app.band_dock_visible = true;
         app.state.rx[0].mode = mode;
+        // The detached-window draw is a no-op under an embedded-viewport
+        // context (the headless harness), so this drives the *main window*
+        // layout: the panadapter out of the column, the panel taking it.
+        app.ui_settings.set_detached(sdroxide_types::DetachableModule::Panadapter, detached);
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
@@ -2751,7 +2785,7 @@ mod tests {
                     .copied()
             })
             .unwrap_or(sdroxide_types::Mode::Ft8);
-        let (mut rows, dock, dock_room) = panel_edge_frame(mode, w);
+        let (mut rows, dock, dock_room) = panel_edge_frame(mode, w, false);
         rows.sort_by(|a, b| b.0.max.x.partial_cmp(&a.0.max.x).unwrap_or(std::cmp::Ordering::Equal));
         println!("--- #643 probe: {mode:?} at {w:.0} pt, dock_room={dock_room:?}");
         if let Some(d) = dock {
@@ -2805,30 +2839,162 @@ mod tests {
                 sdroxide_types::Mode::Olivia,
                 sdroxide_types::Mode::Ft8,
             ] {
-                let (rows, dock, _) = panel_edge_frame(mode, w);
-                let ink: Vec<egui::Rect> =
-                    rows.iter().filter(|(_, drawn)| *drawn).map(|(r, _)| *r).collect();
-                for r in &ink {
-                    assert!(
-                        r.max.x <= w + 0.5 && r.min.x >= -0.5,
-                        "{mode:?} at {w:.0} pt: ink x {}..{} runs past the window",
-                        r.min.x,
-                        r.max.x
-                    );
-                }
-                if let Some(d) = dock {
+                // Both with the panadapter in-window and with it detached: the
+                // detached case is the undocked mode's oracle — the panel takes
+                // the whole column in the main window and must still stop at
+                // both edges. (The detached window itself is a no-op under the
+                // embedded-viewport harness; only the main-window layout runs.)
+                for detached in [false, true] {
+                    let (rows, dock, _) = panel_edge_frame(mode, w, detached);
+                    let ink: Vec<egui::Rect> =
+                        rows.iter().filter(|(_, drawn)| *drawn).map(|(r, _)| *r).collect();
                     for r in &ink {
-                        let y_overlaps = r.min.y < d.max.y && r.max.y > d.min.y;
-                        if y_overlaps && r.max.x > d.min.x + 0.5 && r.min.x < d.min.x - 0.5 {
-                            panic!(
-                                "{mode:?} at {w:.0} pt: ink x {}..{} y {}..{} crosses the dock edge at {}",
-                                r.min.x, r.max.x, r.min.y, r.max.y, d.min.x
-                            );
+                        assert!(
+                            r.max.x <= w + 0.5 && r.min.x >= -0.5,
+                            "{mode:?} at {w:.0} pt (detached={detached}): ink x {}..{} runs past the window",
+                            r.min.x,
+                            r.max.x
+                        );
+                    }
+                    if let Some(d) = dock {
+                        for r in &ink {
+                            let y_overlaps = r.min.y < d.max.y && r.max.y > d.min.y;
+                            if y_overlaps && r.max.x > d.min.x + 0.5 && r.min.x < d.min.x - 0.5 {
+                                panic!(
+                                    "{mode:?} at {w:.0} pt (detached={detached}): ink x {}..{} y {}..{} crosses the dock edge at {}",
+                                    r.min.x, r.max.x, r.min.y, r.max.y, d.min.x
+                                );
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    /// The split arithmetic the undocked mode rests on: a part that is undocked
+    /// (or the panadapter with its layers off) reserves no height here, and the
+    /// other takes the whole column. A pure counterpart to the render checks, so
+    /// the rule is pinned even where a viewport cannot be drawn.
+    #[test]
+    fn undocking_either_part_gives_its_column_away() {
+        let total = 900.0;
+        let split = crate::app::frame::column_split;
+        // Panadapter undocked: the panel takes it all.
+        assert_eq!(split(true, true, false, total, 9.0, 0.5, 24.0), (0.0, total));
+        // Panel undocked: the panadapter takes it all, and no divider is owed.
+        assert_eq!(split(false, true, true, total, 9.0, 0.5, 24.0), (total, 0.0));
+        // Both undocked: neither is drawn in this window.
+        assert_eq!(split(true, true, true, total, 9.0, 0.5, 24.0), (0.0, 0.0));
+        // Layers off is the same as the panadapter being undocked.
+        assert_eq!(split(false, false, false, total, 9.0, 0.5, 24.0), (0.0, total));
+        // Both present: the ordinary split, still summing to the usable height.
+        let (wf, panel) = split(false, true, false, total, 9.0, 0.5, 24.0);
+        assert!(wf > 0.0 && panel > 0.0 && (wf + panel - (total - 9.0)).abs() < 0.01);
+    }
+
+    /// The operator's screenshots: with the panadapter and the panel both
+    /// undocked, nothing is left in the main window's centre, so the band/mode
+    /// selector fills it (`band_menu_fill`) rather than a black hole. With
+    /// either one in-window, the centre is not empty.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_centre_is_empty_only_when_both_modules_are_undocked() {
+        use sdroxide_types::{DetachableModule as M, Mode};
+        let dir = std::env::temp_dir().join(format!("sdroxide-centre-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        crate::layout::set_tier(&ctx, crate::layout::Tier::Desktop);
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+
+        // A digital mode: a panel and a panadapter, both in-window by default.
+        assert!(app.center_has_content(&ctx, Mode::Ft8));
+        app.ui_settings.set_detached(M::Panadapter, true);
+        assert!(app.center_has_content(&ctx, Mode::Ft8), "the panel still fills it");
+        app.ui_settings.set_detached(M::Panel, true);
+        assert!(!app.center_has_content(&ctx, Mode::Ft8), "both undocked leaves it empty");
+
+        // A voice mode has no panel: the panadapter alone fills the centre,
+        // until it too is undocked.
+        app.ui_settings.set_detached(M::Panadapter, false);
+        assert!(app.center_has_content(&ctx, Mode::Am));
+        app.ui_settings.set_detached(M::Panadapter, true);
+        assert!(!app.center_has_content(&ctx, Mode::Am));
+    }
+
+    /// The tool-window mechanism: a closed tool returns false and draws nothing;
+    /// an open tool stays open and docked by default; a tool marked undocked
+    /// stays undocked (the embedded-viewport harness draws no OS window, but the
+    /// state must round-trip).
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_tool_window_round_trips_its_docked_state() {
+        let dir = std::env::temp_dir().join(format!("sdroxide-toolwin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        crate::layout::set_tier(&ctx, crate::layout::Tier::Desktop);
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+
+        let run = |app: &mut SdroxideApp, open: bool| -> bool {
+            let mut out = false;
+            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+                out = app.tool_window(ui.ctx(), "t", "T", [300.0, 200.0], open, |_, _| {});
+            });
+            out
+        };
+
+        // Closed: draws nothing, returns false.
+        assert!(!run(&mut app, false));
+        // Open: stays open, and docked (undocked is off by default).
+        assert!(run(&mut app, true));
+        assert!(!app.tool_windows.get("t").is_some_and(|s| s.undocked));
+        // Undocked: the state survives the frame.
+        app.tool_windows.insert("t", ToolWindowState { undocked: true, window: None });
+        assert!(run(&mut app, true));
+        assert!(app.tool_windows.get("t").is_some_and(|s| s.undocked));
+    }
+
+    /// A whole frame with a tool open, docked and then undocked, runs without
+    /// panicking and keeps the tool open — the real call site (`fn ui`) rather
+    /// than `tool_window` on its own.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn an_undocked_tool_window_survives_a_whole_frame() {
+        let dir = std::env::temp_dir().join(format!("sdroxide-toolframe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.show_scanner = true;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1280.0, 800.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+        assert!(app.show_scanner, "a docked tool stays open");
+        app.tool_windows.insert("scanner", ToolWindowState { undocked: true, window: None });
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1280.0, 800.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+        assert!(app.show_scanner, "an undocked tool stays open");
+        assert!(app.tool_windows.get("scanner").is_some_and(|s| s.undocked));
     }
 
     /// Reproduce Kevin's phone crash report (discussion #9) at the geometry

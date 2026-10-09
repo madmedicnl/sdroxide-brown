@@ -423,22 +423,10 @@ impl super::SdroxideApp {
         if !self.morse.show {
             return;
         }
-        let mut open = self.morse.show;
-        let resp = egui::Window::new("MORSE")
-            .id(crate::layout::salted_id(ctx, "Morse"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 520.0))
-            .default_height(crate::layout::window_h(ctx, 430.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.morse_body(ui);
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
-        self.morse.show = open;
+        let show = self.tool_window(ctx, "morse", "MORSE", [520.0, 430.0], true, |me, ui| {
+            me.morse_body(ui);
+        });
+        self.morse.show = show;
     }
 
     fn morse_body(&mut self, ui: &mut egui::Ui) {

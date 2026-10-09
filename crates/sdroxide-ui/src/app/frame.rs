@@ -12,6 +12,8 @@ use crate::time::now_unix;
 use crate::widgets::spectrum_view;
 
 use crate::app::SdroxideApp;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::app::ToolWindowState;
 use crate::app::net::auto_upload_adif;
 use crate::app::persist::persist_qso_log;
 use crate::app::settings::servers::TciServerStatus;
@@ -59,6 +61,32 @@ fn digi_split(total: f32, divider_h: f32, fraction: f32, row_h: f32) -> (f32, f3
     let min_wf = 80.0_f32.min(usable * 0.5);
     let panel_h = (usable * fraction).clamp(min_panel, (usable - min_wf).max(min_panel));
     (usable - panel_h, panel_h)
+}
+
+/// The panadapter/operating-panel split for one column.
+///
+/// Either part can be **undocked** (drawn in its own window), and the
+/// panadapter can also have both its layers switched off — in every one of
+/// those cases it is not drawn here, so the other part takes the whole height
+/// rather than sharing with an empty strip. Split out from the frame loop so
+/// the decision has a pure test: the windows themselves cannot be asserted
+/// headlessly, but the *main window reclaiming the column* can.
+pub(in crate::app) fn column_split(
+    wf_undocked: bool,
+    layers: bool,
+    panel_undocked: bool,
+    total: f32,
+    divider_h: f32,
+    fraction: f32,
+    row_h: f32,
+) -> (f32, f32) {
+    let wf_hidden = !layers || wf_undocked;
+    match (wf_hidden, panel_undocked) {
+        (true, true) => (0.0, 0.0),
+        (true, false) => (0.0, total),
+        (false, true) => (total, 0.0),
+        (false, false) => digi_split(total, divider_h, fraction, row_h),
+    }
 }
 
 /// Whether a state update that kept the mode moved the receiver far enough to
@@ -179,6 +207,311 @@ fn centred_waterfall_note(ui: &egui::Ui, area: egui::Rect, text: &str) {
         egui::Rect::from_center_size(area.center(), galley.size() + egui::vec2(20.0, 10.0));
     p.rect_filled(box_rect, 4.0, egui::Color32::from_black_alpha(180));
     p.galley(box_rect.center() - galley.size() / 2.0, galley, ink);
+}
+
+/// The dial as a large readout string, MHz with trailing zeros trimmed —
+/// "27.265", "144.8", "10.1206". Shared by the detached panadapter's overlay.
+#[cfg(not(target_arch = "wasm32"))]
+fn readout_text(hz: f64) -> String {
+    let mhz = format!("{:.6}", hz.max(0.0) / 1e6);
+    format!("{} MHz", mhz.trim_end_matches('0').trim_end_matches('.'))
+}
+
+/// A large, display-only frequency readout across the top of the **detached**
+/// panadapter, over a dark pill so it reads on any waterfall, with a smaller
+/// second line under it — the mode and the signal level — so the window on a
+/// second monitor says everything you glance at without looking back at the main
+/// one.
+///
+/// Deliberately display-only: the tuning strip stays in the main window, so
+/// there is a single owner for the frequency and the two windows cannot
+/// disagree — a click or drag on the panadapter itself still tunes, as before.
+#[cfg(not(target_arch = "wasm32"))]
+fn centred_detached_readout(ui: &egui::Ui, area: egui::Rect, title: &str, sub: &str) {
+    let p = ui.painter_at(area);
+    let amber = egui::Color32::from_rgb(255, 209, 66);
+    let big = p.layout_no_wrap(title.to_owned(), egui::FontId::monospace(34.0), amber);
+    let top = area.min.y + big.size().y * 0.5 + 10.0;
+    let r1 = egui::Rect::from_center_size(
+        egui::pos2(area.center().x, top),
+        big.size() + egui::vec2(28.0, 12.0),
+    );
+    p.rect_filled(r1, 6.0, egui::Color32::from_black_alpha(170));
+    p.galley(r1.center() - big.size() / 2.0, big, amber);
+    if sub.is_empty() {
+        return;
+    }
+    let grey = egui::Color32::LIGHT_GRAY;
+    let g2 = p.layout_no_wrap(sub.to_owned(), egui::FontId::proportional(14.0), grey);
+    let r2 = egui::Rect::from_center_size(
+        egui::pos2(area.center().x, r1.max.y + g2.size().y * 0.5 + 8.0),
+        g2.size() + egui::vec2(20.0, 8.0),
+    );
+    p.rect_filled(r2, 4.0, egui::Color32::from_black_alpha(150));
+    p.galley(r2.center() - g2.size() / 2.0, g2, grey);
+}
+
+/// The detached window's second line: the mode, and the S-meter reading when
+/// there is one. Read-only — it shares the main window's meter, so it cannot
+/// disagree with it.
+#[cfg(not(target_arch = "wasm32"))]
+fn detached_status_line(mode: Mode, meters: Option<&sdroxide_types::Meters>) -> String {
+    match meters {
+        Some(m) => {
+            let (s, over) = m.s_units();
+            let level = if over >= 1.0 { format!("S{s}+{over:.0}") } else { format!("S{s}") };
+            format!("{}  ·  {}  ({} dBm)", mode.label(), level, m.s_dbm.round() as i32)
+        }
+        None => mode.label().to_string(),
+    }
+}
+
+/// The plain face a main window shows when every part of the radio is in its own
+/// window **and** the controls window already carries the band selector — so the
+/// selector is not drawn twice, and the centre is never a black hole.
+#[cfg(not(target_arch = "wasm32"))]
+fn empty_centre(ui: &egui::Ui) {
+    let area = ui.max_rect();
+    let p = ui.painter_at(area);
+    p.rect_filled(area, 0.0, crate::theme::BG_DEEP());
+    let (ink, dim) = (crate::theme::gray(105), crate::theme::gray(85));
+    let name = p.layout_no_wrap(
+        sdroxide_version::FLAVOR.to_owned(),
+        egui::FontId::proportional(22.0),
+        ink,
+    );
+    let hint = p.layout_no_wrap(
+        "every module is in its own window".to_owned(),
+        egui::FontId::proportional(13.0),
+        dim,
+    );
+    let (name_w, name_h, hint_w) = (name.size().x, name.size().y, hint.size().x);
+    let top = area.center().y - (name_h + 8.0 + hint.size().y) / 2.0;
+    p.galley(egui::pos2(area.center().x - name_w / 2.0, top), name, ink);
+    p.galley(egui::pos2(area.center().x - hint_w / 2.0, top + name_h + 8.0), hint, dim);
+}
+
+/// The DETACH/DOCK chip a tool window wears at the top-right of its body. On the
+/// browser it is absent — there is no second window to move to.
+fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (ui, undocked);
+        false
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut clicked = false;
+        crate::chrome::row_tail(ui, |ui| {
+            let (label, hover) = if undocked {
+                ("⇱ DOCK", "Return this window into the main window")
+            } else {
+                ("⇱ WINDOW", "Move this window into its own OS window — put it on another monitor")
+            };
+            clicked = crate::chrome::chip(ui, false, label).on_hover_text(hover).clicked();
+        });
+        clicked
+    }
+}
+
+/// Everything about a module's **own OS window** that is not its contents: the
+/// ids, the app-id a Wayland rule matches on, the title and the opening size.
+/// One per [`DetachableModule`], from [`detached_spec`].
+#[cfg(not(target_arch = "wasm32"))]
+struct DetachedWindowSpec {
+    /// Stable viewport id — **one window per module for the whole station**,
+    /// not per radio. `UiSettings` is station-wide, so there is a single window
+    /// and it shows the focused radio's; a stable id across radio and pane
+    /// switches lets the same OS window be reused rather than torn down and
+    /// remapped, which a tiling compositor treats as a *new* window sized by it
+    /// rather than by the operator.
+    viewport_id: egui::ViewportId,
+    /// egui memory key for the last-seen geometry, used to persist once a drag
+    /// settles instead of once per frame.
+    settle_id: egui::Id,
+    /// The Wayland/Windows app-id a compositor rule matches on to float and
+    /// place the window. Owned, because a tool window's id is built at runtime
+    /// (`sdroxide-tool-<id>`).
+    app_id: String,
+    title: String,
+    default_size: [f32; 2],
+    min_size: [f32; 2],
+}
+
+/// The window spec for a module. The `app_id`s are a public contract — the
+/// operator's own compositor rules match on them (`UNDOCKED-HANDOVER.md`), so
+/// changing one is a user-visible change.
+#[cfg(not(target_arch = "wasm32"))]
+fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec {
+    use sdroxide_types::DetachableModule as M;
+    let app_id = module.app_id();
+    let (name, default_size) = match module {
+        M::Panadapter => ("panadapter", [960.0, 540.0]),
+        M::Panel => ("panel", [520.0, 700.0]),
+        M::Controls => ("controls", [1280.0, 640.0]),
+    };
+    DetachedWindowSpec {
+        viewport_id: egui::ViewportId::from_hash_of(app_id),
+        settle_id: egui::Id::new(format!("{app_id}-geom")),
+        app_id: app_id.to_string(),
+        title: format!("{} — {name}", sdroxide_version::FLAVOR),
+        default_size,
+        min_size: [360.0, 240.0],
+    }
+}
+
+/// The window spec for a **tool window** (the scanner, the schedule, the
+/// logbook …) undocked into its own OS window. Distinct from the module specs
+/// only in the id grammar — `sdroxide-tool-<id>` — so an operator's rule can
+/// target them as a group or one by one.
+#[cfg(not(target_arch = "wasm32"))]
+fn tool_spec(id: &str, title: &str, default_size: [f32; 2]) -> DetachedWindowSpec {
+    let app_id = format!("sdroxide-tool-{id}");
+    DetachedWindowSpec {
+        viewport_id: egui::ViewportId::from_hash_of(&app_id),
+        settle_id: egui::Id::new(format!("{app_id}-geom")),
+        app_id,
+        title: format!("{} — {title}", sdroxide_version::FLAVOR),
+        default_size,
+        min_size: [240.0, 160.0],
+    }
+}
+
+/// The size and position a (re)built detached window opens at: the operator's
+/// last geometry if there is one, otherwise the module's default, either way
+/// shrunk to fit the monitor it is about to open on. Never grows a window.
+///
+/// The position is not clamped (a clamp to the monitor's *size* pulled a window
+/// left on a second screen back onto the first — the same reasoning as the 3D
+/// window's geometry), and is `None` on Wayland, which gives a client no
+/// absolute position.
+#[cfg(not(target_arch = "wasm32"))]
+fn detached_geometry(
+    monitor: Option<egui::Vec2>,
+    seed: Option<sdroxide_types::DetachedWindow>,
+    default_size: [f32; 2],
+) -> (egui::Vec2, Option<egui::Pos2>) {
+    let want = seed.map_or(egui::Vec2::from(default_size), |s| egui::Vec2::from(s.size));
+    let Some(monitor) = monitor.filter(|m| m.x > 1.0 && m.y > 1.0) else {
+        return (want, seed.and_then(|s| s.pos).map(egui::Pos2::from));
+    };
+    let chrome = egui::vec2(16.0, 40.0);
+    let size =
+        crate::layout::fit_inner_size(monitor, want + chrome, want, egui::vec2(360.0, 240.0))
+            .unwrap_or(want);
+    (size, seed.and_then(|s| s.pos).map(egui::Pos2::from))
+}
+
+/// What a detached window left behind this frame.
+#[cfg(not(target_arch = "wasm32"))]
+struct DetachedOutcome {
+    /// The operator closed the window — which means "dock me again", not "come
+    /// back next frame".
+    close_requested: bool,
+    /// Where the window ended up, for the settle-persist in
+    /// [`SdroxideApp::handle_detached_outcome`].
+    geometry: Option<sdroxide_types::DetachedWindow>,
+}
+
+/// Show a module's window and draw `draw` into it, returning how it closed.
+///
+/// The one place the multi-window plumbing lives, so a new detachable module
+/// writes its contents and nothing else. `show_viewport_immediate` rather than
+/// the deferred form the 3D window uses: a module draws from `&mut self`'s live
+/// state and a click, zoom or drag has to flow straight back, so the published
+/// snapshot the deferred closure's `Send + Sync + 'static` bound would force is
+/// exactly what must not happen. Immediate runs in this same frame and may
+/// borrow `self`, so `draw` captures it freely.
+///
+/// Where the toolkit only offers *embedded* viewports (the headless test
+/// harness, and any platform without native multi-viewport support), a window
+/// inside the main one is not the feature, so this draws nothing and reports
+/// nothing; the caller has already given the space away, so the main window
+/// still lays out. eframe sets `embed_viewports` false on every supported
+/// native platform; the browser never reaches here.
+#[cfg(not(target_arch = "wasm32"))]
+fn detached_viewport(
+    ctx: &egui::Context,
+    spec: &DetachedWindowSpec,
+    seed: Option<sdroxide_types::DetachedWindow>,
+    draw: impl FnOnce(&mut egui::Ui),
+) -> DetachedOutcome {
+    if ctx.embed_viewports() {
+        return DetachedOutcome { close_requested: false, geometry: None };
+    }
+    let vid = spec.viewport_id;
+    let mut builder = egui::ViewportBuilder::default()
+        // The app-id is not decoration: it is the one handle a Wayland window
+        // rule has to float this window and pin it to a monitor.
+        .with_app_id(spec.app_id.clone())
+        .with_title(spec.title.clone())
+        .with_min_inner_size(spec.min_size);
+    // Seed the size and place only on the frame the window is (re)built, so a
+    // live resize is never fought by our own request.
+    if ctx.cumulative_pass_nr_for(vid) == 0 {
+        let monitor = ctx.input(|i| i.viewport().monitor_size);
+        let (size, pos) = detached_geometry(monitor, seed, spec.default_size);
+        builder = builder.with_inner_size(size);
+        if let Some(pos) = pos {
+            builder = builder.with_position(pos);
+        }
+    }
+    let mut close_requested = false;
+    let mut geometry: Option<sdroxide_types::DetachedWindow> = None;
+    // `show_viewport_immediate` wants an `FnMut`; the draw is a one-shot, so it
+    // rides an `Option` and is taken on the frame it is drawn (and dropped
+    // un-called on a frame the window is only closing).
+    let mut draw = Some(draw);
+    ctx.show_viewport_immediate(vid, builder, |ui, _class| {
+        let ictx = ui.ctx();
+        // `content_rect` is the inner size as the toolkit reports it — the only
+        // size on Wayland, where `viewport().inner_rect` is `None` because
+        // Wayland gives a client no absolute position. `outer_rect` carries that
+        // position where the platform has one, and is `None` on Wayland too.
+        let size = ictx.content_rect().size();
+        if size.x > 1.0 && size.y > 1.0 {
+            let pos = ictx.input(|i| i.viewport().outer_rect).map(|r| r.min);
+            geometry = Some(sdroxide_types::DetachedWindow {
+                // Whole points, so a sub-point wobble is not a resize.
+                size: [size.x.round(), size.y.round()],
+                pos: pos.map(|p| [p.x.round(), p.y.round()]),
+            });
+        }
+        if ictx.input(|i| i.viewport().close_requested()) {
+            close_requested = true;
+            // Wake the root pass so the main window reclaims the space promptly
+            // rather than on the next unrelated repaint.
+            ictx.request_repaint_of(egui::ViewportId::ROOT);
+            return;
+        }
+        if let Some(draw) = draw.take() {
+            draw(ui);
+        }
+    });
+    DetachedOutcome { close_requested, geometry }
+}
+
+/// Everything the panadapter draw needs that is derived from the radio's state
+/// and the current mode, gathered by [`SdroxideApp::panadapter_inputs`].
+///
+/// The point is that [`SdroxideApp::draw_panadapter`] becomes self-contained:
+/// it is then callable from the main window *or* a detached window without the
+/// frame loop's branch having to compute a dozen locals first. The one thing
+/// that must still run before the draw — the sub-band view-fitting that sets
+/// `view.view_lo_hz` — stays in the frame loop, because it is state the draw
+/// reads rather than an argument to it.
+struct PanadapterInputs {
+    cursor: Option<spectrum_view::AudioCursor>,
+    dxped: sdroxide_types::DxpedMode,
+    auto_tx_freq: bool,
+    hold_tx_freq: bool,
+    markers: Vec<f32>,
+    skimmer: Vec<sdroxide_types::SkimmerSpot>,
+    alpha: Vec<f32>,
+    net_spots: Vec<Spot>,
+    net_alpha: Vec<f32>,
+    ism: Vec<spectrum_view::IsmLabel>,
+    mem: Vec<crate::widgets::memories::MemMark>,
 }
 
 impl eframe::App for SdroxideApp {
@@ -364,7 +697,11 @@ impl eframe::App for SdroxideApp {
             }
         }
 
-        {
+        // The strip is drawn here unless the operator has undocked it into its
+        // own window; when they have, this window is the spectrum and the
+        // decoders, and the strip lives in the control window (SDRuno's split
+        // of MAIN SP from RX control).
+        if !self.controls_detached() {
             // The band behind the strip is painted **here** rather than by the
             // panel's own frame fill, and that is the whole of item 1b from fork
             // discussion #16 — Kevin's "the boundary line is missing, the outline
@@ -420,6 +757,27 @@ impl eframe::App for SdroxideApp {
         // like the SWR latch, an operator who has said no is not asked again.
         let rx_only =
             !self.swl_mode() && self.caps.as_ref().is_some_and(|c| !c.is_transmit_capable());
+        // Say, once, that an undocked operating panel has nowhere to show in
+        // this mode — otherwise it silently does not appear when the operator
+        // switches to it. Raised once per mode, so dismissing it sticks until
+        // the mode changes; cleared when a mode with a panel comes back.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mode = self.state.rx[0].mode;
+            let unavailable = self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel)
+                && !(mode.has_bottom_panel() || mode == Mode::Cw);
+            if unavailable {
+                if self.panel_undock_notice_mode != Some(mode) {
+                    self.panel_undock_notice_mode = Some(mode);
+                    self.radio_notice = Some(format!(
+                        "No operating panel in {} — it is undocked, and this mode has none.",
+                        mode.label()
+                    ));
+                }
+            } else {
+                self.panel_undock_notice_mode = None;
+            }
+        }
         let notice = self.radio_notice.clone().or_else(|| {
             (rx_only && !self.rx_only_nudge_dismissed).then(|| {
                 "This radio is receive-only — it has no transmitter. Hide the transmit \
@@ -500,23 +858,23 @@ impl eframe::App for SdroxideApp {
                     });
                 });
         }
-        // Network-spot overlay (shared by voice + digital panadapter paths). A
-        // clicked spot is captured here and pre-filled into a log entry below.
+        // A clicked spot is captured here and pre-filled into a log entry below.
         // The broadcast stations are refreshed first, before anything reads
-        // them: the overlay here, the SPOTS list and the world map all do.
+        // them: the panadapter's network overlay (built in `panadapter_inputs`),
+        // the SPOTS list and the world map all do.
         self.refresh_broadcast_spots(now_unix());
-        let (net_spots, net_alpha) = self.net_overlay(now_unix());
         let mut clicked_spot: Option<Spot> = None;
-        // Built once for both panadapter call sites: the same devices are
-        // labelled whichever layout is on screen.
-        let ism_labels = self.ism_overlay();
-        // Likewise the memory marks along the bottom of the waterfall.
-        let mem_marks = self.memory_overlay();
+        // Whether the main window's centre will be empty this frame — both the
+        // panadapter and the panel in their own windows. Decided before the dock
+        // so the two agree: if the centre is empty the band/mode selector fills
+        // it (`band_menu_fill`), and the narrow dock is not also drawn.
+        let cur_mode = self.state.rx[0].mode;
+        let center_empty = !self.center_has_content(ui.ctx(), cur_mode);
         // A docked band/mode selector takes a column off the right of the
         // panadapter before either draws. Shown here, after the top bar and the
         // notices, so the column sits beside the waterfall rather than under the
         // chrome.
-        if self.band_docked && self.band_dock_visible {
+        if self.band_docked && self.band_dock_visible && !center_empty {
             self.band_dock_panel(ui, &mut cmds);
         }
         // Remaining space: the panadapter (+ FT8/FT4 operating panel).
@@ -553,7 +911,21 @@ impl eframe::App for SdroxideApp {
                 self.retry_backoff = super::RETRY_MIN_S;
                 self.reconnect_now();
             }
-        } else if self.state.rx[0].mode.has_bottom_panel() {
+        } else if center_empty {
+            // Both the panadapter and the panel are in their own windows, so
+            // there is nothing of the radio left to draw here. Normally the
+            // band/mode selector fills it … but when the **controls** window is
+            // up too it already carries the selector, so filling again would
+            // draw it twice — show a plain face instead, never a black hole.
+            #[cfg(not(target_arch = "wasm32"))]
+            if self.controls_detached() {
+                empty_centre(ui);
+            } else {
+                self.band_menu_fill(ui, &mut cmds);
+            }
+            #[cfg(target_arch = "wasm32")]
+            self.band_menu_fill(ui, &mut cmds);
+        } else if cur_mode.has_bottom_panel() {
             // Remember the voice-mode view once, so leaving FT8 can restore it
             // instead of leaving the panadapter zoomed to the sub-band.
             if self.view.pre_digi_view.is_none() {
@@ -653,60 +1025,6 @@ impl eframe::App for SdroxideApp {
                 self.view.view_hi_hz = sub_hi;
             }
             self.digi_view_fit = Some((mode, dial, center));
-            // Which side of the dial the mode's audio band is on. Every tone
-            // offset below is a distance from the dial and every marker is drawn
-            // at dial + offset, so on the bands where the mode rides the lower
-            // sideband (SSTV and RADE on 160/80/40 m) they all belong below it.
-            // Display only: the controllers go on reporting an offset as a
-            // width from the dial, whichever side they are being worked on.
-            let side = if mode.is_lower_sideband_at(dial) { -1.0 } else { 1.0 };
-            let audio_hz = side * self.digi_status.as_ref().map(|s| s.audio_hz).unwrap_or(1500.0);
-            // RTTY shows mark/space tuning lines; Olivia the tone-bank edges;
-            // PSK just the centre marker.
-            let markers: Vec<f32> = if mode == Mode::Rtty {
-                let sh = self.digi_status.as_ref().map(|s| s.config.rtty_shift_hz).unwrap_or(170.0);
-                vec![audio_hz - sh / 2.0, audio_hz + sh / 2.0]
-            } else if mode == Mode::Olivia {
-                let bw = self.digi_status.as_ref().map(|s| s.config.olivia_bw_hz).unwrap_or(1000.0);
-                vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
-            } else if mode == Mode::Thor {
-                let baud =
-                    self.digi_status.as_ref().map(|s| s.config.thor_mode.baud()).unwrap_or(15.625);
-                let bw = 18.0 * baud;
-                vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
-            } else if mode == Mode::Js8 {
-                // Worth showing: Turbo's 160 Hz footprint against Slow's 25 Hz
-                // is what decides whether a frequency is actually free.
-                let bw = self
-                    .digi_status
-                    .as_ref()
-                    .and_then(|s| s.js8.as_ref())
-                    .map_or(50.0, |j| j.speed.bandwidth_hz());
-                vec![audio_hz, audio_hz + bw]
-            } else if mode == Mode::Fsq {
-                let baud = self.digi_status.as_ref().map(|s| s.config.fsq_baud).unwrap_or(4.5);
-                let bw = 33.0 * baud;
-                vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
-            } else if mode == Mode::Hell {
-                let v =
-                    self.digi_status.as_ref().map(|s| s.config.hell_variant).unwrap_or_default();
-                let bw = v.bandwidth_hz() as f32;
-                vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
-            } else if mode == Mode::RfPaint {
-                // The painting band edges (300..3300 Hz).
-                vec![300.0, 3300.0]
-            } else if mode == Mode::Rade {
-                // The RADE V1 OFDM carriers, so the operator can see whether the
-                // signal is sitting inside the modem's window.
-                vec![side * 1062.0, side * 1876.0]
-            } else {
-                Vec::new()
-            };
-            // FT8 station callsign boxes (built before the &mut self borrows).
-            // Only the slotted modes have them — SSTV / RF Paint share the digi
-            // path but must not inherit FT8's overlay.
-            let (ft8_spots, ft8_alpha) =
-                if mode.is_slotted() { self.ft8_overlay() } else { (Vec::new(), Vec::new()) };
 
             let frame = self.frame.take();
             // A phone shows one of the three at a time, chosen by a row of
@@ -729,8 +1047,14 @@ impl eframe::App for SdroxideApp {
             // `spectrum_view::show_ext`), so they cannot empty its screen.
             let layers = crate::layout::panadapter_waterfall_only(ui.ctx())
                 || self.view.panadapter_visible();
-            let show_wf = (!phone || on_waterfall) && layers;
-            let show_panel = !phone || !on_waterfall;
+            // A panadapter or panel drawn into its own window takes no room
+            // here: whatever is left in the column gets the whole of it. The
+            // panadapter's rule is `panadapter_window_wanted`, the same one the
+            // shell emits its window by, so the two cannot disagree.
+            let detached = self.panadapter_window_wanted(ui.ctx());
+            let panel_gone = self.panel_detached(mode);
+            let show_wf = !detached && (!phone || on_waterfall) && layers;
+            let show_panel = (!phone || !on_waterfall) && !panel_gone;
 
             // Manual vertical split with a draggable divider: the operating
             // panel gets `digi_panel_fraction` of the height, the waterfall the
@@ -740,12 +1064,13 @@ impl eframe::App for SdroxideApp {
             let (wf_h, panel_h) = if phone {
                 // Whichever one is showing gets all of it.
                 (total, total)
-            } else if !layers {
-                (0.0, total)
             } else {
                 // The handle plus the gap the layout inserts on each side of it.
                 let divider = handle_h + 2.0 * ui.spacing().item_spacing.y;
-                digi_split(
+                column_split(
+                    detached,
+                    layers,
+                    panel_gone,
                     total,
                     divider,
                     self.view.digi_panel_fraction,
@@ -758,155 +1083,30 @@ impl eframe::App for SdroxideApp {
             // waterfall would be time that never happened — a switched-off
             // radio (or any stalled stream) freezes instead.
             let live = frame.is_some() && now - self.last_spectrum_at < STREAM_STALE_S;
-            self.note_panadapter_width(ui);
-            // Read here: the waterfall call below borrows `self`'s fields mutably.
-            let atsmini = self.atsmini_active();
-            let wf_tuning = self.wf_tick(live, ui.ctx().pixels_per_point());
             if show_wf {
-                ui.allocate_ui(egui::vec2(width, wf_h), |ui| {
-                    let pan =
-                        spectrum_view::WindowPan::of(self.caps.as_ref(), self.state.center_hz)
-                            .with_outer(Some(self.zoom_out_window()), self.state.sample_rate);
-                    // The level slider takes a narrow column off the right of
-                    // the panadapter. `split` declines on a window too small to
-                    // spare it, and the picture then keeps every column.
-                    let area = ui.available_rect_before_wrap();
-                    let (spec_area, level) = match crate::widgets::level_slider::split(area) {
-                        Some((s, l)) => (s, Some(l)),
-                        None => (area, None),
-                    };
-                    // Reserve the panadapter's whole height in this layout
-                    // before drawing into a child: `new_child`'s allocations
-                    // are invisible to `allocate_ui`'s space accounting, so
-                    // without this the split handle and the panel below were
-                    // laid out as if the panadapter had taken no height at all
-                    // — which collapsed the waterfall to a sliver in the modes
-                    // that have a panel under it.
-                    ui.allocate_space(area.size());
-                    let mut spec_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(spec_area)
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    spec_ui.shrink_clip_rect(spec_area);
-                    // **SSTV on a demod-audio front end.** Its view is anchored
-                    // on the picture rather than on the tone it happens to be
-                    // carrying, and CTR has to centre on that anchor — with the
-                    // dial as the anchor it dragged the window back to the
-                    // carrier every frame, which is exactly what the operator
-                    // saw when clicking CTR moved the view. The picture's centre
-                    // is the band's 1750 Hz, signed by the side the mode rides
-                    // (SSTV is LSB on 160/80/40 m), and it is a *view* anchor
-                    // only: the logged frequency stays the dial.
-                    let sstv_picture =
-                        self.caps.as_ref().is_some_and(|c| c.audio_mode) && mode.is_sstv();
-                    spectrum_view::show_ext(
-                        &mut spec_ui,
-                        &mut self.view,
-                        &mut self.state,
-                        frame.as_ref(),
-                        &mut self.peaks,
-                        &mut self.spec_smooth,
-                        &mut self.trace_cache,
-                        &mut self.spec3d,
-                        // A click sets the tone offset in the modes that park
-                        // on an agreed dial and pick a signal inside the
-                        // sub-band. Not in RTTY: its tone pair is a standard
-                        // (2125/2295 Hz), stations are spread across the band
-                        // rather than stacked in one window, and dragging mark
-                        // and space onto each one in turn walks them out of the
-                        // transmit filter. There a click tunes the dial so the
-                        // signal lands on the pair, exactly as CW does.
-                        Some(spectrum_view::AudioCursor {
-                            hz: if sstv_picture {
-                                side * crate::app::spectrum::SSTV_TONE_HZ as f32
-                            } else {
-                                audio_hz
-                            },
-                            // A click sets the digital TX offset in the modes
-                            // that have one. It does not on a listening source
-                            // with no transmitter: there is no offset to set,
-                            // and a click is the only way to nudge the dial
-                            // inside the passband a hardware-demodulated radio
-                            // hands over — so it tunes, as it does in CW.
-                            click_sets_offset: !mode.holds_standard_tones() && !atsmini,
-                            // CW only for now: RTTY and WEFAX sit off their
-                            // dials too and could follow, but each wants
-                            // checking against real signals first.
-                            line_on_cursor: false,
-                            // Where the window is centred is a separate
-                            // question from where the tuning line is drawn,
-                            // and RTTY has already been checked on the air for
-                            // this one: its tone pair is 2210 Hz off the dial,
-                            // so a click-tune zoomed in tighter than that left
-                            // the dial off the picture and the re-centring
-                            // carried the signal away with it.
-                            center_on_cursor: mode.holds_standard_tones() || sstv_picture,
-                        }),
-                        if matches!(mode, Mode::Ft8 | Mode::Ft2) {
-                            self.digi_status
-                                .as_ref()
-                                .map(|s| s.config.dxped_mode)
-                                .unwrap_or_default()
-                        } else {
-                            sdroxide_types::DxpedMode::Normal
-                        },
-                        mode.is_slotted()
-                            && self
-                                .digi_status
-                                .as_ref()
-                                .map(|s| s.config.auto_tx_freq)
-                                .unwrap_or(true),
-                        mode.is_slotted()
-                            && self
-                                .digi_status
-                                .as_ref()
-                                .map(|s| s.config.hold_tx_freq)
-                                .unwrap_or(false),
-                        &markers,
-                        &ft8_spots,
-                        &ft8_alpha,
-                        &net_spots,
-                        &net_alpha,
-                        &mut clicked_spot,
-                        &ism_labels,
-                        &mem_marks,
-                        self.input.cfg.wheel,
-                        pan,
-                        wf_tuning,
-                        show_panel,
-                        &mut cmds,
-                    );
-                    // The ATS Mini tunes by stepping its own band cycle, so the
-                    // dial can be a beat ahead of the radio. It hands us audio
-                    // only, so the waterfall is where the eye already is: say it
-                    // here, centred, rather than under a dial the radio has not
-                    // reached.
-                    if self.atsmini_tuning && self.atsmini_active() {
-                        centred_waterfall_note(
-                            &spec_ui,
-                            spec_area,
-                            "tuning — the radio is catching up",
-                        );
-                    }
-                    if let Some(l) = level
-                        && crate::widgets::level_slider::show(ui, l, &mut self.view)
-                    {
-                        // A hand on the level is a manual override: the next
-                        // automatic fit would otherwise walk it back.
-                        self.view.auto_fit = false;
-                    }
-                    paint_panadapter_chrome(ui, area);
-                    if self.levels_hidden(now) && levels_hidden_chip(ui, spec_area) {
-                        self.view.auto_fit = true;
-                        self.fit_levels_now(now);
-                    }
-                });
+                // The waterfall clock and the width are recorded by whoever
+                // draws the panadapter — here, or the shell when it is undocked
+                // — so they advance exactly once a frame either way.
+                self.note_panadapter_width(ui);
+                let wf_tuning = self.wf_tick(live, ui.ctx().pixels_per_point());
+                let inputs = self.panadapter_inputs(now);
+                self.draw_panadapter(
+                    ui,
+                    width,
+                    wf_h,
+                    frame.as_ref(),
+                    &mut cmds,
+                    &inputs,
+                    &mut clicked_spot,
+                    show_panel,
+                    now,
+                    wf_tuning,
+                );
             }
-            // Only between two things: with the panadapter switched off there
-            // is nothing above the panel for the handle to divide, and a drag
-            // on it would silently rewrite a split with nothing to show for it.
-            if !phone && show_wf {
+            // Only between two things: with either part undocked or the
+            // panadapter switched off there is nothing to divide, and a drag on
+            // the handle would silently rewrite a split with nothing to show.
+            if !phone && show_wf && show_panel {
                 // Resize handle between the waterfall and the FT8/FT4 panel.
                 let hresp = crate::chrome::split_handle(
                     ui,
@@ -922,17 +1122,7 @@ impl eframe::App for SdroxideApp {
             }
             if show_panel {
                 ui.allocate_ui(egui::vec2(width, panel_h), |ui| {
-                    // The operating panels, pulled in on a small screen — one
-                    // call for all of them, see `layout::tighten`.
-                    crate::layout::tighten(ui);
-                    egui::Frame::new()
-                        .fill(crate::theme::BG_DEEP())
-                        .inner_margin(egui::Margin { left: 0, right: 0, top: 6, bottom: 0 })
-                        .show(ui, |ui| {
-                            crate::chrome::angled_frame(ui, crate::theme::PINK(), |ui| {
-                                self.operating_panel(ui, &mut cmds, mode, panel_h);
-                            });
-                        });
+                    self.draw_operating_panel(ui, &mut cmds, mode, panel_h);
                 });
             }
             self.frame = frame;
@@ -965,12 +1155,9 @@ impl eframe::App for SdroxideApp {
                 );
                 ui.add_space(2.0);
             }
-            let (cw_spots, cw_alpha) = self.cw_overlay(now);
             let frame = self.frame.take();
             // As on the digital path: no fresh frames, no scroll.
             let live = frame.is_some() && now - self.last_spectrum_at < STREAM_STALE_S;
-            self.note_panadapter_width(ui);
-            let wf_tuning = self.wf_tick(live, ui.ctx().pixels_per_point());
             // CW is the one analog mode with a panel under the panadapter. It
             // is not a digital mode and does not take the digital path — the
             // demodulated tone stays audible and the view stays wherever the
@@ -984,121 +1171,53 @@ impl eframe::App for SdroxideApp {
             // switching both off asks for.
             let layers = crate::layout::panadapter_waterfall_only(ui.ctx())
                 || self.view.panadapter_visible();
+            // A panadapter or panel drawn into its own window takes no room
+            // here; whatever is left in the column gets the whole of it.
+            let detached = self.panadapter_window_wanted(ui.ctx());
+            let panel_gone = self.panel_detached(self.state.rx[0].mode);
             let (wf_h, panel_h, show_wf, show_panel) = if !cw_mode {
-                (ui.available_height(), 0.0, layers, false)
+                if detached {
+                    (0.0, 0.0, false, false)
+                } else {
+                    (ui.available_height(), 0.0, layers, false)
+                }
             } else if phone {
                 self.digi_tabs(ui, Mode::Cw);
                 let on_wf =
                     self.digi_pane(Mode::Cw) == crate::app::panels::panel_panes(Mode::Cw).len();
                 let h = ui.available_height();
                 (h, h, on_wf, !on_wf)
-            } else if !layers {
-                (0.0, ui.available_height(), false, true)
             } else {
                 let total = ui.available_height();
                 let divider = 7.0 + 2.0 * ui.spacing().item_spacing.y;
-                let (w, p) = digi_split(
+                let (w, p) = column_split(
+                    detached,
+                    layers,
+                    panel_gone,
                     total,
                     divider,
                     self.view.digi_panel_fraction,
                     ui.spacing().interact_size.y,
                 );
-                (w, p, true, true)
+                (w, p, w > 0.0, p > 0.0)
             };
             let width = ui.available_width();
-            let cw_pitch = cw_mode.then(|| spectrum_view::AudioCursor {
-                hz: self.cw_pitch_hz(),
-                // A click tunes the dial so the signal lands on the cursor.
-                click_sets_offset: false,
-                // With the readout reading the signal, the tuning line follows
-                // it there — see `UiSettings::cw_qrg`.
-                line_on_cursor: self.ui_settings.cw_qrg,
-                // And so does the middle of the window: with the readout and
-                // the line both on the cursor, a window still centred on the
-                // dial would be the one thing left disagreeing. Off by
-                // default, with the setting.
-                center_on_cursor: self.ui_settings.cw_qrg,
-            });
             if show_wf {
-                ui.allocate_ui(egui::vec2(width, wf_h), |ui| {
-                    let pan =
-                        spectrum_view::WindowPan::of(self.caps.as_ref(), self.state.center_hz)
-                            .with_outer(Some(self.zoom_out_window()), self.state.sample_rate);
-                    // The level slider's column, exactly as on the digital
-                    // path above.
-                    let area = ui.available_rect_before_wrap();
-                    let (spec_area, level) = match crate::widgets::level_slider::split(area) {
-                        Some((s, l)) => (s, Some(l)),
-                        None => (area, None),
-                    };
-                    // Reserve the panadapter's whole height in this layout
-                    // before drawing into a child: `new_child`'s allocations
-                    // are invisible to `allocate_ui`'s space accounting, so
-                    // without this the split handle and the panel below were
-                    // laid out as if the panadapter had taken no height at all
-                    // — which collapsed the waterfall to a sliver in the modes
-                    // that have a panel under it.
-                    ui.allocate_space(area.size());
-                    let mut spec_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(spec_area)
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    spec_ui.shrink_clip_rect(spec_area);
-                    spectrum_view::show_ext(
-                        &mut spec_ui,
-                        &mut self.view,
-                        &mut self.state,
-                        frame.as_ref(),
-                        &mut self.peaks,
-                        &mut self.spec_smooth,
-                        &mut self.trace_cache,
-                        &mut self.spec3d,
-                        cw_pitch,
-                        sdroxide_types::DxpedMode::Normal,
-                        false,
-                        // This waterfall is drawn for the non-slotted modes, so
-                        // there is no held FT8 transmit tone for a click to
-                        // disturb. The engine's own gate is the authority in any
-                        // case; this only decides whether the UI bothers asking.
-                        false,
-                        &[],
-                        &cw_spots,
-                        &cw_alpha,
-                        &net_spots,
-                        &net_alpha,
-                        &mut clicked_spot,
-                        &ism_labels,
-                        &mem_marks,
-                        self.input.cfg.wheel,
-                        pan,
-                        wf_tuning,
-                        show_panel,
-                        &mut cmds,
-                    );
-                    // The ATS Mini tunes by stepping its own band cycle, so the
-                    // dial can be a beat ahead of the radio. It hands us audio
-                    // only, so the waterfall is where the eye already is: say it
-                    // here, centred, rather than under a dial the radio has not
-                    // reached.
-                    if self.atsmini_tuning && self.atsmini_active() {
-                        centred_waterfall_note(
-                            &spec_ui,
-                            spec_area,
-                            "tuning — the radio is catching up",
-                        );
-                    }
-                    if let Some(l) = level
-                        && crate::widgets::level_slider::show(ui, l, &mut self.view)
-                    {
-                        self.view.auto_fit = false;
-                    }
-                    paint_panadapter_chrome(ui, area);
-                    if self.levels_hidden(now) && levels_hidden_chip(ui, spec_area) {
-                        self.view.auto_fit = true;
-                        self.fit_levels_now(now);
-                    }
-                });
+                self.note_panadapter_width(ui);
+                let wf_tuning = self.wf_tick(live, ui.ctx().pixels_per_point());
+                let inputs = self.panadapter_inputs(now);
+                self.draw_panadapter(
+                    ui,
+                    width,
+                    wf_h,
+                    frame.as_ref(),
+                    &mut cmds,
+                    &inputs,
+                    &mut clicked_spot,
+                    show_panel,
+                    now,
+                    wf_tuning,
+                );
             }
             if show_panel {
                 if !phone && show_wf {
@@ -1114,17 +1233,7 @@ impl eframe::App for SdroxideApp {
                     }
                 }
                 ui.allocate_ui(egui::vec2(width, panel_h), |ui| {
-                    // The operating panels, pulled in on a small screen — one
-                    // call for all of them, see `layout::tighten`.
-                    crate::layout::tighten(ui);
-                    egui::Frame::new()
-                        .fill(crate::theme::BG_DEEP())
-                        .inner_margin(egui::Margin { left: 0, right: 0, top: 6, bottom: 0 })
-                        .show(ui, |ui| {
-                            crate::chrome::angled_frame(ui, crate::theme::PINK(), |ui| {
-                                self.cw_panel(ui, &mut cmds, panel_h);
-                            });
-                        });
+                    self.draw_operating_panel(ui, &mut cmds, Mode::Cw, panel_h);
                 });
             }
             self.frame = frame;
@@ -1295,23 +1404,9 @@ impl eframe::App for SdroxideApp {
         // Any stop control — STOP QSO, STOP TX, a bound Abort TX — disarms
         // auto mode. An unattended run must never be left sequencing after the
         // operator has told the radio to stop, whatever route they used.
-        if self.auto_mode
-            && cmds.iter().any(|c| matches!(c, Command::DigiStopQso | Command::DigiAbortTx))
-        {
-            self.disarm_auto("auto stopped: a stop control was used".into());
-        }
-
-        for c in cmds {
-            // Marked here rather than at the button, because the settings panel
-            // holds borrows of `self` while it draws and cannot take a mutable
-            // one. This is the point where the command is definitely going out,
-            // which is the honest moment to call the check "in flight" anyway.
-            if let Command::TestLogin(t) = &c {
-                self.login_tests_pending.insert(*t);
-                self.login_tests.remove(t);
-            }
-            self.ctrl.send(c);
-        }
+        // (Also inside `dispatch_commands`, so a module's own window cannot
+        // route around it.)
+        self.dispatch_commands(cmds);
 
         // Data-driven repaint: wake at the next expected spectrum frame while
         // something is streaming, and idle-poll when nothing is. User input
@@ -1398,6 +1493,666 @@ pub(in crate::app) struct DabScan {
 const DAB_SCAN_DWELL_S: f64 = 3.0;
 
 impl SdroxideApp {
+    /// Everything the panadapter draw needs, gathered from `self` and the
+    /// current mode so the draw is self-contained (see [`PanadapterInputs`]).
+    /// Both frame-loop paths and the undocked window call this.
+    fn panadapter_inputs(&self, now: f64) -> PanadapterInputs {
+        let mode = self.state.rx[0].mode;
+        let dial = self.state.rx_freq_hz();
+        // Which side of the dial the mode's audio band is on. Every tone offset
+        // below is a distance from the dial and every marker is drawn at
+        // dial + offset, so on the bands where the mode rides the lower
+        // sideband (SSTV and RADE on 160/80/40 m) they all belong below it.
+        // Display only.
+        let side = if mode.is_lower_sideband_at(dial) { -1.0 } else { 1.0 };
+        let audio_hz = side * self.digi_status.as_ref().map(|s| s.audio_hz).unwrap_or(1500.0);
+        // RTTY shows mark/space tuning lines; Olivia the tone-bank edges; PSK
+        // just the centre marker.
+        let markers: Vec<f32> = if mode == Mode::Rtty {
+            let sh = self.digi_status.as_ref().map(|s| s.config.rtty_shift_hz).unwrap_or(170.0);
+            vec![audio_hz - sh / 2.0, audio_hz + sh / 2.0]
+        } else if mode == Mode::Olivia {
+            let bw = self.digi_status.as_ref().map(|s| s.config.olivia_bw_hz).unwrap_or(1000.0);
+            vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
+        } else if mode == Mode::Thor {
+            let baud =
+                self.digi_status.as_ref().map(|s| s.config.thor_mode.baud()).unwrap_or(15.625);
+            let bw = 18.0 * baud;
+            vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
+        } else if mode == Mode::Js8 {
+            // Worth showing: Turbo's 160 Hz footprint against Slow's 25 Hz is
+            // what decides whether a frequency is actually free.
+            let bw = self
+                .digi_status
+                .as_ref()
+                .and_then(|s| s.js8.as_ref())
+                .map_or(50.0, |j| j.speed.bandwidth_hz());
+            vec![audio_hz, audio_hz + bw]
+        } else if mode == Mode::Fsq {
+            let baud = self.digi_status.as_ref().map(|s| s.config.fsq_baud).unwrap_or(4.5);
+            let bw = 33.0 * baud;
+            vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
+        } else if mode == Mode::Hell {
+            let v = self.digi_status.as_ref().map(|s| s.config.hell_variant).unwrap_or_default();
+            let bw = v.bandwidth_hz() as f32;
+            vec![audio_hz - bw / 2.0, audio_hz + bw / 2.0]
+        } else if mode == Mode::RfPaint {
+            // The painting band edges (300..3300 Hz).
+            vec![300.0, 3300.0]
+        } else if mode == Mode::Rade {
+            // The RADE V1 OFDM carriers, so the operator can see whether the
+            // signal is sitting inside the modem's window.
+            vec![side * 1062.0, side * 1876.0]
+        } else {
+            Vec::new()
+        };
+        // Station boxes: FT8's callsign overlay for the slotted modes, the CW
+        // skimmer for CW, nothing otherwise.
+        let (skimmer, alpha) = if mode == Mode::Cw {
+            self.cw_overlay(now)
+        } else if mode.is_slotted() {
+            self.ft8_overlay()
+        } else {
+            (Vec::new(), Vec::new())
+        };
+        let (net_spots, net_alpha) = self.net_overlay(now_unix());
+        let ism = self.ism_overlay();
+        let mem = self.memory_overlay();
+        // The tuning cursor: CW's pitch marker, or the digital mode's offset.
+        // Voice modes get none — there is no agreed dial to park a signal on.
+        let cursor = if mode == Mode::Cw {
+            Some(spectrum_view::AudioCursor {
+                hz: self.cw_pitch_hz(),
+                // A click tunes the dial so the signal lands on the cursor.
+                click_sets_offset: false,
+                // With the readout reading the signal, the tuning line follows
+                // it there — see `UiSettings::cw_qrg`.
+                line_on_cursor: self.ui_settings.cw_qrg,
+                center_on_cursor: self.ui_settings.cw_qrg,
+            })
+        } else if mode.has_bottom_panel() {
+            // **SSTV on a demod-audio front end.** Its view is anchored on the
+            // picture rather than on the tone it happens to be carrying, and CTR
+            // has to centre on that anchor — with the dial as the anchor it
+            // dragged the window back to the carrier every frame, which is
+            // exactly what the operator saw when clicking CTR moved the view.
+            // The picture's centre is the band's 1750 Hz, signed by the side the
+            // mode rides (SSTV is LSB on 160/80/40 m), and it is a *view* anchor
+            // only: the logged frequency stays the dial.
+            let sstv_picture = self.caps.as_ref().is_some_and(|c| c.audio_mode) && mode.is_sstv();
+            Some(spectrum_view::AudioCursor {
+                hz: if sstv_picture {
+                    side * crate::app::spectrum::SSTV_TONE_HZ as f32
+                } else {
+                    audio_hz
+                },
+                // A click sets the digital TX offset in the modes that have one.
+                // It does not on a listening source with no transmitter: a click
+                // is then the only way to nudge the dial inside the passband a
+                // hardware-demodulated radio hands over — so it tunes, as CW.
+                click_sets_offset: !mode.holds_standard_tones() && !self.atsmini_active(),
+                line_on_cursor: false,
+                center_on_cursor: mode.holds_standard_tones() || sstv_picture,
+            })
+        } else {
+            None
+        };
+        let dxped = if matches!(mode, Mode::Ft8 | Mode::Ft2) {
+            self.digi_status.as_ref().map(|s| s.config.dxped_mode).unwrap_or_default()
+        } else {
+            sdroxide_types::DxpedMode::Normal
+        };
+        let auto_tx_freq = mode.is_slotted()
+            && self.digi_status.as_ref().map(|s| s.config.auto_tx_freq).unwrap_or(true);
+        let hold_tx_freq = mode.is_slotted()
+            && self.digi_status.as_ref().map(|s| s.config.hold_tx_freq).unwrap_or(false);
+        PanadapterInputs {
+            cursor,
+            dxped,
+            auto_tx_freq,
+            hold_tx_freq,
+            markers,
+            skimmer,
+            alpha,
+            net_spots,
+            net_alpha,
+            ism,
+            mem,
+        }
+    }
+
+    /// Draw the panadapter — spectrum, waterfall, level slider and the ATS
+    /// "catching up" note — into `ui`, filling `width × wf_h`.
+    ///
+    /// Shared by the digital path, the CW/analog path and the undocked window.
+    /// Everything mode-specific rides `inputs` (gathered by
+    /// [`Self::panadapter_inputs`]), so the picture is identical wherever it is
+    /// drawn from. `panel_below` is `show_ext`'s bandplan-strip gate: whether
+    /// the mode's own panel is on screen under this.
+    fn draw_panadapter(
+        &mut self,
+        ui: &mut egui::Ui,
+        width: f32,
+        wf_h: f32,
+        frame: Option<&std::sync::Arc<sdroxide_types::SpectrumFrame>>,
+        cmds: &mut Vec<Command>,
+        inputs: &PanadapterInputs,
+        clicked_spot: &mut Option<Spot>,
+        panel_below: bool,
+        now: f64,
+        wf_tuning: spectrum_view::WfTuning,
+    ) {
+        ui.allocate_ui(egui::vec2(width, wf_h), |ui| {
+            let pan = spectrum_view::WindowPan::of(self.caps.as_ref(), self.state.center_hz)
+                .with_outer(Some(self.zoom_out_window()), self.state.sample_rate);
+            // The level slider takes a narrow column off the right of the
+            // panadapter. `split` declines on a window too small to spare it,
+            // and the picture then keeps every column.
+            let area = ui.available_rect_before_wrap();
+            let (spec_area, level) = match crate::widgets::level_slider::split(area) {
+                Some((s, l)) => (s, Some(l)),
+                None => (area, None),
+            };
+            // Reserve the panadapter's whole height in this layout before
+            // drawing into a child: `new_child`'s allocations are invisible to
+            // `allocate_ui`'s space accounting, so without this the split handle
+            // and the panel below were laid out as if the panadapter had taken
+            // no height at all — which collapsed the waterfall to a sliver in
+            // the modes that have a panel under it.
+            ui.allocate_space(area.size());
+            let mut spec_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(spec_area)
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
+            );
+            spec_ui.shrink_clip_rect(spec_area);
+            spectrum_view::show_ext(
+                &mut spec_ui,
+                &mut self.view,
+                &mut self.state,
+                frame,
+                &mut self.peaks,
+                &mut self.spec_smooth,
+                &mut self.trace_cache,
+                &mut self.spec3d,
+                inputs.cursor,
+                inputs.dxped,
+                inputs.auto_tx_freq,
+                inputs.hold_tx_freq,
+                &inputs.markers,
+                &inputs.skimmer,
+                &inputs.alpha,
+                &inputs.net_spots,
+                &inputs.net_alpha,
+                clicked_spot,
+                &inputs.ism,
+                &inputs.mem,
+                self.input.cfg.wheel,
+                pan,
+                wf_tuning,
+                panel_below,
+                cmds,
+            );
+            // The ATS Mini tunes by stepping its own band cycle, so the dial can
+            // be a beat ahead of the radio. It hands us audio only, so the
+            // waterfall is where the eye already is: say it here, centred,
+            // rather than under a dial the radio has not reached.
+            if self.atsmini_tuning && self.atsmini_active() {
+                centred_waterfall_note(&spec_ui, spec_area, "tuning — the radio is catching up");
+            }
+            if let Some(l) = level
+                && crate::widgets::level_slider::show(ui, l, &mut self.view)
+            {
+                // A hand on the level is a manual override: the next automatic
+                // fit would otherwise walk it back.
+                self.view.auto_fit = false;
+            }
+            paint_panadapter_chrome(ui, area);
+            if self.levels_hidden(now) && levels_hidden_chip(ui, spec_area) {
+                self.view.auto_fit = true;
+                self.fit_levels_now(now);
+            }
+        });
+    }
+
+    /// Draw one module into its **own OS window** (native only), from the
+    /// focused radio's state.
+    ///
+    /// The **shell** calls this once per undocked module per frame — see
+    /// [`Self::detached_wanted`] — so a window's existence is the shell's
+    /// business and a module only has to say how to draw itself. That is what
+    /// keeps a window alive across a radio or mode switch instead of tearing
+    /// down and re-mapping.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn show_detached_module(
+        &mut self,
+        module: sdroxide_types::DetachableModule,
+        ctx: &egui::Context,
+        now: f64,
+    ) {
+        use sdroxide_types::DetachableModule as M;
+        let spec = detached_spec(module);
+        let seed = self.ui_settings.detached_state(module).window;
+        let mut cmds: Vec<Command> = Vec::new();
+        match module {
+            M::Panadapter => {
+                // The waterfall clock advances here when the main window is not
+                // drawing the panadapter; when it is, the frame loop advanced it
+                // and this is not called. Exactly one of the two runs, and never
+                // both.
+                let live = self.frame.is_some() && now - self.last_spectrum_at < STREAM_STALE_S;
+                let wf_tuning = self.wf_tick(live, ctx.pixels_per_point());
+                let frame = self.frame.clone();
+                let inputs = self.panadapter_inputs(now);
+                let mut clicked_spot: Option<Spot> = None;
+                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+                    self.note_panadapter_width(ui);
+                    let w = ui.available_width();
+                    let h = ui.available_height();
+                    let area = ui.max_rect();
+                    // `panel_below` is false: the operating panel is not under
+                    // this window, so the band-plan strip may use the full
+                    // height.
+                    self.draw_panadapter(
+                        ui,
+                        w,
+                        h,
+                        frame.as_ref(),
+                        &mut cmds,
+                        &inputs,
+                        &mut clicked_spot,
+                        false,
+                        now,
+                        wf_tuning,
+                    );
+                    // A big, display-only dial readout across the top — with the
+                    // mode and signal level under it — so the picture can be
+                    // read from a second monitor without the main window.
+                    centred_detached_readout(
+                        ui,
+                        area,
+                        &readout_text(self.state.rx_freq_hz()),
+                        &detached_status_line(self.state.rx[0].mode, self.meters.as_ref()),
+                    );
+                });
+                self.handle_detached_outcome(ctx, module, &spec, outcome);
+                self.dispatch_commands(cmds);
+                if let Some(spot) = clicked_spot {
+                    self.prefill_from_spot(&spot);
+                }
+            }
+            M::Panel => {
+                // Only reached for a mode that has a panel — the shell asks
+                // `panel_window_wanted`, which is false otherwise.
+                let mode = self.state.rx[0].mode;
+                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+                    let h = ui.available_height();
+                    self.draw_operating_panel(ui, &mut cmds, mode, h);
+                });
+                self.handle_detached_outcome(ctx, module, &spec, outcome);
+                self.dispatch_commands(cmds);
+            }
+            M::Controls => {
+                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+                    let ictx = ui.ctx().clone();
+                    let prev = crate::layout::tier(&ictx);
+                    // The console is **desktop-shaped whatever its own height**:
+                    // the compact strips are for a phone, and a control window
+                    // that flipped to one the moment it opened was the first
+                    // thing the operator noticed. Width still decides how the
+                    // strip's rows pack.
+                    crate::layout::set_tier(&ictx, crate::layout::Tier::Desktop);
+                    egui::Frame::new()
+                        .fill(crate::theme::BG_DEEP())
+                        .inner_margin(egui::Margin::symmetric(8, 6))
+                        .show(ui, |ui| {
+                            // The strip on top, then the band/mode selector —
+                            // the operator's "controls and bands in one window",
+                            // SDRuno's RX control with the band pad beneath it.
+                            crate::chrome::angled_frame(ui, crate::theme::PINK(), |ui| {
+                                self.top_bar(ui, &mut cmds);
+                            });
+                            ui.separator();
+                            egui::ScrollArea::vertical()
+                                .auto_shrink([false, false])
+                                .id_salt("controls-band-scroll")
+                                .show(ui, |ui| {
+                                    self.band_menu_body(ui, &mut cmds);
+                                });
+                        });
+                    crate::layout::set_tier(&ictx, prev);
+                });
+                self.handle_detached_outcome(ctx, module, &spec, outcome);
+                self.dispatch_commands(cmds);
+            }
+        }
+    }
+
+    /// Fold a detached window's outcome into the settings: remember its geometry
+    /// once a drag settles, and dock it again when the operator closes it. The
+    /// one place both modules' outcomes are handled, so their behaviour cannot
+    /// drift apart.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn handle_detached_outcome(
+        &mut self,
+        ctx: &egui::Context,
+        module: sdroxide_types::DetachableModule,
+        spec: &DetachedWindowSpec,
+        outcome: DetachedOutcome,
+    ) {
+        let mut persist = false;
+        {
+            let state = &mut self.ui_settings.detached[module.index()];
+            // Persist once a drag settles — the frame after the geometry stops
+            // changing — so a resize in progress is not a config write a frame,
+            // while the value that stays on screen is the one that is written.
+            if let Some(g) = outcome.geometry {
+                let last: Option<sdroxide_types::DetachedWindow> =
+                    ctx.data(|d| d.get_temp(spec.settle_id));
+                if last == Some(g) && state.window != Some(g) {
+                    state.window = Some(g);
+                    persist = true;
+                }
+                ctx.data_mut(|d| d.insert_temp(spec.settle_id, g));
+            }
+            if outcome.close_requested {
+                // Closing the window is docking it again, not an invitation to
+                // re-open it next frame — and the frame it closed on still
+                // carries the geometry to keep.
+                if let Some(g) = outcome.geometry {
+                    state.window = Some(g);
+                }
+                state.detached = false;
+                persist = true;
+            }
+        }
+        if persist {
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+        }
+    }
+
+    /// The mode's operating panel, drawn into `ui` — the **shared body** of the
+    /// in-window panel and its undocked window, so the two cannot differ.
+    /// `mode` picks the CW keyboard from the digital operating panel.
+    fn draw_operating_panel(
+        &mut self,
+        ui: &mut egui::Ui,
+        cmds: &mut Vec<Command>,
+        mode: Mode,
+        panel_h: f32,
+    ) {
+        // The operating panels, pulled in on a small screen — one call for all
+        // of them, see `layout::tighten`.
+        crate::layout::tighten(ui);
+        egui::Frame::new()
+            .fill(crate::theme::BG_DEEP())
+            .inner_margin(egui::Margin { left: 0, right: 0, top: 6, bottom: 0 })
+            .show(ui, |ui| {
+                crate::chrome::angled_frame(ui, crate::theme::PINK(), |ui| {
+                    if mode == Mode::Cw {
+                        self.cw_panel(ui, cmds, panel_h);
+                    } else {
+                        self.operating_panel(ui, cmds, mode, panel_h);
+                    }
+                });
+            });
+    }
+
+    /// Draw a **tool window** — the scanner, the schedule, the logbook and the
+    /// rest — either as an egui window in this viewport (docked, the default) or
+    /// as its own OS window (undocked). Returns whether it is still open, so the
+    /// caller stores that back in its `show_*` flag.
+    ///
+    /// The undocked flag and the remembered geometry live in
+    /// [`SdroxideApp::tool_windows`], keyed by `id`. **Session-only**, like the
+    /// in-viewport positions egui keeps for the same windows: a tool is
+    /// transient, and where it sat last run is not worth a config field per tool.
+    ///
+    /// `body` receives `self` rather than capturing it, so this can be a method —
+    /// a closure that captured `self` could not also be called from a `&mut self`
+    /// method.
+    pub(in crate::app) fn tool_window(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        open: bool,
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
+        if !open {
+            return false;
+        }
+        self.dispatch_tool_window(ctx, id, title, default_size, body)
+    }
+
+    /// The tool as an egui window in this viewport. Returns
+    /// `(still_open, detach_clicked)`.
+    fn tool_window_egui(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> (bool, bool) {
+        let mut win_open = true;
+        let mut detach = false;
+        let resp = egui::Window::new(title)
+            .id(crate::layout::salted_id(ctx, id))
+            .open(&mut win_open)
+            .frame(crate::chrome::window_frame())
+            .resizable(true)
+            .default_width(crate::layout::window_w(ctx, default_size[0]))
+            .show(ctx, |ui| {
+                crate::chrome::window_body_bg(ui);
+                detach = tool_window_chip(ui, false);
+                body(self, ui);
+            });
+        if let Some(r) = &resp {
+            crate::chrome::paint_window_border(ctx, &r.response);
+        }
+        (win_open, detach)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn dispatch_tool_window(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
+        // No second window in the browser: always the in-viewport window.
+        self.tool_window_egui(ctx, id, title, default_size, body).0
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn dispatch_tool_window(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
+        let st = self.tool_windows.get(id).copied().unwrap_or_default();
+        if st.undocked {
+            self.tool_window_os(ctx, id, title, default_size, st.window, body)
+        } else {
+            let (open, detach) = self.tool_window_egui(ctx, id, title, default_size, body);
+            if detach {
+                self.tool_windows.insert(id, ToolWindowState { undocked: true, window: st.window });
+            }
+            open
+        }
+    }
+
+    /// The tool in its own OS window.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn tool_window_os(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        seed: Option<sdroxide_types::DetachedWindow>,
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
+        let spec = tool_spec(id, title, default_size);
+        let mut dock = false;
+        let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+            dock = tool_window_chip(ui, true);
+            body(self, ui);
+        });
+        // Settle-persist the geometry as the modules do, and treat a close as
+        // *closed*, not docked: the operator shut the tool, so it should not
+        // reappear in the main window.
+        let st = self.tool_windows.get(id).copied().unwrap_or_default();
+        let mut window = st.window;
+        if let Some(g) = outcome.geometry {
+            let last: Option<sdroxide_types::DetachedWindow> =
+                ctx.data(|d| d.get_temp(spec.settle_id));
+            if last == Some(g) || outcome.close_requested {
+                window = Some(g);
+            }
+            ctx.data_mut(|d| d.insert_temp(spec.settle_id, g));
+        }
+        let open = !outcome.close_requested;
+        let undocked = open && !dock;
+        self.tool_windows.insert(id, ToolWindowState { undocked, window });
+        open
+    }
+
+    /// Send a frame's commands, with the bookkeeping that must ride every route
+    /// a command can leave by: a stop control disarms auto mode, and a login
+    /// Test is marked in flight the moment it goes out. Split out so an
+    /// undocked window's own commands are dispatched exactly as the main
+    /// window's — there is one place that decides, not two that can drift.
+    fn dispatch_commands(&mut self, cmds: Vec<Command>) {
+        // Any stop control — STOP QSO, STOP TX, a bound Abort TX — disarms auto
+        // mode. An unattended run must never be left sequencing after the
+        // operator has told the radio to stop, whatever route they used.
+        if self.auto_mode
+            && cmds.iter().any(|c| matches!(c, Command::DigiStopQso | Command::DigiAbortTx))
+        {
+            self.disarm_auto("auto stopped: a stop control was used".into());
+        }
+        for c in cmds {
+            // Marked here rather than at the button, because the settings panel
+            // holds borrows of `self` while it draws and cannot take a mutable
+            // one. This is the point where the command is definitely going out,
+            // which is the honest moment to call the check "in flight" anyway.
+            if let Command::TestLogin(t) = &c {
+                self.login_tests_pending.insert(*t);
+                self.login_tests.remove(t);
+            }
+            self.ctrl.send(c);
+        }
+    }
+
+    /// Undocked on the focused radio. Native only: the browser keeps the
+    /// panadapter in its one window, and off a non-focused radio: there is one
+    /// undocked window per module for the station, and it shows the focused
+    /// radio's.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn panadapter_detached(&self) -> bool {
+        self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panadapter) && self.focused
+    }
+
+    /// Whether the focused radio should draw its operating panel into its own
+    /// window this frame. Only a mode that *has* a panel can — a digital mode's
+    /// operating panel, or CW's keyboard — so a voice mode ignores the setting;
+    /// the preference stays and applies again in a mode with a panel.
+    fn panel_detached(&self, mode: Mode) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = mode;
+            false
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel)
+                && self.focused
+                && (mode.has_bottom_panel() || mode == Mode::Cw)
+        }
+    }
+
+    /// Whether the focused radio draws its **control strip** in its own window
+    /// this frame. Every mode has one, so the only gates are the browser and the
+    /// focus, exactly as for the panadapter.
+    fn controls_detached(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            false
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.ui_settings.is_detached(sdroxide_types::DetachableModule::Controls) && self.focused
+        }
+    }
+
+    /// The panadapter's window should exist this frame: undocked on the focused
+    /// radio *and* there is a panadapter to show (its layers are on). This is the
+    /// same rule the frame loop reserves space by, so the two cannot disagree.
+    fn panadapter_window_wanted(&self, ctx: &egui::Context) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = ctx;
+            false
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.panadapter_detached()
+                && (crate::layout::panadapter_waterfall_only(ctx) || self.view.panadapter_visible())
+        }
+    }
+
+    /// The operating-panel window should exist this frame: undocked on the
+    /// focused radio **and** the mode has a panel to show. A mode with none —
+    /// a voice mode — gets no window at all; the operator is told why by the
+    /// notice banner rather than by an empty window sitting on a monitor.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn panel_window_wanted(&self, mode: Mode) -> bool {
+        self.panel_detached(mode)
+    }
+
+    /// Which of this radio's modules the shell should emit as their own windows
+    /// this frame, by [`sdroxide_types::DetachableModule::index`].
+    ///
+    /// The **app** decides — it knows the layers, the mode and the focus, and
+    /// the shell does not — and the shell emits the true ones, once, for the
+    /// focused radio, every frame. That is what keeps an undocked window from
+    /// being torn down and re-mapped when the radio or the mode changes under
+    /// it: the shell always asks, and there is always an answer.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn detached_wanted(
+        &self,
+        ctx: &egui::Context,
+    ) -> [bool; sdroxide_types::DetachableModule::COUNT] {
+        let mut want = [false; sdroxide_types::DetachableModule::COUNT];
+        want[sdroxide_types::DetachableModule::Panadapter.index()] =
+            self.panadapter_window_wanted(ctx);
+        want[sdroxide_types::DetachableModule::Panel.index()] =
+            self.panel_window_wanted(self.state.rx[0].mode);
+        want[sdroxide_types::DetachableModule::Controls.index()] = self.controls_detached();
+        want
+    }
+
+    /// Whether anything of this radio is drawn in the main window's centre this
+    /// frame — the panadapter in-window, or the mode's panel. When neither is,
+    /// the space is filled with the band/mode selector rather than left black
+    /// (the operator's screenshots of an undocked panadapter and panel).
+    pub(in crate::app) fn center_has_content(&self, ctx: &egui::Context, mode: Mode) -> bool {
+        let layers =
+            crate::layout::panadapter_waterfall_only(ctx) || self.view.panadapter_visible();
+        let pan_here = layers && !self.panadapter_window_wanted(ctx);
+        let panel_here =
+            (mode.has_bottom_panel() || mode == Mode::Cw) && !self.panel_detached(mode);
+        pan_here || panel_here
+    }
+
     /// Advance a DAB scan, if one is running.
     ///
     /// A scan is an act of the operator's, so it lives in the app rather than
@@ -2955,6 +3710,38 @@ mod tests {
         let (wf, panel) = digi_split(300.0, 21.0, 0.2, 34.0);
         assert!(panel <= 0.6 * 279.0 + 0.01, "floor {panel} ate the waterfall");
         assert!(wf > 0.0);
+    }
+
+    /// The detached window's overlay: MHz, trailing zeros trimmed, so
+    /// 27.265 MHz reads as itself rather than as "27.265000 MHz".
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_detached_readout_trims_to_the_dial() {
+        assert_eq!(super::readout_text(27_265_000.0), "27.265 MHz");
+        assert_eq!(super::readout_text(144_800_000.0), "144.8 MHz");
+        assert_eq!(super::readout_text(10_120_600.0), "10.1206 MHz");
+    }
+
+    /// The detached window opens at the operator's last geometry, or a wide
+    /// default, and never grows past the monitor it is about to open on.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_detached_window_opens_fitting_the_monitor() {
+        let (size, pos) = super::detached_geometry(None, None, [960.0, 540.0]);
+        assert_eq!(size, eframe::egui::vec2(960.0, 540.0), "the wide default");
+        assert!(pos.is_none(), "no stored position, none given");
+        // A small monitor shrinks it; a stored position comes back untouched
+        // (a second screen starts where the desktop puts it, not inside
+        // `0..monitor`, so it is not clamped).
+        let stored =
+            sdroxide_types::DetachedWindow { size: [960.0, 540.0], pos: Some([1920.0, 0.0]) };
+        let (size, pos) = super::detached_geometry(
+            Some(eframe::egui::vec2(800.0, 600.0)),
+            Some(stored),
+            [960.0, 540.0],
+        );
+        assert!(size.x <= 800.0 && size.y <= 600.0, "grew past the monitor: {size:?}");
+        assert_eq!(pos, Some(eframe::egui::pos2(1920.0, 0.0)));
     }
 }
 

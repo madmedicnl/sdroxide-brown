@@ -29,22 +29,11 @@ impl super::SdroxideApp {
         if !self.signal_id.show {
             return;
         }
-        let mut open = self.signal_id.show;
-        let resp = egui::Window::new("SIGNAL ID")
-            .id(crate::layout::salted_id(ctx, "SignalId"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 620.0))
-            .default_height(crate::layout::window_h(ctx, 520.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.signal_id_body(ui);
+        let show =
+            self.tool_window(ctx, "signal-id", "SIGNAL ID", [620.0, 520.0], true, |me, ui| {
+                me.signal_id_body(ui);
             });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
-        self.signal_id.show = open;
+        self.signal_id.show = show;
     }
 
     fn signal_id_body(&mut self, ui: &mut egui::Ui) {

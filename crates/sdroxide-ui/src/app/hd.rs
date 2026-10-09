@@ -49,25 +49,12 @@ impl SdroxideApp {
         if !self.show_hd {
             return;
         }
-        let mut open = self.show_hd;
-        let resp = egui::Window::new("HD Radio")
-            .id(crate::layout::salted_id(ctx, "HD Radio"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 440.0))
-            .default_height(crate::layout::window_h(ctx, 360.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.hd_body(ui)
-            });
-        if let Some(r) = &resp {
-            cmds.extend(r.inner.clone().unwrap_or_default());
-        }
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
-        self.show_hd = open;
+        let mut body_cmds = Vec::new();
+        let show = self.tool_window(ctx, "hd-radio", "HD Radio", [440.0, 360.0], true, |me, ui| {
+            body_cmds = me.hd_body(ui);
+        });
+        cmds.extend(body_cmds);
+        self.show_hd = show;
     }
 
     fn hd_body(&mut self, ui: &mut egui::Ui) -> Vec<Command> {
