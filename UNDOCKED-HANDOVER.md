@@ -80,6 +80,13 @@ placeholder panel window — `panel_window_wanted` requires a panel, and a
 one-per-mode dismissible notice names the mode instead ("No operating panel in
 AM …").
 
+**The app-id and the window rules are documented** (`7c3b9ad5`): `app_id()` is a
+method on `DetachableModule` (one source, used by the window spec and the
+Settings hover), and the manual has an **Undocked** section under Settings → UI
+with the app-id table and a **niri `window-rule`** example to float and pin the
+windows to monitors (the app cannot place a window on Wayland; that is the one
+thing the operator does, and it is documented rather than assumed).
+
 **The destination, so the next slice aims at it:** a user-arrangeable workspace
 in the SDRuno mould — each module (the panadapter, the control surface, the
 decoders, the scanner) in its own window, placed by the operator. Adding one is
