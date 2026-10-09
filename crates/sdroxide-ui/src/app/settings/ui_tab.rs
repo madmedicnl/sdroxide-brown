@@ -120,18 +120,40 @@ pub(in crate::app) fn settings_ui_tab(
                 cfg.set_detached(module, on);
                 ui.end_row();
             }
-            // A single way back, shown only when something is out: dock every
-            // module at once, for after arranging windows on another monitor.
-            if DetachableModule::ALL.iter().any(|m| cfg.is_detached(*m)) {
+            // Both directions at once, for arranging a whole screen in one
+            // press: every module out, or every module home. Shown only while
+            // they would do something, so neither is a button that changes
+            // nothing.
+            let any_out = DetachableModule::ALL.iter().any(|m| cfg.is_detached(*m));
+            let any_in = DetachableModule::ALL.iter().any(|m| !cfg.is_detached(*m));
+            if any_out || any_in {
                 ui.label("");
-                if crate::chrome::chip(ui, false, "DOCK ALL WINDOWS")
-                    .on_hover_text("Bring every undocked window back into this one.")
-                    .clicked()
-                {
-                    for m in DetachableModule::ALL {
-                        cfg.set_detached(m, false);
+                ui.horizontal(|ui| {
+                    if any_out
+                        && crate::chrome::chip(ui, false, "DOCK ALL WINDOWS")
+                            .on_hover_text(
+                                "Bring every undocked window back into this one.",
+                            )
+                            .clicked()
+                    {
+                        for m in DetachableModule::ALL {
+                            cfg.set_detached(m, false);
+                        }
                     }
-                }
+                    if any_in
+                        && crate::chrome::chip(ui, false, "UNDOCK ALL WINDOWS")
+                            .on_hover_text(
+                                "Put every module in a window of its own — the main window is \
+                                 left as the spectrum and the decoders. A module with nothing to \
+                                 show, like the operating panel in a voice mode, opens no window.",
+                            )
+                            .clicked()
+                    {
+                        for m in DetachableModule::ALL {
+                            cfg.set_detached(m, true);
+                        }
+                    }
+                });
                 ui.end_row();
             }
         }

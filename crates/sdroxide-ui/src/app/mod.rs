@@ -2047,8 +2047,29 @@ impl SdroxideApp {
     /// Settings → UI button, one write.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn dock_all_windows(&mut self) {
+        self.set_all_detached(false);
+    }
+
+    /// Put **every** module window out at once — the counterpart to
+    /// [`Self::dock_all_windows`]. The arrangement the undocked mode was built
+    /// for: the main window left as the spectrum and the decoders, with SP1, the
+    /// operating panel and the RX control each on a display of their own.
+    ///
+    /// A module that has nothing to show still gets no window — the shell asks
+    /// each one whether it wants a window this frame (a voice mode has no
+    /// operating panel) — so this sets the *preference*, and the windows that
+    /// can exist do.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn undock_all_windows(&mut self) {
+        self.set_all_detached(true);
+    }
+
+    /// The one place "all of them" is written, so the two buttons cannot drift
+    /// in what they persist.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn set_all_detached(&mut self, on: bool) {
         for m in sdroxide_types::DetachableModule::ALL {
-            self.ui_settings.set_detached(m, false);
+            self.ui_settings.set_detached(m, on);
         }
         crate::app::persist::persist_ui_settings(&self.ui_settings);
     }

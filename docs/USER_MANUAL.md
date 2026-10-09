@@ -12457,7 +12457,11 @@ an empty panel. A voice mode, which has no operating panel, opens no panel windo
 at all; a notice says so once. The undocked panadapter window carries a large
 frequency readout with the **mode and signal level** beneath it, so the second
 monitor says what you would otherwise glance back at the main window for. A
-**Dock all windows** button appears under the rows once anything is out.
+**Dock all windows** / **UNDOCK ALL WINDOWS** buttons appear under the rows: one
+brings every module home, the other puts every module in a window of its own (a
+module with nothing to show, like the operating panel in a voice mode, opens no
+window). Each is shown only while it would do something. The same pair is in the
+**🪟 WINDOWS** menu on the radio-tab strip.
 
 **Workspaces** save a whole arrangement and put it back: under the undocked
 rows, type a name and **SAVE CURRENT** to store which modules are in their own

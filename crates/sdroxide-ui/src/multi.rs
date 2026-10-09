@@ -156,6 +156,10 @@ enum StripAction {
     /// the strip where the operator is already looking when they want it.
     #[cfg(not(target_arch = "wasm32"))]
     DockAll,
+    /// **Put every window out at once** — the counterpart, for arranging a whole
+    /// screen in one press.
+    #[cfg(not(target_arch = "wasm32"))]
+    UndockAll,
 }
 
 /// The **WINDOWS** menu's body: one row per module, and a way to bring them all
@@ -193,15 +197,32 @@ fn windows_menu_body(
             });
         });
     }
-    if M::ALL.iter().any(|m| ui_settings.is_detached(*m)) {
+    // Both directions at once, each shown only while it would do something, so
+    // neither is a button that changes nothing.
+    let any_out = M::ALL.iter().any(|m| ui_settings.is_detached(*m));
+    let any_in = M::ALL.iter().any(|m| !ui_settings.is_detached(*m));
+    if any_out || any_in {
         ui.add_space(4.0);
         ui.separator();
-        if crate::chrome::chip(ui, false, "DOCK ALL WINDOWS")
-            .on_hover_text("Bring every module window back into the main window")
-            .clicked()
-        {
-            actions.push(StripAction::DockAll);
-        }
+        ui.horizontal(|ui| {
+            if any_out
+                && crate::chrome::chip(ui, false, "DOCK ALL WINDOWS")
+                    .on_hover_text("Bring every module window back into the main window")
+                    .clicked()
+            {
+                actions.push(StripAction::DockAll);
+            }
+            if any_in
+                && crate::chrome::chip(ui, false, "UNDOCK ALL WINDOWS")
+                    .on_hover_text(
+                        "Put every module in a window of its own — the main window is left as \
+                         the spectrum and the decoders",
+                    )
+                    .clicked()
+            {
+                actions.push(StripAction::UndockAll);
+            }
+        });
     }
 }
 
@@ -736,6 +757,8 @@ impl MultiApp {
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 StripAction::DockAll => self.tabs[self.focused].app.dock_all_windows(),
+                #[cfg(not(target_arch = "wasm32"))]
+                StripAction::UndockAll => self.tabs[self.focused].app.undock_all_windows(),
             }
         }
     }
@@ -1070,7 +1093,10 @@ impl MultiApp {
             });
             // **DOCK ALL** empties the menu, so it closes rather than leaving a
             // menu of rows that are all DOCKED under the pointer.
-            if actions[before..].iter().any(|a| matches!(a, StripAction::DockAll)) {
+            if actions[before..]
+                .iter()
+                .any(|a| matches!(a, StripAction::DockAll | StripAction::UndockAll))
+            {
                 egui::Popup::close_id(ui.ctx(), popup_id);
             }
         }
