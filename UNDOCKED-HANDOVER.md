@@ -92,6 +92,13 @@ readout now has the **mode and signal level** under it (read-only, sharing the
 main window's meter), so the second monitor needs no glance at the first. And a
 **Dock all windows** chip in Settings → UI brings every window back at once.
 
+**The console is SDRuno's RX control** (`0b3a78cd`): the undocked Controls window
+is forced to the **desktop** strip (it opens wide and short, and the compact
+strip was the first thing to look wrong), carries the **band/mode selector**
+beneath it, and the main window's emptied centre shows a plain face instead of
+drawing the selector a second time. The three dozen digital chips are one
+**DIGITAL ▾** dropdown on both menu tabs, SDRuno's DIGITAL button.
+
 **The control surface is a module** (`783ee680`): `DetachableModule::Controls`
 moves the whole top strip — frequency, S-meter, receiver and transmitter
 controls — into its own window (`sdroxide-controls`). Undocked, the main window
