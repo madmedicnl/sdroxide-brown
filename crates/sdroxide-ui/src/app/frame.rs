@@ -293,13 +293,9 @@ fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
         // one the layout cannot fill vertically.
         let size = egui::vec2(ui.available_width(), crate::chrome::chip_height(ui, None));
         let mut clicked = false;
-        ui.allocate_ui_with_layout(
-            size,
-            egui::Layout::right_to_left(egui::Align::Center),
-            |ui| {
-                clicked = crate::chrome::chip(ui, false, label).on_hover_text(hover).clicked();
-            },
-        );
+        ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            clicked = crate::chrome::chip(ui, false, label).on_hover_text(hover).clicked();
+        });
         clicked
     }
 }
@@ -2048,36 +2044,19 @@ impl SdroxideApp {
             .id(crate::layout::salted_id(ctx, id).with(TOOL_WINDOW_EPOCH))
             .open(&mut win_open)
             .frame(crate::chrome::window_frame())
-            // **A fixed size.** A tool window whose body fills its height (they
-            // all do — `ScrollArea::auto_shrink([false, false])`) once grew to
-            // the whole screen, and egui remembered it; neither a new
-            // `default_height` nor a `max_size` reliably undid that, and the
-            // result was the "black window with only the top of its content at
-            // the bottom". A fixed size cannot be remembered larger than it is.
-            // The cost is that a tool window is not manually resizable yet —
-            // correctness first, resizing a follow-up once the growth is truly
-            // dead.
-            .fixed_size(egui::vec2(
+            .resizable(true)
+            .default_size(egui::vec2(
                 crate::layout::window_w(ctx, default_size[0]),
                 crate::layout::window_h(ctx, default_size[1]),
             ))
+            // A cap so no remembered — or future — size can take the whole
+            // screen. The body sits at the top now (the ⇱ chip is a one-row
+            // allocation), so a large window is merely large, not broken; this
+            // just keeps it sane.
+            .max_size(ctx.content_rect().size() * 0.95)
             .show(ctx, |ui| {
-                #[cfg(not(target_arch = "wasm32"))]
-                if std::env::var_os("SDROXIDE_WIN_TRACE").is_some() {
-                    eprintln!(
-                        "[win] {id}: body max={:?} avail={:.1}x{:.1} cursor_y={:.1}",
-                        ui.max_rect(),
-                        ui.available_width(),
-                        ui.available_height(),
-                        ui.cursor().min.y
-                    );
-                }
                 crate::chrome::window_body_bg(ui);
                 detach = tool_window_chip(ui, false);
-                #[cfg(not(target_arch = "wasm32"))]
-                if std::env::var_os("SDROXIDE_WIN_TRACE").is_some() {
-                    eprintln!("[win] {id}: after chip cursor_y={:.1}", ui.cursor().min.y);
-                }
                 body(self, ui);
             });
         if let Some(r) = &resp {
