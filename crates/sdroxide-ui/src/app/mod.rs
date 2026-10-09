@@ -210,6 +210,11 @@ pub struct SdroxideApp {
     /// Persistent, non-fatal operator notice (e.g. radio audio input
     /// unavailable / mono card selected for IQ). Shown as a warning banner.
     radio_notice: Option<String>,
+    /// Another sdroxide found running on this machine at start-up — see
+    /// [`SdroxideApp::warn_other_instance`]. Kept apart from `radio_notice`
+    /// because the engine clears that one with its own notices, and this is
+    /// not the engine's to clear: it stays until the operator dismisses it.
+    other_instance: Option<String>,
     /// The mode for which the "your undocked panel has nowhere to go" notice has
     /// already been raised. Set once per mode so the banner is not re-raised
     /// after the operator dismisses it; cleared when the mode has a panel again.
@@ -1632,6 +1637,7 @@ impl SdroxideApp {
             retry_at: None,
             retry_backoff: RETRY_MIN_S,
             radio_notice: None,
+            other_instance: None,
             #[cfg(not(target_arch = "wasm32"))]
             panel_undock_notice_mode: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -2536,6 +2542,20 @@ impl SdroxideApp {
         self.radio_notice = Some(text);
     }
 
+    /// Warn that another sdroxide on this machine may be reading the same
+    /// radio — the warning stays on the banner until dismissed.
+    pub(crate) fn warn_other_instance(&mut self, text: String) {
+        self.other_instance = Some(text);
+    }
+
+    /// The banner's Dismiss: one banner shows at a time, so one press takes
+    /// the one on screen — the engine's notice first, then this warning.
+    pub(in crate::app) fn dismiss_notice(&mut self) {
+        if self.radio_notice.take().is_none() {
+            self.other_instance = None;
+        }
+    }
+
     /// Whether transmit controls are hidden for the radio on screen.
     ///
     /// Three sources, in the order they override: `--swl` for the run, the
@@ -3153,6 +3173,59 @@ mod tests {
         let _ = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
         assert!(app.show_scanner, "an undocked tool stays open");
         assert!(app.tool_windows.get("scanner").is_some_and(|s| s.undocked));
+    }
+
+    /// Another sdroxide on the same machine is the cause of a broken-up stream
+    /// that nothing on screen used to name. The warning is drawn on the banner,
+    /// survives the engine clearing its own notice (which it does with
+    /// `Notice(None)`), and goes when the operator dismisses it.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn another_instance_warning_stays_on_the_banner_until_dismissed() {
+        fn texts(shapes: &[egui::epaint::ClippedShape]) -> String {
+            fn walk(s: &egui::Shape, out: &mut String) {
+                match s {
+                    egui::Shape::Text(t) => {
+                        out.push_str(t.galley.text());
+                        out.push('\n');
+                    }
+                    egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                    _ => {}
+                }
+            }
+            let mut out = String::new();
+            shapes.iter().for_each(|c| walk(&c.shape, &mut out));
+            out
+        }
+        let dir = std::env::temp_dir().join(format!("sdroxide-otherinst-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        let frame = |app: &mut SdroxideApp| {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1280.0, 800.0),
+                )),
+                ..Default::default()
+            };
+            texts(&ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest())).shapes)
+        };
+        app.warn_other_instance("an sdroxide server is already running — PID 2488".into());
+        assert!(frame(&mut app).contains("PID 2488"), "the warning is drawn");
+        // What `RadioEvent::Notice(None)` does: the engine's own notice gone.
+        app.radio_notice = None;
+        assert!(frame(&mut app).contains("PID 2488"), "the engine does not clear it");
+        // An engine notice shows first; dismissing it brings the warning back.
+        app.show_notice("engine says something".into());
+        assert!(frame(&mut app).contains("engine says something"));
+        app.dismiss_notice();
+        assert!(frame(&mut app).contains("PID 2488"), "one press takes the engine's notice");
+        app.dismiss_notice();
+        assert!(!frame(&mut app).contains("PID 2488"), "dismissed, it stays gone");
     }
 
     /// Reproduce Kevin's phone crash report (discussion #9) at the geometry

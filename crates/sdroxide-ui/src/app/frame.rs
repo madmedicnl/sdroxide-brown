@@ -806,7 +806,9 @@ impl eframe::App for SdroxideApp {
                 self.panel_undock_notice_mode = None;
             }
         }
-        let notice = self.radio_notice.clone().or_else(|| {
+        // The engine's notice first, then another sdroxide on this machine.
+        let shown = self.radio_notice.clone().or_else(|| self.other_instance.clone());
+        let notice = shown.or_else(|| {
             (rx_only && !self.rx_only_nudge_dismissed).then(|| {
                 "This radio is receive-only — it has no transmitter. Hide the transmit \
                  controls and use the listening screen?"
@@ -847,7 +849,7 @@ impl eframe::App for SdroxideApp {
                                 }
                             } else {
                                 if ui.small_button("Dismiss").clicked() {
-                                    self.radio_notice = None;
+                                    self.dismiss_notice();
                                     if rx_only {
                                         self.rx_only_nudge_dismissed = true;
                                     }

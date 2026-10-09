@@ -395,6 +395,16 @@ impl MultiApp {
         }
     }
 
+    /// Show, on every tab, that another sdroxide on this machine may be
+    /// reading the same radios. On every tab because the collision is the
+    /// station's, not one radio's — and the tab the operator is listening on
+    /// is the one that has to say why the sound breaks up.
+    pub fn warn_other_instance(&mut self, text: String) {
+        for tab in &mut self.tabs {
+            tab.app.warn_other_instance(text.clone());
+        }
+    }
+
     /// Put the tabs in `ids` order and remember it (issue #224).
     ///
     /// Tolerant by design: an id that is not here is skipped and a tab the list
