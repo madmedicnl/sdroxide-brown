@@ -2775,6 +2775,69 @@ mod tests {
         .drop_without_applying_deltas();
     }
 
+    /// The console's band area never paints past its own window, at any width.
+    ///
+    /// The operator's report: *"the buttons from the band menu run off screen"*.
+    /// The menu sits beside the keypad in a `horizontal_top`, and a child of a
+    /// horizontal layout is offered the **whole row's** width — so the menu's
+    /// wrapped rows never wrapped (`horizontal_wrapped` wraps at
+    /// `available_width`, which was the full row) and the chips ran off the
+    /// edge. Both the keypad and the menu are now given an allocated rect, which
+    /// is a width the rows can see. Before that, this sweep read the menu out to
+    /// x≈1538 in a 951 pt window.
+    ///
+    /// Ink, not geometry: a transparent rect is not a chip an operator can see
+    /// run off the screen, and counting them reports faults that are not there.
+    #[test]
+    fn the_console_band_area_stays_inside_its_window() {
+        use crate::multi::frame_test_lock;
+        let _guard = frame_test_lock();
+        let dir =
+            std::env::temp_dir().join(format!("sdroxide-console-band-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        fn walk(s: &egui::Shape, out: &mut Vec<(egui::Rect, bool)>) {
+            match s {
+                egui::Shape::Rect(r) => {
+                    out.push((r.rect, r.fill.is_opaque() || r.stroke.width > 0.0));
+                }
+                egui::Shape::Path(q) => out.push((egui::Rect::from_points(&q.points), true)),
+                egui::Shape::Vec(v) => {
+                    for s in v {
+                        walk(s, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        for w in [360.0_f32, 480.0, 600.0, 720.0, 951.0, 1280.0, 1920.0] {
+            let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+            let ctx = egui::Context::default();
+            let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(w, 900.0),
+                )),
+                ..Default::default()
+            };
+            let mut cmds: Vec<Command> = Vec::new();
+            let full = ctx.run_ui(input, |ui| app.console_band_area(ui, &mut cmds));
+            let mut rects = Vec::new();
+            for cs in &full.shapes {
+                walk(&cs.shape, &mut rects);
+            }
+            let worst =
+                rects.iter().filter(|(_, ink)| *ink).fold(0.0_f32, |m, (r, _)| m.max(r.max.x));
+            assert!(
+                worst <= w + 1.0,
+                "the console's band area paints to x={worst:.0} in a {w:.0} pt window"
+            );
+            full.drop_without_applying_deltas();
+        }
+    }
+
     /// Drive one desktop frame with the band dock requested, and hand back its
     /// shape rectangles — (rect, drawn) where drawn means an opaque fill or a
     /// stroke, i.e. ink an operator can see — plus the dock column
@@ -2801,10 +2864,7 @@ mod tests {
         // layout: the panadapter out of the column, the panel taking it.
         app.ui_settings.set_detached(sdroxide_types::DetachableModule::Panadapter, detached);
         let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(w, 1080.0),
-            )),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, 1080.0))),
             ..Default::default()
         };
         let full = ctx.run_ui(input, |ui| {
@@ -2848,12 +2908,7 @@ mod tests {
         let want = std::env::var("MODE").ok();
         let mode = want
             .as_deref()
-            .and_then(|w| {
-                sdroxide_types::Mode::ALL
-                    .iter()
-                    .find(|m| format!("{m:?}") == w)
-                    .copied()
-            })
+            .and_then(|w| sdroxide_types::Mode::ALL.iter().find(|m| format!("{m:?}") == w).copied())
             .unwrap_or(sdroxide_types::Mode::Ft8);
         let (mut rows, dock, dock_room) = panel_edge_frame(mode, w, false);
         rows.sort_by(|a, b| b.0.max.x.partial_cmp(&a.0.max.x).unwrap_or(std::cmp::Ordering::Equal));
@@ -2867,7 +2922,10 @@ mod tests {
         for (r, ink) in rows.iter().take(10) {
             let past_window = r.max.x > w + 1.0 || r.min.x < -1.0;
             let crosses_dock = dock.is_some_and(|d| {
-                r.min.y < d.max.y && r.max.y > d.min.y && r.max.x > d.min.x + 0.5 && r.min.x < d.min.x - 0.5
+                r.min.y < d.max.y
+                    && r.max.y > d.min.y
+                    && r.max.x > d.min.x + 0.5
+                    && r.min.x < d.min.x - 0.5
             });
             let mark = if past_window {
                 "   <-- PAST THE WINDOW"

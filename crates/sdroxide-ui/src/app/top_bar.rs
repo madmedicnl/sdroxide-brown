@@ -2729,6 +2729,62 @@ impl SdroxideApp {
         band_keypad(ui, &mut self.band_keypad, mode, &self.state, self.caps.as_ref(), stated, cmds);
     }
 
+    /// The console's band area: the keypad and the band/mode selector, side by
+    /// side where there is room and stacked where there is not.
+    ///
+    /// The menu's width is **passed down**, not left to the layout: a
+    /// `ScrollArea` inside a `horizontal_top` hands its content an unbounded
+    /// width, so the menu's wrapped rows never wrap and its chips run off the
+    /// edge of the window — which is what the operator saw. The keypad's own
+    /// measurements are the one source, so the column it leaves is the column
+    /// the menu is told it has.
+    ///
+    /// Its own method so the render test drives the *real* arrangement rather
+    /// than a copy of it.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(in crate::app) fn console_band_area(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        let full_w = ui.available_width();
+        let side = full_w >= keypad_side_by_side_w(ui);
+        if side {
+            let kpw = keypad_w(ui);
+            let menu_w = (full_w - kpw - KEYPAD_LIST_GAP).max(180.0);
+            let h = ui.available_height();
+            ui.horizontal_top(|ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(kpw, h),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| self.band_keypad(ui, cmds),
+                );
+                ui.add_space(KEYPAD_LIST_GAP);
+                // The menu is given a **rect of its own**, not left to the
+                // layout: a child of a `horizontal_top` is offered the whole
+                // row's width, so its wrapped rows never wrap and the chips run
+                // off the window. An allocated size is a width the rows can see.
+                ui.allocate_ui_with_layout(
+                    egui::vec2(menu_w, h),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .id_salt("controls-band-scroll")
+                            .show(ui, |ui| {
+                                self.band_menu_body(ui, cmds);
+                            });
+                    },
+                );
+            });
+        } else {
+            self.band_keypad(ui, cmds);
+            ui.add_space(KEYPAD_LIST_GAP);
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .id_salt("controls-band-scroll")
+                .show(ui, |ui| {
+                    self.band_menu_body(ui, cmds);
+                });
+        }
+    }
+
     /// The band/mode selector filling the whole content area — what stands in
     /// for the panadapter and the panel when both are undocked, so the main
     /// window is never left a black hole (the operator's second screenshot).
@@ -7928,7 +7984,7 @@ const KEYPAD_KEY_AIR: f32 = 8.0;
 const KEYPAD_GAP: f32 = 4.0;
 /// The gap the console leaves between the pad and the list beside it.
 #[cfg(not(target_arch = "wasm32"))]
-const KEYPAD_LIST_GAP: f32 = 8.0;
+pub(in crate::app) const KEYPAD_LIST_GAP: f32 = 8.0;
 /// How many digits an MHz entry takes, and the unit it is read in. **Kilohertz**,
 /// six digits deep: `14074` is 14.074 MHz — how a station writes FT8's frequency
 /// on air — and six digits reaches 999.999 MHz, so nothing this program tunes is

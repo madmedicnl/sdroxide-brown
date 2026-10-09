@@ -1841,24 +1841,7 @@ impl SdroxideApp {
                                 self.top_bar(ui, &mut cmds);
                             });
                             ui.separator();
-                            let beside = ui.available_width()
-                                >= crate::app::top_bar::keypad_side_by_side_w(ui);
-                            ui.horizontal_top(|ui| {
-                                if beside {
-                                    self.band_keypad(ui, &mut cmds);
-                                    ui.add_space(8.0);
-                                }
-                                egui::ScrollArea::vertical()
-                                    .auto_shrink([false, false])
-                                    .id_salt("controls-band-scroll")
-                                    .show(ui, |ui| {
-                                        self.band_menu_body(ui, &mut cmds);
-                                    });
-                                if !beside {
-                                    ui.add_space(8.0);
-                                    self.band_keypad(ui, &mut cmds);
-                                }
-                            });
+                            self.console_band_area(ui, &mut cmds);
                         });
                     crate::layout::set_tier(&ictx, prev);
                 });
