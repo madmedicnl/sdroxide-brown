@@ -12405,9 +12405,10 @@ Under **3D view**:
 
 #### Undocked — modules in their own windows
 
-Any of the three big modules can be **pulled out into its own OS window**:
+Any of the big modules can be **pulled out into its own OS window**:
 
-- the **Panadapter** (spectrum + waterfall);
+- the **Panadapter** — SP1, the spectrum and waterfall;
+- the **AUX SP** — a second spectrum and waterfall, the same radio seen twice;
 - the **Operating panel** (the mode's decoder list, transcript and controls);
 - the **Controls** — the whole top strip: the frequency readout, the S-meter and
   the receiver and transmitter controls (SDRuno's "RX control").
@@ -12462,7 +12463,8 @@ rule** matching its application id:
 
 | Module | Application id |
 |---|---|
-| Panadapter | `sdroxide-panadapter` |
+| Panadapter (SP1) | `sdroxide-panadapter` |
+| AUX SP (second spectrum) | `sdroxide-panadapter-aux` |
 | Operating panel | `sdroxide-panel` |
 | Controls | `sdroxide-controls` |
 | Tool windows | `sdroxide-tool-<name>` |

@@ -322,6 +322,7 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
         M::Panadapter => ("panadapter", [960.0, 540.0]),
         M::Panel => ("panel", [520.0, 700.0]),
         M::Controls => ("controls", [1280.0, 640.0]),
+        M::AuxPanadapter => ("aux panadapter", [960.0, 540.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
@@ -1700,7 +1701,7 @@ impl SdroxideApp {
     /// and the tuning strip stays in the controls window — so there is a single owner
     /// for the frequency and the two windows cannot disagree.
     #[cfg(not(target_arch = "wasm32"))]
-    fn sp1_toolbar(&mut self, ui: &mut egui::Ui) {
+    fn sp1_toolbar(&mut self, ui: &mut egui::Ui, module: sdroxide_types::DetachableModule) {
         let area = ui.available_rect_before_wrap();
         ui.allocate_ui(egui::vec2(area.width(), SP1_TOOLBAR_H), |ui| {
             let bar = ui.max_rect();
@@ -1724,13 +1725,12 @@ impl SdroxideApp {
                     self.layers_button(ui, "DISP", 0.0);
                     if crate::chrome::chip(ui, false, "\u{21f1} DOCK")
                         .on_hover_text(
-                            "Return the spectrum into the main window — the same as closing \
-                         this one, without hunting for its close box.",
+                            "Return this spectrum into the main window — the same as \
+                         closing this one, without hunting for its close box.",
                         )
                         .clicked()
                     {
-                        self.ui_settings
-                            .set_detached(sdroxide_types::DetachableModule::Panadapter, false);
+                        self.ui_settings.set_detached(module, false);
                         crate::app::persist::persist_ui_settings(&self.ui_settings);
                     }
                 });
@@ -1765,11 +1765,12 @@ impl SdroxideApp {
         let seed = self.ui_settings.detached_state(module).window;
         let mut cmds: Vec<Command> = Vec::new();
         match module {
-            M::Panadapter => {
-                // The waterfall clock advances here when the main window is not
-                // drawing the panadapter; when it is, the frame loop advanced it
-                // and this is not called. Exactly one of the two runs, and never
-                // both.
+            // SP1 and AUX SP are the same window drawn twice: one spectrum and
+            // waterfall, its own toolbar, its own app-id, its own place on the
+            // desk. The second is a **second view of the same receiver** — both
+            // show one station's waterfall — which is what makes one shared
+            // draw correct for both.
+            M::Panadapter | M::AuxPanadapter => {
                 let live = self.frame.is_some() && now - self.last_spectrum_at < STREAM_STALE_S;
                 let wf_tuning = self.wf_tick(live, ctx.pixels_per_point());
                 let frame = self.frame.clone();
@@ -1780,7 +1781,7 @@ impl SdroxideApp {
                     // `panel_below` is false: the operating panel is not under
                     // this window, so the band-plan strip may use the rest of the
                     // height.
-                    self.sp1_toolbar(ui);
+                    self.sp1_toolbar(ui, module);
                     self.note_panadapter_width(ui);
                     let w = ui.available_width();
                     let h = ui.available_height();
@@ -2091,15 +2092,6 @@ impl SdroxideApp {
         }
     }
 
-    /// Undocked on the focused radio. Native only: the browser keeps the
-    /// panadapter in its one window, and off a non-focused radio: there is one
-    /// undocked window per module for the station, and it shows the focused
-    /// radio's.
-    #[cfg(not(target_arch = "wasm32"))]
-    fn panadapter_detached(&self) -> bool {
-        self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panadapter) && self.focused
-    }
-
     /// Whether the focused radio should draw its operating panel into its own
     /// window this frame. Only a mode that *has* a panel can — a digital mode's
     /// operating panel, or CW's keyboard — so a voice mode ignores the setting;
@@ -2143,9 +2135,24 @@ impl SdroxideApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self.panadapter_detached()
-                && (crate::layout::panadapter_waterfall_only(ctx) || self.view.panadapter_visible())
+            self.module_window_wanted(ctx, sdroxide_types::DetachableModule::Panadapter)
         }
+    }
+
+    /// The same rule for any spectrum module: undocked on the focused radio
+    /// **and** there is a panadapter to show (its layers are on). One predicate
+    /// for both SP1 and AUX SP, so the two cannot disagree about when a spectrum
+    /// window exists — a second one that appeared without its layers would be an
+    /// empty window on a monitor.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn module_window_wanted(
+        &self,
+        ctx: &egui::Context,
+        module: sdroxide_types::DetachableModule,
+    ) -> bool {
+        self.ui_settings.is_detached(module)
+            && self.focused
+            && (crate::layout::panadapter_waterfall_only(ctx) || self.view.panadapter_visible())
     }
 
     /// The operating-panel window should exist this frame: undocked on the
@@ -2176,6 +2183,8 @@ impl SdroxideApp {
         want[sdroxide_types::DetachableModule::Panel.index()] =
             self.panel_window_wanted(self.state.rx[0].mode);
         want[sdroxide_types::DetachableModule::Controls.index()] = self.controls_detached();
+        want[sdroxide_types::DetachableModule::AuxPanadapter.index()] =
+            self.module_window_wanted(ctx, sdroxide_types::DetachableModule::AuxPanadapter);
         want
     }
 

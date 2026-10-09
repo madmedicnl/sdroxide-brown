@@ -558,16 +558,30 @@ pub enum DetachableModule {
     /// The top control strip — the frequency readout, the S-meter and the
     /// receiver and transmitter controls (SDRuno's "RX control").
     Controls,
+    /// A **second** spectrum and waterfall — SDRuno's AUX SP, the window that
+    /// lets the operator watch a second span of the band without giving up the
+    /// first one.
+    ///
+    /// Appended, and drawn from the same spectrum the panadapter is, so this is
+    /// a **second view of the same receiver**, not a second receiver: both
+    /// windows show one station's waterfall. Pointing it at another radio is a
+    /// later thing and would need the shell to own one window per (module,
+    /// radio) rather than per module.
+    AuxPanadapter,
 }
 
 impl DetachableModule {
     /// How many detachable modules there are — the length of
     /// [`UiSettings::detached`], which is an array so `UiSettings` stays `Copy`.
-    pub const COUNT: usize = 3;
+    pub const COUNT: usize = 4;
 
     /// Every module, so a settings list or a test can walk them all.
-    pub const ALL: [DetachableModule; DetachableModule::COUNT] =
-        [DetachableModule::Panadapter, DetachableModule::Panel, DetachableModule::Controls];
+    pub const ALL: [DetachableModule; DetachableModule::COUNT] = [
+        DetachableModule::Panadapter,
+        DetachableModule::Panel,
+        DetachableModule::Controls,
+        DetachableModule::AuxPanadapter,
+    ];
 
     /// This module's slot in [`UiSettings::detached`]. A plain array rather than
     /// a map keeps `UiSettings` `Copy`, which the whole UI leans on.
@@ -576,6 +590,7 @@ impl DetachableModule {
             DetachableModule::Panadapter => 0,
             DetachableModule::Panel => 1,
             DetachableModule::Controls => 2,
+            DetachableModule::AuxPanadapter => 3,
         }
     }
 
@@ -585,6 +600,7 @@ impl DetachableModule {
             DetachableModule::Panadapter => "Panadapter",
             DetachableModule::Panel => "Operating panel",
             DetachableModule::Controls => "Controls",
+            DetachableModule::AuxPanadapter => "AUX SP (second spectrum)",
         }
     }
 
@@ -596,6 +612,7 @@ impl DetachableModule {
             DetachableModule::Panadapter => "sdroxide-panadapter",
             DetachableModule::Panel => "sdroxide-panel",
             DetachableModule::Controls => "sdroxide-controls",
+            DetachableModule::AuxPanadapter => "sdroxide-panadapter-aux",
         }
     }
 }
@@ -1553,6 +1570,37 @@ mod tests {
         assert_eq!((w.size, w.pos), ([800.0, 600.0], Some([10.0, 20.0])));
     }
 
+    /// The registry's own bookkeeping, which is what `UiSettings::detached` is
+    /// indexed by: every module has a **distinct** index inside the array, and
+    /// `ALL` and `COUNT` agree. Two modules sharing a slot would silently share
+    /// one window's geometry, and an `ALL` longer than `COUNT` would index past
+    /// the array.
+    ///
+    /// This is the test that has to keep passing **every** time a module is
+    /// added, because adding one grows `detached` — and a saved config written
+    /// before it carries a shorter list. The reader is tolerant of that (see
+    /// [`detached_slots`]); this pins the bookkeeping the tolerance depends on.
+    #[test]
+    fn every_module_has_its_own_slot() {
+        assert_eq!(DetachableModule::ALL.len(), DetachableModule::COUNT);
+        let mut seen = [false; DetachableModule::COUNT];
+        for m in DetachableModule::ALL {
+            assert!(m.index() < DetachableModule::COUNT, "{:?} indexes past the array", m.label());
+            assert!(
+                !seen[m.index()],
+                "{:?} shares slot {} with another module",
+                m.label(),
+                m.index()
+            );
+            seen[m.index()] = true;
+        }
+        assert!(seen.iter().all(|s| *s), "every slot is a module: {seen:?}");
+    }
+
+    /// The registry's own bookkeeping: every module has a **distinct** index and
+    /// `ALL` and `COUNT` agree, because `UiSettings::detached` is indexed by it
+    /// and two modules sharing a slot would silently share one module's window
+    /// geometry.
     /// A layout value this build has never heard of costs that field, not the
     /// whole `config.toml`. `Settings::load` quarantines the entire file on a
     /// parse error, so before `#[serde(other)]` a config written by a build

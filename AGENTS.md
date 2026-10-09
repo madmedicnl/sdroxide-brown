@@ -17,14 +17,25 @@
 > the operator expects to **switch models when the work reaches MAIN SP** (the
 > panadapter window's toolbar), so that file says where the seam is.
 >
-> **Where the SDRuno work stands (2026-10-09): items 1 and 2 are built** — the
-> band keypad in the console's left column (digits 0–9 naming the HF
+> **Where the SDRuno work stands (2026-10-09): items 1, 2 and 3 are built** —
+> the band keypad in the console's left column (digits 0–9 naming the HF
 > allocations, **Bands**/**MHz** above, the full band list beside it, not behind
-> a dropdown: 28 bands will not fit in ten keys), and **MAIN SP**'s toolbar
-> (the readout in a bar across the top of the panadapter window, a **DISP**
-> chip for the layer menu, a **DOCK** chip). **The next item is item 3, AUX SP**
-> (a second panadapter window); after that the MAIN window's buttons, the rest
-> of the tool windows, and named workspaces.
+> a dropdown: 28 bands will not fit in ten keys), **MAIN SP**'s toolbar (the
+> readout in a bar across the top of the panadapter window, a **DISP** chip, a
+> **DOCK** chip), and **AUX SP** (`DetachableModule::AuxPanadapter`, app-id
+> `sdroxide-panadapter-aux`, the same draw as SP1 in a window of its own).
+>
+> **Adding a detachable module is safe now, and that is the thing to keep.**
+> `UiSettings::detached` reads through `detached_slots`, which accepts a list of
+> any length — because `Settings::load` **quarantines** a `config.toml` it
+> cannot parse and answers `Settings::default()`, so a fixed-length array would
+> have taken an operator's theme, fonts and layout down with their window
+> geometry every time the registry grew. The tests are
+> `sdroxide-config/tests/detached_slots_survive_a_module_count.rs` and
+> `ui::tests::the_detached_list_loads_at_any_length`.
+>
+> **The next item is item 4, the MAIN window's buttons** (a Windows menu on the
+> strip); then the rest of the tool windows, and named workspaces.
 >
 > **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
 > mid-flight — read it before touching ALE). **FST4W**

@@ -66,13 +66,13 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
    SPEC chip does, and a **DOCK** chip that brings the window home. See the note
    below. The operator's "switch models here" was honoured by handing this slice
    back as a self-contained commit rather than a sprawling one.
-3. **AUX SP (SP2)** — a **second** panadapter window (a second spectrum/waterfall
-   on its own receiver or the same one). Needs a second `DetachableModule` or a
-   `Panadapter`-with-index; the shell-owned manager already handles the plumbing.
+3. ~~**AUX SP (SP2)** — a second panadapter window.~~ **BUILT (2026-10-09)** —
+   `DetachableModule::AuxPanadapter`, its own app-id, its own window, its own
+   SP1 toolbar. See the note below.
 4. **The MAIN window's buttons** — SDRuno's MAIN has SP1/SP2/RX/SCANNER/REC/MEM
    buttons. Our shell's radio-tab strip is the MAIN; consider a small **Windows**
    menu that opens each window (SP1/SP2/RX/SCANNER/RECORDER/MEMORIES), mirroring
-   Settings → UI → Undocked but on the strip.
+   Settings → UI → Undocked but on the strip. **Next.**
 5. **The rest of the tool windows** — extract each body to `_body` and call
    `self.tool_window(...)`: schedule, logbook, spots, awards, grid tracker,
    public SDRs, recordings, SWL log, memories, voice keyer, and the per-mode
@@ -148,6 +148,32 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
   tall enough for the 21 pt readout and under a tenth of the window SP1 opens at.
 - **Not seen in a running window** (the detached viewport no-ops under the headless
   harness), and the bar reserves height the spectrum then draws into.
+
+## AUX SP as built (2026-10-09) — the second spectrum, and what it is not
+
+- **`DetachableModule::AuxPanadapter`**, appended (slot 3), app-id
+  `sdroxide-panadapter-aux`, window title *aux panadapter*, opening size the same
+  as SP1. A Settings → UI row appears for it by itself: that list walks
+  `DetachableModule::ALL`, and the hover names its app-id for a window rule.
+- **One draw, two windows.** `M::Panadapter | M::AuxPanadapter` is a single match
+  arm, so the two cannot drift apart in anything but their id. `module_window_wanted`
+  is the one predicate for both ("undocked, focused, and the layers are on"), so a
+  second spectrum window never appears without a spectrum in it.
+- **The toolbar takes the module it is in**, so AUX SP's **DOCK** sends *AUX SP*
+  home rather than SP1 — the bug a shared toolbar would otherwise have.
+- **It is a second view of the *same* receiver**, and the doc says so. Both
+  windows render one station's shared spectrum frame and the same `ViewState`, so
+  they show the same band and the same zoom. Pointing AUX SP at another radio
+  needs the shell to own a window per (module, radio) rather than per module,
+  which is a bigger change than this slice and is left for whoever wants it.
+- **The registry is now proven to extend safely** — that was the real work here.
+  Adding a module grows `UiSettings::detached`, and a derived array deserializer
+  would have rejected every saved config over one extra slot; `Settings::load`
+  **quarantines** a file it cannot parse and answers `Settings::default()`, so
+  the cost would have been the operator's theme, fonts and layout as well as
+  their window geometry. `detached_slots` reads the field at any length now, and
+  the tests are in `crates/sdroxide-config/tests/detached_slots_survive_a_module_count.rs`
+  (through the real loader) and `ui::tests::the_detached_list_loads_at_any_length`.
 
 ## House notes for whoever picks this up
 
