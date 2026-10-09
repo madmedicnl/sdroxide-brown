@@ -216,23 +216,52 @@ fn readout_text(hz: f64) -> String {
 }
 
 /// A large, display-only frequency readout across the top of the **detached**
-/// panadapter, over a dark pill so it reads on any waterfall.
+/// panadapter, over a dark pill so it reads on any waterfall, with a smaller
+/// second line under it — the mode and the signal level — so the window on a
+/// second monitor says everything you glance at without looking back at the main
+/// one.
 ///
-/// The detached window can be on a second monitor with the main window showing
-/// something else, so the one number that has to be legible there is the dial.
 /// Deliberately display-only: the tuning strip stays in the main window, so
 /// there is a single owner for the frequency and the two windows cannot
 /// disagree — a click or drag on the panadapter itself still tunes, as before.
 #[cfg(not(target_arch = "wasm32"))]
-fn centred_detached_readout(ui: &egui::Ui, area: egui::Rect, text: &str) {
+fn centred_detached_readout(ui: &egui::Ui, area: egui::Rect, title: &str, sub: &str) {
     let p = ui.painter_at(area);
-    let ink = egui::Color32::from_rgb(255, 209, 66);
-    let font = egui::FontId::monospace(34.0);
-    let galley = p.layout_no_wrap(text.to_owned(), font, ink);
-    let centre = egui::pos2(area.center().x, area.min.y + galley.size().y * 0.5 + 10.0);
-    let box_rect = egui::Rect::from_center_size(centre, galley.size() + egui::vec2(28.0, 12.0));
-    p.rect_filled(box_rect, 6.0, egui::Color32::from_black_alpha(170));
-    p.galley(box_rect.center() - galley.size() / 2.0, galley, ink);
+    let amber = egui::Color32::from_rgb(255, 209, 66);
+    let big = p.layout_no_wrap(title.to_owned(), egui::FontId::monospace(34.0), amber);
+    let top = area.min.y + big.size().y * 0.5 + 10.0;
+    let r1 = egui::Rect::from_center_size(
+        egui::pos2(area.center().x, top),
+        big.size() + egui::vec2(28.0, 12.0),
+    );
+    p.rect_filled(r1, 6.0, egui::Color32::from_black_alpha(170));
+    p.galley(r1.center() - big.size() / 2.0, big, amber);
+    if sub.is_empty() {
+        return;
+    }
+    let grey = egui::Color32::LIGHT_GRAY;
+    let g2 = p.layout_no_wrap(sub.to_owned(), egui::FontId::proportional(14.0), grey);
+    let r2 = egui::Rect::from_center_size(
+        egui::pos2(area.center().x, r1.max.y + g2.size().y * 0.5 + 8.0),
+        g2.size() + egui::vec2(20.0, 8.0),
+    );
+    p.rect_filled(r2, 4.0, egui::Color32::from_black_alpha(150));
+    p.galley(r2.center() - g2.size() / 2.0, g2, grey);
+}
+
+/// The detached window's second line: the mode, and the S-meter reading when
+/// there is one. Read-only — it shares the main window's meter, so it cannot
+/// disagree with it.
+#[cfg(not(target_arch = "wasm32"))]
+fn detached_status_line(mode: Mode, meters: Option<&sdroxide_types::Meters>) -> String {
+    match meters {
+        Some(m) => {
+            let (s, over) = m.s_units();
+            let level = if over >= 1.0 { format!("S{s}+{over:.0}") } else { format!("S{s}") };
+            format!("{}  ·  {}  ({} dBm)", mode.label(), level, m.s_dbm.round() as i32)
+        }
+        None => mode.label().to_string(),
+    }
 }
 
 /// Everything about a module's **own OS window** that is not its contents: the
@@ -1649,9 +1678,15 @@ impl SdroxideApp {
                         now,
                         wf_tuning,
                     );
-                    // A big, display-only dial readout across the top, so the
-                    // picture can be read from a second monitor.
-                    centred_detached_readout(ui, area, &readout_text(self.state.rx_freq_hz()));
+                    // A big, display-only dial readout across the top — with the
+                    // mode and signal level under it — so the picture can be
+                    // read from a second monitor without the main window.
+                    centred_detached_readout(
+                        ui,
+                        area,
+                        &readout_text(self.state.rx_freq_hz()),
+                        &detached_status_line(self.state.rx[0].mode, self.meters.as_ref()),
+                    );
                 });
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
                 self.dispatch_commands(cmds);

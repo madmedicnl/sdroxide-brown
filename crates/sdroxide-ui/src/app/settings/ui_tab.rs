@@ -120,6 +120,20 @@ pub(in crate::app) fn settings_ui_tab(
                 cfg.set_detached(module, on);
                 ui.end_row();
             }
+            // A single way back, shown only when something is out: dock every
+            // module at once, for after arranging windows on another monitor.
+            if DetachableModule::ALL.iter().any(|m| cfg.is_detached(*m)) {
+                ui.label("");
+                if crate::chrome::chip(ui, false, "DOCK ALL WINDOWS")
+                    .on_hover_text("Bring every undocked window back into this one.")
+                    .clicked()
+                {
+                    for m in DetachableModule::ALL {
+                        cfg.set_detached(m, false);
+                    }
+                }
+                ui.end_row();
+            }
         }
 
         ui.label("Screen update rate");

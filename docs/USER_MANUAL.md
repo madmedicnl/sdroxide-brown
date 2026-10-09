@@ -12411,8 +12411,12 @@ it again, and its size and place are remembered for next time.
 When both are undocked there is nothing left of the radio to draw in the main
 window's centre, so the **band/mode selector fills it** rather than leaving an
 empty panel. A voice mode, which has no operating panel, opens no panel window at
-all; a notice says so once. This is the first step toward a workspace you arrange
-yourself, SDRuno-style: each module its own window, placed where you want it.
+all; a notice says so once. The undocked panadapter window carries a large
+frequency readout with the **mode and signal level** beneath it, so the second
+monitor says what you would otherwise glance back at the main window for. A
+**Dock all windows** button appears under the two rows once anything is out.
+This is the first step toward a workspace you arrange yourself, SDRuno-style:
+each module its own window, placed where you want it.
 
 **The app does not place the window on Wayland.** A Wayland client is given no
 absolute position, so on niri, sway or GNOME the window opens where the
