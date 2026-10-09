@@ -617,6 +617,11 @@ pub struct SdroxideApp {
     /// it, so widening the window again brings it back.
     band_docked: bool,
     band_dock_visible: bool,
+    /// The console's band keypad: which of the two it is in, and the frequency
+    /// typed so far. Session UI state — see [`top_bar::BandKeypad`] — and
+    /// console-only, because the keypad is the console's RX-control surface.
+    #[cfg(not(target_arch = "wasm32"))]
+    band_keypad: top_bar::BandKeypad,
     /// How wide the docked column may be this frame, or `None` where it cannot
     /// dock — see [`top_bar::band_dock_room`]. Settled at the top of the frame
     /// from this app's own column, before the top bar draws the chip that
@@ -1746,6 +1751,8 @@ impl SdroxideApp {
             rpt_tone_popup_since: None,
             band_docked: false,
             band_dock_visible: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            band_keypad: Default::default(),
             band_dock_room: None,
             // Corrected on the first frame, once the viewport size is known.
             tier: crate::layout::Tier::Desktop,

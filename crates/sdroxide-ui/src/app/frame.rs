@@ -1806,19 +1806,36 @@ impl SdroxideApp {
                         .fill(crate::theme::BG_DEEP())
                         .inner_margin(egui::Margin::symmetric(8, 6))
                         .show(ui, |ui| {
-                            // The strip on top, then the band/mode selector —
-                            // the operator's "controls and bands in one window",
-                            // SDRuno's RX control with the band pad beneath it.
+                            // The strip on top, then the band keypad beside the
+                            // band/mode selector — the operator's "controls and
+                            // bands in one window", SDRuno's RX control with the
+                            // keypad down its left side. Wide enough for the two
+                            // to sit side by side; narrower than that they stack,
+                            // because a band list squeezed into a column too thin
+                            // to draw its own pad is a worse way to reach every
+                            // band than the keypad is.
                             crate::chrome::angled_frame(ui, crate::theme::PINK(), |ui| {
                                 self.top_bar(ui, &mut cmds);
                             });
                             ui.separator();
-                            egui::ScrollArea::vertical()
-                                .auto_shrink([false, false])
-                                .id_salt("controls-band-scroll")
-                                .show(ui, |ui| {
-                                    self.band_menu_body(ui, &mut cmds);
-                                });
+                            let beside = ui.available_width()
+                                >= crate::app::top_bar::keypad_side_by_side_w(ui);
+                            ui.horizontal_top(|ui| {
+                                if beside {
+                                    self.band_keypad(ui, &mut cmds);
+                                    ui.add_space(8.0);
+                                }
+                                egui::ScrollArea::vertical()
+                                    .auto_shrink([false, false])
+                                    .id_salt("controls-band-scroll")
+                                    .show(ui, |ui| {
+                                        self.band_menu_body(ui, &mut cmds);
+                                    });
+                                if !beside {
+                                    ui.add_space(8.0);
+                                    self.band_keypad(ui, &mut cmds);
+                                }
+                            });
                         });
                     crate::layout::set_tier(&ictx, prev);
                 });

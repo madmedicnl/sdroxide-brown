@@ -2719,6 +2719,16 @@ impl SdroxideApp {
         );
     }
 
+    /// The band keypad against this radio's state — the console's RX-control
+    /// keypad, beside the band list rather than inside it. Console-only: it is
+    /// the console's surface, and the browser has no console.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(in crate::app) fn band_keypad(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        let mode = self.state.rx[0].mode;
+        let stated = self.radio_cfg.as_ref().is_some_and(|c| !c.freq_ranges_rx.is_empty());
+        band_keypad(ui, &mut self.band_keypad, mode, &self.state, self.caps.as_ref(), stated, cmds);
+    }
+
     /// The band/mode selector filling the whole content area — what stands in
     /// for the panadapter and the panel when both are undocked, so the main
     /// window is never left a black hole (the operator's second screenshot).
@@ -7679,7 +7689,6 @@ fn band_chip(
     daylight: bool,
     cmds: &mut Vec<Command>,
 ) {
-    let digital = mode.is_digital();
     // A band the station's own band plan does not give this region gets
     // no button: 4 m is Region 1's alone and 1.25 m and 33 cm are the
     // Americas', and offering an operator a button that tunes outside
@@ -7690,8 +7699,7 @@ fn band_chip(
     if b.edges().is_none() {
         return;
     }
-    let std_hz = if digital { digi_freq_for_band(mode, b) } else { None };
-    let digi_hz = band_chip_dial(mode, b, std_hz);
+    let (std_hz, digi_hz) = band_jump_target(mode, b);
     // A radio that publishes no tuning range keeps every band button:
     // `may_rx_span` reads an empty range list as "the driver didn't
     // say", and greying out the whole bar would be a worse guess than
@@ -7756,10 +7764,29 @@ fn band_chip(
     }
 }
 
+/// The two dial answers one band press has, and the decision between them —
+/// shared by the band's chip in the list and by the band keypad's keys, so the
+/// two cannot disagree about what pressing a band does.
+///
+/// The first is the current mode's own frequency in that band, when it has one:
+/// that is what makes the band the *active* one rather than merely the selected
+/// one, so it is asked for while drawing, not only on the press. The second is
+/// where the press lands — a frequency in a digital mode, an ordinary band
+/// change otherwise.
+fn band_jump_target(mode: Mode, b: Band) -> (Option<f64>, Option<f64>) {
+    let std_hz = if mode.is_digital() { digi_freq_for_band(mode, b) } else { None };
+    (std_hz, band_chip_dial(mode, b, std_hz))
+}
+
 /// SDRuno's band pad: the current tab's bands as a dense, aligned keypad rather
 /// than a wrapping row. The same chip as the list ([`band_chip`]) — the forecast
 /// tint and all — just laid out in fixed columns, so the band section reads as a
 /// pad instead of a sprawl of chips.
+///
+/// Below [`BAND_PAD_GRID_MIN_W`] the pad wraps into a row instead, and that
+/// constant is the one the console's own layout is measured against — see
+/// [`keypad_side_by_side_w`].
+const BAND_PAD_GRID_MIN_W: f32 = 340.0;
 #[allow(clippy::too_many_arguments)]
 fn band_pad(
     ui: &mut egui::Ui,
@@ -7776,7 +7803,7 @@ fn band_pad(
     // row where there is not (the narrow dock, a popup). A plain `Grid` never
     // shrinks — its columns size to content — so in a narrow column it asks for
     // more width than it has and spills out. Wrapped rows reflow, so they cannot.
-    if ui.available_width() < 340.0 {
+    if ui.available_width() < BAND_PAD_GRID_MIN_W {
         ui.horizontal_wrapped(|ui| {
             for b in bands {
                 band_chip(ui, mode, b, state, caps, ranges_stated, conditions, daylight, cmds);
@@ -7803,6 +7830,329 @@ fn band_pad(
                 }
             }
         });
+}
+
+/// One key of the band keypad, and the air around its label. The **height** is
+/// fixed; the **width** is measured per style ([`keypad_key_w`]), because a chip
+/// narrower than its own label prints the band name outside the box, and the
+/// Terminal style's brackets are seven points of that width on each side.
+#[cfg(not(target_arch = "wasm32"))]
+const KEYPAD_KEY_H: f32 = 26.0;
+#[cfg(not(target_arch = "wasm32"))]
+const KEYPAD_KEY_AIR: f32 = 8.0;
+#[cfg(not(target_arch = "wasm32"))]
+const KEYPAD_GAP: f32 = 4.0;
+/// The gap the console leaves between the pad and the list beside it.
+#[cfg(not(target_arch = "wasm32"))]
+const KEYPAD_LIST_GAP: f32 = 8.0;
+/// How many digits an MHz entry takes, and the unit it is read in. **Kilohertz**,
+/// six digits deep: `14074` is 14.074 MHz — how a station writes FT8's frequency
+/// on air — and six digits reaches 999.999 MHz, so nothing this program tunes is
+/// out of the pad's reach.
+#[cfg(not(target_arch = "wasm32"))]
+const KEYPAD_MAX_DIGITS: usize = 6;
+
+/// The keypad as it is drawn: three rows of three, calculator-style, then `0`
+/// centred under them. One table, so the grid cannot grow a row the layout never
+/// meant to have; `None` is an empty cell.
+///
+/// Each digit names one band, and **the bands rise with the digits**, so the
+/// pad reads up the way the dial does: `1` is 160 m and `9` is 11 m. The ten are
+/// the harmonic HF allocations this station works. A calculator grid has ten
+/// keys, and what is left off it is 60 m — a 15 kHz secondary allocation with
+/// nothing worked on it — and everything above 6 m, all of which the band list
+/// beside the pad still carries.
+#[cfg(not(target_arch = "wasm32"))]
+const KEYPAD_ROWS: [[Option<(char, Band)>; 3]; 4] = [
+    [Some(('7', Band::M15)), Some(('8', Band::M12)), Some(('9', Band::M11))],
+    [Some(('4', Band::M30)), Some(('5', Band::M20)), Some(('6', Band::M17))],
+    [Some(('1', Band::M160)), Some(('2', Band::M80)), Some(('3', Band::M40))],
+    [None, Some(('0', Band::M10)), None],
+];
+
+/// What one key says: the digit, and the band it names. One string for the
+/// measurement below and for the draw, so a key cannot be drawn wider than the
+/// label it was measured for.
+#[cfg(not(target_arch = "wasm32"))]
+fn keypad_label(digit: char, band: Band) -> String {
+    format!("{digit} {}", band.label())
+}
+
+/// The width every key is drawn at — the widest label on the pad, measured by
+/// the same [`crate::chrome::chip_width`] every other chip row is budgeted with,
+/// plus the key's own air. Measured rather than fixed because the themes differ:
+/// the Terminal style spends fourteen more points per key on its brackets, and a
+/// fixed width that fits the widest theme would leave the others looking narrow.
+#[cfg(not(target_arch = "wasm32"))]
+fn keypad_key_w(ui: &egui::Ui) -> f32 {
+    KEYPAD_ROWS
+        .iter()
+        .flatten()
+        .flatten()
+        .map(|(d, b)| crate::chrome::chip_width(ui, &keypad_label(*d, *b), None))
+        .fold(0.0_f32, f32::max)
+        + KEYPAD_KEY_AIR
+}
+
+/// The column the console gives the pad: three keys and the gaps between them.
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) fn keypad_w(ui: &egui::Ui) -> f32 {
+    3.0 * keypad_key_w(ui) + 2.0 * KEYPAD_GAP
+}
+
+/// What the console needs to have before it puts the pad **beside** the band
+/// list rather than above it: the pad's own column, the gap, and the width below
+/// which the list's own band pad stops being a grid and wraps. Below that the two
+/// stack, because a band list squeezed into what is left would be a worse way to
+/// reach every band than the pad is.
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) fn keypad_side_by_side_w(ui: &egui::Ui) -> f32 {
+    keypad_w(ui) + KEYPAD_LIST_GAP + BAND_PAD_GRID_MIN_W
+}
+
+/// What the keypad's digits mean right now. **Bands** is the state it opens in
+/// and the one a press of a digit is a band change in; **MHz** turns the same
+/// ten keys into a frequency entry, where ENTER sends what has been typed.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub(in crate::app) enum KeypadMode {
+    #[default]
+    Bands,
+    Mhz,
+}
+
+/// The band keypad's own state: what it is doing and what has been typed.
+///
+/// Session UI state, not a setting — a pad left half-way through a frequency is
+/// not worth carrying across a restart, and the mode it is in is not either: a
+/// station that likes to dial by keypad would rather press **MHz** each time
+/// than find a pad waiting in the other mode.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Default)]
+pub(in crate::app) struct BandKeypad {
+    mode: KeypadMode,
+    digits: String,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl BandKeypad {
+    fn hz(&self) -> Option<f64> {
+        self.digits.parse::<u32>().ok().map(|khz| khz as f64 * 1e3)
+    }
+
+    /// What one key press does. In **MHz** the digit is typed — the pad is a
+    /// frequency entry, so a key that jumped to a band instead would take the
+    /// dial somewhere mid-type. In **Bands** the same key asks for its band and
+    /// the caller applies [`band_jump_target`]'s answer.
+    fn press(&mut self, digit: char) -> Option<Band> {
+        if self.mode == KeypadMode::Mhz {
+            if self.digits.len() < KEYPAD_MAX_DIGITS {
+                self.digits.push(digit);
+            }
+            return None;
+        }
+        KEYPAD_ROWS.iter().flatten().flatten().find(|(d, _)| *d == digit).map(|(_, b)| *b)
+    }
+
+    /// CLEAR empties the entry and leaves the mode alone: an operator who
+    /// mistypes a frequency and starts again is not asking for the keypad to
+    /// become a row of band buttons under their hands.
+    fn clear(&mut self) {
+        self.digits.clear();
+    }
+
+    /// ENTER's answer: the frequency typed, and the pad back in band mode —
+    /// which is where a station tunes by band and where the next press of a
+    /// digit belongs. `None` when nothing has been typed, so an empty ENTER is
+    /// not a tune to 0.
+    fn enter(&mut self) -> Option<f64> {
+        let hz = self.hz()?;
+        self.digits.clear();
+        self.mode = KeypadMode::Bands;
+        Some(hz)
+    }
+
+    /// What the pad's readout says: the band the keys jump to, and the dial it
+    /// would land on, while it is a pad; the digits typed, in the unit they are
+    /// read in, while it is an entry.
+    fn readout(&self, band: Band, dial_hz: f64) -> String {
+        match self.mode {
+            KeypadMode::Bands => format!("{} · {:.3} MHz", band.label(), dial_hz / 1e6),
+            KeypadMode::Mhz => format!("{} kHz", self.digits),
+        }
+    }
+}
+
+/// The band keypad in the console — SDRuno's RX-control keypad: **Bands** and
+/// **MHz** above, ten keys in calculator order beneath, **Clear** and **Enter**
+/// below, and the band list beside it rather than behind it.
+///
+/// The list stays beside because a keypad of ten keys cannot hold this station's
+/// bands: it carries the eleven metre band this program is built around, the VHF
+/// and UHF allocations and the microwave bands, and every one of them is still a
+/// chip in the list a key's own band is also a chip in. The pad is the way to
+/// *reach* a band without reading the list, not a replacement for it.
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(clippy::too_many_arguments)]
+pub(in crate::app) fn band_keypad(
+    ui: &mut egui::Ui,
+    pad: &mut BandKeypad,
+    mode: Mode,
+    state: &RadioState,
+    caps: Option<&DeviceCaps>,
+    ranges_stated: bool,
+    cmds: &mut Vec<Command>,
+) {
+    let key_w = keypad_key_w(ui);
+    ui.set_min_width(3.0 * key_w + 2.0 * KEYPAD_GAP);
+    crate::chrome::menu_caption(ui, "Band keypad");
+
+    // The two modes the ten keys are in, and which one is in force. A digit is a
+    // band change in **Bands** and a keystroke in **MHz**, so the pad has to say
+    // which it is about to do — and MHz is its own button rather than a mode of
+    // a chip, because a pad whose meaning changed under the operator's finger
+    // would be a control that silently does something else.
+    ui.horizontal(|ui| {
+        if crate::chrome::chip(ui, pad.mode == KeypadMode::Bands, "Bands")
+            .on_hover_text(
+                "The keys name bands: press one to go there, staying in the mode you are in. \
+                 Coming back from MHz empties what was typed.",
+            )
+            .clicked()
+        {
+            pad.mode = KeypadMode::Bands;
+            pad.clear();
+        }
+        if crate::chrome::chip(ui, pad.mode == KeypadMode::Mhz, "MHz")
+            .on_hover_text(
+                "Type a frequency on the keys, in kilohertz: 14074 is 14.074 MHz. \
+                 ENTER sends it, CLEAR empties the entry.",
+            )
+            .clicked()
+        {
+            pad.mode = KeypadMode::Mhz;
+            pad.clear();
+        }
+    });
+    ui.label(
+        egui::RichText::new(pad.readout(state.band, state.active_freq_hz()))
+            .monospace()
+            .size(12.0)
+            .color(crate::theme::CYAN()),
+    );
+    ui.add_space(2.0);
+
+    // The grid. A key's band is drawn on the key, so the pad says where a digit
+    // goes before it is pressed rather than after.
+    egui::Grid::new(ui.id().with("band-keypad"))
+        .num_columns(3)
+        .spacing(egui::vec2(KEYPAD_GAP, KEYPAD_GAP))
+        .show(ui, |ui| {
+            for row in KEYPAD_ROWS {
+                for cell in row {
+                    let Some((digit, band)) = cell else {
+                        ui.allocate_space(egui::vec2(key_w, KEYPAD_KEY_H));
+                        continue;
+                    };
+                    let (std_hz, target) = band_jump_target(mode, band);
+                    let active = match std_hz {
+                        Some(hz) => (state.active_freq_hz() - hz).abs() < 500.0,
+                        None => state.band == band,
+                    };
+                    // A band this radio cannot reach greys its key — and says
+                    // why, for the same reason the list's chip does. In **MHz**
+                    // the key is never grey: the digit is only a digit there, so
+                    // an unreachable band has nothing to say about typing one.
+                    let reachable = caps
+                        .is_none_or(|c| band.edges().is_none_or(|(lo, hi)| c.may_rx_span(lo, hi)));
+                    let enabled = pad.mode == KeypadMode::Mhz || reachable;
+                    let label = egui::RichText::new(keypad_label(digit, band)).monospace();
+                    let mut resp = ui
+                        .allocate_ui(egui::vec2(key_w, KEYPAD_KEY_H), |ui| {
+                            ui.add_enabled_ui(enabled, |ui| {
+                                crate::chrome::chip_sized(
+                                    ui,
+                                    active,
+                                    label,
+                                    egui::vec2(key_w, KEYPAD_KEY_H),
+                                )
+                            })
+                            .inner
+                        })
+                        .inner;
+                    if !reachable && pad.mode == KeypadMode::Bands {
+                        resp = resp.on_disabled_hover_text(disabled_band_reason(
+                            band,
+                            caps,
+                            ranges_stated,
+                        ));
+                    } else {
+                        resp = resp.on_hover_text(match target {
+                            Some(hz) => format!(
+                                "Stay in {} and tune to {:.3} MHz — where it is worked on {}.",
+                                mode.label(),
+                                hz / 1e6,
+                                band.label()
+                            ),
+                            None => format!("Go to {}.", band.label()),
+                        });
+                    }
+                    if resp.clicked() {
+                        match pad.press(digit) {
+                            Some(b) => match target {
+                                Some(hz) => {
+                                    cmds.push(Command::SetVfo { vfo: state.active_vfo, hz })
+                                }
+                                None => cmds.push(Command::SetBand(b)),
+                            },
+                            None => {}
+                        }
+                    }
+                }
+                ui.end_row();
+            }
+        });
+
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        // CLEAR is a control that only means something while something is typed,
+        // so it says so rather than sitting there doing nothing: grey on the band
+        // keys, where there is no entry to empty.
+        let typing = pad.mode == KeypadMode::Mhz;
+        if crate::chrome::chip_enabled(ui, typing, false, "Clear")
+            .on_hover_text(if typing {
+                "Empty the frequency you have typed. The keys stay in MHz."
+            } else {
+                "Nothing is typed — the keys are on bands, where a press goes to a band."
+            })
+            .clicked()
+        {
+            pad.clear();
+        }
+        let typed = pad.hz();
+        let in_range = typed.is_some_and(|hz| caps.is_none_or(|c| c.may_rx_hz(hz)));
+        let enter = crate::chrome::chip_enabled(ui, in_range, false, "Enter").on_hover_text(
+            match (typed, in_range) {
+                (None, _) => {
+                    "Nothing typed yet. The keys are in MHz — press them first.".to_string()
+                }
+                (Some(hz), true) => {
+                    format!("Tune to {:.3} MHz and go back to the band keys.", hz / 1e6)
+                }
+                (Some(hz), false) => format!(
+                    "{:.3} MHz is outside what this radio receives ({} MHz).",
+                    hz / 1e6,
+                    caps.map(|c| sdroxide_types::format_freq_ranges(&c.freq_ranges_rx))
+                        .unwrap_or_else(|| "nothing published".to_string())
+                ),
+            },
+        );
+        if enter.clicked() {
+            if let Some(hz) = pad.enter() {
+                cmds.push(Command::SetVfo { vfo: state.active_vfo, hz });
+            }
+        }
+    });
 }
 
 pub(in crate::app) fn band_mode_menu(
@@ -10455,5 +10805,269 @@ mod tests {
     #[test]
     fn a_published_range_reaching_10_ghz_is_enough_by_itself() {
         assert_eq!(readout_digit_count(true, 0.0, 14_074_000.0), freq_display::DIGITS_EXT);
+    }
+
+    /// The band keypad's whole table, flattened: every digit and its band, in the
+    /// order the keys are drawn.
+    fn keypad_keys() -> Vec<(char, Band)> {
+        KEYPAD_ROWS.iter().flatten().flatten().copied().collect()
+    }
+
+    /// Every digit is a key and every key a band. A pad with two keys on one
+    /// digit would make the second one unreachable, and one with a digit on no
+    /// key would be a dead key on a control the operator aims at by muscle
+    /// memory — so this counts rather than spot-checks.
+    #[test]
+    fn every_digit_names_exactly_one_band() {
+        let keys = keypad_keys();
+        assert_eq!(keys.len(), 10);
+        for d in '0'..='9' {
+            assert_eq!(
+                keys.iter().filter(|(k, _)| *k == d).count(),
+                1,
+                "{d} is on {} keys",
+                keys.iter().filter(|(k, _)| *k == d).count()
+            );
+        }
+        let mut bands = keys.iter().map(|(_, b)| format!("{b:?}")).collect::<Vec<String>>();
+        bands.sort();
+        let before = bands.len();
+        bands.dedup();
+        assert_eq!(bands.len(), before, "two digits share a band");
+    }
+
+    /// The bands rise with the digits, so the pad reads up the way the dial does,
+    /// and the rows are a calculator's — 7 8 9, then 4 5 6, then 1 2 3, with `0`
+    /// centred under them.
+    ///
+    /// The ordering is the pad's whole claim: a key that jumped somewhere the
+    /// operator's hand had not learned would be worse than no key, and an
+    /// accidental reordering would look exactly right on screen.
+    #[test]
+    fn the_keypad_rises_with_the_dial_and_reads_like_a_calculator() {
+        let edge = |d: char| {
+            Band::ALL
+                .into_iter()
+                .find(|b| keypad_keys().contains(&(d, *b)))
+                .and_then(Band::edges)
+                .expect("a keyed band")
+                .1
+        };
+        let rising: Vec<char> = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].to_vec();
+        for pair in rising.windows(2) {
+            assert!(
+                edge(pair[0]) < edge(pair[1]),
+                "{} ({} Hz) is above {} ({} Hz)",
+                pair[1],
+                edge(pair[1]),
+                pair[0],
+                edge(pair[0])
+            );
+        }
+        let digits: Vec<char> = keypad_keys().iter().map(|(d, _)| *d).collect();
+        assert_eq!(digits, vec!['7', '8', '9', '4', '5', '6', '1', '2', '3', '0']);
+    }
+
+    /// A key means what the pad is doing: in **Bands** it asks for its band, in
+    /// **MHz** it types. The mode decides, and it must decide before the press —
+    /// a digit that tuned the band mid-typing would take the dial to 160 m while
+    /// the operator was three digits into a frequency.
+    #[test]
+    fn a_key_is_a_band_or_a_digit_depending_on_the_mode() {
+        let mut pad = BandKeypad::default();
+        assert_eq!(pad.mode, KeypadMode::Bands);
+        assert_eq!(pad.press('7'), Some(Band::M15));
+
+        pad.mode = KeypadMode::Mhz;
+        assert_eq!(pad.press('7'), None, "a digit typed in MHz mode");
+        pad.press('8');
+        assert_eq!(pad.digits, "78");
+    }
+
+    /// The entry is read in **kilohertz**, six digits deep — `14074` is
+    /// 14.074 MHz, the way a station writes FT8's frequency on air — and a
+    /// seventh digit is refused rather than pushing the frequency out of the
+    /// megahertz the pad reports.
+    #[test]
+    fn the_mhz_entry_is_read_in_kilohertz_and_stops_at_six_digits() {
+        let mut pad = BandKeypad { mode: KeypadMode::Mhz, digits: String::new() };
+        for d in "14074".chars() {
+            pad.press(d);
+        }
+        assert_eq!(pad.hz(), Some(14_074_000.0));
+        for d in "500".chars() {
+            pad.press(d);
+        }
+        assert_eq!(pad.digits, "140745", "the entry is never longer than six");
+        assert_eq!(pad.hz(), Some(140_745_000.0), "still read in kilohertz");
+    }
+
+    /// ENTER tunes what was typed and puts the pad back to bands, and an empty
+    /// ENTER tunes nothing at all — an empty pad answered with 0 Hz would be a
+    /// tune the operator could not have meant.
+    #[test]
+    fn enter_tunes_the_entry_and_hands_the_keys_back_to_the_bands() {
+        let mut pad = BandKeypad { mode: KeypadMode::Mhz, digits: "27265".to_string() };
+        assert_eq!(pad.enter(), Some(27_265_000.0));
+        assert_eq!(pad.mode, KeypadMode::Bands, "the next digit is a band again");
+        assert_eq!(pad.digits, "", "the entry does not survive the tune");
+        assert_eq!(pad.enter(), None);
+    }
+
+    /// CLEAR empties the entry and leaves the pad in **MHz**: an operator who
+    /// mistypes and starts again is not asking for the keys under their hand to
+    /// turn back into bands.
+    #[test]
+    fn clear_empties_the_entry_without_leaving_the_mode() {
+        let mut pad = BandKeypad { mode: KeypadMode::Mhz, digits: "14074".to_string() };
+        pad.clear();
+        assert_eq!(pad.digits, "");
+        assert_eq!(pad.mode, KeypadMode::Mhz);
+    }
+
+    /// What the pad says: the band the keys are on and the dial they work around
+    /// in band mode, the digits typed in MHz mode — and the digits in the unit
+    /// they are read in, which is the one thing an operator reading the readout
+    /// has to be told or they will read it as megahertz.
+    #[test]
+    fn the_readout_says_the_band_or_the_digits_it_was_given() {
+        let pad = BandKeypad::default();
+        assert_eq!(pad.readout(Band::M20, 14_074_000.0), "20M · 14.074 MHz");
+        let pad = BandKeypad { mode: KeypadMode::Mhz, digits: "14074".to_string() };
+        assert_eq!(pad.readout(Band::M20, 14_074_000.0), "14074 kHz");
+    }
+
+    /// Headless one-frame ui, for measuring the pad against the style in force.
+    fn keypad_ui(w: f32, add: impl FnMut(&mut egui::Ui)) {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, 700.0))),
+            ..Default::default()
+        };
+        let full = ctx.run_ui(input, add);
+        // The frame hands back a glyph atlas this has no backend to upload, and
+        // epaint debug-asserts on a delta dropped unapplied.
+        full.drop_without_applying_deltas();
+    }
+
+    /// Every key is wide enough for its own label. A chip narrower than its text
+    /// does not wrap or clip it — it prints the band name outside the box, which
+    /// on a keypad is a digit that reads as belonging to two bands.
+    ///
+    /// Measured against the style in force rather than a number, because the
+    /// Terminal style spends fourteen points of key width on its brackets.
+    #[test]
+    fn no_key_is_narrower_than_its_own_label() {
+        keypad_ui(400.0, |ui| {
+            let key_w = keypad_key_w(ui);
+            for (d, b) in keypad_keys() {
+                let want = crate::chrome::chip_width(ui, &keypad_label(d, b), None);
+                assert!(
+                    key_w >= want,
+                    "{d} {} needs {want:.1} pt and the key is {key_w:.1}",
+                    b.label()
+                );
+            }
+        });
+    }
+
+    /// The console puts the pad beside the list only where the list still draws
+    /// its own pad as a grid; the threshold is the list's own, so the two cannot
+    /// drift apart into a band list squeezed into a column too narrow for it.
+    #[test]
+    fn the_pad_goes_beside_the_list_only_where_the_list_has_room() {
+        keypad_ui(1280.0, |ui| {
+            assert_eq!(
+                keypad_side_by_side_w(ui),
+                keypad_w(ui) + KEYPAD_LIST_GAP + BAND_PAD_GRID_MIN_W
+            );
+            // And it is a width a console reaches: the strip above it wants room
+            // too, so this is not a threshold that pushes the pad out of every
+            // window the operator would undock the controls into.
+            assert!(
+                keypad_side_by_side_w(ui) <= 720.0,
+                "the pad would stack until {:.0} pt, past the console's own default width",
+                keypad_side_by_side_w(ui)
+            );
+        });
+    }
+
+    /// Draw the keypad once into a headless ui of `w` points and hand back every
+    /// rect it painted — so the assertions below are about where the ink landed
+    /// rather than about what the table says.
+    fn keypad_rects(w: f32) -> (Vec<egui::Rect>, f32) {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, 700.0))),
+            ..Default::default()
+        };
+        let mut pad = BandKeypad::default();
+        let state = RadioState::default();
+        let mut cmds = Vec::new();
+        let mut key_w = 0.0;
+        let full = ctx.run_ui(input, |ui| {
+            key_w = keypad_key_w(ui);
+            band_keypad(ui, &mut pad, Mode::Usb, &state, None, false, &mut cmds);
+        });
+        let rects = full
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Rect(r) => Some(r.rect),
+                egui::Shape::Path(p) => Some(egui::Rect::from_points(&p.points)),
+                _ => None,
+            })
+            .collect();
+        full.drop_without_applying_deltas();
+        (rects, key_w)
+    }
+
+    /// A key's own rect — every chip style paints the cell it was given, so the
+    /// size is the one test, whatever the theme is wearing.
+    fn is_key(r: egui::Rect, key_w: f32) -> bool {
+        (r.width() - key_w).abs() < 1.0 && (r.height() - KEYPAD_KEY_H).abs() < 1.0
+    }
+
+    /// The pad draws as a calculator: three rows of three keys, `0` alone and
+    /// centred under them, and every key inside the column the console gives it.
+    ///
+    /// The overflow half is why this is a render test and not an arithmetic one.
+    /// A `Grid` never shrinks — its columns size to their content — so a pad laid
+    /// out in one ui and asked about in another draws off the edge with nothing
+    /// on screen to say so, which is the whole of the layout bug class the band
+    /// pad's own wrapped fallback was added for.
+    #[test]
+    fn the_pad_draws_as_a_calculator_and_stays_in_its_column() {
+        let (rects, key_w) = keypad_rects(400.0);
+        let col = 3.0 * key_w + 2.0 * KEYPAD_GAP;
+        let keys: Vec<egui::Rect> = rects.into_iter().filter(|r| is_key(*r, key_w)).collect();
+        assert_eq!(keys.len(), 10, "ten keys, one per digit: {keys:?}");
+
+        // Rows, by where each key's bottom edge falls.
+        let mut rows: Vec<Vec<egui::Rect>> = Vec::new();
+        for k in keys.iter().copied().collect::<Vec<_>>() {
+            match rows.last_mut() {
+                Some(row) if (row[0].max.y - k.max.y).abs() < 0.5 => row.push(k),
+                _ => rows.push(vec![k]),
+            }
+        }
+        assert_eq!(
+            rows.iter().map(Vec::len).collect::<Vec<_>>(),
+            vec![3, 3, 3, 1],
+            "calculator rows"
+        );
+
+        // `0` is the one alone, and a calculator puts it under the middle column.
+        let zero = rows[3][0];
+        assert!(
+            (zero.center().x - col / 2.0).abs() < 2.0,
+            "0 sits at x {} in a {col} pt column",
+            zero.center().x
+        );
+
+        // And nothing of the pad is painted past the column it was given.
+        for k in keys {
+            assert!(k.max.x <= col + 1.0, "a key painted to {k:?}, past the column");
+        }
     }
 }

@@ -7,6 +7,10 @@ windows, each its own module, that the operator arranges. The undocked mode
 at and what is left. It exists because the operator expects to **switch models
 when the work reaches MAIN SP** — so note the split below.
 
+**Where the work stands: the band keypad (item 1) is built, tested and gated, and
+the next item is MAIN SP — the model-switch seam. Nothing has been started past
+it, deliberately.**
+
 ## SDRuno's windows, from the manual (v1.4, ICAS)
 
 Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
@@ -28,7 +32,7 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
 | SDRuno | ours | state |
 |---|---|---|
 | MAIN | the `MultiApp` shell + the radio tab strip | exists (no separate window) |
-| RX Control | the **Controls** module (`sdroxide-controls`) | built, iterating |
+| RX Control | the **Controls** module (`sdroxide-controls`) | built: strip, band keypad, band/mode list |
 | MAIN SP (SP1) | the **Panadapter** module (`sdroxide-panadapter`) | built, **no toolbar yet** |
 | AUX SP (SP2) | a second panadapter window | not built |
 | SCANNER / RECORDER / MEM. PANEL / … | the **tool windows** with the ⇱ WINDOW chip | mechanism done; ~13 tools converted, the rest need their bodies extracted |
@@ -47,23 +51,18 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
   the phone strip) + the band/mode selector beneath it; the digital modes are one
   **DIGITAL ▾** dropdown; the emptied main window shows a plain face, not the
   selector a second time.
+- **The band keypad** (2026-10-09) — the console's left column: **Bands**/**MHz**
+  above, ten keys in calculator order, **Clear**/**Enter** below, with the full
+  band list beside it. The manual describes it under **Undocked**.
 
 ## TODO (in order)
 
-1. **The band pad — the aligned grid is in (2026-10-09); the SDRuno keypad is
-   next.** `band_chip` is now a free function and `band_pad` lays the chips out
-   in **fixed columns where there is room** and a wrapped row where there is not
-   (a plain `Grid` never shrinks, so it overflowed the narrow dock). What is
-   still missing is SDRuno's actual **keypad**: digits 0–9 laid out
-   calculator-style, each also naming a band (7,8,9 / 4,5,6 / 1,2,3 / 0, with
-   **Bands** and **MHz** above and **Clear**/**Enter** below), the digits tuning
-   to a band and, in MHz mode, entering a frequency. It is wider than the dock,
-   so it belongs **in the console** (its own widget, not the shared
-   `band_mode_menu`). Decide then whether to keep the full band list beside it or
-   move it behind a **MORE BANDS ▾** dropdown like the digital modes.
+1. ~~**The band keypad.**~~ **BUILT (2026-10-09)** — `top_bar::band_keypad` and
+   the console's left column, with the reasoning below.
 2. **MAIN SP — switch model here.** Give the undocked **panadapter** window an
    SDRuno-style **toolbar**: the frequency readout, SP controls, and the toggles
    SP1 keeps. This is where the operator expects a different model to take over.
+   **Nothing has been started on it**, and nothing above crosses it.
 3. **AUX SP (SP2)** — a **second** panadapter window (a second spectrum/waterfall
    on its own receiver or the same one). Needs a second `DetachableModule` or a
    `Panadapter`-with-index; the shell-owned manager already handles the plumbing.
@@ -79,6 +78,52 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
    (Ctrl+W / SAVE WS). Ours persists geometry per module but has no named
    workspaces and no "save the whole arrangement". A `UiSettings` list of named
    window layouts is the shape.
+
+## The band keypad as built (2026-10-09) — and where it deliberately stops
+
+- **A widget of its own in the console**, not a part of `band_mode_menu`: the
+  popup and the dock are narrow and the pad is not. It is drawn by
+  `show_detached_module`'s `M::Controls` arm, beside the band list, and it is
+  **console-only** (`#[cfg(not(target_arch = "wasm32"))]` throughout) — the
+  browser has no console.
+- **Digits, calculator order** (`KEYPAD_ROWS`): `7 8 9 / 4 5 6 / 1 2 3`, then `0`
+  centred alone under them. **The bands rise with the digits** — `1` is 160 m and
+  `9` is 11 m — so the pad reads up the way the dial does.
+- **The ten bands, and what is not on the pad.** A calculator grid has ten keys.
+  They are the harmonic HF allocations; **60 m** (a 15 kHz secondary allocation)
+  and everything above 6 m are not on it. 11 m is, because it is this program's
+  band — it took the `9` key, which is why 60 m rather than 11 m is the one left
+  off.
+- **The digit-to-band table is ours.** SDRuno's own assignment was not published
+  in anything we could read, and a table invented and then described as theirs
+  would be a claim nobody checked; what is documented here is the *ordering*
+  rule, which is the part a muscle memory forms on.
+- **MHz mode types a frequency in kilohertz**: `14074` is 14.074 MHz, six digits
+  deep, `ENTER` sends it and hands the keys back to the bands, `CLEAR` empties it
+  and stays in MHz. ENTER is refused, with the range named, when the radio
+  publishes a receive range the typed frequency falls outside.
+- **The band list stays beside the pad, and that was the decision to make.** It
+  was **not** moved behind a **MORE BANDS ▾** dropdown: our list carries 28
+  bands — CB, the VHF/UHF allocations, the microwave bands, the broadcast
+  services — and hiding them behind a dropdown to put ten keys where they were
+  would make them *harder* to reach than they are today. The **DIGITAL ▾**
+  dropdown exists because three dozen chips overflowed a row, not because a
+  keypad replaced them. The two stack below `keypad_side_by_side_w(ui)`, which is
+  the list's own wrap threshold — the same constant `band_pad` reads, so the two
+  cannot drift apart.
+- **One press, one meaning**: `band_jump_target` is now the single place that
+  decides what pressing a band does in the current mode, and both the list's
+  chip and the keypad's key go through it.
+- **Tests** (nine, `top_bar::tests`): one band per digit and one digit per band;
+  the bands rise with the digits and the rows are a calculator's; a key is a band
+  in one mode and a digit in the other; the entry is kilohertz and six digits;
+  ENTER tunes and returns the pad to the bands, an empty ENTER tunes nothing;
+  CLEAR empties without leaving the mode; the readout says which of the two it
+  is; no key is narrower than its own label (measured against the style — the
+  Terminal theme's brackets are 14 pt of key width apiece); and **a render test**
+  that ten keys land in `3,3,3,1` rows with `0` centred and nothing painted past
+  the column. The render test and the width test were both verified failing on
+  wrong code (`KEYPAD_KEY_AIR = -40`, and `0` moved to the left column).
 
 ## House notes for whoever picks this up
 

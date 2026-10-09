@@ -12419,7 +12419,18 @@ size and place are remembered for next time.
 Undocking the **Controls** is the biggest change: the main window loses its top
 strip and becomes the spectrum and the decoders, while the strip lives in the
 control window — which is SDRuno's **RX control**, and it carries the
-**band/mode selector** with it, so the controls and the bands are one window.
+**band keypad** and the **band/mode selector** with it, so the controls and the
+bands are one window. The keypad is SDRuno's too: **Bands** and **MHz** above,
+ten keys laid out like a calculator (7 8 9 / 4 5 6 / 1 2 3, with 0 centred
+underneath), **Clear** and **Enter** below. Each key names the band it goes to
+and the bands rise with the digits, so **1** is 160 m and **9** is 11 m; a press
+tunes there, staying in the mode you are in. Press **MHz** and the same keys type
+a frequency instead — **in kilohertz**, so `14074` is 14.074 MHz — and **Enter**
+tunes it and puts the keys back to bands. The full band list stays beside the
+keypad rather than behind it: the keypad carries the ten HF allocations, and
+everything else (60 m, the VHF and UHF bands, the CB channels, the broadcast
+services) is a chip in the list as it always was. A key for a band your radio
+cannot receive is greyed, and says which range the radio published.
 The main window keeps its radio-tab strip and, when nothing is left in it, shows
 a plain face rather than a black hole (the band selector is already in the
 control window). Undocking the other two is the same idea one module down.
