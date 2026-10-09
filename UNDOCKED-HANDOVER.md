@@ -15,30 +15,37 @@ and the fork already has the mechanism (the solar3d viewport).
 
 - [x] **1. State.** `DetachedWindow` + `UiSettings::{panadapter_detached,
       panadapter_window}` — landed (`21c204fa`). No wire bump (local config).
-- [ ] **2. Extract `draw_panadapter`.** Lift the panadapter block out of
-      `frame.rs`'s nested closure (`~765`–`904`) into `fn draw_panadapter(&mut
-      self, ui, <captured locals>)`, and call it from the main window
-      **unchanged**. Land it as its own commit with the main-window draw
-      byte-identical — that is the whole point of the step, so a mistake is
-      visible before any window is wired. `cargo test -p sdroxide-radio --test
-      cw_panadapter` and the panadapter render test must still pass.
-- [ ] **3. The `DETACH` toggle.** A control in the panadapter's DISP row, with
-      hover saying where the window goes and the Wayland caveat. Handle
-      `ViewportEvent::Close` re-attaching.
-- [ ] **4. The detached window.** `ctx.show_viewport_immediate(panadapter_vid,
-      ViewportBuilder::default().with_app_id("sdroxide-panadapter")
-      .with_title(…).with_inner_size(size)[.with_position(pos)], |ui, _|
-      self.draw_panadapter(ui, …))` — native only. **Immediate, not deferred**
-      (see step 4's note).
-- [ ] **5. The main window reclaims the space.** Detached ⇒ `waterfall_h = 0`,
-      the operating panel takes the column. Pure test on the split.
-- [ ] **6. Persist geometry** on the rebuild frame (the solar3d pattern).
-- [ ] **7. The overlay.** Big centred frequency over the detached panadapter;
-      optionally a compact S-level. Tuning strip and S-meter stay in the main
-      window (decided).
-- [ ] **8. Gate + install.** `cargo check --workspace --all-targets` silent,
-      `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui`,
-      the touched-crate tests, build + install.
+- [x] **2. Extract `draw_panadapter`.** Both panadapter blocks — the digital
+      path and the CW/analog path — lifted into one inherent
+      `SdroxideApp::draw_panadapter`; the main-window draw is byte-identical
+      (`747bfb82`). `cw_panadapter` and the render tests stayed green.
+- [x] **3. The `DETACH` toggle.** A chip in the DISP menu's **Window** group,
+      greyed in modes with no panel to reclaim the column, hover naming the
+      Wayland caveat. `close_requested` re-attaches.
+- [x] **4. The detached window.** `show_viewport_immediate` (native only) with
+      app-id `sdroxide-panadapter` and a stable title. Immediate, not deferred:
+      the draw borrows `&mut self`. One window for the **station**, owned by
+      the focused radio (`UiSettings` is station-wide, so a per-radio id would
+      remap the window on every switch).
+- [x] **5. The main window reclaims the space.** `panadapter_split` returns a
+      zero waterfall height when detached; pure test on the arithmetic plus the
+      both-edges render test run detached too.
+- [x] **6. Persist geometry** on the rebuild frame, and once a drag settles
+      (not a write a frame).
+- [x] **7. The overlay.** A big, display-only dial readout over the detached
+      panadapter; the tuning strip and S-meter stay in the main window.
+- [x] **8. Gate + install.** Workspace check silent, wasm check unchanged (273
+      warnings), `sdroxide-ui` lib 757 passed, `cw_panadapter` green. Built and
+      installed as `2.0.2_brown`; a live run on niri opened the window with
+      app-id `sdroxide-panadapter` and persisted its geometry.
+
+**Status (2026-10-09): the first slice is built, committed (`7e02e051`) and
+installed.** Not yet done, and the honest follow-ups: a **Niri `window-rule`**
+so the window floats and lands on the second monitor (the app exposes the
+app-id for it; position is Wayland-ignored); and multi-radio is by-owner only —
+switching to a radio whose mode has no panel closes the window (the flag is
+station-wide but the app-id is single, so this is the shell-owned-window-
+manager work noted below).
 
 Everything below is the reference for those steps.
 
