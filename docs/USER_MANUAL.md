@@ -412,17 +412,17 @@ The **OPERATE** tab's rows:
   channel the band opens on, and the `CH nn` readout on the panadapter; it does
   **not** move the band's edges, so switching never changes what receives or
   transmits. The same choice is on the General tab ([6.1](#61-general-station-audio-and-remote-access)).
-- **PRIMARY MODES:** `AM NFM USB LSB` — the four a CB or short-wave operator
-  reaches for, on their own row above the full list so they are one click rather
-  than a hunt through the digital modes. `FM` here is **NFM** (narrow); the
-  broadcast band's own button comes up **WFM** (see below).
-- **MODE:** `LSB USB CW AM SAM C-QUAM NFM WFM DRM HD DIGU DIGL DSB ISB SPEC`, and
-  a **DIGITAL ▾** dropdown. The digital modes sit behind that one button rather
-  than across the face — three dozen chips was clutter, and a mode is picked
-  once, not scanned. It lists `FT8 FT4 FT2 JT65 JT9 FST4 MSK144 FSK441 Q65
-  UVPACKET JTTY JS8 WSPR PSK RTTY RTTY-FM OLIVIA THOR FSQ ATCHAT HELL SSTV
-  SSTV-FM NAVTEX DSC RIFP RFPAINT RADE PACKET PACKET-HF APRS ADS-B VDL2 AIS
-  HFDL` (see [Digital modes](#3-digital-modes)).
+- **MODE:** `AM NFM USB LSB` first — the four a CB or short-wave operator
+  reaches for — then a divider and the rest: `CW SAM C-QUAM WFM DRM HD DIGU DIGL
+  DSB ISB SPEC`. `FM` here is **NFM** (narrow); the broadcast band's own button
+  comes up **WFM** (see below).
+- **DIGITAL MODES:** a dropdown that shows the mode in force when a digital one
+  is chosen, otherwise reads **Digital modes**. It opens onto the full list —
+  `FT8 FT4 FT2 JT65 JT9 FST4 MSK144 FSK441 Q65 UVPACKET JTTY JS8 WSPR PSK RTTY
+  RTTY-FM OLIVIA THOR FSQ ATCHAT HELL SSTV SSTV-FM NAVTEX DSC RIFP RFPAINT RADE
+  PACKET PACKET-HF APRS` and a **Wideband** group `ADS-B VDL2 AIS HFDL DAB` (see
+  [Digital modes](#3-digital-modes)). A dropdown rather than three dozen chips on
+  the face: a mode is picked once, but it has to be *visible* as a choice.
 
 On a desktop or tablet layout the popup carries a **DOCK** chip. It moves the
 selector into a resizable column beside the waterfall so it stays open while you
