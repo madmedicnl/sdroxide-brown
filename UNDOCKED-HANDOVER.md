@@ -92,19 +92,24 @@ readout now has the **mode and signal level** under it (read-only, sharing the
 main window's meter), so the second monitor needs no glance at the first. And a
 **Dock all windows** chip in Settings → UI brings every window back at once.
 
+**The control surface is a module** (`783ee680`): `DetachableModule::Controls`
+moves the whole top strip — frequency, S-meter, receiver and transmitter
+controls — into its own window (`sdroxide-controls`). Undocked, the main window
+draws no top strip and becomes the spectrum and the decoders, while the strip
+lives in the window: the classic SDRuno split of MAIN SP from RX control. Done by
+moving the strip whole (not cutting its measured rows apart), publishing the
+window's own tier while it draws. The three big modules the work was aimed at —
+panadapter, panel, controls — are all detachable now.
+
 **The destination, so the next slice aims at it:** a user-arrangeable workspace
-in the SDRuno mould — each module (the panadapter, the control surface, the
-decoders, the scanner) in its own window, placed by the operator. Adding a docked
-module is now: a `DetachableModule` variant, its `detached_spec`, a
-`show_detached_module` arm, and (if it is not always present) a
-`*_window_wanted` predicate — the registry, the shell and the Settings rows take
-care of the rest. The **next module** is the real design question: the **control
-surface** (SDRuno's "RX control") is the pair to the panadapter but lives in the
-top strip, whose rows are measured and packed, so it is the risky one; a
-**decoder window** (the decode list) is cleaner but its list is drawn from
-several mode panels; the **scanner** and the other tool windows are a different
-mechanism (egui windows, not docked panels) and would need extracting their
-bodies. Nothing else is owed.
+in the SDRuno mould. The three docked modules are done; what is left is a
+different mechanism — turning the **tool windows** (scanner, schedule, logbook,
+spots, memories) from egui windows inside the main viewport into OS windows of
+their own, which needs each window's body extracted to draw into a `ui` first.
+Adding another docked module is now: a `DetachableModule` variant, its
+`detached_spec`, a `show_detached_module` arm, and a `*_window_wanted` predicate
+where it is not always present — the registry, the shell and the Settings rows
+take care of the rest.
 
 Everything below is the reference for those steps.
 
