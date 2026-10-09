@@ -264,9 +264,10 @@ struct DetachedWindowSpec {
 #[cfg(not(target_arch = "wasm32"))]
 fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec {
     use sdroxide_types::DetachableModule as M;
-    let (app_id, name, default_size) = match module {
-        M::Panadapter => ("sdroxide-panadapter", "panadapter", [960.0, 540.0]),
-        M::Panel => ("sdroxide-panel", "panel", [520.0, 700.0]),
+    let app_id = module.app_id();
+    let (name, default_size) = match module {
+        M::Panadapter => ("panadapter", [960.0, 540.0]),
+        M::Panel => ("panel", [520.0, 700.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),

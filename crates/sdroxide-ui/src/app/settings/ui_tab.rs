@@ -108,15 +108,15 @@ pub(in crate::app) fn settings_ui_tab(
                         ui.selectable_value(&mut on, true, "Undocked — its own window");
                     })
                     .response
-                    .on_hover_text(
+                    .on_hover_text(format!(
                         "Undocked, this module moves into its own window and the main \
                          window gives the space back to what is left — put the waterfall on \
-                         a second monitor, or the controls on a third. Closing a module's \
-                         window docks it again.\n\nOn Wayland the size comes back but the \
+                         a second monitor, or the controls on a third. Closing its window \
+                         docks it again.\n\nOn Wayland the size comes back but the \
                          compositor decides where a window goes: float it and pin it to a \
-                         monitor with a window rule matching its app-id \
-                         (\"sdroxide-panadapter\", \"sdroxide-panel\").",
-                    );
+                         monitor with a window rule matching app-id \"{}\".",
+                        module.app_id(),
+                    ));
                 cfg.set_detached(module, on);
                 ui.end_row();
             }

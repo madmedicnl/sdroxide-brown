@@ -12399,6 +12399,53 @@ Under **3D view**:
   its outside — at several times the cost per pixel. Both draw the same weather;
   this only chooses how much the GPU spends on the light in it.
 
+#### Undocked — the panadapter and panel in their own windows
+
+The panadapter (spectrum + waterfall) and the mode's operating panel can each be
+**pulled out into their own OS window**, so the waterfall can sit on a second
+monitor while the controls and the decode list stay on the first. Set each under
+**Panadapter window** and **Operating panel window** — **Docked in this window**
+(the default) or **Undocked — its own window**. Closing an undocked window docks
+it again, and its size and place are remembered for next time.
+
+When both are undocked there is nothing left of the radio to draw in the main
+window's centre, so the **band/mode selector fills it** rather than leaving an
+empty panel. A voice mode, which has no operating panel, opens no panel window at
+all; a notice says so once. This is the first step toward a workspace you arrange
+yourself, SDRuno-style: each module its own window, placed where you want it.
+
+**The app does not place the window on Wayland.** A Wayland client is given no
+absolute position, so on niri, sway or GNOME the window opens where the
+compositor tiles it. To float it and pin it to a monitor, give it a **window
+rule** matching its application id:
+
+| Module | Application id |
+|---|---|
+| Panadapter | `sdroxide-panadapter` |
+| Operating panel | `sdroxide-panel` |
+
+For **niri**, in `~/.config/niri/config.kdl` (use your own output names —
+`niri msg outputs`):
+
+```kdl
+window-rule {
+    match app-id="sdroxide-panadapter"
+    open-floating true
+    open-on-output "HDMI-A-1"
+    default-column-width { fixed 1200; }
+    default-window-height { fixed 720; }
+}
+window-rule {
+    match app-id="sdroxide-panel"
+    open-floating true
+    open-on-output "DP-1"
+    default-column-width { fixed 560; }
+}
+```
+
+On X11, Windows and macOS the position is honoured directly and no rule is
+needed.
+
 #### Voice announcements
 
 The last section of the UI tab reads the radio out loud, so it can be operated

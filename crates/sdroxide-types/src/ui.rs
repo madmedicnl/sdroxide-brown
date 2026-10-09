@@ -582,6 +582,16 @@ impl DetachableModule {
             DetachableModule::Panel => "Operating panel",
         }
     }
+
+    /// The window's **application id** — the handle a Wayland compositor rule
+    /// matches on to float this window and pin it to a monitor. A public
+    /// contract with the operator: change it and their rules stop matching.
+    pub fn app_id(self) -> &'static str {
+        match self {
+            DetachableModule::Panadapter => "sdroxide-panadapter",
+            DetachableModule::Panel => "sdroxide-panel",
+        }
+    }
 }
 
 /// Whether one [`DetachableModule`] is undocked, and where its window last was.
