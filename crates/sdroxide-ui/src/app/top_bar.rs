@@ -7972,6 +7972,36 @@ fn band_pad(
         });
 }
 
+/// How many equal columns of chips fit across `ui`, given the longest label —
+/// for the mode and CB rows, which are laid in a fixed grid so they read as a
+/// designed pad rather than a ragged wrap. `max` keeps a two-word label from
+/// being stretched across a very wide window.
+fn chip_grid_cols(ui: &egui::Ui, labels: &[&str], gap: f32, max: usize) -> usize {
+    let cell =
+        labels.iter().map(|l| crate::chrome::chip_width(ui, l, None)).fold(0.0_f32, f32::max) + gap;
+    (((ui.available_width() + gap) / cell.max(1.0)).floor() as usize).clamp(1, max)
+}
+
+/// Lay `n` chips in equal columns — the grid half of the mode and CB rows, kept
+/// out of the rows themselves so the wrap-when-narrow fallback sits in one
+/// place. `draw` is called with each index; a row closes after every `cols`.
+fn chip_grid(
+    ui: &mut egui::Ui,
+    id: &str,
+    cols: usize,
+    n: usize,
+    mut draw: impl FnMut(&mut egui::Ui, usize),
+) {
+    egui::Grid::new(id).num_columns(cols).spacing(egui::vec2(6.0, 4.0)).show(ui, |ui| {
+        for i in 0..n {
+            draw(ui, i);
+            if (i + 1) % cols == 0 {
+                ui.end_row();
+            }
+        }
+    });
+}
+
 /// One key of the band keypad, and the air around its label. The **height** is
 /// fixed; the **width** is measured per style ([`keypad_key_w`]), because a chip
 /// narrower than its own label prints the band name outside the box, and the
@@ -8439,64 +8469,77 @@ pub(in crate::app) fn band_mode_menu(
         BandMenuTab::Operate => {
             ui.add_space(6.0);
             crate::chrome::menu_caption(ui, "11M/CB");
-            ui.horizontal_wrapped(|ui| {
-                // Which channel plan the dial reads in: the 11 m citizens' band
-                // plans, and the 446 MHz PMR446 ones. Only the channels and the
-                // channel the band opens on — the band's edges are left wide,
-                // so switching never changes what receives or transmits. The
-                // channel numbers themselves are drawn on the tuning line (see
-                // `spectrum_view`), not as bands on the bar: PMR446 is a
-                // licence-free service beside 11 m, not an amateur band.
-                let current = sdroxide_types::cb_plan();
-                for p in sdroxide_types::CbPlan::ALL {
-                    // A separator before the UHF plans, so the 11 m and 446 MHz
-                    // groups read apart without a second caption.
-                    if p == sdroxide_types::CbPlan::Pmr446 && !current.is_uhf() {
-                        ui.add_space(4.0);
+            // The channel plans, in the same aligned grid as the modes. Which
+            // plan the dial reads in: the 11 m citizens' band plans and the
+            // 446 MHz PMR446 ones. Only the channels and the channel the band
+            // opens on — the band's edges are left wide, so switching never
+            // changes what receives or transmits. The channel numbers are drawn
+            // on the tuning line (see `spectrum_view`), not as bands on the bar:
+            // PMR446 is a licence-free service beside 11 m, not an amateur band.
+            let current = sdroxide_types::cb_plan();
+            let plans = sdroxide_types::CbPlan::ALL;
+            let labels: Vec<&str> = plans.iter().map(|p| p.short()).collect();
+            if ui.available_width() < 300.0 {
+                ui.horizontal_wrapped(|ui| {
+                    for p in plans {
+                        if crate::chrome::chip(ui, current == p, p.short())
+                            .on_hover_text(format!("{} — {}", p.label(), p.modes()))
+                            .clicked()
+                        {
+                            cmds.push(Command::SetCbPlan(p));
+                        }
                     }
+                });
+            } else {
+                let cols = chip_grid_cols(ui, &labels, 6.0, 6);
+                chip_grid(ui, "cb-plan-pad", cols, plans.len(), |ui, i| {
+                    let p = plans[i];
                     if crate::chrome::chip(ui, current == p, p.short())
                         .on_hover_text(format!("{} — {}", p.label(), p.modes()))
                         .clicked()
                     {
                         cmds.push(Command::SetCbPlan(p));
                     }
-                }
-            });
+                });
+            }
             ui.add_space(6.0);
             crate::chrome::menu_caption(ui, "Mode");
-            // The four an operator reaches for lead the row, then a divider and
-            // the rest — one row, one heading, rather than a "Primary modes" row
-            // and a "Mode" row that repeated the same four chips. Selecting a
-            // mode is one decision; giving it two rows made the second read as
-            // the leftovers.
-            ui.horizontal_wrapped(|ui| {
-                for m in [Mode::Am, Mode::Nfm, Mode::Usb, Mode::Lsb] {
-                    mode_band_chip(ui, mode, m, band, state, cmds);
-                }
-                ui.separator();
-                for m in [
-                    Mode::Cw,
-                    Mode::Sam,
-                    Mode::Cquam,
-                    Mode::Wfm,
-                    // DRM belongs with the analog modes rather than under
-                    // "Digital" below: that heading is the modes the digi engine
-                    // decodes and transmits, and DRM is a broadcast to listen to
-                    // — a demodulator, like WFM beside it.
-                    Mode::Drm,
-                    // HD Radio is the same kind of thing — the digital sidecar
-                    // of an FM broadcast, a demodulator and not a digi-engine
-                    // mode — so it sits here too.
-                    Mode::HdRadio,
-                    Mode::Digu,
-                    Mode::Digl,
-                    Mode::Dsb,
-                    Mode::Isb,
-                    Mode::Spec,
-                ] {
-                    mode_band_chip(ui, mode, m, band, state, cmds);
-                }
-            });
+            // The modes in an **aligned grid** — the operator's ask: the four a
+            // CB or short-wave operator reaches for lead, but the row is laid in
+            // equal columns rather than a ragged wrap, so it reads as a designed
+            // pad. DRM and HD Radio sit here rather than under "Digital": that
+            // heading is the modes the digi engine decodes and transmits, and
+            // these two are demodulators, like WFM beside them.
+            let modes = [
+                Mode::Am,
+                Mode::Nfm,
+                Mode::Usb,
+                Mode::Lsb,
+                Mode::Cw,
+                Mode::Sam,
+                Mode::Cquam,
+                Mode::Wfm,
+                Mode::Drm,
+                Mode::HdRadio,
+                Mode::Digu,
+                Mode::Digl,
+                Mode::Dsb,
+                Mode::Isb,
+                Mode::Spec,
+            ];
+            let labels: Vec<&str> = modes.iter().map(|m| m.label()).collect();
+            if ui.available_width() < 300.0 {
+                ui.horizontal_wrapped(|ui| {
+                    for m in modes {
+                        mode_band_chip(ui, mode, m, band, state, cmds);
+                    }
+                });
+            } else {
+                let cols = chip_grid_cols(ui, &labels, 6.0, 6);
+                chip_grid(ui, "mode-pad", cols, modes.len(), |ui, i| {
+                    mode_band_chip(ui, mode, modes[i], band, state, cmds);
+                });
+            }
             ui.add_space(6.0);
             // The digital modes, in a dropdown: the mode in force when one of
             // them is chosen, otherwise "Digital modes", opening the list. A
@@ -8508,29 +8551,37 @@ pub(in crate::app) fn band_mode_menu(
         BandMenuTab::Listen => {
             ui.add_space(6.0);
             crate::chrome::menu_caption(ui, "Receive modes");
-            ui.horizontal_wrapped(|ui| {
-                // What a listener actually selects on a service band: AM and
-                // its synchronous/ECSS variants, the two sidebands for SSB
-                // utility and freeband listening, FM broadcast with its stereo
-                // pilot and RDS, the two digital broadcast modes, and C-QUAM
-                // where it exists (medium wave alone). CW covers the beacons and
-                // utility signals. Nothing here is greyed for the band: the
-                // listener's screen is where the dial is explored, so a mode
-                // the band table would not put here is still offered.
-                for m in [
-                    Mode::Am,
-                    Mode::Sam,
-                    Mode::Cw,
-                    Mode::Usb,
-                    Mode::Lsb,
-                    Mode::Wfm,
-                    Mode::Drm,
-                    Mode::HdRadio,
-                    Mode::Cquam,
-                ] {
-                    mode_listen_chip(ui, mode, m, state, cmds);
-                }
-            });
+            // The same aligned grid as the OPERATE tab. What a listener selects
+            // on a service band: AM and its synchronous/ECSS variants, the two
+            // sidebands for SSB utility and freeband listening, FM broadcast
+            // with its stereo pilot and RDS, the two digital broadcast modes,
+            // and C-QUAM where it exists (medium wave alone). CW covers the
+            // beacons and utility signals. Nothing is greyed for the band: the
+            // listener's screen is where the dial is explored.
+            let modes = [
+                Mode::Am,
+                Mode::Sam,
+                Mode::Cw,
+                Mode::Usb,
+                Mode::Lsb,
+                Mode::Wfm,
+                Mode::Drm,
+                Mode::HdRadio,
+                Mode::Cquam,
+            ];
+            let labels: Vec<&str> = modes.iter().map(|m| m.label()).collect();
+            if ui.available_width() < 300.0 {
+                ui.horizontal_wrapped(|ui| {
+                    for m in modes {
+                        mode_listen_chip(ui, mode, m, state, cmds);
+                    }
+                });
+            } else {
+                let cols = chip_grid_cols(ui, &labels, 6.0, 6);
+                chip_grid(ui, "listen-mode-pad", cols, modes.len(), |ui, i| {
+                    mode_listen_chip(ui, mode, modes[i], state, cmds);
+                });
+            }
             // Every digimode decode, on the listener's side too: a listener
             // reads the same signals the operator does — WSPR beacons, RTTY
             // and PSK bulletins, NAVTEX and weather fax, APRS, the aircraft

@@ -1967,6 +1967,14 @@ impl SdroxideApp {
             .frame(crate::chrome::window_frame())
             .resizable(true)
             .default_width(crate::layout::window_w(ctx, default_size[0]))
+            // A **height**, not only a width: the bodies fill their height
+            // (`ScrollArea::vertical().auto_shrink([false, false])`), and an
+            // auto-sized `egui::Window` offers the whole screen as "available
+            // height" — so without this the window grew to full height and its
+            // short content sat in a mostly-empty box (the operator: "a black
+            // window"). The default is the size the tool asks for; the operator
+            // can still resize it.
+            .default_height(crate::layout::window_h(ctx, default_size[1]))
             .show(ctx, |ui| {
                 crate::chrome::window_body_bg(ui);
                 detach = tool_window_chip(ui, false);
@@ -2026,8 +2034,17 @@ impl SdroxideApp {
         let spec = tool_spec(id, title, default_size);
         let mut dock = false;
         let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-            dock = tool_window_chip(ui, true);
-            body(self, ui);
+            // A tool's own window gets the panel background the in-window one
+            // has from its `egui::Window` frame — the module windows paint their
+            // own, a tool body assumes one.
+            egui::Frame::new()
+                .fill(crate::theme::BG_DEEP())
+                .inner_margin(egui::Margin::symmetric(10, 8))
+                .show(ui, |ui| {
+                    ui.set_min_size(ui.available_size());
+                    dock = tool_window_chip(ui, true);
+                    body(self, ui);
+                });
         });
         // Settle-persist the geometry as the modules do, and treat a close as
         // *closed*, not docked: the operator shut the tool, so it should not
