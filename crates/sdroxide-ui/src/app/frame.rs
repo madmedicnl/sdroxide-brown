@@ -2031,28 +2031,24 @@ impl SdroxideApp {
         let mut detach = false;
         let resp = egui::Window::new(title)
             // The id carries an **epoch**, bumped when this window's bounding
-            // changed. egui remembers a window's size and eframe persists it
-            // (`persist_egui_memory` is on), so a tool window an older build grew
-            // to the whole screen — its body fills its height, and there was no
-            // `default_height` to bound it — would keep that size for good
-            // whatever default this build asks for. The epoch discards it once.
+            // changes; egui remembers a window's size and eframe persists it, so
+            // the epoch discards a stale one.
             .id(crate::layout::salted_id(ctx, id).with(TOOL_WINDOW_EPOCH))
             .open(&mut win_open)
             .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, default_size[0]))
-            // A **height**, not only a width: the bodies fill their height
-            // (`ScrollArea::vertical().auto_shrink([false, false])`), and an
-            // auto-sized `egui::Window` offers the whole screen as "available
-            // height" — so without this the window grew to full height and its
-            // short content sat in a mostly-empty box (the operator: "a black
-            // window"). The default is the size the tool asks for; the operator
-            // can still resize it.
-            .default_height(crate::layout::window_h(ctx, default_size[1]))
-            // …and a hard ceiling, so a size that survived the epoch (or any
-            // future runaway) cannot take the whole screen. Twice the tool's
-            // own height is room to grow without becoming a black wall.
-            .max_height(crate::layout::window_h(ctx, default_size[1]) * 2.0)
+            // **A fixed size.** A tool window whose body fills its height (they
+            // all do — `ScrollArea::auto_shrink([false, false])`) once grew to
+            // the whole screen, and egui remembered it; neither a new
+            // `default_height` nor a `max_size` reliably undid that, and the
+            // result was the "black window with only the top of its content at
+            // the bottom". A fixed size cannot be remembered larger than it is.
+            // The cost is that a tool window is not manually resizable yet —
+            // correctness first, resizing a follow-up once the growth is truly
+            // dead.
+            .fixed_size(egui::vec2(
+                crate::layout::window_w(ctx, default_size[0]),
+                crate::layout::window_h(ctx, default_size[1]),
+            ))
             .show(ctx, |ui| {
                 crate::chrome::window_body_bg(ui);
                 detach = tool_window_chip(ui, false);
