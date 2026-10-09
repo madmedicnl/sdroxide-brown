@@ -7676,39 +7676,51 @@ fn mode_listen_chip(
 /// control.
 const WIDEBAND_MODES: [Mode; 5] = [Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab];
 
-/// The **digital modes**, as an **inline disclosure**: a chip that reveals the
-/// list in place. SDRuno's DIGITAL button, and a mode is picked once.
+/// The modes that are **not** on the face — the analog extras, the digital modes
+/// and the wideband decoders — behind one **dropdown**.
 ///
-/// **Not a dropdown, deliberately** — a combo's menu is a *second* popup, and
-/// inside the band/mode popup egui only keeps a parent open for a registered
-/// submenu, which a `ComboBox` is not: its menu counted as "clicked elsewhere",
-/// so the band popup closed under it and the dropdown did nothing (the
-/// operator: *"if you don't dock or window the bands popup the dropbox for digi
-/// doesn't work"*). Revealing the list in place nests nothing, so it works in
-/// the popup, the dock and the console alike.
-fn digital_modes_disclosure(
+/// A *dropdown*, and specifically a **menu popup** (`Popup::menu`) rather than a
+/// `ComboBox`. Two things follow from that, and both are the operator's:
+///
+/// - It opens **upward** (`.align(TOP_START)`), because in the band/mode popup a
+///   menu that opens downward has nowhere to go.
+/// - It is a **registered submenu**, which is what keeps the band popup open
+///   beneath it. A `ComboBox`'s menu is not a submenu, so inside the popup the
+///   band menu closed the moment the list was touched — the operator: *"if you
+///   don't dock or window the bands popup the dropbox for digi doesn't work"*.
+///
+/// The list is a **small scroll box**, not a full-height one: revealing it
+/// inline (a first try) pushed a giant scrollbar onto the dock and the popup.
+fn more_modes_dropdown(
     ui: &mut egui::Ui,
     mode: Mode,
     band: Band,
     state: &RadioState,
     listen: bool,
+    extras: bool,
     cmds: &mut Vec<Command>,
 ) {
-    let id = crate::layout::salted_id(ui.ctx(), "band-digital-open");
-    let open = ui.ctx().data_mut(|d| d.get_persisted::<bool>(id).unwrap_or(false));
-    let in_list = mode.is_digital() || WIDEBAND_MODES.contains(&mode);
-    let label = if in_list { format!("{}  ▾", mode.label()) } else { "Digital modes  ▾".to_string() };
-    if crate::chrome::chip(ui, open, label)
-        .on_hover_text(
-            "Every mode the digi engine decodes and transmits, and the wideband decoders \
-             (ADS-B, VDL2, AIS, HFDL, DAB) that have a lane of their own.",
-        )
-        .clicked()
-    {
-        ui.ctx().data_mut(|d| d.insert_persisted(id, !open));
-    }
-    if open {
-        ui.indent(id, |ui| {
+    let in_extra = extras && MODE_EXTRAS.contains(&mode);
+    let in_list = mode.is_digital() || WIDEBAND_MODES.contains(&mode) || in_extra;
+    let label = if in_list {
+        format!("{}  \u{25be}", mode.label())
+    } else if extras {
+        "More modes  \u{25be}".to_string()
+    } else {
+        "Digital modes  \u{25be}".to_string()
+    };
+    let btn = crate::chrome::chip(ui, in_list, label).on_hover_text(
+        "The rest of the modes, and the wideband decoders (ADS-B, VDL2, AIS, HFDL, DAB).",
+    );
+    egui::Popup::menu(&btn).align(egui::RectAlign::TOP_START).width(230.0).show(|ui| {
+        egui::ScrollArea::vertical().max_height(240.0).auto_shrink([false, false]).show(ui, |ui| {
+            if extras {
+                crate::chrome::menu_caption(ui, "More modes");
+                for m in MODE_EXTRAS {
+                    digital_mode_item(ui, mode, m, band, state, listen, cmds);
+                }
+                ui.add_space(4.0);
+            }
             crate::chrome::menu_caption(ui, "Digital");
             for m in Mode::DIGITAL {
                 digital_mode_item(ui, mode, m, band, state, listen, cmds);
@@ -7719,8 +7731,24 @@ fn digital_modes_disclosure(
                 digital_mode_item(ui, mode, m, band, state, listen, cmds);
             }
         });
-    }
+    });
 }
+
+/// The modes the dropdown carries that are neither the four on the face nor the
+/// digi-engine set: the other voice/data modes and the broadcast demodulators.
+const MODE_EXTRAS: [Mode; 11] = [
+    Mode::Nfm,
+    Mode::Sam,
+    Mode::Cquam,
+    Mode::Wfm,
+    Mode::Drm,
+    Mode::HdRadio,
+    Mode::Digu,
+    Mode::Digl,
+    Mode::Dsb,
+    Mode::Isb,
+    Mode::Spec,
+];
 
 /// One row of the digital dropdown: a selectable label that greys where the
 /// station cannot run the mode, or — on OPERATE — where the band does not carry
@@ -8369,10 +8397,11 @@ pub(in crate::app) fn band_mode_menu(
 
     let band = state.band;
     crate::chrome::menu_caption(ui, "Show bands");
-    // Two different decisions sit here and must not read as one: HF/VHF/UHF
-    // narrow the list below, and ALL (Band::Gen) *clears the band*. The filters
-    // are plain HF / VHF / UHF — the caption above already says they are bands —
-    // and the clear-band action has its own row and its own hover below.
+    // Two different decisions sit on one row and must not read as one: HF/VHF/UHF
+    // *narrow the list below*, and ALL (Band::Gen) *clears the band*. They share
+    // the row (the operator asked for ALL beside UHF), separated by a divider and
+    // each with its own hover, so the difference is spoken rather than shown by
+    // position.
     ui.horizontal_wrapped(|ui| {
         for f in BandFilter::CHIPS {
             let lit = *filter == f;
@@ -8390,22 +8419,20 @@ pub(in crate::app) fn band_mode_menu(
         {
             *filter = BandFilter::All;
         }
+        // ALL is not a filter and not a band — it *drops* the band restriction —
+        // so it takes a divider and its own hover to say so.
+        ui.separator();
+        if crate::chrome::chip(ui, state.band == Band::Gen, "ALL")
+            .on_hover_text(
+                "General coverage: clear the band and let the dial go anywhere. \
+                 Not the same as the band filter, which only narrows this list.",
+            )
+            .clicked()
+        {
+            *filter = BandFilter::All;
+            cmds.push(Command::SetBand(Band::Gen));
+        }
     });
-    ui.add_space(2.0);
-    // The bandless entry, on its own: it is not a filter and not a band, it is
-    // "drop the band restriction", so it must not sit in the row that reads as
-    // filters. Given its own caption rather than left in the band list, where it
-    // used to be the one chip that meant something different.
-    if crate::chrome::chip(ui, state.band == Band::Gen, "ALL")
-        .on_hover_text(
-            "General coverage: clear the band and let the dial go anywhere. \
-             Not the same as the band filter above, which only narrows this list.",
-        )
-        .clicked()
-    {
-        *filter = BandFilter::All;
-        cmds.push(Command::SetBand(Band::Gen));
-    }
     ui.add_space(4.0);
     {
         match *tab {
@@ -8511,48 +8538,16 @@ pub(in crate::app) fn band_mode_menu(
             }
             ui.add_space(6.0);
             crate::chrome::menu_caption(ui, "Mode");
-            // The modes in an **aligned grid** — the operator's ask: the four a
-            // CB or short-wave operator reaches for lead, but the row is laid in
-            // equal columns rather than a ragged wrap, so it reads as a designed
-            // pad. DRM and HD Radio sit here rather than under "Digital": that
-            // heading is the modes the digi engine decodes and transmits, and
-            // these two are demodulators, like WFM beside them.
-            let modes = [
-                Mode::Am,
-                Mode::Nfm,
-                Mode::Usb,
-                Mode::Lsb,
-                Mode::Cw,
-                Mode::Sam,
-                Mode::Cquam,
-                Mode::Wfm,
-                Mode::Drm,
-                Mode::HdRadio,
-                Mode::Digu,
-                Mode::Digl,
-                Mode::Dsb,
-                Mode::Isb,
-                Mode::Spec,
-            ];
-            let labels: Vec<&str> = modes.iter().map(|m| m.label()).collect();
-            if ui.available_width() < 300.0 {
-                ui.horizontal_wrapped(|ui| {
-                    for m in modes {
-                        mode_band_chip(ui, mode, m, band, state, cmds);
-                    }
-                });
-            } else {
-                let cols = chip_grid_cols(ui, &labels, 6.0, 6);
-                chip_grid(ui, "mode-pad", cols, modes.len(), |ui, i| {
-                    mode_band_chip(ui, mode, modes[i], band, state, cmds);
-                });
-            }
+            // The four a CB or short-wave operator reaches for, on the face;
+            // everything else — the other voice modes, the broadcast
+            // demodulators, the digital modes — is the dropdown below.
+            ui.horizontal_wrapped(|ui| {
+                for m in [Mode::Am, Mode::Usb, Mode::Lsb, Mode::Cw] {
+                    mode_band_chip(ui, mode, m, band, state, cmds);
+                }
+            });
             ui.add_space(6.0);
-            // The digital modes, in a dropdown: the mode in force when one of
-            // them is chosen, otherwise "Digital modes", opening the list. A
-            // dropdown rather than a chip that hides a popup — the modes are
-            // picked once, but they have to be *visible* as a choice.
-            digital_modes_disclosure(ui, mode, band, state, false, cmds);
+            more_modes_dropdown(ui, mode, band, state, false, true, cmds);
         }
         BandMenuTab::Listen => {
             ui.add_space(6.0);
@@ -8598,7 +8593,7 @@ pub(in crate::app) fn band_mode_menu(
             ui.add_space(6.0);
             // One dropdown, as on the OPERATE tab — the same list, so the two
             // cannot drift. Here it never greys for the band.
-            digital_modes_disclosure(ui, mode, band, state, true, cmds);
+            more_modes_dropdown(ui, mode, band, state, true, false, cmds);
         }
     }
 }
@@ -10488,16 +10483,10 @@ mod tests {
         assert_eq!(filter, BandFilter::All);
     }
 
-    /// `label`, returning what the menu asked for. Two passes, as `press` does
-    /// in the public-SDR browser: the first finds where the label was painted,
-    /// the second aims at it.
-    fn click_in_band_mode_menu(state: &RadioState, label: &str) -> Vec<Command> {
-        let mut filter = BandFilter::default();
-        click_in_band_mode_menu_filtered(state, label, &mut filter)
-    }
-
-    /// The same, with the range filter carried in and out, so a test can see
-    /// what a click did to it as well as what the menu asked for.
+    /// `label`, returning what the menu asked for, with the range filter carried
+    /// in and out so a test can see what a click did to it too. Two passes, as
+    /// `press` does in the public-SDR browser: the first finds where the label
+    /// was painted, the second aims at it.
     fn click_in_band_mode_menu_filtered(
         state: &RadioState,
         label: &str,
@@ -10547,14 +10536,80 @@ mod tests {
         cmds
     }
 
-    /// HD Radio stays on the mode row on a station without an nrsc5, but
+    /// Click an item inside the band/mode menu's **More modes** dropdown: first
+    /// open the dropdown (its open state lives in egui memory, which persists
+    /// across the `run_ui` calls on one context), then aim at the item.
+    fn click_dropdown_item(state: &RadioState, dropdown: &str, label: &str) -> Vec<Command> {
+        let (ctx, input) = desktop_ctx();
+        let mut filter = BandFilter::default();
+        let mut draw = |input: egui::RawInput, cmds: &mut Vec<Command>| {
+            ctx.run_ui(input, |ui| {
+                band_mode_menu(
+                    ui,
+                    &mut BandMenuTab::Operate,
+                    &mut filter,
+                    state.rx[0].mode,
+                    state,
+                    None,
+                    false,
+                    None,
+                    true,
+                    false,
+                    cmds,
+                );
+            })
+        };
+        let text_at = |out: &egui::FullOutput, label: &str| {
+            out.shapes.iter().find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text() == label => {
+                    Some(t.pos + t.galley.rect.center().to_vec2())
+                }
+                _ => None,
+            })
+        };
+        let button = |pos: egui::Pos2, pressed: bool| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        // Open the dropdown.
+        let first = draw(input.clone(), &mut Vec::new());
+        let toggle_at =
+            text_at(&first, dropdown).unwrap_or_else(|| panic!("{dropdown} is not in the menu"));
+        first.drop_without_applying_deltas();
+        for events in [
+            vec![egui::Event::PointerMoved(toggle_at), button(toggle_at, true)],
+            vec![button(toggle_at, false)],
+        ] {
+            draw(egui::RawInput { events, ..input.clone() }, &mut Vec::new())
+                .drop_without_applying_deltas();
+        }
+        // The item is drawn only now that the dropdown is open.
+        let open = draw(input.clone(), &mut Vec::new());
+        let item_at =
+            text_at(&open, label).unwrap_or_else(|| panic!("{label} is not in {dropdown}"));
+        open.drop_without_applying_deltas();
+        let mut cmds = Vec::new();
+        for events in [
+            vec![egui::Event::PointerMoved(item_at), button(item_at, true)],
+            vec![button(item_at, false)],
+        ] {
+            draw(egui::RawInput { events, ..input.clone() }, &mut cmds)
+                .drop_without_applying_deltas();
+        }
+        cmds
+    }
+
+    /// HD Radio stays in the mode list on a station without an nrsc5, but
     /// greyed out: a click on it asks for nothing (issue #488). With the
     /// library there, the same click picks the mode — so the test is of the
-    /// greying, not of a chip that could never be clicked.
+    /// greying, not of a chip that could never be clicked. It now lives in the
+    /// **More modes** dropdown, so the test opens that first.
     #[test]
     fn a_mode_the_station_cannot_run_is_offered_but_cannot_be_picked() {
         let mut state = RadioState::default();
-        let picked = click_in_band_mode_menu(&state, "HD RADIO");
+        let picked = click_dropdown_item(&state, "More modes  \u{25be}", "HD RADIO");
         assert!(
             picked.contains(&Command::SetMode { rx: RxId::Main, mode: Mode::HdRadio }),
             "{picked:?}"
@@ -10563,7 +10618,7 @@ mod tests {
         state.hd_radio_unavailable = Some("no libnrsc5 here".into());
         assert_eq!(state.mode_unavailable(Mode::HdRadio), Some("no libnrsc5 here"));
         assert_eq!(state.mode_unavailable(Mode::Wfm), None);
-        let picked = click_in_band_mode_menu(&state, "HD RADIO");
+        let picked = click_dropdown_item(&state, "More modes  \u{25be}", "HD RADIO");
         assert!(picked.is_empty(), "a greyed-out chip asked for {picked:?}");
     }
 

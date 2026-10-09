@@ -3491,11 +3491,36 @@ behind a divider. No behaviour change; the tests
 **Later — 2026-10-09, the operator's call.** The `BANDS` suffix came back off:
 the filters read plain **HF** / **VHF** / **UHF** (the **Show bands** caption
 above them already says what they are, and the shorter chips sit closer
-together), and the clear-band chip is plain **ALL**. The hovers are unchanged, so
-the distinction the suffix was there to draw is still said in words. The DIGITAL
-chip likewise became a real dropdown (see the "digital modes are a real
-dropdown" commit), because as a chip it read as a toggle and the modes looked
-like they were not there at all.
+together), and the clear-band chip is plain **ALL**, now **beside UHF** on the
+same row (a divider and its own hover keep it from reading as a filter — the
+operator asked for it there). The hovers are unchanged, so the distinction the
+suffix was there to draw is still said in words.
+
+**Later still, same day: the mode row and the dropdown.** OPERATE's `Mode`
+section is now the four a CB/SWL operator reaches for — **AM USB LSB CW** — on
+the face, then a **`More modes ▾`** dropdown holding everything else (the other
+voice modes, the broadcast demodulators DRM/HD, and the digital + wideband
+lists). LISTEN keeps its Receive-modes grid and a **`Digital modes ▾`** dropdown
+(the same list, so the two cannot drift).
+
+The dropdown is **`egui::Popup::menu`, not a `ComboBox`**, and both halves of
+that are load-bearing:
+- **It is a registered submenu**, which is the only thing that keeps the band
+  popup open under it. A `ComboBox`'s menu is not a submenu, so in the
+  undocked/unwindowed band popup the menu closed the instant it was touched —
+  *"if you don't dock or window the bands popup the dropbox for digi doesn't
+  work"*.
+- **It opens upward** (`.align(RectAlign::TOP_START)`) with a **small scroll
+  box** (`ScrollArea::max_height(240.0)`), which is what the operator liked in
+  the docked window. Do **not** "fix" it into a `ComboBox`, and do **not** reveal
+  the list inline — an inline disclosure (a first attempt, commit `7b6e5b66`)
+  opened the whole list in the popup and pushed a giant scrollbar onto the dock
+  *and* the popup, which is the bug that attempt was meant to fix.
+
+The band-menu test helper `click_dropdown_item` opens the dropdown (its open
+state is egui memory, which persists across `run_ui` calls on one context) before
+clicking an item; `a_mode_the_station_cannot_run_is_offered_but_cannot_be_picked`
+now drives HD Radio through it.
 
 **Fork-only on purpose — do not offer this upstream.** Upstream's band menu is a
 single flat band row: no `BandFilter`, no LISTEN/OPERATE tabs, no Primary-modes
