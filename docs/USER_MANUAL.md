@@ -12399,24 +12399,32 @@ Under **3D view**:
   its outside — at several times the cost per pixel. Both draw the same weather;
   this only chooses how much the GPU spends on the light in it.
 
-#### Undocked — the panadapter and panel in their own windows
+#### Undocked — modules in their own windows
 
-The panadapter (spectrum + waterfall) and the mode's operating panel can each be
-**pulled out into their own OS window**, so the waterfall can sit on a second
-monitor while the controls and the decode list stay on the first. Set each under
-**Panadapter window** and **Operating panel window** — **Docked in this window**
-(the default) or **Undocked — its own window**. Closing an undocked window docks
-it again, and its size and place are remembered for next time.
+Any of the three big modules can be **pulled out into its own OS window**:
 
-When both are undocked there is nothing left of the radio to draw in the main
-window's centre, so the **band/mode selector fills it** rather than leaving an
-empty panel. A voice mode, which has no operating panel, opens no panel window at
-all; a notice says so once. The undocked panadapter window carries a large
+- the **Panadapter** (spectrum + waterfall);
+- the **Operating panel** (the mode's decoder list, transcript and controls);
+- the **Controls** — the whole top strip: the frequency readout, the S-meter and
+  the receiver and transmitter controls (SDRuno's "RX control").
+
+Set each under its row on this tab — **Docked in this window** (the default) or
+**Undocked — its own window**. Closing an undocked window docks it again, and its
+size and place are remembered for next time.
+
+Undocking the **Controls** is the biggest change: the main window loses its top
+strip and becomes the spectrum and the decoders, while the strip — with its
+menus and the frequency box — lives in the control window. That is the classic
+two-window split: MAIN SP on one screen, RX control on the other. Undocking the
+other two is the same idea one module down.
+
+When everything is undocked there is nothing left of the radio to draw in the
+main window's centre, so the **band/mode selector fills it** rather than leaving
+an empty panel. A voice mode, which has no operating panel, opens no panel window
+at all; a notice says so once. The undocked panadapter window carries a large
 frequency readout with the **mode and signal level** beneath it, so the second
 monitor says what you would otherwise glance back at the main window for. A
-**Dock all windows** button appears under the two rows once anything is out.
-This is the first step toward a workspace you arrange yourself, SDRuno-style:
-each module its own window, placed where you want it.
+**Dock all windows** button appears under the rows once anything is out.
 
 **The app does not place the window on Wayland.** A Wayland client is given no
 absolute position, so on niri, sway or GNOME the window opens where the
@@ -12427,6 +12435,7 @@ rule** matching its application id:
 |---|---|
 | Panadapter | `sdroxide-panadapter` |
 | Operating panel | `sdroxide-panel` |
+| Controls | `sdroxide-controls` |
 
 For **niri**, in `~/.config/niri/config.kdl` (use your own output names —
 `niri msg outputs`):
@@ -12438,6 +12447,13 @@ window-rule {
     open-on-output "HDMI-A-1"
     default-column-width { fixed 1200; }
     default-window-height { fixed 720; }
+}
+window-rule {
+    match app-id="sdroxide-controls"
+    open-floating true
+    open-on-output "HDMI-A-1"
+    default-column-width { fixed 1400; }
+    default-window-height { fixed 150; }
 }
 window-rule {
     match app-id="sdroxide-panel"

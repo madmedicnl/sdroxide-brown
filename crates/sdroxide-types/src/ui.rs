@@ -555,16 +555,19 @@ pub enum DetachableModule {
     /// The mode's operating panel — the decoder list, the transcript and the
     /// controls under the panadapter.
     Panel,
+    /// The top control strip — the frequency readout, the S-meter and the
+    /// receiver and transmitter controls (SDRuno's "RX control").
+    Controls,
 }
 
 impl DetachableModule {
     /// How many detachable modules there are — the length of
     /// [`UiSettings::detached`], which is an array so `UiSettings` stays `Copy`.
-    pub const COUNT: usize = 2;
+    pub const COUNT: usize = 3;
 
     /// Every module, so a settings list or a test can walk them all.
     pub const ALL: [DetachableModule; DetachableModule::COUNT] =
-        [DetachableModule::Panadapter, DetachableModule::Panel];
+        [DetachableModule::Panadapter, DetachableModule::Panel, DetachableModule::Controls];
 
     /// This module's slot in [`UiSettings::detached`]. A plain array rather than
     /// a map keeps `UiSettings` `Copy`, which the whole UI leans on.
@@ -572,6 +575,7 @@ impl DetachableModule {
         match self {
             DetachableModule::Panadapter => 0,
             DetachableModule::Panel => 1,
+            DetachableModule::Controls => 2,
         }
     }
 
@@ -580,6 +584,7 @@ impl DetachableModule {
         match self {
             DetachableModule::Panadapter => "Panadapter",
             DetachableModule::Panel => "Operating panel",
+            DetachableModule::Controls => "Controls",
         }
     }
 
@@ -590,6 +595,7 @@ impl DetachableModule {
         match self {
             DetachableModule::Panadapter => "sdroxide-panadapter",
             DetachableModule::Panel => "sdroxide-panel",
+            DetachableModule::Controls => "sdroxide-controls",
         }
     }
 }

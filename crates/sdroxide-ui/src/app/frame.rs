@@ -297,6 +297,7 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
     let (name, default_size) = match module {
         M::Panadapter => ("panadapter", [960.0, 540.0]),
         M::Panel => ("panel", [520.0, 700.0]),
+        M::Controls => ("controls", [1280.0, 150.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
@@ -622,7 +623,11 @@ impl eframe::App for SdroxideApp {
             }
         }
 
-        {
+        // The strip is drawn here unless the operator has undocked it into its
+        // own window; when they have, this window is the spectrum and the
+        // decoders, and the strip lives in the control window (SDRuno's split
+        // of MAIN SP from RX control).
+        if !self.controls_detached() {
             // The band behind the strip is painted **here** rather than by the
             // panel's own frame fill, and that is the whole of item 1b from fork
             // discussion #16 — Kevin's "the boundary line is missing, the outline
@@ -1705,6 +1710,32 @@ impl SdroxideApp {
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
                 self.dispatch_commands(cmds);
             }
+            M::Controls => {
+                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+                    // The strip lays itself out for *this* window's size, not
+                    // the main window's, so publish the tier this window would
+                    // have and put the main one back afterwards. Safe because
+                    // the shell draws these windows after the tabs, and the
+                    // next frame republishes the main tier at its start.
+                    let ictx = ui.ctx().clone();
+                    let prev = crate::layout::tier(&ictx);
+                    crate::layout::set_tier(
+                        &ictx,
+                        crate::layout::tier_for(ui.max_rect().size(), self.ui_settings.layout),
+                    );
+                    egui::Frame::new()
+                        .fill(crate::theme::BG_DEEP())
+                        .inner_margin(egui::Margin::symmetric(8, 6))
+                        .show(ui, |ui| {
+                            crate::chrome::angled_frame(ui, crate::theme::PINK(), |ui| {
+                                self.top_bar(ui, &mut cmds);
+                            });
+                        });
+                    crate::layout::set_tier(&ictx, prev);
+                });
+                self.handle_detached_outcome(ctx, module, &spec, outcome);
+                self.dispatch_commands(cmds);
+            }
         }
     }
 
@@ -1805,13 +1836,6 @@ impl SdroxideApp {
         }
     }
 
-    /// Whether the focused radio should draw its panadapter into its own window
-    /// this frame. Off on the browser (the panadapter stays in-window) and off
-    /// for a radio that is not the focused one — there is one undocked window
-    /// per module for the station, and it shows the focused radio's. **Every
-    /// mode** can be undocked: the waterfall leaving is what the operator asked
-    /// for, and what is left in the main window is whatever that mode puts
-    /// there.
     /// Undocked on the focused radio. Native only: the browser keeps the
     /// panadapter in its one window, and off a non-focused radio: there is one
     /// undocked window per module for the station, and it shows the focused
@@ -1836,6 +1860,20 @@ impl SdroxideApp {
             self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel)
                 && self.focused
                 && (mode.has_bottom_panel() || mode == Mode::Cw)
+        }
+    }
+
+    /// Whether the focused radio draws its **control strip** in its own window
+    /// this frame. Every mode has one, so the only gates are the browser and the
+    /// focus, exactly as for the panadapter.
+    fn controls_detached(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            false
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.ui_settings.is_detached(sdroxide_types::DetachableModule::Controls) && self.focused
         }
     }
 
@@ -1882,6 +1920,7 @@ impl SdroxideApp {
             self.panadapter_window_wanted(ctx);
         want[sdroxide_types::DetachableModule::Panel.index()] =
             self.panel_window_wanted(self.state.rx[0].mode);
+        want[sdroxide_types::DetachableModule::Controls.index()] = self.controls_detached();
         want
     }
 
