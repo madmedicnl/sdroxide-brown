@@ -34,8 +34,12 @@
 > `sdroxide-config/tests/detached_slots_survive_a_module_count.rs` and
 > `ui::tests::the_detached_list_loads_at_any_length`.
 >
-> **The next item is item 4, the MAIN window's buttons** (a Windows menu on the
-> strip); then the rest of the tool windows, and named workspaces.
+> **Items 1–4 are built, so the window set is the SDRuno one**: the band keypad
+> (console), SP1 with its toolbar, AUX SP as a second spectrum, and the MAIN
+> window's own **🪟 WINDOWS** button on the radio-tab strip that opens each of
+> them by its SDRuno name. **The next items are 5 and 6**: the rest of the tool
+> windows (extract each body to `_body` and call `self.tool_window(...)`), then
+> named workspaces (SDRuno saves up to ten with Ctrl+W).
 >
 > **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
 > mid-flight — read it before touching ALE). **FST4W**

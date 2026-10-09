@@ -2011,6 +2011,38 @@ impl SdroxideApp {
         }
     }
 
+    /// This screen's display preferences, read-only — for the radio strip, which
+    /// is drawn from `&MultiApp` and so reads the arrangement rather than
+    /// borrowing the app to change it. Native-only in use (the browser never
+    /// draws the chip); kept on one target so the accessors beside it are too.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn ui_settings_for_windows(&self) -> sdroxide_types::UiSettings {
+        self.ui_settings
+    }
+
+    /// Put one module in or out of its own window, and remember it. The one
+    /// place the arrangement is written from, so the strip's **WINDOWS** menu and
+    /// a window's own **DOCK** chip cannot drift in whether they persist.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn set_module_detached(
+        &mut self,
+        module: sdroxide_types::DetachableModule,
+        on: bool,
+    ) {
+        self.ui_settings.set_detached(module, on);
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
+    }
+
+    /// Bring every module window home — the strip's **DOCK ALL WINDOWS** and the
+    /// Settings → UI button, one write.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn dock_all_windows(&mut self) {
+        for m in sdroxide_types::DetachableModule::ALL {
+            self.ui_settings.set_detached(m, false);
+        }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
+    }
+
     /// Set the focus flag without side effects — used while a multi-radio
     /// session is being assembled, before there is a first frame.
     pub(crate) fn set_focused_flag(&mut self, focused: bool) {

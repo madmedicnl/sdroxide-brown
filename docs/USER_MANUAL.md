@@ -12417,6 +12417,18 @@ Set each under its row on this tab — **Docked in this window** (the default) o
 **Undocked — its own window**. Closing an undocked window docks it again, and its
 size and place are remembered for next time.
 
+You can also do it from the window itself: the **🪟 WINDOWS** chip at the right of
+the **radio-tab strip** — the row of radio names at the top of the main window —
+opens a list of the module windows (**SP1 — the spectrum**, **SP2 (AUX) — a second
+spectrum**, **Operating panel**, **RX control**), each with a **DOCKED** /
+**IN ITS OWN WINDOW** toggle, and **DOCK ALL WINDOWS** to bring them all back. The
+chip is lit while any of them is out of the main window. It acts on the radio you
+are looking at.
+
+This is the same arrangement as the rows on this tab, from the face of the program
+— a window arrangement is something you change while watching the program, not
+while watching a settings page.
+
 Undocking the **Controls** is the biggest change: the main window loses its top
 strip and becomes the spectrum and the decoders, while the strip lives in the
 control window — which is SDRuno's **RX control**, and it carries the

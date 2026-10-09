@@ -140,6 +140,86 @@ enum StripAction {
         on: bool,
     },
     Add,
+    /// The **WINDOWS** menu on the strip: move one of the station's module
+    /// windows in or out of its own OS window. Carried as an action because the
+    /// strip is drawn from `&self` — it reads the state and says what was asked
+    /// for, and the write happens where the focused radio's settings are.
+    ///
+    /// Native-only: the browser has one window, keeps every module in it, and
+    /// does not draw the chip that would push these.
+    #[cfg(not(target_arch = "wasm32"))]
+    SetDetached {
+        module: sdroxide_types::DetachableModule,
+        on: bool,
+    },
+    /// **Dock every window at once** — the same thing Settings → UI offers, on
+    /// the strip where the operator is already looking when they want it.
+    #[cfg(not(target_arch = "wasm32"))]
+    DockAll,
+}
+
+/// The **WINDOWS** menu's body: one row per module, and a way to bring them all
+/// home. A free function over [`sdroxide_types::UiSettings`] and the action list,
+/// so the strip can draw it from `&self` and let the write happen where the
+/// settings are.
+#[cfg(not(target_arch = "wasm32"))]
+fn windows_menu_body(
+    ui: &mut egui::Ui,
+    ui_settings: sdroxide_types::UiSettings,
+    actions: &mut Vec<StripAction>,
+) {
+    use sdroxide_types::DetachableModule as M;
+    ui.label(RichText::new("MODULE WINDOWS").color(crate::theme::CYAN()).size(11.0).strong());
+    ui.separator();
+    for m in M::ALL {
+        let out = ui_settings.is_detached(m);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(module_window_name(m)).size(12.0));
+            crate::chrome::row_tail(ui, |ui| {
+                let chip =
+                    crate::chrome::chip(ui, out, if out { "IN ITS OWN WINDOW" } else { "DOCKED" })
+                        .on_hover_text(if out {
+                            format!("Bring {} back into the main window", module_window_name(m))
+                        } else {
+                            format!(
+                                "Put {} in its own OS window — its own app-id, so a window rule \
+                             can pin it to a monitor",
+                                module_window_name(m)
+                            )
+                        });
+                if chip.clicked() {
+                    actions.push(StripAction::SetDetached { module: m, on: !out });
+                }
+            });
+        });
+    }
+    if M::ALL.iter().any(|m| ui_settings.is_detached(*m)) {
+        ui.add_space(4.0);
+        ui.separator();
+        if crate::chrome::chip(ui, false, "DOCK ALL WINDOWS")
+            .on_hover_text("Bring every module window back into the main window")
+            .clicked()
+        {
+            actions.push(StripAction::DockAll);
+        }
+    }
+}
+
+/// What each detachable module's window is called in the **WINDOWS** menu —
+/// SDRuno's names for the two that have one, and the program's own for the
+/// rest. The settings rows call them by
+/// [`sdroxide_types::DetachableModule::label`]; this is the face of the program,
+/// where SP1 and SP2 are what an SDRuno operator is looking for and "Panadapter"
+/// is not.
+#[cfg(not(target_arch = "wasm32"))]
+fn module_window_name(m: sdroxide_types::DetachableModule) -> &'static str {
+    use sdroxide_types::DetachableModule as M;
+    match m {
+        M::Panadapter => "SP1 — the spectrum",
+        M::AuxPanadapter => "SP2 (AUX) — a second spectrum",
+        M::Panel => "Operating panel",
+        M::Controls => "RX control",
+    }
 }
 
 pub struct MultiApp {
@@ -152,6 +232,11 @@ pub struct MultiApp {
     /// empty, and always holding the focused tab ([`Self::sanitize_panes`]).
     panes: Vec<u32>,
     factory: Option<RadioFactory>,
+    /// When the **WINDOWS** menu opened, for its auto-fade — the same clock the
+    /// other menus keep, and here rather than on an app because the strip is the
+    /// shell's own chrome and is drawn from `&self`.
+    #[cfg(not(target_arch = "wasm32"))]
+    windows_popup_since: Option<f64>,
     /// How a station somewhere else is dialled — General → connect. Present
     /// in every native session, including one that is itself a remote client:
     /// a screen with no radio of its own is exactly the one most likely to be
@@ -276,6 +361,8 @@ impl MultiApp {
             focused: 0,
             panes,
             factory,
+            #[cfg(not(target_arch = "wasm32"))]
+            windows_popup_since: None,
             remote,
             wgpu: cc.wgpu_render_state.clone(),
             pending_add: None,
@@ -643,6 +730,12 @@ impl MultiApp {
                 // in Settings → Radio, where the two rosters are already side
                 // by side.
                 StripAction::Add => self.add_radio("", None, ctx),
+                #[cfg(not(target_arch = "wasm32"))]
+                StripAction::SetDetached { module, on } => {
+                    self.tabs[self.focused].app.set_module_detached(module, on);
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                StripAction::DockAll => self.tabs[self.focused].app.dock_all_windows(),
             }
         }
     }
@@ -721,9 +814,18 @@ impl MultiApp {
         shown: &[u32],
         splittable: bool,
         actions: &mut Vec<StripAction>,
+        #[cfg(not(target_arch = "wasm32"))] windows_since: &mut Option<f64>,
     ) {
         egui::ScrollArea::horizontal().id_salt("radio-strip").show(ui, |ui| {
-            self.strip_row(ui, pane, shown, splittable, actions);
+            self.strip_row(
+                ui,
+                pane,
+                shown,
+                splittable,
+                actions,
+                #[cfg(not(target_arch = "wasm32"))]
+                windows_since,
+            );
         });
     }
 
@@ -760,6 +862,7 @@ impl MultiApp {
         shown: &[u32],
         splittable: bool,
         actions: &mut Vec<StripAction>,
+        #[cfg(not(target_arch = "wasm32"))] windows_since: &mut Option<f64>,
     ) {
         crate::chrome::tab_bar(ui, |ui, bar| {
             for (i, tab) in self.tabs.iter().enumerate() {
@@ -911,7 +1014,66 @@ impl MultiApp {
                     actions.push(StripAction::Add);
                 }
             }
+            self.windows_button(
+                ui,
+                actions,
+                #[cfg(not(target_arch = "wasm32"))]
+                windows_since,
+            );
         });
+    }
+
+    /// **WINDOWS** — the MAIN window's own buttons, in SDRuno's sense: the
+    /// window that opens the others.
+    ///
+    /// Every other control on this strip is about *which radio* the page below
+    /// is. This one is about *which windows* the station is arranged in — SP1,
+    /// AUX SP, the operating panel and the RX control, each a toggle, plus a way
+    /// to bring them all home. It is on the strip rather than only in Settings →
+    /// UI → Undocked because a window arrangement is something an operator
+    /// changes while looking at the program; Settings keeps the same rows, for
+    /// the same reason it keeps everything else.
+    ///
+    /// Lit while any module is out of the main window, so the arrangement is
+    /// visible with the menu closed.
+    ///
+    /// Reads the **focused** radio's settings and asks for the change through
+    /// [`StripAction`], like everything else on the strip — the strip is drawn
+    /// from `&self`, and a split pane must not undock the radio it is not
+    /// looking at.
+    #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
+    fn windows_button(
+        &self,
+        ui: &mut egui::Ui,
+        actions: &mut Vec<StripAction>,
+        #[cfg(not(target_arch = "wasm32"))] since: &mut Option<f64>,
+    ) {
+        // The browser draws no chip here at all: it has one window and keeps
+        // every module in it, so there is nothing to arrange.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use sdroxide_types::DetachableModule as M;
+            let ui_settings = self.tabs[self.focused].app.ui_settings_for_windows();
+            let any_out = M::ALL.iter().any(|m| ui_settings.is_detached(*m));
+            let btn = crate::chrome::chip(ui, any_out, RichText::new("🪟 WINDOWS").size(12.0))
+                .on_hover_text(if any_out {
+                    "The station's windows — some modules are in their own OS windows. \
+                     Open this to change that."
+                } else {
+                    "Put a module in its own window — SP1 or AUX SP on another monitor, \
+                     the RX control beside them. The same rows are in Settings → UI → Undocked."
+                });
+            let popup_id = egui::Popup::default_response_id(&btn);
+            let before = actions.len();
+            crate::chrome::fading_menu_popup(ui, &btn, since, |ui| {
+                windows_menu_body(ui, ui_settings, actions);
+            });
+            // **DOCK ALL** empties the menu, so it closes rather than leaving a
+            // menu of rows that are all DOCKED under the pointer.
+            if actions[before..].iter().any(|a| matches!(a, StripAction::DockAll)) {
+                egui::Popup::close_id(ui.ctx(), popup_id);
+            }
+        }
     }
 
     fn focus_tab(&mut self, i: usize, ctx: &egui::Context) {
@@ -1454,7 +1616,26 @@ impl eframe::App for MultiApp {
                             .inner_margin(egui::Margin { left: 8, right: 8, top: 3, bottom: 0 }),
                     )
                     .show(ui, |ui| {
-                        self.radio_strip_scrolled(ui, 0, &shown, plan.splittable, &mut actions);
+                        // The **WINDOWS** menu's fade clock is taken out for
+                        // the call and put back: the strip is drawn from
+                        // `&self`, so it cannot also borrow this field mutably
+                        // for the length of the call. Absent on the browser,
+                        // which draws no such chip.
+                        #[cfg(not(target_arch = "wasm32"))]
+                        let mut since = self.windows_popup_since.take();
+                        self.radio_strip_scrolled(
+                            ui,
+                            0,
+                            &shown,
+                            plan.splittable,
+                            &mut actions,
+                            #[cfg(not(target_arch = "wasm32"))]
+                            &mut since,
+                        );
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            self.windows_popup_since = since;
+                        }
                     });
             }
             // A split that is not drawn is not a split: the focused radio takes
@@ -1490,7 +1671,23 @@ impl eframe::App for MultiApp {
                     .inner_margin(egui::Margin { left: 8, right: 8, top: 3, bottom: 0 })
                     .show(&mut pane_ui, |ui| {
                         ui.set_min_width(ui.available_width());
-                        self.strip_row(ui, k, &shown, plan.splittable, &mut actions);
+                        // The **WINDOWS** menu's clock, out for the call and
+                        // back after — see the single-pane strip above.
+                        #[cfg(not(target_arch = "wasm32"))]
+                        let mut since = self.windows_popup_since.take();
+                        self.strip_row(
+                            ui,
+                            k,
+                            &shown,
+                            plan.splittable,
+                            &mut actions,
+                            #[cfg(not(target_arch = "wasm32"))]
+                            &mut since,
+                        );
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            self.windows_popup_since = since;
+                        }
                     });
                 self.tabs[ti].app.set_radio_roster(roster.clone());
                 eframe::App::ui(&mut self.tabs[ti].app, &mut pane_ui, frame);
@@ -2067,6 +2264,35 @@ mod split_tests {
             "a strip is widening the page again (fork discussion #16):\n  {}",
             worst.join("\n  ")
         );
+    }
+
+    /// The **WINDOWS** menu names every module, and each row offers both answers
+    /// — so a window that is out can be brought back from the strip, not only
+    /// sent out.
+    ///
+    /// The list and the names are one function, so a module added to the registry
+    /// gets a row whether or not anyone remembered to add it here; what this pins
+    /// is that the two halves cannot come apart, and that SP1 and SP2 are called
+    /// by the names an SDRuno operator is looking for.
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn the_windows_menu_offers_every_module_by_name() {
+        use sdroxide_types::DetachableModule as M;
+        let names: Vec<&str> = M::ALL.iter().map(|m| module_window_name(*m)).collect();
+        assert_eq!(names.len(), M::ALL.len(), "one row per module");
+        for m in M::ALL {
+            let name = module_window_name(m);
+            assert!(!name.is_empty(), "{:?} has no name in the menu", m.label());
+        }
+        // The two an SDRuno operator looks for are called SP1 and SP2, and the
+        // second says so plainly rather than "Panadapter 2".
+        assert!(module_window_name(M::Panadapter).contains("SP1"));
+        assert!(module_window_name(M::AuxPanadapter).contains("SP2"));
+        // And no two rows are the same control.
+        let mut sorted = names.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), names.len(), "two modules share a menu row");
     }
 
     /// The width of the widest **page container** in a frame's output.

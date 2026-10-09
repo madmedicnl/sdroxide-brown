@@ -69,10 +69,9 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
 3. ~~**AUX SP (SP2)** — a second panadapter window.~~ **BUILT (2026-10-09)** —
    `DetachableModule::AuxPanadapter`, its own app-id, its own window, its own
    SP1 toolbar. See the note below.
-4. **The MAIN window's buttons** — SDRuno's MAIN has SP1/SP2/RX/SCANNER/REC/MEM
-   buttons. Our shell's radio-tab strip is the MAIN; consider a small **Windows**
-   menu that opens each window (SP1/SP2/RX/SCANNER/RECORDER/MEMORIES), mirroring
-   Settings → UI → Undocked but on the strip. **Next.**
+4. ~~**The MAIN window's buttons.**~~ **BUILT (2026-10-09)** — the **🪟 WINDOWS**
+   chip on the radio-tab strip: the four module windows by their SDRuno names,
+   each a toggle, plus **DOCK ALL WINDOWS**. See the note below.
 5. **The rest of the tool windows** — extract each body to `_body` and call
    `self.tool_window(...)`: schedule, logbook, spots, awards, grid tracker,
    public SDRs, recordings, SWL log, memories, voice keyer, and the per-mode
@@ -174,6 +173,35 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
   their window geometry. `detached_slots` reads the field at any length now, and
   the tests are in `crates/sdroxide-config/tests/detached_slots_survive_a_module_count.rs`
   (through the real loader) and `ui::tests::the_detached_list_loads_at_any_length`.
+
+## The MAIN window's buttons as built (2026-10-09) — WINDOWS on the strip
+
+- **On the radio-tab strip, not the top bar.** That was tried first and the strip
+  layout tests refused it: the System box's width is priced from its two chip
+  rows and the top row is the wider of the two (435 pt against 427), so an eighth
+  chip there grew the box by ~85 pt and the desktop strip needed **three** rows
+  instead of two. The radio-tab strip is also the better home on the handover's
+  own reading — it *is* the MAIN window, and every other control on it is about
+  the windows and the radio together.
+- **The chip** (`MultiApp::windows_button`) is lit while any module is out of the
+  main window, and opens one row per module named as an SDRuno operator looks for
+  them — **SP1 — the spectrum**, **SP2 (AUX) — a second spectrum**, **Operating
+  panel**, **RX control** — each with a **DOCKED** / **IN ITS OWN WINDOW**
+  toggle, and **DOCK ALL WINDOWS** when any is out. The toggle closes the menu on
+  **DOCK ALL** rather than leaving a list of rows that are all docked.
+- **It acts on the focused radio**, and reads its settings rather than the app
+  mutably: the strip is drawn from `&MultiApp` and a split pane must not undock
+  the radio it is not looking at. So the change goes through
+  `StripAction::{SetDetached, DockAll}` and lands in
+  `SdroxideApp::{set_module_detached, dock_all_windows}` — the same two writers
+  Settings → UI uses, so the two cannot drift in whether they persist.
+- **The browser draws no chip.** It has one window and keeps every module in it,
+  so there is nothing to arrange; the strip's calls are `#[cfg]`-gated to keep
+  that honest rather than leaving a dead control.
+- **Test** `the_windows_menu_offers_every_module_by_name`: one row per module, no
+  two rows the same, and SP1/SP2 called by those names.
+- The module names live in one function (`module_window_name`), so a module added
+  to the registry gets a row whether or not anyone remembered.
 
 ## House notes for whoever picks this up
 
