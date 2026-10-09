@@ -50,14 +50,17 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
 
 ## TODO (in order)
 
-1. **The band pad — IN PROGRESS.** SDRuno's RX control has a **keypad** on the
-   right: digits 0–9 laid out calculator-style, each also naming a band
-   (7≈2200m, 8≈630m, 9≈160m, 4≈80m, 5≈60m, 6≈40m, 1≈30m, 2≈20m, 3≈17m, 0≈15m),
-   with **Bands** and **MHz** buttons above and **Clear**/**Enter** below. Two
-   jobs: pick a band, or type a frequency (MHz mode). Goal: replace the sprawling
-   band chip list in the console with this pad. Decide whether the pad lives
-   **only in the console** or replaces the band rows in `band_mode_menu`
-   everywhere (the popup, the dock, the fill).
+1. **The band pad — the aligned grid is in (2026-10-09); the SDRuno keypad is
+   next.** `band_chip` is now a free function and `band_pad` lays the chips out
+   in **fixed columns where there is room** and a wrapped row where there is not
+   (a plain `Grid` never shrinks, so it overflowed the narrow dock). What is
+   still missing is SDRuno's actual **keypad**: digits 0–9 laid out
+   calculator-style, each also naming a band (7,8,9 / 4,5,6 / 1,2,3 / 0, with
+   **Bands** and **MHz** above and **Clear**/**Enter** below), the digits tuning
+   to a band and, in MHz mode, entering a frequency. It is wider than the dock,
+   so it belongs **in the console** (its own widget, not the shared
+   `band_mode_menu`). Decide then whether to keep the full band list beside it or
+   move it behind a **MORE BANDS ▾** dropdown like the digital modes.
 2. **MAIN SP — switch model here.** Give the undocked **panadapter** window an
    SDRuno-style **toolbar**: the frequency readout, SP controls, and the toggles
    SP1 keeps. This is where the operator expects a different model to take over.
