@@ -1286,23 +1286,9 @@ impl eframe::App for SdroxideApp {
         // Any stop control — STOP QSO, STOP TX, a bound Abort TX — disarms
         // auto mode. An unattended run must never be left sequencing after the
         // operator has told the radio to stop, whatever route they used.
-        if self.auto_mode
-            && cmds.iter().any(|c| matches!(c, Command::DigiStopQso | Command::DigiAbortTx))
-        {
-            self.disarm_auto("auto stopped: a stop control was used".into());
-        }
-
-        for c in cmds {
-            // Marked here rather than at the button, because the settings panel
-            // holds borrows of `self` while it draws and cannot take a mutable
-            // one. This is the point where the command is definitely going out,
-            // which is the honest moment to call the check "in flight" anyway.
-            if let Command::TestLogin(t) = &c {
-                self.login_tests_pending.insert(*t);
-                self.login_tests.remove(t);
-            }
-            self.ctrl.send(c);
-        }
+        // (Also inside `dispatch_commands`, so a module's own window cannot
+        // route around it.)
+        self.dispatch_commands(cmds);
 
         // Data-driven repaint: wake at the next expected spectrum frame while
         // something is streaming, and idle-poll when nothing is. User input
@@ -1734,6 +1720,33 @@ impl SdroxideApp {
                     }
                 });
             });
+    }
+
+    /// Send a frame's commands, with the bookkeeping that must ride every route
+    /// a command can leave by: a stop control disarms auto mode, and a login
+    /// Test is marked in flight the moment it goes out. Split out so an
+    /// undocked window's own commands are dispatched exactly as the main
+    /// window's — there is one place that decides, not two that can drift.
+    fn dispatch_commands(&mut self, cmds: Vec<Command>) {
+        // Any stop control — STOP QSO, STOP TX, a bound Abort TX — disarms auto
+        // mode. An unattended run must never be left sequencing after the
+        // operator has told the radio to stop, whatever route they used.
+        if self.auto_mode
+            && cmds.iter().any(|c| matches!(c, Command::DigiStopQso | Command::DigiAbortTx))
+        {
+            self.disarm_auto("auto stopped: a stop control was used".into());
+        }
+        for c in cmds {
+            // Marked here rather than at the button, because the settings panel
+            // holds borrows of `self` while it draws and cannot take a mutable
+            // one. This is the point where the command is definitely going out,
+            // which is the honest moment to call the check "in flight" anyway.
+            if let Command::TestLogin(t) = &c {
+                self.login_tests_pending.insert(*t);
+                self.login_tests.remove(t);
+            }
+            self.ctrl.send(c);
+        }
     }
 
     /// Whether the focused radio should draw its panadapter into its own window
