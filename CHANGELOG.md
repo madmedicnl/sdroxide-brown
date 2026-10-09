@@ -13,6 +13,28 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [2.0.4_brown] - 2026-10-09
+
+Tool-window fixes, console fixes, and two new start-up banners.
+
+### Fixed
+
+- Tool windows (BANDS, SPOTS, SWL LOG, LOGBOOK, SATELLITE …) no longer open as a tall empty box with their content pushed off the bottom.
+- The console's band and mode buttons no longer run off the edge of the window.
+
+### Added
+
+- A banner when a newer release exists — releases only (Settings → UI → Updates turns it off).
+- A warning when a second sdroxide is running on this machine, which may be reading the same radio.
+
+### Changed
+
+- A tool window's OS-window button is a small icon in its title bar, not a chip in the body.
+- AUX SP is an independent second spectrum now (its own zoom and pan), not a mirror of SP1.
+- The Mode and CB-plan rows are laid out in aligned columns.
+
+`PROTO_VERSION` 198, unchanged — no wire change.
+
 ## [2.0.3_brown] - 2026-10-09
 
 **The undocked workspace.** The panadapter, the operating panel and the

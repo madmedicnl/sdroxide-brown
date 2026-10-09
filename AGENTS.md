@@ -2,7 +2,7 @@
 
 > **Fresh session, 2026-10-09. Start here.** `main` is green, the whole open
 > queue is merged (#22 SSTV KEEP DIAL, #23 the browser `remember` cookie, #24
-> the ADS-B noise floor), and `2.0.3_brown` is cut and installed.
+> the ADS-B noise floor), and `2.0.4_brown` is cut and installed.
 > `PROTO_VERSION` is **198** (the Calm theme moved `UiTheme::Default`'s
 > discriminant, a `ClientScreen` wire change).
 >
@@ -4364,14 +4364,19 @@ note and were rendered from a separate HTML source; leave them alone.)
    fixed** (see "The Windows installer is its own product"), so a new version
    is what an upgrade keys on — re-tagging the same version does not.
 **The entry's shape: `### Fixed` / `### Added` / `### Changed` / `### Not
-proven`.** The 1.9.20 and 1.9.21 entries were written as thematic prose instead —
-that style came in with those two and is not this changelog's, so it read as a
-revert. And the last heading is **`Not proven`, never `Not fixed`**: everything
-in a build has passed its tests or it would not be in the build, so *"not fixed"*
-asserts a breakage that is usually not there. A feature that is present,
-tested and simply untried on the air is **not proven**; a bug that was reported
-and never reproduced here is **not proven** too. The operator's framing, and it
-is the right one: *"we are not shipping something knowingly broken."*
+proven`.** **Keep it SHORT — one line per change.** The operator's standing
+order (2026-10-09): *"use the short release-notes style … I hate those long reads
+before you get to assets."* On GitHub the notes sit **above** the download
+assets, so a wall of prose buries the thing a visitor came for: a heading and a
+list of one-line bullets, then stop. The 1.9.20 and 1.9.21 entries were written
+as thematic prose instead — that style came in with those two and is not this
+changelog's, so it read as a revert. And the last heading is **`Not proven`,
+never `Not fixed`**: everything in a build has passed its tests or it would not
+be in the build, so *"not fixed"* asserts a breakage that is usually not there. A
+feature that is present, tested and simply untried on the air is **not proven**;
+a bug that was reported and never reproduced here is **not proven** too. The
+operator's framing, and it is the right one: *"we are not shipping something
+knowingly broken."*
 
 1b. **Write the changelog entry** — in `CHANGELOG.md`, rename `## [Unreleased]`
    to `## [X.Y.Z_brown] - <date>` (the date the tag will carry) and add a fresh
