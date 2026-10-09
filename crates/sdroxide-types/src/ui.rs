@@ -915,7 +915,17 @@ pub struct UiSettings {
     /// in-window, so the flags are ignored there. Machine-local, and
     /// deliberately not on the wire (`ClientScreen`): where a window sits is a
     /// property of this screen, as [`Self::solar3d_window`]'s note says.
-    #[serde(default)]
+    ///
+    /// Read through [`detached_slots`], not as a fixed array, **because a module
+    /// added to the enum makes this array longer**: a config written by a build
+    /// with three slots carries a three-element list, and a derived array
+    /// deserializer would reject the whole file over it — and
+    /// `Settings::load` *quarantines* a file it cannot parse and hands back
+    /// defaults, so adding AUX SP that way would have reset every operator's
+    /// theme, fonts and layout along with their window geometry. A short list
+    /// leaves the modules it does not reach docked, which is what a fresh slot
+    /// wants anyway.
+    #[serde(default = "default_detached", deserialize_with = "detached_slots")]
     pub detached: [DetachedState; DetachableModule::COUNT],
     /// Legacy — the panadapter's undocked flag from before [`Self::detached`]
     /// existed, read once at load by [`Self::migrate_detached`] and never
@@ -978,6 +988,39 @@ where
     let mut out = default_bandplan_colors();
     for (slot, c) in out.iter_mut().zip(list) {
         *slot = c;
+    }
+    Ok(out)
+}
+
+/// Default for [`UiSettings::detached`] — every module docked, no windows
+/// placed yet. The same state a build starts in, so a slot a config does not
+/// reach needs nothing else.
+fn default_detached() -> [DetachedState; DetachableModule::COUNT] {
+    [DetachedState::default(); DetachableModule::COUNT]
+}
+
+/// Read [`UiSettings::detached`] as a list of any length, so a config written
+/// before a module was added — or by a build that has one more — still loads.
+///
+/// This is the one field that has to survive the registry growing, and the cost
+/// of not doing it is not a lost setting but the whole file:
+/// `sdroxide_config::Settings::load` quarantines a `config.toml` it cannot parse
+/// and answers `Settings::default()`, so a single over-long (or short) `detached`
+/// list would take the operator's theme, fonts, layout and the rest of their
+/// configuration with it. A short list leaves the modules it does not reach
+/// docked; a long one has its tail ignored, the way a newer build's extra module
+/// is.
+///
+/// Safe to leave on the wire-adjacent types because `UiSettings` is local
+/// `config.toml` and is never postcard-encoded — see the field's note.
+fn detached_slots<'de, D>(d: D) -> Result<[DetachedState; DetachableModule::COUNT], D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let list = Vec::<DetachedState>::deserialize(d)?;
+    let mut out = default_detached();
+    for (slot, state) in out.iter_mut().zip(list) {
+        *slot = state;
     }
     Ok(out)
 }
@@ -1466,6 +1509,49 @@ pub fn set_force_swl(on: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A `detached` list of **any** length loads, and a module the list does
+    /// not reach simply starts docked.
+    ///
+    /// This is the field the registry grows through: adding AUX SP makes the
+    /// array longer, and every config written before it carries a shorter list.
+    /// Without the tolerant reader the whole `[ui]` table — and with it the
+    /// theme, the fonts and the layout, because `Settings::load` quarantines a
+    /// file it cannot parse — would go over one list length.
+    #[test]
+    fn the_detached_list_loads_at_any_length() {
+        let one = |n: usize| {
+            let list: Vec<String> = (0..n).map(|_| r#"{"detached":true}"#.to_string()).collect();
+            let json = format!(r#"{{"detached":[{}]}}"#, list.join(","));
+            serde_json::from_str::<UiSettings>(&json).expect("a short list")
+        };
+
+        let short = one(1);
+        assert!(short.detached[0].detached, "the slot it does carry is kept");
+        for m in &DetachableModule::ALL[1..] {
+            assert!(
+                !short.detached[m.index()].detached,
+                "{:?} a list that does not reach it starts docked",
+                m.label()
+            );
+        }
+
+        // A longer list — a build with a module this one has not heard of — has
+        // its tail ignored rather than failing the file.
+        let long = one(DetachableModule::COUNT + 2);
+        for m in DetachableModule::ALL {
+            assert!(long.detached[m.index()].detached, "{:?} kept", m.label());
+        }
+
+        // And the reader keeps the operator's own windows, geometry included,
+        // rather than defaulting the slot.
+        let kept: UiSettings = serde_json::from_str(
+            r#"{"detached":[{"detached":true,"window":{"size":[800.0,600.0],"pos":[10.0,20.0]}}]}"#,
+        )
+        .expect("a placed window");
+        let w = kept.detached[0].window.expect("the window it carried");
+        assert_eq!((w.size, w.pos), ([800.0, 600.0], Some([10.0, 20.0])));
+    }
 
     /// A layout value this build has never heard of costs that field, not the
     /// whole `config.toml`. `Settings::load` quarantines the entire file on a
