@@ -15449,6 +15449,15 @@ for scheduled recordings, **REPLAY** for the last two minutes of audio, **SIG
 ID** (see [§10.7](#107-signal-identification)) for what is on the dial, and the
 **Tone** row for bass, mid and treble shelves on the demodulated audio.
 
+**LOUDNESS**, at the end of that row and in the RX strip's **EQ** popup, lifts
+the bass (up to +12 dB, around 120 Hz) and a little treble (up to +6 dB, around
+6 kHz) as the volume goes down, because the ear loses the ends of the spectrum
+first at low level. It follows the volume knob as you turn it, works with the
+tone shelves on or off, is flat at full volume, and is never more than the
+volume it compensates — so it cannot make the speaker play louder than full
+volume would, nor clip it. Narrow modes (SSB, CW) carry little treble, so there
+it is mostly a bass lift.
+
 ### 10.7 Signal identification
 
 **SIG ID**, beside **JOBS** in the SWL LOG window, opens a guide to what is on the

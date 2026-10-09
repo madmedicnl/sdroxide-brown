@@ -605,6 +605,13 @@ pub struct RadioState {
     /// position.
     #[serde(default)]
     pub dab: crate::DabSettings,
+    /// LOUDNESS on the receive audio: a bass and treble lift that grows as the
+    /// volume goes down, so a quiet speaker still sounds full — the ear loses
+    /// the ends of the spectrum first at low level. Independent of
+    /// [`Self::rx_tone`]'s own switch, and a no-op at full volume. Appended
+    /// last: postcard numbers fields by position.
+    #[serde(default)]
+    pub rx_loudness: bool,
 }
 
 impl Default for RadioState {
@@ -653,6 +660,7 @@ impl Default for RadioState {
             vdl2: crate::Vdl2Settings::default(),
             ais: crate::AisSettings::default(),
             dab: crate::DabSettings::default(),
+            rx_loudness: false,
             rx_antenna: false,
             // Available until the engine says otherwise: it is the one that
             // knows, and it says so in the first state it sends.

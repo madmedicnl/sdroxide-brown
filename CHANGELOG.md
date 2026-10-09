@@ -13,6 +13,15 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+- **LOUDNESS in the receive EQ.** The RX strip's **EQ** popup and the SWL LOG's
+  Tone row gain a **LOUDNESS** switch: a bass lift (up to +12 dB around 120 Hz)
+  and a smaller treble lift (up to +6 dB around 6 kHz) that grow as the volume
+  goes down, so a quiet speaker still sounds full. It follows the volume knob,
+  works with the tone shelves on or off, is flat at full volume, and never
+  lifts by more than the volume took away — it cannot play louder than full
+  volume, nor clip. `PROTO_VERSION` 197 → 198 (an appended `RadioState` field
+  and command), so client and server must both be updated. *Not proven:* tested
+  as DSP and over the wire, not yet listened to on the air.
 - **eQSL accounts with more than one QTH profile work.** eQSL identifies an
   account by callsign *and* QTH nickname, so a multi-profile account refused an
   upload that did not name one — and answered "No such Username/Password found"

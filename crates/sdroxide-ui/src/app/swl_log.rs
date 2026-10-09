@@ -527,6 +527,7 @@ impl SdroxideApp {
                         self.state.rx_tone = tone.clone();
                         cmds.push(Command::SetRxTone(Box::new(tone)));
                     }
+                    self.loudness_toggle(ui, cmds);
                 });
                 if self.swl_edit.is_some() {
                     ui.add_space(4.0);

@@ -1251,6 +1251,13 @@ pub enum Command {
     /// Appended last, for the usual reason — postcard numbers variants by
     /// position.
     SetDabConfig(crate::DabSettings),
+
+    /// Turn LOUDNESS on the receive audio on or off — see
+    /// [`crate::RadioState::rx_loudness`].
+    ///
+    /// Appended last, for the usual reason — postcard numbers variants by
+    /// position.
+    SetRxLoudness(bool),
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.

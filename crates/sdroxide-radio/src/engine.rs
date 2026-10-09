@@ -2996,6 +2996,10 @@ struct Engine {
     /// kept alive across blocks; reconfigured only when the settings change.
     rx_eq: ParametricEq,
     rx_eq_cfg: sdroxide_types::TxEqState,
+    /// LOUDNESS: a second EQ whose bass/treble lift follows the volume
+    /// (`sdroxide_dsp::loudness_curve`), and the curve it was last tuned to.
+    rx_loud: ParametricEq,
+    rx_loud_cfg: sdroxide_types::TxEqState,
     /// Right channel of the main chain, non-empty only while WFM stereo is
     /// decoding and the sub receiver is off — or while the binaural widener
     /// below is placing the passband across the two ears.
@@ -4371,6 +4375,8 @@ fn engine_thread(
         replay_buf: Vec::new(),
         rx_eq: ParametricEq::new(),
         rx_eq_cfg: sdroxide_types::TxEqState::default(),
+        rx_loud: ParametricEq::new(),
+        rx_loud_cfg: sdroxide_types::TxEqState::default(),
         binaural: None,
         bin_left: Vec::new(),
         speech_duck: 1.0,
@@ -5640,6 +5646,21 @@ impl Engine {
         }
         if self.state.rx_tone.enabled {
             self.rx_eq.process(&mut self.main_play);
+        }
+        // LOUDNESS after the tone: a lift that grows as the volume goes down,
+        // read off the knob each block. Flat at full volume, and never more
+        // than the attenuation it compensates, so it cannot clip.
+        if self.state.rx_loudness {
+            let rx0 = &self.state.rx[0];
+            let vol = if rx0.muted { 0.0 } else { rx0.volume };
+            let curve = sdroxide_dsp::loudness_curve(vol, self.audio_out_rate);
+            if curve != self.rx_loud_cfg {
+                self.rx_loud.configure(&curve, self.audio_out_rate);
+                self.rx_loud_cfg = curve;
+            }
+            if self.rx_loud_cfg.enabled {
+                self.rx_loud.process(&mut self.main_play);
+            }
         }
         // Feed the time-shift window from the live audio, then play from it
         // instead of from live while replay is on. The recorder keeps the live
@@ -10218,6 +10239,10 @@ impl Engine {
             }
             SetRxTone(tone) => {
                 self.state.rx_tone = *tone;
+                self.emit_state();
+            }
+            SetRxLoudness(on) => {
+                self.state.rx_loudness = on;
                 self.emit_state();
             }
             SetReplay(on) => {

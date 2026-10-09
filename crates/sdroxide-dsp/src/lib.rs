@@ -76,7 +76,7 @@ pub use demod::{
 };
 pub use dfnr::DeepFilterNr;
 pub use diversity::{Diversity, DiversityMode};
-pub use eq::ParametricEq;
+pub use eq::{ParametricEq, loudness_curve};
 pub use fec::{ConvCode, viterbi_soft};
 pub use fir::{ComplexFir, RealFir, bandpass_taps};
 pub use fsk441::{

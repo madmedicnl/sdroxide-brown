@@ -3281,7 +3281,8 @@ impl SdroxideApp {
                 // wants a tone control the ham speech chain never needed, and
                 // the ear reaches for it beside MUTE.
                 let tone = &self.state.rx_tone;
-                let hover = if tone.enabled {
+                let loud = self.state.rx_loudness;
+                let mut hover = if tone.enabled {
                     format!(
                         "Tone: bass {:+.0} dB, mid {:+.0} dB, treble {:+.0} dB",
                         tone.low.gain_db, tone.mid.gain_db, tone.high.gain_db
@@ -3289,7 +3290,10 @@ impl SdroxideApp {
                 } else {
                     "Tone — a three-band equalizer on the receive audio. Click to open".to_string()
                 };
-                let resp = crate::chrome::chip(ui, tone.enabled, "EQ").on_hover_text(hover);
+                if loud {
+                    hover.push_str("\nLOUDNESS on");
+                }
+                let resp = crate::chrome::chip(ui, tone.enabled || loud, "EQ").on_hover_text(hover);
                 self.eq_popup(ui, cmds, &resp);
             }
             RxChip::Rec => {
@@ -3747,6 +3751,21 @@ impl SdroxideApp {
         if tone != before {
             self.state.rx_tone = tone.clone();
             cmds.push(Command::SetRxTone(Box::new(tone)));
+        }
+        self.loudness_toggle(ui, cmds);
+    }
+
+    /// The LOUDNESS switch, shared by the EQ popup and the SWL LOG's Tone row.
+    pub(crate) fn loudness_toggle(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        let mut on = self.state.rx_loudness;
+        crate::chrome::checkbox(ui, &mut on, "LOUDNESS").on_hover_text(
+            "Lifts the bass (and a little treble) as you turn the volume down, so a quiet \
+             speaker still sounds full. Works with or without the tone above; does \
+             nothing at full volume and never plays louder than full volume would.",
+        );
+        if on != self.state.rx_loudness {
+            self.state.rx_loudness = on;
+            cmds.push(Command::SetRxLoudness(on));
         }
     }
 

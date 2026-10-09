@@ -1739,7 +1739,12 @@ use sdroxide_types::{
 /// one (upstream issue #647). `NetworkConfig` rides `Command::SetNetworkConfig`
 /// whole, so this is the same appended-field break as every version before it.
 /// A downstream (fork) change, appended last.
-pub const PROTO_VERSION: u16 = 197;
+///
+/// v198: `RadioState` gains `rx_loudness` (bool) on its tail and `Command`
+/// gains `SetRxLoudness(bool)` last — LOUDNESS in the receive EQ, a bass and
+/// treble lift that follows the volume. `RadioState` rides whole, so this is
+/// the same appended-field break as v195. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 198;
 const VERSION_BYTE: u8 = 0x13;
 
 #[derive(Debug, thiserror::Error)]
@@ -3035,6 +3040,18 @@ mod tests {
         let field = ClientMsg::Command(Command::SetDigiContest(ContestMode::EuVhf));
         assert_ne!(encode(&whole).unwrap(), encode(&field).unwrap());
         assert_eq!(decode::<ClientMsg>(&encode(&whole).unwrap()).unwrap(), whole);
+    }
+
+    /// LOUDNESS crosses the wire both ways: the command, and the state's tail
+    /// field that tells a remote client the switch's real position.
+    #[test]
+    fn roundtrip_rx_loudness() {
+        for on in [false, true] {
+            let m = ClientMsg::Command(Command::SetRxLoudness(on));
+            assert_eq!(decode::<ClientMsg>(&encode(&m).unwrap()).unwrap(), m);
+            let st = ServerMsg::State(RadioState { rx_loudness: on, ..RadioState::default() });
+            assert_eq!(decode::<ServerMsg>(&encode(&st).unwrap()).unwrap(), st);
+        }
     }
 
     /// The per-mode transmit-audio level, over the wire in both directions
