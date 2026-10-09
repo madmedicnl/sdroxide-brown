@@ -5478,6 +5478,10 @@ impl Engine {
     /// forked — see [`Engine::process_block`].
     fn finish_audio(&mut self, iq: &[Complex32]) {
         let want_rec = self.recorder.is_some();
+        // Set while a voice-keyer preview has the speakers: that audio never
+        // passed the AF knob, so LOUDNESS (which lifts by what the knob took
+        // away) must leave it alone or it would lift full-level audio.
+        let mut unscaled_preview = false;
         // A radio listening to its transceiver while an attached receiver
         // paints the picture. The main chain still runs — the high-resolution
         // channel analyzer reads its DDC output, and the sub receiver is a
@@ -5545,6 +5549,7 @@ impl Engine {
             // lane has a length to be taken at. See `take_dab_audio_into`.
             let block = self.main_play.len().max(speaker_block(out_rate));
             if self.take_preview_audio(out_rate, block) {
+                unscaled_preview = true;
                 self.main_play.clear();
                 self.main_play.extend_from_slice(&self.voice_prev_out);
                 self.main_play_r.clear();
@@ -5650,7 +5655,7 @@ impl Engine {
         // LOUDNESS after the tone: a lift that grows as the volume goes down,
         // read off the knob each block. Flat at full volume, and never more
         // than the attenuation it compensates, so it cannot clip.
-        if self.state.rx_loudness {
+        if self.state.rx_loudness && !unscaled_preview {
             let rx0 = &self.state.rx[0];
             let vol = if rx0.muted { 0.0 } else { rx0.volume };
             let curve = sdroxide_dsp::loudness_curve(vol, self.audio_out_rate);
@@ -10242,6 +10247,9 @@ impl Engine {
                 self.emit_state();
             }
             SetRxLoudness(on) => {
+                // Start from silence: history left from the last time it ran
+                // would otherwise ring into the first block after re-enabling.
+                self.rx_loud.reset();
                 self.state.rx_loudness = on;
                 self.emit_state();
             }
