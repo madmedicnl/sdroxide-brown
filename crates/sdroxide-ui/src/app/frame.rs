@@ -266,6 +266,31 @@ fn detached_status_line(mode: Mode, meters: Option<&sdroxide_types::Meters>) -> 
     }
 }
 
+/// The plain face a main window shows when every part of the radio is in its own
+/// window **and** the controls window already carries the band selector — so the
+/// selector is not drawn twice, and the centre is never a black hole.
+#[cfg(not(target_arch = "wasm32"))]
+fn empty_centre(ui: &egui::Ui) {
+    let area = ui.max_rect();
+    let p = ui.painter_at(area);
+    p.rect_filled(area, 0.0, crate::theme::BG_DEEP());
+    let (ink, dim) = (crate::theme::gray(105), crate::theme::gray(85));
+    let name = p.layout_no_wrap(
+        sdroxide_version::FLAVOR.to_owned(),
+        egui::FontId::proportional(22.0),
+        ink,
+    );
+    let hint = p.layout_no_wrap(
+        "every module is in its own window".to_owned(),
+        egui::FontId::proportional(13.0),
+        dim,
+    );
+    let (name_w, name_h, hint_w) = (name.size().x, name.size().y, hint.size().x);
+    let top = area.center().y - (name_h + 8.0 + hint.size().y) / 2.0;
+    p.galley(egui::pos2(area.center().x - name_w / 2.0, top), name, ink);
+    p.galley(egui::pos2(area.center().x - hint_w / 2.0, top + name_h + 8.0), hint, dim);
+}
+
 /// The DETACH/DOCK chip a tool window wears at the top-right of its body. On the
 /// browser it is absent — there is no second window to move to.
 fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
@@ -323,7 +348,7 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
     let (name, default_size) = match module {
         M::Panadapter => ("panadapter", [960.0, 540.0]),
         M::Panel => ("panel", [520.0, 700.0]),
-        M::Controls => ("controls", [1280.0, 150.0]),
+        M::Controls => ("controls", [1280.0, 640.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
@@ -888,9 +913,17 @@ impl eframe::App for SdroxideApp {
             }
         } else if center_empty {
             // Both the panadapter and the panel are in their own windows, so
-            // there is nothing of the radio left to draw here. Fill the space
-            // with the band/mode selector rather than a black hole (the
-            // operator's screenshot of an all-black centre).
+            // there is nothing of the radio left to draw here. Normally the
+            // band/mode selector fills it … but when the **controls** window is
+            // up too it already carries the selector, so filling again would
+            // draw it twice — show a plain face instead, never a black hole.
+            #[cfg(not(target_arch = "wasm32"))]
+            if self.controls_detached() {
+                empty_centre(ui);
+            } else {
+                self.band_menu_fill(ui, &mut cmds);
+            }
+            #[cfg(target_arch = "wasm32")]
             self.band_menu_fill(ui, &mut cmds);
         } else if cur_mode.has_bottom_panel() {
             // Remember the voice-mode view once, so leaving FT8 can restore it
@@ -1761,24 +1794,31 @@ impl SdroxideApp {
             }
             M::Controls => {
                 let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    // The strip lays itself out for *this* window's size, not
-                    // the main window's, so publish the tier this window would
-                    // have and put the main one back afterwards. Safe because
-                    // the shell draws these windows after the tabs, and the
-                    // next frame republishes the main tier at its start.
                     let ictx = ui.ctx().clone();
                     let prev = crate::layout::tier(&ictx);
-                    crate::layout::set_tier(
-                        &ictx,
-                        crate::layout::tier_for(ui.max_rect().size(), self.ui_settings.layout),
-                    );
+                    // The console is **desktop-shaped whatever its own height**:
+                    // the compact strips are for a phone, and a control window
+                    // that flipped to one the moment it opened was the first
+                    // thing the operator noticed. Width still decides how the
+                    // strip's rows pack.
+                    crate::layout::set_tier(&ictx, crate::layout::Tier::Desktop);
                     egui::Frame::new()
                         .fill(crate::theme::BG_DEEP())
                         .inner_margin(egui::Margin::symmetric(8, 6))
                         .show(ui, |ui| {
+                            // The strip on top, then the band/mode selector —
+                            // the operator's "controls and bands in one window",
+                            // SDRuno's RX control with the band pad beneath it.
                             crate::chrome::angled_frame(ui, crate::theme::PINK(), |ui| {
                                 self.top_bar(ui, &mut cmds);
                             });
+                            ui.separator();
+                            egui::ScrollArea::vertical()
+                                .auto_shrink([false, false])
+                                .id_salt("controls-band-scroll")
+                                .show(ui, |ui| {
+                                    self.band_menu_body(ui, &mut cmds);
+                                });
                         });
                     crate::layout::set_tier(&ictx, prev);
                 });

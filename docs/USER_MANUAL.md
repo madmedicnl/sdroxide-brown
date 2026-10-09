@@ -416,9 +416,13 @@ The **OPERATE** tab's rows:
   reaches for, on their own row above the full list so they are one click rather
   than a hunt through the digital modes. `FM` here is **NFM** (narrow); the
   broadcast band's own button comes up **WFM** (see below).
-- **MODE:** `LSB USB CW AM SAM C-QUAM NFM WFM DRM HD DIGU DIGL DSB ISB SPEC`.
-- **DIGITAL:** `FT8 FT4 FT2 JT65 JT9 FST4 MSK144 FSK441 Q65 UVPACKET JTTY JS8 WSPR PSK RTTY RTTY-FM OLIVIA THOR FSQ ATCHAT HELL SSTV SSTV-FM NAVTEX DSC RIFP RFPAINT RADE PACKET PACKET-HF APRS ADS-B VDL2 AIS HFDL` (see
-  [Digital modes](#3-digital-modes)).
+- **MODE:** `LSB USB CW AM SAM C-QUAM NFM WFM DRM HD DIGU DIGL DSB ISB SPEC`, and
+  a **DIGITAL ▾** dropdown. The digital modes sit behind that one button rather
+  than across the face — three dozen chips was clutter, and a mode is picked
+  once, not scanned. It lists `FT8 FT4 FT2 JT65 JT9 FST4 MSK144 FSK441 Q65
+  UVPACKET JTTY JS8 WSPR PSK RTTY RTTY-FM OLIVIA THOR FSQ ATCHAT HELL SSTV
+  SSTV-FM NAVTEX DSC RIFP RFPAINT RADE PACKET PACKET-HF APRS ADS-B VDL2 AIS
+  HFDL` (see [Digital modes](#3-digital-modes)).
 
 On a desktop or tablet layout the popup carries a **DOCK** chip. It moves the
 selector into a resizable column beside the waterfall so it stays open while you
@@ -3474,7 +3478,7 @@ FT8, FT4, FT2, JS8 and WSPR are worked on **one dial frequency per band**, in
 lockstep with everyone else on it — a receiver a few kilohertz off is not
 off-centre, it is deaf — and each of them keeps its own. On 20 m that is 14.074,
 14.080, 14.084, 14.078 and 14.095600 respectively, so even arriving from the
-mode next door is a move. Picking one of them from the DIGITAL row therefore
+mode next door is a move. Picking one of them from the DIGITAL menu therefore
 tunes the dial to that band's agreed frequency, the same way APRS, ADS-B, VDL2
 and AIS already do ([3.12](#312-aprs), [3.13](#313-ads-b-aircraft-on-1090-mhz),
 [3.15](#315-vdl2-what-the-aircraft-are-saying),
@@ -3591,7 +3595,7 @@ The FT8/FT4/FT2 decode list has its own **CSV** and **ADIF** buttons instead
 
 **FT8**, **FT4** and **FT2** are the automatic modes: timeslot-based, with QSO
 sequencing, a world map, a transcript, and automatic logging. Choose one from
-the DIGITAL row ([3.1](#31-general-considerations)) and the operating panel
+the DIGITAL menu ([3.1](#31-general-considerations)) and the operating panel
 appears in the lower part of the window.
 
 Choosing one also puts the **dial** on that band's agreed frequency — 14.074,
@@ -4307,7 +4311,7 @@ setting.
 
 ### 3.3 PSK31 and RTTY
 
-Choose **PSK** or **RTTY** from the DIGITAL row of the Band/Mode popup. As with
+Choose **PSK** or **RTTY** from the DIGITAL menu of the Band/Mode popup. As with
 FT8/FT4/FT2 the panadapter switches to a zoomed sub-band waterfall, but the lower
 panel is a live **messaging area** instead of a QSO sequencer.
 
@@ -4385,7 +4389,7 @@ transmit. A label already in that mode leaves your own offset alone.
 **On VHF and UHF, use RTTY-FM instead.** Some national societies still send
 their weekly bulletin as RTTY on a 2 m FM channel, and that is not the same
 signal as RTTY on a sideband — the tone pair modulates an FM carrier rather than
-riding on one edge of a passband. **RTTY-FM** is on the DIGITAL row beside RTTY.
+riding on one edge of a passband. **RTTY-FM** is on the DIGITAL menu beside RTTY.
 
 Everything about the modem is the same: the same Baudot alphabet, the same
 2125/2295 Hz tone pair, the same shift, baud and **Reverse** controls and the
@@ -4407,7 +4411,7 @@ store it in a memory.
 
 ### 3.4 Olivia, THOR and FSQ
 
-Three more keyboard modes are on the DIGITAL row. **Olivia** and **THOR** reuse
+Three more keyboard modes are on the DIGITAL menu. **Olivia** and **THOR** reuse
 the same messaging panel as PSK/RTTY — including **SEND ON RETURN**
 ([3.3](#33-psk31-and-rtty)), which is worth a look in these modes in particular:
 at 32/1000 Olivia a typed correction takes long enough to send that it is better
@@ -4457,7 +4461,7 @@ signals.
 
 ### 3.5 Hellschreiber
 
-Choose **HELL** from the DIGITAL row for **Hellschreiber** — the oldest digital
+Choose **HELL** from the DIGITAL menu for **Hellschreiber** — the oldest digital
 mode still in regular amateur use, and the only one you read with your eyes
 instead of a decoder.
 
@@ -4565,7 +4569,7 @@ more here than the numbers do. Check them against a current plan for your region
 
 ### 3.6 SSTV
 
-Choose **SSTV** from the DIGITAL row to send and receive pictures. The panel has
+Choose **SSTV** from the DIGITAL menu to send and receive pictures. The panel has
 a received-image gallery on the left and a transmit compositor on the right, with
 a row of mode buttons across the top: **Auto**, **Scottie 1**, **Scottie 2**,
 **Scottie DX**, **Martin 1**, **Martin 2**, **Robot 72**, **Robot 36**,
@@ -4645,7 +4649,7 @@ radio whose SSB modulation source is already set to USB, or one with no data
 mode at all.
 
 **On VHF and UHF, use SSTV-FM instead.** Above 30 MHz a picture is normally sent
-on an FM carrier rather than a sideband, so the DIGITAL row has a second entry —
+on an FM carrier rather than a sideband, so the DIGITAL menu has a second entry —
 **SSTV-FM** — beside SSTV. Everything about the picture is the same: the same
 transmission modes, the same decoder, the same gallery and the same
 compositor. What differs is the radio underneath. SSTV puts a CAT-controlled rig
@@ -4797,7 +4801,7 @@ one of the two.
 
 ### 3.7 RIFP (Radio Image Framing Protocol)
 
-Choose **RIFP** from the DIGITAL row to send and receive pictures over
+Choose **RIFP** from the DIGITAL menu to send and receive pictures over
 [draft-dulaunoy-rifp-00](https://datatracker.ietf.org/doc/draft-dulaunoy-rifp/) —
 a packetised image protocol, and the only mode here that is *not* single
 sideband. Its `rifp-cpfsk-4800` radio profile keys the carrier itself:
@@ -4866,7 +4870,7 @@ extension.
 
 ### 3.8 Weather fax (WEFAX / radiofax)
 
-Choose **WEFAX** from the DIGITAL row to receive the weather charts the
+Choose **WEFAX** from the DIGITAL menu to receive the weather charts the
 meteorological services broadcast on short wave — surface analyses, wave
 heights, ice edges, satellite composites. It is **receive only**: these are
 commercial and military transmitters, and an amateur station has nothing to send
@@ -4994,7 +4998,7 @@ does not reappear on the next listing.
 
 ### 3.9 JS8
 
-Choose **JS8** from the DIGITAL row. JS8 uses FT8's waveform — the same eight
+Choose **JS8** from the DIGITAL menu. JS8 uses FT8's waveform — the same eight
 tones in the same 79-symbol frame — but carries a conversation instead of a
 contest exchange: free text, questions you can ask another station, and a
 periodic "I am here" heartbeat. Because it is slotted like FT8 it decodes far
@@ -5169,7 +5173,7 @@ decision for the operator.
 
 ### 3.10 RF Paint (spectrum painting)
 
-Choose **RFPAINT** from the DIGITAL row for **RF Paint** — a transmit-only mode
+Choose **RFPAINT** from the DIGITAL menu for **RF Paint** — a transmit-only mode
 that draws text and pictures **directly onto a receiver's waterfall**. There is no
 decoder and no message format: the picture *is* the signal. Anyone watching their
 panadapter on your frequency simply *sees* what you paint, so it is a fun way to
@@ -5209,7 +5213,7 @@ your own waterfall like any other signal.
 
 ### 3.11 WSPR (Weak Signal Propagation Reporter)
 
-Choose **WSPR** from the DIGITAL row. This is the one mode here that is not
+Choose **WSPR** from the DIGITAL menu. This is the one mode here that is not
 trying to make a contact. A WSPR transmission is 110.6 seconds of four-tone FSK
 six hertz wide, carrying a callsign, a four-character grid and a power level and
 nothing else, sent in a two-minute slot. It decodes about ten decibels below
@@ -5377,7 +5381,7 @@ both use the callsign and grid from the General tab.
 
 ### 3.12 APRS
 
-Choose **APRS** from the DIGITAL row. This is the Automatic Packet Reporting
+Choose **APRS** from the DIGITAL menu. This is the Automatic Packet Reporting
 System: 1200 baud AX.25 on one shared FM channel per region, carrying positions,
 weather, telemetry, objects and short messages. It is not a QSO mode — almost
 everything on the channel is a broadcast that nobody answers — so the panel is a
@@ -5813,7 +5817,7 @@ capture is 10 dB above it, no decoder will find anything in it.
 
 ### 3.14 NAVTEX
 
-Choose **NAVTEX** from the DIGITAL row. It is the maritime safety broadcast
+Choose **NAVTEX** from the DIGITAL menu. It is the maritime safety broadcast
 every coast station in the world sends: navigational and meteorological
 warnings, search-and-rescue bulletins, ice reports, pilot notices.
 
@@ -6285,7 +6289,7 @@ way at both ends agrees with itself.
 
 ### 3.17 AtCHAT NET
 
-Choose **ATCHAT** from the DIGITAL row. AtCHAT NET is a multi-station keyboard
+Choose **ATCHAT** from the DIGITAL menu. AtCHAT NET is a multi-station keyboard
 and file mode built out of nostalgia for the old packet-radio net: several
 stations share one channel, chat both openly and directly, and pass files and
 pictures around, all while the net itself works out who is in charge without
@@ -6391,7 +6395,7 @@ HFDL (High Frequency Data Link, ARINC 635) is the shortwave aircraft datalink: g
 
 ### 3.20 PI4 (Next Generation Beacon)
 
-Choose **PI4** from the DIGITAL row. Like WSPR this is not a QSO mode — a PI4
+Choose **PI4** from the DIGITAL menu. Like WSPR this is not a QSO mode — a PI4
 transmission carries a callsign (occasionally a status string instead) and
 nothing else — but unlike WSPR it is **receive only** here: this is a decoder
 for the "Next Generation Beacon" propagation-beacon network
@@ -6457,7 +6461,7 @@ it.
 
 ### 3.21 DSC (marine distress and calling)
 
-Choose **DSC** from the DIGITAL row. Digital Selective Calling is the marine
+Choose **DSC** from the DIGITAL menu. Digital Selective Calling is the marine
 system behind every GMDSS distress alert: a short digital burst that carries
 an identity and, on a distress call, what is wrong and where. It is the one
 marine emergency channel a listener can decode, and the reason this mode is
@@ -6509,7 +6513,7 @@ The tones and the baud are fixed by ITU-R M.493.
 
 ### 3.22 JT65 and JT9
 
-Choose **JT65** or **JT9** from the DIGITAL row. These are the two classic
+Choose **JT65** or **JT9** from the DIGITAL menu. These are the two classic
 weak-signal modes from the WSJT family: JT65 is the EME (moonbounce) mode,
 and JT9 is its narrower, slower sibling for the weakest signals on HF. Both
 carry a short message — a callsign, another callsign, and a locator or a
@@ -6549,7 +6553,7 @@ copies. The modes will gain a sequencer when it can be done properly.
 
 ### 3.23 FST4
 
-Choose **FST4** from the DIGITAL row. FST4 is the slow weak-signal mode of the
+Choose **FST4** from the DIGITAL menu. FST4 is the slow weak-signal mode of the
 same WSJT family, built for the paths where JT65 and FT8 run out: EME
 (moonbounce), troposcatter, and LF/MF propagation experiments. It is even
 slower than JT65 and digs correspondingly deeper.
@@ -6578,7 +6582,7 @@ decodes rather than sequences.
 
 ### 3.24 MSK144
 
-Choose **MSK144** from the DIGITAL row. MSK144 is the **meteor-scatter** mode:
+Choose **MSK144** from the DIGITAL menu. MSK144 is the **meteor-scatter** mode:
 it works by bouncing a signal off the brief, random ionised trail a meteor
 leaves in the upper atmosphere, which exists for a fraction of a second to a
 few seconds at a time. It is the standard way to work 6 m and 2 m "meteor
@@ -6608,7 +6612,7 @@ FST4. What the panel does is copy the pings that arrive.
 
 ### 3.25 Q65
 
-Choose **Q65** from the DIGITAL row. Q65 is the modern WSJT weak-signal mode:
+Choose **Q65** from the DIGITAL menu. Q65 is the modern WSJT weak-signal mode:
 a 65-tone signal built for the paths where FT8 and JT65 run out — EME
 (moonbounce), ionoscatter, rainscatter and troposcatter — and the mode WSJT-X
 recommends for 6 m and up. It is more sensitive than JT65 and, unlike the older
@@ -6639,7 +6643,7 @@ decodes rather than sequences.
 
 ### 3.26 UVPacket
 
-Choose **UVPACKET** from the DIGITAL row. UVPacket is not one of the WSJT
+Choose **UVPACKET** from the DIGITAL menu. UVPacket is not one of the WSJT
 weak-signal modes: it is a **packet protocol** for private amateur VHF/UHF
 groups, carried as a short π/4-DQPSK burst. Where FT8 and its relatives carry a
 `<to> <from> <grid>` message, a UVPacket frame carries an application **byte
@@ -6674,7 +6678,7 @@ put in it. The panel decodes what the group is sending.
 
 ### 3.27 FSK441
 
-Choose **FSK441** from the DIGITAL row. FSK441 is the **original meteor-scatter
+Choose **FSK441** from the DIGITAL menu. FSK441 is the **original meteor-scatter
 mode** — MSK144's older sibling — and it works the same way: the signal bounces
 off the brief ionised trail a meteor leaves about 100 km up, which lasts from a
 few milliseconds to a few hundred. It is the classic way to work 6 m and 2 m
@@ -6722,7 +6726,7 @@ arranged by ear and by the shorthand, which is what the mode has always been.
 > not off-air. It is here to try, not yet to rely on: treat a decode as worth a
 > second look and a first contact as a test.
 
-Choose **JTTY** from the DIGITAL row. JTTY is the **asynchronous keyboard
+Choose **JTTY** from the DIGITAL menu. JTTY is the **asynchronous keyboard
 mode** from the WSJT-X 3.2 release: it is worked like RTTY — either side types
 and sends whenever it likes — but carries forward error correction, so a signal
 that would be marginal and error-prone as 45.45-baud RTTY still copies. It is
@@ -12413,10 +12417,15 @@ Set each under its row on this tab — **Docked in this window** (the default) o
 size and place are remembered for next time.
 
 Undocking the **Controls** is the biggest change: the main window loses its top
-strip and becomes the spectrum and the decoders, while the strip — with its
-menus and the frequency box — lives in the control window. That is the classic
-two-window split: MAIN SP on one screen, RX control on the other. Undocking the
-other two is the same idea one module down.
+strip and becomes the spectrum and the decoders, while the strip lives in the
+control window — which is SDRuno's **RX control**, and it carries the
+**band/mode selector** with it, so the controls and the bands are one window.
+The main window keeps its radio-tab strip and, when nothing is left in it, shows
+a plain face rather than a black hole (the band selector is already in the
+control window). Undocking the other two is the same idea one module down.
+Undocking the Controls does not first flip it to a phone-shaped strip: the
+control window is a desktop console whatever its own height, because it opens
+wide and short and a compact strip there was the first thing to look wrong.
 
 When everything is undocked there is nothing left of the radio to draw in the
 main window's centre, so the **band/mode selector fills it** rather than leaving

@@ -7945,23 +7945,27 @@ pub(in crate::app) fn band_mode_menu(
                 }
             });
             ui.add_space(6.0);
-            crate::chrome::menu_caption(ui, "Digital");
-            ui.horizontal_wrapped(|ui| {
-                // ADS-B, VDL2, AIS and HFDL ride along at the end of this row
-                // rather than in [`Mode::DIGITAL`] itself: that list is what the
-                // digi engine decodes and transmits, and none of these is — each
-                // has its own lane, no QSO and no transmitter. They are digital
-                // signals all the same, and this is where an operator looks for
-                // one.
-                for m in Mode::DIGITAL.into_iter().chain([
-                    Mode::Adsb,
-                    Mode::Vdl2,
-                    Mode::Ais,
-                    Mode::Hfdl,
-                    Mode::Dab,
-                ]) {
-                    mode_band_chip(ui, mode, m, band, state, cmds);
-                }
+            // The digital modes go behind one dropdown, SDRuno's DIGITAL button:
+            // three dozen chips on the face is the clutter the operator asked to
+            // be rid of, and a mode is picked once, not scanned.
+            let d_btn = crate::chrome::chip(ui, digital, "DIGITAL ▾").on_hover_text(
+                "Every mode the digi engine decodes and transmits, and the wideband decoders \
+                 (ADS-B, VDL2, AIS, HFDL, DAB) that have a lane of their own.",
+            );
+            crate::chrome::menu_popup(ui, &d_btn, |ui| {
+                crate::chrome::menu_group(ui, "Digital", 300.0, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for m in Mode::DIGITAL.into_iter().chain([
+                            Mode::Adsb,
+                            Mode::Vdl2,
+                            Mode::Ais,
+                            Mode::Hfdl,
+                            Mode::Dab,
+                        ]) {
+                            mode_band_chip(ui, mode, m, band, state, cmds);
+                        }
+                    });
+                });
             });
         }
         BandMenuTab::Listen => {
@@ -7998,17 +8002,25 @@ pub(in crate::app) fn band_mode_menu(
             // cannot drift, and the same "every band" rule: exploring is the
             // point, so the band does not grey a decoder out here.
             ui.add_space(6.0);
-            crate::chrome::menu_caption(ui, "Digital");
-            ui.horizontal_wrapped(|ui| {
-                for m in Mode::DIGITAL.into_iter().chain([
-                    Mode::Adsb,
-                    Mode::Vdl2,
-                    Mode::Ais,
-                    Mode::Hfdl,
-                    Mode::Dab,
-                ]) {
-                    mode_listen_chip(ui, mode, m, state, cmds);
-                }
+            // One dropdown, as on the OPERATE tab — the same list, so the two
+            // cannot drift.
+            let d_btn = crate::chrome::chip(ui, digital, "DIGITAL ▾").on_hover_text(
+                "Every digimode decode a listener reads, and the wideband decoders.",
+            );
+            crate::chrome::menu_popup(ui, &d_btn, |ui| {
+                crate::chrome::menu_group(ui, "Digital", 300.0, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for m in Mode::DIGITAL.into_iter().chain([
+                            Mode::Adsb,
+                            Mode::Vdl2,
+                            Mode::Ais,
+                            Mode::Hfdl,
+                            Mode::Dab,
+                        ]) {
+                            mode_listen_chip(ui, mode, m, state, cmds);
+                        }
+                    });
+                });
             });
         }
     }
