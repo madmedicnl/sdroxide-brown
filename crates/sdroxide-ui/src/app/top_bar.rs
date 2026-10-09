@@ -5442,7 +5442,7 @@ impl SdroxideApp {
     /// The SPEC chip: the spectrum/waterfall layer switches, behind a popup.
     /// Lit while both layers are drawn, so a display with one of them switched
     /// off says so from the strip without the popup being opened.
-    fn layers_button(&mut self, ui: &mut egui::Ui, label: &str, extra: f32) {
+    pub(in crate::app) fn layers_button(&mut self, ui: &mut egui::Ui, label: &str, extra: f32) {
         let both = self.view.spectrum_visible() && self.view.waterfall_visible();
         let btn = chip_stretched(ui, both, label, extra).on_hover_text(
             "Spectrum and waterfall — either layer, both, or neither. Lit while both are shown.",

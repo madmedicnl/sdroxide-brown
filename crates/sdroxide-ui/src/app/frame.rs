@@ -217,39 +217,12 @@ fn readout_text(hz: f64) -> String {
     format!("{} MHz", mhz.trim_end_matches('0').trim_end_matches('.'))
 }
 
-/// A large, display-only frequency readout across the top of the **detached**
-/// panadapter, over a dark pill so it reads on any waterfall, with a smaller
-/// second line under it — the mode and the signal level — so the window on a
-/// second monitor says everything you glance at without looking back at the main
-/// one.
-///
-/// Deliberately display-only: the tuning strip stays in the main window, so
-/// there is a single owner for the frequency and the two windows cannot
-/// disagree — a click or drag on the panadapter itself still tunes, as before.
+/// Height of SP1's toolbar — the readout's line and the chips beside it. The
+/// spectrum is drawn **below** the bar, not under it, which is the whole point of
+/// moving the readout out of the middle of the picture: a waterfall you cannot
+/// see the centre of is worse than a number in the way.
 #[cfg(not(target_arch = "wasm32"))]
-fn centred_detached_readout(ui: &egui::Ui, area: egui::Rect, title: &str, sub: &str) {
-    let p = ui.painter_at(area);
-    let amber = egui::Color32::from_rgb(255, 209, 66);
-    let big = p.layout_no_wrap(title.to_owned(), egui::FontId::monospace(34.0), amber);
-    let top = area.min.y + big.size().y * 0.5 + 10.0;
-    let r1 = egui::Rect::from_center_size(
-        egui::pos2(area.center().x, top),
-        big.size() + egui::vec2(28.0, 12.0),
-    );
-    p.rect_filled(r1, 6.0, egui::Color32::from_black_alpha(170));
-    p.galley(r1.center() - big.size() / 2.0, big, amber);
-    if sub.is_empty() {
-        return;
-    }
-    let grey = egui::Color32::LIGHT_GRAY;
-    let g2 = p.layout_no_wrap(sub.to_owned(), egui::FontId::proportional(14.0), grey);
-    let r2 = egui::Rect::from_center_size(
-        egui::pos2(area.center().x, r1.max.y + g2.size().y * 0.5 + 8.0),
-        g2.size() + egui::vec2(20.0, 8.0),
-    );
-    p.rect_filled(r2, 4.0, egui::Color32::from_black_alpha(150));
-    p.galley(r2.center() - g2.size() / 2.0, g2, grey);
-}
+const SP1_TOOLBAR_H: f32 = 32.0;
 
 /// The detached window's second line: the mode, and the S-meter reading when
 /// there is one. Read-only — it shares the main window's meter, so it cannot
@@ -1715,6 +1688,63 @@ impl SdroxideApp {
         });
     }
 
+    /// SP1's toolbar: the header bar SDRuno's main-spectrum window carries.
+    ///
+    /// The frequency readout that used to float over the middle of the waterfall now
+    /// sits in a bar across the top with the mode and the signal level beside it; a
+    /// **DISP** chip opens the same layer menu the main window's SPEC chip does, so
+    /// the toggles SP1 keeps are the ones the whole program uses; and a **DOCK**
+    /// chip brings the window home without hunting for its close box.
+    ///
+    /// The readout stays display-only — a click or drag on the spectrum still tunes,
+    /// and the tuning strip stays in the controls window — so there is a single owner
+    /// for the frequency and the two windows cannot disagree.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn sp1_toolbar(&mut self, ui: &mut egui::Ui) {
+        let area = ui.available_rect_before_wrap();
+        ui.allocate_ui(egui::vec2(area.width(), SP1_TOOLBAR_H), |ui| {
+            let bar = ui.max_rect();
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(10.0, 0.0);
+                ui.label(
+                    RichText::new(readout_text(self.state.rx_freq_hz()))
+                        .monospace()
+                        .size(21.0)
+                        .color(egui::Color32::from_rgb(255, 209, 66)),
+                );
+                ui.label(
+                    RichText::new(detached_status_line(
+                        self.state.rx[0].mode,
+                        self.meters.as_ref(),
+                    ))
+                    .size(12.0)
+                    .color(egui::Color32::LIGHT_GRAY),
+                );
+                crate::chrome::row_tail(ui, |ui| {
+                    self.layers_button(ui, "DISP", 0.0);
+                    if crate::chrome::chip(ui, false, "\u{21f1} DOCK")
+                        .on_hover_text(
+                            "Return the spectrum into the main window — the same as closing \
+                         this one, without hunting for its close box.",
+                        )
+                        .clicked()
+                    {
+                        self.ui_settings
+                            .set_detached(sdroxide_types::DetachableModule::Panadapter, false);
+                        crate::app::persist::persist_ui_settings(&self.ui_settings);
+                    }
+                });
+            });
+            // A hairline under the bar, so it reads as a bar and not as a row of
+            // text floating over the picture.
+            ui.painter().hline(
+                egui::Rangef::new(bar.left(), bar.right()),
+                bar.bottom(),
+                egui::Stroke::new(1.0, crate::theme::LINE()),
+            );
+        });
+    }
+
     /// Draw one module into its **own OS window** (native only), from the
     /// focused radio's state.
     ///
@@ -1746,13 +1776,14 @@ impl SdroxideApp {
                 let inputs = self.panadapter_inputs(now);
                 let mut clicked_spot: Option<Spot> = None;
                 let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+                    // The toolbar across the top, then the spectrum below it.
+                    // `panel_below` is false: the operating panel is not under
+                    // this window, so the band-plan strip may use the rest of the
+                    // height.
+                    self.sp1_toolbar(ui);
                     self.note_panadapter_width(ui);
                     let w = ui.available_width();
                     let h = ui.available_height();
-                    let area = ui.max_rect();
-                    // `panel_below` is false: the operating panel is not under
-                    // this window, so the band-plan strip may use the full
-                    // height.
                     self.draw_panadapter(
                         ui,
                         w,
@@ -1764,15 +1795,6 @@ impl SdroxideApp {
                         false,
                         now,
                         wf_tuning,
-                    );
-                    // A big, display-only dial readout across the top — with the
-                    // mode and signal level under it — so the picture can be
-                    // read from a second monitor without the main window.
-                    centred_detached_readout(
-                        ui,
-                        area,
-                        &readout_text(self.state.rx_freq_hz()),
-                        &detached_status_line(self.state.rx[0].mode, self.meters.as_ref()),
                     );
                 });
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
@@ -3737,6 +3759,20 @@ mod tests {
         assert_eq!(super::readout_text(27_265_000.0), "27.265 MHz");
         assert_eq!(super::readout_text(144_800_000.0), "144.8 MHz");
         assert_eq!(super::readout_text(10_120_600.0), "10.1206 MHz");
+    }
+
+    /// SP1's toolbar is a header, not a share of the picture: enough room for
+    /// the 21 pt readout, and small enough against the window it opens at that
+    /// the waterfall still gets the window. This is the one arithmetic the bar
+    /// has — a header that grows with the window is a header that eats it.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_sp1_toolbar_is_a_header_and_not_a_share_of_the_picture() {
+        let h = super::SP1_TOOLBAR_H;
+        assert!(h >= 28.0, "{h} pt will not hold the readout it carries");
+        let window =
+            super::detached_spec(sdroxide_types::DetachableModule::Panadapter).default_size[1];
+        assert!(h < window * 0.1, "a {h} pt bar is a tenth of the {window} pt window it opens at");
     }
 
     /// The detached window opens at the operator's last geometry, or a wide

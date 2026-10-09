@@ -59,10 +59,13 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
 
 1. ~~**The band keypad.**~~ **BUILT (2026-10-09)** — `top_bar::band_keypad` and
    the console's left column, with the reasoning below.
-2. **MAIN SP — switch model here.** Give the undocked **panadapter** window an
-   SDRuno-style **toolbar**: the frequency readout, SP controls, and the toggles
-   SP1 keeps. This is where the operator expects a different model to take over.
-   **Nothing has been started on it**, and nothing above crosses it.
+2. ~~**MAIN SP — switch model here.**~~ **BUILT (2026-10-09)** — the panadapter
+   window now carries an SDRuno-style **toolbar**: the frequency readout (with the
+   mode and S-meter) in a bar across the top instead of floating over the middle
+   of the waterfall, a **DISP** chip opening the same layer menu the main window's
+   SPEC chip does, and a **DOCK** chip that brings the window home. See the note
+   below. The operator's "switch models here" was honoured by handing this slice
+   back as a self-contained commit rather than a sprawling one.
 3. **AUX SP (SP2)** — a **second** panadapter window (a second spectrum/waterfall
    on its own receiver or the same one). Needs a second `DetachableModule` or a
    `Panadapter`-with-index; the shell-owned manager already handles the plumbing.
@@ -124,6 +127,27 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
   that ten keys land in `3,3,3,1` rows with `0` centred and nothing painted past
   the column. The render test and the width test were both verified failing on
   wrong code (`KEYPAD_KEY_AIR = -40`, and `0` moved to the left column).
+
+## MAIN SP as built (2026-10-09) — the toolbar
+
+- **The bar.** `sp1_toolbar` (in `frame.rs`, console-free, native-only) draws a
+  fixed-height (`SP1_TOOLBAR_H = 32 pt`) header across the top of the undocked
+  panadapter window, and the spectrum is drawn **below** it. The frequency readout
+  that used to float over the middle of the waterfall — `centred_detached_readout`,
+  now deleted — sits in the bar with the mode and the S-meter beside it.
+- **DISP** opens the **same** layer menu the main window's SPEC chip does
+  (`layers_button` → `panadapter_controls`), so SP1's toggles are the program's
+  own rather than a second copy. It needed one visibility change:
+  `layers_button` is now `pub(in crate::app)`.
+- **DOCK** sets `DetachableModule::Panadapter` back to docked and persists, so the
+  operator does not have to hunt for the window's close box to send it home.
+- **The readout stays display-only** — a click or drag on the spectrum still tunes
+  and the tuning strip stays in the controls window — preserving the single-owner
+  invariant for the frequency.
+- **Test** `the_sp1_toolbar_is_a_header_and_not_a_share_of_the_picture`: the bar is
+  tall enough for the 21 pt readout and under a tenth of the window SP1 opens at.
+- **Not seen in a running window** (the detached viewport no-ops under the headless
+  harness), and the bar reserves height the spectrum then draws into.
 
 ## House notes for whoever picks this up
 

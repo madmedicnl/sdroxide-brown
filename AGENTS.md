@@ -17,12 +17,14 @@
 > the operator expects to **switch models when the work reaches MAIN SP** (the
 > panadapter window's toolbar), so that file says where the seam is.
 >
-> **Where the SDRuno work stands (2026-10-09): item 1, the band keypad, is
-> built** — SDRuno's calculator keypad in the console's left column, **Bands**
-> and **MHz** above it, the full band list beside it (not behind a dropdown: 28
-> bands will not fit in ten keys, and hiding them would make them harder to
-> reach). **The next item is MAIN SP, and that is the seam** — the operator
-> switches models there, so stop at it and note what was done.
+> **Where the SDRuno work stands (2026-10-09): items 1 and 2 are built** — the
+> band keypad in the console's left column (digits 0–9 naming the HF
+> allocations, **Bands**/**MHz** above, the full band list beside it, not behind
+> a dropdown: 28 bands will not fit in ten keys), and **MAIN SP**'s toolbar
+> (the readout in a bar across the top of the panadapter window, a **DISP**
+> chip for the layer menu, a **DOCK** chip). **The next item is item 3, AUX SP**
+> (a second panadapter window); after that the MAIN window's buttons, the rest
+> of the tool windows, and named workspaces.
 >
 > **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
 > mid-flight — read it before touching ALE). **FST4W**
