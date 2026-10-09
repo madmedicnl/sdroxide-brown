@@ -7676,43 +7676,50 @@ fn mode_listen_chip(
 /// control.
 const WIDEBAND_MODES: [Mode; 5] = [Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab];
 
-/// The **digital-mode dropdown** — SDRuno's DIGITAL button, as a combo.
+/// The **digital modes**, as an **inline disclosure**: a chip that reveals the
+/// list in place. SDRuno's DIGITAL button, and a mode is picked once.
 ///
-/// One dropdown rather than three dozen chips on the face, which is the clutter
-/// this menu cannot afford. But a **dropdown**: it shows the mode in force when
-/// one of its own is chosen, and opens onto the list, so the modes are visible
-/// as something to choose. A chip labelled DIGITAL that hid a popup read as a
-/// toggle — the modes looked like they were not there at all.
-///
-/// `listen` is the LISTEN tab: like every other mode there, the band does not
-/// grey a decoder out — the whole point of that screen is trying one where the
-/// band plan would not. The station's own limits (HD Radio with no `libnrsc5`)
-/// apply on both.
-fn digital_mode_dropdown(
+/// **Not a dropdown, deliberately** — a combo's menu is a *second* popup, and
+/// inside the band/mode popup egui only keeps a parent open for a registered
+/// submenu, which a `ComboBox` is not: its menu counted as "clicked elsewhere",
+/// so the band popup closed under it and the dropdown did nothing (the
+/// operator: *"if you don't dock or window the bands popup the dropbox for digi
+/// doesn't work"*). Revealing the list in place nests nothing, so it works in
+/// the popup, the dock and the console alike.
+fn digital_modes_disclosure(
     ui: &mut egui::Ui,
-    cur: Mode,
+    mode: Mode,
     band: Band,
     state: &RadioState,
     listen: bool,
     cmds: &mut Vec<Command>,
 ) {
-    let is_digital = cur.is_digital() || WIDEBAND_MODES.contains(&cur);
-    let label = if is_digital { cur.label().to_string() } else { "Digital modes".to_string() };
-    egui::ComboBox::from_id_salt(if listen { "listen-digital" } else { "band-digital" })
-        .selected_text(label)
-        .width(190.0)
-        .height(340.0)
-        .show_styled(ui, |ui| {
+    let id = crate::layout::salted_id(ui.ctx(), "band-digital-open");
+    let open = ui.ctx().data_mut(|d| d.get_persisted::<bool>(id).unwrap_or(false));
+    let in_list = mode.is_digital() || WIDEBAND_MODES.contains(&mode);
+    let label = if in_list { format!("{}  ▾", mode.label()) } else { "Digital modes  ▾".to_string() };
+    if crate::chrome::chip(ui, open, label)
+        .on_hover_text(
+            "Every mode the digi engine decodes and transmits, and the wideband decoders \
+             (ADS-B, VDL2, AIS, HFDL, DAB) that have a lane of their own.",
+        )
+        .clicked()
+    {
+        ui.ctx().data_mut(|d| d.insert_persisted(id, !open));
+    }
+    if open {
+        ui.indent(id, |ui| {
             crate::chrome::menu_caption(ui, "Digital");
             for m in Mode::DIGITAL {
-                digital_mode_item(ui, cur, m, band, state, listen, cmds);
+                digital_mode_item(ui, mode, m, band, state, listen, cmds);
             }
-            ui.separator();
+            ui.add_space(4.0);
             crate::chrome::menu_caption(ui, "Wideband");
             for m in WIDEBAND_MODES {
-                digital_mode_item(ui, cur, m, band, state, listen, cmds);
+                digital_mode_item(ui, mode, m, band, state, listen, cmds);
             }
         });
+    }
 }
 
 /// One row of the digital dropdown: a selectable label that greys where the
@@ -8545,8 +8552,7 @@ pub(in crate::app) fn band_mode_menu(
             // them is chosen, otherwise "Digital modes", opening the list. A
             // dropdown rather than a chip that hides a popup — the modes are
             // picked once, but they have to be *visible* as a choice.
-            crate::chrome::menu_caption(ui, "Digital modes");
-            digital_mode_dropdown(ui, mode, band, state, false, cmds);
+            digital_modes_disclosure(ui, mode, band, state, false, cmds);
         }
         BandMenuTab::Listen => {
             ui.add_space(6.0);
@@ -8592,8 +8598,7 @@ pub(in crate::app) fn band_mode_menu(
             ui.add_space(6.0);
             // One dropdown, as on the OPERATE tab — the same list, so the two
             // cannot drift. Here it never greys for the band.
-            crate::chrome::menu_caption(ui, "Digital modes");
-            digital_mode_dropdown(ui, mode, band, state, true, cmds);
+            digital_modes_disclosure(ui, mode, band, state, true, cmds);
         }
     }
 }
