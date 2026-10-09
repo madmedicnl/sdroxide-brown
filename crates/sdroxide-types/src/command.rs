@@ -1219,7 +1219,10 @@ pub enum Command {
     /// path. Its read-back is `CwSelfRx` either way.
     ///
     /// Appended for the usual reason — postcard numbers variants by position.
-    CwContacts { dot: bool, dah: bool },
+    CwContacts {
+        dot: bool,
+        dah: bool,
+    },
 
     /// Set only [`DigiConfig::contest`](crate::DigiConfig::contest) — which
     /// message layout the FT8 side sends a contest exchange in — leaving every
