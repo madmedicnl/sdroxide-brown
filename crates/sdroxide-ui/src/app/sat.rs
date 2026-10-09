@@ -600,7 +600,7 @@ impl SdroxideApp {
         // rather than inside the tab arm because `qo100_body` needs `&mut self`
         // and the state lives on `self`.
         let mut qo100 = std::mem::take(&mut self.qo100_win);
-        let show = self.tool_window(ctx, "sat", "SATELLITE", [480.0, 520.0], true, |me, ui| {
+        let show = self.tool_window(ctx, "sat", "SATELLITE", [560.0, 680.0], true, |me, ui| {
             me.sat_body(ui, &mut win, &mut qo100, cmds);
         });
         self.show_sat = show;

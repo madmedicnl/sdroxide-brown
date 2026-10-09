@@ -264,6 +264,49 @@ fn empty_centre(ui: &egui::Ui) {
     p.galley(egui::pos2(area.center().x - hint_w / 2.0, top + name_h + 8.0), hint, dim);
 }
 
+/// The **⇱** button for a tool window's **title bar**, beside egui's fold and
+/// close.
+///
+/// egui draws its own title bar and offers no hook to add to it, so this is an
+/// `Area` laid over the title bar. The overlay is the point: a control in the
+/// body **reserves** a row and pushes the content down (the operator: *"the
+/// button pushes the content down so a scrollbar occurs"*), while this one
+/// costs the body nothing. Returns whether it was pressed.
+#[cfg(not(target_arch = "wasm32"))]
+fn tool_window_title_button(
+    ctx: &egui::Context,
+    win_id: egui::Id,
+    win_rect: egui::Rect,
+    body_top: f32,
+) -> bool {
+    if !body_top.is_finite() {
+        return false;
+    }
+    // The title bar is the strip from the window's top down to where the body
+    // begins (its fold ▾ left, its close ✕ right).
+    let title_h = (body_top - win_rect.top()).clamp(18.0, 40.0);
+    let side = title_h - 6.0;
+    // egui's close button owns the title bar's right edge; put ours just inside
+    // it, so the two never overlap.
+    let rect = egui::Rect::from_min_size(
+        egui::pos2(win_rect.right() - 2.0 * side - 10.0, win_rect.top() + (title_h - side) / 2.0),
+        egui::vec2(side, side),
+    );
+    let mut clicked = false;
+    egui::Area::new(win_id.with("title-btn")).fixed_pos(rect.min).order(egui::Order::Middle).show(
+        ctx,
+        |ui| {
+            ui.set_min_size(rect.size());
+            clicked = crate::chrome::chip(ui, false, "\u{21f1}")
+                .on_hover_text(
+                    "Move this window into its own OS window — put it on another monitor",
+                )
+                .clicked();
+        },
+    );
+    clicked
+}
+
 /// See [`SdroxideApp::tool_window_egui`]: the id epoch that resets a tool
 /// window's remembered geometry when this window's bounding changes. Bump it
 /// whenever a tool window's default size or its body's height-filling changes.
@@ -271,13 +314,8 @@ const TOOL_WINDOW_EPOCH: &str = "b1";
 
 /// The DETACH/DOCK chip a tool window wears at the top-right of its body. On the
 /// browser it is absent — there is no second window to move to.
+#[cfg(not(target_arch = "wasm32"))]
 fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = (ui, undocked);
-        false
-    }
-    #[cfg(not(target_arch = "wasm32"))]
     {
         let (label, hover) = if undocked {
             ("⇱ DOCK", "Return this window into the main window")
@@ -2036,12 +2074,14 @@ impl SdroxideApp {
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> (bool, bool) {
         let mut win_open = true;
-        let mut detach = false;
+        let win_id = crate::layout::salted_id(ctx, id).with(TOOL_WINDOW_EPOCH);
+        #[cfg_attr(target_arch = "wasm32", allow(unused))]
+        let mut body_top = f32::NAN;
         let resp = egui::Window::new(title)
             // The id carries an **epoch**, bumped when this window's bounding
             // changes; egui remembers a window's size and eframe persists it, so
             // the epoch discards a stale one.
-            .id(crate::layout::salted_id(ctx, id).with(TOOL_WINDOW_EPOCH))
+            .id(win_id)
             .open(&mut win_open)
             .frame(crate::chrome::window_frame())
             .resizable(true)
@@ -2056,11 +2096,19 @@ impl SdroxideApp {
             .max_size(ctx.content_rect().size() * 0.95)
             .show(ctx, |ui| {
                 crate::chrome::window_body_bg(ui);
-                detach = tool_window_chip(ui, false);
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    body_top = ui.min_rect().min.y;
+                }
                 body(self, ui);
             });
+        let mut detach = false;
         if let Some(r) = &resp {
             crate::chrome::paint_window_border(ctx, &r.response);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                detach = tool_window_title_button(ctx, win_id, r.response.rect, body_top);
+            }
         }
         (win_open, detach)
     }
