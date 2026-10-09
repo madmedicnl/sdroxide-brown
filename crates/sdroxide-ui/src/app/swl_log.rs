@@ -369,177 +369,15 @@ fn prefill_station(
 impl SdroxideApp {
     /// The SWL LOG window: the reception log, its entry form and its report.
     pub(in crate::app) fn swl_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
-        let mut open = self.show_swl;
         // The reception REPORT was asked for, so its "report sent" is stamped
         // after the window has closed the borrow of the log — see below.
         let mut mark_sent: Option<u64> = None;
-        // Titled "SWL LOG" to match its top-strip chip; the id stays "LISTEN"
-        // so an operator's saved window position survives the rename.
-        let resp = egui::Window::new("SWL LOG")
-            .id(crate::layout::salted_id(ctx, "LISTEN"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 720.0))
-            .default_height(crate::layout::window_h(ctx, 520.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                ui.horizontal(|ui| {
-                    ui.label(
-                        RichText::new(format!("{} UTC", crate::time::utc_clock(now_unix())))
-                            .monospace()
-                            .color(crate::theme::CYAN()),
-                    );
-                    // Which build this is, beside the clock: a QSL screenshot
-                    // then names the version it came from.
-                    ui.label(
-                        RichText::new(format!("v{}", sdroxide_version::VERSION))
-                            .size(10.5)
-                            .color(crate::theme::gray(120)),
-                    )
-                    .on_hover_text(sdroxide_version::LONG_VERSION);
-                    ui.separator();
-                    if crate::chrome::chip(ui, false, "+ NEW").clicked() {
-                        let freq = self.on_air_freq_hz();
-                        let mode = self.state.rx[0].mode;
-                        let s = self.meters.map(|m| m.s_dbm);
-                        let grid = self.my_grid();
-                        let antenna = self.swl_antenna.clone();
-                        let mut form = SwlEditForm::new(freq, mode, s, grid, antenna);
-                        // A known broadcast on this dial comes in filled with
-                        // what a reception report needs; see `prefill_station`.
-                        prefill_station(&mut form, &self.broadcast, &self.swl_log, freq, now_unix());
-                        self.swl_edit = Some(form);
-                    }
-                    if crate::chrome::chip(ui, false, "JOBS")
-                        .on_hover_text("Scheduled recordings — record a band at a set time")
-                        .clicked()
-                    {
-                        self.jobs.show = true;
-                    }
-                    if crate::chrome::chip(ui, false, "SIG ID")
-                        .on_hover_text(
-                            "What is on this dial? A guide to signals by frequency, mode and bandwidth",
-                        )
-                        .clicked()
-                    {
-                        self.signal_id.show = true;
-                    }
-                    let replay = self.state.replay;
-                    if crate::chrome::chip(ui, replay, "REPLAY")
-                        .on_hover_text(
-                            "Play the last two minutes instead of live — catch the station id \
-                             you just missed",
-                        )
-                        .clicked()
-                    {
-                        cmds.push(Command::SetReplay(!replay));
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let selected = self
-                            .swl_selected
-                            .and_then(|id| self.swl_log.iter().find(|e| e.id == id));
-                        ui.add_enabled_ui(selected.is_some(), |ui| {
-                            if crate::chrome::chip(ui, false, "REPORT")
-                                .on_hover_text(
-                                    "Copy this reception as a report to send to the station",
-                                )
-                                .clicked()
-                                && let Some(e) = selected
-                            {
-                                let listener = self.report_identity();
-                                // Where it was heard and the aerial that heard
-                                // it come from the entry, which captured both at
-                                // logging time; only an entry too old to have a
-                                // locator falls back to the current grid.
-                                let grid = if e.recv_grid.is_empty() {
-                                    self.my_grid()
-                                } else {
-                                    e.recv_grid.clone()
-                                };
-                                let text =
-                                    e.report_text(&listener, &grid, "sdroxide_SWL", &e.antenna);
-                                crate::download::save("reception-report.txt", text.as_bytes());
-                                // Writing the report is the "report" step of the
-                                // loop; mark it done unless it already was.
-                                mark_sent = Some(e.id);
-                            }
-                        });
-                        // The whole log at a glance — how many heard, and of
-                        // those how far round the SWL's loop they have got. The
-                        // counts that are zero are left out, so a fresh log reads
-                        // simply as "n heard".
-                        let n = self.swl_log.len();
-                        let reported =
-                            self.swl_log.iter().filter(|e| e.report_sent_unix.is_some()).count();
-                        let qsl =
-                            self.swl_log.iter().filter(|e| e.qsl_received_unix.is_some()).count();
-                        let pirates = self.swl_log.iter().filter(|e| e.pirate).count();
-                        let mut stats = format!("{n} heard");
-                        if reported > 0 {
-                            stats.push_str(&format!(" · {reported} reported"));
-                        }
-                        if qsl > 0 {
-                            stats.push_str(&format!(" · {qsl} QSL"));
-                        }
-                        if pirates > 0 {
-                            stats.push_str(&format!(" · {pirates} pirates"));
-                        }
-                        ui.label(RichText::new(stats).size(11.0).color(crate::theme::gray(150)))
-                            .on_hover_text("The whole log — the Show filters do not change it");
-                    });
-                });
-                // The aerial, in the listener's own words, for the reception
-                // report. Session state set once — an aerial is swapped far
-                // more often than a settings page is opened, and it is not a
-                // property of the radio, so it does not ride the wire.
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Antenna").size(11.0).color(crate::theme::gray(150)));
-                    crate::chrome::field(
-                        ui,
-                        egui::TextEdit::singleline(&mut self.swl_antenna)
-                            .desired_width(240.0)
-                            .hint_text("Longwire 20 m, MLA-30 loop, mini-whip …"),
-                    )
-                    .on_hover_text("Goes on the reception report's Antenna: line");
-                });
-                // The listener's tone control: shelves on the demodulated
-                // audio, in front of the speakers. Broadcast audio wants a
-                // tone control the ham speech chain never needed.
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Tone").size(11.0).color(crate::theme::gray(150)));
-                    let mut tone = self.state.rx_tone.clone();
-                    let before = tone.clone();
-                    crate::chrome::checkbox(ui, &mut tone.enabled, "on");
-                    let band = |ui: &mut egui::Ui, name: &str, b: &mut sdroxide_types::TxEqBand| {
-                        ui.label(RichText::new(name).size(11.0));
-                        ui.add(
-                            egui::DragValue::new(&mut b.gain_db)
-                                .speed(0.2)
-                                .range(-12.0..=12.0)
-                                .suffix(" dB"),
-                        );
-                    };
-                    band(ui, "Bass", &mut tone.low);
-                    band(ui, "Mid", &mut tone.mid);
-                    band(ui, "Treble", &mut tone.high);
-                    if tone != before {
-                        self.state.rx_tone = tone.clone();
-                        cmds.push(Command::SetRxTone(Box::new(tone)));
-                    }
-                });
-                if self.swl_edit.is_some() {
-                    ui.add_space(4.0);
-                    self.swl_entry_form(ui, ctx);
-                }
-                ui.add_space(2.0);
-                self.swl_filter_row(ui);
-                ui.separator();
-                self.swl_list(ui, cmds);
+        // The shell's window: an egui window or its own OS one, with the ⇱
+        // WINDOW chip. Titled "SWL LOG" to match its top-strip chip.
+        let open =
+            self.tool_window(ctx, "swl-log", "SWL LOG", [720.0, 520.0], self.show_swl, |me, ui| {
+                me.swl_log_body(ctx, ui, cmds, &mut mark_sent)
             });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
         self.show_swl = open;
         if let Some(id) = mark_sent {
             let now = now_unix().max(0) as u64;
@@ -554,6 +392,165 @@ impl SdroxideApp {
                 persist_swl_log(&self.swl_log);
             }
         }
+    }
+
+    /// The reception log's body: the heard stations with their reception reports.
+    /// Split out of [`Self::swl_window`] so the shell can draw it in a window of
+    /// its own.
+    fn swl_log_body(
+        &mut self,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+        cmds: &mut Vec<Command>,
+        mark_sent: &mut Option<u64>,
+    ) {
+        crate::chrome::window_body_bg(ui);
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(format!("{} UTC", crate::time::utc_clock(now_unix())))
+                    .monospace()
+                    .color(crate::theme::CYAN()),
+            );
+            // Which build this is, beside the clock: a QSL screenshot
+            // then names the version it came from.
+            ui.label(
+                RichText::new(format!("v{}", sdroxide_version::VERSION))
+                    .size(10.5)
+                    .color(crate::theme::gray(120)),
+            )
+            .on_hover_text(sdroxide_version::LONG_VERSION);
+            ui.separator();
+            if crate::chrome::chip(ui, false, "+ NEW").clicked() {
+                let freq = self.on_air_freq_hz();
+                let mode = self.state.rx[0].mode;
+                let s = self.meters.map(|m| m.s_dbm);
+                let grid = self.my_grid();
+                let antenna = self.swl_antenna.clone();
+                let mut form = SwlEditForm::new(freq, mode, s, grid, antenna);
+                // A known broadcast on this dial comes in filled with
+                // what a reception report needs; see `prefill_station`.
+                prefill_station(&mut form, &self.broadcast, &self.swl_log, freq, now_unix());
+                self.swl_edit = Some(form);
+            }
+            if crate::chrome::chip(ui, false, "JOBS")
+                .on_hover_text("Scheduled recordings — record a band at a set time")
+                .clicked()
+            {
+                self.jobs.show = true;
+            }
+            if crate::chrome::chip(ui, false, "SIG ID")
+                .on_hover_text(
+                    "What is on this dial? A guide to signals by frequency, mode and bandwidth",
+                )
+                .clicked()
+            {
+                self.signal_id.show = true;
+            }
+            let replay = self.state.replay;
+            if crate::chrome::chip(ui, replay, "REPLAY")
+                .on_hover_text(
+                    "Play the last two minutes instead of live — catch the station id \
+                 you just missed",
+                )
+                .clicked()
+            {
+                cmds.push(Command::SetReplay(!replay));
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let selected =
+                    self.swl_selected.and_then(|id| self.swl_log.iter().find(|e| e.id == id));
+                ui.add_enabled_ui(selected.is_some(), |ui| {
+                    if crate::chrome::chip(ui, false, "REPORT")
+                        .on_hover_text("Copy this reception as a report to send to the station")
+                        .clicked()
+                        && let Some(e) = selected
+                    {
+                        let listener = self.report_identity();
+                        // Where it was heard and the aerial that heard
+                        // it come from the entry, which captured both at
+                        // logging time; only an entry too old to have a
+                        // locator falls back to the current grid.
+                        let grid = if e.recv_grid.is_empty() {
+                            self.my_grid()
+                        } else {
+                            e.recv_grid.clone()
+                        };
+                        let text = e.report_text(&listener, &grid, "sdroxide_SWL", &e.antenna);
+                        crate::download::save("reception-report.txt", text.as_bytes());
+                        // Writing the report is the "report" step of the
+                        // loop; mark it done unless it already was.
+                        *mark_sent = Some(e.id);
+                    }
+                });
+                // The whole log at a glance — how many heard, and of
+                // those how far round the SWL's loop they have got. The
+                // counts that are zero are left out, so a fresh log reads
+                // simply as "n heard".
+                let n = self.swl_log.len();
+                let reported = self.swl_log.iter().filter(|e| e.report_sent_unix.is_some()).count();
+                let qsl = self.swl_log.iter().filter(|e| e.qsl_received_unix.is_some()).count();
+                let pirates = self.swl_log.iter().filter(|e| e.pirate).count();
+                let mut stats = format!("{n} heard");
+                if reported > 0 {
+                    stats.push_str(&format!(" · {reported} reported"));
+                }
+                if qsl > 0 {
+                    stats.push_str(&format!(" · {qsl} QSL"));
+                }
+                if pirates > 0 {
+                    stats.push_str(&format!(" · {pirates} pirates"));
+                }
+                ui.label(RichText::new(stats).size(11.0).color(crate::theme::gray(150)))
+                    .on_hover_text("The whole log — the Show filters do not change it");
+            });
+        });
+        // The aerial, in the listener's own words, for the reception
+        // report. Session state set once — an aerial is swapped far
+        // more often than a settings page is opened, and it is not a
+        // property of the radio, so it does not ride the wire.
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Antenna").size(11.0).color(crate::theme::gray(150)));
+            crate::chrome::field(
+                ui,
+                egui::TextEdit::singleline(&mut self.swl_antenna)
+                    .desired_width(240.0)
+                    .hint_text("Longwire 20 m, MLA-30 loop, mini-whip …"),
+            )
+            .on_hover_text("Goes on the reception report's Antenna: line");
+        });
+        // The listener's tone control: shelves on the demodulated
+        // audio, in front of the speakers. Broadcast audio wants a
+        // tone control the ham speech chain never needed.
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Tone").size(11.0).color(crate::theme::gray(150)));
+            let mut tone = self.state.rx_tone.clone();
+            let before = tone.clone();
+            crate::chrome::checkbox(ui, &mut tone.enabled, "on");
+            let band = |ui: &mut egui::Ui, name: &str, b: &mut sdroxide_types::TxEqBand| {
+                ui.label(RichText::new(name).size(11.0));
+                ui.add(
+                    egui::DragValue::new(&mut b.gain_db)
+                        .speed(0.2)
+                        .range(-12.0..=12.0)
+                        .suffix(" dB"),
+                );
+            };
+            band(ui, "Bass", &mut tone.low);
+            band(ui, "Mid", &mut tone.mid);
+            band(ui, "Treble", &mut tone.high);
+            if tone != before {
+                self.state.rx_tone = tone.clone();
+                cmds.push(Command::SetRxTone(Box::new(tone)));
+            }
+        });
+        if self.swl_edit.is_some() {
+            ui.add_space(4.0);
+            self.swl_entry_form(ui, ctx);
+        }
+        ui.add_space(2.0);
+        self.swl_filter_row(ui);
+        ui.separator();
+        self.swl_list(ui, cmds);
     }
 
     /// The reception log's controls, drawn as the list's own header: what to

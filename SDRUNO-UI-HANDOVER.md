@@ -72,10 +72,21 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
 4. ~~**The MAIN window's buttons.**~~ **BUILT (2026-10-09)** — the **🪟 WINDOWS**
    chip on the radio-tab strip: the four module windows by their SDRuno names,
    each a toggle, plus **DOCK ALL WINDOWS**. See the note below.
-5. **The rest of the tool windows** — extract each body to `_body` and call
-   `self.tool_window(...)`: schedule, logbook, spots, awards, grid tracker,
-   public SDRs, recordings, SWL log, memories, voice keyer, and the per-mode
-   setup windows.
+5. **The rest of the tool windows** — **partly done (2026-10-09): awards,
+   logbook, grid tracker, memories and the SWL log are converted.** Left, and why
+   each is not mechanical:
+   - **SPOTS** and **PUBLIC SDRS** compute values before the window and act on
+     them after (`clicked` / `open_setup`, `picked` / `refresh` / `answer`), and
+     those would have to come back through an app field. That is a design
+     decision, not a body extraction — do it deliberately.
+   - **SCHEDULE** and **RECORDINGS** return several `&mut` locals to their
+     caller (`fav_toggle`, `tune`, `log`; `new_job`, `save`, `cancel`, `delete`),
+     so their bodies need those as parameters rather than capturing them.
+   - **Voice keyer** and the per-mode setup windows (AIS / ADS-B / VDL2 / FSQ /
+     WEFAX) are not started.
+   The shape to copy is the five that are done: extract the body, take the window
+   through `self.tool_window(ctx, "<id>", "<Title>", [w, h], self.show_x, |me, ui|
+   me.x_body(...))`, and keep the tail in the caller.
 6. **Workspace save/recall** — SDRuno records up to ten named workspaces
    (Ctrl+W / SAVE WS). Ours persists geometry per module but has no named
    workspaces and no "save the whole arrangement". A `UiSettings` list of named
@@ -202,6 +213,23 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
   two rows the same, and SP1/SP2 called by those names.
 - The module names live in one function (`module_window_name`), so a module added
   to the registry gets a row whether or not anyone remembered.
+
+## Tool windows converted so far (2026-10-09)
+
+- **AWARDS**, **LOGBOOK**, **GRID TRACKER**, **Memories** and **SWL LOG** now go
+  through `self.tool_window`, so each has the ⇱ WINDOW chip and can sit on a
+  second monitor. Each is `fn x_body` + a caller that keeps only the tail (what
+  the body asked for afterwards).
+- **The borrow that makes it awkward, and the two answers.** A window whose body
+  captured `&mut` locals cannot be moved into a closure the shell calls while it
+  holds the app. The five done each took one of two routes: the locals became
+  **parameters** of the body (`swl_log_body(..., mark_sent: &mut Option<u64>)`),
+  or state already out of the app was **taken and put back**
+  (`std::mem::take(&mut self.grid_tracker)` — the shell borrows the app for the
+  window, so the tracker cannot be borrowed out of it at the same time).
+- **Not done on purpose**, and the reason is in the TODO above: SPOTS and PUBLIC
+  SDRS need their results carried back through the app, which is a decision about
+  where a window's actions land, not a body extraction.
 
 ## House notes for whoever picks this up
 

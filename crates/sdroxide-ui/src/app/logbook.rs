@@ -426,91 +426,94 @@ impl SdroxideApp {
     /// The logbook overlay: a session-grouped list of all QSOs (digital and
     /// manual), with add / edit / delete and ADIF/TXT export.
     pub(in crate::app) fn logbook_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
-        let mut open = self.show_logbook;
-        let resp = egui::Window::new("LOGBOOK")
-            .id(crate::layout::salted_id(ctx, "LOGBOOK"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 720.0))
-            .default_height(crate::layout::window_h(ctx, 560.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                ui.horizontal(|ui| {
-                    let adding = self.log_edit.as_ref().is_some_and(|f| f.id == 0);
-                    if crate::chrome::chip(ui, adding, "+ NEW ENTRY").clicked() {
-                        // The frequency of the contact, not the dial. In CW
-                        // the dial sits a sidetone-pitch below the signal and
-                        // in RTTY a tone pair below it, so logging the readout
-                        // logs every one of those contacts low.
-                        let freq = self.on_air_freq_hz();
-                        let mode = self.state.rx[0].mode.label();
-                        self.log_edit = Some(LogEditForm::new_entry(now_unix(), freq, mode));
-                    }
-                    if crate::chrome::chip(ui, self.show_contest, "CONTEST")
-                        .on_hover_text(
-                            "Contest logger — a session, dupes, a live score and Cabrillo",
-                        )
-                        .clicked()
-                    {
-                        self.show_contest = !self.show_contest;
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let have = !self.qso_log.is_empty();
-                        ui.add_enabled_ui(have, |ui| {
-                            if crate::chrome::chip(ui, false, "TXT").clicked() {
-                                let txt = sdroxide_types::qso_log_to_text(&self.qso_log);
-                                crate::download::save("sdroxide-log.txt", txt.as_bytes());
-                            }
-                            if crate::chrome::chip(ui, false, "ADIF").clicked() {
-                                let adif = sdroxide_types::qso_log_to_adif(&self.qso_log);
-                                crate::download::save("sdroxide-log.adi", adif.as_bytes());
-                            }
-                        });
-                        if crate::chrome::chip(ui, false, "IMPORT")
-                            .on_hover_text("Import QSOs from an ADIF (.adi or .adif) file")
-                            .clicked()
-                        {
-                            crate::download::load_text(
-                                "ADIF",
-                                &["adi", "adif"],
-                                self.adif_import_inbox.clone(),
-                            );
-                        }
-                        ui.label(
-                            RichText::new(format!("{} QSO", self.qso_log.len()))
-                                .size(11.0)
-                                .color(crate::theme::gray(150)),
-                        );
-                    });
-                });
-                if self.log_edit.is_some() {
-                    ui.add_space(4.0);
-                    self.log_entry_form(ui, cmds);
-                }
-                ui.separator();
-                // Virtualised: show_rows lays out only the items the viewport
-                // covers, so a 22,000 QSO log costs the same per frame as a
-                // twenty QSO one. It needs the item count up front, which is
-                // why the view is refreshed before the scroll area rather than
-                // inside it.
-                self.log_view.refresh(&self.qso_log);
-                // Lent out for the duration of the draw and put straight back:
-                // a row is drawn from `self.qso_log` while the view says which
-                // row, and the two cannot both be borrowed out of `self`.
-                let view = std::mem::take(&mut self.log_view);
-                egui::ScrollArea::vertical().auto_shrink([false, false]).show_rows_themed(
-                    ui,
-                    row_height(ui),
-                    view.items.len(),
-                    |ui, rows| self.log_list(ui, &view, rows),
-                );
-                self.log_view = view;
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
+        // The shell's window: an egui window or its own OS one, with the ⇱
+        // WINDOW chip. That is what makes the logbook one of the station's
+        // windows rather than a dialog over the page — it can go on a second
+        // monitor like the rest.
+        let open = self.tool_window(
+            ctx,
+            "logbook",
+            "LOGBOOK",
+            [720.0, 560.0],
+            self.show_logbook,
+            |me, ui| me.logbook_body(ui, cmds),
+        );
         self.show_logbook = open;
+    }
+
+    /// The logbook's body: the session-grouped QSO list with add / edit / delete
+    /// and the ADIF/TXT export. Split out of [`Self::logbook_window`] so the
+    /// shell can draw it in a window of its own.
+    fn logbook_body(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        crate::chrome::window_body_bg(ui);
+        ui.horizontal(|ui| {
+            let adding = self.log_edit.as_ref().is_some_and(|f| f.id == 0);
+            if crate::chrome::chip(ui, adding, "+ NEW ENTRY").clicked() {
+                // The frequency of the contact, not the dial. In CW
+                // the dial sits a sidetone-pitch below the signal and
+                // in RTTY a tone pair below it, so logging the readout
+                // logs every one of those contacts low.
+                let freq = self.on_air_freq_hz();
+                let mode = self.state.rx[0].mode.label();
+                self.log_edit = Some(LogEditForm::new_entry(now_unix(), freq, mode));
+            }
+            if crate::chrome::chip(ui, self.show_contest, "CONTEST")
+                .on_hover_text("Contest logger — a session, dupes, a live score and Cabrillo")
+                .clicked()
+            {
+                self.show_contest = !self.show_contest;
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let have = !self.qso_log.is_empty();
+                ui.add_enabled_ui(have, |ui| {
+                    if crate::chrome::chip(ui, false, "TXT").clicked() {
+                        let txt = sdroxide_types::qso_log_to_text(&self.qso_log);
+                        crate::download::save("sdroxide-log.txt", txt.as_bytes());
+                    }
+                    if crate::chrome::chip(ui, false, "ADIF").clicked() {
+                        let adif = sdroxide_types::qso_log_to_adif(&self.qso_log);
+                        crate::download::save("sdroxide-log.adi", adif.as_bytes());
+                    }
+                });
+                if crate::chrome::chip(ui, false, "IMPORT")
+                    .on_hover_text("Import QSOs from an ADIF (.adi or .adif) file")
+                    .clicked()
+                {
+                    crate::download::load_text(
+                        "ADIF",
+                        &["adi", "adif"],
+                        self.adif_import_inbox.clone(),
+                    );
+                }
+                ui.label(
+                    RichText::new(format!("{} QSO", self.qso_log.len()))
+                        .size(11.0)
+                        .color(crate::theme::gray(150)),
+                );
+            });
+        });
+        if self.log_edit.is_some() {
+            ui.add_space(4.0);
+            self.log_entry_form(ui, cmds);
+        }
+        ui.separator();
+        // Virtualised: show_rows lays out only the items the viewport
+        // covers, so a 22,000 QSO log costs the same per frame as a
+        // twenty QSO one. It needs the item count up front, which is
+        // why the view is refreshed before the scroll area rather than
+        // inside it.
+        self.log_view.refresh(&self.qso_log);
+        // Lent out for the duration of the draw and put straight back:
+        // a row is drawn from `self.qso_log` while the view says which
+        // row, and the two cannot both be borrowed out of `self`.
+        let view = std::mem::take(&mut self.log_view);
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show_rows_themed(
+            ui,
+            row_height(ui),
+            view.items.len(),
+            |ui, rows| self.log_list(ui, &view, rows),
+        );
+        self.log_view = view;
     }
 
     /// The new/edit entry form (shown inside the logbook when active).

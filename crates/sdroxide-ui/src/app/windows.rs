@@ -471,30 +471,27 @@ fn memory_repeater_rows(ui: &mut egui::Ui, e: &mut MemoryEdit) {
 
 impl SdroxideApp {
     pub(in crate::app) fn memories_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
-        let mut open = self.show_memories;
-        let resp = egui::Window::new("Memories")
-            .id(crate::layout::salted_id(ctx, "Memories"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            // Wide enough for a row: the recall button, a name, a dial to the
-            // Hz, a mode, and the edit and delete buttons. Narrower than this
-            // and every name is drawn with an ellipsis on it.
-            .default_width(crate::layout::window_w(ctx, 460.0))
-            // A real starting height, and a floor under what egui remembers:
-            // the window used to hug its (often short) list and come up a few
-            // rows tall. See the voice keyer below for why the minimum matters
-            // as much as the default.
-            .default_height(crate::layout::window_h(ctx, 460.0))
-            .min_height(crate::layout::window_h(ctx, 280.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                self.memories_ui(ui, cmds)
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
+        // The shell's window: an egui window or its own OS one, with the ⇱
+        // WINDOW chip. Wide enough for a row — the recall button, a name, a
+        // dial to the Hz, a mode, and the edit and delete buttons; narrower and
+        // every name is drawn with an ellipsis on it.
+        let open = self.tool_window(
+            ctx,
+            "memories",
+            "Memories",
+            [460.0, 460.0],
+            self.show_memories,
+            |me, ui| me.memories_body(ui, cmds),
+        );
         self.show_memories = open;
+    }
+
+    /// The memory channel list and its entry form. Split out of
+    /// [`Self::memories_window`] so the shell can draw it in a window of its
+    /// own.
+    fn memories_body(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        crate::chrome::window_body_bg(ui);
+        self.memories_ui(ui, cmds)
     }
 
     fn memories_ui(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {

@@ -389,85 +389,101 @@ impl SdroxideApp {
             ),
         };
 
-        let mut open = self.show_grid;
-        let tracker = &mut self.grid_tracker;
-        egui::Window::new("GRID TRACKER")
-            .id(crate::layout::salted_id(ctx, "GRID TRACKER"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 760.0))
-            .default_height(crate::layout::window_h(ctx, 560.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                ui.horizontal(|ui| {
-                    // Which shape the log is read in. A CB operator wants
-                    // countries, a ham wants squares, and a mixed log can look
-                    // at either.
-                    if ui
-                        .selectable_label(tracker.mode == TrackerMode::Grid, "GRID/HAM")
-                        .on_hover_text(
-                            "Maidenhead squares — what a ham log carries. No CB calls land here: \
-                             an 11 m exchange carries a country, never a locator.",
-                        )
-                        .clicked()
-                    {
-                        tracker.mode = TrackerMode::Grid;
-                    }
-                    if ui
-                        .selectable_label(tracker.mode == TrackerMode::Country, "COUNTRY/CB")
-                        .on_hover_text(
-                            "DXCC countries at their nominal centre — what a CB log carries, \
-                             since an 11 m exchange has no locator in it. No ham calls land \
-                             here either: this is countries, not squares.",
-                        )
-                        .clicked()
-                    {
-                        tracker.mode = TrackerMode::Country;
-                    }
-                    ui.separator();
-                    ui.label(
-                        egui::RichText::new(format!("{worked_n} worked"))
-                            .color(theme::YELLOW())
-                            .monospace(),
-                    );
-                    ui.label(
-                        egui::RichText::new(format!("{confirmed} confirmed"))
-                            .color(theme::GREEN())
-                            .monospace(),
-                    );
-                    if ui
-                        .selectable_label(
-                            tracker.show_heard,
-                            egui::RichText::new(format!("{heard_n} heard"))
-                                .color(theme::CYAN())
-                                .monospace(),
-                        )
-                        .on_hover_text(
-                            "Shade what is heard on the live decode list, not only what is in \
-                             the log. A listener's version of the map: what is on the air now, \
-                             in cyan under the worked marks.",
-                        )
-                        .clicked()
-                    {
-                        tracker.show_heard = !tracker.show_heard;
-                    }
-                });
-                ui.separator();
-                let h = ui.available_height();
-                draw(ui, tracker, &data, home, h);
-                ui.separator();
-                ui.label(
-                    egui::RichText::new(
-                        "Drag to pan, wheel to zoom. Amber = worked, green = confirmed, \
-                         cyan = heard.",
-                    )
-                    .size(10.0)
-                    .color(theme::gray(150)),
-                );
-            });
+        // The shell's window: an egui window or its own OS one, with the ⇱
+        // WINDOW chip — one of the station's windows rather than a dialog.
+        //
+        // The tracker's own state is borrowed out for the draw because the map
+        // is painted from it while the shell holds the app, and the body is a
+        // free function over that borrow rather than a method.
+        let mut tracker = std::mem::take(&mut self.grid_tracker);
+        let open = self.tool_window(
+            ctx,
+            "grid-tracker",
+            "GRID TRACKER",
+            [760.0, 560.0],
+            self.show_grid,
+            |_me, ui| {
+                grid_tracker_body(ui, &mut tracker, worked_n, confirmed, heard_n, &data, home)
+            },
+        );
+        self.grid_tracker = tracker;
         self.show_grid = open;
     }
+}
+
+/// The grid tracker's body: the worked-squares map and the countries column.
+///
+/// A free function over the tracker's own state rather than an app method: the
+/// shell borrows the app to draw the window while the tracker is borrowed out of
+/// it for the paint, so the body cannot be reached through the app.
+fn grid_tracker_body<'a>(
+    ui: &mut egui::Ui,
+    tracker: &mut GridTracker,
+    worked_n: usize,
+    confirmed: usize,
+    heard_n: usize,
+    data: &'a TrackerData<'a>,
+    home: Option<(f64, f64)>,
+) {
+    crate::chrome::window_body_bg(ui);
+    ui.horizontal(|ui| {
+        // Which shape the log is read in. A CB operator wants
+        // countries, a ham wants squares, and a mixed log can look
+        // at either.
+        if ui
+            .selectable_label(tracker.mode == TrackerMode::Grid, "GRID/HAM")
+            .on_hover_text(
+                "Maidenhead squares — what a ham log carries. No CB calls land here: \
+                 an 11 m exchange carries a country, never a locator.",
+            )
+            .clicked()
+        {
+            tracker.mode = TrackerMode::Grid;
+        }
+        if ui
+            .selectable_label(tracker.mode == TrackerMode::Country, "COUNTRY/CB")
+            .on_hover_text(
+                "DXCC countries at their nominal centre — what a CB log carries, \
+                 since an 11 m exchange has no locator in it. No ham calls land \
+                 here either: this is countries, not squares.",
+            )
+            .clicked()
+        {
+            tracker.mode = TrackerMode::Country;
+        }
+        ui.separator();
+        ui.label(
+            egui::RichText::new(format!("{worked_n} worked")).color(theme::YELLOW()).monospace(),
+        );
+        ui.label(
+            egui::RichText::new(format!("{confirmed} confirmed")).color(theme::GREEN()).monospace(),
+        );
+        if ui
+            .selectable_label(
+                tracker.show_heard,
+                egui::RichText::new(format!("{heard_n} heard")).color(theme::CYAN()).monospace(),
+            )
+            .on_hover_text(
+                "Shade what is heard on the live decode list, not only what is in \
+                 the log. A listener's version of the map: what is on the air now, \
+                 in cyan under the worked marks.",
+            )
+            .clicked()
+        {
+            tracker.show_heard = !tracker.show_heard;
+        }
+    });
+    ui.separator();
+    draw(ui, tracker, &data, home, ui.available_height());
+    ui.separator();
+    ui.label(
+        egui::RichText::new(
+            "Drag to pan, wheel to zoom. Amber = worked, green = confirmed, \
+             cyan = heard.",
+        )
+        .size(10.0)
+        .color(theme::gray(150)),
+    );
 }
 
 #[cfg(test)]
