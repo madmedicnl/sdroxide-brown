@@ -86,41 +86,40 @@ pub(in crate::app) fn settings_ui_tab(
         );
         ui.end_row();
 
-        // The **undocked** panadapter. A window arrangement, chosen once and
-        // kept, rather than something reached for mid-QSO — so it lives here
-        // with the other display settings and applies to every mode. Native
-        // only: the browser keeps the panadapter in its one window.
+        // The **undocked** modules. A window arrangement, chosen once and kept,
+        // rather than something reached for mid-QSO — so it lives here with the
+        // other display settings. One row per [`DetachableModule`], so the next
+        // detachable module appears here for free. Native only: the browser
+        // keeps every module in its one window.
         #[cfg(not(target_arch = "wasm32"))]
         {
-            ui.label("Panadapter window");
-            ComboBox::from_id_salt("ui-panadapter-undocked")
-                .selected_text(if cfg.panadapter_detached {
-                    "Undocked — its own window"
-                } else {
-                    "Docked in this window"
-                })
-                .show_styled(ui, |ui| {
-                    ui.selectable_value(
-                        &mut cfg.panadapter_detached,
-                        false,
-                        "Docked in this window",
+            use sdroxide_types::DetachableModule;
+            for module in DetachableModule::ALL {
+                let mut on = cfg.is_detached(module);
+                ui.label(format!("{} window", module.label()));
+                ComboBox::from_id_salt(("ui-undocked", module))
+                    .selected_text(if on {
+                        "Undocked — its own window"
+                    } else {
+                        "Docked in this window"
+                    })
+                    .show_styled(ui, |ui| {
+                        ui.selectable_value(&mut on, false, "Docked in this window");
+                        ui.selectable_value(&mut on, true, "Undocked — its own window");
+                    })
+                    .response
+                    .on_hover_text(
+                        "Undocked, this module moves into its own window and the main \
+                         window gives the space back to what is left — put the waterfall on \
+                         a second monitor, or the controls on a third. Closing a module's \
+                         window docks it again.\n\nOn Wayland the size comes back but the \
+                         compositor decides where a window goes: float it and pin it to a \
+                         monitor with a window rule matching its app-id \
+                         (\"sdroxide-panadapter\", \"sdroxide-panel\").",
                     );
-                    ui.selectable_value(
-                        &mut cfg.panadapter_detached,
-                        true,
-                        "Undocked — its own window",
-                    );
-                })
-                .response
-                .on_hover_text(
-                    "Undocked, the panadapter moves into its own window and this window \
-                     gives the space to the controls and decoders — put the waterfall on a \
-                     second monitor. Closing the panadapter window docks it again.\n\nOn \
-                     Wayland the size comes back but the compositor decides where the \
-                     window goes: float it and pin it to a monitor with a window rule \
-                     matching app-id \"sdroxide-panadapter\".",
-                );
-            ui.end_row();
+                cfg.set_detached(module, on);
+                ui.end_row();
+            }
         }
 
         ui.label("Screen update rate");

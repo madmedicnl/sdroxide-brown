@@ -542,6 +542,59 @@ pub struct DetachedWindow {
     pub pos: Option<[f32; 2]>,
 }
 
+/// A module that can be pulled out of the main window into its own OS window —
+/// **undocked**. The panadapter and the mode's operating panel are the first
+/// two; the end goal is a user-arrangeable workspace in the SDRuno mould, so
+/// this is an enum keyed in [`UiSettings::detached`] rather than a field pair
+/// per module: a new detachable module is a variant here plus its UI spec,
+/// nothing else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum DetachableModule {
+    /// The spectrum and waterfall.
+    Panadapter,
+    /// The mode's operating panel — the decoder list, the transcript and the
+    /// controls under the panadapter.
+    Panel,
+}
+
+impl DetachableModule {
+    /// How many detachable modules there are — the length of
+    /// [`UiSettings::detached`], which is an array so `UiSettings` stays `Copy`.
+    pub const COUNT: usize = 2;
+
+    /// Every module, so a settings list or a test can walk them all.
+    pub const ALL: [DetachableModule; DetachableModule::COUNT] =
+        [DetachableModule::Panadapter, DetachableModule::Panel];
+
+    /// This module's slot in [`UiSettings::detached`]. A plain array rather than
+    /// a map keeps `UiSettings` `Copy`, which the whole UI leans on.
+    pub fn index(self) -> usize {
+        match self {
+            DetachableModule::Panadapter => 0,
+            DetachableModule::Panel => 1,
+        }
+    }
+
+    /// A short, stable label for a settings row or a window title.
+    pub fn label(self) -> &'static str {
+        match self {
+            DetachableModule::Panadapter => "Panadapter",
+            DetachableModule::Panel => "Operating panel",
+        }
+    }
+}
+
+/// Whether one [`DetachableModule`] is undocked, and where its window last was.
+/// See [`UiSettings::detached`].
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct DetachedState {
+    /// True when the module is drawn in its own window instead of the main one.
+    pub detached: bool,
+    /// Where its window last was; `None` until it has been open once.
+    #[serde(default)]
+    pub window: Option<DetachedWindow>,
+}
+
 /// User display preferences. All have defaults so a missing `[ui]` table loads.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -836,21 +889,28 @@ pub struct UiSettings {
     /// it leaves a dead control behind the moment the condition clears.
     #[serde(default)]
     pub dismissed_advisories: u64,
-    /// Draw the panadapter (spectrum + waterfall) in its **own OS window**
-    /// rather than the main one — the first slice of undocked mode
-    /// (`UNDOCKED-HANDOVER.md`). The main window hands that space back to the
-    /// operating panel and the decoders.
+    /// Which modules are undocked into their own windows, and where those
+    /// windows last were — one [`DetachedState`] per [`DetachableModule`], in
+    /// `module.index()` order. An array rather than a map so `UiSettings` stays
+    /// `Copy`. `#[serde(default)]`: a config written before this loads and
+    /// simply starts docked.
     ///
-    /// **Native only.** The browser has no second window and keeps the
-    /// panadapter in-window, so the flag is ignored there. Machine-local and
+    /// **Native only.** The browser has no second window and keeps every module
+    /// in-window, so the flags are ignored there. Machine-local, and
     /// deliberately not on the wire (`ClientScreen`): where a window sits is a
     /// property of this screen, as [`Self::solar3d_window`]'s note says.
     #[serde(default)]
-    pub panadapter_detached: bool,
-    /// Where that detached panadapter window last was. `None` until it has been
-    /// open once. See [`DetachedWindow`].
-    #[serde(default)]
-    pub panadapter_window: Option<DetachedWindow>,
+    pub detached: [DetachedState; DetachableModule::COUNT],
+    /// Legacy — the panadapter's undocked flag from before [`Self::detached`]
+    /// existed, read once at load by [`Self::migrate_detached`] and never
+    /// written again. Public only because a `..*settings` struct update needs
+    /// every field; do not read it, use [`Self::is_detached`].
+    #[serde(default, skip_serializing, rename = "panadapter_detached")]
+    pub panadapter_detached_legacy: bool,
+    /// Legacy — the panadapter window geometry from before the array. See the
+    /// note above.
+    #[serde(default, skip_serializing, rename = "panadapter_window")]
+    pub panadapter_window_legacy: Option<DetachedWindow>,
 }
 
 /// Default for [`UiSettings::spot_colors`] — every kind on its stock tint.
@@ -998,8 +1058,9 @@ impl Default for UiSettings {
             client_share_bindings: false,
             client_bindings_declined: false,
             dismissed_advisories: 0,
-            panadapter_detached: false,
-            panadapter_window: None,
+            detached: [DetachedState::default(); DetachableModule::COUNT],
+            panadapter_detached_legacy: false,
+            panadapter_window_legacy: None,
         }
     }
 }
@@ -1032,6 +1093,40 @@ impl UiSettings {
         } else {
             format!("{khz:.1} kHz")
         }
+    }
+
+    /// One module's undocked state, or the docked default if it has never been
+    /// touched.
+    pub fn detached_state(&self, module: DetachableModule) -> DetachedState {
+        self.detached[module.index()]
+    }
+
+    /// Whether a module is undocked.
+    pub fn is_detached(&self, module: DetachableModule) -> bool {
+        self.detached[module.index()].detached
+    }
+
+    /// Set (or clear) a module's undocked flag, leaving its remembered window
+    /// geometry alone.
+    pub fn set_detached(&mut self, module: DetachableModule, on: bool) {
+        self.detached[module.index()].detached = on;
+    }
+
+    /// Fold the pre-array `panadapter_detached` / `panadapter_window` keys from
+    /// an older config into [`Self::detached`]. Idempotent, so the two load
+    /// paths (native `config.toml`, browser storage) can both call it and
+    /// neither has to know whether there is anything to do.
+    pub fn migrate_detached(&mut self) {
+        if !self.panadapter_detached_legacy && self.panadapter_window_legacy.is_none() {
+            return;
+        }
+        let entry = &mut self.detached[DetachableModule::Panadapter.index()];
+        entry.detached |= self.panadapter_detached_legacy;
+        if entry.window.is_none() {
+            entry.window = self.panadapter_window_legacy;
+        }
+        self.panadapter_detached_legacy = false;
+        self.panadapter_window_legacy = None;
     }
 
     /// Selectable frame rates for the UI combo.
@@ -1374,6 +1469,45 @@ mod tests {
         // order: it is written out, not derived.
         assert!(LayoutMode::ALL.contains(&LayoutMode::Auto));
         assert_eq!(LayoutMode::ALL.len(), 5);
+    }
+
+    /// The undocked state survives a serialise round trip, and the pre-array
+    /// keys of an older config fold into the array rather than being dropped.
+    #[test]
+    fn undocked_state_round_trips_and_migrates() {
+        // A fresh config starts docked everywhere.
+        let mut s = UiSettings::default();
+        for m in DetachableModule::ALL {
+            assert!(!s.is_detached(m), "{m:?} must start docked");
+        }
+        // Undock the panel and give it a window; the panadapter stays docked.
+        s.set_detached(DetachableModule::Panel, true);
+        s.detached[DetachableModule::Panel.index()].window =
+            Some(DetachedWindow { size: [520.0, 700.0], pos: None });
+        let json = serde_json::to_string(&s).unwrap();
+        let back: UiSettings = serde_json::from_str(&json).unwrap();
+        assert!(back.is_detached(DetachableModule::Panel));
+        assert!(!back.is_detached(DetachableModule::Panadapter));
+        assert_eq!(
+            back.detached_state(DetachableModule::Panel).window,
+            Some(DetachedWindow { size: [520.0, 700.0], pos: None })
+        );
+
+        // An old config's two panadapter keys fold in on `migrate_detached`.
+        let mut migrated = UiSettings::default();
+        migrated.panadapter_detached_legacy = true;
+        migrated.panadapter_window_legacy =
+            Some(DetachedWindow { size: [960.0, 540.0], pos: None });
+        assert!(!migrated.is_detached(DetachableModule::Panadapter), "not until migration runs");
+        migrated.migrate_detached();
+        assert!(migrated.is_detached(DetachableModule::Panadapter));
+        assert_eq!(
+            migrated.detached_state(DetachableModule::Panadapter).window.map(|w| w.size),
+            Some([960.0, 540.0])
+        );
+        // Idempotent: a second call changes nothing.
+        migrated.migrate_detached();
+        assert!(migrated.is_detached(DetachableModule::Panadapter));
     }
 }
 

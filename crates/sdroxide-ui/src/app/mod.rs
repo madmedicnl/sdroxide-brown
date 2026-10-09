@@ -1497,7 +1497,10 @@ impl SdroxideApp {
         // The look and the font sizes must be selected before `theme::apply`
         // reads them, or the first frame flashes the default theme at the
         // default scale.
-        let ui_settings = load_ui_settings(storage);
+        let mut ui_settings = load_ui_settings(storage);
+        // Fold a pre-map config's panadapter undock into the `detached` map, so
+        // an operator who had it open does not find it docked after the update.
+        ui_settings.migrate_detached();
         // Start in SWL mode when asked: either the stored preference or this
         // run's `--swl`. The per-radio switch can still turn it off for a
         // session (which clears this seed), but the next start honours the
@@ -2700,7 +2703,7 @@ mod tests {
         // The detached-window draw is a no-op under an embedded-viewport
         // context (the headless harness), so this drives the *main window*
         // layout: the panadapter out of the column, the panel taking it.
-        app.ui_settings.panadapter_detached = detached;
+        app.ui_settings.set_detached(sdroxide_types::DetachableModule::Panadapter, detached);
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
@@ -2843,23 +2846,25 @@ mod tests {
         }
     }
 
-    /// The split arithmetic the undocked mode rests on: detached, the main
-    /// window reserves no height for the panadapter at all and the operating
-    /// panel takes the whole column. A pure counterpart to the render check
-    /// above, so the rule is pinned even where a viewport cannot be drawn.
+    /// The split arithmetic the undocked mode rests on: a part that is undocked
+    /// (or the panadapter with its layers off) reserves no height here, and the
+    /// other takes the whole column. A pure counterpart to the render checks, so
+    /// the rule is pinned even where a viewport cannot be drawn.
     #[test]
-    fn detaching_gives_the_panel_the_whole_column() {
+    fn undocking_either_part_gives_its_column_away() {
         let total = 900.0;
-        let (wf, panel) = crate::app::frame::panadapter_split(true, true, total, 9.0, 0.5, 24.0);
-        assert_eq!((wf, panel), (0.0, total), "detached must hand the column to the panel");
-        // And the ordinary case still splits rather than collapsing.
-        let (wf, panel) = crate::app::frame::panadapter_split(false, true, total, 9.0, 0.5, 24.0);
+        let split = crate::app::frame::column_split;
+        // Panadapter undocked: the panel takes it all.
+        assert_eq!(split(true, true, false, total, 9.0, 0.5, 24.0), (0.0, total));
+        // Panel undocked: the panadapter takes it all, and no divider is owed.
+        assert_eq!(split(false, true, true, total, 9.0, 0.5, 24.0), (total, 0.0));
+        // Both undocked: neither is drawn in this window.
+        assert_eq!(split(true, true, true, total, 9.0, 0.5, 24.0), (0.0, 0.0));
+        // Layers off is the same as the panadapter being undocked.
+        assert_eq!(split(false, false, false, total, 9.0, 0.5, 24.0), (0.0, total));
+        // Both present: the ordinary split, still summing to the usable height.
+        let (wf, panel) = split(false, true, false, total, 9.0, 0.5, 24.0);
         assert!(wf > 0.0 && panel > 0.0 && (wf + panel - (total - 9.0)).abs() < 0.01);
-        // Layers off is the same as detached: no panadapter, panel gets it all.
-        assert_eq!(
-            crate::app::frame::panadapter_split(false, false, total, 9.0, 0.5, 24.0),
-            (0.0, total)
-        );
     }
 
     /// Reproduce Kevin's phone crash report (discussion #9) at the geometry
