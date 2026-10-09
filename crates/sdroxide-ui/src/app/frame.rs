@@ -581,6 +581,9 @@ impl eframe::App for SdroxideApp {
             self.remember_ui_zoom(&ctx);
         }
         self.drain_events(&ctx, now);
+        // The update check answers on its own thread; pick it up cheaply.
+        #[cfg(not(target_arch = "wasm32"))]
+        self.update.poll();
         self.poll_adif_import();
         self.poll_settings_import();
         self.refresh_band_conditions(now);
@@ -827,6 +830,43 @@ impl eframe::App for SdroxideApp {
                                     self.radio_notice = None;
                                     self.rx_only_nudge_dismissed = true;
                                 }
+                            }
+                        });
+                    });
+                });
+        }
+        // **An update is available.** The fork's own GitHub Releases, so only a
+        // full release lands here — the nightly is a pre-release and asks
+        // nothing. Dismissed for the session; the check itself is the
+        // `check_for_updates` setting.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(tag) = self.update.latest.clone().filter(|_| !self.update_dismissed) {
+            let (wash, rule, mark, ink) = notice_banner_colors();
+            egui::Frame::new()
+                .fill(wash)
+                .stroke(egui::Stroke::new(1.0, rule))
+                .inner_margin(egui::Margin::symmetric(8, 5))
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new("⬆").size(15.0).color(mark));
+                        ui.label(
+                            RichText::new(format!(
+                                "SDR Oxide Brown {tag} is available — you are on {}.",
+                                sdroxide_version::VERSION
+                            ))
+                            .size(13.0)
+                            .color(ink),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("Dismiss").clicked() {
+                                self.update_dismissed = true;
+                            }
+                            if ui
+                                .button(RichText::new("Download").size(13.0))
+                                .on_hover_text("Opens the release page in your browser")
+                                .clicked()
+                            {
+                                crate::download::open_external(super::update::RELEASES_PAGE);
                             }
                         });
                     });

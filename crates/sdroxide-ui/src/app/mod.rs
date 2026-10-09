@@ -57,6 +57,9 @@ pub(in crate::app) mod speech;
 pub(in crate::app) mod spots;
 pub(in crate::app) mod swl_log;
 pub(in crate::app) mod top_bar;
+/// The update check — native only (a browser has no updater to point at).
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) mod update;
 pub(crate) mod util;
 pub(in crate::app) mod windows;
 pub(in crate::app) mod winlink;
@@ -543,6 +546,12 @@ pub struct SdroxideApp {
     /// What is being typed into the next **SAVE CURRENT**.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     workspace_name: String,
+    /// The startup update check, and whether its banner has been dismissed this
+    /// session. Native only; `None` while the check is off or still in flight.
+    #[cfg(not(target_arch = "wasm32"))]
+    update: update::UpdateCheck,
+    #[cfg(not(target_arch = "wasm32"))]
+    update_dismissed: bool,
     /// Which half of the band/mode menu was last shown (listen or operate).
     band_menu_tab: top_bar::BandMenuTab,
     /// Which slice of the spectrum the band menu's chips are narrowed to (HF,
@@ -1740,6 +1749,17 @@ impl SdroxideApp {
             mode_popup_since: None,
             workspaces: crate::app::persist::load_workspaces(),
             workspace_name: String::new(),
+            // Started here only where the operator has asked for it. Every
+            // radio tab asks on its own startup; a few requests an hour is
+            // nothing against the API's limit.
+            #[cfg(not(target_arch = "wasm32"))]
+            update: if ui_settings.check_for_updates {
+                update::UpdateCheck::start()
+            } else {
+                update::UpdateCheck::default()
+            },
+            #[cfg(not(target_arch = "wasm32"))]
+            update_dismissed: false,
             band_menu_tab: top_bar::BandMenuTab::Operate,
             band_filter: top_bar::BandFilter::default(),
             fft_popup_since: None,

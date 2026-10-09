@@ -86,6 +86,19 @@ pub(in crate::app) fn settings_ui_tab(
         );
         ui.end_row();
 
+        ui.label("Updates");
+        crate::chrome::checkbox(
+            ui,
+            &mut cfg.check_for_updates,
+            "check for a new release at start-up",
+        )
+        .on_hover_text(
+            "Asks the fork's GitHub Releases for the latest release once at start-up, and \
+             shows a banner if it is newer than this build. Only full releases count — the \
+             nightly is a pre-release — and off means no outbound call at all.",
+        );
+        ui.end_row();
+
         // The **undocked** modules. A window arrangement, chosen once and kept,
         // rather than something reached for mid-QSO — so it lives here with the
         // other display settings. One row per [`DetachableModule`], so the next
