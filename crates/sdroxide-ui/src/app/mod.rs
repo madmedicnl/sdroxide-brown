@@ -2684,6 +2684,7 @@ mod tests {
     fn panel_edge_frame(
         mode: sdroxide_types::Mode,
         w: f32,
+        detached: bool,
     ) -> (Vec<(egui::Rect, bool)>, Option<egui::Rect>, Option<f32>) {
         let dir = std::env::temp_dir().join(format!("sdroxide-panel-edge-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -2696,6 +2697,10 @@ mod tests {
         app.band_docked = true;
         app.band_dock_visible = true;
         app.state.rx[0].mode = mode;
+        // The detached-window draw is a no-op under an embedded-viewport
+        // context (the headless harness), so this drives the *main window*
+        // layout: the panadapter out of the column, the panel taking it.
+        app.ui_settings.panadapter_detached = detached;
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
@@ -2751,7 +2756,7 @@ mod tests {
                     .copied()
             })
             .unwrap_or(sdroxide_types::Mode::Ft8);
-        let (mut rows, dock, dock_room) = panel_edge_frame(mode, w);
+        let (mut rows, dock, dock_room) = panel_edge_frame(mode, w, false);
         rows.sort_by(|a, b| b.0.max.x.partial_cmp(&a.0.max.x).unwrap_or(std::cmp::Ordering::Equal));
         println!("--- #643 probe: {mode:?} at {w:.0} pt, dock_room={dock_room:?}");
         if let Some(d) = dock {
@@ -2805,30 +2810,56 @@ mod tests {
                 sdroxide_types::Mode::Olivia,
                 sdroxide_types::Mode::Ft8,
             ] {
-                let (rows, dock, _) = panel_edge_frame(mode, w);
-                let ink: Vec<egui::Rect> =
-                    rows.iter().filter(|(_, drawn)| *drawn).map(|(r, _)| *r).collect();
-                for r in &ink {
-                    assert!(
-                        r.max.x <= w + 0.5 && r.min.x >= -0.5,
-                        "{mode:?} at {w:.0} pt: ink x {}..{} runs past the window",
-                        r.min.x,
-                        r.max.x
-                    );
-                }
-                if let Some(d) = dock {
+                // Both with the panadapter in-window and with it detached: the
+                // detached case is the undocked mode's oracle — the panel takes
+                // the whole column in the main window and must still stop at
+                // both edges. (The detached window itself is a no-op under the
+                // embedded-viewport harness; only the main-window layout runs.)
+                for detached in [false, true] {
+                    let (rows, dock, _) = panel_edge_frame(mode, w, detached);
+                    let ink: Vec<egui::Rect> =
+                        rows.iter().filter(|(_, drawn)| *drawn).map(|(r, _)| *r).collect();
                     for r in &ink {
-                        let y_overlaps = r.min.y < d.max.y && r.max.y > d.min.y;
-                        if y_overlaps && r.max.x > d.min.x + 0.5 && r.min.x < d.min.x - 0.5 {
-                            panic!(
-                                "{mode:?} at {w:.0} pt: ink x {}..{} y {}..{} crosses the dock edge at {}",
-                                r.min.x, r.max.x, r.min.y, r.max.y, d.min.x
-                            );
+                        assert!(
+                            r.max.x <= w + 0.5 && r.min.x >= -0.5,
+                            "{mode:?} at {w:.0} pt (detached={detached}): ink x {}..{} runs past the window",
+                            r.min.x,
+                            r.max.x
+                        );
+                    }
+                    if let Some(d) = dock {
+                        for r in &ink {
+                            let y_overlaps = r.min.y < d.max.y && r.max.y > d.min.y;
+                            if y_overlaps && r.max.x > d.min.x + 0.5 && r.min.x < d.min.x - 0.5 {
+                                panic!(
+                                    "{mode:?} at {w:.0} pt (detached={detached}): ink x {}..{} y {}..{} crosses the dock edge at {}",
+                                    r.min.x, r.max.x, r.min.y, r.max.y, d.min.x
+                                );
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    /// The split arithmetic the undocked mode rests on: detached, the main
+    /// window reserves no height for the panadapter at all and the operating
+    /// panel takes the whole column. A pure counterpart to the render check
+    /// above, so the rule is pinned even where a viewport cannot be drawn.
+    #[test]
+    fn detaching_gives_the_panel_the_whole_column() {
+        let total = 900.0;
+        let (wf, panel) = crate::app::frame::panadapter_split(true, true, total, 9.0, 0.5, 24.0);
+        assert_eq!((wf, panel), (0.0, total), "detached must hand the column to the panel");
+        // And the ordinary case still splits rather than collapsing.
+        let (wf, panel) = crate::app::frame::panadapter_split(false, true, total, 9.0, 0.5, 24.0);
+        assert!(wf > 0.0 && panel > 0.0 && (wf + panel - (total - 9.0)).abs() < 0.01);
+        // Layers off is the same as detached: no panadapter, panel gets it all.
+        assert_eq!(
+            crate::app::frame::panadapter_split(false, false, total, 9.0, 0.5, 24.0),
+            (0.0, total)
+        );
     }
 
     /// Reproduce Kevin's phone crash report (discussion #9) at the geometry

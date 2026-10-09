@@ -5576,6 +5576,38 @@ impl SdroxideApp {
                 self.detail_row(ui, &mut cfg);
             }
         });
+        // The detached panadapter: move this panadapter into its own OS window,
+        // so the main window can give the whole column to the controls and
+        // decoders — the waterfall on a second monitor. Native only; the
+        // browser keeps the panadapter in-window.
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::chrome::menu_group(ui, "Window", w, |ui| {
+            let mode = self.state.rx[0].mode;
+            let can = mode.has_bottom_panel() || mode == Mode::Cw;
+            let on = cfg.panadapter_detached;
+            let resp = ui.add_enabled_ui(can, |ui| crate::chrome::chip(ui, on, "DETACH")).inner;
+            let resp = if can {
+                resp.on_hover_text(
+                    "Show the panadapter in its own window, and give its column here to \
+                     the controls and decoders — put the waterfall on a second monitor. \
+                     Closing that window puts it back.\n\nOn Wayland the size comes back \
+                     but the compositor decides where the window goes: float it and pin \
+                     it to a monitor with a window rule matching app-id \
+                     \"sdroxide-panadapter\".",
+                )
+            } else {
+                resp.on_hover_text(
+                    "Detaching needs a mode with a panel under the panadapter — there is \
+                     otherwise no column for this window to reclaim.",
+                )
+            };
+            if resp.clicked() {
+                // Through the local copy, not `self.ui_settings`, so the commit
+                // at the foot of this function sees the change (it writes the
+                // whole struct back and would otherwise undo a direct write).
+                cfg.panadapter_detached = !on;
+            }
+        });
         if cfg != self.ui_settings {
             self.ui_settings = cfg;
             crate::app::persist::persist_ui_settings(&self.ui_settings);

@@ -61,6 +61,24 @@ fn digi_split(total: f32, divider_h: f32, fraction: f32, row_h: f32) -> (f32, f3
     (usable - panel_h, panel_h)
 }
 
+/// The panadapter/operating-panel split for one column.
+///
+/// Detached — or with both panadapter layers switched off — there is no
+/// panadapter in this window at all, so the panel takes the whole height rather
+/// than sharing it with an empty strip. Split out from the frame loop so that
+/// decision has a pure test: the detached window itself cannot be asserted
+/// headlessly, but the *main window reclaiming the column* can.
+pub(in crate::app) fn panadapter_split(
+    detached: bool,
+    layers: bool,
+    total: f32,
+    divider_h: f32,
+    fraction: f32,
+    row_h: f32,
+) -> (f32, f32) {
+    if detached || !layers { (0.0, total) } else { digi_split(total, divider_h, fraction, row_h) }
+}
+
 /// Whether a state update that kept the mode moved the receiver far enough to
 /// throw the copied decodes away.
 ///
@@ -179,6 +197,74 @@ fn centred_waterfall_note(ui: &egui::Ui, area: egui::Rect, text: &str) {
         egui::Rect::from_center_size(area.center(), galley.size() + egui::vec2(20.0, 10.0));
     p.rect_filled(box_rect, 4.0, egui::Color32::from_black_alpha(180));
     p.galley(box_rect.center() - galley.size() / 2.0, galley, ink);
+}
+
+/// The dial as a large readout string, MHz with trailing zeros trimmed —
+/// "27.265", "144.8", "10.1206". Shared by the detached panadapter's overlay.
+#[cfg(not(target_arch = "wasm32"))]
+fn readout_text(hz: f64) -> String {
+    let mhz = format!("{:.6}", hz.max(0.0) / 1e6);
+    format!("{} MHz", mhz.trim_end_matches('0').trim_end_matches('.'))
+}
+
+/// A large, display-only frequency readout across the top of the **detached**
+/// panadapter, over a dark pill so it reads on any waterfall.
+///
+/// The detached window can be on a second monitor with the main window showing
+/// something else, so the one number that has to be legible there is the dial.
+/// Deliberately display-only: the tuning strip stays in the main window, so
+/// there is a single owner for the frequency and the two windows cannot
+/// disagree — a click or drag on the panadapter itself still tunes, as before.
+#[cfg(not(target_arch = "wasm32"))]
+fn centred_detached_readout(ui: &egui::Ui, area: egui::Rect, text: &str) {
+    let p = ui.painter_at(area);
+    let ink = egui::Color32::from_rgb(255, 209, 66);
+    let font = egui::FontId::monospace(34.0);
+    let galley = p.layout_no_wrap(text.to_owned(), font, ink);
+    let centre = egui::pos2(area.center().x, area.min.y + galley.size().y * 0.5 + 10.0);
+    let box_rect = egui::Rect::from_center_size(centre, galley.size() + egui::vec2(28.0, 12.0));
+    p.rect_filled(box_rect, 6.0, egui::Color32::from_black_alpha(170));
+    p.galley(box_rect.center() - galley.size() / 2.0, galley, ink);
+}
+
+/// The detached panadapter's window id. **One window for the station**, not one
+/// per radio: `UiSettings::panadapter_detached` is station-wide, so there is a
+/// single detached panadapter and it shows the focused radio's. A stable id
+/// across radio and pane switches is the point — it lets the same OS window be
+/// reused rather than torn down and remapped, which a tiling compositor treats
+/// as a *new* window sized by it rather than by the operator.
+#[cfg(not(target_arch = "wasm32"))]
+fn panadapter_viewport_id() -> egui::ViewportId {
+    egui::ViewportId::from_hash_of("sdroxide-panadapter")
+}
+
+/// The app-id a Wayland window rule matches on to float the detached
+/// panadapter and pin it to a monitor. See `UNDOCKED-HANDOVER.md`.
+#[cfg(not(target_arch = "wasm32"))]
+const PANADAPTER_APP_ID: &str = "sdroxide-panadapter";
+
+/// The size and position a (re)built detached panadapter opens at: the
+/// operator's last geometry if there is one, otherwise a wide default, either
+/// way shrunk to fit the monitor it is about to open on. Never grows a window.
+///
+/// The position is not clamped (a clamp to the monitor's *size* pulled a window
+/// left on a second screen back onto the first — the same reasoning as the 3D
+/// window's geometry), and is `None` on Wayland, which gives a client no
+/// absolute position.
+#[cfg(not(target_arch = "wasm32"))]
+fn detached_geometry(
+    monitor: Option<egui::Vec2>,
+    seed: Option<sdroxide_types::DetachedWindow>,
+) -> (egui::Vec2, Option<egui::Pos2>) {
+    let want = seed.map_or(egui::vec2(960.0, 540.0), |s| egui::Vec2::from(s.size));
+    let Some(monitor) = monitor.filter(|m| m.x > 1.0 && m.y > 1.0) else {
+        return (want, seed.and_then(|s| s.pos).map(egui::Pos2::from));
+    };
+    let chrome = egui::vec2(16.0, 40.0);
+    let size =
+        crate::layout::fit_inner_size(monitor, want + chrome, want, egui::vec2(360.0, 240.0))
+            .unwrap_or(want);
+    (size, seed.and_then(|s| s.pos).map(egui::Pos2::from))
 }
 
 impl eframe::App for SdroxideApp {
@@ -729,7 +815,11 @@ impl eframe::App for SdroxideApp {
             // `spectrum_view::show_ext`), so they cannot empty its screen.
             let layers = crate::layout::panadapter_waterfall_only(ui.ctx())
                 || self.view.panadapter_visible();
-            let show_wf = (!phone || on_waterfall) && layers;
+            // A detached panadapter is drawn into its own window and takes no
+            // room here: the operating panel gets the whole column. Native
+            // only, and only for a mode with a panel to reclaim the space.
+            let detached = layers && self.panadapter_detached(mode);
+            let show_wf = !detached && (!phone || on_waterfall) && layers;
             let show_panel = !phone || !on_waterfall;
 
             // Manual vertical split with a draggable divider: the operating
@@ -740,12 +830,12 @@ impl eframe::App for SdroxideApp {
             let (wf_h, panel_h) = if phone {
                 // Whichever one is showing gets all of it.
                 (total, total)
-            } else if !layers {
-                (0.0, total)
             } else {
                 // The handle plus the gap the layout inserts on each side of it.
                 let divider = handle_h + 2.0 * ui.spacing().item_spacing.y;
-                digi_split(
+                panadapter_split(
+                    detached,
+                    layers,
                     total,
                     divider,
                     self.view.digi_panel_fraction,
@@ -762,7 +852,7 @@ impl eframe::App for SdroxideApp {
             // Read here: the waterfall call below borrows `self`'s fields mutably.
             let atsmini = self.atsmini_active();
             let wf_tuning = self.wf_tick(live, ui.ctx().pixels_per_point());
-            if show_wf {
+            if show_wf || detached {
                 // **SSTV on a demod-audio front end.** Its view is anchored on
                 // the picture rather than on the tone it happens to be carrying,
                 // and CTR has to centre on that anchor — with the dial as the
@@ -815,28 +905,51 @@ impl eframe::App for SdroxideApp {
                     && self.digi_status.as_ref().map(|s| s.config.auto_tx_freq).unwrap_or(true);
                 let hold_tx_freq = mode.is_slotted()
                     && self.digi_status.as_ref().map(|s| s.config.hold_tx_freq).unwrap_or(false);
-                self.draw_panadapter(
-                    ui,
-                    width,
-                    wf_h,
-                    frame.as_ref(),
-                    &mut cmds,
-                    cursor,
-                    dxped,
-                    auto_tx_freq,
-                    hold_tx_freq,
-                    &markers,
-                    &ft8_spots,
-                    &ft8_alpha,
-                    &net_spots,
-                    &net_alpha,
-                    &mut clicked_spot,
-                    &ism_labels,
-                    &mem_marks,
-                    show_panel,
-                    now,
-                    wf_tuning,
-                );
+                if detached {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    self.show_detached_panadapter(
+                        ui.ctx(),
+                        now,
+                        frame.as_ref(),
+                        &mut cmds,
+                        cursor,
+                        dxped,
+                        auto_tx_freq,
+                        hold_tx_freq,
+                        &markers,
+                        &ft8_spots,
+                        &ft8_alpha,
+                        &net_spots,
+                        &net_alpha,
+                        &mut clicked_spot,
+                        &ism_labels,
+                        &mem_marks,
+                        wf_tuning,
+                    );
+                } else {
+                    self.draw_panadapter(
+                        ui,
+                        width,
+                        wf_h,
+                        frame.as_ref(),
+                        &mut cmds,
+                        cursor,
+                        dxped,
+                        auto_tx_freq,
+                        hold_tx_freq,
+                        &markers,
+                        &ft8_spots,
+                        &ft8_alpha,
+                        &net_spots,
+                        &net_alpha,
+                        &mut clicked_spot,
+                        &ism_labels,
+                        &mem_marks,
+                        show_panel,
+                        now,
+                        wf_tuning,
+                    );
+                }
             }
             // Only between two things: with the panadapter switched off there
             // is nothing above the panel for the handle to divide, and a drag
@@ -919,6 +1032,9 @@ impl eframe::App for SdroxideApp {
             // switching both off asks for.
             let layers = crate::layout::panadapter_waterfall_only(ui.ctx())
                 || self.view.panadapter_visible();
+            // A detached panadapter takes no room here; only CW, of the analog
+            // modes, has a panel under it to reclaim the column.
+            let detached = layers && self.panadapter_detached(self.state.rx[0].mode);
             let (wf_h, panel_h, show_wf, show_panel) = if !cw_mode {
                 (ui.available_height(), 0.0, layers, false)
             } else if phone {
@@ -927,7 +1043,7 @@ impl eframe::App for SdroxideApp {
                     self.digi_pane(Mode::Cw) == crate::app::panels::panel_panes(Mode::Cw).len();
                 let h = ui.available_height();
                 (h, h, on_wf, !on_wf)
-            } else if !layers {
+            } else if !layers || detached {
                 (0.0, ui.available_height(), false, true)
             } else {
                 let total = ui.available_height();
@@ -954,29 +1070,52 @@ impl eframe::App for SdroxideApp {
                 // default, with the setting.
                 center_on_cursor: self.ui_settings.cw_qrg,
             });
-            if show_wf {
-                self.draw_panadapter(
-                    ui,
-                    width,
-                    wf_h,
-                    frame.as_ref(),
-                    &mut cmds,
-                    cw_pitch,
-                    sdroxide_types::DxpedMode::Normal,
-                    false,
-                    false,
-                    &[],
-                    &cw_spots,
-                    &cw_alpha,
-                    &net_spots,
-                    &net_alpha,
-                    &mut clicked_spot,
-                    &ism_labels,
-                    &mem_marks,
-                    show_panel,
-                    now,
-                    wf_tuning,
-                );
+            if show_wf || detached {
+                if detached {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    self.show_detached_panadapter(
+                        ui.ctx(),
+                        now,
+                        frame.as_ref(),
+                        &mut cmds,
+                        cw_pitch,
+                        sdroxide_types::DxpedMode::Normal,
+                        false,
+                        false,
+                        &[],
+                        &cw_spots,
+                        &cw_alpha,
+                        &net_spots,
+                        &net_alpha,
+                        &mut clicked_spot,
+                        &ism_labels,
+                        &mem_marks,
+                        wf_tuning,
+                    );
+                } else {
+                    self.draw_panadapter(
+                        ui,
+                        width,
+                        wf_h,
+                        frame.as_ref(),
+                        &mut cmds,
+                        cw_pitch,
+                        sdroxide_types::DxpedMode::Normal,
+                        false,
+                        false,
+                        &[],
+                        &cw_spots,
+                        &cw_alpha,
+                        &net_spots,
+                        &net_alpha,
+                        &mut clicked_spot,
+                        &ism_labels,
+                        &mem_marks,
+                        show_panel,
+                        now,
+                        wf_tuning,
+                    );
+                }
             }
             if show_panel {
                 if !phone && show_wf {
@@ -1380,6 +1519,180 @@ impl SdroxideApp {
                 self.fit_levels_now(now);
             }
         });
+    }
+
+    /// Draw the panadapter into its **own OS window** (native only), when the
+    /// focused radio has [`UiSettings::panadapter_detached`] set.
+    ///
+    /// `show_viewport_immediate` rather than the deferred form the 3D window
+    /// uses: the panadapter draws from `&mut self`'s live state (the view, the
+    /// peaks, the smoothing, the trace cache, the 3D surface) and a click, zoom
+    /// or drag has to flow straight back into it — so the published snapshot
+    /// the deferred closure's `Send + Sync + 'static` bound would force is
+    /// exactly what must not happen. Immediate runs in this same frame and may
+    /// borrow `self`, so the ordinary draw moves across nearly unchanged.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[allow(clippy::too_many_arguments)]
+    fn show_detached_panadapter(
+        &mut self,
+        ctx: &egui::Context,
+        now: f64,
+        frame: Option<&std::sync::Arc<sdroxide_types::SpectrumFrame>>,
+        cmds: &mut Vec<Command>,
+        cursor: Option<spectrum_view::AudioCursor>,
+        dxped: sdroxide_types::DxpedMode,
+        auto_tx_freq: bool,
+        hold_tx_freq: bool,
+        markers: &[f32],
+        skimmer: &[sdroxide_types::SkimmerSpot],
+        alpha: &[f32],
+        net_spots: &[Spot],
+        net_alpha: &[f32],
+        clicked_spot: &mut Option<Spot>,
+        ism: &[spectrum_view::IsmLabel],
+        mem: &[crate::widgets::memories::MemMark],
+        wf_tuning: spectrum_view::WfTuning,
+    ) {
+        // A real separate window, or nothing. Where the toolkit only offers
+        // embedded viewports (the headless test harness, and any platform
+        // without native multi-viewport support), drawing the panadapter into a
+        // floating sub-window *inside* the main one is not the feature — and the
+        // caller has already handed the column to the panel, so the main window
+        // still lays out. eframe sets this `false` on every supported native
+        // platform; the browser never reaches here.
+        if ctx.embed_viewports() {
+            return;
+        }
+        let vid = panadapter_viewport_id();
+        let mut builder = egui::ViewportBuilder::default()
+            // The app-id is not decoration: it is the one handle a Wayland
+            // window rule (the operator's Niri rule) has to float this window
+            // and pin it to a monitor. A stable title is the fallback match.
+            .with_app_id(PANADAPTER_APP_ID)
+            .with_title(format!("{} — panadapter", sdroxide_version::FLAVOR))
+            .with_min_inner_size([360.0, 240.0]);
+        // Seed the size and place only on the frame the window is (re)built, so
+        // a live resize is never fought by our own request (the 3D window's
+        // pattern). `cumulative_pass_nr_for` is zero for an id that is not up.
+        if ctx.cumulative_pass_nr_for(vid) == 0 {
+            let monitor = ctx.input(|i| i.viewport().monitor_size);
+            let (size, pos) = detached_geometry(monitor, self.ui_settings.panadapter_window);
+            builder = builder.with_inner_size(size);
+            if let Some(pos) = pos {
+                builder = builder.with_position(pos);
+            }
+        }
+        let mut close_requested = false;
+        let mut geometry: Option<sdroxide_types::DetachedWindow> = None;
+        ctx.show_viewport_immediate(vid, builder, |ui, _class| {
+            let ictx = ui.ctx();
+            // Remember where it ended up, for the next rebuild. `content_rect`
+            // is the inner size as the toolkit reports it — the only size on
+            // Wayland, where `viewport().inner_rect` is `None` because Wayland
+            // gives a client no absolute position. `outer_rect` carries that
+            // position where the platform has one, and is `None` on Wayland too.
+            let size = ictx.content_rect().size();
+            if size.x > 1.0 && size.y > 1.0 {
+                let pos = ictx.input(|i| i.viewport().outer_rect).map(|r| r.min);
+                geometry = Some(sdroxide_types::DetachedWindow {
+                    // Whole points, so a sub-point wobble is not a resize.
+                    size: [size.x.round(), size.y.round()],
+                    pos: pos.map(|p| [p.x.round(), p.y.round()]),
+                });
+            }
+            if ictx.input(|i| i.viewport().close_requested()) {
+                close_requested = true;
+                // Wake the root pass so the main window reclaims the column
+                // promptly rather than on the next unrelated repaint.
+                ictx.request_repaint_of(egui::ViewportId::ROOT);
+                return;
+            }
+            let w = ui.available_width();
+            let h = ui.available_height();
+            let area = ui.max_rect();
+            // `panel_below` is false: the operating panel is in the main
+            // window, not under this one, so the band-plan strip is free to
+            // use the detached waterfall's full height.
+            self.draw_panadapter(
+                ui,
+                w,
+                h,
+                frame,
+                cmds,
+                cursor,
+                dxped,
+                auto_tx_freq,
+                hold_tx_freq,
+                markers,
+                skimmer,
+                alpha,
+                net_spots,
+                net_alpha,
+                clicked_spot,
+                ism,
+                mem,
+                false,
+                now,
+                wf_tuning,
+            );
+            // A big, display-only dial readout across the top, so the picture
+            // can be read from a second monitor without the main window.
+            centred_detached_readout(ui, area, &readout_text(self.state.rx_freq_hz()));
+        });
+        // Persist once a drag settles — the frame after the geometry stops
+        // changing — so a resize in progress is not a config write a frame,
+        // while the value that stays on screen is the one that is written. The
+        // last-seen value rides egui's own memory rather than a struct field,
+        // which keeps it out of the wire types and off the browser build.
+        let geom_id = egui::Id::new("sdroxide-panadapter-geom");
+        if let Some(g) = geometry {
+            let last: Option<sdroxide_types::DetachedWindow> = ctx.data(|d| d.get_temp(geom_id));
+            if last == Some(g) && self.ui_settings.panadapter_window != Some(g) {
+                self.ui_settings.panadapter_window = Some(g);
+                crate::app::persist::persist_ui_settings(&self.ui_settings);
+            }
+            ctx.data_mut(|d| d.insert_temp(geom_id, g));
+        }
+        if close_requested {
+            // Closing the window is turning the toggle off, not an invitation to
+            // re-open it next frame — and the frame it closed on still carries
+            // the geometry to keep.
+            if let Some(g) = geometry {
+                self.ui_settings.panadapter_window = Some(g);
+            }
+            self.set_panadapter_detached(false);
+        }
+    }
+
+    /// Turn the detached panadapter on or off, and persist the choice the way
+    /// any other display setting is. Off (or a closed window) puts the
+    /// panadapter back in the main window.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(in crate::app) fn set_panadapter_detached(&mut self, on: bool) {
+        if self.ui_settings.panadapter_detached == on {
+            return;
+        }
+        self.ui_settings.panadapter_detached = on;
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
+    }
+
+    /// Whether the focused radio should draw its panadapter into its own window
+    /// this frame. Off on the browser (the panadapter stays in-window), off
+    /// when the mode has nothing in the main window to reclaim the column for,
+    /// and off for a radio that is not the focused one — there is one detached
+    /// window for the station, and it shows the focused radio's.
+    fn panadapter_detached(&self, mode: Mode) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = mode;
+            false
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.ui_settings.panadapter_detached
+                && self.focused
+                && (mode.has_bottom_panel() || mode == Mode::Cw)
+        }
     }
 
     /// Advance a DAB scan, if one is running.
@@ -2939,6 +3252,35 @@ mod tests {
         let (wf, panel) = digi_split(300.0, 21.0, 0.2, 34.0);
         assert!(panel <= 0.6 * 279.0 + 0.01, "floor {panel} ate the waterfall");
         assert!(wf > 0.0);
+    }
+
+    /// The detached window's overlay: MHz, trailing zeros trimmed, so
+    /// 27.265 MHz reads as itself rather than as "27.265000 MHz".
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_detached_readout_trims_to_the_dial() {
+        assert_eq!(super::readout_text(27_265_000.0), "27.265 MHz");
+        assert_eq!(super::readout_text(144_800_000.0), "144.8 MHz");
+        assert_eq!(super::readout_text(10_120_600.0), "10.1206 MHz");
+    }
+
+    /// The detached window opens at the operator's last geometry, or a wide
+    /// default, and never grows past the monitor it is about to open on.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_detached_window_opens_fitting_the_monitor() {
+        let (size, pos) = super::detached_geometry(None, None);
+        assert_eq!(size, eframe::egui::vec2(960.0, 540.0), "the wide default");
+        assert!(pos.is_none(), "no stored position, none given");
+        // A small monitor shrinks it; a stored position comes back untouched
+        // (a second screen starts where the desktop puts it, not inside
+        // `0..monitor`, so it is not clamped).
+        let stored =
+            sdroxide_types::DetachedWindow { size: [960.0, 540.0], pos: Some([1920.0, 0.0]) };
+        let (size, pos) =
+            super::detached_geometry(Some(eframe::egui::vec2(800.0, 600.0)), Some(stored));
+        assert!(size.x <= 800.0 && size.y <= 600.0, "grew past the monitor: {size:?}");
+        assert_eq!(pos, Some(eframe::egui::pos2(1920.0, 0.0)));
     }
 }
 
