@@ -3481,6 +3481,15 @@ behind a divider. No behaviour change; the tests
 `all_clears_the_range_filter_too` and
 `the_band_filter_says_it_filters_and_toggles_off` pin it.
 
+**Later — 2026-10-09, the operator's call.** The `BANDS` suffix came back off:
+the filters read plain **HF** / **VHF** / **UHF** (the **Show bands** caption
+above them already says what they are, and the shorter chips sit closer
+together), and the clear-band chip is plain **ALL**. The hovers are unchanged, so
+the distinction the suffix was there to draw is still said in words. The DIGITAL
+chip likewise became a real dropdown (see the "digital modes are a real
+dropdown" commit), because as a chip it read as a toggle and the modes looked
+like they were not there at all.
+
 **Fork-only on purpose — do not offer this upstream.** Upstream's band menu is a
 single flat band row: no `BandFilter`, no LISTEN/OPERATE tabs, no Primary-modes
 row, no metre-band shortcuts. Every problem this fixes was introduced by the

@@ -8276,14 +8276,14 @@ pub(in crate::app) fn band_mode_menu(
 
     let band = state.band;
     crate::chrome::menu_caption(ui, "Show bands");
-    // Two different decisions sat on one unnamed row and read as one: HF/VHF/UHF
-    // narrow the list below, and ALL (Band::Gen) *clears the band*. The filter
-    // chips carry a "BANDS" suffix so they read as a slice of the list, and the
-    // clear-band action is separated out under its own divider.
+    // Two different decisions sit here and must not read as one: HF/VHF/UHF
+    // narrow the list below, and ALL (Band::Gen) *clears the band*. The filters
+    // are plain HF / VHF / UHF — the caption above already says they are bands —
+    // and the clear-band action has its own row and its own hover below.
     ui.horizontal_wrapped(|ui| {
         for f in BandFilter::CHIPS {
             let lit = *filter == f;
-            if crate::chrome::chip(ui, lit, format!("{} BANDS", f.label()))
+            if crate::chrome::chip(ui, lit, f.label())
                 .on_hover_text(format!(
                     "Show only the {} bands in the list below. Click again to show every band.",
                     f.label()
@@ -8303,7 +8303,7 @@ pub(in crate::app) fn band_mode_menu(
     // "drop the band restriction", so it must not sit in the row that reads as
     // filters. Given its own caption rather than left in the band list, where it
     // used to be the one chip that meant something different.
-    if crate::chrome::chip(ui, state.band == Band::Gen, "ALL — no band")
+    if crate::chrome::chip(ui, state.band == Band::Gen, "ALL")
         .on_hover_text(
             "General coverage: clear the band and let the dial go anywhere. \
              Not the same as the band filter above, which only narrows this list.",
@@ -10350,7 +10350,7 @@ mod tests {
     fn all_clears_the_range_filter_too() {
         let state = RadioState::default();
         let mut filter = BandFilter::Hf;
-        let cmds = click_in_band_mode_menu_filtered(&state, "ALL — no band", &mut filter);
+        let cmds = click_in_band_mode_menu_filtered(&state, "ALL", &mut filter);
         assert_eq!(filter, BandFilter::All, "ALL must let the range filter go");
         assert!(
             cmds.contains(&Command::SetBand(Band::Gen)),
@@ -10366,13 +10366,13 @@ mod tests {
     fn the_band_filter_says_it_filters_and_toggles_off() {
         let state = RadioState::default();
         let mut filter = BandFilter::All;
-        // Clicking "HF BANDS" narrows to HF...
-        let cmds = click_in_band_mode_menu_filtered(&state, "HF BANDS", &mut filter);
+        // Clicking "HF" narrows to HF...
+        let cmds = click_in_band_mode_menu_filtered(&state, "HF", &mut filter);
         assert_eq!(filter, BandFilter::Hf);
         assert!(!cmds.contains(&Command::SetBand(Band::Gen)), "a filter is not a band change");
         // ...clicking the lit chip again shows everything.
         let mut filter = BandFilter::Hf;
-        let _ = click_in_band_mode_menu_filtered(&state, "HF BANDS", &mut filter);
+        let _ = click_in_band_mode_menu_filtered(&state, "HF", &mut filter);
         assert_eq!(filter, BandFilter::All);
     }
 
