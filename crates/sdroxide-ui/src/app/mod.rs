@@ -1055,6 +1055,11 @@ pub struct SdroxideApp {
     /// only, deliberately: the answer that matters is persisted (see
     /// `client_share_bindings`), not this.
     bindings_offer_asked: bool,
+    /// The bindings choice (`client_share_bindings`, `client_bindings_declined`)
+    /// as this tab last reconciled it with the other tabs, and the generation
+    /// it came from — see [`crate::app::frame::reconcile_bindings_choice`].
+    bindings_choice_seen: (bool, bool),
+    bindings_choice_gen: u64,
     /// What the last explicit save did, said where the operator pressed it. A
     /// control that saves silently is a control that cannot be trusted.
     client_settings_status: Option<String>,
@@ -1562,6 +1567,8 @@ impl SdroxideApp {
         // Fold a pre-map config's panadapter undock into the `detached` map, so
         // an operator who had it open does not find it docked after the update.
         ui_settings.migrate_detached();
+        let bindings_choice_seen =
+            (ui_settings.client_share_bindings, ui_settings.client_bindings_declined);
         // Start in SWL mode when asked: either the stored preference or this
         // run's `--swl`. The per-radio switch can still turn it off for a
         // session (which clears this seed), but the next start honours the
@@ -1940,6 +1947,8 @@ impl SdroxideApp {
             client_settings_stored: None,
             bindings_pending: None,
             bindings_offer_asked: false,
+            bindings_choice_seen,
+            bindings_choice_gen: 0,
             client_settings_status: None,
             client_settings_pending: std::cell::Cell::new(None),
             known_calls: known_calls::KnownCallsState::default(),

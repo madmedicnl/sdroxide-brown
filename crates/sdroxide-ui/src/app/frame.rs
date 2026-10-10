@@ -1527,6 +1527,9 @@ impl eframe::App for SdroxideApp {
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        // Before writing `ui_settings`: the writer tab may not be the one the
+        // bindings were answered on, and must not write its stale copy back.
+        self.sync_bindings_choice();
         eframe::set_value(storage, &self.view_key, &self.view);
         // The station-wide keys are written by exactly one tab — every tab
         // holds its own copy of these, and the last to save would otherwise
@@ -2727,6 +2730,9 @@ impl SdroxideApp {
                     // know now which profile to save it to.
                 }
                 RadioEvent::ClientBindings { profile, bindings } => {
+                    // A hidden tab draws nothing, so it learns another tab's
+                    // answer here, before deciding whether to ask.
+                    self.sync_bindings_choice();
                     // Applied and written out at once, so the restored keys
                     // survive a reload the same way a rebind does.
                     let apply = |me: &mut Self| {
@@ -3645,6 +3651,74 @@ fn bindings_should_offer(already_asked_this_session: bool, declined: bool) -> bo
     !already_asked_this_session && !declined
 }
 
+/// What a tab should do with the bindings answer, given its own copy and the
+/// newest one any tab of this window published.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) enum ChoiceSync {
+    /// Nothing changed anywhere.
+    Keep,
+    /// This tab changed it: publish it as the new generation and store it.
+    Publish,
+    /// Another tab changed it: take its value and generation.
+    Adopt { generation: u64, choice: (bool, bool) },
+}
+
+/// Every radio tab holds its own `UiSettings`, so an answer given on one tab
+/// used to stay on that tab: the others kept asking, and the station-writer
+/// tab — the only one whose copy reaches browser storage — wrote its stale
+/// "not answered" back over it. A local change wins over the shared one, since
+/// it is the newer of the two in this frame.
+pub(in crate::app) fn reconcile_bindings_choice(
+    mine: (bool, bool),
+    seen: (bool, bool),
+    seen_gen: u64,
+    shared: (u64, (bool, bool)),
+) -> ChoiceSync {
+    if mine != seen {
+        ChoiceSync::Publish
+    } else if shared.0 > seen_gen {
+        ChoiceSync::Adopt { generation: shared.0, choice: shared.1 }
+    } else {
+        ChoiceSync::Keep
+    }
+}
+
+/// The newest bindings answer any tab of this process published, and its
+/// generation (0 = nobody has answered since start-up).
+static BINDINGS_CHOICE: std::sync::Mutex<(u64, (bool, bool))> =
+    std::sync::Mutex::new((0, (false, false)));
+
+impl SdroxideApp {
+    /// Bring this tab's bindings answer in step with the other tabs, and store
+    /// a new answer the moment it is given.
+    pub(in crate::app) fn sync_bindings_choice(&mut self) {
+        let mine =
+            (self.ui_settings.client_share_bindings, self.ui_settings.client_bindings_declined);
+        let mut shared = BINDINGS_CHOICE.lock().unwrap_or_else(|e| e.into_inner());
+        match reconcile_bindings_choice(
+            mine,
+            self.bindings_choice_seen,
+            self.bindings_choice_gen,
+            *shared,
+        ) {
+            ChoiceSync::Keep => {}
+            ChoiceSync::Publish => {
+                let generation = shared.0.max(self.bindings_choice_gen) + 1;
+                *shared = (generation, mine);
+                self.bindings_choice_seen = mine;
+                self.bindings_choice_gen = generation;
+                crate::app::persist::persist_bindings_choice(mine.0, mine.1);
+            }
+            ChoiceSync::Adopt { generation, choice } => {
+                self.ui_settings.client_share_bindings = choice.0;
+                self.ui_settings.client_bindings_declined = choice.1;
+                self.bindings_choice_seen = choice;
+                self.bindings_choice_gen = generation;
+            }
+        }
+    }
+}
+
 impl SdroxideApp {
     /// The profile carries control bindings and this client has not said it
     /// wants them. Ask, once, and act on the answer.
@@ -3657,7 +3731,22 @@ impl SdroxideApp {
     /// said anywhere. One question, with the same warning the settings row
     /// gives, and the answer is persisted so it is not asked twice.
     pub(in crate::app) fn bindings_offer_ui(&mut self, ctx: &egui::Context) {
+        self.sync_bindings_choice();
         let Some(offer) = self.bindings_pending.clone() else { return };
+        // Answered on another tab while this one held the offer: act on that
+        // answer rather than asking the same question twice.
+        if self.ui_settings.client_share_bindings {
+            self.input.cfg = offer.bindings;
+            self.input.cfg.migrate();
+            self.input.persist();
+            self.client_settings_from = Some(offer.profile);
+            self.bindings_pending = None;
+            return;
+        }
+        if self.ui_settings.client_bindings_declined {
+            self.bindings_pending = None;
+            return;
+        }
         let mut adopt = false;
         let mut decline = false;
         egui::Modal::new(egui::Id::new("client-bindings-offer")).show(ctx, |ui| {
@@ -3714,6 +3803,7 @@ impl SdroxideApp {
             self.client_settings_status =
                 Some("using the keyboard bindings stored for this profile".into());
             self.bindings_pending = None;
+            self.sync_bindings_choice();
         } else if decline {
             // **"and stop asking" has to mean it.** Dropping the offer is not
             // an answer: the yes branch persists the opt-in, so the no branch
@@ -3725,6 +3815,7 @@ impl SdroxideApp {
             self.client_settings_status =
                 Some("keeping this device\'s own keyboard bindings; not asked again".into());
             self.bindings_pending = None;
+            self.sync_bindings_choice();
         }
     }
 }
@@ -4088,7 +4179,50 @@ mod tests {
 
 #[cfg(test)]
 mod bindings_offer_tests {
-    use super::bindings_should_offer;
+    use super::{ChoiceSync, bindings_should_offer, reconcile_bindings_choice};
+    use crate::app::persist::{format_bindings_choice, parse_bindings_choice};
+
+    /// "Keep mine" on radio 2 must reach radio 1 and the station-writer tab,
+    /// or radio 1 asks again and the writer saves "not answered" over it.
+    #[test]
+    fn an_answer_on_one_tab_reaches_the_others() {
+        let unanswered = (false, false);
+        let declined = (false, true);
+        // Tab B answers: it publishes.
+        assert_eq!(
+            reconcile_bindings_choice(declined, unanswered, 0, (0, unanswered)),
+            ChoiceSync::Publish
+        );
+        // Tab A, still unanswered, adopts generation 1.
+        assert_eq!(
+            reconcile_bindings_choice(unanswered, unanswered, 0, (1, declined)),
+            ChoiceSync::Adopt { generation: 1, choice: declined }
+        );
+        // And once in step, nothing more happens.
+        assert_eq!(
+            reconcile_bindings_choice(declined, declined, 1, (1, declined)),
+            ChoiceSync::Keep
+        );
+        // A later local change (the settings row) wins over the shared value.
+        assert_eq!(
+            reconcile_bindings_choice((true, true), declined, 1, (1, declined)),
+            ChoiceSync::Publish
+        );
+    }
+
+    /// The stored answer reads back as it was written, and junk reads as
+    /// nothing rather than as a guess.
+    #[test]
+    fn the_stored_answer_round_trips() {
+        for share in [false, true] {
+            for declined in [false, true] {
+                let v = format_bindings_choice(share, declined);
+                assert_eq!(parse_bindings_choice(&v), Some((share, declined)));
+            }
+        }
+        assert_eq!(parse_bindings_choice(""), None);
+        assert_eq!(parse_bindings_choice("yes,no"), None);
+    }
 
     /// The button said "and stop asking", so a no has to end it — for the rest
     /// of the session *and* every session after, and on every radio of the

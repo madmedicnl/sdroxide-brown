@@ -1059,12 +1059,44 @@ fn spot_colors<'de, D>(d: D) -> Result<[[u8; 3]; SpotKind::COUNT], D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let list = Vec::<[u8; 3]>::deserialize(d)?;
+    let list = any_length_list::<D, [u8; 3]>(d)?;
     let mut out = default_spot_colors();
     for (slot, c) in out.iter_mut().zip(list) {
         *slot = c;
     }
     Ok(out)
+}
+
+/// Read a list of any length **whether it was written as a list or as a
+/// tuple**.
+///
+/// serde writes a fixed array as a *tuple*, and the formats disagree on what
+/// that looks like: TOML writes `[…]`, RON — the browser build's storage —
+/// writes `(…)`. Reading with `Vec::deserialize` asks for a list, so on the web
+/// every saved `ui_settings` failed to parse ("Expected opening `[`") and the
+/// screen came back at its defaults on every load: the theme, and the answer to
+/// "Keep mine (and stop asking)", which is why that question never stopped.
+/// Both formats are self-describing, so `deserialize_any` takes either.
+fn any_length_list<'de, D, T>(d: D) -> Result<Vec<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    struct Any<T>(std::marker::PhantomData<T>);
+    impl<'de, T: serde::Deserialize<'de>> serde::de::Visitor<'de> for Any<T> {
+        type Value = Vec<T>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a list or a tuple")
+        }
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<T>, A::Error> {
+            let mut out = Vec::new();
+            while let Some(v) = seq.next_element()? {
+                out.push(v);
+            }
+            Ok(out)
+        }
+    }
+    d.deserialize_any(Any(std::marker::PhantomData))
 }
 
 /// Default for [`UiSettings::bandplan_colors`] — every class on its stock shade.
@@ -1084,7 +1116,7 @@ fn bandplan_colors<'de, D>(d: D) -> Result<[[u8; 3]; BandplanKind::COUNT], D::Er
 where
     D: serde::Deserializer<'de>,
 {
-    let list = Vec::<[u8; 3]>::deserialize(d)?;
+    let list = any_length_list::<D, [u8; 3]>(d)?;
     let mut out = default_bandplan_colors();
     for (slot, c) in out.iter_mut().zip(list) {
         *slot = c;
@@ -1117,7 +1149,7 @@ fn detached_slots<'de, D>(d: D) -> Result<[DetachedState; DetachableModule::COUN
 where
     D: serde::Deserializer<'de>,
 {
-    let list = Vec::<DetachedState>::deserialize(d)?;
+    let list = any_length_list::<D, DetachedState>(d)?;
     let mut out = default_detached();
     for (slot, state) in out.iter_mut().zip(list) {
         *slot = state;
@@ -1516,6 +1548,22 @@ mod client_screen_tests {
     /// The screen round-trips through postcard — the thing `UiSettings` itself
     /// cannot do. This is the test that would fail first if a non-postcard-safe
     /// field were ever added here.
+    /// The browser keeps `UiSettings` as RON, where a fixed array is written
+    /// `(…)`; the any-length readers once demanded `[…]`, so on the web the
+    /// whole screen — theme, and the bindings answer — failed to load and came
+    /// back at its defaults on every reload.
+    #[test]
+    fn the_screen_survives_the_browser_store() {
+        let mut ui = UiSettings::default();
+        ui.client_bindings_declined = true;
+        ui.spot_colors[0] = [1, 2, 3];
+        let back: UiSettings = ron::from_str(&ron::to_string(&ui).unwrap())
+            .expect("a stored browser screen must load");
+        assert!(back.client_bindings_declined, "the answer to the bindings offer survives");
+        assert_eq!(back.spot_colors[0], [1, 2, 3]);
+        assert_eq!(back.detached, ui.detached);
+    }
+
     #[test]
     fn the_screen_survives_a_postcard_round_trip() {
         let screen = ClientScreen::from_settings(&UiSettings::default());
