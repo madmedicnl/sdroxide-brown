@@ -1757,13 +1757,15 @@ use sdroxide_types::{
 /// it and refuses the whole bindings document — which is why this is a version
 /// bump rather than a silent loss of the operator's key map. `PROTO_VERSION`
 /// 198 → 199, `VERSION_BYTE` 0x13 → 0x14. A downstream (fork) change.
-/// v200: `ClientMsg::SetClientAcks` and `ServerMsg::ClientAcks`, both
+/// v200 is taken by the receive EQ's LOUDNESS (PR #43: `RadioState::rx_tone`
+/// moves into `RxState`, `Command::SetRxLoudness`).
+/// v201: `ClientMsg::SetClientAcks` and `ServerMsg::ClientAcks`, both
 /// appended last — the "do not ask me again" answers (the bindings offer, the
 /// dismissed advisories, the CB transmit acknowledgement, the receive-only
 /// banner) kept on the server against the signed-in profile, because browser
 /// storage could not hold them and the questions came back every session. A
-/// downstream (fork) change.
-pub const PROTO_VERSION: u16 = 200;
+/// downstream (fork) change. `PROTO_VERSION` → 201, `VERSION_BYTE` 0x14 → 0x15.
+pub const PROTO_VERSION: u16 = 201;
 const VERSION_BYTE: u8 = 0x15;
 
 #[derive(Debug, thiserror::Error)]
