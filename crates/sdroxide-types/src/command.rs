@@ -1131,7 +1131,9 @@ pub enum Command {
         mode: Option<Mode>,
     },
 
-    /// Set the receive tone (low/peak/high shelves on the demodulated audio).
+    /// Set the receive tone (low/peak/high shelves on the demodulated audio) —
+    /// [`crate::RxState::tone`] on the main receiver, remembered for the mode
+    /// in force like the other per-mode settings.
     ///
     /// Appended for the usual reason — postcard numbers variants by position.
     SetRxTone(Box<crate::TxEqState>),
@@ -1219,7 +1221,10 @@ pub enum Command {
     /// path. Its read-back is `CwSelfRx` either way.
     ///
     /// Appended for the usual reason — postcard numbers variants by position.
-    CwContacts { dot: bool, dah: bool },
+    CwContacts {
+        dot: bool,
+        dah: bool,
+    },
 
     /// Set only [`DigiConfig::contest`](crate::DigiConfig::contest) — which
     /// message layout the FT8 side sends a contest exchange in — leaving every
@@ -1286,6 +1291,14 @@ pub enum Command {
     ///
     /// Appended last, for the usual reason.
     StopRotator,
+
+    /// Turn LOUDNESS on the receive audio on or off — see
+    /// [`crate::RxState::loudness`]. Main receiver, remembered for the mode in
+    /// force.
+    ///
+    /// Appended last, for the usual reason — postcard numbers variants by
+    /// position.
+    SetRxLoudness(bool),
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.

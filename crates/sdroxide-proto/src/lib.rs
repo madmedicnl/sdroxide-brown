@@ -1766,7 +1766,15 @@ use sdroxide_types::{
 /// have to agree. `RotatorTransport` and `RotatorAuthority` are new enums that
 /// only the rotator's own messages ride. `PROTO_VERSION` 199 → 200,
 /// `VERSION_BYTE` 0x14 → 0x15. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 200;
+///
+/// v201: the receive tone and LOUDNESS are per-mode settings of the main
+/// receiver. `RadioState::rx_tone` moves into [`sdroxide_types::RxState`] as
+/// `tone`, `RxState` gains `loudness` (bool) after it, and `Command` gains
+/// `SetRxLoudness(bool)` last. Removing a mid-struct field from `RadioState`
+/// shifts every field after it and `RxState` rides it twice, so a v200 peer
+/// would misread the whole state — hence the bump. `PROTO_VERSION` 200 → 201,
+/// `VERSION_BYTE` unchanged at 0x15. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 201;
 const VERSION_BYTE: u8 = 0x15;
 
 #[derive(Debug, thiserror::Error)]
@@ -3069,6 +3077,22 @@ mod tests {
         let field = ClientMsg::Command(Command::SetDigiContest(ContestMode::EuVhf));
         assert_ne!(encode(&whole).unwrap(), encode(&field).unwrap());
         assert_eq!(decode::<ClientMsg>(&encode(&whole).unwrap()).unwrap(), whole);
+    }
+
+    /// LOUDNESS and the tone cross the wire both ways: the command, and the
+    /// receiver fields that tell a remote client their real position.
+    #[test]
+    fn roundtrip_rx_loudness() {
+        for on in [false, true] {
+            let m = ClientMsg::Command(Command::SetRxLoudness(on));
+            assert_eq!(decode::<ClientMsg>(&encode(&m).unwrap()).unwrap(), m);
+            let mut state = RadioState::default();
+            state.rx[0].loudness = on;
+            state.rx[0].tone.enabled = on;
+            state.rx[0].tone.low.gain_db = if on { 6.0 } else { 0.0 };
+            let st = ServerMsg::State(state);
+            assert_eq!(decode::<ServerMsg>(&encode(&st).unwrap()).unwrap(), st);
+        }
     }
 
     /// The per-mode transmit-audio level, over the wire in both directions

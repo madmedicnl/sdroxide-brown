@@ -2996,6 +2996,10 @@ struct Engine {
     /// kept alive across blocks; reconfigured only when the settings change.
     rx_eq: ParametricEq,
     rx_eq_cfg: sdroxide_types::TxEqState,
+    /// LOUDNESS: a second EQ whose bass/treble lift follows the volume
+    /// (`sdroxide_dsp::loudness_curve`), and the curve it was last tuned to.
+    rx_loud: ParametricEq,
+    rx_loud_cfg: sdroxide_types::TxEqState,
     /// Right channel of the main chain, non-empty only while WFM stereo is
     /// decoding and the sub receiver is off — or while the binaural widener
     /// below is placing the passband across the two ears.
@@ -4380,6 +4384,8 @@ fn engine_thread(
         replay_buf: Vec::new(),
         rx_eq: ParametricEq::new(),
         rx_eq_cfg: sdroxide_types::TxEqState::default(),
+        rx_loud: ParametricEq::new(),
+        rx_loud_cfg: sdroxide_types::TxEqState::default(),
         binaural: None,
         bin_left: Vec::new(),
         speech_duck: 1.0,
@@ -5483,6 +5489,10 @@ impl Engine {
     /// forked — see [`Engine::process_block`].
     fn finish_audio(&mut self, iq: &[Complex32]) {
         let want_rec = self.recorder.is_some();
+        // Set while a voice-keyer preview has the speakers: that audio never
+        // passed the AF knob, so LOUDNESS (which lifts by what the knob took
+        // away) must leave it alone or it would lift full-level audio.
+        let mut unscaled_preview = false;
         // A radio listening to its transceiver while an attached receiver
         // paints the picture. The main chain still runs — the high-resolution
         // channel analyzer reads its DDC output, and the sub receiver is a
@@ -5550,6 +5560,7 @@ impl Engine {
             // lane has a length to be taken at. See `take_dab_audio_into`.
             let block = self.main_play.len().max(speaker_block(out_rate));
             if self.take_preview_audio(out_rate, block) {
+                unscaled_preview = true;
                 self.main_play.clear();
                 self.main_play.extend_from_slice(&self.voice_prev_out);
                 self.main_play_r.clear();
@@ -5645,12 +5656,27 @@ impl Engine {
         };
         // The listener's receive tone, in front of the speakers (and the
         // time-shift window, so a replay sounds like what was heard).
-        if self.state.rx_tone != self.rx_eq_cfg {
-            self.rx_eq.configure(&self.state.rx_tone, self.audio_out_rate);
-            self.rx_eq_cfg = self.state.rx_tone.clone();
+        if self.state.rx[0].tone != self.rx_eq_cfg {
+            self.rx_eq.configure(&self.state.rx[0].tone, self.audio_out_rate);
+            self.rx_eq_cfg = self.state.rx[0].tone;
         }
-        if self.state.rx_tone.enabled {
+        if self.state.rx[0].tone.enabled {
             self.rx_eq.process(&mut self.main_play);
+        }
+        // LOUDNESS after the tone: a lift that grows as the volume goes down,
+        // read off the knob each block. Flat at full volume, and never more
+        // than the attenuation it compensates, so it cannot clip.
+        if self.state.rx[0].loudness && !unscaled_preview {
+            let rx0 = &self.state.rx[0];
+            let vol = if rx0.muted { 0.0 } else { rx0.volume };
+            let curve = sdroxide_dsp::loudness_curve(vol, self.audio_out_rate);
+            if curve != self.rx_loud_cfg {
+                self.rx_loud.configure(&curve, self.audio_out_rate);
+                self.rx_loud_cfg = curve;
+            }
+            if self.rx_loud_cfg.enabled {
+                self.rx_loud.process(&mut self.main_play);
+            }
         }
         // Feed the time-shift window from the live audio, then play from it
         // instead of from live while replay is on. The recorder keeps the live
@@ -10249,8 +10275,23 @@ impl Engine {
                 // dial reads in.
                 self.emit_station_config();
             }
+            // The speaker audio is the main receiver's, so both of these are
+            // its settings — and per-mode ones, remembered for the mode in
+            // force like BIN. A client's tone goes through `clamped` on the
+            // way in, because it is stored in `modeprofiles.json` and laid on
+            // the filters again at every mode change.
             SetRxTone(tone) => {
-                self.state.rx_tone = *tone;
+                let tone = tone.clamped();
+                self.state.rx[0].tone = tone;
+                self.remember_mode_setting(RxId::Main, |p| p.tone = Some(tone));
+                self.emit_state();
+            }
+            SetRxLoudness(on) => {
+                // Start from silence: history left from the last time it ran
+                // would otherwise ring into the first block after re-enabling.
+                self.rx_loud.reset();
+                self.state.rx[0].loudness = on;
+                self.remember_mode_setting(RxId::Main, |p| p.loudness = Some(on));
                 self.emit_state();
             }
             SetReplay(on) => {

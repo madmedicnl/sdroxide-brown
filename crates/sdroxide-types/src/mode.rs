@@ -600,7 +600,8 @@ impl Mode {
                 | Mode::Msk144
                 | Mode::Q65
                 | Mode::UvPacket
-                | Mode::Jtty | Mode::Ale
+                | Mode::Jtty
+                | Mode::Ale
                 | Mode::Fsk441
                 | Mode::Packet
                 | Mode::PacketHf
@@ -1150,6 +1151,10 @@ impl Mode {
             auto_notch: Some(false),
             wfm_stereo: Some(true),
             binaural: Some(false),
+            // The listener's tone and LOUDNESS are the operator's to switch on:
+            // off and flat in every mode until they are.
+            tone: Some(crate::TxEqState::default()),
+            loudness: Some(false),
         }
     }
 
@@ -1226,7 +1231,8 @@ impl Mode {
             | Mode::Q65
             | Mode::Fsk441
             | Mode::UvPacket
-            | Mode::Jtty | Mode::Ale
+            | Mode::Jtty
+            | Mode::Ale
             | Mode::Psk
             | Mode::Rtty
             | Mode::Sstv
@@ -1492,7 +1498,8 @@ impl Mode {
             | Mode::Msk144
             | Mode::Q65
             | Mode::UvPacket
-            | Mode::Jtty | Mode::Ale
+            | Mode::Jtty
+            | Mode::Ale
             | Mode::Fsk441
             | Mode::Olivia
             | Mode::Thor
@@ -1577,8 +1584,10 @@ impl Mode {
     /// away to a dead band in the waterfall and the spectrum. The same argument
     /// covers the receive-only image lanes: their content is tone, not voice.
     pub fn auto_notch_applies(self) -> bool {
-        if matches!(self, Mode::Am | Mode::Sam | Mode::Cquam | Mode::Wfm | Mode::Drm | Mode::HdRadio)
-        {
+        if matches!(
+            self,
+            Mode::Am | Mode::Sam | Mode::Cquam | Mode::Wfm | Mode::Drm | Mode::HdRadio
+        ) {
             return false;
         }
         if self.is_image() || self.is_wefax() || self.is_hell() || self.is_rf_paint() {
@@ -1775,7 +1784,8 @@ impl Mode {
             | Mode::Msk144
             | Mode::Q65
             | Mode::UvPacket
-            | Mode::Jtty | Mode::Ale
+            | Mode::Jtty
+            | Mode::Ale
             | Mode::Fsk441
             | Mode::Acars
             | Mode::PacketHf

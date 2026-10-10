@@ -208,6 +208,43 @@ impl ParametricEq {
     }
 }
 
+/// Bass corner of the LOUDNESS lift.
+const LOUDNESS_BASS_HZ: f64 = 120.0;
+/// Treble corner of the LOUDNESS lift — clamped below Nyquist at low rates.
+const LOUDNESS_TREBLE_HZ: f64 = 6000.0;
+/// The most the bass is ever lifted.
+pub const LOUDNESS_MAX_BASS_DB: f32 = 12.0;
+/// The most the treble is ever lifted.
+pub const LOUDNESS_MAX_TREBLE_DB: f32 = 6.0;
+
+/// The LOUDNESS lift for a volume knob at `volume` (`0..=1`), as an EQ setting
+/// for a [`ParametricEq`] of its own.
+///
+/// The knob follows a squared law (`gain = volume²`), so its attenuation is
+/// `40·log10(volume)` dB below full. The bass is lifted by half of that and
+/// the treble by a quarter, capped at [`LOUDNESS_MAX_BASS_DB`] and
+/// [`LOUDNESS_MAX_TREBLE_DB`] — the classic equal-loudness compensation. Two
+/// consequences, both deliberate: at full volume the curve is flat, so LOUDNESS
+/// never changes a loud speaker; and because the lift is never more than the
+/// attenuation it compensates, it cannot push the output past what full volume
+/// would have played — it cannot make the speaker clip.
+///
+/// Gains are rounded to half a decibel, so dragging the volume does not
+/// retune the filters on every block.
+pub fn loudness_curve(volume: f32, rate: f64) -> TxEqState {
+    let atten_db = if volume > 0.0 { -40.0 * volume.min(1.0).log10() } else { f32::INFINITY };
+    let step = |db: f32, max: f32| ((db.min(max) * 2.0).round() / 2.0).max(0.0);
+    let bass = step(atten_db * 0.5, LOUDNESS_MAX_BASS_DB);
+    let treble = step(atten_db * 0.25, LOUDNESS_MAX_TREBLE_DB);
+    let treble_hz = LOUDNESS_TREBLE_HZ.min(rate * 0.4) as f32;
+    TxEqState {
+        enabled: bass > 0.0 || treble > 0.0,
+        low: TxEqBand { freq_hz: LOUDNESS_BASS_HZ as f32, gain_db: bass, q: 0.7 },
+        mid: TxEqBand { freq_hz: 1000.0, gain_db: 0.0, q: 1.0 },
+        high: TxEqBand { freq_hz: treble_hz, gain_db: treble, q: 0.7 },
+    }
+}
+
 impl Default for ParametricEq {
     fn default() -> Self {
         Self::new()
@@ -246,6 +283,62 @@ mod tests {
 
     fn flat_state() -> TxEqState {
         TxEqState::default()
+    }
+
+    #[test]
+    fn loudness_is_flat_at_full_volume() {
+        let c = loudness_curve(1.0, 48_000.0);
+        assert!(!c.enabled);
+        assert_eq!(c.low.gain_db, 0.0);
+        assert_eq!(c.high.gain_db, 0.0);
+    }
+
+    #[test]
+    fn loudness_grows_as_the_volume_drops_and_is_capped() {
+        let half = loudness_curve(0.5, 48_000.0);
+        let quiet = loudness_curve(0.1, 48_000.0);
+        // 0.5 on a squared law is 12 dB down: bass +6, treble +3.
+        assert_eq!(half.low.gain_db, 6.0);
+        assert_eq!(half.high.gain_db, 3.0);
+        assert_eq!(quiet.low.gain_db, LOUDNESS_MAX_BASS_DB);
+        assert_eq!(quiet.high.gain_db, LOUDNESS_MAX_TREBLE_DB);
+        assert_eq!(loudness_curve(0.0, 48_000.0).low.gain_db, LOUDNESS_MAX_BASS_DB);
+    }
+
+    /// The lift never exceeds the attenuation it compensates, so the output of
+    /// a quiet knob with LOUDNESS on stays below the same tone at full volume.
+    #[test]
+    fn loudness_cannot_play_louder_than_full_volume() {
+        let rate = 48_000.0;
+        for &vol in &[0.9f32, 0.7, 0.5, 0.3, 0.1] {
+            let mut eq = ParametricEq::new();
+            eq.configure(&loudness_curve(vol, rate), rate);
+            for &f in &[60.0, 120.0, 1000.0, 8000.0] {
+                let mut buf = tone(rate, f, 0.5 * vol * vol, 48_000);
+                eq.process(&mut buf);
+                let tail = &buf[24_000..];
+                assert!(rms(tail) <= rms(&tone(rate, f, 0.5, 24_000)) * 1.01, "{vol} at {f} Hz");
+            }
+        }
+    }
+
+    #[test]
+    fn loudness_lifts_the_bass_against_the_middle() {
+        let rate = 48_000.0;
+        let mut eq = ParametricEq::new();
+        eq.configure(&loudness_curve(0.3, rate), rate);
+        let mut lo = tone(rate, 80.0, 0.1, 48_000);
+        let mut mid = tone(rate, 1000.0, 0.1, 48_000);
+        eq.process(&mut lo);
+        eq.reset();
+        eq.process(&mut mid);
+        let ratio_db = 20.0 * (rms(&lo[24_000..]) / rms(&mid[24_000..])).log10();
+        assert!(ratio_db > 6.0, "bass lifted only {ratio_db:.1} dB over 1 kHz");
+    }
+
+    #[test]
+    fn loudness_treble_corner_stays_below_nyquist() {
+        assert!(loudness_curve(0.2, 8_000.0).high.freq_hz < 4_000.0);
     }
 
     #[test]

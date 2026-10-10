@@ -523,8 +523,8 @@ impl SdroxideApp {
         // tone control the ham speech chain never needed.
         ui.horizontal(|ui| {
             ui.label(RichText::new("Tone").size(11.0).color(crate::theme::gray(150)));
-            let mut tone = self.state.rx_tone.clone();
-            let before = tone.clone();
+            let mut tone = self.state.rx[0].tone;
+            let before = tone;
             crate::chrome::checkbox(ui, &mut tone.enabled, "on");
             let band = |ui: &mut egui::Ui, name: &str, b: &mut sdroxide_types::TxEqBand| {
                 ui.label(RichText::new(name).size(11.0));
@@ -539,9 +539,10 @@ impl SdroxideApp {
             band(ui, "Mid", &mut tone.mid);
             band(ui, "Treble", &mut tone.high);
             if tone != before {
-                self.state.rx_tone = tone.clone();
+                self.state.rx[0].tone = tone;
                 cmds.push(Command::SetRxTone(Box::new(tone)));
             }
+            self.loudness_toggle(ui, cmds);
         });
         if self.swl_edit.is_some() {
             ui.add_space(4.0);

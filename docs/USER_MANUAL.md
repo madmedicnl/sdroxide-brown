@@ -957,9 +957,12 @@ The settings in this box are a matter of taste, but not the same taste in every
 mode: a little noise reduction helps a weak SSB voice and only gets in the way
 of an FT8 decoder, and a slow AGC is kinder to a signal sitting in the noise
 than the fast one that sounds right on a strong local. So each mode carries a
-set of starting values for **AGC**, **Man**, **SQL**, **NR**, **ANC**, **BIN**
-and WFM's **ST**, and selecting a mode — here, or on a CAT rig's own controls —
-lays its own on the receiver.
+set of starting values for **AGC**, **Man**, **SQL**, **NR**, **ANC**, **BIN**,
+WFM's **ST**, and the receive **tone** and **LOUDNESS** of the **EQ** popup, and
+selecting a mode — here, or on a CAT rig's own controls — lays its own on the
+receiver. The tone and LOUDNESS are **off in every mode** until you switch them
+on, so ticking LOUDNESS for a broadcast in AM leaves your SSB and FT8 exactly as
+they were.
 
 The built-in defaults are deliberately plain. A slow AGC on the weak-signal
 digital modes, whose whole point is signals near the noise, and the stock medium
@@ -15643,6 +15646,23 @@ The window's other controls are the listening tools in their own right: **JOBS**
 for scheduled recordings, **REPLAY** for the last two minutes of audio, **SIG
 ID** (see [§10.7](#107-signal-identification)) for what is on the dial, and the
 **Tone** row for bass, mid and treble shelves on the demodulated audio.
+
+**LOUDNESS**, at the end of that row and in the RX strip's **EQ** popup, lifts
+the bass (up to +12 dB, around 120 Hz) and a little treble (up to +6 dB, around
+6 kHz) as the volume goes down, because the ear loses the ends of the spectrum
+first at low level. It follows the volume knob as you turn it, works with the
+tone shelves on or off, is flat at full volume, and is never more than the
+volume it compensates — so it cannot make the speaker play louder than full
+volume would, nor clip it. Narrow modes (SSB, CW) carry little treble, so there
+it is mostly a bass lift.
+
+Both the **Tone** shelves and **LOUDNESS** are **off by default** — nothing
+changes until you tick the box — and both are **per-mode settings**
+([Per-mode settings](#per-mode-settings-the-reset-chip)): what you set is
+remembered for the mode you are in, every other mode keeps its own (off until
+you set it there too), and the value comes back with the mode and after a
+restart. The circular-arrow reset chip and **Settings → General → RESET EVERY
+MODE** switch them back off. They shape the main receiver's speaker audio only.
 
 ### 10.7 Signal identification
 
