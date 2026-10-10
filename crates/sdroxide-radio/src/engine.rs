@@ -14137,7 +14137,33 @@ impl Engine {
             let gain = self.source.rx_gain_db().unwrap_or(0.0);
             return Some(p - gain + self.cal_offset_db);
         }
+        // A wideband lane (DAB, ADS-B, AIS, VDL2) runs no demodulator, so the
+        // chain above measures nothing — and with no reading no meter was
+        // published at all, which left the S-meter frozen on whatever the last
+        // mode had read: a DAB ensemble showed the S9+5 of the station before
+        // it, and turning the gain did nothing. The signal is measured off the
+        // spectrum across the lane's own bandwidth instead, the way a scan
+        // already does with no chain to ask.
+        if !self.audio_mode && self.state.rx[0].mode.is_wideband_lane() {
+            let gain = self.source.rx_gain_db().unwrap_or(0.0);
+            return self.spectrum_channel_dbfs().map(|p| p - gain + self.cal_offset_db);
+        }
         self.audio_mode.then(|| self.audio_level_dbfs() + self.cal_offset_db)
+    }
+
+    /// The power the panadapter's spectrum shows inside the mode's own filter
+    /// around the dial, in dBFS — the quantity a demodulator would have
+    /// measured, read off the FFT for when there is no demodulator to ask.
+    fn spectrum_channel_dbfs(&mut self) -> Option<f32> {
+        let (flo, fhi) = self.state.rx[0].mode.default_filter();
+        self.analyzer.spectrum_db(&mut self.scan_db);
+        crate::scanner::channel_power_db(
+            &self.scan_db,
+            self.state.center_hz,
+            self.state.sample_rate,
+            self.state.rx_freq_hz(),
+            (fhi - flo).abs().max(1.0) as f64,
+        )
     }
 
     /// The smoothed level of audio that arrived as audio — a demod-audio
@@ -14173,15 +14199,7 @@ impl Engine {
         // scan still works with nothing to listen on. It inherits the display's
         // own averaging, though, so with `avg_tc` turned up a channel takes
         // longer to read as free than the real meter would have taken.
-        let (flo, fhi) = self.state.rx[0].mode.default_filter();
-        self.analyzer.spectrum_db(&mut self.scan_db);
-        crate::scanner::channel_power_db(
-            &self.scan_db,
-            self.state.center_hz,
-            self.state.sample_rate,
-            self.state.rx_freq_hz(),
-            (fhi - flo).abs().max(1.0) as f64,
-        )
+        self.spectrum_channel_dbfs()
     }
 
     fn scan_threshold_db(&self) -> f32 {
