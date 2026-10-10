@@ -7722,15 +7722,16 @@ fn mode_listen_chip(
 /// control.
 const WIDEBAND_MODES: [Mode; 5] = [Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab];
 
-/// A section of mode chips laid in **rows of five**, left-aligned, in aligned
-/// columns — the operator's "trimmed" look.
+/// A section of mode chips laid in **rows of five**, left-aligned.
 ///
-/// Fixed-width cells in plain `ui.horizontal` rows, **not** an `egui::Grid`: a
-/// Grid here asked its container wider than it was and grew the docked column
-/// over the operating panel below it (the #643 guard caught it on RIFP and
-/// FT8). The cells are sized to the widest chip plus slack, and as many as fit
-/// go on a row (up to [`MODE_GRID_COLS`]); where none fit, a wrapped row
-/// reflows instead.
+/// Plain `ui.horizontal` rows of the chips themselves — **not** an `egui::Grid`
+/// and **not** fixed-width cells. A Grid here asked its container wider than it
+/// was and grew the docked column over the operating panel below it (the #643
+/// guard caught it on RIFP and FT8); and fixed-width cells sized every chip to
+/// the section's widest label, so a short `AM` or `CW` sat in a wide cell with a
+/// gap after it (the operator: *"remove the alignment"*). The chips pack tight
+/// and the row simply holds up to [`MODE_GRID_COLS`] of them; where even one
+/// column will not fit, a wrapped row reflows instead.
 fn mode_chip_grid(
     ui: &mut egui::Ui,
     cur: Mode,
@@ -7753,14 +7754,11 @@ fn mode_chip_grid(
         });
         return;
     }
-    let cell = widest + MODE_GRID_CELL_SLACK;
     let mut start = 0;
     while start < modes.len() {
         ui.horizontal(|ui| {
             for &m in &modes[start..(start + cols).min(modes.len())] {
-                ui.allocate_ui(egui::vec2(cell, 0.0), |ui| {
-                    mode_chip(ui, cur, m, band, state, listen, cmds);
-                });
+                mode_chip(ui, cur, m, band, state, listen, cmds);
             }
         });
         start += cols;
