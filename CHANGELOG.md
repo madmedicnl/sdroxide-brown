@@ -29,9 +29,13 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 - **SSTV on 60 m** now reads lower sideband, like every band below 10 MHz.
 - **Weak SSTV with CTR** — the front-end LO is kept half its offset from the
   dial, so a zero-IF image no longer lands in the passband.
+- **The "do not ask me again" answers stick** — the bindings offer, the
+  receive-only banner, the dismissed advisories and the CB transmit warning are
+  kept on the server, so they stop coming back every session.
 
 ### Not proven
 - The serial rotator transports, and the rotator and LOUDNESS on the air.
+- The server-kept answers: tested over a WebSocket, not yet in a real browser.
 
 **Everything else — how each works, the settings, the limits — is in the
 manual: press F1 in the program, or read `docs/USER_MANUAL.md`.**

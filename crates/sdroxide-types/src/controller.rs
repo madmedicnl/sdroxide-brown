@@ -428,6 +428,10 @@ pub enum RadioEvent {
         profile: Option<String>,
         bindings: crate::InputSettings,
     },
+    /// The "do not ask me again" answers the server holds for this client's
+    /// profile — sent on connect, and echoed after a change. Client-local: it
+    /// rides `ServerMsg::ClientAcks`, not the engine.
+    ClientAcks(crate::ClientAcks),
     /// The answer to a [`crate::Command::GetKnownCalls`]: the callsigns the
     /// digital decoder's hash table can currently resolve, newest first — or
     /// `None` when there is no such table to ask, or the worker did not answer
@@ -480,6 +484,11 @@ pub trait RadioController {
     /// in-process engine has no server, and the bindings are already in its own
     /// `input.json`.
     fn send_client_bindings(&mut self, _profile: Option<String>, _bindings: crate::InputSettings) {}
+
+    /// Hand a remote server this client's "do not ask me again" answers, to keep
+    /// against its profile. Defaulted to nothing: the in-process engine has no
+    /// server, and its answers live in its own `config.toml`.
+    fn send_client_acks(&mut self, _acks: crate::ClientAcks) {}
 
     /// Non-blocking; the UI drains this each frame until `None`.
     fn poll_event(&mut self) -> Option<RadioEvent>;

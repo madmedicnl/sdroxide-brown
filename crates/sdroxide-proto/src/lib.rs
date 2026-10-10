@@ -1774,8 +1774,16 @@ use sdroxide_types::{
 /// shifts every field after it and `RxState` rides it twice, so a v200 peer
 /// would misread the whole state — hence the bump. `PROTO_VERSION` 200 → 201,
 /// `VERSION_BYTE` unchanged at 0x15. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 201;
-const VERSION_BYTE: u8 = 0x15;
+///
+/// v202: `ClientMsg::SetClientAcks` and `ServerMsg::ClientAcks`, both
+/// appended last — the "do not ask me again" answers (the bindings offer, the
+/// dismissed advisories, the CB transmit acknowledgement, the receive-only
+/// banner) kept on the server per login and browser, because browser storage
+/// could not hold them and the questions came back every session.
+/// `PROTO_VERSION` 201 → 202, `VERSION_BYTE` 0x15 → 0x16. A downstream (fork)
+/// change.
+pub const PROTO_VERSION: u16 = 202;
+const VERSION_BYTE: u8 = 0x16;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -1911,6 +1919,11 @@ pub enum ClientMsg {
         profile: Option<String>,
         bindings: sdroxide_types::InputSettings,
     },
+    /// Store this client's "do not ask me again" answers on the server, against
+    /// the profile it signed in as. The server **merges** them into what it
+    /// holds (see [`sdroxide_types::ClientAcks::merge`]) and echoes the result
+    /// with [`ServerMsg::ClientAcks`]. Appended last, as ever.
+    SetClientAcks(sdroxide_types::ClientAcks),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2297,6 +2310,14 @@ pub enum ServerMsg {
     ///
     /// Appended last, for the usual reason.
     DabStatus(Box<sdroxide_types::DabStatus>),
+
+    /// The "do not ask me again" answers stored for this client's profile.
+    /// Sent on connect **before** [`ServerMsg::ClientBindings`] — and when the
+    /// answer to the bindings offer is "keep mine", those are not sent at all —
+    /// and echoed after a [`ClientMsg::SetClientAcks`].
+    ///
+    /// Appended last, for the usual reason.
+    ClientAcks(sdroxide_types::ClientAcks),
 }
 
 /// What [`ServerMsg::ClientSettings`] carries.
