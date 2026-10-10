@@ -2996,6 +2996,10 @@ struct Engine {
     /// kept alive across blocks; reconfigured only when the settings change.
     rx_eq: ParametricEq,
     rx_eq_cfg: sdroxide_types::TxEqState,
+    /// LOUDNESS: a second EQ whose bass/treble lift follows the volume
+    /// (`sdroxide_dsp::loudness_curve`), and the curve it was last tuned to.
+    rx_loud: ParametricEq,
+    rx_loud_cfg: sdroxide_types::TxEqState,
     /// Right channel of the main chain, non-empty only while WFM stereo is
     /// decoding and the sub receiver is off — or while the binaural widener
     /// below is placing the passband across the two ears.
@@ -3122,11 +3126,20 @@ struct Engine {
     rot_cfg: sdroxide_types::RotatorConfig,
     /// The rotctld client itself, when enabled. `poll_sat_track` feeds it;
     /// `poll_rotator_status` reads its health back for the clients.
-    rotator: Option<sdroxide_rotator::RotctldClient>,
+    rotator: Option<sdroxide_rotator::RotatorClient>,
     /// What was last told to the clients, and when az/el may next go out —
     /// connection transitions bypass the throttle, movement does not.
     rot_last_status: Option<sdroxide_rotator::RotStatus>,
     next_rot_emit: Instant,
+    /// Who is allowed to move the antenna. `Auto` lets the satellite lock drive
+    /// it and parks it with no lock; `Manual` holds the operator's own target
+    /// and a satellite lock does not override it. `drive_rotator` runs every
+    /// frame, so without this a point the operator made would be undone by the
+    /// next tracking tick — a control that silently does nothing.
+    rot_authority: sdroxide_types::RotatorAuthority,
+    /// The operator's own target, when [`Self::rot_authority`] is `Manual`.
+    /// `None` parks.
+    rot_manual: Option<(f64, f64)>,
     /// The external T/R switch's config as persisted (`relay.json`), announced
     /// in the station bundle the way the rotator's is.
     relay_cfg: sdroxide_types::RelayConfig,
@@ -4371,6 +4384,8 @@ fn engine_thread(
         replay_buf: Vec::new(),
         rx_eq: ParametricEq::new(),
         rx_eq_cfg: sdroxide_types::TxEqState::default(),
+        rx_loud: ParametricEq::new(),
+        rx_loud_cfg: sdroxide_types::TxEqState::default(),
         binaural: None,
         bin_left: Vec::new(),
         speech_duck: 1.0,
@@ -4420,6 +4435,8 @@ fn engine_thread(
         rotator: None,
         rot_last_status: None,
         next_rot_emit: Instant::now(),
+        rot_authority: sdroxide_types::RotatorAuthority::Auto,
+        rot_manual: None,
         session,
         want_antenna,
         band_antenna,
@@ -5472,6 +5489,10 @@ impl Engine {
     /// forked — see [`Engine::process_block`].
     fn finish_audio(&mut self, iq: &[Complex32]) {
         let want_rec = self.recorder.is_some();
+        // Set while a voice-keyer preview has the speakers: that audio never
+        // passed the AF knob, so LOUDNESS (which lifts by what the knob took
+        // away) must leave it alone or it would lift full-level audio.
+        let mut unscaled_preview = false;
         // A radio listening to its transceiver while an attached receiver
         // paints the picture. The main chain still runs — the high-resolution
         // channel analyzer reads its DDC output, and the sub receiver is a
@@ -5539,6 +5560,7 @@ impl Engine {
             // lane has a length to be taken at. See `take_dab_audio_into`.
             let block = self.main_play.len().max(speaker_block(out_rate));
             if self.take_preview_audio(out_rate, block) {
+                unscaled_preview = true;
                 self.main_play.clear();
                 self.main_play.extend_from_slice(&self.voice_prev_out);
                 self.main_play_r.clear();
@@ -5634,12 +5656,27 @@ impl Engine {
         };
         // The listener's receive tone, in front of the speakers (and the
         // time-shift window, so a replay sounds like what was heard).
-        if self.state.rx_tone != self.rx_eq_cfg {
-            self.rx_eq.configure(&self.state.rx_tone, self.audio_out_rate);
-            self.rx_eq_cfg = self.state.rx_tone.clone();
+        if self.state.rx[0].tone != self.rx_eq_cfg {
+            self.rx_eq.configure(&self.state.rx[0].tone, self.audio_out_rate);
+            self.rx_eq_cfg = self.state.rx[0].tone;
         }
-        if self.state.rx_tone.enabled {
+        if self.state.rx[0].tone.enabled {
             self.rx_eq.process(&mut self.main_play);
+        }
+        // LOUDNESS after the tone: a lift that grows as the volume goes down,
+        // read off the knob each block. Flat at full volume, and never more
+        // than the attenuation it compensates, so it cannot clip.
+        if self.state.rx[0].loudness && !unscaled_preview {
+            let rx0 = &self.state.rx[0];
+            let vol = if rx0.muted { 0.0 } else { rx0.volume };
+            let curve = sdroxide_dsp::loudness_curve(vol, self.audio_out_rate);
+            if curve != self.rx_loud_cfg {
+                self.rx_loud.configure(&curve, self.audio_out_rate);
+                self.rx_loud_cfg = curve;
+            }
+            if self.rx_loud_cfg.enabled {
+                self.rx_loud.process(&mut self.main_play);
+            }
         }
         // Feed the time-shift window from the live audio, then play from it
         // instead of from live while replay is on. The recorder keeps the live
@@ -10165,6 +10202,28 @@ impl Engine {
                 self.emit_station_config();
                 return;
             }
+            PointRotator { az, el } => {
+                self.rot_authority = sdroxide_types::RotatorAuthority::Manual;
+                self.rot_manual = Some((az, el));
+                if let Some(rot) = self.rotator.as_ref() {
+                    rot.set_target(az, el);
+                }
+                return;
+            }
+            SetRotatorAuthority(a) => {
+                self.rot_authority = a;
+                self.rot_manual = None;
+                self.drive_rotator();
+                return;
+            }
+            StopRotator => {
+                self.rot_authority = sdroxide_types::RotatorAuthority::Manual;
+                self.rot_manual = None;
+                if let Some(rot) = self.rotator.as_ref() {
+                    rot.stop();
+                }
+                return;
+            }
             SetRelayConfig(cfg) => {
                 if let Err(e) = sdroxide_config::save_relay_config(&cfg) {
                     warn!("saving T/R switch config: {e}");
@@ -10216,8 +10275,23 @@ impl Engine {
                 // dial reads in.
                 self.emit_station_config();
             }
+            // The speaker audio is the main receiver's, so both of these are
+            // its settings — and per-mode ones, remembered for the mode in
+            // force like BIN. A client's tone goes through `clamped` on the
+            // way in, because it is stored in `modeprofiles.json` and laid on
+            // the filters again at every mode change.
             SetRxTone(tone) => {
-                self.state.rx_tone = *tone;
+                let tone = tone.clamped();
+                self.state.rx[0].tone = tone;
+                self.remember_mode_setting(RxId::Main, |p| p.tone = Some(tone));
+                self.emit_state();
+            }
+            SetRxLoudness(on) => {
+                // Start from silence: history left from the last time it ran
+                // would otherwise ring into the first block after re-enabling.
+                self.rx_loud.reset();
+                self.state.rx[0].loudness = on;
+                self.remember_mode_setting(RxId::Main, |p| p.loudness = Some(on));
                 self.emit_state();
             }
             SetReplay(on) => {
@@ -12826,6 +12900,15 @@ impl Engine {
             next_emit: Instant::now(),
             next_slow_unix: 0.0,
         });
+        // Arming the lock's rotator switch is the operator asking the antenna
+        // to follow the bird, so it takes ownership — otherwise a manual point
+        // made earlier would hold the beam off the satellite the lock is now
+        // tracking. The lock's own `rotator` flag is what makes this true, so
+        // a lock that cannot steer leaves whatever the operator had alone.
+        if self.sat_lock.as_ref().is_some_and(|l| l.cfg.rotator) {
+            self.rot_authority = sdroxide_types::RotatorAuthority::Auto;
+            self.rot_manual = None;
+        }
         self.update_tuning();
         let _ = self.event_tx.send(RadioEvent::State(self.state.clone()));
         self.poll_sat_track();
@@ -12994,7 +13077,7 @@ impl Engine {
         self.rotator = None;
         self.rot_last_status = None;
         if self.rot_cfg.enabled {
-            self.rotator = Some(sdroxide_rotator::RotctldClient::start(self.rot_cfg.clone()));
+            self.rotator = Some(sdroxide_rotator::RotatorClient::start(self.rot_cfg.clone()));
         } else {
             // Say the client has gone, so a status line does not keep showing
             // the last position of a client that no longer exists.
@@ -13007,12 +13090,22 @@ impl Engine {
         }
     }
 
-    /// Feed the rotator from the lock's geometry: track above the configured
-    /// horizon, pre-position onto the rise azimuth in the last minute before
-    /// AOS, park otherwise. The client dedups, so calling this at the
-    /// tracking rate costs nothing.
+    /// Feed the rotator from whoever owns it: the satellite lock when
+    /// [`Self::rot_authority`] is `Auto`, the operator's own target when it is
+    /// `Manual`. The client dedups, so calling this at the tracking rate costs
+    /// nothing.
     fn drive_rotator(&mut self) {
         let Some(rot) = self.rotator.as_ref() else { return };
+        if self.rot_authority == sdroxide_types::RotatorAuthority::Manual {
+            match self.rot_manual {
+                Some((az, el)) => rot.set_target(az, el),
+                // A manual hold with no target is a **stop**, not a park: the
+                // operator said "that is far enough", and answering with a swing
+                // to the park bearing would be the opposite of what they asked.
+                None => rot.stop(),
+            }
+            return;
+        }
         let lock = self.sat_lock.as_ref().filter(|l| l.cfg.rotator);
         let Some(l) = lock else {
             rot.park();
@@ -18255,11 +18348,19 @@ impl Engine {
     /// How far the active VFO has to stay from the hardware LO.
     ///
     /// Zero on a front end whose LO is clean (`lo_offset_hz` == 0), so its
-    /// tuning behaviour is untouched. Otherwise 1.2× the DDC channel's
-    /// half-width, which is the whole point of the offset: keep DC outside the
-    /// channel the demodulator actually sees, with a margin. Capped below the
-    /// offset itself, because a guard a retune could not satisfy would make
-    /// [`Self::keep_vfo_in_span`] retune on every single call.
+    /// tuning behaviour is untouched. Otherwise at least 1.2× the DDC channel's
+    /// half-width, so DC stays outside the channel the demodulator sees, and at
+    /// least half the offset. Capped below the offset itself, because a guard a
+    /// retune could not satisfy would make [`Self::keep_vfo_in_span`] retune on
+    /// every single call.
+    ///
+    /// Keeping DC out of the channel is not enough. A zero-IF front end
+    /// mirrors whatever sits at `2·LO − f` onto `f`, and a HackRF's image
+    /// rejection is poor. With CTR the LO used to sit ~30 kHz from the dial, so
+    /// on 80 m the SSTV passband's mirror landed in the busy phone segment
+    /// 60 kHz up: a strong picture still decoded and a weak one never started,
+    /// and both decoded at once with CTR off, where the LO is a whole offset
+    /// away. Half the offset puts the mirror a whole offset away from the dial.
     fn lo_guard_hz(&self) -> f64 {
         let offset = self.lo_offset_hz();
         if offset <= 0.0 {
@@ -18286,7 +18387,7 @@ impl Engine {
             return 0.0;
         }
         let channel = self.main.as_ref().map(|c| c.channel_rate()).unwrap_or(48_000.0);
-        (channel * 0.6).min(offset * 0.8)
+        (channel * 0.6).max(offset * 0.5).min(offset * 0.8)
     }
 
     /// A hardware centre the caller asked for, moved out of the active VFO's

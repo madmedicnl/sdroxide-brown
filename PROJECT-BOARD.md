@@ -30,6 +30,11 @@ granted (`gh auth refresh -h github.com -s project`).
 - **Nine upstream PRs merged** into upstream on 2026-09-28 (#583, #588, #590, #591, #593, …)
 - Upstream fixes taken: WEFAX auto start/stop, RADE RX reporting, HD-on-AM, Icom WFM,
   PureSignal gate, TX drive ceiling, LimeSDR Mini, HFDL lane rate
+- **Antenna rotator** — a manual **ROTATOR** window (compass, live hardware bearing,
+  drag/click to point, DX-country lookup, STOP/PARK/AUTO) with an authority model so a
+  manual point is not overridden by the satellite lock; point-at-DX from a decode row's
+  **BEAM** chip and click-to-point on the map; **EasyComm II / GS-232** serial transports
+  beside the Hamlib `rotctld` client (serial paths not proven on hardware)
 
 ## Open (In Progress)
 

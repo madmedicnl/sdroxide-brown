@@ -109,6 +109,21 @@ pub struct RxState {
     /// and read from the main receiver alone — the sub receiver *is* the other
     /// ear, and claims it whenever it is running.
     pub binaural: bool,
+    /// Receive tone: a low-shelf / peak / high-shelf on the demodulated audio,
+    /// the listener's tone control. Reuses [`TxEqState`]'s shape — the same
+    /// three bands — but applies on receive, in front of the speakers. A
+    /// per-mode setting ([`crate::ModeProfile`]), read from the main receiver
+    /// alone like [`Self::binaural`]: it shapes the speaker audio, which is the
+    /// main receiver's. Off and flat until the operator sets it.
+    #[serde(default)]
+    pub tone: TxEqState,
+    /// LOUDNESS on the receive audio: a bass and treble lift that grows as the
+    /// volume goes down, so a quiet speaker still sounds full — the ear loses
+    /// the ends of the spectrum first at low level. Independent of
+    /// [`Self::tone`]'s own switch, and a no-op at full volume. Per mode and
+    /// main receiver only, like [`Self::tone`]; off until the operator ticks it.
+    #[serde(default)]
+    pub loudness: bool,
 }
 
 impl RxState {
@@ -129,6 +144,8 @@ impl RxState {
             wfm_stereo: true,
             tone_sql: None,
             binaural: false,
+            tone: TxEqState::default(),
+            loudness: false,
         }
     }
 }
@@ -503,10 +520,6 @@ pub struct RadioState {
     /// Whether the receiver is playing the time-shift replay rather than live
     /// audio. Drives the REPLAY control's lit state.
     pub replay: bool,
-    /// Receive tone: a low-shelf / peak / high-shelf on the demodulated audio,
-    /// the listener's tone control. Reuses [`TxEqState`]'s shape — the same
-    /// three bands — but applies on receive, in front of the speakers.
-    pub rx_tone: TxEqState,
     pub oob_tx: bool,
     /// The *radio's own* squelch threshold, as a `0..1` fraction of its scale —
     /// `0` open, `1` closed, the way the knob on the front panel reads.
@@ -644,7 +657,6 @@ impl Default for RadioState {
             iq_recording_file: None,
             iq_recording_mb: 0,
             replay: false,
-            rx_tone: TxEqState::default(),
             oob_tx: false,
             // Open, until the radio says otherwise: the level is adopted from
             // the rig, and until one has answered there is nothing to claim.

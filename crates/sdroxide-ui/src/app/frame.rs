@@ -387,6 +387,9 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
         // it is a window and not the docked column, which cannot be this wide
         // without squeezing the operating panel below it.
         M::BandMenu => ("band & mode", [560.0, 760.0]),
+        // A compass wants to be near square: it is a dial with a readout
+        // underneath, and a wide window would just be dial with margins.
+        M::Rotor => ("antenna rotator", [420.0, 520.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
@@ -2036,6 +2039,53 @@ impl SdroxideApp {
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
                 self.dispatch_commands(cmds);
             }
+            M::Rotor => {
+                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+                    let ictx = ui.ctx().clone();
+                    let prev = crate::layout::tier(&ictx);
+                    // Desktop-shaped whatever its height, like the console and
+                    // the band selector: this is a desk tool, and the compact
+                    // strips are for a phone.
+                    crate::layout::set_tier(&ictx, crate::layout::Tier::Desktop);
+                    egui::Frame::new()
+                        .fill(crate::theme::BG_DEEP())
+                        .inner_margin(egui::Margin::symmetric(8, 6))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new("ANTENNA ROTATOR")
+                                        .size(11.0)
+                                        .strong()
+                                        .color(crate::theme::CYAN()),
+                                );
+                                crate::chrome::row_tail(ui, |ui| {
+                                    if crate::chrome::chip_window_icon(
+                                        ui,
+                                        crate::chrome::WindowIcon::In,
+                                    )
+                                    .on_hover_text(
+                                        "DOCK — return the rotator into the main window, the \
+                                             same as closing this one without hunting for its \
+                                             close box.",
+                                    )
+                                    .clicked()
+                                    {
+                                        self.ui_settings.set_detached(
+                                            sdroxide_types::DetachableModule::Rotor,
+                                            false,
+                                        );
+                                        crate::app::persist::persist_ui_settings(&self.ui_settings);
+                                    }
+                                });
+                            });
+                            ui.separator();
+                            self.rotor_body(ui, &mut cmds);
+                        });
+                    crate::layout::set_tier(&ictx, prev);
+                });
+                self.handle_detached_outcome(ctx, module, &spec, outcome);
+                self.dispatch_commands(cmds);
+            }
         }
     }
 
@@ -2425,6 +2475,15 @@ impl SdroxideApp {
         self.ui_settings.is_detached(sdroxide_types::DetachableModule::BandMenu) && self.focused
     }
 
+    /// The rotator window should exist this frame: undocked on the focused
+    /// radio. Like the band selector it needs nothing else to be present — the
+    /// compass is meaningful whether or not a rotator is configured, and when
+    /// none is, the window says so rather than disappearing.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn rotor_detached(&self) -> bool {
+        self.ui_settings.is_detached(sdroxide_types::DetachableModule::Rotor) && self.focused
+    }
+
     /// Which of this radio's modules the shell should emit as their own windows
     /// this frame, by [`sdroxide_types::DetachableModule::index`].
     ///
@@ -2447,6 +2506,7 @@ impl SdroxideApp {
         want[sdroxide_types::DetachableModule::AuxPanadapter.index()] =
             self.module_window_wanted(ctx, sdroxide_types::DetachableModule::AuxPanadapter);
         want[sdroxide_types::DetachableModule::BandMenu.index()] = self.band_menu_detached();
+        want[sdroxide_types::DetachableModule::Rotor.index()] = self.rotor_detached();
         want
     }
 

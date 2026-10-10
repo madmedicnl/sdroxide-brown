@@ -3288,6 +3288,12 @@ impl SdroxideApp {
         if defaults.binaural != Some(rx.binaural) {
             changed.push("binaural");
         }
+        if defaults.tone != Some(rx.tone) {
+            changed.push("tone");
+        }
+        if defaults.loudness != Some(rx.loudness) {
+            changed.push("LOUDNESS");
+        }
         if changed.is_empty() {
             return;
         }
@@ -3424,8 +3430,9 @@ impl SdroxideApp {
                 // audio, in front of the speakers. Broadcast and utility audio
                 // wants a tone control the ham speech chain never needed, and
                 // the ear reaches for it beside MUTE.
-                let tone = &self.state.rx_tone;
-                let hover = if tone.enabled {
+                let tone = &self.state.rx[0].tone;
+                let loud = self.state.rx[0].loudness;
+                let mut hover = if tone.enabled {
                     format!(
                         "Tone: bass {:+.0} dB, mid {:+.0} dB, treble {:+.0} dB",
                         tone.low.gain_db, tone.mid.gain_db, tone.high.gain_db
@@ -3433,7 +3440,10 @@ impl SdroxideApp {
                 } else {
                     "Tone — a three-band equalizer on the receive audio. Click to open".to_string()
                 };
-                let resp = crate::chrome::chip(ui, tone.enabled, "EQ").on_hover_text(hover);
+                if loud {
+                    hover.push_str("\nLOUDNESS on");
+                }
+                let resp = crate::chrome::chip(ui, tone.enabled || loud, "EQ").on_hover_text(hover);
                 self.eq_popup(ui, cmds, &resp);
             }
             RxChip::Rec => {
@@ -3846,8 +3856,8 @@ impl SdroxideApp {
     const GATE_POLL_MS: u64 = 250;
 
     /// The tone popup behind the EQ chip: on/off and a shelf each for bass, mid
-    /// and treble, on [`sdroxide_types::RadioState::rx_tone`] — the same control
-    /// the SWL LOG window offers, put where the ear reaches for it.
+    /// and treble, on [`sdroxide_types::RxState::tone`] — the same control the
+    /// SWL LOG window offers, put where the ear reaches for it.
     fn eq_popup(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>, btn: &egui::Response) {
         let popup_id = egui::Popup::default_response_id(btn);
         let now = ui.input(|i| i.time);
@@ -3871,11 +3881,11 @@ impl SdroxideApp {
         }
     }
 
-    /// The rows inside the EQ popup: three shelves and the on/off.
+    /// The rows inside the EQ popup: three shelves, the on/off and LOUDNESS.
     fn eq_controls(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
         crate::chrome::menu_caption(ui, "Tone");
-        let mut tone = self.state.rx_tone.clone();
-        let before = tone.clone();
+        let mut tone = self.state.rx[0].tone;
+        let before = tone;
         let band = |ui: &mut egui::Ui, name: &str, b: &mut sdroxide_types::TxEqBand| {
             ui.label(RichText::new(name).size(11.0));
             ui.add(
@@ -3889,8 +3899,34 @@ impl SdroxideApp {
             band(ui, "Treble", &mut tone.high);
         });
         if tone != before {
-            self.state.rx_tone = tone.clone();
+            self.state.rx[0].tone = tone;
             cmds.push(Command::SetRxTone(Box::new(tone)));
+        }
+        self.loudness_toggle(ui, cmds);
+        // Say where the setting lives, so a different sound in another mode is
+        // not a surprise: both are per-mode settings, like BIN.
+        ui.label(
+            RichText::new(format!(
+                "Remembered for {} — each mode keeps its own.",
+                self.state.rx[0].mode.label()
+            ))
+            .size(10.5)
+            .color(crate::theme::gray(140)),
+        );
+    }
+
+    /// The LOUDNESS switch, shared by the EQ popup and the SWL LOG's Tone row.
+    pub(crate) fn loudness_toggle(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        let mut on = self.state.rx[0].loudness;
+        crate::chrome::checkbox(ui, &mut on, "LOUDNESS").on_hover_text(
+            "Lifts the bass (and a little treble) as you turn the volume down, so a quiet \
+             speaker still sounds full. Works with or without the tone; does nothing at \
+             full volume and never plays louder than full volume would. Off by default, \
+             and remembered for the mode you are in.",
+        );
+        if on != self.state.rx[0].loudness {
+            self.state.rx[0].loudness = on;
+            cmds.push(Command::SetRxLoudness(on));
         }
     }
 

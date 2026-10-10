@@ -455,6 +455,15 @@ pub enum Mode {
 const PHONE_LSB_BANDS: [(f64, f64); 3] =
     [(1_800_000.0, 2_000_000.0), (3_500_000.0, 4_000_000.0), (7_000_000.0, 7_300_000.0)];
 
+/// Below this dial, analog SSTV rides the lower sideband — **60 m included**.
+///
+/// SSTV keeps the plain amateur rule, LSB below 10 MHz and USB above, rather
+/// than [`PHONE_LSB_BANDS`]: 60 m is not a picture channel anybody agreed to
+/// work upper sideband, and an SSTV listener on 5.357 MHz was shown the
+/// picture marker on the USB side, above the dial, while the band below 10 MHz
+/// says LSB. RADE keeps the phone table, where 60 m is USB.
+const SSTV_LSB_BELOW_HZ: f64 = 10_000_000.0;
+
 impl Mode {
     /// Every mode, in the order they cycle and appear in the picker — which is
     /// deliberately *not* the enum's declaration order (see [`Mode::Hell`]).
@@ -591,7 +600,8 @@ impl Mode {
                 | Mode::Msk144
                 | Mode::Q65
                 | Mode::UvPacket
-                | Mode::Jtty | Mode::Ale
+                | Mode::Jtty
+                | Mode::Ale
                 | Mode::Fsk441
                 | Mode::Packet
                 | Mode::PacketHf
@@ -1141,6 +1151,10 @@ impl Mode {
             auto_notch: Some(false),
             wfm_stereo: Some(true),
             binaural: Some(false),
+            // The listener's tone and LOUDNESS are the operator's to switch on:
+            // off and flat in every mode until they are.
+            tone: Some(crate::TxEqState::default()),
+            loudness: Some(false),
         }
     }
 
@@ -1217,7 +1231,8 @@ impl Mode {
             | Mode::Q65
             | Mode::Fsk441
             | Mode::UvPacket
-            | Mode::Jtty | Mode::Ale
+            | Mode::Jtty
+            | Mode::Ale
             | Mode::Psk
             | Mode::Rtty
             | Mode::Sstv
@@ -1299,7 +1314,9 @@ impl Mode {
     /// speech and is worked on the phone segments alongside it. On 160, 80 and
     /// 40 m both ride the lower sideband — a picture or an over sent on USB
     /// there arrives at everybody else's receiver inverted, and an inverted
-    /// RADE signal does not decode at all — and USB on every band above.
+    /// RADE signal does not decode at all — and USB on every band above. SSTV
+    /// draws the line at 10 MHz instead, so it is LSB on 60 m too (see
+    /// [`SSTV_LSB_BELOW_HZ`]).
     ///
     /// `Mode::Sstv` by name rather than [`Self::is_sstv`]: sideband is a
     /// question about a sideband emission, and [`Mode::SstvFm`] is not one.
@@ -1314,6 +1331,9 @@ impl Mode {
     /// [`Self::sideband_follows_band`] names, which take theirs from the band
     /// they are being worked on.
     pub fn is_lower_sideband_at(self, dial_hz: f64) -> bool {
+        if self == Mode::Sstv {
+            return dial_hz < SSTV_LSB_BELOW_HZ;
+        }
         self.is_lower_sideband()
             || (self.sideband_follows_band()
                 && PHONE_LSB_BANDS.iter().any(|&(lo, hi)| dial_hz >= lo && dial_hz <= hi))
@@ -1478,7 +1498,8 @@ impl Mode {
             | Mode::Msk144
             | Mode::Q65
             | Mode::UvPacket
-            | Mode::Jtty | Mode::Ale
+            | Mode::Jtty
+            | Mode::Ale
             | Mode::Fsk441
             | Mode::Olivia
             | Mode::Thor
@@ -1563,8 +1584,10 @@ impl Mode {
     /// away to a dead band in the waterfall and the spectrum. The same argument
     /// covers the receive-only image lanes: their content is tone, not voice.
     pub fn auto_notch_applies(self) -> bool {
-        if matches!(self, Mode::Am | Mode::Sam | Mode::Cquam | Mode::Wfm | Mode::Drm | Mode::HdRadio)
-        {
+        if matches!(
+            self,
+            Mode::Am | Mode::Sam | Mode::Cquam | Mode::Wfm | Mode::Drm | Mode::HdRadio
+        ) {
             return false;
         }
         if self.is_image() || self.is_wefax() || self.is_hell() || self.is_rf_paint() {
@@ -1761,7 +1784,8 @@ impl Mode {
             | Mode::Msk144
             | Mode::Q65
             | Mode::UvPacket
-            | Mode::Jtty | Mode::Ale
+            | Mode::Jtty
+            | Mode::Ale
             | Mode::Fsk441
             | Mode::Acars
             | Mode::PacketHf
@@ -2609,6 +2633,17 @@ mod tests {
         assert!(!Mode::Fsk441.has_qso_sequencer(), "…but has no QSO to sequence");
     }
 
+    /// SSTV is LSB everywhere below 10 MHz, 60 m included, and USB above.
+    #[test]
+    fn sstv_is_lower_sideband_below_ten_megahertz() {
+        for dial in [1_890_000.0, 3_730_000.0, 5_357_000.0, 7_171_000.0, 9_999_000.0] {
+            assert!(Mode::Sstv.is_lower_sideband_at(dial), "SSTV at {dial} should be LSB");
+        }
+        for dial in [10_130_000.0, 14_230_000.0, 27_700_000.0] {
+            assert!(!Mode::Sstv.is_lower_sideband_at(dial), "SSTV at {dial} should be USB");
+        }
+    }
+
     /// SSTV and RADE follow phone practice: the low bands are LSB, everything
     /// above is USB, and no other mode's sideband moves with the dial.
     #[test]
@@ -2626,9 +2661,9 @@ mod tests {
                 let (ulo, uhi) = mode.default_filter();
                 assert_eq!((hi - lo), (uhi - ulo));
             }
-            // 60 m is a low band worked upper sideband, and 30 m is the first
-            // of the ones nothing argues about.
-            for dial in [5_357_000.0, 10_130_000.0, 14_236_000.0, 21_340_000.0, 144_500_000.0] {
+            // 30 m is the first of the ones nothing argues about. (60 m is USB
+            // for RADE and LSB for SSTV — see the test above.)
+            for dial in [10_130_000.0, 14_236_000.0, 21_340_000.0, 144_500_000.0] {
                 assert!(!mode.is_lower_sideband_at(dial), "{mode:?} at {dial} should be USB");
                 assert_eq!(mode.default_filter_at(dial), mode.default_filter());
             }

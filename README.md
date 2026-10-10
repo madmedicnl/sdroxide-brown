@@ -231,6 +231,12 @@ client — are in [`docs/images/`](docs/images).
   relay kinds supported. A contact can take a **band-decoder** role instead,
   switching an outboard filter or transverter by the dial's band from a
   per-band RX/TX table. See "T/R switch" in the manual for the limits.
+- **Antenna rotator** — points a motorized beam. The satellite lock steers it
+  through a Hamlib `rotctld` daemon (or an EasyComm II / GS-232 controller on a
+  serial port directly), and the **ROTATOR** window is the manual side: a
+  compass showing the hardware's own bearing against the one you asked for,
+  drag or click to point, a DX-country lookup, and STOP / PARK / AUTO. Point the
+  beam from a **right-click** on the map or a decode row's **BEAM** chip.
 - **Persistence** — device, rates, gains, memories, band stacks, network/QSL
   credentials, control bindings and the logbook under `~/.config/sdroxide-brown/`,
   plus named **station profiles**.

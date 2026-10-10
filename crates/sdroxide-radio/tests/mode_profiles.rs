@@ -475,3 +475,58 @@ fn the_overrides_survive_a_restart() {
     assert_eq!(s.rx[0].agc, AgcMode::Slow, "the mode's own defaults are still under it");
     stop(h);
 }
+
+/// The receive tone and LOUDNESS are per-mode settings like BIN: off in every
+/// mode until the operator switches them on, kept for the mode they were set
+/// in, back after a restart, and turned off again by the reset.
+///
+/// `session.json` carries neither, so the restart half can only pass if
+/// `modeprofiles.json` brought them back.
+#[test]
+fn the_tone_and_loudness_follow_the_mode() {
+    let _guard = CONFIG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    isolate("modeprofiles-tone-loudness");
+    let mut tone = sdroxide_types::TxEqState::default();
+    tone.enabled = true;
+    tone.low.gain_db = 6.0;
+    {
+        let h = start(Mode::Usb);
+        // Off by default: nothing is lifted until the box is ticked.
+        let s = wait_for(&h, "USB", |s| s.rx[0].mode == Mode::Usb);
+        assert!(!s.rx[0].loudness, "LOUDNESS must start off");
+        assert!(!s.rx[0].tone.enabled, "the tone must start off");
+
+        send(&h, Command::SetRxLoudness(true));
+        send(&h, Command::SetRxTone(Box::new(tone)));
+        let _ = wait_for(&h, "USB with LOUDNESS and the tone on", |s| {
+            s.rx[0].mode == Mode::Usb && s.rx[0].loudness && s.rx[0].tone == tone
+        });
+
+        // LSB is another mode: its own values, which are off.
+        send(&h, Command::SetMode { rx: RxId::Main, mode: Mode::Lsb });
+        let s = wait_for(&h, "LSB", |s| s.rx[0].mode == Mode::Lsb);
+        assert!(!s.rx[0].loudness, "LOUDNESS leaked from USB into LSB");
+        assert!(!s.rx[0].tone.enabled, "the tone leaked from USB into LSB");
+
+        // Back to USB, and what was set there returns.
+        send(&h, Command::SetMode { rx: RxId::Main, mode: Mode::Usb });
+        let _ = wait_for(&h, "USB's remembered LOUDNESS and tone", |s| {
+            s.rx[0].mode == Mode::Usb && s.rx[0].loudness && s.rx[0].tone == tone
+        });
+        stop(h);
+    }
+
+    // Across a restart.
+    let h = start(Mode::Usb);
+    let _ = wait_for(&h, "USB's LOUDNESS and tone after a restart", |s| {
+        s.rx[0].mode == Mode::Usb && s.rx[0].loudness && s.rx[0].tone == tone
+    });
+
+    // The reset turns both off and forgets them.
+    send(&h, Command::ResetModeDefaults { mode: Some(Mode::Usb) });
+    let s = wait_for(&h, "USB back on its defaults", |s| {
+        s.rx[0].mode == Mode::Usb && !s.rx[0].loudness
+    });
+    assert_eq!(s.rx[0].tone, sdroxide_types::TxEqState::default());
+    stop(h);
+}

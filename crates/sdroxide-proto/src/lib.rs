@@ -1757,16 +1757,33 @@ use sdroxide_types::{
 /// it and refuses the whole bindings document — which is why this is a version
 /// bump rather than a silent loss of the operator's key map. `PROTO_VERSION`
 /// 198 → 199, `VERSION_BYTE` 0x13 → 0x14. A downstream (fork) change.
-/// v200 is taken by the receive EQ's LOUDNESS (PR #43: `RadioState::rx_tone`
-/// moves into `RxState`, `Command::SetRxLoudness`).
-/// v201: `ClientMsg::SetClientAcks` and `ServerMsg::ClientAcks`, both
+///
+/// v200: the antenna rotator gains a manual side. Three appended `Command`s
+/// (`PointRotator`, `SetRotatorAuthority`, `StopRotator`), so no surviving
+/// discriminant moves — and `RotatorConfig` gained three fields (`transport`,
+/// `serial_port`, `baud`), which changes the layout of every message carrying it
+/// (`StationConfig::rotator`) and postcard is not self-describing, so both ends
+/// have to agree. `RotatorTransport` and `RotatorAuthority` are new enums that
+/// only the rotator's own messages ride. `PROTO_VERSION` 199 → 200,
+/// `VERSION_BYTE` 0x14 → 0x15. A downstream (fork) change.
+///
+/// v201: the receive tone and LOUDNESS are per-mode settings of the main
+/// receiver. `RadioState::rx_tone` moves into [`sdroxide_types::RxState`] as
+/// `tone`, `RxState` gains `loudness` (bool) after it, and `Command` gains
+/// `SetRxLoudness(bool)` last. Removing a mid-struct field from `RadioState`
+/// shifts every field after it and `RxState` rides it twice, so a v200 peer
+/// would misread the whole state — hence the bump. `PROTO_VERSION` 200 → 201,
+/// `VERSION_BYTE` unchanged at 0x15. A downstream (fork) change.
+///
+/// v202: `ClientMsg::SetClientAcks` and `ServerMsg::ClientAcks`, both
 /// appended last — the "do not ask me again" answers (the bindings offer, the
 /// dismissed advisories, the CB transmit acknowledgement, the receive-only
-/// banner) kept on the server against the signed-in profile, because browser
-/// storage could not hold them and the questions came back every session. A
-/// downstream (fork) change. `PROTO_VERSION` → 201, `VERSION_BYTE` 0x14 → 0x15.
-pub const PROTO_VERSION: u16 = 201;
-const VERSION_BYTE: u8 = 0x15;
+/// banner) kept on the server per login and browser, because browser storage
+/// could not hold them and the questions came back every session.
+/// `PROTO_VERSION` 201 → 202, `VERSION_BYTE` 0x15 → 0x16. A downstream (fork)
+/// change.
+pub const PROTO_VERSION: u16 = 202;
+const VERSION_BYTE: u8 = 0x16;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -2388,6 +2405,13 @@ mod tests {
                 audio: AudioCaps { opus_decode: true, opus_encode: false },
             },
             ClientMsg::Command(Command::SetPtt(true)),
+            // The rotator's manual side, both variants — appended, so a
+            // discriminant slip here would show as a decode error.
+            ClientMsg::Command(Command::PointRotator { az: 217.0, el: 43.0 }),
+            ClientMsg::Command(Command::SetRotatorAuthority(
+                sdroxide_types::RotatorAuthority::Manual,
+            )),
+            ClientMsg::Command(Command::StopRotator),
             ClientMsg::MicFrame { seq: 7, payload: vec![1, 2, 3] },
         ];
         for m in &msgs {
@@ -3074,6 +3098,22 @@ mod tests {
         let field = ClientMsg::Command(Command::SetDigiContest(ContestMode::EuVhf));
         assert_ne!(encode(&whole).unwrap(), encode(&field).unwrap());
         assert_eq!(decode::<ClientMsg>(&encode(&whole).unwrap()).unwrap(), whole);
+    }
+
+    /// LOUDNESS and the tone cross the wire both ways: the command, and the
+    /// receiver fields that tell a remote client their real position.
+    #[test]
+    fn roundtrip_rx_loudness() {
+        for on in [false, true] {
+            let m = ClientMsg::Command(Command::SetRxLoudness(on));
+            assert_eq!(decode::<ClientMsg>(&encode(&m).unwrap()).unwrap(), m);
+            let mut state = RadioState::default();
+            state.rx[0].loudness = on;
+            state.rx[0].tone.enabled = on;
+            state.rx[0].tone.low.gain_db = if on { 6.0 } else { 0.0 };
+            let st = ServerMsg::State(state);
+            assert_eq!(decode::<ServerMsg>(&encode(&st).unwrap()).unwrap(), st);
+        }
     }
 
     /// The per-mode transmit-audio level, over the wire in both directions

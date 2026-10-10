@@ -1336,7 +1336,7 @@ impl SdroxideApp {
             let night = self.night_texture(ui.ctx());
             self.prop_map_controls(ui);
             let reporters = self.heard_me_reporters();
-            crate::widgets::worldmap::show(
+            if let Some((lat, lon)) = crate::widgets::worldmap::show(
                 ui,
                 &mut self.map_view,
                 home_ll,
@@ -1350,7 +1350,12 @@ impl SdroxideApp {
                 night,
                 tx_active,
                 map_budget,
-            );
+            ) {
+                // A right-click on the map swings the beam to that spot — HRD's
+                // click-to-point. Guarded inside `beam_at`, which does nothing
+                // without a rotator.
+                self.beam_at(lat, lon, cmds);
+            }
             // Draggable border between the map and the QSO form below it.
             // Nothing is below it in a listener's column, so there is no border
             // to drag either.
@@ -1375,6 +1380,11 @@ impl SdroxideApp {
             return;
         }
         // Station card.
+        // A BEAM chip inside the card records the station's location here, and
+        // the command is sent after the closure — the card is drawn in a
+        // `red_panel` closure that does not hold `cmds`, so a flag is the way
+        // out without widening what it captures.
+        let mut rotor_beam: Option<(f64, f64)> = None;
         crate::chrome::red_panel(ui, |ui| {
             match status.as_ref() {
                 Some(s) => {
@@ -1505,6 +1515,26 @@ impl SdroxideApp {
                                         RichText::new(g).size(13.0).color(crate::theme::CYAN_DIM()),
                                     );
                                 }
+                                // Point the antenna at the station being shown —
+                                // HRD's "click a callsign, the beam follows", a
+                                // chip rather than the click because a click
+                                // already means "preview this decode".
+                                if self.rot_cfg_edit.enabled {
+                                    if let Some(ll) = s
+                                        .dx_grid
+                                        .as_deref()
+                                        .and_then(sdroxide_types::grid_to_latlon)
+                                    {
+                                        if crate::chrome::chip(ui, false, "BEAM")
+                                            .on_hover_text(
+                                                "Point the antenna at this station's locator",
+                                            )
+                                            .clicked()
+                                        {
+                                            rotor_beam = Some(ll);
+                                        }
+                                    }
+                                }
                                 if let (Some(hg), Some(dg)) = (
                                     (!my_grid.is_empty()).then_some(my_grid.as_str()),
                                     s.dx_grid.as_deref(),
@@ -1546,6 +1576,9 @@ impl SdroxideApp {
                 }
             }
         });
+        if let Some((lat, lon)) = rotor_beam {
+            self.beam_at(lat, lon, cmds);
+        }
 
         // Fox pile-up: who is being worked and who is waiting. Only a Fox has
         // one, so its presence is the mode indicator.
