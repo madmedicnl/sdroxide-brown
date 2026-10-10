@@ -2782,6 +2782,52 @@ mod tests {
         }
     }
 
+    /// JTTY's panel offers the FREQ picker, CLEAR RX and SAVE from the start —
+    /// before anything has been heard, since FREQ is how an operator gets onto
+    /// a JTTY frequency at all.
+    #[test]
+    fn the_jtty_panel_has_freq_clear_and_save() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-jtty-panel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let ctx = egui::Context::default();
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.state.rx[0].mode = sdroxide_types::Mode::Jtty;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1280.0, 800.0),
+            )),
+            ..Default::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            let mut cmds = Vec::new();
+            app.jtty_panel(ui, &mut cmds, 300.0);
+        });
+        let mut texts = Vec::new();
+        fn walk(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        for c in &out.shapes {
+            walk(&c.shape, &mut texts);
+        }
+        out.drop_without_applying_deltas();
+        for want in ["⇵", "CLEAR RX", "SAVE"] {
+            assert!(
+                texts.iter().any(|t| t.contains(want)),
+                "no {want:?} in the JTTY panel: {texts:?}"
+            );
+        }
+    }
+
     /// Drive one whole app frame off-screen at a phone size, to catch any
     /// panic in rendering or layout at that width.
     ///

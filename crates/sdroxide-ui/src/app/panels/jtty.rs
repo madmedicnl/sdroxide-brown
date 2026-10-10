@@ -22,6 +22,9 @@ impl SdroxideApp {
         _panel_h: f32,
     ) {
         let st: Option<JttyStatus> = self.digi_status.as_ref().and_then(|s| s.jtty.clone());
+        // The header is drawn before anything has been heard: FREQ is how an
+        // operator gets onto a JTTY frequency in the first place.
+        self.jtty_header(ui, cmds, st.as_ref());
         // The transmit row is drawn whatever the receiver has heard — on a
         // quiet band there are no messages, and returning early here left the
         // whole TX row missing, which is the only thing the operator wanted.
@@ -33,25 +36,41 @@ impl SdroxideApp {
         self.jtty_tx_row(ui, cmds);
     }
 
-    /// The rolling log of messages heard.
-    fn jtty_log(&mut self, ui: &mut egui::Ui, st: &JttyStatus) {
+    /// The panel's header: the level, the **FREQ** picker (the provisional
+    /// meeting points, or any dial the operator chooses — the list does not
+    /// confine the receiver), and **CLEAR RX** / **SAVE** for the log.
+    fn jtty_header(&self, ui: &mut egui::Ui, cmds: &mut Vec<Command>, st: Option<&JttyStatus>) {
+        let heard = st.is_some_and(|s| !s.messages.is_empty());
         ui.horizontal(|ui| {
             ui.label(RichText::new("JTTY").strong().color(theme::CYAN()));
-            // The audio level: an asynchronous mode is bursts between silences,
-            // and the meter tells "nothing on the channel" from "nothing
-            // decoded".
-            ui.add(
-                egui::ProgressBar::new(st.level.clamp(0.0, 1.0))
-                    .desired_width(70.0)
-                    .fill(theme::CYAN_DIM()),
-            )
-            .on_hover_text("Receive audio level");
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(
-                    RichText::new(format!("{} rx", st.total)).size(10.0).color(theme::gray(120)),
-                );
+            if let Some(st) = st {
+                // The audio level: an asynchronous mode is bursts between
+                // silences, and the meter tells "nothing on the channel" from
+                // "nothing decoded".
+                ui.add(
+                    egui::ProgressBar::new(st.level.clamp(0.0, 1.0))
+                        .desired_width(70.0)
+                        .fill(theme::CYAN_DIM()),
+                )
+                .on_hover_text("Receive audio level");
+            }
+            self.digi_freq_chip(ui, cmds);
+            crate::chrome::row_tail(ui, |ui| {
+                self.save_rx_chip(ui);
+                self.clear_rx_chip_enabled(ui, cmds, heard);
+                if let Some(st) = st {
+                    ui.label(
+                        RichText::new(format!("{} rx", st.total))
+                            .size(10.0)
+                            .color(theme::gray(120)),
+                    );
+                }
             });
         });
+    }
+
+    /// The rolling log of messages heard.
+    fn jtty_log(&mut self, ui: &mut egui::Ui, st: &JttyStatus) {
         ui.add_space(4.0);
         ui.separator();
 
