@@ -69,6 +69,9 @@
 > The `&mut` locals turned out **not** to be a design problem, and the refactor
 > found a **dead EDIT button** in RECORDINGS on the way. **WEFAX is deliberately
 > left docked**: its only window is a per-chart viewer, not a menu tool.
+> **Settings is a tool window too** (`sdroxide-tool-settings`), and it is the one
+> that needed `tool_window_sized`'s `min_size` and `centre_first` — a 900x760 box
+> in a corner lands under the top bar, which only rendering it showed.
 >
 > **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
 > mid-flight — read it before touching ALE). **FST4W**

@@ -12492,14 +12492,20 @@ session-only, like its position inside the main window — where it sat is not
 remembered across a restart. Their app-ids are `sdroxide-tool-<name>` (e.g.
 `sdroxide-tool-scanner`, `sdroxide-tool-mail`), so one rule can float them all.
 
-Every menu tool window has one, and each remembers its own size: SCHEDULE,
-RECORDINGS, SPOTS, PUBLIC SDRS, the voice keyer, and the AIS / ADS-B / VDL2 /
-FSQ Contacts and per-mode setup panels. The WEFAX chart viewer is the one
+Every menu tool window has one, and each remembers its own size: **Settings**,
+SCHEDULE, RECORDINGS, SPOTS, PUBLIC SDRS, the voice keyer, and the AIS / ADS-B /
+VDL2 / FSQ Contacts and per-mode setup panels. The WEFAX chart viewer is the one
 exception and stays docked — it belongs to the chart you picked rather than to
 the menu, so it opens and closes with that chart.
 
+Settings is the one worth putting on a second monitor: it opens in the middle of
+the screen the first time and will not be dragged narrower than its tabs can
+use, so the whole box survives a move rather than becoming a column of clipped
+controls.
+
 | Tool window | Application id |
 |---|---|
+| Settings | `sdroxide-tool-settings` |
 | Schedule | `sdroxide-tool-schedule` |
 | Recordings | `sdroxide-tool-recordings` |
 | Spots | `sdroxide-tool-spots` |

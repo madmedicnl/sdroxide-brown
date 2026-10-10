@@ -16,7 +16,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 ### Added
 
 - The band and mode selector is a window of its own (**⇱ WINDOW**), in five columns, because a docked column cannot be wide enough.
-- Every remaining menu tool window can be undocked: SCHEDULE, RECORDINGS, SPOTS, PUBLIC SDRS, the voice keyer and the per-mode setup panels.
+- Every remaining menu tool window can be undocked, Settings included: SCHEDULE, RECORDINGS, SPOTS, PUBLIC SDRS, the voice keyer and the per-mode setup panels.
 - **Ctrl+W** opens Settings on the UI page, where the saved window arrangements are listed.
 
 ### Fixed

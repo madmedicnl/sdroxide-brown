@@ -3281,4 +3281,77 @@ mod tests {
             "the scan still holds a block after {ticks} ticks ({t:.0} s) — it never ends"
         );
     }
+
+    /// The settings box opens in the middle of the screen, not tucked into the
+    /// corner where the top bar covers it.
+    ///
+    /// It used to be a pinned `egui::Window` that put itself in the middle, and
+    /// that `default_pos` was lost when it became a tool window — the very next
+    /// build drew it at `x 15.4..916.6 y 15.4..776.6` in a 1920x1080 window, so
+    /// its whole tab bar sat under the 187 pt top bar. The test says where the
+    /// body lands rather than only that it does not panic, because a box drawn
+    /// in the wrong place still draws.
+    #[test]
+    fn the_settings_box_opens_below_the_top_bar() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-setbox-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.show_settings = true;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1920.0, 1080.0),
+            )),
+            ..Default::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest());
+        });
+        // The window's own frame is the largest inked rect near its 900x760
+        // default, so take the widest that fits rather than guessing at a shape
+        // type — a rounded frame is a Path, not a Rect.
+        let win = out
+            .shapes
+            .iter()
+            // Intersected with the clip rect: a shape clipped against the
+            // viewport still reports its full *unclipped* bounds, and one
+            // hanging off the top of the screen then reads as a 1041 pt tall
+            // rect that happens to be near the window's width. This is the same
+            // trap the page-overflow probe in `multi.rs` records — measure the
+            // ink, not the geometry.
+            .map(|cs| cs.shape.visual_bounding_rect().intersect(cs.clip_rect))
+            .filter(|b| {
+                b.is_finite()
+                    && !b.is_negative()
+                    && b.width() > 700.0
+                    && b.width() < 1100.0
+                    && b.height() > 500.0
+            })
+            .fold(None::<egui::Rect>, |acc: Option<egui::Rect>, b| {
+                Some(match acc {
+                    Some(a) if a.width() * a.height() >= b.width() * b.height() => a,
+                    _ => b,
+                })
+            })
+            .expect("the settings box should have painted something its own size");
+        // Handed back before the assertions, so a failure here reports its own
+        // message instead of aborting inside epaint's dropped-texture check.
+        out.drop_without_applying_deltas();
+        assert!(
+            win.min.y > 150.0,
+            "the settings box opened at y {:.0}, under the top bar: {:?}",
+            win.min.y,
+            win,
+        );
+        assert!(
+            win.max.x <= 1920.0 && win.max.y <= 1080.0,
+            "the settings box does not fit the screen: {:?}",
+            win,
+        );
+    }
 }

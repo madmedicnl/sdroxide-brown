@@ -99,6 +99,19 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
    "a control that can silently do nothing" rule finding a second instance in
    code this refactor touched.
 
+   **Settings joined them (2026-10-10)** — id `settings`, app-id
+   `sdroxide-tool-settings`. It needed two things the other ten did not:
+   `tool_window_sized` grew a `min_size` and a `centre_first`, because the
+   settings tabs are laid out at fixed widths (a narrow box is a column of
+   clipped controls) and a 900x760 window in a corner sits *under* the 187 pt
+   top bar. **Rendering it caught the second one**: the conversion dropped the
+   old `default_pos` and the box opened at `x 15.4..916.6 y 15.4..776.6` in a
+   1920x1080 window, entirely under the top bar. Pinned by
+   `the_settings_box_opens_below_the_top_bar`, verified failing with the
+   centring off (`the settings box opened at y 15, under the top bar`).
+   Its window's `vscroll` is now an explicit `ScrollArea::vertical()`, built
+   *before* `bars.restore(ui)` so the scrollbar keeps its accent.
+
    **WEFAX is the one deliberate omission.** Its only window is the per-chart
    **viewer** (`panels/wefax.rs`), opened from a selected chart and carrying that
    chart's own title, size and state — not a menu tool. A fixed tool id would

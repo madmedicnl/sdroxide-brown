@@ -2119,10 +2119,34 @@ impl SdroxideApp {
         open: bool,
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> bool {
+        self.tool_window_sized(ctx, id, title, default_size, [0.0, 0.0], false, open, body)
+    }
+
+    /// As [`Self::tool_window`], with a floor on how small the docked window may
+    /// be dragged, and whether to open in the middle of the screen the first
+    /// time rather than in a corner.
+    ///
+    /// Both exist for the settings box and nothing else: its tabs are laid out
+    /// at fixed widths, so it becomes a column of clipped controls if it is
+    /// shrunk much; and at 900x760 a corner is under the top bar, which is where
+    /// the pinned [`egui::Window`] it used to be deliberately put it in the
+    /// middle instead. egui remembers the position either way, so this only
+    /// decides where a window lands the first time it is opened.
+    pub(in crate::app) fn tool_window_sized(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        min_size: [f32; 2],
+        centre_first: bool,
+        open: bool,
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
         if !open {
             return false;
         }
-        self.dispatch_tool_window(ctx, id, title, default_size, body)
+        self.dispatch_tool_window(ctx, id, title, default_size, min_size, centre_first, body)
     }
 
     /// The tool as an egui window in this viewport. Returns
@@ -2133,13 +2157,15 @@ impl SdroxideApp {
         id: &'static str,
         title: &str,
         default_size: [f32; 2],
+        min_size: [f32; 2],
+        centre_first: bool,
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> (bool, bool) {
         let mut win_open = true;
         let win_id = crate::layout::salted_id(ctx, id).with(TOOL_WINDOW_EPOCH);
         #[cfg_attr(target_arch = "wasm32", allow(unused))]
         let mut body_top = f32::NAN;
-        let resp = egui::Window::new(title)
+        let mut w = egui::Window::new(title)
             // The id carries an **epoch**, bumped when this window's bounding
             // changes; egui remembers a window's size and eframe persists it, so
             // the epoch discards a stale one.
@@ -2155,15 +2181,29 @@ impl SdroxideApp {
             // screen. The body sits at the top now (the ⇱ chip is a one-row
             // allocation), so a large window is merely large, not broken; this
             // just keeps it sane.
-            .max_size(ctx.content_rect().size() * 0.95)
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    body_top = ui.min_rect().min.y;
-                }
-                body(self, ui);
-            });
+            .max_size(ctx.content_rect().size() * 0.95);
+        if min_size[0] > 0.0 {
+            w = w
+                .min_width(crate::layout::window_w(ctx, min_size[0]))
+                .min_height(crate::layout::window_h(ctx, min_size[1]));
+        }
+        // First open only — egui remembers a window's position, so this decides
+        // where a window lands once and never again.
+        if centre_first {
+            let want = egui::vec2(
+                crate::layout::window_w(ctx, default_size[0]),
+                crate::layout::window_h(ctx, default_size[1]),
+            );
+            w = w.default_pos(ctx.content_rect().center() - want * 0.5);
+        }
+        let resp = w.show(ctx, |ui| {
+            crate::chrome::window_body_bg(ui);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                body_top = ui.min_rect().min.y;
+            }
+            body(self, ui);
+        });
         // Only ever set on the native path below: the ⇱ chip rides the title
         // bar, and the browser has no second window to send it to. Same shape
         // as `body_top` above.
@@ -2186,10 +2226,12 @@ impl SdroxideApp {
         id: &'static str,
         title: &str,
         default_size: [f32; 2],
+        min_size: [f32; 2],
+        centre_first: bool,
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> bool {
         // No second window in the browser: always the in-viewport window.
-        self.tool_window_egui(ctx, id, title, default_size, body).0
+        self.tool_window_egui(ctx, id, title, default_size, min_size, centre_first, body).0
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -2199,13 +2241,16 @@ impl SdroxideApp {
         id: &'static str,
         title: &str,
         default_size: [f32; 2],
+        min_size: [f32; 2],
+        centre_first: bool,
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> bool {
         let st = self.tool_windows.get(id).copied().unwrap_or_default();
         if st.undocked {
             self.tool_window_os(ctx, id, title, default_size, st.window, body)
         } else {
-            let (open, detach) = self.tool_window_egui(ctx, id, title, default_size, body);
+            let (open, detach) =
+                self.tool_window_egui(ctx, id, title, default_size, min_size, centre_first, body);
             if detach {
                 self.tool_windows.insert(id, ToolWindowState { undocked: true, window: st.window });
             }
