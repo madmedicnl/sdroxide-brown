@@ -13,6 +13,13 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [2.0.7.1_brown] - 2026-10-10
+
+### Fixed
+- **Windows builds** — the vendored faad2 patch now matches its anchor whatever
+  the checkout's line endings, so the Windows downloads are back in this release
+  (2.0.7 shipped Linux, macOS and web only).
+
 ## [2.0.7_brown] - 2026-10-10
 
 ### Added

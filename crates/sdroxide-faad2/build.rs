@@ -49,6 +49,13 @@ const DRM_FILL_PATCH: (&str, &str) = (
 fn patched_syntax(faad2: &Path) -> PathBuf {
     let src = faad2.join("libfaad/syntax.c");
     let text = std::fs::read_to_string(&src).expect("read faad2 syntax.c");
+    // Normalise line endings **before** matching. A Windows checkout of the
+    // `vendor/faad2` submodule comes out CRLF (git's `core.autocrlf`), and the
+    // anchor below is written with `\n` — so on Windows it matched nothing and
+    // the build stopped with "the DRM fill-element anchor moved" while Linux and
+    // macOS, which check out LF, built fine. The patch and the written file are
+    // LF either way, which every C compiler takes.
+    let text = text.replace("\r\n", "\n");
     let (from, to) = DRM_FILL_PATCH;
     assert_eq!(text.matches(from).count(), 1, "faad2 syntax.c: the DRM fill-element anchor moved");
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("syntax.c");
