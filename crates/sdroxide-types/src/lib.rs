@@ -288,7 +288,7 @@ pub use rifp::{
     RifpSize, RifpStatus,
 };
 pub use rigctld::RigctldConfig;
-pub use rotator::RotatorConfig;
+pub use rotator::{RotatorAuthority, RotatorConfig, RotatorTransport};
 pub use satcfg::{
     CELESTRAK_GROUPS, CelestrakGroup, CustomTle, OrbitRings, Passband, SatConfig, SatFreqs,
     SatLink, TleSubStatus, TleSubscription, fmt_mhz as fmt_sat_mhz, parse_tle_block,

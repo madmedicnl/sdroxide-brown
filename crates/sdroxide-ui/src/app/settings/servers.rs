@@ -276,8 +276,10 @@ pub(in crate::app) fn settings_rigctld_tab(
     );
 }
 
-/// The rotctld *client* — the one interface on this tab where sdroxide dials
-/// out instead of listening. Driven by the satellite lock's az/el.
+/// The antenna rotator — the one interface on this tab where sdroxide dials
+/// out instead of listening. Driven by the satellite lock's az/el, or by hand
+/// from the ROTATOR window. The transport is a Hamlib `rotctld` daemon over TCP
+/// by default, or an EasyComm II / GS-232 controller on a serial port.
 pub(in crate::app) fn settings_rotator_tab(
     ui: &mut egui::Ui,
     cfg: &mut sdroxide_types::RotatorConfig,
@@ -285,12 +287,8 @@ pub(in crate::app) fn settings_rotator_tab(
     status: &Option<(bool, f64, f64, Option<String>)>,
     apply: &mut bool,
 ) {
-    ui.label(
-        RichText::new("Antenna rotator (rotctld client)")
-            .size(14.0)
-            .strong()
-            .color(crate::theme::CYAN()),
-    );
+    use sdroxide_types::RotatorTransport as T;
+    ui.label(RichText::new("Antenna rotator").size(14.0).strong().color(crate::theme::CYAN()));
     ui.add_space(4.0);
     if !seeded {
         ui.label(RichText::new("Waiting for the station's rotator configuration…").weak());
@@ -298,10 +296,11 @@ pub(in crate::app) fn settings_rotator_tab(
     }
     ui.label(
         RichText::new(
-            "Points a motorized antenna at the satellite you are locked onto, through a Hamlib \
-             rotctld daemon (run e.g. \u{201c}rotctld -m 603 -r /dev/ttyUSB0\u{201d} for a GS-232B \
-             rotator, or \u{201c}rotctld -m 1\u{201d} to try it without hardware). One daemon covers \
-             every rotator Hamlib drives — EasyComm, GS-232, SPID and the rest.",
+            "Points a motorized antenna at the satellite you are locked onto, or by hand from \
+             the ROTATOR window and the maps. The default is a Hamlib rotctld daemon (run e.g. \
+             \u{201c}rotctld -m 603 -r /dev/ttyUSB0\u{201d} for a GS-232B rotator, or \
+             \u{201c}rotctld -m 1\u{201d} to try it without hardware) — one daemon covers every \
+             rotator Hamlib drives. A controller on a serial port can also be driven directly.",
         )
         .weak(),
     );
@@ -310,19 +309,52 @@ pub(in crate::app) fn settings_rotator_tab(
     ui.add_space(6.0);
     ui.add_enabled_ui(cfg.enabled, |ui| {
         egui::Grid::new("rotator-grid").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
-            ui.label("Host");
-            crate::chrome::field(
-                ui,
-                egui::TextEdit::singleline(&mut cfg.host)
-                    .desired_width(160.0)
-                    .hint_text("127.0.0.1"),
-            );
+            ui.label("Connection");
+            egui::ComboBox::from_id_salt("rotator-transport")
+                .selected_text(match cfg.transport {
+                    T::Rotctld => "Hamlib rotctld (TCP)",
+                    T::EasyComm2 => "EasyComm II (serial)",
+                    T::Gs232 => "Yaesu GS-232 (serial)",
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut cfg.transport, T::Rotctld, "Hamlib rotctld (TCP)");
+                    ui.selectable_value(&mut cfg.transport, T::EasyComm2, "EasyComm II (serial)");
+                    ui.selectable_value(&mut cfg.transport, T::Gs232, "Yaesu GS-232 (serial)");
+                });
             ui.end_row();
 
-            ui.label("Port");
-            ui.add(egui::DragValue::new(&mut cfg.port).range(1..=65535))
-                .on_hover_text("4533 is rotctld's default");
-            ui.end_row();
+            match cfg.transport {
+                T::Rotctld => {
+                    ui.label("Host");
+                    crate::chrome::field(
+                        ui,
+                        egui::TextEdit::singleline(&mut cfg.host)
+                            .desired_width(160.0)
+                            .hint_text("127.0.0.1"),
+                    );
+                    ui.end_row();
+
+                    ui.label("Port");
+                    ui.add(egui::DragValue::new(&mut cfg.port).range(1..=65535))
+                        .on_hover_text("4533 is rotctld's default");
+                    ui.end_row();
+                }
+                T::EasyComm2 | T::Gs232 => {
+                    ui.label("Serial port");
+                    crate::chrome::field(
+                        ui,
+                        egui::TextEdit::singleline(&mut cfg.serial_port)
+                            .desired_width(160.0)
+                            .hint_text("/dev/ttyUSB0"),
+                    );
+                    ui.end_row();
+
+                    ui.label("Baud");
+                    ui.add(egui::DragValue::new(&mut cfg.baud).range(1200..=115200))
+                        .on_hover_text("Most controllers run at 9600");
+                    ui.end_row();
+                }
+            }
 
             ui.label("Min elevation");
             ui.add(egui::DragValue::new(&mut cfg.min_el_deg).range(0.0..=45.0).suffix("°"))
@@ -397,7 +429,7 @@ pub(in crate::app) fn settings_rotator_tab(
         crate::theme::GREEN(),
         crate::theme::INK_ON_CYAN(),
     )
-    .on_hover_text("Persist and (re)connect to the daemon")
+    .on_hover_text("Persist and (re)connect to the rotator")
     .clicked()
     {
         *apply = true;

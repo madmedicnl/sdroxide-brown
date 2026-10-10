@@ -13,6 +13,25 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+### Added
+- A **ROTATOR** window: a compass showing the hardware's reported bearing against
+  the one you asked for, drag or click to point, manual bearing entry, a
+  DX-country lookup, and STOP / PARK / AUTO.
+- Point the beam from where you work — a right-click on the FT8/FT4 map, or the
+  **BEAM** chip on a station card.
+- EasyComm II and Yaesu GS-232 rotators on a serial port directly, no Hamlib
+  daemon needed (Settings ▸ Servers).
+
+### Changed
+- A manual point now takes the antenna off the satellite lock until you hand it
+  back, instead of the next tracking tick overriding it.
+
+### Not proven
+- The serial rotator transports: their framing is unit-tested, but no controller
+  has been driven with them here — `rotctld` remains the exercised route.
+- Swinging a real beam from the compass, the map or a callsign: built and
+  unit-tested, not yet done on the air.
+
 ## [2.0.6_brown] - 2026-10-10
 
 Windows you can move, and six fixes from the field.

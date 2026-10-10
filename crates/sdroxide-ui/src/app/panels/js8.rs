@@ -357,7 +357,7 @@ impl SdroxideApp {
             if pane == 0 {
                 self.js8_heard_list(ui, &js8, avail_h, total_w);
             } else if swl {
-                self.js8_map(ui, &js8, avail_h);
+                self.js8_map(ui, &js8, avail_h, cmds);
             } else {
                 self.js8_chat(ui, cmds, &js8, avail_h);
             }
@@ -388,7 +388,7 @@ impl SdroxideApp {
             ui.vertical(|ui| {
                 ui.set_height(avail_h);
                 if swl {
-                    self.js8_map(ui, &js8, avail_h);
+                    self.js8_map(ui, &js8, avail_h, cmds);
                 } else {
                     self.js8_chat(ui, cmds, &js8, avail_h);
                 }
@@ -432,7 +432,13 @@ impl SdroxideApp {
     /// conversation below would be an empty "— no messages —" box — the column
     /// shows where the stations are instead. The same map the FT8/FT4/FT2 QSO
     /// pane has, with the selected station, if it sent a locator, marked.
-    fn js8_map(&mut self, ui: &mut egui::Ui, js8: &sdroxide_types::Js8Status, avail_h: f32) {
+    fn js8_map(
+        &mut self,
+        ui: &mut egui::Ui,
+        js8: &sdroxide_types::Js8Status,
+        avail_h: f32,
+        cmds: &mut Vec<Command>,
+    ) {
         let my_grid = self.my_grid();
         let home_ll = sdroxide_types::grid_to_latlon(&my_grid);
         let dx_ll = self
@@ -445,7 +451,7 @@ impl SdroxideApp {
         let night = self.night_texture(ui.ctx());
         self.prop_map_controls(ui);
         let reporters = self.heard_me_reporters();
-        crate::widgets::worldmap::show(
+        if let Some((lat, lon)) = crate::widgets::worldmap::show(
             ui,
             &mut self.map_view,
             home_ll,
@@ -459,7 +465,10 @@ impl SdroxideApp {
             night,
             false,
             avail_h,
-        );
+        ) {
+            // A right-click on the map swings the beam at that spot.
+            self.beam_at(lat, lon, cmds);
+        }
     }
 
     // ── JS8: locating stations ──────────────────────────────────────────────

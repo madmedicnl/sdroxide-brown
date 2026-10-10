@@ -2408,8 +2408,9 @@ corrections is one too many.
 
 ![Rotator setup](images/rotator.jpg)
 
-sdroxide points motorized antennas as a **Hamlib rotctld client** — configure
-it in Settings ▸ Servers. Run a daemon next to the hardware, for example:
+sdroxide points motorized antennas two ways, chosen in Settings ▸ Servers.
+
+**A Hamlib `rotctld` daemon** (the default) — run it next to the hardware:
 
 ```bash
 rotctld -m 603 -r /dev/ttyUSB0    # a Yaesu GS-232B interface
@@ -2417,13 +2418,35 @@ rotctld -m 202 -r /dev/ttyUSB0    # an EasyComm II controller (SatNOGS-style)
 rotctld -m 1                      # Hamlib's dummy rotator, for trying it out
 ```
 
-One protocol reaches everything Hamlib drives — GS-232, EasyComm, SPID,
-AlfaSpid and the rest — without sdroxide needing a serial driver per
-controller. The settings are the daemon's address, a minimum elevation below
-which the rotator parks (set it to your local roofline), an azimuth offset for
-a rotator whose north is off, the smallest movement worth commanding (motors
-last longer not chasing tenths of a degree), and an optional park position.
-The status line shows where the hardware actually reports itself pointing.
+One daemon reaches everything Hamlib drives — GS-232, EasyComm, SPID, AlfaSpid
+and the rest — so this is the route to reach for first.
+
+**A controller on a serial port directly** — EasyComm II or Yaesu GS-232A/B, for
+a station that would rather not run a daemon. Pick the connection, then the
+port (e.g. `/dev/ttyUSB0`) and baud (9600 on most controllers). These land the
+same commands the daemon would and are offered for convenience; the rotctld
+route above is the one exercised here, so treat the serial paths as not yet
+proven against real hardware.
+
+The shared settings are a minimum elevation below which the rotator parks (set
+it to your local roofline), an azimuth offset for a rotator whose north is off,
+the smallest movement worth commanding (motors last longer not chasing tenths
+of a degree), and an optional park position.
+
+**The ROTATOR window** — open it from **🪟 WINDOWS ▸ Antenna rotator** (or
+Settings ▸ UI) — is the manual side. A compass shows the hardware's own reported
+bearing against the one you have asked for; drag or click the dial to point,
+type a bearing, or pick a DX country and the beam swings to its bearing from
+your own locator. **STOP** halts where the antenna is, **PARK** drives to the
+park bearing, and **AUTO** hands the antenna back to the satellite lock. While
+the satellite lock is steering, a manual point takes over and the lock will not
+drag the beam off it — re-affirm the lock (**AUTO**, or its ROTATOR switch) to
+hand it back.
+
+You can also point the beam from where you are working. On the FT8/FT4 map a
+**right-click** aims the antenna at that spot; a decode row's **BEAM** chip (on
+the station card) aims it at the station's locator. Both need a rotator
+configured and your grid locator set.
 
 ### 2.17 Running more than one radio
 

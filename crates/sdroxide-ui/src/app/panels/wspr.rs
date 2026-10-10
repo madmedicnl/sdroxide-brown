@@ -88,7 +88,7 @@ impl SdroxideApp {
             match pane {
                 0 => self.wspr_spot_list(ui, panel_h),
                 1 => {
-                    self.wspr_map(ui, panel_h);
+                    self.wspr_map(ui, panel_h, cmds);
                 }
                 _ => self.wspr_status_scroll(ui, cmds),
             }
@@ -123,7 +123,7 @@ impl SdroxideApp {
             }
             ui.vertical(|ui| {
                 ui.set_height(panel_h);
-                let map_h = self.wspr_map(ui, panel_h);
+                let map_h = self.wspr_map(ui, panel_h, cmds);
                 if map_h > 0.0 {
                     ui.add_space(6.0);
                 }
@@ -137,7 +137,7 @@ impl SdroxideApp {
     /// Returns the height it took, so the caller knows whether to leave a gap.
     /// Zero when the panel is too short for a map — one two rows tall is not a
     /// map, and the beacon's state is worth more than a smear.
-    fn wspr_map(&mut self, ui: &mut egui::Ui, panel_h: f32) -> f32 {
+    fn wspr_map(&mut self, ui: &mut egui::Ui, panel_h: f32, cmds: &mut Vec<Command>) -> f32 {
         let map_lo = crate::widgets::worldmap::MIN_HEIGHT;
         if panel_h < map_lo * 2.0 {
             return 0.0;
@@ -164,7 +164,7 @@ impl SdroxideApp {
         let heat = self.prop_texture(ui.ctx(), self.state.rx_freq_hz());
         let night = self.night_texture(ui.ctx());
         let reporters = self.heard_me_reporters();
-        crate::widgets::worldmap::show(
+        if let Some((lat, lon)) = crate::widgets::worldmap::show(
             ui,
             &mut self.map_view,
             home,
@@ -178,7 +178,10 @@ impl SdroxideApp {
             night,
             self.digi_status.as_ref().map(|s| s.transmitting).unwrap_or(false),
             map_budget,
-        );
+        ) {
+            // A right-click on the map swings the beam at that spot.
+            self.beam_at(lat, lon, cmds);
+        }
         let legend = wspr_band_legend(ui, &stations);
         // Draggable edge under the map, as the FT8 panel has.
         let resp = crate::chrome::split_handle(ui, egui::vec2(ui.available_width(), 7.0), None);

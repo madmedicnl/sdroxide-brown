@@ -3122,11 +3122,20 @@ struct Engine {
     rot_cfg: sdroxide_types::RotatorConfig,
     /// The rotctld client itself, when enabled. `poll_sat_track` feeds it;
     /// `poll_rotator_status` reads its health back for the clients.
-    rotator: Option<sdroxide_rotator::RotctldClient>,
+    rotator: Option<sdroxide_rotator::RotatorClient>,
     /// What was last told to the clients, and when az/el may next go out —
     /// connection transitions bypass the throttle, movement does not.
     rot_last_status: Option<sdroxide_rotator::RotStatus>,
     next_rot_emit: Instant,
+    /// Who is allowed to move the antenna. `Auto` lets the satellite lock drive
+    /// it and parks it with no lock; `Manual` holds the operator's own target
+    /// and a satellite lock does not override it. `drive_rotator` runs every
+    /// frame, so without this a point the operator made would be undone by the
+    /// next tracking tick — a control that silently does nothing.
+    rot_authority: sdroxide_types::RotatorAuthority,
+    /// The operator's own target, when [`Self::rot_authority`] is `Manual`.
+    /// `None` parks.
+    rot_manual: Option<(f64, f64)>,
     /// The external T/R switch's config as persisted (`relay.json`), announced
     /// in the station bundle the way the rotator's is.
     relay_cfg: sdroxide_types::RelayConfig,
@@ -4420,6 +4429,8 @@ fn engine_thread(
         rotator: None,
         rot_last_status: None,
         next_rot_emit: Instant::now(),
+        rot_authority: sdroxide_types::RotatorAuthority::Auto,
+        rot_manual: None,
         session,
         want_antenna,
         band_antenna,
@@ -10165,6 +10176,28 @@ impl Engine {
                 self.emit_station_config();
                 return;
             }
+            PointRotator { az, el } => {
+                self.rot_authority = sdroxide_types::RotatorAuthority::Manual;
+                self.rot_manual = Some((az, el));
+                if let Some(rot) = self.rotator.as_ref() {
+                    rot.set_target(az, el);
+                }
+                return;
+            }
+            SetRotatorAuthority(a) => {
+                self.rot_authority = a;
+                self.rot_manual = None;
+                self.drive_rotator();
+                return;
+            }
+            StopRotator => {
+                self.rot_authority = sdroxide_types::RotatorAuthority::Manual;
+                self.rot_manual = None;
+                if let Some(rot) = self.rotator.as_ref() {
+                    rot.stop();
+                }
+                return;
+            }
             SetRelayConfig(cfg) => {
                 if let Err(e) = sdroxide_config::save_relay_config(&cfg) {
                     warn!("saving T/R switch config: {e}");
@@ -12826,6 +12859,15 @@ impl Engine {
             next_emit: Instant::now(),
             next_slow_unix: 0.0,
         });
+        // Arming the lock's rotator switch is the operator asking the antenna
+        // to follow the bird, so it takes ownership — otherwise a manual point
+        // made earlier would hold the beam off the satellite the lock is now
+        // tracking. The lock's own `rotator` flag is what makes this true, so
+        // a lock that cannot steer leaves whatever the operator had alone.
+        if self.sat_lock.as_ref().is_some_and(|l| l.cfg.rotator) {
+            self.rot_authority = sdroxide_types::RotatorAuthority::Auto;
+            self.rot_manual = None;
+        }
         self.update_tuning();
         let _ = self.event_tx.send(RadioEvent::State(self.state.clone()));
         self.poll_sat_track();
@@ -12994,7 +13036,7 @@ impl Engine {
         self.rotator = None;
         self.rot_last_status = None;
         if self.rot_cfg.enabled {
-            self.rotator = Some(sdroxide_rotator::RotctldClient::start(self.rot_cfg.clone()));
+            self.rotator = Some(sdroxide_rotator::RotatorClient::start(self.rot_cfg.clone()));
         } else {
             // Say the client has gone, so a status line does not keep showing
             // the last position of a client that no longer exists.
@@ -13007,12 +13049,22 @@ impl Engine {
         }
     }
 
-    /// Feed the rotator from the lock's geometry: track above the configured
-    /// horizon, pre-position onto the rise azimuth in the last minute before
-    /// AOS, park otherwise. The client dedups, so calling this at the
-    /// tracking rate costs nothing.
+    /// Feed the rotator from whoever owns it: the satellite lock when
+    /// [`Self::rot_authority`] is `Auto`, the operator's own target when it is
+    /// `Manual`. The client dedups, so calling this at the tracking rate costs
+    /// nothing.
     fn drive_rotator(&mut self) {
         let Some(rot) = self.rotator.as_ref() else { return };
+        if self.rot_authority == sdroxide_types::RotatorAuthority::Manual {
+            match self.rot_manual {
+                Some((az, el)) => rot.set_target(az, el),
+                // A manual hold with no target is a **stop**, not a park: the
+                // operator said "that is far enough", and answering with a swing
+                // to the park bearing would be the opposite of what they asked.
+                None => rot.stop(),
+            }
+            return;
+        }
         let lock = self.sat_lock.as_ref().filter(|l| l.cfg.rotator);
         let Some(l) = lock else {
             rot.park();

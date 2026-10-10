@@ -587,12 +587,20 @@ pub enum DetachableModule {
     /// own it can be as wide as the operator likes, with the operating panel
     /// keeping its full width. Appended last.
     BandMenu,
+    /// The **antenna rotator** — a compass the operator points by hand, with the
+    /// hardware's own reported position and a country lookup for DX bearings.
+    ///
+    /// A window because it is a tool the operator opens to swing a beam and
+    /// then leaves, not a panel that belongs under the waterfall: the satellite
+    /// lock already steers the antenna from the SAT window, and this is the
+    /// manual half — point at a callsign, a map, or a country. Appended last.
+    Rotor,
 }
 
 impl DetachableModule {
     /// How many detachable modules there are — the length of
     /// [`UiSettings::detached`], which is an array so `UiSettings` stays `Copy`.
-    pub const COUNT: usize = 5;
+    pub const COUNT: usize = 6;
 
     /// Every module, so a settings list or a test can walk them all.
     pub const ALL: [DetachableModule; DetachableModule::COUNT] = [
@@ -601,6 +609,7 @@ impl DetachableModule {
         DetachableModule::Controls,
         DetachableModule::AuxPanadapter,
         DetachableModule::BandMenu,
+        DetachableModule::Rotor,
     ];
 
     /// This module's slot in [`UiSettings::detached`]. A plain array rather than
@@ -612,6 +621,7 @@ impl DetachableModule {
             DetachableModule::Controls => 2,
             DetachableModule::AuxPanadapter => 3,
             DetachableModule::BandMenu => 4,
+            DetachableModule::Rotor => 5,
         }
     }
 
@@ -623,6 +633,7 @@ impl DetachableModule {
             DetachableModule::Controls => "Controls",
             DetachableModule::AuxPanadapter => "AUX SP (second spectrum)",
             DetachableModule::BandMenu => "Band & mode selector",
+            DetachableModule::Rotor => "Antenna rotator",
         }
     }
 
@@ -636,6 +647,7 @@ impl DetachableModule {
             DetachableModule::Controls => "sdroxide-controls",
             DetachableModule::AuxPanadapter => "sdroxide-panadapter-aux",
             DetachableModule::BandMenu => "sdroxide-bandmenu",
+            DetachableModule::Rotor => "sdroxide-rotor",
         }
     }
 }

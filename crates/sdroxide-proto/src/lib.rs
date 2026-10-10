@@ -1757,8 +1757,17 @@ use sdroxide_types::{
 /// it and refuses the whole bindings document — which is why this is a version
 /// bump rather than a silent loss of the operator's key map. `PROTO_VERSION`
 /// 198 → 199, `VERSION_BYTE` 0x13 → 0x14. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 199;
-const VERSION_BYTE: u8 = 0x14;
+///
+/// v200: the antenna rotator gains a manual side. Three appended `Command`s
+/// (`PointRotator`, `SetRotatorAuthority`, `StopRotator`), so no surviving
+/// discriminant moves — and `RotatorConfig` gained three fields (`transport`,
+/// `serial_port`, `baud`), which changes the layout of every message carrying it
+/// (`StationConfig::rotator`) and postcard is not self-describing, so both ends
+/// have to agree. `RotatorTransport` and `RotatorAuthority` are new enums that
+/// only the rotator's own messages ride. `PROTO_VERSION` 199 → 200,
+/// `VERSION_BYTE` 0x14 → 0x15. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 200;
+const VERSION_BYTE: u8 = 0x15;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -2367,6 +2376,13 @@ mod tests {
                 audio: AudioCaps { opus_decode: true, opus_encode: false },
             },
             ClientMsg::Command(Command::SetPtt(true)),
+            // The rotator's manual side, both variants — appended, so a
+            // discriminant slip here would show as a decode error.
+            ClientMsg::Command(Command::PointRotator { az: 217.0, el: 43.0 }),
+            ClientMsg::Command(Command::SetRotatorAuthority(
+                sdroxide_types::RotatorAuthority::Manual,
+            )),
+            ClientMsg::Command(Command::StopRotator),
             ClientMsg::MicFrame { seq: 7, payload: vec![1, 2, 3] },
         ];
         for m in &msgs {
