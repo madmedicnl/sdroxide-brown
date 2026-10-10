@@ -37,6 +37,13 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   `loudness`, `Command::SetRxLoudness` is appended), so client and server must
   both be updated.
 
+### Fixed
+
+- "This profile carries keyboard bindings" and "This radio is receive-only"
+  no longer come back every session: the answers, and the dismissed advisories
+  and CB transmit warning, are kept on the server per login and browser.
+  `PROTO_VERSION` 201 → 202.
+
 ### Changed
 
 - A manual point now takes the antenna off the satellite lock until you hand it
@@ -50,6 +57,8 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   unit-tested, not yet done on the air.
 - LOUDNESS has been tested as DSP, through the engine and over the wire, but
   not yet listened to on the air.
+- The server-kept answers are tested end to end over a WebSocket, not yet in a
+  real browser.
 
 ## [2.0.6_brown] - 2026-10-10
 
