@@ -2612,7 +2612,7 @@ impl SdroxideApp {
         crate::chrome::fading_menu_popup(ui, &btn, &mut self.mode_popup_since, |ui| {
             if can_dock {
                 ui.horizontal(|ui| {
-                    if crate::chrome::chip(ui, false, "⇲")
+                    if crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::In)
                         .on_hover_text(
                             "DOCK — keep the band and mode selector open beside the waterfall \
                              instead of closing this popup every time",
@@ -2626,7 +2626,7 @@ impl SdroxideApp {
                     // five columns and the operating panel below keeps its full
                     // width.
                     #[cfg(not(target_arch = "wasm32"))]
-                    if crate::chrome::chip(ui, false, "⇱")
+                    if crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
                         .on_hover_text(
                             "WINDOW — open the band and mode selector in a window of its own, as \
                              wide as you like, on any monitor beside the waterfall",
@@ -2707,7 +2707,7 @@ impl SdroxideApp {
                         {
                             visible = false;
                         }
-                        if crate::chrome::chip(ui, false, "⇲")
+                        if crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::In)
                             .on_hover_text(
                                 "DOCK — return the selector to the top-bar popup, where it \
                                  closes after every choice",
@@ -2720,7 +2720,7 @@ impl SdroxideApp {
                         // cannot show the modes in five columns without
                         // squeezing the operating panel, and this can.
                         #[cfg(not(target_arch = "wasm32"))]
-                        if crate::chrome::chip(ui, false, "⇱")
+                        if crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
                             .on_hover_text(
                                 "WINDOW — open the selector in a window of its own, as wide as \
                                  you like, on any monitor",

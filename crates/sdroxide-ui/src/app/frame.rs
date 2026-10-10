@@ -298,9 +298,9 @@ fn tool_window_title_button(
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
             ui.set_min_size(rect.size());
-            clicked = crate::chrome::chip(ui, false, "\u{21f1}")
+            clicked = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
                 .on_hover_text(
-                    "Move this window into its own OS window — put it on another monitor",
+                    "WINDOW — move this window into its own OS window, put it on another monitor",
                 )
                 .clicked();
         });
@@ -323,14 +323,11 @@ fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
         // bliss."* The arrow points the way the click goes — right and out to a
         // window of its own, left and back into the main one — so the direction
         // reads without the hover, and the hover still names it in words.
-        let (label, hover) = if undocked {
-            (
-                "\u{21f2}",
-                "DOCK — return this window into the main window",
-            )
+        let (icon, hover) = if undocked {
+            (crate::chrome::WindowIcon::In, "DOCK — return this window into the main window")
         } else {
             (
-                "\u{21f1}",
+                crate::chrome::WindowIcon::Out,
                 "WINDOW — move this window into its own OS window, to put it on another monitor",
             )
         };
@@ -344,7 +341,7 @@ fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
         let size = egui::vec2(ui.available_width(), crate::chrome::chip_height(ui, None));
         let mut clicked = false;
         ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            clicked = crate::chrome::chip(ui, false, label).on_hover_text(hover).clicked();
+            clicked = crate::chrome::chip_window_icon(ui, icon).on_hover_text(hover).clicked();
         });
         clicked
     }
@@ -1832,7 +1829,7 @@ impl SdroxideApp {
                 );
                 crate::chrome::row_tail(ui, |ui| {
                     self.layers_button(ui, "DISP", 0.0);
-                    if crate::chrome::chip(ui, false, "\u{21f2}")
+                    if crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::In)
                         .on_hover_text(
                             "DOCK — return this spectrum into the main window, the same as \
                          closing this one without hunting for its close box.",
@@ -2003,13 +2000,16 @@ impl SdroxideApp {
                                         .color(crate::theme::CYAN()),
                                 );
                                 crate::chrome::row_tail(ui, |ui| {
-                                    if crate::chrome::chip(ui, false, "⇲")
-                                        .on_hover_text(
-                                            "DOCK — return the band and mode selector into the \
+                                    if crate::chrome::chip_window_icon(
+                                        ui,
+                                        crate::chrome::WindowIcon::In,
+                                    )
+                                    .on_hover_text(
+                                        "DOCK — return the band and mode selector into the \
                                              main window, the same as closing this one \
                                              without hunting for its close box.",
-                                        )
-                                        .clicked()
+                                    )
+                                    .clicked()
                                     {
                                         self.ui_settings.set_detached(
                                             sdroxide_types::DetachableModule::BandMenu,

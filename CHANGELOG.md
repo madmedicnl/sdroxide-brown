@@ -27,7 +27,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ### Changed
 
-- The **WINDOW** and **DOCK** buttons are now arrows — ⇱ out to a window of its own, ⇲ back into the main one — with the wording on hover.
+- The **WINDOW** and **DOCK** buttons are now a drawn icon — a window's frame with an arrow crossing it, pointing out to a window of its own or back into the main one — with the wording on hover. They were text, then font arrows that this program's own faces do not carry and that drew as empty squares; the icon is painted, the way the flags are.
 
 ### Changed
 
