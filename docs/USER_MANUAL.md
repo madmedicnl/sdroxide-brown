@@ -9811,6 +9811,9 @@ ten boards: the original Pluto, PlutoPlus, ANTSDR E200/E310, Fishball/PlutoSky,
 SignalSDR Pro, LibreSDR/ZynqSDR, Pluto Nano and the PCIe and Mini
 OpenSDRLab boards.
 
+**As of today (10/2026), we recommend tezuka firmware v0.3.21: stable and
+tested.** Versions v0.3.19 and v0.3.23 are not stable.
+
 Nothing has to be configured in sdroxide to use it. The tuning range, the
 sample rate and the on-the-wire sample format are all read off the device as it
 connects rather than assumed, so a board running tezuka reports its own limits
