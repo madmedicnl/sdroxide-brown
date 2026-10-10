@@ -9814,6 +9814,14 @@ OpenSDRLab boards.
 **As of today (10/2026), we recommend tezuka firmware v0.3.21: stable and
 tested.** Versions v0.3.19 and v0.3.23 are not stable.
 
+**Power the Pluto from a supply that delivers at least 3 A, and give it an
+exact 5 V at the board.** The Pluto needs a precise 5 V at its own input, and
+the supply cable loses some of it on the way there. We recommend a laboratory
+(bench) supply set to **5.15 V** at its output, so that the board receives
+exactly 5 V. A supply that falls short shows up as `EAGAIN` errors on the
+stream, and running the board away from a precise 5 V exposes you to errors and
+crashes.
+
 Nothing has to be configured in sdroxide to use it. The tuning range, the
 sample rate and the on-the-wire sample format are all read off the device as it
 connects rather than assumed, so a board running tezuka reports its own limits
