@@ -24,6 +24,15 @@ fn dab_clear_offered(scanning: bool, found_len: usize) -> bool {
     !scanning && found_len > 0
 }
 
+/// A Band III frequency as the panel shows it: MHz to the kHz, `197.648`.
+///
+/// One decimal rounded every block to the nearest 100 kHz, so 8B read `197.6`
+/// where the published frequency — and the one a DAB radio shows — is
+/// 197.648 MHz, and the operator had nothing to check the dial against.
+fn dab_mhz(hz: f64) -> String {
+    format!("{:.3}", hz / 1e6)
+}
+
 use crate::app::SdroxideApp;
 use crate::theme;
 
@@ -153,8 +162,8 @@ impl SdroxideApp {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(
                     RichText::new(format!(
-                        "{:.1} MHz · {} frames · {} fibs",
-                        st.window_center_hz / 1e6,
+                        "{} MHz · {} frames · {} fibs",
+                        dab_mhz(st.window_center_hz),
                         st.frames,
                         st.fibs
                     ))
@@ -289,7 +298,7 @@ impl SdroxideApp {
                         .find(|(n, _)| n == name)
                         .map(|(_, hz)| *hz);
                     let label = match freq {
-                        Some(hz) => format!("{name}  {:.1}", hz as f64 / 1e6),
+                        Some(hz) => format!("{name}  {}", dab_mhz(hz)),
                         None => name.clone(),
                     };
                     ui.horizontal(|ui| {
@@ -443,10 +452,18 @@ impl SdroxideApp {
 #[cfg(test)]
 mod tests {
     use super::{
-        dab_block_has_multiplex, dab_channel_choices, dab_focus_service, dab_is_split,
+        dab_block_has_multiplex, dab_channel_choices, dab_focus_service, dab_is_split, dab_mhz,
         dab_service_extra,
     };
     use sdroxide_types::{DabService, DabStatus};
+
+    /// Kevin's report: 8B read `197.6` where the block is 197.648 MHz.
+    #[test]
+    fn a_block_shows_its_frequency_to_the_khz() {
+        let hz = sdroxide_types::DAB_BAND_III.iter().find(|(n, _)| *n == "8B").unwrap().1;
+        assert_eq!(dab_mhz(hz), "197.648");
+        assert_eq!(dab_mhz(174_928_000.0), "174.928");
+    }
 
     fn v(names: &[&str]) -> Vec<String> {
         names.iter().map(|s| s.to_string()).collect()
