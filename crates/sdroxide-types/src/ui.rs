@@ -578,12 +578,21 @@ pub enum DetachableModule {
     /// later thing and would need the shell to own one window per (module,
     /// radio) rather than per module.
     AuxPanadapter,
+    /// The **band/mode selector** in a window of its own — SDRuno's RX-control
+    /// band panel.
+    ///
+    /// It exists because the docked column cannot be wide: the operating panels
+    /// below it are built for ~680 pt, so a docked selector that showed its
+    /// modes in five columns would squeeze them and overrun. In a window of its
+    /// own it can be as wide as the operator likes, with the operating panel
+    /// keeping its full width. Appended last.
+    BandMenu,
 }
 
 impl DetachableModule {
     /// How many detachable modules there are — the length of
     /// [`UiSettings::detached`], which is an array so `UiSettings` stays `Copy`.
-    pub const COUNT: usize = 4;
+    pub const COUNT: usize = 5;
 
     /// Every module, so a settings list or a test can walk them all.
     pub const ALL: [DetachableModule; DetachableModule::COUNT] = [
@@ -591,6 +600,7 @@ impl DetachableModule {
         DetachableModule::Panel,
         DetachableModule::Controls,
         DetachableModule::AuxPanadapter,
+        DetachableModule::BandMenu,
     ];
 
     /// This module's slot in [`UiSettings::detached`]. A plain array rather than
@@ -601,6 +611,7 @@ impl DetachableModule {
             DetachableModule::Panel => 1,
             DetachableModule::Controls => 2,
             DetachableModule::AuxPanadapter => 3,
+            DetachableModule::BandMenu => 4,
         }
     }
 
@@ -611,6 +622,7 @@ impl DetachableModule {
             DetachableModule::Panel => "Operating panel",
             DetachableModule::Controls => "Controls",
             DetachableModule::AuxPanadapter => "AUX SP (second spectrum)",
+            DetachableModule::BandMenu => "Band & mode selector",
         }
     }
 
@@ -623,6 +635,7 @@ impl DetachableModule {
             DetachableModule::Panel => "sdroxide-panel",
             DetachableModule::Controls => "sdroxide-controls",
             DetachableModule::AuxPanadapter => "sdroxide-panadapter-aux",
+            DetachableModule::BandMenu => "sdroxide-bandmenu",
         }
     }
 }

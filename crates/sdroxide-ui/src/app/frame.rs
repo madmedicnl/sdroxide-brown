@@ -293,17 +293,17 @@ fn tool_window_title_button(
         egui::vec2(side, side),
     );
     let mut clicked = false;
-    egui::Area::new(win_id.with("title-btn")).fixed_pos(rect.min).order(egui::Order::Foreground).show(
-        ctx,
-        |ui| {
+    egui::Area::new(win_id.with("title-btn"))
+        .fixed_pos(rect.min)
+        .order(egui::Order::Foreground)
+        .show(ctx, |ui| {
             ui.set_min_size(rect.size());
             clicked = crate::chrome::chip(ui, false, "\u{21f1}")
                 .on_hover_text(
                     "Move this window into its own OS window — put it on another monitor",
                 )
                 .clicked();
-        },
-    );
+        });
     clicked
 }
 
@@ -374,6 +374,10 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
         M::Panel => ("panel", [520.0, 700.0]),
         M::Controls => ("controls", [1280.0, 640.0]),
         M::AuxPanadapter => ("aux panadapter", [960.0, 540.0]),
+        // Wide enough for the mode sections in five columns — the whole reason
+        // it is a window and not the docked column, which cannot be this wide
+        // without squeezing the operating panel below it.
+        M::BandMenu => ("band & mode", [560.0, 760.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
@@ -1964,6 +1968,34 @@ impl SdroxideApp {
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
                 self.dispatch_commands(cmds);
             }
+            M::BandMenu => {
+                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+                    let ictx = ui.ctx().clone();
+                    let prev = crate::layout::tier(&ictx);
+                    // Desktop-shaped whatever its height, like the console: the
+                    // window is a desktop surface, and the compact strips are
+                    // for a phone.
+                    crate::layout::set_tier(&ictx, crate::layout::Tier::Desktop);
+                    egui::Frame::new()
+                        .fill(crate::theme::BG_DEEP())
+                        .inner_margin(egui::Margin::symmetric(8, 6))
+                        .show(ui, |ui| {
+                            // The same body the docked column draws, so the
+                            // window and the dock cannot come apart — and at
+                            // this width `mode_chip_grid` lays the modes in five
+                            // columns, which the docked column never could.
+                            egui::ScrollArea::vertical()
+                                .auto_shrink([false, false])
+                                .id_salt("band-window-scroll")
+                                .show(ui, |ui| {
+                                    self.band_menu_body(ui, &mut cmds);
+                                });
+                        });
+                    crate::layout::set_tier(&ictx, prev);
+                });
+                self.handle_detached_outcome(ctx, module, &spec, outcome);
+                self.dispatch_commands(cmds);
+            }
         }
     }
 
@@ -2293,6 +2325,16 @@ impl SdroxideApp {
         self.panel_detached(mode)
     }
 
+    /// The band/mode selector's window should exist this frame: undocked on the
+    /// focused radio. Unlike the spectrum modules it needs nothing else to be
+    /// present — it is a selector, always meaningful, and the operator opened it
+    /// deliberately. Every mode has a band and a mode, so there is never an empty
+    /// window to explain.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn band_menu_detached(&self) -> bool {
+        self.ui_settings.is_detached(sdroxide_types::DetachableModule::BandMenu) && self.focused
+    }
+
     /// Which of this radio's modules the shell should emit as their own windows
     /// this frame, by [`sdroxide_types::DetachableModule::index`].
     ///
@@ -2314,6 +2356,7 @@ impl SdroxideApp {
         want[sdroxide_types::DetachableModule::Controls.index()] = self.controls_detached();
         want[sdroxide_types::DetachableModule::AuxPanadapter.index()] =
             self.module_window_wanted(ctx, sdroxide_types::DetachableModule::AuxPanadapter);
+        want[sdroxide_types::DetachableModule::BandMenu.index()] = self.band_menu_detached();
         want
     }
 

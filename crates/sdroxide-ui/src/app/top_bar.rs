@@ -2607,16 +2607,32 @@ impl SdroxideApp {
             self.radio_cfg.as_ref().is_some_and(|c| c.backend == sdroxide_types::Backend::AtsMini);
         let popup_id = egui::Popup::default_response_id(&btn);
         let mut dock = false;
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut window = false;
         crate::chrome::fading_menu_popup(ui, &btn, &mut self.mode_popup_since, |ui| {
-            if can_dock
-                && crate::chrome::chip(ui, false, "DOCK")
+            if can_dock {
+                if crate::chrome::chip(ui, false, "DOCK")
                     .on_hover_text(
                         "Keep the band and mode selector open beside the waterfall instead of \
                          closing this popup every time",
                     )
                     .clicked()
-            {
-                dock = true;
+                {
+                    dock = true;
+                }
+                // The SDRuno answer, and the only way to a genuinely wide band
+                // panel: its own window, where the mode sections lay in five
+                // columns and the operating panel below keeps its full width.
+                #[cfg(not(target_arch = "wasm32"))]
+                if crate::chrome::chip(ui, false, "⇱ WINDOW")
+                    .on_hover_text(
+                        "Open the band and mode selector in a window of its own — as wide as \
+                         you like, on any monitor, beside the waterfall",
+                    )
+                    .clicked()
+                {
+                    window = true;
+                }
             }
             ui.add_space(2.0);
             band_mode_menu(
@@ -2638,6 +2654,14 @@ impl SdroxideApp {
             self.band_dock_visible = true;
             egui::Popup::close_id(ui.ctx(), popup_id);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if window {
+            // The window *is* the selector now: leave the dock behind, so there
+            // is one selector on screen rather than two.
+            self.band_docked = false;
+            self.set_module_detached(sdroxide_types::DetachableModule::BandMenu, true);
+            egui::Popup::close_id(ui.ctx(), popup_id);
+        }
     }
 
     /// The band/mode selector docked as a column beside the panadapter: the
@@ -2648,6 +2672,11 @@ impl SdroxideApp {
         // opens the popup meanwhile, and widening the window brings the column
         // back where it was.
         let Some(max_w) = self.band_dock_room else { return };
+        // The selector is in its own window: leave the column out, so there is
+        // one selector on screen rather than two.
+        if self.ui_settings.is_detached(sdroxide_types::DetachableModule::BandMenu) {
+            return;
+        }
         let mut visible = true;
         egui::Panel::right(crate::layout::salted_id(ui.ctx(), "band-dock"))
             .resizable(true)
@@ -2680,6 +2709,23 @@ impl SdroxideApp {
                             .clicked()
                         {
                             self.band_docked = false;
+                        }
+                        // The window is the wider surface: the docked column
+                        // cannot show the modes in five columns without
+                        // squeezing the operating panel, and this can.
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if crate::chrome::chip(ui, false, "⇱ WINDOW")
+                            .on_hover_text(
+                                "Open the selector in a window of its own — as wide as you like, \
+                                 on any monitor",
+                            )
+                            .clicked()
+                        {
+                            self.band_docked = false;
+                            self.set_module_detached(
+                                sdroxide_types::DetachableModule::BandMenu,
+                                true,
+                            );
                         }
                     });
                 });
@@ -7698,8 +7744,7 @@ fn mode_chip_grid(
         .iter()
         .map(|m| crate::chrome::chip_width(ui, m.label(), None))
         .fold(0.0_f32, f32::max);
-    let cell = widest + MODE_GRID_CELL_SLACK;
-    let cols = ((ui.available_width() / cell.max(1.0)).floor() as usize).clamp(1, MODE_GRID_COLS);
+    let cols = mode_grid_cols(ui.available_width(), widest);
     if cols < 2 {
         ui.horizontal_wrapped(|ui| {
             for &m in modes {
@@ -7708,6 +7753,7 @@ fn mode_chip_grid(
         });
         return;
     }
+    let cell = widest + MODE_GRID_CELL_SLACK;
     let mut start = 0;
     while start < modes.len() {
         ui.horizontal(|ui| {
@@ -7719,6 +7765,15 @@ fn mode_chip_grid(
         });
         start += cols;
     }
+}
+
+/// How many columns [`mode_chip_grid`] lays at `avail_w` for chips whose widest
+/// label measures `widest` points — up to [`MODE_GRID_COLS`]. Split out so a test
+/// can pin the five the band **window** gets and the fewer the docked column
+/// does, without driving a frame.
+fn mode_grid_cols(avail_w: f32, widest: f32) -> usize {
+    let cell = widest + MODE_GRID_CELL_SLACK;
+    ((avail_w / cell.max(1.0)).floor() as usize).clamp(1, MODE_GRID_COLS)
 }
 
 /// One mode chip — the band-greyed one on OPERATE, the never-greyed one on
@@ -10527,6 +10582,30 @@ mod tests {
         assert_eq!(state.mode_unavailable(Mode::Wfm), None);
         let picked = click_in_band_mode_menu(&state, "HD RADIO");
         assert!(picked.is_empty(), "a greyed-out chip asked for {picked:?}");
+    }
+
+    /// The band **window** is wide enough for the mode sections in five columns
+    /// — which the docked column, capped so the operating panel below keeps its
+    /// width, is not. That difference is the whole reason the selector has a
+    /// window of its own (SDRUNO-UI-HANDOVER.md, item 1).
+    #[test]
+    fn the_band_window_lays_the_modes_in_five_columns() {
+        let (ctx, _) = desktop_ctx();
+        let mut widest = 0.0_f32;
+        ctx.run_ui(Default::default(), |ui| {
+            widest = OPERATE_MODES
+                .iter()
+                .map(|m| crate::chrome::chip_width(ui, m.label(), None))
+                .fold(0.0_f32, f32::max);
+        })
+        .drop_without_applying_deltas();
+        assert!(widest > 0.0, "measured nothing");
+        // The window opens at 560 pt: five across.
+        assert_eq!(mode_grid_cols(560.0, widest), 5, "widest={widest}");
+        // The docked column cannot be this wide, so it is fewer — but still a
+        // grid, not one wrapped chip a row.
+        let docked = mode_grid_cols(262.0, widest);
+        assert!((2..5).contains(&docked), "docked={docked} widest={widest}");
     }
 
     /// Open the band/mode menu on a `screen`-sized viewport and measure the

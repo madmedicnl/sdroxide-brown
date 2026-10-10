@@ -12412,7 +12412,9 @@ Any of the big modules can be **pulled out into its own OS window**:
 - the **AUX SP** — a second spectrum and waterfall, the same radio seen twice;
 - the **Operating panel** (the mode's decoder list, transcript and controls);
 - the **Controls** — the whole top strip: the frequency readout, the S-meter and
-  the receiver and transmitter controls (SDRuno's "RX control").
+  the receiver and transmitter controls (SDRuno's "RX control");
+- the **Band & mode selector** — the band list and the mode rows in a window of
+  their own, where they lay out in **five columns**.
 
 Set each under its row on this tab — **Docked in this window** (the default) or
 **Undocked — its own window**. Closing an undocked window docks it again, and its
@@ -12421,8 +12423,9 @@ size and place are remembered for next time.
 You can also do it from the window itself: the **🪟 WINDOWS** chip at the right of
 the **radio-tab strip** — the row of radio names at the top of the main window —
 opens a list of the module windows (**SP1 — the spectrum**, **SP2 (AUX) — a second
-spectrum**, **Operating panel**, **RX control**), each with a **DOCKED** /
-**IN ITS OWN WINDOW** toggle, and **DOCK ALL WINDOWS** to bring them all back. The
+spectrum**, **Operating panel**, **RX control**, **Band & mode**), each with a
+**DOCKED** / **IN ITS OWN WINDOW** toggle, and **DOCK ALL WINDOWS** to bring them
+all back. The
 chip is lit while any of them is out of the main window. It acts on the radio you
 are looking at.
 
@@ -12451,6 +12454,14 @@ control window). Undocking the other two is the same idea one module down.
 Undocking the Controls does not first flip it to a phone-shaped strip: the
 control window is a desktop console whatever its own height, because it opens
 wide and short and a compact strip there was the first thing to look wrong.
+
+Undocking the **band/mode selector** is the widest surface of all: as a docked
+column it cannot be much more than 280 pt — the operating panels below it are
+built for about 680 pt, and a wider column squeezes them — so its window is
+where the mode sections lay out in **five columns** (SDRuno's band panel). Open
+it from the **⇱ WINDOW** chip in the band popup, from the docked column's
+header, or from the **🪟 WINDOWS** menu. While it is out the docked column is not
+drawn, so there is one selector on screen; closing the window docks it again.
 
 When everything is undocked there is nothing left of the radio to draw in the
 main window's centre, so the **band/mode selector fills it** rather than leaving
@@ -12492,6 +12503,7 @@ rule** matching its application id:
 | AUX SP (second spectrum) | `sdroxide-panadapter-aux` |
 | Operating panel | `sdroxide-panel` |
 | Controls | `sdroxide-controls` |
+| Band & mode selector | `sdroxide-bandmenu` |
 | Tool windows | `sdroxide-tool-<name>` |
 
 For **niri**, in `~/.config/niri/config.kdl` (use your own output names —

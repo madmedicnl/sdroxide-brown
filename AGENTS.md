@@ -42,6 +42,20 @@
 > `sdroxide-config/tests/detached_slots_survive_a_module_count.rs` and
 > `ui::tests::the_detached_list_loads_at_any_length`.
 >
+> **The band/mode selector is its own window now (2026-10-10)** —
+> `DetachableModule::BandMenu`, app-id `sdroxide-bandmenu`, opening 560×760.
+> This is the SDRuno RX-control band panel, and it exists because the **docked
+> column cannot be wider than ~280 pt**: the operating panels below it are built
+> for ~680 pt, so a docked selector showing its modes in five columns would
+> squeeze them and overrun the dock (the #643 guard). In its own window the mode
+> sections lay in **five columns** and the operating panel keeps its full width.
+> `band_menu_body` is the one body, drawn by the window and the dock alike; while
+> the window is out the docked column is not drawn (one selector on screen). The
+> entry points are a **⇱ WINDOW** chip in the band popup and on the dock header;
+> the **🪟 WINDOWS** menu and Settings → UI pick it up from
+> `DetachableModule::ALL`. `the_band_window_lays_the_modes_in_five_columns` pins
+> the five columns (and that the dock is fewer) through the pure `mode_grid_cols`.
+>
 > **Items 1–4 are built, so the window set is the SDRuno one**: the band keypad
 > (console), SP1 with its toolbar, AUX SP as a second spectrum, and the MAIN
 > window's own **🪟 WINDOWS** button on the radio-tab strip that opens each of
