@@ -1,10 +1,12 @@
 //! Builds faad2 for the DRM receiver: knik0's 2.11.2 from `vendor/faad2`, as it
 //! is, with `DRM_SUPPORT`.
 //!
-//! Stock sources and nothing patched. The HD Radio decoder needs faad2's HDC
+//! Stock sources with one patch, applied here at build time so `vendor/` stays
+//! untouched: see [`DRM_FILL_PATCH`]. The HD Radio decoder needs faad2's HDC
 //! variant, which upstream does not carry, and it gets it from the `libnrsc5`
 //! it loads at run time, which keeps its own patched copy private (issue #488).
-//! So the one faad2 compiled into sdroxide is the plain one DRM needs.
+//! So the one faad2 compiled into sdroxide is the one DRM needs — and DAB+
+//! decodes through it too.
 //!
 //! Dependents find the headers through `DEP_FAAD2_INCLUDE`.
 
@@ -29,7 +31,32 @@ fn main() {
     println!("cargo:include={}", faad2.join("include").display());
 }
 
-/// The stock sources with `DRM_SUPPORT`, which brings in `NeAACDecInitDRM`.
+/// `DRM_SUPPORT` makes faad2's `fill_element` refuse a whole frame (error 30,
+/// "No standard extension payload allowed in DRM") when a fill element carries
+/// anything but SBR data. That is DRM's rule, not AAC's — and DAB+ encoders pad
+/// their Access Units with ordinary fill elements, so in a DAB+ broadcast most
+/// frames were thrown away and the audio came out chopped. The patch skips the
+/// payload's bytes, exactly as the non-DRM build does with `extension_payload`.
+/// A conforming DRM stream carries no such payload, so DRM is unaffected.
+const DRM_FILL_PATCH: (&str, &str) = (
+    "            (void)drc;\n            return 30;\n",
+    "            (void)drc;\n            while (count > 0) {\n                faad_getbits(ld, LEN_BYTE);\n                count--;\n            }\n",
+);
+
+/// `syntax.c` with [`DRM_FILL_PATCH`] applied, written to `OUT_DIR`. Panics if
+/// the anchor is not found exactly once, so a faad2 update cannot silently
+/// drop the patch.
+fn patched_syntax(faad2: &Path) -> PathBuf {
+    let src = faad2.join("libfaad/syntax.c");
+    let text = std::fs::read_to_string(&src).expect("read faad2 syntax.c");
+    let (from, to) = DRM_FILL_PATCH;
+    assert_eq!(text.matches(from).count(), 1, "faad2 syntax.c: the DRM fill-element anchor moved");
+    let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("syntax.c");
+    std::fs::write(&out, text.replacen(from, to, 1)).expect("write patched syntax.c");
+    out
+}
+
+/// The stock sources (one patched) with `DRM_SUPPORT`, which brings in `NeAACDecInitDRM`.
 /// Upstream ships that as a second library, `libfaad_drm`, because the plain
 /// one cannot decode DRM at all.
 fn build(faad2: &Path) {
@@ -56,7 +83,9 @@ fn build(faad2: &Path) {
         .expect("read faad2/libfaad")
         .map(|entry| entry.expect("faad2 dir entry").path())
         .filter(|path| path.extension().is_some_and(|e| e == "c"))
+        .filter(|path| path.file_name().is_none_or(|n| n != "syntax.c"))
         .collect();
+    sources.push(patched_syntax(faad2));
     sources.sort();
     build.files(sources);
     build.compile("sdroxide_faad2");
