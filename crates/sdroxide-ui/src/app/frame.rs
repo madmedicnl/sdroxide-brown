@@ -317,10 +317,22 @@ const TOOL_WINDOW_EPOCH: &str = "b1";
 #[cfg(not(target_arch = "wasm32"))]
 fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
     {
+        // A glyph, not a word. The operator's note: *"the huge buttons for
+        // window and dock … there already is a lot of text in the screen, so if
+        // we can strip that down a bit with symbols and a hover that would be
+        // bliss."* The arrow points the way the click goes — right and out to a
+        // window of its own, left and back into the main one — so the direction
+        // reads without the hover, and the hover still names it in words.
         let (label, hover) = if undocked {
-            ("⇱ DOCK", "Return this window into the main window")
+            (
+                "\u{21f2}",
+                "DOCK — return this window into the main window",
+            )
         } else {
-            ("⇱ WINDOW", "Move this window into its own OS window — put it on another monitor")
+            (
+                "\u{21f1}",
+                "WINDOW — move this window into its own OS window, to put it on another monitor",
+            )
         };
         // A **one-row** allocation, right-aligned — not `row_tail`. `row_tail`
         // lays out `right_to_left(Align::Center)` over the whole available
@@ -1820,10 +1832,10 @@ impl SdroxideApp {
                 );
                 crate::chrome::row_tail(ui, |ui| {
                     self.layers_button(ui, "DISP", 0.0);
-                    if crate::chrome::chip(ui, false, "\u{21f1} DOCK")
+                    if crate::chrome::chip(ui, false, "\u{21f2}")
                         .on_hover_text(
-                            "Return this spectrum into the main window — the same as \
-                         closing this one, without hunting for its close box.",
+                            "DOCK — return this spectrum into the main window, the same as \
+                         closing this one without hunting for its close box.",
                         )
                         .clicked()
                     {
@@ -1991,11 +2003,11 @@ impl SdroxideApp {
                                         .color(crate::theme::CYAN()),
                                 );
                                 crate::chrome::row_tail(ui, |ui| {
-                                    if crate::chrome::chip(ui, false, "⇱ DOCK")
+                                    if crate::chrome::chip(ui, false, "⇲")
                                         .on_hover_text(
-                                            "Return the band and mode selector into the main \
-                                             window — the same as closing this one, without \
-                                             hunting for its close box.",
+                                            "DOCK — return the band and mode selector into the \
+                                             main window, the same as closing this one \
+                                             without hunting for its close box.",
                                         )
                                         .clicked()
                                     {

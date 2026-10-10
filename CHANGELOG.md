@@ -22,6 +22,12 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 ### Fixed
 
 - RECORDINGS' **EDIT** button did nothing; it now loads the chosen job into the form.
+- A CB station whose callsign is a shape only the wide grammar accepts (three letters, e.g. `13ABC123`) decoded and then showed no country and no flag.
+- A station worked before, on a band ADIF gives no name — 11 m — no longer says it was worked "but not on this band". A CB callsign exists only on the citizens' band, so there is no other band it could have been on.
+
+### Changed
+
+- The **WINDOW** and **DOCK** buttons are now arrows — ⇱ out to a window of its own, ⇲ back into the main one — with the wording on hover.
 
 ### Changed
 

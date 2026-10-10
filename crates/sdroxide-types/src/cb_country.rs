@@ -403,9 +403,18 @@ static FALLBACK: &[(&str, &str, &str)] = &[
 /// The CB country number a callsign's leading digit run encodes, or `None`
 /// when it is not a CB-shaped callsign. Matches WSJT-CB's own shape rules and
 /// right-justifies the run to three digits (`26AT715` → `026`).
+///
+/// **The shape test is the wide one**, on purpose. This names a station; it does
+/// not decide whether to decode one. The decode gate is
+/// [`crate::cb_callsign::is_cb_callsign_with`] in `sdroxide-digi`, which honours
+/// the operator's toggle — and when a station on 11 m carries a three-letter
+/// group that only the *wide* grammar accepts, the gate took it and this lookup
+/// did not: `13ABC123` and `19DCG3733` both decoded and then named no country
+/// and no flag. Widening a name lookup cannot gate anything, so it takes the
+/// superset and the two cannot disagree about what is a CB call.
 pub(crate) fn cb_country_number(call: &str) -> Option<u32> {
     let call = call.trim().to_ascii_uppercase();
-    if !is_cb_callsign(&call) {
+    if !is_cb_callsign_wide(&call) {
         return None;
     }
     // The country is the *base* call's leading digit run. A modifier is a
@@ -422,15 +431,19 @@ pub(crate) fn name_prefix(code: u16) -> Option<(&'static str, &'static str)> {
     CB.iter().find(|(c, _, _)| *c == code).map(|(_, name, pfx)| (*name, *pfx))
 }
 
-/// The first WSJT-CB-shaped callsign in `text`, if there is one.
+/// The first CB-shaped callsign in `text`, if there is one.
 ///
 /// A CB one-call exchange arrives as free text with the callsign in the message
 /// and nowhere else, so a consumer that reads only the parsed sender — the
 /// spot reporters do — has nothing to name. Tokens are split on whitespace and
 /// the few separators a decoded line uses.
+///
+/// The wide grammar here for the same reason as in [`cb_country_number`]: this
+/// finds a station to *name*, and a station the decoder already accepted must
+/// not go unnamed because it is a shape only the wide rule allows.
 pub fn cb_callsign_in(text: &str) -> Option<&str> {
     text.split(|c: char| c.is_whitespace() || matches!(c, ',' | ';' | ':'))
-        .find(|t| !t.is_empty() && is_cb_callsign(t))
+        .find(|t| !t.is_empty() && is_cb_callsign_wide(t))
 }
 
 /// `(primary prefix → (flag, continent))` for a CB entity.
@@ -445,7 +458,12 @@ pub(crate) fn fallback_cell(pfx: &str) -> Option<(&'static str, &'static str)> {
 /// suffix, so a call the decoder accepted named no country and lost its flag on
 /// the decode row. The shape is now asked of the one grammar, in
 /// [`crate::cb_callsign`], so the country and the gate cannot disagree again.
-use crate::cb_callsign::is_cb_callsign;
+///
+/// **Wide**, and that is the second half of the same drift: asking for the
+/// *strict* grammar here while the decode gate asks for whichever the operator
+/// chose meant a wide-only callsign decoded and then had no country and no flag.
+/// Asking one grammar for the superset is what stops the two disagreeing again.
+use crate::cb_callsign::is_cb_callsign_wide;
 
 #[cfg(test)]
 mod tests {
@@ -459,10 +477,12 @@ mod tests {
         assert_eq!(cb_callsign_in("CQ 26AT101"), Some("26AT101"));
         assert_eq!(cb_callsign_in("26AT101 1AT106 JO01"), Some("26AT101"));
         assert_eq!(cb_callsign_in("CQ 26AT101,"), Some("26AT101"));
-        // The one-digit-prefix four-digit-suffix case is valid; two digits and
-        // four is not.
+        // Four-digit suffix, either prefix length. The *decode gate* still holds
+        // WSJT-CB's coupling — a one-digit prefix is required there — but this is
+        // a name lookup over text the decoder already produced, so taking the
+        // wide superset can only name more stations, never admit one.
         assert_eq!(cb_callsign_in("CQ 1AT1000"), Some("1AT1000"));
-        assert_eq!(cb_callsign_in("CQ 26AT1000"), None);
+        assert_eq!(cb_callsign_in("CQ 26AT1000"), Some("26AT1000"));
         assert_eq!(cb_callsign_in("CQ DX"), None);
         assert_eq!(cb_callsign_in(""), None);
     }
