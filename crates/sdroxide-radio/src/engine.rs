@@ -18307,11 +18307,19 @@ impl Engine {
     /// How far the active VFO has to stay from the hardware LO.
     ///
     /// Zero on a front end whose LO is clean (`lo_offset_hz` == 0), so its
-    /// tuning behaviour is untouched. Otherwise 1.2× the DDC channel's
-    /// half-width, which is the whole point of the offset: keep DC outside the
-    /// channel the demodulator actually sees, with a margin. Capped below the
-    /// offset itself, because a guard a retune could not satisfy would make
-    /// [`Self::keep_vfo_in_span`] retune on every single call.
+    /// tuning behaviour is untouched. Otherwise at least 1.2× the DDC channel's
+    /// half-width, so DC stays outside the channel the demodulator sees, and at
+    /// least half the offset. Capped below the offset itself, because a guard a
+    /// retune could not satisfy would make [`Self::keep_vfo_in_span`] retune on
+    /// every single call.
+    ///
+    /// Keeping DC out of the channel is not enough. A zero-IF front end
+    /// mirrors whatever sits at `2·LO − f` onto `f`, and a HackRF's image
+    /// rejection is poor. With CTR the LO used to sit ~30 kHz from the dial, so
+    /// on 80 m the SSTV passband's mirror landed in the busy phone segment
+    /// 60 kHz up: a strong picture still decoded and a weak one never started,
+    /// and both decoded at once with CTR off, where the LO is a whole offset
+    /// away. Half the offset puts the mirror a whole offset away from the dial.
     fn lo_guard_hz(&self) -> f64 {
         let offset = self.lo_offset_hz();
         if offset <= 0.0 {
@@ -18338,7 +18346,7 @@ impl Engine {
             return 0.0;
         }
         let channel = self.main.as_ref().map(|c| c.channel_rate()).unwrap_or(48_000.0);
-        (channel * 0.6).min(offset * 0.8)
+        (channel * 0.6).max(offset * 0.5).min(offset * 0.8)
     }
 
     /// A hardware centre the caller asked for, moved out of the active VFO's
