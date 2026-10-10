@@ -668,6 +668,24 @@ pub const RTTY_DIALS: &[(f64, &str, u8)] = &[
     (28_080_000.0, "", mask::ALL),
 ];
 
+/// JTTY dial frequencies (Hz), USB: the meeting points the WSJT-X team
+/// proposed for the mode's test period. **Provisional** — they were put out so
+/// that experimenters could find one another, and may move if JTTY grows.
+/// 14.090 is the one recommended as the main meeting point.
+pub const JTTY_DIALS: &[(f64, &str, u8)] = &[
+    (1_838_000.0, "provisional", mask::ALL),
+    (3_575_000.0, "provisional", mask::ALL),
+    (7_090_000.0, "provisional", mask::ALL),
+    (10_140_000.0, "provisional", mask::ALL),
+    (14_090_000.0, "main meeting point", mask::ALL),
+    (18_100_000.0, "provisional", mask::ALL),
+    (21_090_000.0, "provisional", mask::ALL),
+    (24_920_000.0, "provisional", mask::ALL),
+    (28_090_000.0, "provisional", mask::ALL),
+    (50_160_000.0, "provisional", mask::ALL),
+    (144_160_000.0, "provisional", mask::ALL),
+];
+
 /// FSQCall dial frequencies (Hz), as the mode's own documentation publishes
 /// them. The signal sits in the audio passband above each.
 pub const FSQ_DIALS: &[f64] = &[
@@ -977,6 +995,7 @@ pub fn digi_channels_for(mode: crate::Mode, region: Region) -> Vec<DigiChannel> 
         Mode::Rtty => tagged(RTTY_DIALS),
         Mode::Fsq => plain(FSQ_DIALS),
         Mode::Olivia => tagged(OLIVIA_DIALS),
+        Mode::Jtty => tagged(JTTY_DIALS),
         Mode::Sstv => tagged(SSTV_DIALS),
         Mode::SstvFm => tagged(SSTV_FM_DIALS),
         Mode::Rifp => plain(RIFP_CALLING),
@@ -1548,6 +1567,24 @@ mod tests {
                 let (_, hi) = band.edges_in(region).expect("a named band has edges");
                 assert!(s.hi <= hi, "{region:?}: {s:?} runs past {band:?}'s edge at {hi}");
             }
+        }
+    }
+
+    /// JTTY's FREQ list is the WSJT-X team's provisional meeting points, in every
+    /// region, with 14.090 named as the main one — and each sits in a band.
+    #[test]
+    fn jtty_offers_its_provisional_meeting_points() {
+        for region in Region::ALL {
+            let ch = digi_channels_for(crate::Mode::Jtty, region);
+            for &(dial, _, _) in JTTY_DIALS {
+                assert!(
+                    ch.iter().any(|c| c.dial_hz == dial),
+                    "{region:?}: {dial} missing from JTTY's list"
+                );
+                assert_ne!(Band::containing_in(dial, region), Band::Gen, "{dial} is in no band");
+            }
+            let main = ch.iter().find(|c| c.dial_hz == 14_090_000.0).expect("14.090 listed");
+            assert_eq!(main.note, "main meeting point");
         }
     }
 }
