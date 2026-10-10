@@ -2546,6 +2546,8 @@ impl SdroxideApp {
         // And the automatic half: with a signed-in profile, the screen keeps
         // itself in step. See `auto_save_screen`.
         self.auto_save_screen(now);
+        // And the "do not ask me again" answers, kept on the server.
+        self.sync_client_acks();
         // Answers to the settings dialog's device questions. Drained here
         // rather than in the dialog: they come from another machine, so one can
         // land in the frame after it was closed, and an answer left in the
@@ -2726,6 +2728,7 @@ impl SdroxideApp {
                     // has nothing saved yet, so we keep our own look and simply
                     // know now which profile to save it to.
                 }
+                RadioEvent::ClientAcks(acks) => self.apply_client_acks(acks),
                 RadioEvent::ClientBindings { profile, bindings } => {
                     // Applied and written out at once, so the restored keys
                     // survive a reload the same way a rebind does.
@@ -3573,6 +3576,65 @@ impl SdroxideApp {
             None => "saved as this station's default (the server has no password,                      so this is what every client gets)"
                 .to_string(),
         });
+    }
+}
+
+impl SdroxideApp {
+    /// This client's "do not ask me again" answers, as it holds them now.
+    fn current_client_acks(&self) -> sdroxide_types::ClientAcks {
+        let mut rx_only_dismissed = Vec::new();
+        if self.rx_only_nudge_dismissed {
+            rx_only_dismissed.push(self.radio_id);
+        }
+        sdroxide_types::ClientAcks {
+            bindings: sdroxide_types::ClientAcks::bindings_from(
+                self.ui_settings.client_share_bindings,
+                self.ui_settings.client_bindings_declined,
+            ),
+            dismissed_advisories: self.ui_settings.dismissed_advisories,
+            cb_tx_warning_ack: self.ui_settings.cb_tx_warning_ack,
+            rx_only_dismissed,
+        }
+    }
+
+    /// Take the server's answers. **The server is authoritative**: a question
+    /// it holds an answer for is never asked here, whatever the browser did or
+    /// did not keep.
+    pub(in crate::app) fn apply_client_acks(&mut self, server: sdroxide_types::ClientAcks) {
+        match server.bindings {
+            Some(true) => {
+                self.ui_settings.client_share_bindings = true;
+                self.ui_settings.client_bindings_declined = false;
+            }
+            Some(false) => {
+                self.ui_settings.client_share_bindings = false;
+                self.ui_settings.client_bindings_declined = true;
+                // Asked on this connection already? The answer is in.
+                self.bindings_pending = None;
+            }
+            None => {}
+        }
+        self.ui_settings.dismissed_advisories |= server.dismissed_advisories;
+        self.ui_settings.cb_tx_warning_ack |= server.cb_tx_warning_ack;
+        if server.rx_only_dismissed.contains(&self.radio_id) {
+            self.rx_only_nudge_dismissed = true;
+        }
+        self.acks_server = Some(server);
+    }
+
+    /// Send an answer the server does not hold yet. Nothing goes out until the
+    /// server has said what it holds, so a fresh tab cannot report "nothing
+    /// answered" over somebody's answer — and the server merges in any case.
+    pub(in crate::app) fn sync_client_acks(&mut self) {
+        let Some(server) = self.acks_server.as_ref() else { return };
+        let mine = self.current_client_acks();
+        let mut want = server.clone();
+        want.merge(&mine);
+        if want != *server {
+            self.ctrl.send_client_acks(mine);
+            // Assume it lands; the server's echo replaces this either way.
+            self.acks_server = Some(want);
+        }
     }
 }
 

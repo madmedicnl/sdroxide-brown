@@ -1840,6 +1840,11 @@ pub struct ClientSettingsStore {
     pub bindings_default: Option<sdroxide_types::InputSettings>,
     /// Control bindings per profile, for clients that opted in.
     pub bindings: std::collections::BTreeMap<String, sdroxide_types::InputSettings>,
+    /// The "do not ask me again" answers, per **login and browser**, keyed
+    /// `login@Browser/System` (`@Chrome/Android` with no login). The operator's
+    /// rule: once answered, a login is not asked again on that browser; on a
+    /// new browser it answers once more. No fallback between keys.
+    pub acks: std::collections::BTreeMap<String, sdroxide_types::ClientAcks>,
 }
 
 impl ClientSettingsStore {
@@ -1882,6 +1887,24 @@ impl ClientSettingsStore {
         self.bindings_default.clone().map(|b| (None, b))
     }
 
+    /// The answers stored for `login` on `browser`, empty when none have been
+    /// given there.
+    pub fn acks_for(&self, login: &str, browser: &str) -> sdroxide_types::ClientAcks {
+        self.acks.get(&acks_key(login, browser)).cloned().unwrap_or_default()
+    }
+
+    /// Merge `incoming` into what `login` holds on `browser`; returns the result.
+    pub fn merge_acks(
+        &mut self,
+        login: &str,
+        browser: &str,
+        incoming: &sdroxide_types::ClientAcks,
+    ) -> sdroxide_types::ClientAcks {
+        let slot = self.acks.entry(acks_key(login, browser)).or_default();
+        slot.merge(incoming);
+        slot.clone()
+    }
+
     /// Store `bindings` against `profile`, or as the default when it is `None`.
     pub fn set_bindings(&mut self, profile: Option<&str>, bindings: sdroxide_types::InputSettings) {
         match profile {
@@ -1891,6 +1914,55 @@ impl ClientSettingsStore {
             None => self.bindings_default = Some(bindings),
         }
     }
+}
+
+fn acks_key(login: &str, browser: &str) -> String {
+    format!("{login}@{browser}")
+}
+
+/// Name a browser by its family and system from a User-Agent — `Chrome/Android`,
+/// `Firefox/Windows` — **without the version**, so an update does not make it a
+/// new browser. Nothing is stored in the browser for this: it is read from the
+/// request every time, which is the point (cookies and storage cannot be
+/// depended on). The cost, accepted: two machines with the same browser and
+/// system share one set of answers, and Chrome and its installed app (PWA) on
+/// one phone are one browser. A client sending no User-Agent (the desktop app)
+/// is `App`.
+pub fn browser_label(ua: Option<&str>) -> String {
+    let Some(ua) = ua.filter(|u| !u.trim().is_empty()) else { return "App".into() };
+    // Order matters: Edge, Opera and Samsung all claim Chrome, and Chrome
+    // claims Safari.
+    let family = if ua.contains("Edg") {
+        "Edge"
+    } else if ua.contains("OPR/") || ua.contains("Opera") {
+        "Opera"
+    } else if ua.contains("SamsungBrowser") {
+        "Samsung"
+    } else if ua.contains("Firefox/") || ua.contains("FxiOS") {
+        "Firefox"
+    } else if ua.contains("Chrome/") || ua.contains("CriOS") || ua.contains("Chromium") {
+        "Chrome"
+    } else if ua.contains("Safari/") {
+        "Safari"
+    } else {
+        "Other"
+    };
+    let system = if ua.contains("Android") {
+        "Android"
+    } else if ua.contains("iPhone") || ua.contains("iPad") || ua.contains("iPod") {
+        "iOS"
+    } else if ua.contains("Windows") {
+        "Windows"
+    } else if ua.contains("CrOS") {
+        "ChromeOS"
+    } else if ua.contains("Mac OS") || ua.contains("Macintosh") {
+        "macOS"
+    } else if ua.contains("Linux") {
+        "Linux"
+    } else {
+        "Other"
+    };
+    format!("{family}/{system}")
 }
 
 pub fn load_client_settings() -> ClientSettingsStore {

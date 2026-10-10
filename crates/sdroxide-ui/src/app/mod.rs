@@ -1055,6 +1055,10 @@ pub struct SdroxideApp {
     /// only, deliberately: the answer that matters is persisted (see
     /// `client_share_bindings`), not this.
     bindings_offer_asked: bool,
+    /// The "do not ask me again" answers as the server last reported them for
+    /// this profile, or `None` before it has (a local engine never does). Only
+    /// once it is known are changes sent back — see `sync_client_acks`.
+    acks_server: Option<sdroxide_types::ClientAcks>,
     /// What the last explicit save did, said where the operator pressed it. A
     /// control that saves silently is a control that cannot be trusted.
     client_settings_status: Option<String>,
@@ -1940,6 +1944,7 @@ impl SdroxideApp {
             client_settings_stored: None,
             bindings_pending: None,
             bindings_offer_asked: false,
+            acks_server: None,
             client_settings_status: None,
             client_settings_pending: std::cell::Cell::new(None),
             known_calls: known_calls::KnownCallsState::default(),
@@ -2798,6 +2803,83 @@ mod tests {
         fn poll_event(&mut self) -> Option<RadioEvent> {
             self.0.borrow_mut().pop_front()
         }
+    }
+
+    /// A controller that queues events for the app and keeps every
+    /// "do not ask me again" set the app sends.
+    struct AcksController {
+        events: std::rc::Rc<std::cell::RefCell<std::collections::VecDeque<RadioEvent>>>,
+        sent: std::rc::Rc<std::cell::RefCell<Vec<sdroxide_types::ClientAcks>>>,
+    }
+
+    impl RadioController for AcksController {
+        fn send(&mut self, _cmd: Command) {}
+        fn poll_event(&mut self) -> Option<RadioEvent> {
+            self.events.borrow_mut().pop_front()
+        }
+        fn send_client_acks(&mut self, acks: sdroxide_types::ClientAcks) {
+            self.sent.borrow_mut().push(acks);
+        }
+    }
+
+    /// The report: "Keep mine" and the receive-only banner came back every
+    /// session, because the answers lived in the browser. The server now holds
+    /// them; a client that is told them asks nothing, and a new answer goes
+    /// back to the server at once — but only once the server has said what it
+    /// holds, so a fresh tab cannot report "unanswered" over an answer.
+    #[test]
+    fn the_servers_answers_are_obeyed_and_new_ones_are_sent_back() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-acks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let events = std::rc::Rc::new(std::cell::RefCell::new(std::collections::VecDeque::new()));
+        let sent = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(
+            &ctx,
+            None,
+            None,
+            Box::new(AcksController { events: events.clone(), sent: sent.clone() }),
+            0,
+            true,
+        );
+
+        // Nothing known from the server yet: a local change is not sent.
+        app.rx_only_nudge_dismissed = true;
+        app.sync_client_acks();
+        assert!(sent.borrow().is_empty(), "nothing goes out before the server has spoken");
+        app.rx_only_nudge_dismissed = false;
+
+        // The server: this login said "keep mine" on this browser, and
+        // dismissed the receive-only banner on radio 0.
+        events.borrow_mut().push_back(RadioEvent::ClientAcks(sdroxide_types::ClientAcks {
+            bindings: Some(false),
+            rx_only_dismissed: vec![0],
+            ..Default::default()
+        }));
+        // And a profile's bindings arrive anyway (an older server would send
+        // them): no question is raised.
+        let bindings = sdroxide_types::InputSettings::default();
+        assert!(!bindings.keys.is_empty(), "a set that would otherwise be offered");
+        events.borrow_mut().push_back(RadioEvent::ClientBindings { profile: None, bindings });
+        app.drain_events(&ctx, 1.0);
+        assert!(app.ui_settings.client_bindings_declined, "the server's answer is taken");
+        assert!(app.rx_only_nudge_dismissed, "and the banner stays down on radio 0");
+        assert!(app.bindings_pending.is_none(), "the bindings question is not asked");
+        app.sync_client_acks();
+        assert!(sent.borrow().is_empty(), "in step with the server: nothing to send");
+
+        // A new answer — an advisory dismissed — goes straight back.
+        app.ui_settings.dismissed_advisories |= 1;
+        app.sync_client_acks();
+        let out = sent.borrow().last().cloned().expect("the new answer is sent");
+        assert_eq!(out.dismissed_advisories & 1, 1);
+        assert_eq!(out.bindings, Some(false));
+        app.sync_client_acks();
+        assert_eq!(sent.borrow().len(), 1, "and only once");
     }
 
     /// Kevin's report: with CTR lit, stepping the dial with the arrow keys made

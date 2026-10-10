@@ -1757,8 +1757,14 @@ use sdroxide_types::{
 /// it and refuses the whole bindings document — which is why this is a version
 /// bump rather than a silent loss of the operator's key map. `PROTO_VERSION`
 /// 198 → 199, `VERSION_BYTE` 0x13 → 0x14. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 199;
-const VERSION_BYTE: u8 = 0x14;
+/// v200: `ClientMsg::SetClientAcks` and `ServerMsg::ClientAcks`, both
+/// appended last — the "do not ask me again" answers (the bindings offer, the
+/// dismissed advisories, the CB transmit acknowledgement, the receive-only
+/// banner) kept on the server against the signed-in profile, because browser
+/// storage could not hold them and the questions came back every session. A
+/// downstream (fork) change.
+pub const PROTO_VERSION: u16 = 200;
+const VERSION_BYTE: u8 = 0x15;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -1894,6 +1900,11 @@ pub enum ClientMsg {
         profile: Option<String>,
         bindings: sdroxide_types::InputSettings,
     },
+    /// Store this client's "do not ask me again" answers on the server, against
+    /// the profile it signed in as. The server **merges** them into what it
+    /// holds (see [`sdroxide_types::ClientAcks::merge`]) and echoes the result
+    /// with [`ServerMsg::ClientAcks`]. Appended last, as ever.
+    SetClientAcks(sdroxide_types::ClientAcks),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2280,6 +2291,14 @@ pub enum ServerMsg {
     ///
     /// Appended last, for the usual reason.
     DabStatus(Box<sdroxide_types::DabStatus>),
+
+    /// The "do not ask me again" answers stored for this client's profile.
+    /// Sent on connect **before** [`ServerMsg::ClientBindings`] — and when the
+    /// answer to the bindings offer is "keep mine", those are not sent at all —
+    /// and echoed after a [`ClientMsg::SetClientAcks`].
+    ///
+    /// Appended last, for the usual reason.
+    ClientAcks(sdroxide_types::ClientAcks),
 }
 
 /// What [`ServerMsg::ClientSettings`] carries.

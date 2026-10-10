@@ -31,7 +31,8 @@ pub async fn ws_route(
 ) -> Response {
     let shared = station.first();
     let signed = crate::session_cookie::from_headers(&headers, &station.auth);
-    upgrade.on_upgrade(move |socket| session(socket, shared, station, signed))
+    let browser = browser_of(&headers);
+    upgrade.on_upgrade(move |socket| session(socket, shared, station, signed, browser))
 }
 
 /// `/ws/<id>` — one named radio out of the station's roster. Unknown ids are
@@ -44,8 +45,11 @@ pub async fn ws_route_for(
     upgrade: WebSocketUpgrade,
 ) -> Response {
     let signed = crate::session_cookie::from_headers(&headers, &station.auth);
+    let browser = browser_of(&headers);
     match station.radio(id) {
-        Some(shared) => upgrade.on_upgrade(move |socket| session(socket, shared, station, signed)),
+        Some(shared) => {
+            upgrade.on_upgrade(move |socket| session(socket, shared, station, signed, browser))
+        }
         None => {
             let known: Vec<String> = station.list().iter().map(|r| r.id.to_string()).collect();
             (
@@ -57,6 +61,13 @@ pub async fn ws_route_for(
     }
 }
 
+/// The browser and system this connection comes from, read from its
+/// User-Agent — see [`config::browser_label`].
+fn browser_of(headers: &axum::http::HeaderMap) -> String {
+    let ua = headers.get(axum::http::header::USER_AGENT).and_then(|v| v.to_str().ok());
+    config::browser_label(ua)
+}
+
 fn msg(m: &ServerMsg) -> Message {
     Message::Binary(encode(m).expect("encode").into())
 }
@@ -66,6 +77,7 @@ async fn session(
     shared: Arc<Shared>,
     station: Arc<Station>,
     signed: Option<String>,
+    browser: String,
 ) {
     // Hello and the sign-in first, and only then the single-client slot. The
     // order matters: claiming the slot before knowing who this is would let
@@ -82,7 +94,7 @@ async fn session(
         let _ = socket.close().await;
         return;
     }
-    run_session(&mut socket, &shared, &station, audio_caps, &login).await;
+    run_session(&mut socket, &shared, &station, audio_caps, &login, &browser).await;
 
     // Cleanup — whatever happened, release the slot and drop the keys.
     *shared.session.lock().unwrap() = None;
@@ -209,6 +221,9 @@ async fn run_session(
     roster: &Arc<Station>,
     audio_caps: AudioCaps,
     login: &str,
+    // Which browser this is, from its User-Agent — the "do not ask me again"
+    // answers are kept per login *and* per browser. See `browser_label`.
+    browser: &str,
 ) {
     let rx_codec =
         if audio_caps.opus_decode { AudioCodec::Opus48kMono } else { AudioCodec::Pcm16_48k };
@@ -332,7 +347,14 @@ async fn run_session(
             }
             None => {}
         }
-        if let Some((_, bindings)) = store.bindings_for_profile(profile) {
+        // The "do not ask me again" answers, ahead of the bindings so the
+        // client already knows its answer when they arrive. A profile that said
+        // "keep mine" is not sent the bindings at all: the question cannot come
+        // back if there is nothing to ask about.
+        let acks = store.acks_for(login, browser);
+        let declined = acks.bindings == Some(false);
+        let _ = socket.send(msg(&ServerMsg::ClientAcks(acks))).await;
+        if !declined && let Some((_, bindings)) = store.bindings_for_profile(profile) {
             let _ = socket
                 .send(msg(&ServerMsg::ClientBindings(ClientBindingsReply {
                     profile: profile.map(str::to_string),
@@ -650,6 +672,28 @@ async fn run_session(
                             ));
                         }
                     }
+                }
+                // The "do not ask me again" answers, keyed on the authenticated
+                // identity *and the browser* (the operator's rule: a new browser
+                // answers again). Merged rather than replaced:
+                // each radio tab of one login sends its own copy, and a tab that
+                // never saw an answer must not erase it.
+                Ok(ClientMsg::SetClientAcks(incoming)) => {
+                    let (who, what) = (login.to_string(), browser.to_string());
+                    let done = tokio::task::spawn_blocking(move || {
+                        let mut store = config::load_client_settings();
+                        let merged = store.merge_acks(&who, &what, &incoming);
+                        config::save_client_settings(&store)
+                            .map(|()| merged)
+                            .map_err(|e| e.to_string())
+                    })
+                    .await;
+                    if let Ok(Ok(merged)) = &done
+                        && let Some(s) = shared.session.lock().unwrap().as_ref()
+                    {
+                        let _ = s.reliable.try_send(ServerMsg::ClientAcks(merged.clone()));
+                    }
+                    report(shared, done.map(|r| r.map(|_| ())), "saving the client's answers");
                 }
                 Ok(ClientMsg::Ping(t)) => {
                     if let Some(s) = shared.session.lock().unwrap().as_ref() {

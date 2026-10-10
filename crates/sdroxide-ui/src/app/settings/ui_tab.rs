@@ -427,6 +427,9 @@ pub(in crate::app) fn settings_ui_tab(
                             ui.data_mut(|d| d.insert_temp(confirm_id, true));
                         } else {
                             cfg.client_share_bindings = shown;
+                            // Turning it off is an answer too — "keep mine" —
+                            // so the server stops offering the profile's keys.
+                            cfg.client_bindings_declined = !shown;
                         }
                     }
                     resp
@@ -474,6 +477,7 @@ pub(in crate::app) fn settings_ui_tab(
                 );
                 if enable {
                     cfg.client_share_bindings = true;
+                    cfg.client_bindings_declined = false;
                 }
                 if enable || cancel {
                     ui.data_mut(|d| d.remove_temp::<bool>(confirm_id));

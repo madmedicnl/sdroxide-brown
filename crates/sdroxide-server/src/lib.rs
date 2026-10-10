@@ -1268,6 +1268,8 @@ fn handle_event(shared: &Shared, ev: RadioEvent) {
             RadioEvent::ClientSettings { .. } => None,
             // Likewise the opt-in control bindings.
             RadioEvent::ClientBindings { .. } => None,
+            // And the "do not ask me again" answers.
+            RadioEvent::ClientAcks(_) => None,
             // The engine's answer to a client's question, so it is relayed like
             // any other engine event: the hash table being asked about is the
             // server's, and a client asking is asking about this station.

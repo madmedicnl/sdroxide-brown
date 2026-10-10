@@ -1393,6 +1393,64 @@ impl UiSettings {
 /// waterfall and spectrum look, fonts, Simple UI, the map layers —
 /// and no more. (There was never an injection risk: `UiSettings` carries no
 /// URLs, paths or feeds, only scalars. This is a scope cut, not a guard.)
+/// The "do not ask me again" answers a remote client has given, kept **on the
+/// server** against the profile it signed in as.
+///
+/// Browser storage cannot hold them reliably — not every browser grants
+/// persistent storage, some refuse cookies, and a reload can land before the
+/// next periodic save — so a question answered "stop asking" came back on every
+/// session. The server is the one place every device of a login reaches, and the
+/// one an administrator can reset.
+///
+/// Every field is a one-way answer the program has no "undo" for except the
+/// bindings choice, which is why [`ClientAcks::merge`] is a union: two radio
+/// tabs of one login each send their own copy, and neither may erase the
+/// other's answer.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ClientAcks {
+    /// The answer to "this profile carries keyboard bindings": `Some(true)` use
+    /// them, `Some(false)` keep this device's own (and the server stops sending
+    /// them), `None` not answered yet.
+    pub bindings: Option<bool>,
+    /// [`UiSettings::dismissed_advisories`].
+    pub dismissed_advisories: u64,
+    /// [`UiSettings::cb_tx_warning_ack`].
+    pub cb_tx_warning_ack: bool,
+    /// Radios (by station id) whose "this radio is receive-only — use the
+    /// listening screen?" banner was dismissed.
+    pub rx_only_dismissed: Vec<u32>,
+}
+
+impl ClientAcks {
+    /// Fold `other` in. Dismissals only accumulate; a bindings answer replaces
+    /// the stored one, and an unanswered one (`None`) leaves it alone.
+    pub fn merge(&mut self, other: &ClientAcks) {
+        if other.bindings.is_some() {
+            self.bindings = other.bindings;
+        }
+        self.dismissed_advisories |= other.dismissed_advisories;
+        self.cb_tx_warning_ack |= other.cb_tx_warning_ack;
+        for id in &other.rx_only_dismissed {
+            if !self.rx_only_dismissed.contains(id) {
+                self.rx_only_dismissed.push(*id);
+            }
+        }
+        self.rx_only_dismissed.sort_unstable();
+    }
+
+    /// The bindings answer as the two client flags express it.
+    pub fn bindings_from(share: bool, declined: bool) -> Option<bool> {
+        if share {
+            Some(true)
+        } else if declined {
+            Some(false)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ClientScreen {
@@ -1516,6 +1574,46 @@ mod client_screen_tests {
     /// The screen round-trips through postcard — the thing `UiSettings` itself
     /// cannot do. This is the test that would fail first if a non-postcard-safe
     /// field were ever added here.
+    /// Two tabs of one login each send their own copy; neither may erase the
+    /// other's answer, and a later explicit bindings answer replaces an earlier
+    /// one while "not answered" never does.
+    #[test]
+    fn answers_accumulate_across_copies() {
+        let mut stored = ClientAcks {
+            rx_only_dismissed: vec![2],
+            dismissed_advisories: 0b01,
+            ..Default::default()
+        };
+        stored.merge(&ClientAcks {
+            bindings: Some(false),
+            rx_only_dismissed: vec![0],
+            dismissed_advisories: 0b10,
+            ..Default::default()
+        });
+        assert_eq!(stored.bindings, Some(false));
+        assert_eq!(stored.rx_only_dismissed, vec![0, 2]);
+        assert_eq!(stored.dismissed_advisories, 0b11);
+        // A stale tab that never saw the answer sends `None`: it stays.
+        stored.merge(&ClientAcks::default());
+        assert_eq!(stored.bindings, Some(false));
+        assert_eq!(stored.rx_only_dismissed, vec![0, 2]);
+        // The operator changes their mind: the new answer replaces it.
+        stored.merge(&ClientAcks { bindings: Some(true), ..Default::default() });
+        assert_eq!(stored.bindings, Some(true));
+    }
+
+    #[test]
+    fn the_answers_survive_a_postcard_round_trip() {
+        let a = ClientAcks {
+            bindings: Some(false),
+            dismissed_advisories: 5,
+            cb_tx_warning_ack: true,
+            rx_only_dismissed: vec![0, 3],
+        };
+        let back: ClientAcks = postcard::from_bytes(&postcard::to_allocvec(&a).unwrap()).unwrap();
+        assert_eq!(back, a);
+    }
+
     #[test]
     fn the_screen_survives_a_postcard_round_trip() {
         let screen = ClientScreen::from_settings(&UiSettings::default());
