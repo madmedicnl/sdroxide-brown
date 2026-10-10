@@ -59,14 +59,16 @@
 > **Items 1–4 are built, so the window set is the SDRuno one**: the band keypad
 > (console), SP1 with its toolbar, AUX SP as a second spectrum, and the MAIN
 > window's own **🪟 WINDOWS** button on the radio-tab strip that opens each of
-> them by its SDRuno name. **Item 6, workspaces, is also built** — saved named
-> window arrangements in `workspaces.json`, edited on Settings → UI; the only
-> piece left is the Ctrl+W shortcut (a `PROTO_VERSION` bump, so deliberately not
-> done in passing). **Item 5 is part-done**: awards, logbook, grid tracker,
-> memories and the SWL log go through `self.tool_window`; the rest (SPOTS, PUBLIC
-> SDRS, SCHEDULE, RECORDINGS, voice keyer, per-mode setups) need their results or
-> captured `&mut` locals threaded, which is per-window work, not mechanical —
-> `SDRUNO-UI-HANDOVER.md` says which and why.
+> them by its SDRuno name. **Item 6, workspaces, is built** — saved named
+> window arrangements in `workspaces.json`, edited on Settings → UI, with a
+> **Ctrl+W** shortcut that opens that page (`Action::Workspaces`, `PROTO_VERSION`
+> 198 → 199, bindings schema stamp 2 → 3 so an existing `input.json` picks the
+> key up). **Item 5 is built too**: every menu tool window goes through
+> `self.tool_window`, so each has a ⇱ chip and a remembered geometry — the table
+> in `SDRUNO-UI-HANDOVER.md` item 5 lists them and the locals each carries back.
+> The `&mut` locals turned out **not** to be a design problem, and the refactor
+> found a **dead EDIT button** in RECORDINGS on the way. **WEFAX is deliberately
+> left docked**: its only window is a per-chart viewer, not a menu tool.
 >
 > **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
 > mid-flight — read it before touching ALE). **FST4W**

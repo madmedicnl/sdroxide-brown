@@ -1747,8 +1747,18 @@ use sdroxide_types::{
 /// before it and **`Default`'s discriminant moves 16 → 17**. `UiTheme` rides
 /// [`ClientScreen`]'s `theme` field, so this is a wire change: a v197 peer
 /// would read the moved `Default` as `Calm`. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 198;
-const VERSION_BYTE: u8 = 0x13;
+/// v199: [`Action`] gains `Workspaces` on its tail — the Ctrl+W shortcut that
+/// opens the Settings window on the UI page, where the saved window
+/// arrangements are listed. An `Action` discriminant is on the wire for the
+/// first time only because it rides `InputSettings`, which travels whole inside
+/// [`ClientMsg::SetClientBindings`] / [`ServerMsg::ClientBindings`] behind the
+/// operator's opt-in; the new variant is last, so every action below it keeps
+/// its number. A v198 peer that reads a `Workspaces` key has no variant for
+/// it and refuses the whole bindings document — which is why this is a version
+/// bump rather than a silent loss of the operator's key map. `PROTO_VERSION`
+/// 198 → 199, `VERSION_BYTE` 0x13 → 0x14. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 199;
+const VERSION_BYTE: u8 = 0x14;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {

@@ -12492,6 +12492,25 @@ session-only, like its position inside the main window — where it sat is not
 remembered across a restart. Their app-ids are `sdroxide-tool-<name>` (e.g.
 `sdroxide-tool-scanner`, `sdroxide-tool-mail`), so one rule can float them all.
 
+Every menu tool window has one, and each remembers its own size: SCHEDULE,
+RECORDINGS, SPOTS, PUBLIC SDRS, the voice keyer, and the AIS / ADS-B / VDL2 /
+FSQ Contacts and per-mode setup panels. The WEFAX chart viewer is the one
+exception and stays docked — it belongs to the chart you picked rather than to
+the menu, so it opens and closes with that chart.
+
+| Tool window | Application id |
+|---|---|
+| Schedule | `sdroxide-tool-schedule` |
+| Recordings | `sdroxide-tool-recordings` |
+| Spots | `sdroxide-tool-spots` |
+| Public SDRs | `sdroxide-tool-public-sdrs` |
+| Voice keyer | `sdroxide-tool-voice-keyer` |
+| AIS setup | `sdroxide-tool-ais-setup` |
+| ADS-B setup | `sdroxide-tool-adsb-setup` |
+| VDL2 setup | `sdroxide-tool-vdl2-setup` |
+| FSQ contacts | `sdroxide-tool-fsq-contacts` |
+| Digital-mode setup | `sdroxide-tool-digi-setup` |
+
 **The app does not place the window on Wayland.** A Wayland client is given no
 absolute position, so on niri, sway or GNOME the window opens where the
 compositor tiles it. To float it and pin it to a monitor, give it a **window
@@ -17564,6 +17583,7 @@ floating RTS is the *receive* state, and test it.
 | 1 – 9, 0 (numpad) | Transmit voice-keyer slots 1–10 (nothing if the slot is empty). |
 | − (numpad) | Stop a voice-keyer message. |
 | Space (CW, with **KEY** on) | The straight key: carrier while held, and re-bindable as **CW straight key** in Settings → Controls ([2.14](#214-cw-decoding-and-keyboard-sending)). |
+| Ctrl+W | Open Settings on the **UI** page, where saved window arrangements (**Workspaces**) are listed ([6.4](#64-controls-keyboard-mouse-and-midi)). |
 | F1 | Open this manual (works even while typing). |
 
 Shortcuts are ignored while typing in a text field.

@@ -13,6 +13,20 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+### Added
+
+- The band and mode selector is a window of its own (**⇱ WINDOW**), in five columns, because a docked column cannot be wide enough.
+- Every remaining menu tool window can be undocked: SCHEDULE, RECORDINGS, SPOTS, PUBLIC SDRS, the voice keyer and the per-mode setup panels.
+- **Ctrl+W** opens Settings on the UI page, where the saved window arrangements are listed.
+
+### Fixed
+
+- RECORDINGS' **EDIT** button did nothing; it now loads the chosen job into the form.
+
+### Changed
+
+- `PROTO_VERSION` 199 (from 198) — the Ctrl+W action is a new bound action. A client and a server must agree on it.
+
 ## [2.0.4_brown] - 2026-10-09
 
 Tool-window fixes, console fixes, and two new start-up banners.

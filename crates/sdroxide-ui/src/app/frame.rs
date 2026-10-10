@@ -2164,6 +2164,10 @@ impl SdroxideApp {
                 }
                 body(self, ui);
             });
+        // Only ever set on the native path below: the ⇱ chip rides the title
+        // bar, and the browser has no second window to send it to. Same shape
+        // as `body_top` above.
+        #[cfg_attr(target_arch = "wasm32", allow(unused))]
         let mut detach = false;
         if let Some(r) = &resp {
             crate::chrome::paint_window_border(ctx, &r.response);
@@ -3701,6 +3705,7 @@ impl SdroxideApp {
     /// ↑/↓ ±1 kHz, PgUp/PgDn ±10 kHz, M mute, N noise blanker, F fit span.
     fn control_inputs(&mut self, ctx: &egui::Context, now: f64, cmds: &mut Vec<Command>) {
         let mut speech_acts: Vec<sdroxide_types::Action> = Vec::new();
+        let mut open_workspaces = false;
         // Destructured rather than borrowed field-by-field: the runtime needs
         // `state` and the window flags mutably at the same time, and they are
         // disjoint parts of `self`.
@@ -3739,6 +3744,7 @@ impl SdroxideApp {
             spots: show_spots,
             memories: show_memories,
             voice: show_voice,
+            workspaces: &mut open_workspaces,
             speech: &mut speech_acts,
             rig_squelch,
             zoom_out,
@@ -3747,6 +3753,12 @@ impl SdroxideApp {
         #[cfg(not(target_arch = "wasm32"))]
         input.poll_midi(ctx, state, &mut sink, cmds);
         drop(sink);
+        if open_workspaces {
+            // Open the main Settings dialog on the UI page, which is where the
+            // saved window arrangements live.
+            self.show_settings = true;
+            self.settings_tab = crate::app::SettingsTab::Ui;
+        }
         for act in speech_acts {
             self.apply_speech_action(act, now);
         }
@@ -3813,6 +3825,10 @@ impl SdroxideApp {
             spots: show_spots,
             memories: show_memories,
             voice: show_voice,
+            // Releases only: nothing is pressed on this path, so no action can
+            // ask for the workspaces. The sink's field is still filled so the
+            // two constructions cannot drift apart.
+            workspaces: &mut false,
             speech: &mut Vec::new(),
             rig_squelch,
             // Releasing held keys never pans or zooms, so the passband will do.
