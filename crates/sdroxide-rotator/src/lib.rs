@@ -1,34 +1,38 @@
-//! Antenna-rotator client: sdroxide as a Hamlib **rotctld** client.
+//! Antenna-rotator client: sdroxide driving a motorised antenna.
 //!
-//! The satellite lock computes azimuth and elevation a few times a second;
-//! this crate is how those numbers reach a motorized antenna. It dials a
-//! `rotctld` daemon (TCP, default port 4533) and speaks the short text
-//! protocol — `P az el` to point, `p` to ask where the antenna is, `S` to
-//! stop. One protocol reaches every rotator Hamlib can drive, which is
-//! essentially all of them, and costs this codebase no serial drivers.
+//! The satellite lock and the manual compass compute azimuth and elevation;
+//! this crate is how those numbers reach a motor. Two kinds of transport:
+//!
+//! - **Rotctld** — a Hamlib `rotctld` daemon over TCP, default port 4533. One
+//!   short text protocol (`P az el` to point, `p` to ask, `S` to stop) reaches
+//!   every rotator Hamlib can drive, which is essentially all of them. This is
+//!   the default and the one route that needs no hardware in hand to trust.
+//! - **EasyComm II** and **GS-232A/B** — a controller on a serial port
+//!   directly, for a station that would rather not run a daemon. The line
+//!   protocols are simpler than rotctld's and slot in behind the same
+//!   [`Transport`] the daemon does.
 //!
 //! The mirror image of `sdroxide-rigctld`: there we *are* the daemon and
-//! GPredict connects to us; here the daemon already exists and we connect to
-//! it.
-//!
-//! # Future backends
-//!
-//! For stations that would rather not run a daemon, the obvious additions are
-//! **EasyComm II** (`AZnnn.n ELnnn.n` over a serial port — SatNOGS-style
-//! homebrew controllers) and **GS-232A/B** (`Wnnn nnn` — Yaesu's own
-//! interfaces). Both are line protocols simpler than rotctld's; they would
-//! slot in behind the same [`RotctldClient`]-shaped API without the engine
-//! noticing. Until someone owns the hardware to verify against, rotctld — via
-//! `rotctld -m <model>` — already speaks to all of them.
+//! GPredict connects to us; here the daemon (or the controller) already exists
+//! and we connect to it.
 //!
 //! # Shape
 //!
-//! One worker thread owns the socket; the engine talks to it through a small
+//! One worker thread owns the transport; the engine talks to it through a small
 //! command channel and reads health back from a shared [`RotStatus`]. The
-//! worker deduplicates movement (no point grinding motors over a fraction of
-//! a degree), applies the configured azimuth offset, reconnects with backoff,
-//! and polls the real antenna position once a second so the operator can see
-//! the hardware answer.
+//! worker deduplicates movement (no point grinding motors over a fraction of a
+//! degree), applies the configured azimuth offset, reconnects with backoff, and
+//! polls the real antenna position once a second so the operator can see the
+//! hardware answer.
+//!
+//! # Not proven
+//!
+//! The **serial** transports are implemented from the published protocols and
+//! their framing is unit-tested, but **no controller has been driven with them**
+//! — this crate's own bench is a rotctld daemon. A station with a serial
+//! controller should try `rotctld -m <model>` first (which drives the same
+//! hardware and is exercised here); the serial paths are offered for those who
+//! would rather not, and are marked not proven until somebody runs one.
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
@@ -38,45 +42,50 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded};
 use tracing::{debug, warn};
 
-pub use sdroxide_types::RotatorConfig;
+pub use sdroxide_types::{RotatorConfig, RotatorTransport};
 
 /// The client's health, as the engine reads it back: reachable or not, where
 /// the daemon says the antenna points, and the last thing that went wrong.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RotStatus {
     pub connected: bool,
-    /// Where the *hardware* reports itself — the commanded target lives in
-    /// the satellite lock's own status.
+    /// Where the *hardware* reports itself — the commanded target lives in the
+    /// operator's own state (the satellite lock's track, or the compass).
     pub az_deg: f64,
     pub el_deg: f64,
     pub error: Option<String>,
 }
 
 enum RotCmd {
-    Target { az: f64, el: f64 },
+    Target {
+        az: f64,
+        el: f64,
+    },
     Park,
+    /// Halt the antenna where it is, whatever the configured park position.
+    Stop,
 }
 
 /// Handle to the worker thread. Dropping it closes the command channel, which
 /// is the shutdown signal; the drop joins the thread so a socket mid-write
 /// cannot outlive the engine.
-pub struct RotctldClient {
+pub struct RotatorClient {
     tx: Option<Sender<RotCmd>>,
     status: Arc<Mutex<RotStatus>>,
     join: Option<std::thread::JoinHandle<()>>,
 }
 
-impl RotctldClient {
-    pub fn start(cfg: RotatorConfig) -> RotctldClient {
+impl RotatorClient {
+    pub fn start(cfg: RotatorConfig) -> RotatorClient {
         let (tx, rx) = bounded(8);
         let status = Arc::new(Mutex::new(RotStatus::default()));
         let st = status.clone();
         let join = std::thread::Builder::new()
-            .name("sdroxide-rotctld".into())
+            .name("sdroxide-rotator".into())
             .spawn(move || worker(cfg, rx, st))
-            .map_err(|e| warn!("could not start the rotctld client: {e}"))
+            .map_err(|e| warn!("could not start the rotator client: {e}"))
             .ok();
-        RotctldClient { tx: Some(tx), status, join }
+        RotatorClient { tx: Some(tx), status, join }
     }
 
     /// Point the antenna. Safe to call at the tracking rate: the worker
@@ -100,12 +109,26 @@ impl RotctldClient {
         }
     }
 
+    /// Halt the antenna where it is. Distinct from [`Self::park`], which drives
+    /// to the configured park position when there is one: a stop is the operator
+    /// saying "that is far enough", and it must not be answered by swinging the
+    /// beam to the park bearing instead.
+    ///
+    /// Idempotent for the same reason `park` is — the engine says this every
+    /// tick the antenna is under a manual stop, and only the first one may
+    /// reach the wire.
+    pub fn stop(&self) {
+        if let Some(tx) = &self.tx {
+            let _ = tx.try_send(RotCmd::Stop);
+        }
+    }
+
     pub fn status(&self) -> RotStatus {
         self.status.lock().unwrap().clone()
     }
 }
 
-impl Drop for RotctldClient {
+impl Drop for RotatorClient {
     fn drop(&mut self) {
         self.tx = None; // closes the channel — the worker's shutdown signal
         if let Some(j) = self.join.take() {
@@ -115,7 +138,7 @@ impl Drop for RotctldClient {
 }
 
 /// First retry after a connection failure, and the ceiling the spacing
-/// doubles up to while the daemon stays unreachable.
+/// doubles up to while the transport stays unreachable.
 const RECONNECT_FIRST: Duration = Duration::from_secs(1);
 const RECONNECT_MAX: Duration = Duration::from_secs(30);
 /// How often the real antenna position is read back.
@@ -124,17 +147,89 @@ const POSITION_POLL: Duration = Duration::from_secs(1);
 /// paces the reconnect attempts and the position poll.
 const TICK: Duration = Duration::from_millis(250);
 
+// ── the transports ───────────────────────────────────────────────────────────
+
+/// What every transport can do. The engine-side interface — "here is az/el,
+/// go" — is the same for all of them, so the worker never knows which it holds.
+trait Transport: Send {
+    fn point(&mut self, cfg: &RotatorConfig, az: f64, el: f64) -> Result<(), String>;
+    fn park(&mut self, cfg: &RotatorConfig) -> Result<(), String>;
+    fn stop(&mut self) -> Result<(), String>;
+    fn position(&mut self) -> Result<(f64, f64), String>;
+}
+
+/// Open whichever transport the config asks for.
+fn open_transport(cfg: &RotatorConfig) -> Result<Box<dyn Transport>, String> {
+    match cfg.transport {
+        RotatorTransport::Rotctld => Ok(Box::new(RotctldTransport::open(cfg)?)),
+        RotatorTransport::EasyComm2 | RotatorTransport::Gs232 => {
+            Ok(Box::new(SerialTransport::open(cfg)?))
+        }
+    }
+}
+
+/// The movement memory every transport shares: what was last commanded (so a
+/// crawling satellite is a trickle and not a stream) and whether a park or a
+/// stop has already been said.
+struct MoveState {
+    last_pointed: Option<(f64, f64)>,
+    parked: bool,
+    stopped: bool,
+}
+
+impl MoveState {
+    /// Born parked: an idle engine must leave hardware it never commanded
+    /// exactly where it found it.
+    fn new() -> MoveState {
+        MoveState { last_pointed: None, parked: true, stopped: false }
+    }
+
+    /// Whether a point should reach the wire, applying the offset, the
+    /// elevation clamp and the dead band. `None` means "too small a move".
+    fn resolve(&self, cfg: &RotatorConfig, az: f64, el: f64) -> Option<(f64, f64)> {
+        let az = (az + cfg.az_offset_deg).rem_euclid(360.0);
+        let el = el.clamp(0.0, 90.0);
+        if !self.parked && !self.stopped {
+            if let Some((la, le)) = self.last_pointed {
+                let min = cfg.min_move_deg.max(0.0);
+                if az_dist(la, az) < min && (le - el).abs() < min {
+                    return None;
+                }
+            }
+        }
+        Some((az, el))
+    }
+
+    fn pointed(&mut self, az: f64, el: f64) {
+        self.parked = false;
+        self.stopped = false;
+        self.last_pointed = Some((az, el));
+    }
+
+    fn took_park(&mut self) {
+        self.parked = true;
+        self.stopped = false;
+        self.last_pointed = None;
+    }
+
+    fn took_stop(&mut self) {
+        self.stopped = true;
+        self.parked = false;
+        self.last_pointed = None;
+    }
+}
+
 fn worker(cfg: RotatorConfig, rx: Receiver<RotCmd>, status: Arc<Mutex<RotStatus>>) {
-    let mut conn: Option<Conn> = None;
+    let mut conn: Option<Box<dyn Transport>> = None;
     let mut retry_at = Instant::now();
     let mut retry_every = RECONNECT_FIRST;
     let mut next_poll = Instant::now();
 
     loop {
         if conn.is_none() && Instant::now() >= retry_at {
-            match Conn::open(&cfg) {
+            match open_transport(&cfg) {
                 Ok(c) => {
-                    debug!("rotctld connected: {}", cfg.address());
+                    debug!("rotator connected: {}", cfg.address());
                     retry_every = RECONNECT_FIRST;
                     set(&status, |s| {
                         s.connected = true;
@@ -168,6 +263,7 @@ fn worker(cfg: RotatorConfig, rx: Receiver<RotCmd>, status: Arc<Mutex<RotStatus>
         let r = match cmd {
             Some(RotCmd::Target { az, el }) => c.point(&cfg, az, el),
             Some(RotCmd::Park) => c.park(&cfg),
+            Some(RotCmd::Stop) => c.stop(),
             None => Ok(()),
         }
         .and_then(|()| {
@@ -182,7 +278,7 @@ fn worker(cfg: RotatorConfig, rx: Receiver<RotCmd>, status: Arc<Mutex<RotStatus>
             Ok(())
         });
         if let Err(e) = r {
-            warn!("rotctld: {e}");
+            warn!("rotator: {e}");
             set(&status, |s| {
                 s.connected = false;
                 s.error = Some(e);
@@ -200,18 +296,23 @@ fn set(status: &Mutex<RotStatus>, f: impl FnOnce(&mut RotStatus)) {
     }
 }
 
-/// One TCP connection to the daemon, with the per-connection movement state:
-/// what was last commanded (for the dedup) and whether the antenna was left
-/// parked (so a below-the-horizon satellite does not re-park every tick).
-struct Conn {
-    stream: TcpStream,
-    reader: BufReader<TcpStream>,
-    last_pointed: Option<(f64, f64)>,
-    parked: bool,
+/// Shortest angular distance between two azimuths, degrees.
+fn az_dist(a: f64, b: f64) -> f64 {
+    let d = (a - b).rem_euclid(360.0);
+    d.min(360.0 - d)
 }
 
-impl Conn {
-    fn open(cfg: &RotatorConfig) -> Result<Conn, String> {
+// ── rotctld over TCP ─────────────────────────────────────────────────────────
+
+/// One TCP connection to a `rotctld` daemon, with the movement state.
+struct RotctldTransport {
+    stream: TcpStream,
+    reader: BufReader<TcpStream>,
+    state: MoveState,
+}
+
+impl RotctldTransport {
+    fn open(cfg: &RotatorConfig) -> Result<RotctldTransport, String> {
         use std::net::ToSocketAddrs;
         let addr = cfg.address();
         let sock = addr
@@ -224,66 +325,10 @@ impl Conn {
         let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
         let _ = stream.set_nodelay(true);
         let reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
-        // Freshly connected, nothing commanded yet: `parked` so an idle
-        // engine leaves the hardware exactly where it found it.
-        Ok(Conn { stream, reader, last_pointed: None, parked: true })
+        Ok(RotctldTransport { stream, reader, state: MoveState::new() })
     }
 
-    fn point(&mut self, cfg: &RotatorConfig, az: f64, el: f64) -> Result<(), String> {
-        let az = (az + cfg.az_offset_deg).rem_euclid(360.0);
-        let el = el.clamp(0.0, 90.0);
-        if !self.parked {
-            if let Some((la, le)) = self.last_pointed {
-                let min = cfg.min_move_deg.max(0.0);
-                if az_dist(la, az) < min && (le - el).abs() < min {
-                    return Ok(());
-                }
-            }
-        }
-        self.send(&format!("P {az:.2} {el:.2}\n"))?;
-        self.rprt()?;
-        self.parked = false;
-        self.last_pointed = Some((az, el));
-        Ok(())
-    }
-
-    fn park(&mut self, cfg: &RotatorConfig) -> Result<(), String> {
-        if self.parked {
-            return Ok(());
-        }
-        self.parked = true;
-        self.last_pointed = None;
-        match cfg.park {
-            Some((az, el)) => {
-                let az = (az + cfg.az_offset_deg).rem_euclid(360.0);
-                self.send(&format!("P {az:.2} {:.2}\n", el.clamp(0.0, 90.0)))?;
-                self.rprt()
-            }
-            // No park position: stop where it is rather than inventing one.
-            None => {
-                self.send("S\n")?;
-                self.rprt()
-            }
-        }
-    }
-
-    /// `p` — where the daemon says the antenna is. Two bare lines on success;
-    /// an `RPRT -n` in their place on failure.
-    fn position(&mut self) -> Result<(f64, f64), String> {
-        self.send("p\n")?;
-        let first = self.read_line()?;
-        let t = first.trim().to_string();
-        if let Some(code) = t.strip_prefix("RPRT ") {
-            return Err(format!("rotctld answered RPRT {} to a position query", code.trim()));
-        }
-        let az: f64 = t.parse().map_err(|_| format!("unparseable azimuth {t:?}"))?;
-        let second = self.read_line()?;
-        let t = second.trim();
-        let el: f64 = t.parse().map_err(|_| format!("unparseable elevation {t:?}"))?;
-        Ok((az, el))
-    }
-
-    fn send(&mut self, line: &str) -> Result<(), String> {
+    fn send_line(&mut self, line: &str) -> Result<(), String> {
         self.stream.write_all(line.as_bytes()).map_err(|e| e.to_string())
     }
 
@@ -296,6 +341,7 @@ impl Conn {
         }
     }
 
+    /// `RPRT 0` on success; anything else is the daemon's error code.
     fn rprt(&mut self) -> Result<(), String> {
         let line = self.read_line()?;
         let t = line.trim();
@@ -307,10 +353,239 @@ impl Conn {
     }
 }
 
-/// Shortest angular distance between two azimuths, degrees.
-fn az_dist(a: f64, b: f64) -> f64 {
-    let d = (a - b).rem_euclid(360.0);
-    d.min(360.0 - d)
+impl Transport for RotctldTransport {
+    fn point(&mut self, cfg: &RotatorConfig, az: f64, el: f64) -> Result<(), String> {
+        let Some((az, el)) = self.state.resolve(cfg, az, el) else { return Ok(()) };
+        self.send_line(&format!("P {az:.2} {el:.2}\n"))?;
+        self.rprt()?;
+        self.state.pointed(az, el);
+        Ok(())
+    }
+
+    fn park(&mut self, cfg: &RotatorConfig) -> Result<(), String> {
+        if self.state.parked {
+            return Ok(());
+        }
+        self.state.took_park();
+        match cfg.park {
+            Some((az, el)) => {
+                let az = (az + cfg.az_offset_deg).rem_euclid(360.0);
+                self.send_line(&format!("P {az:.2} {:.2}\n", el.clamp(0.0, 90.0)))?;
+                self.rprt()
+            }
+            // No park position: stop where it is rather than inventing one.
+            None => {
+                self.send_line("S\n")?;
+                self.rprt()
+            }
+        }
+    }
+
+    fn stop(&mut self) -> Result<(), String> {
+        if self.state.stopped {
+            return Ok(());
+        }
+        self.state.took_stop();
+        self.send_line("S\n")?;
+        self.rprt()
+    }
+
+    /// `p` — where the daemon says the antenna is. Two bare lines on success;
+    /// an `RPRT -n` in their place on failure.
+    fn position(&mut self) -> Result<(f64, f64), String> {
+        self.send_line("p\n")?;
+        let first = self.read_line()?;
+        let t = first.trim().to_string();
+        if let Some(code) = t.strip_prefix("RPRT ") {
+            return Err(format!("rotctld answered RPRT {} to a position query", code.trim()));
+        }
+        let az: f64 = t.parse().map_err(|_| format!("unparseable azimuth {t:?}"))?;
+        let second = self.read_line()?;
+        let t = second.trim();
+        let el: f64 = t.parse().map_err(|_| format!("unparseable elevation {t:?}"))?;
+        Ok((az, el))
+    }
+}
+
+// ── serial: EasyComm II and GS-232A/B ────────────────────────────────────────
+
+/// Which line protocol a serial controller speaks, and how to frame it. Pure:
+/// the framing is tested here without a controller in hand.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SerialProtocol {
+    /// EasyComm II — the open standard behind SatNOGS-style homebrew.
+    EasyComm2,
+    /// Yaesu GS-232B — the ubiquitous interface, and its many clones.
+    Gs232,
+}
+
+impl SerialProtocol {
+    /// The bytes to point the antenna. Both protocols carry whole degrees or a
+    /// tenth; azimuth is wrapped, elevation clamped by the caller.
+    fn point(self, az: f64, el: f64) -> String {
+        match self {
+            // `AZ<az> EL<el>`, one decimal. The set and the read share a shape.
+            SerialProtocol::EasyComm2 => format!("AZ{az:.1} EL{el:.1}\r\n"),
+            // `W<aaa> <eee>` — GS-232B's azimuth+elevation set, fixed three
+            // digits each. GS-232A is azimuth-only and ignores the elevation,
+            // which is harmless: an azimuth-only controller has no elevation.
+            SerialProtocol::Gs232 => format!("W{:03.0} {:03.0}\r\n", az.round(), el.round()),
+        }
+    }
+
+    fn position_query(self) -> &'static str {
+        match self {
+            // `AZ EL` reads the position back in the set shape.
+            SerialProtocol::EasyComm2 => "AZ EL\r\n",
+            // `C2` returns azimuth then elevation (GS-232B). A GS-232A given
+            // `C2` answers the azimuth and nothing else, which the parser
+            // accepts with elevation 0.
+            SerialProtocol::Gs232 => "C2\r\n",
+        }
+    }
+
+    fn stop(self) -> &'static str {
+        match self {
+            // Stop azimuth and elevation moving.
+            SerialProtocol::EasyComm2 => "SA SE\r\n",
+            SerialProtocol::Gs232 => "S\r\n",
+        }
+    }
+
+    /// Pull an azimuth and elevation out of a reply, if it carries one.
+    /// `None` while the reply is still partial, so the reader can wait for more.
+    fn parse_position(self, reply: &str) -> Option<(f64, f64)> {
+        match self {
+            // `AZ120.0 EL30.0`
+            SerialProtocol::EasyComm2 => {
+                let mut az = None;
+                let mut el = None;
+                for tok in reply.split_whitespace() {
+                    if let Some(v) = tok.strip_prefix("AZ").and_then(parse_num) {
+                        az = Some(v);
+                    } else if let Some(v) = tok.strip_prefix("EL").and_then(parse_num) {
+                        el = Some(v);
+                    }
+                }
+                match (az, el) {
+                    (Some(a), Some(e)) => Some((a, e)),
+                    _ => None,
+                }
+            }
+            // `+0120\r\n+0030` — a sign then the value, azimuth first. One line
+            // (azimuth only) is a GS-232A and reads as elevation 0.
+            SerialProtocol::Gs232 => {
+                let mut nums = reply.lines().filter_map(parse_num);
+                let az = nums.next()?;
+                let el = nums.next().unwrap_or(0.0);
+                Some((az, el))
+            }
+        }
+    }
+}
+
+/// Parse a number the way these controllers write one: a trailing `\r` is
+/// already gone (the string was split on lines/whitespace), but a leading `+`
+/// is kept, and `parse` takes it.
+fn parse_num(s: &str) -> Option<f64> {
+    s.trim().parse::<f64>().ok()
+}
+
+/// A controller on a serial port.
+struct SerialTransport {
+    port: Box<dyn serialport::SerialPort>,
+    proto: SerialProtocol,
+    state: MoveState,
+}
+
+impl SerialTransport {
+    fn open(cfg: &RotatorConfig) -> Result<SerialTransport, String> {
+        let proto = match cfg.transport {
+            RotatorTransport::EasyComm2 => SerialProtocol::EasyComm2,
+            RotatorTransport::Gs232 => SerialProtocol::Gs232,
+            RotatorTransport::Rotctld => return Err("not a serial transport".into()),
+        };
+        if cfg.serial_port.trim().is_empty() {
+            return Err("no serial port set for the rotator".into());
+        }
+        let port = serialport::new(cfg.serial_port.trim(), cfg.baud.max(1200))
+            .timeout(Duration::from_millis(600))
+            .open()
+            .map_err(|e| format!("{}: {e}", cfg.serial_port.trim()))?;
+        Ok(SerialTransport { port, proto, state: MoveState::new() })
+    }
+
+    fn write(&mut self, bytes: &[u8]) -> Result<(), String> {
+        self.port.write_all(bytes).map_err(|e| e.to_string())?;
+        self.port.flush().map_err(|e| e.to_string())
+    }
+
+    /// Read until the protocol can parse a position out of what has arrived, or
+    /// the port times out. Two reads rather than one because GS-232B's `C2`
+    /// answers on two lines, which may land in two chunks.
+    fn read_position(&mut self) -> Result<(f64, f64), String> {
+        let mut out = String::new();
+        let mut buf = [0u8; 256];
+        let deadline = Instant::now() + Duration::from_millis(1200);
+        while Instant::now() < deadline {
+            match self.port.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    out.push_str(&String::from_utf8_lossy(&buf[..n]));
+                    if let Some(ll) = self.proto.parse_position(&out) {
+                        return Ok(ll);
+                    }
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => break,
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+        Err(format!("no position in the controller's reply {:?}", out.trim()))
+    }
+}
+
+impl Transport for SerialTransport {
+    fn point(&mut self, cfg: &RotatorConfig, az: f64, el: f64) -> Result<(), String> {
+        let Some((az, el)) = self.state.resolve(cfg, az, el) else { return Ok(()) };
+        let cmd = self.proto.point(az, el);
+        self.write(cmd.as_bytes())?;
+        self.state.pointed(az, el);
+        Ok(())
+    }
+
+    fn park(&mut self, cfg: &RotatorConfig) -> Result<(), String> {
+        if self.state.parked {
+            return Ok(());
+        }
+        self.state.took_park();
+        match cfg.park {
+            Some((az, el)) => {
+                let az = (az + cfg.az_offset_deg).rem_euclid(360.0);
+                let cmd = self.proto.point(az, el.clamp(0.0, 90.0));
+                self.write(cmd.as_bytes())
+            }
+            // No park position: stop where it is rather than inventing one.
+            None => {
+                let cmd = self.proto.stop();
+                self.write(cmd.as_bytes())
+            }
+        }
+    }
+
+    fn stop(&mut self) -> Result<(), String> {
+        if self.state.stopped {
+            return Ok(());
+        }
+        self.state.took_stop();
+        let cmd = self.proto.stop();
+        self.write(cmd.as_bytes())
+    }
+
+    fn position(&mut self) -> Result<(f64, f64), String> {
+        let q = self.proto.position_query();
+        self.write(q.as_bytes())?;
+        self.read_position()
+    }
 }
 
 #[cfg(test)]
@@ -322,7 +597,7 @@ mod tests {
 
     /// A one-connection rotctld impersonation: answers `P` with the given
     /// report code, `p` with a fixed position, `S` with success, and sends
-    /// every `P` line it saw down the channel for the test to inspect.
+    /// every command line it saw down the channel for the test to inspect.
     fn mock_rotctld(rprt_for_p: &'static str) -> (u16, mpsc::Receiver<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let port = listener.local_addr().unwrap().port();
@@ -363,13 +638,16 @@ mod tests {
         }
     }
 
+    fn recv(rx: &mpsc::Receiver<String>) -> String {
+        rx.recv_timeout(Duration::from_secs(5)).expect("a command")
+    }
+
     #[test]
     fn points_polls_and_reports_the_hardware_position() {
         let (port, seen) = mock_rotctld("0");
-        let client = RotctldClient::start(cfg(port));
+        let client = RotatorClient::start(cfg(port));
         client.set_target(200.0, 30.0);
-        let p = seen.recv_timeout(Duration::from_secs(5)).expect("a P command");
-        assert_eq!(p, "P 200.00 30.00");
+        assert_eq!(recv(&seen), "P 200.00 30.00");
         // The position poll reads the mock's fixed answer back.
         wait_for(|| {
             let s = client.status();
@@ -382,12 +660,12 @@ mod tests {
     #[test]
     fn small_movements_are_swallowed_by_the_dedup() {
         let (port, seen) = mock_rotctld("0");
-        let client = RotctldClient::start(cfg(port)); // min_move_deg = 1.0 default
+        let client = RotatorClient::start(cfg(port)); // min_move_deg = 1.0 default
         client.set_target(100.0, 20.0);
-        assert_eq!(seen.recv_timeout(Duration::from_secs(5)).unwrap(), "P 100.00 20.00");
+        assert_eq!(recv(&seen), "P 100.00 20.00");
         client.set_target(100.4, 20.4); // inside the dead band
         client.set_target(103.0, 20.0); // outside it
-        assert_eq!(seen.recv_timeout(Duration::from_secs(5)).unwrap(), "P 103.00 20.00");
+        assert_eq!(recv(&seen), "P 103.00 20.00");
     }
 
     /// Parking with no park position stops the rotator; saying it twice
@@ -395,17 +673,46 @@ mod tests {
     #[test]
     fn park_stops_once_and_only_after_tracking() {
         let (port, seen) = mock_rotctld("0");
-        let client = RotctldClient::start(cfg(port));
+        let client = RotatorClient::start(cfg(port));
         // Fresh connection is born parked: an idle engine's park chatter
         // must not touch hardware it never commanded.
         client.park();
         client.set_target(50.0, 10.0);
-        assert_eq!(seen.recv_timeout(Duration::from_secs(5)).unwrap(), "P 50.00 10.00");
+        assert_eq!(recv(&seen), "P 50.00 10.00");
         client.park();
-        assert_eq!(seen.recv_timeout(Duration::from_secs(5)).unwrap(), "S");
+        assert_eq!(recv(&seen), "S");
         client.park(); // already parked — nothing more may arrive
         client.set_target(60.0, 15.0); // ...and tracking resumes cleanly
-        assert_eq!(seen.recv_timeout(Duration::from_secs(5)).unwrap(), "P 60.00 15.00");
+        assert_eq!(recv(&seen), "P 60.00 15.00");
+    }
+
+    /// A stop halts where the antenna is and, said again every tick, speaks
+    /// once. Tracking resumes cleanly afterwards.
+    #[test]
+    fn stop_halts_where_it_is_and_is_idempotent() {
+        let (port, seen) = mock_rotctld("0");
+        let client = RotatorClient::start(cfg(port));
+        client.set_target(50.0, 10.0);
+        assert_eq!(recv(&seen), "P 50.00 10.00");
+        client.stop();
+        assert_eq!(recv(&seen), "S");
+        client.stop(); // already stopped — nothing more may arrive
+        client.set_target(60.0, 15.0); // resumes cleanly after the stop
+        assert_eq!(recv(&seen), "P 60.00 15.00");
+    }
+
+    /// A stop is not a park: with a park position configured, the operator
+    /// saying "stop" must halt, not swing to the park bearing.
+    #[test]
+    fn a_stop_is_not_a_park_even_with_a_park_position() {
+        let (port, seen) = mock_rotctld("0");
+        let mut c = cfg(port);
+        c.park = Some((0.0, 0.0));
+        let client = RotatorClient::start(c);
+        client.set_target(50.0, 10.0);
+        assert_eq!(recv(&seen), "P 50.00 10.00");
+        client.stop();
+        assert_eq!(recv(&seen), "S");
     }
 
     #[test]
@@ -413,15 +720,15 @@ mod tests {
         let (port, seen) = mock_rotctld("0");
         let mut c = cfg(port);
         c.az_offset_deg = 10.0;
-        let client = RotctldClient::start(c);
+        let client = RotatorClient::start(c);
         client.set_target(355.0, 5.0);
-        assert_eq!(seen.recv_timeout(Duration::from_secs(5)).unwrap(), "P 5.00 5.00");
+        assert_eq!(recv(&seen), "P 5.00 5.00");
     }
 
     #[test]
     fn a_daemon_error_reaches_the_status() {
         let (port, _seen) = mock_rotctld("-1");
-        let client = RotctldClient::start(cfg(port));
+        let client = RotatorClient::start(cfg(port));
         client.set_target(10.0, 10.0);
         wait_for(|| client.status().error.as_deref().is_some_and(|e| e.contains("RPRT -1")));
     }
@@ -430,11 +737,52 @@ mod tests {
     fn an_unreachable_daemon_is_a_status_not_a_hang() {
         // A port nothing listens on: bind-then-drop guarantees it is closed.
         let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-        let client = RotctldClient::start(cfg(port));
+        let client = RotatorClient::start(cfg(port));
         client.set_target(10.0, 10.0);
         wait_for(|| {
             let s = client.status();
             !s.connected && s.error.is_some()
         });
+    }
+
+    // ── the serial protocols' framing, tested without a controller ──
+
+    /// GS-232B points with `W<aaa> <eee>`, fixed three digits, CR-terminated —
+    /// the one place a wrong format is a wrong command.
+    #[test]
+    fn gs232_frames_a_point_the_way_the_manual_says() {
+        assert_eq!(SerialProtocol::Gs232.point(120.0, 30.0), "W120 030\r\n");
+        assert_eq!(SerialProtocol::Gs232.point(5.4, 0.0), "W005 000\r\n");
+        assert_eq!(SerialProtocol::Gs232.point(359.6, 90.0), "W360 090\r\n");
+    }
+
+    /// EasyComm II's set carries a decimal and both fields on one line.
+    #[test]
+    fn easycomm_frames_a_point_as_az_el() {
+        assert_eq!(SerialProtocol::EasyComm2.point(120.0, 30.0), "AZ120.0 EL30.0\r\n");
+        assert_eq!(SerialProtocol::EasyComm2.point(5.25, 0.0), "AZ5.2 EL0.0\r\n");
+    }
+
+    /// A GS-232B `C2` answer is two signed lines, azimuth then elevation.
+    /// A GS-232A answers the azimuth alone, which reads as elevation 0.
+    #[test]
+    fn gs232_reads_a_two_line_position_and_tolerates_one() {
+        assert_eq!(SerialProtocol::Gs232.parse_position("+0120\r\n+0030\r\n"), Some((120.0, 30.0)));
+        assert_eq!(SerialProtocol::Gs232.parse_position("+0359\r\n+0000\r\n"), Some((359.0, 0.0)));
+        // Azimuth only — a GS-232A, or a reply still arriving.
+        assert_eq!(SerialProtocol::Gs232.parse_position("+0210\r\n"), Some((210.0, 0.0)));
+        assert_eq!(SerialProtocol::Gs232.parse_position(""), None);
+    }
+
+    /// EasyComm II answers `AZ EL` with the set shape back.
+    #[test]
+    fn easycomm_reads_the_position_back() {
+        assert_eq!(
+            SerialProtocol::EasyComm2.parse_position("AZ120.0 EL30.0\r\n"),
+            Some((120.0, 30.0))
+        );
+        // A partial reply — only the azimuth has arrived — waits for more.
+        assert_eq!(SerialProtocol::EasyComm2.parse_position("AZ120.0 "), None);
+        assert_eq!(SerialProtocol::EasyComm2.parse_position("garbage"), None);
     }
 }

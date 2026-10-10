@@ -628,10 +628,10 @@ pub fn show(
     night: Option<eframe::egui::TextureId>,
     tx_active: bool,
     max_h: f32,
-) {
+) -> Option<(f64, f64)> {
     let avail_w = ui.available_width();
     if avail_w < MIN_HEIGHT {
-        return;
+        return None;
     }
     // Fill the caller's width and its (user-draggable) height budget. The map is
     // no longer aspect-locked to 2:1, so it can be dragged taller than half its
@@ -641,7 +641,7 @@ pub fn show(
     let w = avail_w;
     let (rect, resp) = ui.allocate_exact_size(vec2(w, h), Sense::click_and_drag());
     if !ui.is_rect_visible(rect) {
-        return;
+        return None;
     }
     let p = ui.painter_at(rect);
     let map = theme::map();
@@ -885,6 +885,23 @@ pub fn show(
 
     // Frame (red-accent, matching the QSO section panels).
     crate::chrome::paint_cut_border(&p, rect.shrink(0.5), map.frame, map.shell);
+
+    // A **secondary** click reports the spot it landed on, so a caller can aim
+    // an antenna there. Secondary rather than primary because a primary
+    // double-click is how the view is reframed, and egui reports a double-click
+    // as a click as well — a left-click-to-point would swing the beam every time
+    // the operator reframed the map. A right-click (or a long touch) is the
+    // unambiguous gesture, and the caller draws its own hint.
+    if resp.secondary_clicked() {
+        return resp.interact_pointer_pos().map(|p| {
+            let fx = ((p.x - rect.left()) / rect.width()) as f64 - 0.5;
+            let fy = 0.5 - ((p.y - rect.top()) / rect.height()) as f64;
+            let lon = wrap180(clon + fx * lon_span);
+            let lat = (clat + fy * lat_span).clamp(-90.0, 90.0);
+            (lat, lon)
+        });
+    }
+    None
 }
 
 #[cfg(test)]

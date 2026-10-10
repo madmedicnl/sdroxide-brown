@@ -15,6 +15,13 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ### Added
 
+- A **ROTATOR** window: a compass showing the hardware's reported bearing against
+  the one you asked for, drag or click to point, manual bearing entry, a
+  DX-country lookup, and STOP / PARK / AUTO.
+- Point the beam from where you work — a right-click on the FT8/FT4 map, or the
+  **BEAM** chip on a station card.
+- EasyComm II and Yaesu GS-232 rotators on a serial port directly, no Hamlib
+  daemon needed (Settings ▸ Servers).
 - **LOUDNESS in the receive EQ, and the tone remembered per mode.** The RX
   strip's **EQ** popup and the SWL LOG's Tone row gain a **LOUDNESS** switch: a
   bass lift (up to +12 dB around 120 Hz) and a smaller treble lift (up to +6 dB
@@ -25,13 +32,22 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
   nothing changes until the box is ticked. LOUDNESS and the Bass / Mid / Treble
   tone are now **per-mode settings** like BIN — remembered for the mode they
   were set in, kept across a restart (they used to be lost at every start), and
-  switched back off by the reset chip and RESET EVERY MODE. `PROTO_VERSION` 199
-  → 200 (the tone moves from `RadioState` into `RxState`, `RxState` gains
+  switched back off by the reset chip and RESET EVERY MODE. `PROTO_VERSION` 200
+  → 201 (the tone moves from `RadioState` into `RxState`, `RxState` gains
   `loudness`, `Command::SetRxLoudness` is appended), so client and server must
   both be updated.
 
+### Changed
+
+- A manual point now takes the antenna off the satellite lock until you hand it
+  back, instead of the next tracking tick overriding it.
+
 ### Not proven
 
+- The serial rotator transports: their framing is unit-tested, but no controller
+  has been driven with them here — `rotctld` remains the exercised route.
+- Swinging a real beam from the compass, the map or a callsign: built and
+  unit-tested, not yet done on the air.
 - LOUDNESS has been tested as DSP, through the engine and over the wire, but
   not yet listened to on the air.
 

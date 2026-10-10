@@ -241,6 +241,7 @@ fn module_window_name(m: sdroxide_types::DetachableModule) -> &'static str {
         M::Panel => "Operating panel",
         M::Controls => "RX control",
         M::BandMenu => "Band & mode",
+        M::Rotor => "Antenna rotator",
     }
 }
 

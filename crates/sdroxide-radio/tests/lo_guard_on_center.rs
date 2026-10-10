@@ -35,8 +35,10 @@ const LO_OFFSET: f64 = 500_000.0;
 /// matters, not the arithmetic.
 const MIN_CLEARANCE: f64 = 10_000.0;
 /// ...and CTR is still centring the window, so the LO must not be thrown back
-/// out to the full `lo_offset_hz` either.
-const MAX_CLEARANCE: f64 = 60_000.0;
+/// out to the full `lo_offset_hz` either. The guard is half the offset now (see
+/// the SSTV test at the bottom), so this is the room between that and the
+/// offset itself.
+const MAX_CLEARANCE: f64 = LO_OFFSET * 0.6;
 
 /// A zero-IF front end that takes every tune and remembers where it was sent.
 struct ZeroIf {
@@ -169,7 +171,7 @@ fn the_window_is_moved_as_near_the_dial_as_the_guard_allows() {
 /// ordinary pan of the panadapter goes through untouched.
 #[test]
 fn a_centre_outside_the_guard_is_honoured_exactly() {
-    let want = VFO + 250_000.0;
+    let want = VFO + 300_000.0;
     let (center, _) = ask_for_center(want);
     assert!((center - want).abs() < 1.0, "asked for {want}, engine settled on {center}");
 }
@@ -215,4 +217,26 @@ fn in_am_hd_centring_the_window_still_keeps_the_lo_off_the_dial() {
     let clear = (center - AM_HD_DIAL).abs();
     assert!(clear >= MIN_CLEARANCE, "the LO was parked {clear:.0} Hz from an AM HD carrier");
     assert!(clear <= MAX_CLEARANCE, "the window was pushed {clear:.0} Hz from the dial");
+}
+
+/// The SSTV report: on a HackRF, a weak 80 m picture never started with CTR
+/// on and decoded at once with it off.
+///
+/// With CTR the LO used to sit ~30 kHz from the dial, which keeps DC out of the
+/// channel and nothing else: a zero-IF front end mirrors `2·LO − f` onto `f`,
+/// so the LSB passband's image was the phone segment 60 kHz up, and a HackRF
+/// rejects its image poorly. The LO now stays at least half its offset away,
+/// so the mirror is at least a whole offset from the dial.
+#[test]
+fn ctr_keeps_the_lo_far_enough_that_the_image_misses_the_band() {
+    const SSTV_80M: f64 = 3_730_000.0;
+    let (center, lo) = ask_for_center_in(Mode::Sstv, SSTV_80M, SSTV_80M);
+    for (what, hz) in [("window", center), ("front end", lo)] {
+        let clear = (hz - SSTV_80M).abs();
+        assert!(
+            clear >= LO_OFFSET * 0.5 - 1.0,
+            "CTR left the {what} {clear:.0} Hz from an SSTV dial; its image lands {:.0} Hz away",
+            2.0 * clear
+        );
+    }
 }

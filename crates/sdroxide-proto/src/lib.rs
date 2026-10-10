@@ -1758,15 +1758,24 @@ use sdroxide_types::{
 /// bump rather than a silent loss of the operator's key map. `PROTO_VERSION`
 /// 198 → 199, `VERSION_BYTE` 0x13 → 0x14. A downstream (fork) change.
 ///
-/// v200: the receive tone and LOUDNESS are per-mode settings of the main
+/// v200: the antenna rotator gains a manual side. Three appended `Command`s
+/// (`PointRotator`, `SetRotatorAuthority`, `StopRotator`), so no surviving
+/// discriminant moves — and `RotatorConfig` gained three fields (`transport`,
+/// `serial_port`, `baud`), which changes the layout of every message carrying it
+/// (`StationConfig::rotator`) and postcard is not self-describing, so both ends
+/// have to agree. `RotatorTransport` and `RotatorAuthority` are new enums that
+/// only the rotator's own messages ride. `PROTO_VERSION` 199 → 200,
+/// `VERSION_BYTE` 0x14 → 0x15. A downstream (fork) change.
+///
+/// v201: the receive tone and LOUDNESS are per-mode settings of the main
 /// receiver. `RadioState::rx_tone` moves into [`sdroxide_types::RxState`] as
 /// `tone`, `RxState` gains `loudness` (bool) after it, and `Command` gains
 /// `SetRxLoudness(bool)` last. Removing a mid-struct field from `RadioState`
-/// shifts every field after it and `RxState` rides it twice, so a v199 peer
-/// would misread the whole state — hence the bump. `VERSION_BYTE` is left at
-/// 0x14. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 200;
-const VERSION_BYTE: u8 = 0x14;
+/// shifts every field after it and `RxState` rides it twice, so a v200 peer
+/// would misread the whole state — hence the bump. `PROTO_VERSION` 200 → 201,
+/// `VERSION_BYTE` unchanged at 0x15. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 201;
+const VERSION_BYTE: u8 = 0x15;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -2375,6 +2384,13 @@ mod tests {
                 audio: AudioCaps { opus_decode: true, opus_encode: false },
             },
             ClientMsg::Command(Command::SetPtt(true)),
+            // The rotator's manual side, both variants — appended, so a
+            // discriminant slip here would show as a decode error.
+            ClientMsg::Command(Command::PointRotator { az: 217.0, el: 43.0 }),
+            ClientMsg::Command(Command::SetRotatorAuthority(
+                sdroxide_types::RotatorAuthority::Manual,
+            )),
+            ClientMsg::Command(Command::StopRotator),
             ClientMsg::MicFrame { seq: 7, payload: vec![1, 2, 3] },
         ];
         for m in &msgs {

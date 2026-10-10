@@ -1257,6 +1257,41 @@ pub enum Command {
     /// position.
     SetDabConfig(crate::DabSettings),
 
+    /// Point the antenna by hand — a manual target the satellite lock will not
+    /// override. Sets [`crate::RotatorAuthority::Manual`] and drives toward the
+    /// given azimuth and elevation.
+    ///
+    /// Its own command rather than a field on
+    /// [`Command::SetRotatorConfig`] because the two are edited in different
+    /// places: the transport is set once in Settings and left alone, while a
+    /// point is something an operator does repeatedly, from a map click or a
+    /// dial drag. Riding it on the config would make every point rewrite the
+    /// transport too — and a whole-struct write from a stale panel copy is how
+    /// a setting the operator already chose gets rolled back.
+    ///
+    /// Appended last, for the usual reason — postcard numbers variants by
+    /// position.
+    PointRotator {
+        az: f64,
+        el: f64,
+    },
+
+    /// Hand the antenna back to the satellite lock — or, with no lock, park it.
+    /// The way out of [`Command::PointRotator`]'s manual hold: without it the
+    /// operator's target would outlive the reason for setting it.
+    ///
+    /// Appended last, for the usual reason.
+    SetRotatorAuthority(crate::RotatorAuthority),
+
+    /// Halt the antenna where it is. Holds the manual authority with no target,
+    /// so the per-frame drive does not restart the move it was just told to
+    /// stop — which is the whole difference between this and
+    /// [`Command::SetRotatorAuthority`], whose park swings the beam to the park
+    /// bearing when one is set.
+    ///
+    /// Appended last, for the usual reason.
+    StopRotator,
+
     /// Turn LOUDNESS on the receive audio on or off — see
     /// [`crate::RxState::loudness`]. Main receiver, remembered for the mode in
     /// force.

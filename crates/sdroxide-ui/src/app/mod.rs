@@ -46,6 +46,8 @@ pub(in crate::app) mod publicsdr;
 pub(in crate::app) mod qo100;
 pub(in crate::app) mod rds;
 pub(in crate::app) mod recording_jobs;
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) mod rotor;
 pub(in crate::app) mod sat;
 pub(in crate::app) mod save_text;
 pub(in crate::app) mod scanner;
@@ -1268,6 +1270,24 @@ pub struct SdroxideApp {
     /// server configs.
     rot_cfg_edit: sdroxide_types::RotatorConfig,
     rot_cfg_seeded: bool,
+    /// The antenna rotator window's own state: the last manual target the
+    /// operator asked for (drawn on the compass so the commanded bearing is
+    /// visible against the hardware's reported one) and the manual entry fields
+    /// a compass click or a country pick carries (azimuth, elevation).
+    ///
+    /// Session-only, and deliberately not the engine's — the engine owns what
+    /// it is actually driving, this only remembers what the operator last chose.
+    ///
+    /// Native only, with the window itself: the browser has no second-window
+    /// mechanism, so the rotator's manual side is a desktop tool.
+    #[cfg(not(target_arch = "wasm32"))]
+    rotor_target: Option<(f64, f64)>,
+    #[cfg(not(target_arch = "wasm32"))]
+    rotor_entry: (f64, f64),
+    /// The country last chosen from the rotator window's DX lookup, kept only
+    /// so the drop-down can show it and the caption can name the bearing.
+    #[cfg(not(target_arch = "wasm32"))]
+    rotor_country: Option<String>,
     /// The external T/R switch's health, mirrored from
     /// [`RadioEvent::RelayStatus`]. Replayed on connect by the server, so a
     /// remote client is told about a relay that is not answering before it
@@ -2022,6 +2042,12 @@ impl SdroxideApp {
             qo100_win: Default::default(),
             rotator_status: None,
             rot_cfg_edit: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            rotor_target: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            rotor_entry: (0.0, 0.0),
+            #[cfg(not(target_arch = "wasm32"))]
+            rotor_country: None,
             relay_status: Default::default(),
             relay_edit: Default::default(),
             relay_seeded: false,
@@ -2571,6 +2597,38 @@ impl SdroxideApp {
         sdroxide_types::force_swl()
             || self.swl_start
             || self.radio_cfg.as_ref().is_some_and(|c| c.hide_tx)
+    }
+
+    /// The station's own location, from the digi grid locator — what a beam
+    /// bearing is measured from. `None` when no locator is set.
+    pub(in crate::app) fn home_latlon(&self) -> Option<(f64, f64)> {
+        self.digi_status
+            .as_ref()
+            .map(|s| s.config.my_grid.clone())
+            .filter(|g| !g.is_empty())
+            .and_then(|g| sdroxide_types::grid_to_latlon(&g))
+    }
+
+    /// Aim the antenna at a location: the bearing from the station's own grid,
+    /// if a rotator is configured and a locator is set. Shared by the map's
+    /// click-to-point and a decode row's BEAM chip, so the two cannot compute
+    /// the bearing differently.
+    ///
+    /// Nothing happens without a rotator — and deliberately so: this is called
+    /// from a map, where there is no control to be misled by, while the rotator
+    /// window is the place that says a rotator is not configured.
+    pub(in crate::app) fn beam_at(
+        &self,
+        lat: f64,
+        lon: f64,
+        cmds: &mut Vec<sdroxide_types::Command>,
+    ) {
+        if !self.rot_cfg_edit.enabled {
+            return;
+        }
+        let Some(home) = self.home_latlon() else { return };
+        let az = sdroxide_types::bearing_deg(home, (lat, lon));
+        cmds.push(sdroxide_types::Command::PointRotator { az, el: 0.0 });
     }
 
     /// Whether this radio's screen is the listener's: SWL mode, or a radio that
