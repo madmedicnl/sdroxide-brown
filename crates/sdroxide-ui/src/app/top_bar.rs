@@ -2611,28 +2611,31 @@ impl SdroxideApp {
         let mut window = false;
         crate::chrome::fading_menu_popup(ui, &btn, &mut self.mode_popup_since, |ui| {
             if can_dock {
-                if crate::chrome::chip(ui, false, "DOCK")
-                    .on_hover_text(
-                        "Keep the band and mode selector open beside the waterfall instead of \
-                         closing this popup every time",
-                    )
-                    .clicked()
-                {
-                    dock = true;
-                }
-                // The SDRuno answer, and the only way to a genuinely wide band
-                // panel: its own window, where the mode sections lay in five
-                // columns and the operating panel below keeps its full width.
-                #[cfg(not(target_arch = "wasm32"))]
-                if crate::chrome::chip(ui, false, "⇱ WINDOW")
-                    .on_hover_text(
-                        "Open the band and mode selector in a window of its own — as wide as \
-                         you like, on any monitor, beside the waterfall",
-                    )
-                    .clicked()
-                {
-                    window = true;
-                }
+                ui.horizontal(|ui| {
+                    if crate::chrome::chip(ui, false, "DOCK")
+                        .on_hover_text(
+                            "Keep the band and mode selector open beside the waterfall instead \
+                             of closing this popup every time",
+                        )
+                        .clicked()
+                    {
+                        dock = true;
+                    }
+                    // The SDRuno answer, and the only way to a genuinely wide
+                    // band panel: its own window, where the mode sections lay in
+                    // five columns and the operating panel below keeps its full
+                    // width.
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if crate::chrome::chip(ui, false, "⇱ WINDOW")
+                        .on_hover_text(
+                            "Open the band and mode selector in a window of its own — as wide as \
+                             you like, on any monitor, beside the waterfall",
+                        )
+                        .clicked()
+                    {
+                        window = true;
+                    }
+                });
             }
             ui.add_space(2.0);
             band_mode_menu(

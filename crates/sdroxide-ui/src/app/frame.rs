@@ -1980,6 +1980,34 @@ impl SdroxideApp {
                         .fill(crate::theme::BG_DEEP())
                         .inner_margin(egui::Margin::symmetric(8, 6))
                         .show(ui, |ui| {
+                            // A header with its own DOCK chip, like SP1's
+                            // toolbar: bring the selector home without hunting
+                            // for the window's close box.
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new("BAND & MODE")
+                                        .size(11.0)
+                                        .strong()
+                                        .color(crate::theme::CYAN()),
+                                );
+                                crate::chrome::row_tail(ui, |ui| {
+                                    if crate::chrome::chip(ui, false, "⇱ DOCK")
+                                        .on_hover_text(
+                                            "Return the band and mode selector into the main \
+                                             window — the same as closing this one, without \
+                                             hunting for its close box.",
+                                        )
+                                        .clicked()
+                                    {
+                                        self.ui_settings.set_detached(
+                                            sdroxide_types::DetachableModule::BandMenu,
+                                            false,
+                                        );
+                                        crate::app::persist::persist_ui_settings(&self.ui_settings);
+                                    }
+                                });
+                            });
+                            ui.separator();
                             // The same body the docked column draws, so the
                             // window and the dock cannot come apart — and at
                             // this width `mode_chip_grid` lays the modes in five
