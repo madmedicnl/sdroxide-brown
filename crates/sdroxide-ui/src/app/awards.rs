@@ -102,96 +102,89 @@ impl SdroxideApp {
         self.ensure_awards();
         let bands =
             ["", "160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m"];
-        let mut open = self.show_awards;
         let mut new_band: Option<String> = None;
         let awards = self.awards_cache.as_ref().map(|(_, _, a)| a.clone()).unwrap_or_default();
-        let resp = egui::Window::new("AWARDS")
-            .id(crate::layout::salted_id(ctx, "AWARDS"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 540.0))
-            .default_height(crate::layout::window_h(ctx, 560.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Band").size(11.0).color(crate::theme::gray(150)));
-                    for b in bands {
-                        let label = if b.is_empty() { "All" } else { b };
-                        if crate::chrome::chip(ui, self.awards_band == b, label).clicked() {
-                            new_band = Some(b.to_string());
-                        }
-                    }
-                });
-                ui.separator();
-                // Summary counts.
-                award_summary(ui, "DXCC", &awards.dxcc);
-                award_summary(ui, "WAZ", &awards.waz);
-                award_summary(ui, "WAS", &awards.was);
-                award_summary(ui, "Grids", &awards.grids);
-                ui.add_space(6.0);
-
-                egui::ScrollArea::vertical().auto_shrink([false, false]).show_themed(ui, |ui| {
-                    // WAS state grid.
-                    ui.label(
-                        RichText::new("Worked All States")
-                            .size(12.0)
-                            .strong()
-                            .color(crate::theme::CYAN()),
-                    );
-                    award_cell_grid(
-                        ui,
-                        sdroxide_types::US_STATES.iter().map(|s| {
-                            (s.to_string(), awards.was.get(*s).copied().unwrap_or_default())
-                        }),
-                        44.0,
-                    );
-                    ui.add_space(8.0);
-                    // WAZ zone grid (1..40).
-                    ui.label(
-                        RichText::new("CQ Zones (WAZ)")
-                            .size(12.0)
-                            .strong()
-                            .color(crate::theme::CYAN()),
-                    );
-                    award_cell_grid(
-                        ui,
-                        (1u8..=40).map(|z| {
-                            (format!("{z:02}"), awards.waz.get(&z).copied().unwrap_or_default())
-                        }),
-                        34.0,
-                    );
-                    ui.add_space(8.0);
-                    // DXCC worked list (confirmed marked).
-                    ui.label(
-                        RichText::new("DXCC entities")
-                            .size(12.0)
-                            .strong()
-                            .color(crate::theme::CYAN()),
-                    );
-                    for (name, st) in &awards.dxcc {
-                        let col = if st.confirmed {
-                            crate::theme::GREEN()
-                        } else {
-                            crate::theme::YELLOW()
-                        };
-                        ui.label(
-                            RichText::new(format!(
-                                "{} {name}",
-                                if st.confirmed { "✓" } else { "•" }
-                            ))
-                            .size(11.5)
-                            .color(col),
-                        );
-                    }
-                });
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
-        self.show_awards = open;
+        // The window itself is the shell's: an egui window or its own OS one,
+        // with the ⇱ WINDOW chip, which is what makes the award tracker one of
+        // the station's windows rather than a dialog.
+        let show = self.tool_window(
+            ctx,
+            "awards",
+            "AWARDS",
+            [540.0, 560.0],
+            self.show_awards,
+            |me, ui| me.awards_body(ui, &bands, &awards, &mut new_band),
+        );
+        self.show_awards = show;
         if let Some(b) = new_band {
             self.awards_band = b;
         }
+    }
+
+    /// The award tracker's body — the band row, the progress bars and the
+    /// new-award box. Split out of [`Self::awards_window`] so the shell can draw
+    /// it in a window of its own.
+    fn awards_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        bands: &[&str; 12],
+        awards: &sdroxide_types::Awards,
+        new_band: &mut Option<String>,
+    ) {
+        crate::chrome::window_body_bg(ui);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Band").size(11.0).color(crate::theme::gray(150)));
+            for b in bands {
+                let label = if b.is_empty() { "All" } else { b };
+                if crate::chrome::chip(ui, self.awards_band == *b, label).clicked() {
+                    *new_band = Some(b.to_string());
+                }
+            }
+        });
+        ui.separator();
+        // Summary counts.
+        award_summary(ui, "DXCC", &awards.dxcc);
+        award_summary(ui, "WAZ", &awards.waz);
+        award_summary(ui, "WAS", &awards.was);
+        award_summary(ui, "Grids", &awards.grids);
+        ui.add_space(6.0);
+
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show_themed(ui, |ui| {
+            // WAS state grid.
+            ui.label(
+                RichText::new("Worked All States").size(12.0).strong().color(crate::theme::CYAN()),
+            );
+            award_cell_grid(
+                ui,
+                sdroxide_types::US_STATES
+                    .iter()
+                    .map(|s| (s.to_string(), awards.was.get(*s).copied().unwrap_or_default())),
+                44.0,
+            );
+            ui.add_space(8.0);
+            // WAZ zone grid (1..40).
+            ui.label(
+                RichText::new("CQ Zones (WAZ)").size(12.0).strong().color(crate::theme::CYAN()),
+            );
+            award_cell_grid(
+                ui,
+                (1u8..=40)
+                    .map(|z| (format!("{z:02}"), awards.waz.get(&z).copied().unwrap_or_default())),
+                34.0,
+            );
+            ui.add_space(8.0);
+            // DXCC worked list (confirmed marked).
+            ui.label(
+                RichText::new("DXCC entities").size(12.0).strong().color(crate::theme::CYAN()),
+            );
+            for (name, st) in &awards.dxcc {
+                let col = if st.confirmed { crate::theme::GREEN() } else { crate::theme::YELLOW() };
+                ui.label(
+                    RichText::new(format!("{} {name}", if st.confirmed { "✓" } else { "•" }))
+                        .size(11.5)
+                        .color(col),
+                );
+            }
+        });
     }
 }

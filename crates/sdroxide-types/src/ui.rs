@@ -340,6 +340,14 @@ pub enum UiTheme {
     /// faint. For low vision, for glare, and for a display that has lost its
     /// contrast.
     HighContrast,
+    /// The SDRuno look: deep blue grounds, near-white ink, a single calm blue
+    /// accent. Named for how it reads rather than for the program it echoes.
+    ///
+    /// Declared before [`UiTheme::Default`] because the catch-all must stay
+    /// last, which means **`Default`'s discriminant moves** when a theme is
+    /// added — a `UiTheme` rides [`ClientScreen`], so this is the reason the
+    /// theme arrived with a `PROTO_VERSION` bump rather than a free change.
+    Calm,
     /// The classic navy/cyan/pink look. Declared last because serde demands
     /// the catch-all be the final variant: it also swallows an unrecognised
     /// value in a hand-edited config, so a typo degrades to the default theme
@@ -350,7 +358,7 @@ pub enum UiTheme {
 }
 
 impl UiTheme {
-    pub const ALL: [UiTheme; 17] = [
+    pub const ALL: [UiTheme; 18] = [
         UiTheme::Default,
         UiTheme::Light,
         UiTheme::HighContrast,
@@ -368,6 +376,7 @@ impl UiTheme {
         UiTheme::CatppuccinMocha,
         UiTheme::CatppuccinLatte,
         UiTheme::ModernMinimalist,
+        UiTheme::Calm,
     ];
 
     pub fn label(self) -> &'static str {
@@ -389,6 +398,7 @@ impl UiTheme {
             UiTheme::CatppuccinMocha => "Catppuccin mocha",
             UiTheme::CatppuccinLatte => "Catppuccin latte",
             UiTheme::ModernMinimalist => "Modern minimalist",
+            UiTheme::Calm => "Calm",
         }
     }
 
@@ -558,16 +568,40 @@ pub enum DetachableModule {
     /// The top control strip — the frequency readout, the S-meter and the
     /// receiver and transmitter controls (SDRuno's "RX control").
     Controls,
+    /// A **second** spectrum and waterfall — SDRuno's AUX SP, the window that
+    /// lets the operator watch a second span of the band without giving up the
+    /// first one.
+    ///
+    /// Appended, and drawn from the same spectrum the panadapter is, so this is
+    /// a **second view of the same receiver**, not a second receiver: both
+    /// windows show one station's waterfall. Pointing it at another radio is a
+    /// later thing and would need the shell to own one window per (module,
+    /// radio) rather than per module.
+    AuxPanadapter,
+    /// The **band/mode selector** in a window of its own — SDRuno's RX-control
+    /// band panel.
+    ///
+    /// It exists because the docked column cannot be wide: the operating panels
+    /// below it are built for ~680 pt, so a docked selector that showed its
+    /// modes in five columns would squeeze them and overrun. In a window of its
+    /// own it can be as wide as the operator likes, with the operating panel
+    /// keeping its full width. Appended last.
+    BandMenu,
 }
 
 impl DetachableModule {
     /// How many detachable modules there are — the length of
     /// [`UiSettings::detached`], which is an array so `UiSettings` stays `Copy`.
-    pub const COUNT: usize = 3;
+    pub const COUNT: usize = 5;
 
     /// Every module, so a settings list or a test can walk them all.
-    pub const ALL: [DetachableModule; DetachableModule::COUNT] =
-        [DetachableModule::Panadapter, DetachableModule::Panel, DetachableModule::Controls];
+    pub const ALL: [DetachableModule; DetachableModule::COUNT] = [
+        DetachableModule::Panadapter,
+        DetachableModule::Panel,
+        DetachableModule::Controls,
+        DetachableModule::AuxPanadapter,
+        DetachableModule::BandMenu,
+    ];
 
     /// This module's slot in [`UiSettings::detached`]. A plain array rather than
     /// a map keeps `UiSettings` `Copy`, which the whole UI leans on.
@@ -576,6 +610,8 @@ impl DetachableModule {
             DetachableModule::Panadapter => 0,
             DetachableModule::Panel => 1,
             DetachableModule::Controls => 2,
+            DetachableModule::AuxPanadapter => 3,
+            DetachableModule::BandMenu => 4,
         }
     }
 
@@ -585,6 +621,8 @@ impl DetachableModule {
             DetachableModule::Panadapter => "Panadapter",
             DetachableModule::Panel => "Operating panel",
             DetachableModule::Controls => "Controls",
+            DetachableModule::AuxPanadapter => "AUX SP (second spectrum)",
+            DetachableModule::BandMenu => "Band & mode selector",
         }
     }
 
@@ -596,7 +634,58 @@ impl DetachableModule {
             DetachableModule::Panadapter => "sdroxide-panadapter",
             DetachableModule::Panel => "sdroxide-panel",
             DetachableModule::Controls => "sdroxide-controls",
+            DetachableModule::AuxPanadapter => "sdroxide-panadapter-aux",
+            DetachableModule::BandMenu => "sdroxide-bandmenu",
         }
+    }
+}
+
+/// A named window arrangement — SDRuno's **workspace**. SDRuno keeps up to ten
+/// and recalls them by name; this is the same idea for our module windows: which
+/// of them are in their own OS windows, and where those windows are.
+///
+/// A **list of its own**, not a field in [`UiSettings`], and the reason is that
+/// `UiSettings` is `Copy`: the whole UI passes it around by value, and a `Vec`
+/// would take that away from every one of those sites to add one screen's worth
+/// of arrangements. The list lives in `workspaces.json`, reached through the
+/// same config store as the memories and the logbook.
+///
+/// A workspace is the arrangement only — the modules and their windows. What is
+/// *on* is what a station profile or a radio carries; a workspace is where the
+/// furniture is.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Workspace {
+    /// What the operator called it. Not an index: SDRuno recalls by name, and a
+    /// name survives a reorder.
+    pub name: String,
+    /// One slot per [`DetachableModule`] in `index()` order **at save time**. A
+    /// `Vec` rather than the fixed array because a workspace written by a build
+    /// with a module this one has not heard of must still load and apply the
+    /// modules it does know — the same tolerance [`UiSettings::detached`]'s
+    /// reader has, for the same reason.
+    pub slots: Vec<DetachedState>,
+}
+
+/// How many workspaces may be saved — SDRuno's ten. A cap rather than a
+/// refusal-at-save would be a memory growing without bound; ten named
+/// arrangements is already more than a station uses.
+pub const WORKSPACE_MAX: usize = 10;
+
+impl Workspace {
+    /// Snapshot the arrangement in `settings` under `name`.
+    pub fn capture(name: impl Into<String>, settings: &UiSettings) -> Self {
+        Self { name: name.into(), slots: settings.detached.to_vec() }
+    }
+
+    /// Put this arrangement back into `settings`, leaving any module the
+    /// workspace does not mention — a slot a newer or older build wrote —
+    /// docked.
+    pub fn apply(&self, settings: &mut UiSettings) {
+        let mut out = [DetachedState::default(); DetachableModule::COUNT];
+        for (slot, saved) in out.iter_mut().zip(self.slots.iter()) {
+            *slot = *saved;
+        }
+        settings.detached = out;
     }
 }
 
@@ -905,6 +994,12 @@ pub struct UiSettings {
     /// it leaves a dead control behind the moment the condition clears.
     #[serde(default)]
     pub dismissed_advisories: u64,
+    /// Ask the fork's GitHub Releases whether a **newer release** exists, once
+    /// at start-up, and show a banner if so. On by default; off means no
+    /// outbound call at all. Only full releases count — the nightly is a
+    /// pre-release, so it never triggers the banner.
+    #[serde(default = "default_true")]
+    pub check_for_updates: bool,
     /// Which modules are undocked into their own windows, and where those
     /// windows last were — one [`DetachedState`] per [`DetachableModule`], in
     /// `module.index()` order. An array rather than a map so `UiSettings` stays
@@ -915,7 +1010,17 @@ pub struct UiSettings {
     /// in-window, so the flags are ignored there. Machine-local, and
     /// deliberately not on the wire (`ClientScreen`): where a window sits is a
     /// property of this screen, as [`Self::solar3d_window`]'s note says.
-    #[serde(default)]
+    ///
+    /// Read through [`detached_slots`], not as a fixed array, **because a module
+    /// added to the enum makes this array longer**: a config written by a build
+    /// with three slots carries a three-element list, and a derived array
+    /// deserializer would reject the whole file over it — and
+    /// `Settings::load` *quarantines* a file it cannot parse and hands back
+    /// defaults, so adding AUX SP that way would have reset every operator's
+    /// theme, fonts and layout along with their window geometry. A short list
+    /// leaves the modules it does not reach docked, which is what a fresh slot
+    /// wants anyway.
+    #[serde(default = "default_detached", deserialize_with = "detached_slots")]
     pub detached: [DetachedState; DetachableModule::COUNT],
     /// Legacy — the panadapter's undocked flag from before [`Self::detached`]
     /// existed, read once at load by [`Self::migrate_detached`] and never
@@ -930,6 +1035,11 @@ pub struct UiSettings {
 }
 
 /// Default for [`UiSettings::spot_colors`] — every kind on its stock tint.
+/// `true` for a `#[serde(default)]` field that must default on, not off.
+fn default_true() -> bool {
+    true
+}
+
 fn default_spot_colors() -> [[u8; 3]; SpotKind::COUNT] {
     let mut out = [[0u8; 3]; SpotKind::COUNT];
     for kind in SpotKind::ALL {
@@ -978,6 +1088,39 @@ where
     let mut out = default_bandplan_colors();
     for (slot, c) in out.iter_mut().zip(list) {
         *slot = c;
+    }
+    Ok(out)
+}
+
+/// Default for [`UiSettings::detached`] — every module docked, no windows
+/// placed yet. The same state a build starts in, so a slot a config does not
+/// reach needs nothing else.
+fn default_detached() -> [DetachedState; DetachableModule::COUNT] {
+    [DetachedState::default(); DetachableModule::COUNT]
+}
+
+/// Read [`UiSettings::detached`] as a list of any length, so a config written
+/// before a module was added — or by a build that has one more — still loads.
+///
+/// This is the one field that has to survive the registry growing, and the cost
+/// of not doing it is not a lost setting but the whole file:
+/// `sdroxide_config::Settings::load` quarantines a `config.toml` it cannot parse
+/// and answers `Settings::default()`, so a single over-long (or short) `detached`
+/// list would take the operator's theme, fonts, layout and the rest of their
+/// configuration with it. A short list leaves the modules it does not reach
+/// docked; a long one has its tail ignored, the way a newer build's extra module
+/// is.
+///
+/// Safe to leave on the wire-adjacent types because `UiSettings` is local
+/// `config.toml` and is never postcard-encoded — see the field's note.
+fn detached_slots<'de, D>(d: D) -> Result<[DetachedState; DetachableModule::COUNT], D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let list = Vec::<DetachedState>::deserialize(d)?;
+    let mut out = default_detached();
+    for (slot, state) in out.iter_mut().zip(list) {
+        *slot = state;
     }
     Ok(out)
 }
@@ -1074,6 +1217,7 @@ impl Default for UiSettings {
             client_share_bindings: false,
             client_bindings_declined: false,
             dismissed_advisories: 0,
+            check_for_updates: true,
             detached: [DetachedState::default(); DetachableModule::COUNT],
             panadapter_detached_legacy: false,
             panadapter_window_legacy: None,
@@ -1085,9 +1229,13 @@ impl UiSettings {
     /// The steps the tuning buttons cycle through, in hertz — from the 10 Hz
     /// that trims a carrier onto zero-beat up to the 25 kHz of an FM channel,
     /// by way of the AM broadcast spacings (9 kHz in Regions 1 and 3, 10 kHz in
-    /// Region 2) and the 5 kHz most shortwave broadcasters sit on.
-    pub const TUNE_STEPS_HZ: [f64; 9] =
-        [10.0, 100.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 9_000.0, 10_000.0, 25_000.0];
+    /// Region 2), the 5 kHz most shortwave broadcasters sit on, and the VHF/UHF
+    /// channel spacings — 6.25 kHz (dPMR, NXDN, PMR446 digital) and 12.5 kHz
+    /// (narrow FM, PMR446, DMR) — beside the 25 kHz wide channel (issue #28).
+    pub const TUNE_STEPS_HZ: [f64; 11] = [
+        10.0, 100.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 6_250.0, 9_000.0, 10_000.0, 12_500.0,
+        25_000.0,
+    ];
 
     /// The step after the current one, wrapping. A tap on the step button.
     pub fn next_tune_step(&self) -> f64 {
@@ -1097,18 +1245,15 @@ impl UiSettings {
     }
 
     /// The current step written the way a radio's own display would: "100 Hz",
-    /// "1 kHz", "12.5 kHz".
+    /// "1 kHz", "12.5 kHz", "6.25 kHz" — as many decimals as the step has, so
+    /// 6.25 kHz is not rounded to a 6.2 that is on no channel plan.
     pub fn tune_step_label(&self) -> String {
         let hz = self.tune_step_hz;
         if hz < 1_000.0 {
             return format!("{hz:.0} Hz");
         }
-        let khz = hz / 1_000.0;
-        if (khz - khz.round()).abs() < 1e-6 {
-            format!("{khz:.0} kHz")
-        } else {
-            format!("{khz:.1} kHz")
-        }
+        let khz = format!("{:.3}", hz / 1_000.0);
+        format!("{} kHz", khz.trim_end_matches('0').trim_end_matches('.'))
     }
 
     /// One module's undocked state, or the docked default if it has never been
@@ -1438,7 +1583,9 @@ mod tune_step_tests {
             (500.0, "500 Hz"),
             (1_000.0, "1 kHz"),
             (2_500.0, "2.5 kHz"),
+            (6_250.0, "6.25 kHz"),
             (9_000.0, "9 kHz"),
+            (12_500.0, "12.5 kHz"),
             (25_000.0, "25 kHz"),
         ] {
             ui.tune_step_hz = hz;
@@ -1467,6 +1614,109 @@ pub fn set_force_swl(on: bool) {
 mod tests {
     use super::*;
 
+    /// A workspace snapshots the arrangement and puts it back, and a slot it
+    /// does not carry leaves that module docked rather than half-restored.
+    #[test]
+    fn a_workspace_round_trips_the_arrangement() {
+        let mut s = UiSettings::default();
+        s.set_detached(DetachableModule::Panadapter, true);
+        s.set_detached(DetachableModule::Controls, true);
+        let saved = Workspace::capture("second monitor", &s);
+
+        let mut back = UiSettings::default();
+        saved.apply(&mut back);
+        assert!(back.is_detached(DetachableModule::Panadapter));
+        assert!(back.is_detached(DetachableModule::Controls));
+        assert!(!back.is_detached(DetachableModule::Panel), "a module it did not set stays docked");
+        assert!(!back.is_detached(DetachableModule::AuxPanadapter));
+        assert_eq!(back.detached, s.detached, "the whole arrangement, not a subset");
+
+        // A workspace written before a module existed carries a shorter list:
+        // the modules it does reach are restored, and the rest stay docked.
+        let short = Workspace {
+            name: "old".into(),
+            slots: vec![DetachedState { detached: true, window: None }],
+        };
+        let mut from_old = UiSettings::default();
+        short.apply(&mut from_old);
+        assert!(from_old.is_detached(DetachableModule::Panadapter));
+        assert!(!from_old.is_detached(DetachableModule::Controls));
+    }
+
+    /// A `detached` list of **any** length loads, and a module the list does
+    /// not reach simply starts docked.
+    ///
+    /// This is the field the registry grows through: adding AUX SP makes the
+    /// array longer, and every config written before it carries a shorter list.
+    /// Without the tolerant reader the whole `[ui]` table — and with it the
+    /// theme, the fonts and the layout, because `Settings::load` quarantines a
+    /// file it cannot parse — would go over one list length.
+    #[test]
+    fn the_detached_list_loads_at_any_length() {
+        let one = |n: usize| {
+            let list: Vec<String> = (0..n).map(|_| r#"{"detached":true}"#.to_string()).collect();
+            let json = format!(r#"{{"detached":[{}]}}"#, list.join(","));
+            serde_json::from_str::<UiSettings>(&json).expect("a short list")
+        };
+
+        let short = one(1);
+        assert!(short.detached[0].detached, "the slot it does carry is kept");
+        for m in &DetachableModule::ALL[1..] {
+            assert!(
+                !short.detached[m.index()].detached,
+                "{:?} a list that does not reach it starts docked",
+                m.label()
+            );
+        }
+
+        // A longer list — a build with a module this one has not heard of — has
+        // its tail ignored rather than failing the file.
+        let long = one(DetachableModule::COUNT + 2);
+        for m in DetachableModule::ALL {
+            assert!(long.detached[m.index()].detached, "{:?} kept", m.label());
+        }
+
+        // And the reader keeps the operator's own windows, geometry included,
+        // rather than defaulting the slot.
+        let kept: UiSettings = serde_json::from_str(
+            r#"{"detached":[{"detached":true,"window":{"size":[800.0,600.0],"pos":[10.0,20.0]}}]}"#,
+        )
+        .expect("a placed window");
+        let w = kept.detached[0].window.expect("the window it carried");
+        assert_eq!((w.size, w.pos), ([800.0, 600.0], Some([10.0, 20.0])));
+    }
+
+    /// The registry's own bookkeeping, which is what `UiSettings::detached` is
+    /// indexed by: every module has a **distinct** index inside the array, and
+    /// `ALL` and `COUNT` agree. Two modules sharing a slot would silently share
+    /// one window's geometry, and an `ALL` longer than `COUNT` would index past
+    /// the array.
+    ///
+    /// This is the test that has to keep passing **every** time a module is
+    /// added, because adding one grows `detached` — and a saved config written
+    /// before it carries a shorter list. The reader is tolerant of that (see
+    /// [`detached_slots`]); this pins the bookkeeping the tolerance depends on.
+    #[test]
+    fn every_module_has_its_own_slot() {
+        assert_eq!(DetachableModule::ALL.len(), DetachableModule::COUNT);
+        let mut seen = [false; DetachableModule::COUNT];
+        for m in DetachableModule::ALL {
+            assert!(m.index() < DetachableModule::COUNT, "{:?} indexes past the array", m.label());
+            assert!(
+                !seen[m.index()],
+                "{:?} shares slot {} with another module",
+                m.label(),
+                m.index()
+            );
+            seen[m.index()] = true;
+        }
+        assert!(seen.iter().all(|s| *s), "every slot is a module: {seen:?}");
+    }
+
+    /// The registry's own bookkeeping: every module has a **distinct** index and
+    /// `ALL` and `COUNT` agree, because `UiSettings::detached` is indexed by it
+    /// and two modules sharing a slot would silently share one module's window
+    /// geometry.
     /// A layout value this build has never heard of costs that field, not the
     /// whole `config.toml`. `Settings::load` quarantines the entire file on a
     /// parse error, so before `#[serde(other)]` a config written by a build

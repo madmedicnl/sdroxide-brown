@@ -43,8 +43,34 @@ pub const RELEASE_SUFFIX: &str = "_brown";
 /// what [`FLAVOR`] is for the places that compose their own line. The suffix is
 /// added here rather than in `Cargo.toml`, so a stamped nightly reads
 /// `…-nightly.…_brown` and a release reads `1.9.2_brown`.
-pub const LONG_VERSION: &str =
-    concat!("SDR Oxide Brown ", env!("SDROXIDE_VERSION"), "_brown");
+pub const LONG_VERSION: &str = concat!("SDR Oxide Brown ", env!("SDROXIDE_VERSION"), "_brown");
+
+/// The numeric release a **tag or a version string** names, as
+/// `(major, minor, patch)`, or `None` if it names none.
+///
+/// A tag is `v2.0.3_brown`; the crate version is `2.0.3`; a stamped nightly is
+/// `2.0.3-nightly.20261008…`. All three reduce to their leading three numbers,
+/// which is the only part the update check compares — a suffix is not a newer
+/// version, it is the *same* one packaged differently.
+pub fn release_number(s: &str) -> Option<(u32, u32, u32)> {
+    let t = s.trim().trim_start_matches('v');
+    let t = t.split(RELEASE_SUFFIX).next().unwrap_or(t);
+    let mut parts = t.split(|c: char| !c.is_ascii_digit()).filter(|p| !p.is_empty());
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next().unwrap_or("0").parse().ok()?;
+    let patch = parts.next().unwrap_or("0").parse().ok()?;
+    Some((major, minor, patch))
+}
+
+/// Whether `latest` (a release tag) is a **newer release** than `current` (the
+/// running version). A string that names no release is never newer, so a build
+/// with a version this cannot parse is never nagged.
+pub fn is_newer_release(latest: &str, current: &str) -> bool {
+    match (release_number(latest), release_number(current)) {
+        (Some(l), Some(c)) => l > c,
+        _ => false,
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -70,6 +96,24 @@ mod tests {
     fn the_long_version_names_the_build() {
         assert!(super::LONG_VERSION.starts_with(super::FLAVOR));
         assert!(super::LONG_VERSION.contains(super::VERSION));
+    }
+
+    /// The update check: a tag, a crate version and a stamped nightly all read
+    /// as their leading three numbers, and only a genuinely higher release is
+    /// "newer" — a nightly of the same release, or a downgrade, never is.
+    #[test]
+    fn only_a_higher_release_is_newer() {
+        assert_eq!(super::release_number("v2.0.3_brown"), Some((2, 0, 3)));
+        assert_eq!(super::release_number("2.0.3"), Some((2, 0, 3)));
+        assert_eq!(super::release_number("2.0.3-nightly.20261008"), Some((2, 0, 3)));
+        assert!(super::is_newer_release("v2.0.3_brown", "2.0.2"));
+        assert!(super::is_newer_release("v2.1.0_brown", "2.0.9"));
+        // The same release packaged as a nightly is not an update.
+        assert!(!super::is_newer_release("v2.0.3_brown", "2.0.3-nightly.1"));
+        // Nor is an older one, nor nonsense.
+        assert!(!super::is_newer_release("v2.0.2_brown", "2.0.3"));
+        assert!(!super::is_newer_release("nightly", "2.0.3"));
+        assert!(!super::is_newer_release("v2.0.3_brown", "garbage"));
     }
 
     /// The release suffix is display-only and never touches the crate version,

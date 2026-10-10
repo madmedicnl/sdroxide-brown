@@ -1141,6 +1141,10 @@ impl Mode {
             auto_notch: Some(false),
             wfm_stereo: Some(true),
             binaural: Some(false),
+            // The listener's tone and LOUDNESS are the operator's to switch on:
+            // off and flat in every mode until they are.
+            tone: Some(crate::TxEqState::default()),
+            loudness: Some(false),
         }
     }
 

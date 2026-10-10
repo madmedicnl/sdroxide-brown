@@ -5645,17 +5645,17 @@ impl Engine {
         };
         // The listener's receive tone, in front of the speakers (and the
         // time-shift window, so a replay sounds like what was heard).
-        if self.state.rx_tone != self.rx_eq_cfg {
-            self.rx_eq.configure(&self.state.rx_tone, self.audio_out_rate);
-            self.rx_eq_cfg = self.state.rx_tone.clone();
+        if self.state.rx[0].tone != self.rx_eq_cfg {
+            self.rx_eq.configure(&self.state.rx[0].tone, self.audio_out_rate);
+            self.rx_eq_cfg = self.state.rx[0].tone;
         }
-        if self.state.rx_tone.enabled {
+        if self.state.rx[0].tone.enabled {
             self.rx_eq.process(&mut self.main_play);
         }
         // LOUDNESS after the tone: a lift that grows as the volume goes down,
         // read off the knob each block. Flat at full volume, and never more
         // than the attenuation it compensates, so it cannot clip.
-        if self.state.rx_loudness && !unscaled_preview {
+        if self.state.rx[0].loudness && !unscaled_preview {
             let rx0 = &self.state.rx[0];
             let vol = if rx0.muted { 0.0 } else { rx0.volume };
             let curve = sdroxide_dsp::loudness_curve(vol, self.audio_out_rate);
@@ -10242,15 +10242,23 @@ impl Engine {
                 // dial reads in.
                 self.emit_station_config();
             }
+            // The speaker audio is the main receiver's, so both of these are
+            // its settings — and per-mode ones, remembered for the mode in
+            // force like BIN. A client's tone goes through `clamped` on the
+            // way in, because it is stored in `modeprofiles.json` and laid on
+            // the filters again at every mode change.
             SetRxTone(tone) => {
-                self.state.rx_tone = *tone;
+                let tone = tone.clamped();
+                self.state.rx[0].tone = tone;
+                self.remember_mode_setting(RxId::Main, |p| p.tone = Some(tone));
                 self.emit_state();
             }
             SetRxLoudness(on) => {
                 // Start from silence: history left from the last time it ran
                 // would otherwise ring into the first block after re-enabling.
                 self.rx_loud.reset();
-                self.state.rx_loudness = on;
+                self.state.rx[0].loudness = on;
+                self.remember_mode_setting(RxId::Main, |p| p.loudness = Some(on));
                 self.emit_state();
             }
             SetReplay(on) => {
@@ -14170,7 +14178,33 @@ impl Engine {
             let gain = self.source.rx_gain_db().unwrap_or(0.0);
             return Some(p - gain + self.cal_offset_db);
         }
+        // A wideband lane (DAB, ADS-B, AIS, VDL2) runs no demodulator, so the
+        // chain above measures nothing — and with no reading no meter was
+        // published at all, which left the S-meter frozen on whatever the last
+        // mode had read: a DAB ensemble showed the S9+5 of the station before
+        // it, and turning the gain did nothing. The signal is measured off the
+        // spectrum across the lane's own bandwidth instead, the way a scan
+        // already does with no chain to ask.
+        if !self.audio_mode && self.state.rx[0].mode.is_wideband_lane() {
+            let gain = self.source.rx_gain_db().unwrap_or(0.0);
+            return self.spectrum_channel_dbfs().map(|p| p - gain + self.cal_offset_db);
+        }
         self.audio_mode.then(|| self.audio_level_dbfs() + self.cal_offset_db)
+    }
+
+    /// The power the panadapter's spectrum shows inside the mode's own filter
+    /// around the dial, in dBFS — the quantity a demodulator would have
+    /// measured, read off the FFT for when there is no demodulator to ask.
+    fn spectrum_channel_dbfs(&mut self) -> Option<f32> {
+        let (flo, fhi) = self.state.rx[0].mode.default_filter();
+        self.analyzer.spectrum_db(&mut self.scan_db);
+        crate::scanner::channel_power_db(
+            &self.scan_db,
+            self.state.center_hz,
+            self.state.sample_rate,
+            self.state.rx_freq_hz(),
+            (fhi - flo).abs().max(1.0) as f64,
+        )
     }
 
     /// The smoothed level of audio that arrived as audio — a demod-audio
@@ -14206,15 +14240,7 @@ impl Engine {
         // scan still works with nothing to listen on. It inherits the display's
         // own averaging, though, so with `avg_tc` turned up a channel takes
         // longer to read as free than the real meter would have taken.
-        let (flo, fhi) = self.state.rx[0].mode.default_filter();
-        self.analyzer.spectrum_db(&mut self.scan_db);
-        crate::scanner::channel_power_db(
-            &self.scan_db,
-            self.state.center_hz,
-            self.state.sample_rate,
-            self.state.rx_freq_hz(),
-            (fhi - flo).abs().max(1.0) as f64,
-        )
+        self.spectrum_channel_dbfs()
     }
 
     fn scan_threshold_db(&self) -> f32 {

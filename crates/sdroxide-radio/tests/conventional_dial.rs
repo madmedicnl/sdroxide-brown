@@ -69,8 +69,28 @@ fn caps() -> DeviceCaps {
     }
 }
 
+/// Point the engine at a scratch config directory.
+///
+/// The engine loads its `DigiConfig` from the station's store, and
+/// `SDROXIDE_CONFIG_DIR` is process-global — without this the test would read
+/// (and, on a mode change, write) the real station's settings, and an operator
+/// who had switched **KEEP DIAL** on would find SSTV never lands on the calling
+/// frequency and the tests red on their machine alone. Every other radio test
+/// isolates itself the same way; this one did not.
+fn isolate_config() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let root =
+            std::env::temp_dir().join(format!("sdroxide-conventional-dial-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &root) };
+    });
+}
+
 /// Run `cmds`, then return the dial from the last state the engine published.
 fn dial_after(cmds: &[Command]) -> f64 {
+    isolate_config();
     let mut h = start_engine(
         Box::new(MockSource { center: M11 }),
         caps(),

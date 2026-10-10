@@ -515,6 +515,49 @@ const NORD_DARK: Palette = Palette {
     hazard_dark: c(0x1b1912),
 };
 
+/// The SDRuno look: deep blue grounds, near-white ink, and a single calm blue
+/// accent. The operator's name for it is the point — nothing here is loud, and
+/// the blue reads as the SDRplay face without copying its pixels. A dark theme
+/// (SDRuno is blue-dominant with white text), so its meters, scope and map are
+/// all derived by blending its own hues.
+const CALM: Palette = Palette {
+    light: false,
+    no_dim: false,
+    bg_deep: c(0x0a1424),
+    panel: c(0x13233a),
+    input_bg: c(0x0c1828),
+    fill: c(0x1c3050),
+    fill_hover: c(0x27436a),
+    fill_active: c(0x335586),
+    line: c(0x27405f),
+    line_lit: c(0x5aa9e6),
+    text: c(0xd7e3f2),
+    text_strong: c(0xf1f6fd),
+    cyan: c(0x5aa9e6),
+    cyan_dim: c(0x7db6e2),
+    pink: c(0x9dc0dd),
+    yellow: c(0xe7c987),
+    green: c(0x9ed2b2),
+    ink_on_cyan: c(0x081522),
+    ink_on_bright: Color32::BLACK,
+    red_deep: c(0x5a2b38),
+    cq_bg: c(0x362a44),
+    tome_bg: c(0x3a3422),
+    done_bg: c(0x22342c),
+    row_bg: c(0x101d30),
+    row_hover: c(0x22344f),
+    scroll_track: c(0x13202f),
+    scroll_handle: c(0x5aa9e6),
+    scroll_handle_hover: c(0x84c2f2),
+    scroll_handle_drag: c(0xeef5ff),
+    faint_bg: c(0x13202f),
+    // The same hot red every theme keeps: SDRuno's own blue would fail the
+    // "is this an alarm?" test [`every_theme_keeps_alerts_red`] enforces.
+    alert: c(0xe35545),
+    hazard: c(0xe7c987),
+    hazard_dark: c(0x241f12),
+};
+
 /// The warm Gruvbox palette: parchment text on near-black browns, blue/aqua
 /// accents, and the bright-orange chrome that makes it unmistakable.
 const GRUVBOX: Palette = Palette {
@@ -829,7 +872,7 @@ const MODERN_MINIMALIST: Palette = Palette {
 };
 
 /// Indexed by [`theme_index`].
-static PALETTES: [Palette; 17] = [
+static PALETTES: [Palette; 18] = [
     DEFAULT,           // 0  Default
     GREEN_PHOSPHOR,    // 1  Green phosphor
     AMBER_PHOSPHOR,    // 2  Amber phosphor
@@ -847,6 +890,7 @@ static PALETTES: [Palette; 17] = [
     MODERN_MINIMALIST, // 14 Modern minimalist
     LIGHT,             // 15 Light
     HIGH_CONTRAST,     // 16 High contrast
+    CALM,              // 17 Calm
 ];
 
 /// The S-meter instrument's colours: the face wash, the backlight bloom, the
@@ -1155,7 +1199,7 @@ const fn meter_paper(p: &Palette) -> MeterPalette {
 /// Indexed by [`theme_index`], like [`PALETTES`]. Rainbow keeps the historic
 /// navy instrument: its grounds are the default's, and the meter already
 /// reads in the accents the ramps give it.
-static METER_PALETTES: [MeterPalette; 17] = [
+static METER_PALETTES: [MeterPalette; 18] = [
     METER_DEFAULT,                   // 0  Default
     METER_GREEN,                     // 1  Green phosphor
     METER_AMBER,                     // 2  Amber phosphor
@@ -1173,6 +1217,7 @@ static METER_PALETTES: [MeterPalette; 17] = [
     meter_paper(&MODERN_MINIMALIST), // 14 Modern minimalist
     METER_LIGHT,                     // 15 Light
     METER_HIGH_CONTRAST,             // 16 High contrast
+    meter_from(&CALM),               // 17 Calm
 ];
 
 /// The current theme's S-meter instrument colours.
@@ -1276,7 +1321,7 @@ const fn scope_light_from(p: &Palette) -> ScopePalette {
 /// Indexed by [`theme_index`], like [`PALETTES`]. High contrast lends the
 /// instruments its own roles like any other dark theme — its accents were
 /// already picked to sit on black, which is what the glass is.
-static SCOPE_PALETTES: [ScopePalette; 17] = [
+static SCOPE_PALETTES: [ScopePalette; 18] = [
     scope_from(&DEFAULT),                 // 0  Default
     scope_from(&GREEN_PHOSPHOR),          // 1  Green phosphor
     scope_from(&AMBER_PHOSPHOR),          // 2  Amber phosphor
@@ -1294,6 +1339,7 @@ static SCOPE_PALETTES: [ScopePalette; 17] = [
     scope_light_from(&MODERN_MINIMALIST), // 14 Modern minimalist
     SCOPE_LIGHT,                          // 15 Light
     scope_from(&HIGH_CONTRAST),           // 16 High contrast
+    scope_from(&CALM),                    // 17 Calm
 ];
 
 /// The current theme's instrument inks — see [`ScopePalette`].
@@ -1460,7 +1506,7 @@ const fn map_light_from(p: &Palette) -> MapPalette {
 }
 
 /// Indexed by [`theme_index`], like [`PALETTES`].
-static MAP_PALETTES: [MapPalette; 17] = [
+static MAP_PALETTES: [MapPalette; 18] = [
     map_from(&DEFAULT),                 // 0  Default
     map_from(&GREEN_PHOSPHOR),          // 1  Green phosphor
     map_from(&AMBER_PHOSPHOR),          // 2  Amber phosphor
@@ -1478,6 +1524,7 @@ static MAP_PALETTES: [MapPalette; 17] = [
     map_light_from(&MODERN_MINIMALIST), // 14 Modern minimalist
     SCOPE_MAP_LIGHT,                    // 15 Light
     MAP_HIGH_CONTRAST,                  // 16 High contrast
+    map_from(&CALM),                    // 17 Calm
 ];
 
 /// The current theme's world-map inks — see [`MapPalette`].
@@ -1515,6 +1562,7 @@ const fn theme_index(t: UiTheme) -> u8 {
         UiTheme::ModernMinimalist => 14,
         UiTheme::Light => 15,
         UiTheme::HighContrast => 16,
+        UiTheme::Calm => 17,
     }
 }
 

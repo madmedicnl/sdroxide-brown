@@ -449,6 +449,26 @@ mod tests {
         assert_eq!(de.continent, "EU");
     }
 
+    /// A station on 11 m whose callsign only the *wide* CB grammar accepts gets
+    /// a country and a flag.
+    ///
+    /// The operator's report: a German division-13 station on FT8 showed no flag.
+    /// `13DA001` is strict-shaped and always resolved; `13ABC123` — three
+    /// letters, which the decode gate takes when the wide setting is on — came
+    /// back `None` from here and drew nothing at all. The country lookup asked
+    /// for the strict grammar while the gate asked for whichever the operator
+    /// had chosen.
+    #[test]
+    fn a_german_cb_station_gets_its_flag_under_the_wide_grammar() {
+        for call in ["13ABC123", "13DCA001"] {
+            let e = resolve_callsign(call).unwrap_or_else(|| panic!("{call} names no country"));
+            assert_eq!(e.name, "Germany", "{call}");
+            assert_eq!(e.flag, "DE", "{call} should show the German flag");
+        }
+        // The strict shape was never the problem, and still is not.
+        assert_eq!(resolve_callsign("13DA001").map(|e| e.flag), Some("DE"));
+    }
+
     #[test]
     fn cb_country_numbers() {
         assert_eq!(cb_country::cb_country_number("26AT715"), Some(26));
@@ -458,8 +478,14 @@ mod tests {
         assert_eq!(cb_country::cb_country_number("999ZZ/ZZ"), Some(999));
         assert_eq!(cb_country::cb_country_number("26ZZ/MM"), Some(26));
         assert_eq!(cb_country::cb_country_number("2ZZ1234"), Some(2));
-        // A 4-digit suffix needs a single-digit prefix.
-        assert_eq!(cb_country::cb_country_number("26ZZ1234"), None);
+        // The wide grammar, deliberately: a three-letter group (13ABC123) and a
+        // four-digit unit behind a two-digit prefix (26ZZ1234) are both shapes
+        // the decode gate accepts on the wide setting, and a country lookup that
+        // refused them named no country and no flag for a station already
+        // decoded. Naming is a superset of gating.
+        assert_eq!(cb_country::cb_country_number("13ABC123"), Some(13));
+        assert_eq!(cb_country::cb_country_number("26ZZ1234"), Some(26));
+        assert_eq!(cb_country::cb_country_number("19DCG3733"), Some(19));
         // Base-only and amateur shapes are not CB callsigns.
         assert_eq!(cb_country::cb_country_number("26AT"), None);
         assert_eq!(cb_country::cb_country_number("9M0SDX"), None);

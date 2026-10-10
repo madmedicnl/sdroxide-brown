@@ -217,39 +217,12 @@ fn readout_text(hz: f64) -> String {
     format!("{} MHz", mhz.trim_end_matches('0').trim_end_matches('.'))
 }
 
-/// A large, display-only frequency readout across the top of the **detached**
-/// panadapter, over a dark pill so it reads on any waterfall, with a smaller
-/// second line under it — the mode and the signal level — so the window on a
-/// second monitor says everything you glance at without looking back at the main
-/// one.
-///
-/// Deliberately display-only: the tuning strip stays in the main window, so
-/// there is a single owner for the frequency and the two windows cannot
-/// disagree — a click or drag on the panadapter itself still tunes, as before.
+/// Height of SP1's toolbar — the readout's line and the chips beside it. The
+/// spectrum is drawn **below** the bar, not under it, which is the whole point of
+/// moving the readout out of the middle of the picture: a waterfall you cannot
+/// see the centre of is worse than a number in the way.
 #[cfg(not(target_arch = "wasm32"))]
-fn centred_detached_readout(ui: &egui::Ui, area: egui::Rect, title: &str, sub: &str) {
-    let p = ui.painter_at(area);
-    let amber = egui::Color32::from_rgb(255, 209, 66);
-    let big = p.layout_no_wrap(title.to_owned(), egui::FontId::monospace(34.0), amber);
-    let top = area.min.y + big.size().y * 0.5 + 10.0;
-    let r1 = egui::Rect::from_center_size(
-        egui::pos2(area.center().x, top),
-        big.size() + egui::vec2(28.0, 12.0),
-    );
-    p.rect_filled(r1, 6.0, egui::Color32::from_black_alpha(170));
-    p.galley(r1.center() - big.size() / 2.0, big, amber);
-    if sub.is_empty() {
-        return;
-    }
-    let grey = egui::Color32::LIGHT_GRAY;
-    let g2 = p.layout_no_wrap(sub.to_owned(), egui::FontId::proportional(14.0), grey);
-    let r2 = egui::Rect::from_center_size(
-        egui::pos2(area.center().x, r1.max.y + g2.size().y * 0.5 + 8.0),
-        g2.size() + egui::vec2(20.0, 8.0),
-    );
-    p.rect_filled(r2, 4.0, egui::Color32::from_black_alpha(150));
-    p.galley(r2.center() - g2.size() / 2.0, g2, grey);
-}
+const SP1_TOOLBAR_H: f32 = 32.0;
 
 /// The detached window's second line: the mode, and the S-meter reading when
 /// there is one. Read-only — it shares the main window's meter, so it cannot
@@ -291,24 +264,84 @@ fn empty_centre(ui: &egui::Ui) {
     p.galley(egui::pos2(area.center().x - hint_w / 2.0, top + name_h + 8.0), hint, dim);
 }
 
+/// The **⇱** button for a tool window's **title bar**, beside egui's fold and
+/// close.
+///
+/// egui draws its own title bar and offers no hook to add to it, so this is an
+/// `Area` laid over the title bar. The overlay is the point: a control in the
+/// body **reserves** a row and pushes the content down (the operator: *"the
+/// button pushes the content down so a scrollbar occurs"*), while this one
+/// costs the body nothing. Returns whether it was pressed.
+#[cfg(not(target_arch = "wasm32"))]
+fn tool_window_title_button(
+    ctx: &egui::Context,
+    win_id: egui::Id,
+    win_rect: egui::Rect,
+    body_top: f32,
+) -> bool {
+    if !body_top.is_finite() {
+        return false;
+    }
+    // The title bar is the strip from the window's top down to where the body
+    // begins (its fold ▾ left, its close ✕ right).
+    let title_h = (body_top - win_rect.top()).clamp(18.0, 40.0);
+    let side = title_h - 6.0;
+    // egui's close button owns the title bar's right edge; put ours just inside
+    // it, so the two never overlap.
+    let rect = egui::Rect::from_min_size(
+        egui::pos2(win_rect.right() - 2.0 * side - 10.0, win_rect.top() + (title_h - side) / 2.0),
+        egui::vec2(side, side),
+    );
+    let mut clicked = false;
+    egui::Area::new(win_id.with("title-btn"))
+        .fixed_pos(rect.min)
+        .order(egui::Order::Foreground)
+        .show(ctx, |ui| {
+            ui.set_min_size(rect.size());
+            clicked = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
+                .on_hover_text(
+                    "WINDOW — move this window into its own OS window, put it on another monitor",
+                )
+                .clicked();
+        });
+    clicked
+}
+
+/// See [`SdroxideApp::tool_window_egui`]: the id epoch that resets a tool
+/// window's remembered geometry when this window's bounding changes. Bump it
+/// whenever a tool window's default size or its body's height-filling changes.
+const TOOL_WINDOW_EPOCH: &str = "b1";
+
 /// The DETACH/DOCK chip a tool window wears at the top-right of its body. On the
 /// browser it is absent — there is no second window to move to.
+#[cfg(not(target_arch = "wasm32"))]
 fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
-    #[cfg(target_arch = "wasm32")]
     {
-        let _ = (ui, undocked);
-        false
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
+        // A glyph, not a word. The operator's note: *"the huge buttons for
+        // window and dock … there already is a lot of text in the screen, so if
+        // we can strip that down a bit with symbols and a hover that would be
+        // bliss."* The arrow points the way the click goes — right and out to a
+        // window of its own, left and back into the main one — so the direction
+        // reads without the hover, and the hover still names it in words.
+        let (icon, hover) = if undocked {
+            (crate::chrome::WindowIcon::In, "DOCK — return this window into the main window")
+        } else {
+            (
+                crate::chrome::WindowIcon::Out,
+                "WINDOW — move this window into its own OS window, to put it on another monitor",
+            )
+        };
+        // A **one-row** allocation, right-aligned — not `row_tail`. `row_tail`
+        // lays out `right_to_left(Align::Center)` over the whole available
+        // height, so once a window's area has settled it centres the chip and
+        // advances the cursor to the bottom, pushing every tool's body off the
+        // screen. The operator's trace was the proof: `after chip cursor_y=530`
+        // in a window whose body ends at 525. A row of the chip's own height is
+        // one the layout cannot fill vertically.
+        let size = egui::vec2(ui.available_width(), crate::chrome::chip_height(ui, None));
         let mut clicked = false;
-        crate::chrome::row_tail(ui, |ui| {
-            let (label, hover) = if undocked {
-                ("⇱ DOCK", "Return this window into the main window")
-            } else {
-                ("⇱ WINDOW", "Move this window into its own OS window — put it on another monitor")
-            };
-            clicked = crate::chrome::chip(ui, false, label).on_hover_text(hover).clicked();
+        ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            clicked = crate::chrome::chip_window_icon(ui, icon).on_hover_text(hover).clicked();
         });
         clicked
     }
@@ -349,6 +382,11 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
         M::Panadapter => ("panadapter", [960.0, 540.0]),
         M::Panel => ("panel", [520.0, 700.0]),
         M::Controls => ("controls", [1280.0, 640.0]),
+        M::AuxPanadapter => ("aux panadapter", [960.0, 540.0]),
+        // Wide enough for the mode sections in five columns — the whole reason
+        // it is a window and not the docked column, which cannot be this wide
+        // without squeezing the operating panel below it.
+        M::BandMenu => ("band & mode", [560.0, 760.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
@@ -607,6 +645,9 @@ impl eframe::App for SdroxideApp {
             self.remember_ui_zoom(&ctx);
         }
         self.drain_events(&ctx, now);
+        // The update check answers on its own thread; pick it up cheaply.
+        #[cfg(not(target_arch = "wasm32"))]
+        self.update.poll();
         self.poll_adif_import();
         self.poll_settings_import();
         self.refresh_band_conditions(now);
@@ -778,7 +819,9 @@ impl eframe::App for SdroxideApp {
                 self.panel_undock_notice_mode = None;
             }
         }
-        let notice = self.radio_notice.clone().or_else(|| {
+        // The engine's notice first, then another sdroxide on this machine.
+        let shown = self.radio_notice.clone().or_else(|| self.other_instance.clone());
+        let notice = shown.or_else(|| {
             (rx_only && !self.rx_only_nudge_dismissed).then(|| {
                 "This radio is receive-only — it has no transmitter. Hide the transmit \
                  controls and use the listening screen?"
@@ -819,7 +862,7 @@ impl eframe::App for SdroxideApp {
                                 }
                             } else {
                                 if ui.small_button("Dismiss").clicked() {
-                                    self.radio_notice = None;
+                                    self.dismiss_notice();
                                     if rx_only {
                                         self.rx_only_nudge_dismissed = true;
                                     }
@@ -853,6 +896,43 @@ impl eframe::App for SdroxideApp {
                                     self.radio_notice = None;
                                     self.rx_only_nudge_dismissed = true;
                                 }
+                            }
+                        });
+                    });
+                });
+        }
+        // **An update is available.** The fork's own GitHub Releases, so only a
+        // full release lands here — the nightly is a pre-release and asks
+        // nothing. Dismissed for the session; the check itself is the
+        // `check_for_updates` setting.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(tag) = self.update.latest.clone().filter(|_| !self.update_dismissed) {
+            let (wash, rule, mark, ink) = notice_banner_colors();
+            egui::Frame::new()
+                .fill(wash)
+                .stroke(egui::Stroke::new(1.0, rule))
+                .inner_margin(egui::Margin::symmetric(8, 5))
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new("⬆").size(15.0).color(mark));
+                        ui.label(
+                            RichText::new(format!(
+                                "SDR Oxide Brown {tag} is available — you are on {}.",
+                                sdroxide_version::VERSION
+                            ))
+                            .size(13.0)
+                            .color(ink),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("Dismiss").clicked() {
+                                self.update_dismissed = true;
+                            }
+                            if ui
+                                .button(RichText::new("Download").size(13.0))
+                                .on_hover_text("Opens the release page in your browser")
+                                .clicked()
+                            {
+                                crate::download::open_external(super::update::RELEASES_PAGE);
                             }
                         });
                     });
@@ -1715,6 +1795,108 @@ impl SdroxideApp {
         });
     }
 
+    /// SP1's toolbar: the header bar SDRuno's main-spectrum window carries.
+    ///
+    /// The frequency readout that used to float over the middle of the waterfall now
+    /// sits in a bar across the top with the mode and the signal level beside it; a
+    /// **DISP** chip opens the same layer menu the main window's SPEC chip does, so
+    /// the toggles SP1 keeps are the ones the whole program uses; and a **DOCK**
+    /// chip brings the window home without hunting for its close box.
+    ///
+    /// The readout stays display-only — a click or drag on the spectrum still tunes,
+    /// and the tuning strip stays in the controls window — so there is a single owner
+    /// for the frequency and the two windows cannot disagree.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn sp1_toolbar(&mut self, ui: &mut egui::Ui, module: sdroxide_types::DetachableModule) {
+        let area = ui.available_rect_before_wrap();
+        ui.allocate_ui(egui::vec2(area.width(), SP1_TOOLBAR_H), |ui| {
+            let bar = ui.max_rect();
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(10.0, 0.0);
+                ui.label(
+                    RichText::new(readout_text(self.state.rx_freq_hz()))
+                        .monospace()
+                        .size(21.0)
+                        .color(egui::Color32::from_rgb(255, 209, 66)),
+                );
+                ui.label(
+                    RichText::new(detached_status_line(
+                        self.state.rx[0].mode,
+                        self.meters.as_ref(),
+                    ))
+                    .size(12.0)
+                    .color(egui::Color32::LIGHT_GRAY),
+                );
+                crate::chrome::row_tail(ui, |ui| {
+                    self.layers_button(ui, "DISP", 0.0);
+                    if crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::In)
+                        .on_hover_text(
+                            "DOCK — return this spectrum into the main window, the same as \
+                         closing this one without hunting for its close box.",
+                        )
+                        .clicked()
+                    {
+                        self.ui_settings.set_detached(module, false);
+                        crate::app::persist::persist_ui_settings(&self.ui_settings);
+                    }
+                });
+            });
+            // A hairline under the bar, so it reads as a bar and not as a row of
+            // text floating over the picture.
+            ui.painter().hline(
+                egui::Rangef::new(bar.left(), bar.right()),
+                bar.bottom(),
+                egui::Stroke::new(1.0, crate::theme::LINE()),
+            );
+        });
+    }
+
+    /// One panadapter window's contents — SP1's or AUX SP's. The caller has
+    /// already put the right `self.view` in place (AUX swaps its own in around
+    /// this call), so the draw itself is shared.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn draw_detached_panadapter(
+        &mut self,
+        module: sdroxide_types::DetachableModule,
+        ctx: &egui::Context,
+        spec: &DetachedWindowSpec,
+        seed: Option<sdroxide_types::DetachedWindow>,
+        now: f64,
+        cmds: &mut Vec<Command>,
+    ) {
+        let live = self.frame.is_some() && now - self.last_spectrum_at < STREAM_STALE_S;
+        let wf_tuning = self.wf_tick(live, ctx.pixels_per_point());
+        let frame = self.frame.clone();
+        let inputs = self.panadapter_inputs(now);
+        let mut clicked_spot: Option<Spot> = None;
+        let outcome = detached_viewport(ctx, spec, seed, |ui| {
+            // The toolbar across the top, then the spectrum below it.
+            // `panel_below` is false: the operating panel is not under this
+            // window, so the band-plan strip may use the rest of the height.
+            self.sp1_toolbar(ui, module);
+            self.note_panadapter_width(ui);
+            let w = ui.available_width();
+            let h = ui.available_height();
+            self.draw_panadapter(
+                ui,
+                w,
+                h,
+                frame.as_ref(),
+                cmds,
+                &inputs,
+                &mut clicked_spot,
+                false,
+                now,
+                wf_tuning,
+            );
+        });
+        self.handle_detached_outcome(ctx, module, spec, outcome);
+        self.dispatch_commands(std::mem::take(cmds));
+        if let Some(spot) = clicked_spot {
+            self.prefill_from_spot(&spot);
+        }
+    }
+
     /// Draw one module into its **own OS window** (native only), from the
     /// focused radio's state.
     ///
@@ -1735,51 +1917,21 @@ impl SdroxideApp {
         let seed = self.ui_settings.detached_state(module).window;
         let mut cmds: Vec<Command> = Vec::new();
         match module {
+            // SP1 and AUX SP are the same window drawn twice: one spectrum and
+            // waterfall, its own toolbar, its own app-id, its own place on the
+            // desk. AUX is a second view of the same receiver, but not a mirror
+            // of it — the draw reads `self.view`, so AUX is drawn with its **own**
+            // view swapped in, and the two spectra can sit on different bands of
+            // zoom and different layer switches. (A `mem::swap` around the draw
+            // rather than a view parameter threaded through `draw_panadapter` and
+            // its callees; the operator's own complaint was that they mirrored.)
             M::Panadapter => {
-                // The waterfall clock advances here when the main window is not
-                // drawing the panadapter; when it is, the frame loop advanced it
-                // and this is not called. Exactly one of the two runs, and never
-                // both.
-                let live = self.frame.is_some() && now - self.last_spectrum_at < STREAM_STALE_S;
-                let wf_tuning = self.wf_tick(live, ctx.pixels_per_point());
-                let frame = self.frame.clone();
-                let inputs = self.panadapter_inputs(now);
-                let mut clicked_spot: Option<Spot> = None;
-                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    self.note_panadapter_width(ui);
-                    let w = ui.available_width();
-                    let h = ui.available_height();
-                    let area = ui.max_rect();
-                    // `panel_below` is false: the operating panel is not under
-                    // this window, so the band-plan strip may use the full
-                    // height.
-                    self.draw_panadapter(
-                        ui,
-                        w,
-                        h,
-                        frame.as_ref(),
-                        &mut cmds,
-                        &inputs,
-                        &mut clicked_spot,
-                        false,
-                        now,
-                        wf_tuning,
-                    );
-                    // A big, display-only dial readout across the top — with the
-                    // mode and signal level under it — so the picture can be
-                    // read from a second monitor without the main window.
-                    centred_detached_readout(
-                        ui,
-                        area,
-                        &readout_text(self.state.rx_freq_hz()),
-                        &detached_status_line(self.state.rx[0].mode, self.meters.as_ref()),
-                    );
-                });
-                self.handle_detached_outcome(ctx, module, &spec, outcome);
-                self.dispatch_commands(cmds);
-                if let Some(spot) = clicked_spot {
-                    self.prefill_from_spot(&spot);
-                }
+                self.draw_detached_panadapter(module, ctx, &spec, seed, now, &mut cmds)
+            }
+            M::AuxPanadapter => {
+                std::mem::swap(&mut self.view, &mut self.aux_view);
+                self.draw_detached_panadapter(module, ctx, &spec, seed, now, &mut cmds);
+                std::mem::swap(&mut self.view, &mut self.aux_view);
             }
             M::Panel => {
                 // Only reached for a mode that has a panel — the shell asks
@@ -1806,16 +1958,75 @@ impl SdroxideApp {
                         .fill(crate::theme::BG_DEEP())
                         .inner_margin(egui::Margin::symmetric(8, 6))
                         .show(ui, |ui| {
-                            // The strip on top, then the band/mode selector —
-                            // the operator's "controls and bands in one window",
-                            // SDRuno's RX control with the band pad beneath it.
+                            // The strip on top, then the band keypad beside the
+                            // band/mode selector — the operator's "controls and
+                            // bands in one window", SDRuno's RX control with the
+                            // keypad down its left side. Wide enough for the two
+                            // to sit side by side; narrower than that they stack,
+                            // because a band list squeezed into a column too thin
+                            // to draw its own pad is a worse way to reach every
+                            // band than the keypad is.
                             crate::chrome::angled_frame(ui, crate::theme::PINK(), |ui| {
                                 self.top_bar(ui, &mut cmds);
                             });
                             ui.separator();
+                            self.console_band_area(ui, &mut cmds);
+                        });
+                    crate::layout::set_tier(&ictx, prev);
+                });
+                self.handle_detached_outcome(ctx, module, &spec, outcome);
+                self.dispatch_commands(cmds);
+            }
+            M::BandMenu => {
+                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+                    let ictx = ui.ctx().clone();
+                    let prev = crate::layout::tier(&ictx);
+                    // Desktop-shaped whatever its height, like the console: the
+                    // window is a desktop surface, and the compact strips are
+                    // for a phone.
+                    crate::layout::set_tier(&ictx, crate::layout::Tier::Desktop);
+                    egui::Frame::new()
+                        .fill(crate::theme::BG_DEEP())
+                        .inner_margin(egui::Margin::symmetric(8, 6))
+                        .show(ui, |ui| {
+                            // A header with its own DOCK chip, like SP1's
+                            // toolbar: bring the selector home without hunting
+                            // for the window's close box.
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new("BAND & MODE")
+                                        .size(11.0)
+                                        .strong()
+                                        .color(crate::theme::CYAN()),
+                                );
+                                crate::chrome::row_tail(ui, |ui| {
+                                    if crate::chrome::chip_window_icon(
+                                        ui,
+                                        crate::chrome::WindowIcon::In,
+                                    )
+                                    .on_hover_text(
+                                        "DOCK — return the band and mode selector into the \
+                                             main window, the same as closing this one \
+                                             without hunting for its close box.",
+                                    )
+                                    .clicked()
+                                    {
+                                        self.ui_settings.set_detached(
+                                            sdroxide_types::DetachableModule::BandMenu,
+                                            false,
+                                        );
+                                        crate::app::persist::persist_ui_settings(&self.ui_settings);
+                                    }
+                                });
+                            });
+                            ui.separator();
+                            // The same body the docked column draws, so the
+                            // window and the dock cannot come apart — and at
+                            // this width `mode_chip_grid` lays the modes in five
+                            // columns, which the docked column never could.
                             egui::ScrollArea::vertical()
                                 .auto_shrink([false, false])
-                                .id_salt("controls-band-scroll")
+                                .id_salt("band-window-scroll")
                                 .show(ui, |ui| {
                                     self.band_menu_body(ui, &mut cmds);
                                 });
@@ -1920,10 +2131,34 @@ impl SdroxideApp {
         open: bool,
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> bool {
+        self.tool_window_sized(ctx, id, title, default_size, [0.0, 0.0], false, open, body)
+    }
+
+    /// As [`Self::tool_window`], with a floor on how small the docked window may
+    /// be dragged, and whether to open in the middle of the screen the first
+    /// time rather than in a corner.
+    ///
+    /// Both exist for the settings box and nothing else: its tabs are laid out
+    /// at fixed widths, so it becomes a column of clipped controls if it is
+    /// shrunk much; and at 900x760 a corner is under the top bar, which is where
+    /// the pinned [`egui::Window`] it used to be deliberately put it in the
+    /// middle instead. egui remembers the position either way, so this only
+    /// decides where a window lands the first time it is opened.
+    pub(in crate::app) fn tool_window_sized(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        default_size: [f32; 2],
+        min_size: [f32; 2],
+        centre_first: bool,
+        open: bool,
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
         if !open {
             return false;
         }
-        self.dispatch_tool_window(ctx, id, title, default_size, body)
+        self.dispatch_tool_window(ctx, id, title, default_size, min_size, centre_first, body)
     }
 
     /// The tool as an egui window in this viewport. Returns
@@ -1934,23 +2169,64 @@ impl SdroxideApp {
         id: &'static str,
         title: &str,
         default_size: [f32; 2],
+        min_size: [f32; 2],
+        centre_first: bool,
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> (bool, bool) {
         let mut win_open = true;
-        let mut detach = false;
-        let resp = egui::Window::new(title)
-            .id(crate::layout::salted_id(ctx, id))
+        let win_id = crate::layout::salted_id(ctx, id).with(TOOL_WINDOW_EPOCH);
+        #[cfg_attr(target_arch = "wasm32", allow(unused))]
+        let mut body_top = f32::NAN;
+        let mut w = egui::Window::new(title)
+            // The id carries an **epoch**, bumped when this window's bounding
+            // changes; egui remembers a window's size and eframe persists it, so
+            // the epoch discards a stale one.
+            .id(win_id)
             .open(&mut win_open)
             .frame(crate::chrome::window_frame())
             .resizable(true)
-            .default_width(crate::layout::window_w(ctx, default_size[0]))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                detach = tool_window_chip(ui, false);
-                body(self, ui);
-            });
+            .default_size(egui::vec2(
+                crate::layout::window_w(ctx, default_size[0]),
+                crate::layout::window_h(ctx, default_size[1]),
+            ))
+            // A cap so no remembered — or future — size can take the whole
+            // screen. The body sits at the top now (the ⇱ chip is a one-row
+            // allocation), so a large window is merely large, not broken; this
+            // just keeps it sane.
+            .max_size(ctx.content_rect().size() * 0.95);
+        if min_size[0] > 0.0 {
+            w = w
+                .min_width(crate::layout::window_w(ctx, min_size[0]))
+                .min_height(crate::layout::window_h(ctx, min_size[1]));
+        }
+        // First open only — egui remembers a window's position, so this decides
+        // where a window lands once and never again.
+        if centre_first {
+            let want = egui::vec2(
+                crate::layout::window_w(ctx, default_size[0]),
+                crate::layout::window_h(ctx, default_size[1]),
+            );
+            w = w.default_pos(ctx.content_rect().center() - want * 0.5);
+        }
+        let resp = w.show(ctx, |ui| {
+            crate::chrome::window_body_bg(ui);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                body_top = ui.min_rect().min.y;
+            }
+            body(self, ui);
+        });
+        // Only ever set on the native path below: the ⇱ chip rides the title
+        // bar, and the browser has no second window to send it to. Same shape
+        // as `body_top` above.
+        #[cfg_attr(target_arch = "wasm32", allow(unused))]
+        let mut detach = false;
         if let Some(r) = &resp {
             crate::chrome::paint_window_border(ctx, &r.response);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                detach = tool_window_title_button(ctx, win_id, r.response.rect, body_top);
+            }
         }
         (win_open, detach)
     }
@@ -1962,10 +2238,12 @@ impl SdroxideApp {
         id: &'static str,
         title: &str,
         default_size: [f32; 2],
+        min_size: [f32; 2],
+        centre_first: bool,
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> bool {
         // No second window in the browser: always the in-viewport window.
-        self.tool_window_egui(ctx, id, title, default_size, body).0
+        self.tool_window_egui(ctx, id, title, default_size, min_size, centre_first, body).0
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1975,13 +2253,16 @@ impl SdroxideApp {
         id: &'static str,
         title: &str,
         default_size: [f32; 2],
+        min_size: [f32; 2],
+        centre_first: bool,
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> bool {
         let st = self.tool_windows.get(id).copied().unwrap_or_default();
         if st.undocked {
             self.tool_window_os(ctx, id, title, default_size, st.window, body)
         } else {
-            let (open, detach) = self.tool_window_egui(ctx, id, title, default_size, body);
+            let (open, detach) =
+                self.tool_window_egui(ctx, id, title, default_size, min_size, centre_first, body);
             if detach {
                 self.tool_windows.insert(id, ToolWindowState { undocked: true, window: st.window });
             }
@@ -2003,8 +2284,17 @@ impl SdroxideApp {
         let spec = tool_spec(id, title, default_size);
         let mut dock = false;
         let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-            dock = tool_window_chip(ui, true);
-            body(self, ui);
+            // A tool's own window gets the panel background the in-window one
+            // has from its `egui::Window` frame — the module windows paint their
+            // own, a tool body assumes one.
+            egui::Frame::new()
+                .fill(crate::theme::BG_DEEP())
+                .inner_margin(egui::Margin::symmetric(10, 8))
+                .show(ui, |ui| {
+                    ui.set_min_size(ui.available_size());
+                    dock = tool_window_chip(ui, true);
+                    body(self, ui);
+                });
         });
         // Settle-persist the geometry as the modules do, and treat a close as
         // *closed*, not docked: the operator shut the tool, so it should not
@@ -2030,7 +2320,7 @@ impl SdroxideApp {
     /// Test is marked in flight the moment it goes out. Split out so an
     /// undocked window's own commands are dispatched exactly as the main
     /// window's — there is one place that decides, not two that can drift.
-    fn dispatch_commands(&mut self, cmds: Vec<Command>) {
+    pub(in crate::app) fn dispatch_commands(&mut self, cmds: Vec<Command>) {
         // Any stop control — STOP QSO, STOP TX, a bound Abort TX — disarms auto
         // mode. An unattended run must never be left sequencing after the
         // operator has told the radio to stop, whatever route they used.
@@ -2048,17 +2338,9 @@ impl SdroxideApp {
                 self.login_tests_pending.insert(*t);
                 self.login_tests.remove(t);
             }
+            self.dial_hold.note(&c);
             self.ctrl.send(c);
         }
-    }
-
-    /// Undocked on the focused radio. Native only: the browser keeps the
-    /// panadapter in its one window, and off a non-focused radio: there is one
-    /// undocked window per module for the station, and it shows the focused
-    /// radio's.
-    #[cfg(not(target_arch = "wasm32"))]
-    fn panadapter_detached(&self) -> bool {
-        self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panadapter) && self.focused
     }
 
     /// Whether the focused radio should draw its operating panel into its own
@@ -2104,9 +2386,24 @@ impl SdroxideApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self.panadapter_detached()
-                && (crate::layout::panadapter_waterfall_only(ctx) || self.view.panadapter_visible())
+            self.module_window_wanted(ctx, sdroxide_types::DetachableModule::Panadapter)
         }
+    }
+
+    /// The same rule for any spectrum module: undocked on the focused radio
+    /// **and** there is a panadapter to show (its layers are on). One predicate
+    /// for both SP1 and AUX SP, so the two cannot disagree about when a spectrum
+    /// window exists — a second one that appeared without its layers would be an
+    /// empty window on a monitor.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn module_window_wanted(
+        &self,
+        ctx: &egui::Context,
+        module: sdroxide_types::DetachableModule,
+    ) -> bool {
+        self.ui_settings.is_detached(module)
+            && self.focused
+            && (crate::layout::panadapter_waterfall_only(ctx) || self.view.panadapter_visible())
     }
 
     /// The operating-panel window should exist this frame: undocked on the
@@ -2116,6 +2413,16 @@ impl SdroxideApp {
     #[cfg(not(target_arch = "wasm32"))]
     fn panel_window_wanted(&self, mode: Mode) -> bool {
         self.panel_detached(mode)
+    }
+
+    /// The band/mode selector's window should exist this frame: undocked on the
+    /// focused radio. Unlike the spectrum modules it needs nothing else to be
+    /// present — it is a selector, always meaningful, and the operator opened it
+    /// deliberately. Every mode has a band and a mode, so there is never an empty
+    /// window to explain.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn band_menu_detached(&self) -> bool {
+        self.ui_settings.is_detached(sdroxide_types::DetachableModule::BandMenu) && self.focused
     }
 
     /// Which of this radio's modules the shell should emit as their own windows
@@ -2137,6 +2444,9 @@ impl SdroxideApp {
         want[sdroxide_types::DetachableModule::Panel.index()] =
             self.panel_window_wanted(self.state.rx[0].mode);
         want[sdroxide_types::DetachableModule::Controls.index()] = self.controls_detached();
+        want[sdroxide_types::DetachableModule::AuxPanadapter.index()] =
+            self.module_window_wanted(ctx, sdroxide_types::DetachableModule::AuxPanadapter);
+        want[sdroxide_types::DetachableModule::BandMenu.index()] = self.band_menu_detached();
         want
     }
 
@@ -2297,7 +2607,12 @@ impl SdroxideApp {
                 // throwing it away on a QSY would blank the wideband strip and
                 // re-read every image store for nothing.
                 RadioEvent::CapabilitiesUpdated(c) => self.caps = Some(c),
-                RadioEvent::State(s) => {
+                RadioEvent::State(mut s) => {
+                    // The dial and centre this screen has just sent outrank a
+                    // snapshot that has not caught up with them yet — or CTR
+                    // recentres on the old dial for a frame and the waterfall
+                    // shakes. See `dial_hold`.
+                    self.dial_hold.apply(&mut s, now);
                     let prev_vfo = self.state.active_freq_hz();
                     let prev_rate = self.state.sample_rate;
                     let prev_mode = self.state.rx[0].mode;
@@ -3453,6 +3768,7 @@ impl SdroxideApp {
     /// ↑/↓ ±1 kHz, PgUp/PgDn ±10 kHz, M mute, N noise blanker, F fit span.
     fn control_inputs(&mut self, ctx: &egui::Context, now: f64, cmds: &mut Vec<Command>) {
         let mut speech_acts: Vec<sdroxide_types::Action> = Vec::new();
+        let mut open_workspaces = false;
         // Destructured rather than borrowed field-by-field: the runtime needs
         // `state` and the window flags mutably at the same time, and they are
         // disjoint parts of `self`.
@@ -3491,6 +3807,7 @@ impl SdroxideApp {
             spots: show_spots,
             memories: show_memories,
             voice: show_voice,
+            workspaces: &mut open_workspaces,
             speech: &mut speech_acts,
             rig_squelch,
             zoom_out,
@@ -3499,6 +3816,12 @@ impl SdroxideApp {
         #[cfg(not(target_arch = "wasm32"))]
         input.poll_midi(ctx, state, &mut sink, cmds);
         drop(sink);
+        if open_workspaces {
+            // Open the main Settings dialog on the UI page, which is where the
+            // saved window arrangements live.
+            self.show_settings = true;
+            self.settings_tab = crate::app::SettingsTab::Ui;
+        }
         for act in speech_acts {
             self.apply_speech_action(act, now);
         }
@@ -3565,6 +3888,10 @@ impl SdroxideApp {
             spots: show_spots,
             memories: show_memories,
             voice: show_voice,
+            // Releases only: nothing is pressed on this path, so no action can
+            // ask for the workspaces. The sink's field is still filled so the
+            // two constructions cannot drift apart.
+            workspaces: &mut false,
             speech: &mut Vec::new(),
             rig_squelch,
             // Releasing held keys never pans or zooms, so the passband will do.
@@ -3720,6 +4047,20 @@ mod tests {
         assert_eq!(super::readout_text(27_265_000.0), "27.265 MHz");
         assert_eq!(super::readout_text(144_800_000.0), "144.8 MHz");
         assert_eq!(super::readout_text(10_120_600.0), "10.1206 MHz");
+    }
+
+    /// SP1's toolbar is a header, not a share of the picture: enough room for
+    /// the 21 pt readout, and small enough against the window it opens at that
+    /// the waterfall still gets the window. This is the one arithmetic the bar
+    /// has — a header that grows with the window is a header that eats it.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_sp1_toolbar_is_a_header_and_not_a_share_of_the_picture() {
+        let h = super::SP1_TOOLBAR_H;
+        assert!(h >= 28.0, "{h} pt will not hold the readout it carries");
+        let window =
+            super::detached_spec(sdroxide_types::DetachableModule::Panadapter).default_size[1];
+        assert!(h < window * 0.1, "a {h} pt bar is a tenth of the {window} pt window it opens at");
     }
 
     /// The detached window opens at the operator's last geometry, or a wide

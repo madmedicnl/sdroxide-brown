@@ -26,6 +26,7 @@ pub(in crate::app) mod bands;
 pub(in crate::app) mod contest;
 #[cfg(all(not(target_arch = "wasm32"), target_os = "linux"))]
 pub(in crate::app) mod cw_key;
+pub(in crate::app) mod dial_hold;
 pub(in crate::app) mod drm;
 pub(in crate::app) mod enigma;
 pub(in crate::app) mod frame;
@@ -57,6 +58,9 @@ pub(in crate::app) mod speech;
 pub(in crate::app) mod spots;
 pub(in crate::app) mod swl_log;
 pub(in crate::app) mod top_bar;
+/// The update check — native only (a browser has no updater to point at).
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) mod update;
 pub(crate) mod util;
 pub(in crate::app) mod windows;
 pub(in crate::app) mod winlink;
@@ -174,6 +178,14 @@ pub struct SdroxideApp {
     /// the whole struct goes back on any change, the way the skimmer's does.
     scanner: sdroxide_types::ScannerConfig,
     view: ViewState,
+    /// The **AUX SP** window's own view — its zoom, its pan, its layers. The
+    /// panadapter draw reads `view`, so the AUX window is drawn with this
+    /// **swapped in** around it (see `show_detached_module`): that keeps two
+    /// spectra from mirroring each other without threading a view parameter
+    /// through the whole draw. Session-only for now — the main view's zoom is
+    /// persisted, this one is not yet.
+    #[cfg(not(target_arch = "wasm32"))]
+    aux_view: ViewState,
     peaks: spectrum_view::PeakHold,
     /// UI-side smoothing for the spectrum *line* (waterfall stays un-averaged).
     spec_smooth: spectrum_view::SpectrumSmooth,
@@ -199,6 +211,11 @@ pub struct SdroxideApp {
     /// Persistent, non-fatal operator notice (e.g. radio audio input
     /// unavailable / mono card selected for IQ). Shown as a warning banner.
     radio_notice: Option<String>,
+    /// Another sdroxide found running on this machine at start-up — see
+    /// [`SdroxideApp::warn_other_instance`]. Kept apart from `radio_notice`
+    /// because the engine clears that one with its own notices, and this is
+    /// not the engine's to clear: it stays until the operator dismisses it.
+    other_instance: Option<String>,
     /// The mode for which the "your undocked panel has nowhere to go" notice has
     /// already been raised. Set once per mode so the banner is not re-raised
     /// after the operator dismisses it; cleared when the mode has a panel again.
@@ -458,6 +475,9 @@ pub struct SdroxideApp {
     /// Result of the last PlutoSDR "Test connection".
     pluto_test_result: Option<TestOutcome>,
     seen_first_state: bool,
+    /// The dial and the centre this screen has just sent, held against
+    /// engine snapshots that have not caught up with them. See [`dial_hold`].
+    dial_hold: dial_hold::DialHold,
     show_memories: bool,
     /// The RDS window. Opened from the RDS chip in the receive menu, which only
     /// appears on WFM.
@@ -535,6 +555,20 @@ pub struct SdroxideApp {
     /// When the band/mode, FFT and skimmer popups opened (egui time), for their
     /// auto-fade.
     mode_popup_since: Option<f64>,
+    /// Saved window arrangements — SDRuno's **workspaces**. A list of its own
+    /// rather than a `UiSettings` field, because `UiSettings` is `Copy`; see
+    /// [`sdroxide_types::Workspace`]. Loaded from the shared `workspaces.json`.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    workspaces: Vec<sdroxide_types::Workspace>,
+    /// What is being typed into the next **SAVE CURRENT**.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    workspace_name: String,
+    /// The startup update check, and whether its banner has been dismissed this
+    /// session. Native only; `None` while the check is off or still in flight.
+    #[cfg(not(target_arch = "wasm32"))]
+    update: update::UpdateCheck,
+    #[cfg(not(target_arch = "wasm32"))]
+    update_dismissed: bool,
     /// Which half of the band/mode menu was last shown (listen or operate).
     band_menu_tab: top_bar::BandMenuTab,
     /// Which slice of the spectrum the band menu's chips are narrowed to (HF,
@@ -617,6 +651,11 @@ pub struct SdroxideApp {
     /// it, so widening the window again brings it back.
     band_docked: bool,
     band_dock_visible: bool,
+    /// The console's band keypad: which of the two it is in, and the frequency
+    /// typed so far. Session UI state — see [`top_bar::BandKeypad`] — and
+    /// console-only, because the keypad is the console's RX-control surface.
+    #[cfg(not(target_arch = "wasm32"))]
+    band_keypad: top_bar::BandKeypad,
     /// How wide the docked column may be this frame, or `None` where it cannot
     /// dock — see [`top_bar::band_dock_room`]. Settled at the top of the frame
     /// from this app's own column, before the top bar draws the chip that
@@ -1594,12 +1633,15 @@ impl SdroxideApp {
             mem_folders: Vec::new(),
             scanner: sdroxide_types::ScannerConfig::default(),
             view,
+            #[cfg(not(target_arch = "wasm32"))]
+            aux_view: ViewState::default(),
             peaks: spectrum_view::PeakHold::default(),
             spec_smooth: spectrum_view::SpectrumSmooth::default(),
             error: None,
             retry_at: None,
             retry_backoff: RETRY_MIN_S,
             radio_notice: None,
+            other_instance: None,
             #[cfg(not(target_arch = "wasm32"))]
             panel_undock_notice_mode: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -1695,6 +1737,7 @@ impl SdroxideApp {
             pluto_devices: Vec::new(),
             pluto_test_result: None,
             seen_first_state: false,
+            dial_hold: dial_hold::DialHold::default(),
             show_memories: false,
             show_rds: false,
             show_drm: false,
@@ -1725,6 +1768,19 @@ impl SdroxideApp {
             show_voice: false,
             voice_name_edit: None,
             mode_popup_since: None,
+            workspaces: crate::app::persist::load_workspaces(),
+            workspace_name: String::new(),
+            // Started here only where the operator has asked for it. Every
+            // radio tab asks on its own startup; a few requests an hour is
+            // nothing against the API's limit.
+            #[cfg(not(target_arch = "wasm32"))]
+            update: if ui_settings.check_for_updates {
+                update::UpdateCheck::start()
+            } else {
+                update::UpdateCheck::default()
+            },
+            #[cfg(not(target_arch = "wasm32"))]
+            update_dismissed: false,
             band_menu_tab: top_bar::BandMenuTab::Operate,
             band_filter: top_bar::BandFilter::default(),
             fft_popup_since: None,
@@ -1746,6 +1802,8 @@ impl SdroxideApp {
             rpt_tone_popup_since: None,
             band_docked: false,
             band_dock_visible: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            band_keypad: Default::default(),
             band_dock_room: None,
             // Corrected on the first frame, once the viewport size is known.
             tier: crate::layout::Tier::Desktop,
@@ -2002,6 +2060,59 @@ impl SdroxideApp {
             radio_tab_requests: Vec::new(),
             radio_name_edit: None,
         }
+    }
+
+    /// This screen's display preferences, read-only — for the radio strip, which
+    /// is drawn from `&MultiApp` and so reads the arrangement rather than
+    /// borrowing the app to change it. Native-only in use (the browser never
+    /// draws the chip); kept on one target so the accessors beside it are too.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn ui_settings_for_windows(&self) -> sdroxide_types::UiSettings {
+        self.ui_settings
+    }
+
+    /// Put one module in or out of its own window, and remember it. The one
+    /// place the arrangement is written from, so the strip's **WINDOWS** menu and
+    /// a window's own **DOCK** chip cannot drift in whether they persist.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn set_module_detached(
+        &mut self,
+        module: sdroxide_types::DetachableModule,
+        on: bool,
+    ) {
+        self.ui_settings.set_detached(module, on);
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
+    }
+
+    /// Bring every module window home — the strip's **DOCK ALL WINDOWS** and the
+    /// Settings → UI button, one write.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn dock_all_windows(&mut self) {
+        self.set_all_detached(false);
+    }
+
+    /// Put **every** module window out at once — the counterpart to
+    /// [`Self::dock_all_windows`]. The arrangement the undocked mode was built
+    /// for: the main window left as the spectrum and the decoders, with SP1, the
+    /// operating panel and the RX control each on a display of their own.
+    ///
+    /// A module that has nothing to show still gets no window — the shell asks
+    /// each one whether it wants a window this frame (a voice mode has no
+    /// operating panel) — so this sets the *preference*, and the windows that
+    /// can exist do.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn undock_all_windows(&mut self) {
+        self.set_all_detached(true);
+    }
+
+    /// The one place "all of them" is written, so the two buttons cannot drift
+    /// in what they persist.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn set_all_detached(&mut self, on: bool) {
+        for m in sdroxide_types::DetachableModule::ALL {
+            self.ui_settings.set_detached(m, on);
+        }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
 
     /// Set the focus flag without side effects — used while a multi-radio
@@ -2436,6 +2547,20 @@ impl SdroxideApp {
         self.radio_notice = Some(text);
     }
 
+    /// Warn that another sdroxide on this machine may be reading the same
+    /// radio — the warning stays on the banner until dismissed.
+    pub(crate) fn warn_other_instance(&mut self, text: String) {
+        self.other_instance = Some(text);
+    }
+
+    /// The banner's Dismiss: one banner shows at a time, so one press takes
+    /// the one on screen — the engine's notice first, then this warning.
+    pub(in crate::app) fn dismiss_notice(&mut self) {
+        if self.radio_notice.take().is_none() {
+            self.other_instance = None;
+        }
+    }
+
     /// Whether transmit controls are hidden for the radio on screen.
     ///
     /// Three sources, in the order they override: `--swl` for the run, the
@@ -2662,6 +2787,119 @@ mod tests {
         }
     }
 
+    /// A controller whose event queue the test keeps a handle on, so engine
+    /// snapshots can be fed in after the app has been built over it.
+    struct SharedController(
+        std::rc::Rc<std::cell::RefCell<std::collections::VecDeque<RadioEvent>>>,
+    );
+
+    impl RadioController for SharedController {
+        fn send(&mut self, _cmd: Command) {}
+        fn poll_event(&mut self) -> Option<RadioEvent> {
+            self.0.borrow_mut().pop_front()
+        }
+    }
+
+    /// Kevin's report: with CTR lit, stepping the dial with the arrow keys made
+    /// the waterfall jump, flicker and shake until the keys were let go — and
+    /// not at all with CTR off.
+    ///
+    /// A key writes the new dial into the state at once and sends `SetVfo`;
+    /// CTR then recentres and sends `SetCenter`. The engine's next snapshot is
+    /// often its answer to an *earlier* command, and adopting it as it stood
+    /// put the old dial and the old centre back, so CTR recentred on the old
+    /// dial and moved the front end back, then forward again on the next
+    /// snapshot. A late snapshot must not pull either value back.
+    #[test]
+    fn a_late_snapshot_does_not_pull_the_dial_or_the_centre_back() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-dial-hold-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let events = std::rc::Rc::new(std::cell::RefCell::new(std::collections::VecDeque::new()));
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(
+            &ctx,
+            None,
+            None,
+            Box::new(SharedController(events.clone())),
+            0,
+            true,
+        );
+        app.state.active_vfo = sdroxide_types::Vfo::A;
+        let (dial, centre) = (7_100_000.0, 7_000_000.0);
+        let mut engine = app.state.clone();
+        (engine.vfo_a_hz, engine.center_hz) = (dial, centre);
+
+        // One step right: the optimistic echo and the two commands, as the
+        // key binding and CTR leave them.
+        (app.state.vfo_a_hz, app.state.center_hz) = (dial + 100.0, centre + 100.0);
+        app.dispatch_commands(vec![
+            Command::SetVfo { vfo: sdroxide_types::Vfo::A, hz: dial + 100.0 },
+            Command::SetCenter(centre + 100.0),
+        ]);
+
+        // The engine's answer to the command before.
+        events.borrow_mut().push_back(RadioEvent::State(engine.clone()));
+        app.drain_events(&ctx, 1.0);
+        assert_eq!(app.state.vfo_a_hz, dial + 100.0, "a late snapshot pulled the dial back");
+        assert_eq!(app.state.center_hz, centre + 100.0, "a late snapshot pulled the centre back");
+
+        // Its answer to this one: adopted, and from here the engine's word stands.
+        (engine.vfo_a_hz, engine.center_hz) = (dial + 100.0, centre + 100.0);
+        events.borrow_mut().push_back(RadioEvent::State(engine.clone()));
+        app.drain_events(&ctx, 1.1);
+        assert_eq!((app.state.vfo_a_hz, app.state.center_hz), (dial + 100.0, centre + 100.0));
+    }
+
+    /// JTTY's panel offers the FREQ picker, CLEAR RX and SAVE from the start —
+    /// before anything has been heard, since FREQ is how an operator gets onto
+    /// a JTTY frequency at all.
+    #[test]
+    fn the_jtty_panel_has_freq_clear_and_save() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-jtty-panel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let ctx = egui::Context::default();
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.state.rx[0].mode = sdroxide_types::Mode::Jtty;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1280.0, 800.0),
+            )),
+            ..Default::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            let mut cmds = Vec::new();
+            app.jtty_panel(ui, &mut cmds, 300.0);
+        });
+        let mut texts = Vec::new();
+        fn walk(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        for c in &out.shapes {
+            walk(&c.shape, &mut texts);
+        }
+        out.drop_without_applying_deltas();
+        for want in ["⇵", "CLEAR RX", "SAVE"] {
+            assert!(
+                texts.iter().any(|t| t.contains(want)),
+                "no {want:?} in the JTTY panel: {texts:?}"
+            );
+        }
+    }
+
     /// Drive one whole app frame off-screen at a phone size, to catch any
     /// panic in rendering or layout at that width.
     ///
@@ -2705,6 +2943,69 @@ mod tests {
         .drop_without_applying_deltas();
     }
 
+    /// The console's band area never paints past its own window, at any width.
+    ///
+    /// The operator's report: *"the buttons from the band menu run off screen"*.
+    /// The menu sits beside the keypad in a `horizontal_top`, and a child of a
+    /// horizontal layout is offered the **whole row's** width — so the menu's
+    /// wrapped rows never wrapped (`horizontal_wrapped` wraps at
+    /// `available_width`, which was the full row) and the chips ran off the
+    /// edge. Both the keypad and the menu are now given an allocated rect, which
+    /// is a width the rows can see. Before that, this sweep read the menu out to
+    /// x≈1538 in a 951 pt window.
+    ///
+    /// Ink, not geometry: a transparent rect is not a chip an operator can see
+    /// run off the screen, and counting them reports faults that are not there.
+    #[test]
+    fn the_console_band_area_stays_inside_its_window() {
+        use crate::multi::frame_test_lock;
+        let _guard = frame_test_lock();
+        let dir =
+            std::env::temp_dir().join(format!("sdroxide-console-band-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        fn walk(s: &egui::Shape, out: &mut Vec<(egui::Rect, bool)>) {
+            match s {
+                egui::Shape::Rect(r) => {
+                    out.push((r.rect, r.fill.is_opaque() || r.stroke.width > 0.0));
+                }
+                egui::Shape::Path(q) => out.push((egui::Rect::from_points(&q.points), true)),
+                egui::Shape::Vec(v) => {
+                    for s in v {
+                        walk(s, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        for w in [360.0_f32, 480.0, 600.0, 720.0, 951.0, 1280.0, 1920.0] {
+            let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+            let ctx = egui::Context::default();
+            let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(w, 900.0),
+                )),
+                ..Default::default()
+            };
+            let mut cmds: Vec<Command> = Vec::new();
+            let full = ctx.run_ui(input, |ui| app.console_band_area(ui, &mut cmds));
+            let mut rects = Vec::new();
+            for cs in &full.shapes {
+                walk(&cs.shape, &mut rects);
+            }
+            let worst =
+                rects.iter().filter(|(_, ink)| *ink).fold(0.0_f32, |m, (r, _)| m.max(r.max.x));
+            assert!(
+                worst <= w + 1.0,
+                "the console's band area paints to x={worst:.0} in a {w:.0} pt window"
+            );
+            full.drop_without_applying_deltas();
+        }
+    }
+
     /// Drive one desktop frame with the band dock requested, and hand back its
     /// shape rectangles — (rect, drawn) where drawn means an opaque fill or a
     /// stroke, i.e. ink an operator can see — plus the dock column
@@ -2731,10 +3032,7 @@ mod tests {
         // layout: the panadapter out of the column, the panel taking it.
         app.ui_settings.set_detached(sdroxide_types::DetachableModule::Panadapter, detached);
         let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(w, 1080.0),
-            )),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, 1080.0))),
             ..Default::default()
         };
         let full = ctx.run_ui(input, |ui| {
@@ -2778,12 +3076,7 @@ mod tests {
         let want = std::env::var("MODE").ok();
         let mode = want
             .as_deref()
-            .and_then(|w| {
-                sdroxide_types::Mode::ALL
-                    .iter()
-                    .find(|m| format!("{m:?}") == w)
-                    .copied()
-            })
+            .and_then(|w| sdroxide_types::Mode::ALL.iter().find(|m| format!("{m:?}") == w).copied())
             .unwrap_or(sdroxide_types::Mode::Ft8);
         let (mut rows, dock, dock_room) = panel_edge_frame(mode, w, false);
         rows.sort_by(|a, b| b.0.max.x.partial_cmp(&a.0.max.x).unwrap_or(std::cmp::Ordering::Equal));
@@ -2797,7 +3090,10 @@ mod tests {
         for (r, ink) in rows.iter().take(10) {
             let past_window = r.max.x > w + 1.0 || r.min.x < -1.0;
             let crosses_dock = dock.is_some_and(|d| {
-                r.min.y < d.max.y && r.max.y > d.min.y && r.max.x > d.min.x + 0.5 && r.min.x < d.min.x - 0.5
+                r.min.y < d.max.y
+                    && r.max.y > d.min.y
+                    && r.max.x > d.min.x + 0.5
+                    && r.min.x < d.min.x - 0.5
             });
             let mark = if past_window {
                 "   <-- PAST THE WINDOW"
@@ -2997,6 +3293,59 @@ mod tests {
         assert!(app.tool_windows.get("scanner").is_some_and(|s| s.undocked));
     }
 
+    /// Another sdroxide on the same machine is the cause of a broken-up stream
+    /// that nothing on screen used to name. The warning is drawn on the banner,
+    /// survives the engine clearing its own notice (which it does with
+    /// `Notice(None)`), and goes when the operator dismisses it.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn another_instance_warning_stays_on_the_banner_until_dismissed() {
+        fn texts(shapes: &[egui::epaint::ClippedShape]) -> String {
+            fn walk(s: &egui::Shape, out: &mut String) {
+                match s {
+                    egui::Shape::Text(t) => {
+                        out.push_str(t.galley.text());
+                        out.push('\n');
+                    }
+                    egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                    _ => {}
+                }
+            }
+            let mut out = String::new();
+            shapes.iter().for_each(|c| walk(&c.shape, &mut out));
+            out
+        }
+        let dir = std::env::temp_dir().join(format!("sdroxide-otherinst-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        let frame = |app: &mut SdroxideApp| {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1280.0, 800.0),
+                )),
+                ..Default::default()
+            };
+            texts(&ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest())).shapes)
+        };
+        app.warn_other_instance("an sdroxide server is already running — PID 2488".into());
+        assert!(frame(&mut app).contains("PID 2488"), "the warning is drawn");
+        // What `RadioEvent::Notice(None)` does: the engine's own notice gone.
+        app.radio_notice = None;
+        assert!(frame(&mut app).contains("PID 2488"), "the engine does not clear it");
+        // An engine notice shows first; dismissing it brings the warning back.
+        app.show_notice("engine says something".into());
+        assert!(frame(&mut app).contains("engine says something"));
+        app.dismiss_notice();
+        assert!(frame(&mut app).contains("PID 2488"), "one press takes the engine's notice");
+        app.dismiss_notice();
+        assert!(!frame(&mut app).contains("PID 2488"), "dismissed, it stays gone");
+    }
+
     /// Reproduce Kevin's phone crash report (discussion #9) at the geometry
     /// Chrome Android gave: a 360 pt viewport, which crashed.
     #[test]
@@ -3048,6 +3397,79 @@ mod tests {
         assert!(
             app.dab_scan.is_none(),
             "the scan still holds a block after {ticks} ticks ({t:.0} s) — it never ends"
+        );
+    }
+
+    /// The settings box opens in the middle of the screen, not tucked into the
+    /// corner where the top bar covers it.
+    ///
+    /// It used to be a pinned `egui::Window` that put itself in the middle, and
+    /// that `default_pos` was lost when it became a tool window — the very next
+    /// build drew it at `x 15.4..916.6 y 15.4..776.6` in a 1920x1080 window, so
+    /// its whole tab bar sat under the 187 pt top bar. The test says where the
+    /// body lands rather than only that it does not panic, because a box drawn
+    /// in the wrong place still draws.
+    #[test]
+    fn the_settings_box_opens_below_the_top_bar() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-setbox-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.show_settings = true;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1920.0, 1080.0),
+            )),
+            ..Default::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest());
+        });
+        // The window's own frame is the largest inked rect near its 900x760
+        // default, so take the widest that fits rather than guessing at a shape
+        // type — a rounded frame is a Path, not a Rect.
+        let win = out
+            .shapes
+            .iter()
+            // Intersected with the clip rect: a shape clipped against the
+            // viewport still reports its full *unclipped* bounds, and one
+            // hanging off the top of the screen then reads as a 1041 pt tall
+            // rect that happens to be near the window's width. This is the same
+            // trap the page-overflow probe in `multi.rs` records — measure the
+            // ink, not the geometry.
+            .map(|cs| cs.shape.visual_bounding_rect().intersect(cs.clip_rect))
+            .filter(|b| {
+                b.is_finite()
+                    && !b.is_negative()
+                    && b.width() > 700.0
+                    && b.width() < 1100.0
+                    && b.height() > 500.0
+            })
+            .fold(None::<egui::Rect>, |acc: Option<egui::Rect>, b| {
+                Some(match acc {
+                    Some(a) if a.width() * a.height() >= b.width() * b.height() => a,
+                    _ => b,
+                })
+            })
+            .expect("the settings box should have painted something its own size");
+        // Handed back before the assertions, so a failure here reports its own
+        // message instead of aborting inside epaint's dropped-texture check.
+        out.drop_without_applying_deltas();
+        assert!(
+            win.min.y > 150.0,
+            "the settings box opened at y {:.0}, under the top bar: {:?}",
+            win.min.y,
+            win,
+        );
+        assert!(
+            win.max.x <= 1920.0 && win.max.y <= 1080.0,
+            "the settings box does not fit the screen: {:?}",
+            win,
         );
     }
 }

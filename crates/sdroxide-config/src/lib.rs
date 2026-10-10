@@ -1686,6 +1686,17 @@ pub struct Profile {
 /// The named profiles defined on this station. Station scope, like the band
 /// stacks: a profile is a way of working the station, not a thing a single
 /// radio owns.
+/// Saved window arrangements — SDRuno's workspaces. A list of independent
+/// records, so a workspace this build cannot read costs only itself and not the
+/// rest (see [`load_json_list`]).
+pub fn load_workspaces() -> Vec<sdroxide_types::Workspace> {
+    load_json_list("workspaces.json")
+}
+
+pub fn save_workspaces(workspaces: &Vec<sdroxide_types::Workspace>) -> Result<(), ConfigError> {
+    save_json("workspaces.json", workspaces)
+}
+
 pub fn load_profiles() -> Vec<Profile> {
     load_json_list("profiles.json")
 }
@@ -2439,6 +2450,40 @@ pub fn broadcast_schedule_status() -> (String, bool) {
     let season = sdroxide_types::broadcast::season_file(now_unix());
     let cached = broadcast_cache_path(&season).map(|p| p.exists()).unwrap_or(false);
     (season, cached)
+}
+
+/// The fork's **latest full release**, from the GitHub Releases API.
+///
+/// `/releases/latest` is deliberately the endpoint rather than `/releases`:
+/// GitHub answers it with the newest release that is **not** a draft and **not**
+/// a pre-release, so the nightly tag (a pre-release) can never be offered as an
+/// update. Blocking, so the caller puts it on a worker thread.
+pub const RELEASES_LATEST_URL: &str =
+    "https://api.github.com/repos/madmedicnl/sdroxide-brown/releases/latest";
+
+/// The tag of the latest full release, e.g. `v2.0.3_brown`, or an error.
+pub fn latest_release_tag() -> Result<String, String> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(std::time::Duration::from_secs(10)))
+        .timeout_global(Some(std::time::Duration::from_secs(20)))
+        .user_agent(concat!("sdroxide/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .into();
+    let mut resp = agent
+        .get(RELEASES_LATEST_URL)
+        .header("Accept", "application/vnd.github+json")
+        .call()
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    let bytes =
+        resp.body_mut().with_config().limit(64 * 1024).read_to_vec().map_err(|e| e.to_string())?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    json.get("tag_name")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| "the release has no tag_name".to_string())
 }
 
 /// Download the current season's schedule and cache it.

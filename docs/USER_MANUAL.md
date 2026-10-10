@@ -412,17 +412,17 @@ The **OPERATE** tab's rows:
   channel the band opens on, and the `CH nn` readout on the panadapter; it does
   **not** move the band's edges, so switching never changes what receives or
   transmits. The same choice is on the General tab ([6.1](#61-general-station-audio-and-remote-access)).
-- **PRIMARY MODES:** `AM NFM USB LSB` — the four a CB or short-wave operator
-  reaches for, on their own row above the full list so they are one click rather
-  than a hunt through the digital modes. `FM` here is **NFM** (narrow); the
-  broadcast band's own button comes up **WFM** (see below).
-- **MODE:** `LSB USB CW AM SAM C-QUAM NFM WFM DRM HD DIGU DIGL DSB ISB SPEC`, and
-  a **DIGITAL ▾** dropdown. The digital modes sit behind that one button rather
-  than across the face — three dozen chips was clutter, and a mode is picked
-  once, not scanned. It lists `FT8 FT4 FT2 JT65 JT9 FST4 MSK144 FSK441 Q65
-  UVPACKET JTTY JS8 WSPR PSK RTTY RTTY-FM OLIVIA THOR FSQ ATCHAT HELL SSTV
-  SSTV-FM NAVTEX DSC RIFP RFPAINT RADE PACKET PACKET-HF APRS ADS-B VDL2 AIS
-  HFDL` (see [Digital modes](#3-digital-modes)).
+- **MODE:** `AM NFM USB LSB` first — the four a CB or short-wave operator
+  reaches for — then a divider and the rest: `CW SAM C-QUAM WFM DRM HD DIGU DIGL
+  DSB ISB SPEC`. `FM` here is **NFM** (narrow); the broadcast band's own button
+  comes up **WFM** (see below).
+- **DIGITAL MODES:** a dropdown that shows the mode in force when a digital one
+  is chosen, otherwise reads **Digital modes**. It opens onto the full list —
+  `FT8 FT4 FT2 JT65 JT9 FST4 MSK144 FSK441 Q65 UVPACKET JTTY JS8 WSPR PSK RTTY
+  RTTY-FM OLIVIA THOR FSQ ATCHAT HELL SSTV SSTV-FM NAVTEX DSC RIFP RFPAINT RADE
+  PACKET PACKET-HF APRS` and a **Wideband** group `ADS-B VDL2 AIS HFDL DAB` (see
+  [Digital modes](#3-digital-modes)). A dropdown rather than three dozen chips on
+  the face: a mode is picked once, but it has to be *visible* as a choice.
 
 On a desktop or tablet layout the popup carries a **DOCK** chip. It moves the
 selector into a resizable column beside the waterfall so it stays open while you
@@ -957,9 +957,12 @@ The settings in this box are a matter of taste, but not the same taste in every
 mode: a little noise reduction helps a weak SSB voice and only gets in the way
 of an FT8 decoder, and a slow AGC is kinder to a signal sitting in the noise
 than the fast one that sounds right on a strong local. So each mode carries a
-set of starting values for **AGC**, **Man**, **SQL**, **NR**, **ANC**, **BIN**
-and WFM's **ST**, and selecting a mode — here, or on a CAT rig's own controls —
-lays its own on the receiver.
+set of starting values for **AGC**, **Man**, **SQL**, **NR**, **ANC**, **BIN**,
+WFM's **ST**, and the receive **tone** and **LOUDNESS** of the **EQ** popup, and
+selecting a mode — here, or on a CAT rig's own controls — lays its own on the
+receiver. The tone and LOUDNESS are **off in every mode** until you switch them
+on, so ticking LOUDNESS for a broadcast in AM leaves your SSB and FT8 exactly as
+they were.
 
 The built-in defaults are deliberately plain. A slow AGC on the weak-signal
 digital modes, whose whole point is signals near the noise, and the stock medium
@@ -9811,6 +9814,17 @@ ten boards: the original Pluto, PlutoPlus, ANTSDR E200/E310, Fishball/PlutoSky,
 SignalSDR Pro, LibreSDR/ZynqSDR, Pluto Nano and the PCIe and Mini
 OpenSDRLab boards.
 
+**As of today (10/2026), we recommend tezuka firmware v0.3.21: stable and
+tested.** Versions v0.3.19 and v0.3.23 are not stable.
+
+**Power the Pluto from a supply that delivers at least 3 A, and give it an
+exact 5 V at the board.** The Pluto needs a precise 5 V at its own input, and
+the supply cable loses some of it on the way there. We recommend a laboratory
+(bench) supply set to **5.15 V** at its output, so that the board receives
+exactly 5 V. A supply that falls short shows up as `EAGAIN` errors on the
+stream, and running the board away from a precise 5 V exposes you to errors and
+crashes.
+
 Nothing has to be configured in sdroxide to use it. The tuning range, the
 sample rate and the on-the-wire sample format are all read off the device as it
 connects rather than assumed, so a board running tezuka reports its own limits
@@ -12290,11 +12304,12 @@ spoken announcements below them under `[speech]`:
   and near-black text, for a bright shack or a screen read in daylight),
   **High contrast** (white on black, at the widest separation the screen can
   give), **Green phosphor** and **Amber phosphor** (monochrome CRT looks),
-  **Teal / orange**, **Rainbow** (the accents spread across the spectrum), or
-  one of ten schemes after the editor palettes of the same names: **Nord**,
-  **Nord dark**, **Gruvbox**, **Everforest**, **Solarized dark**, **Dracula** and
-  **Catppuccin mocha** on dark grounds, and **Solarized**, **Catppuccin latte**
-  and **Modern minimalist** on bright ones. Where a palette's own accent would be
+  **Teal / orange**, **Rainbow** (the accents spread across the spectrum),
+  **Calm** (deep blue grounds and near-white ink, the blue-dominant look SDRuno
+  wears), or one of ten schemes after the editor palettes of the same names:
+  **Nord**, **Nord dark**, **Gruvbox**, **Everforest**, **Solarized dark**,
+  **Dracula** and **Catppuccin mocha** on dark grounds, and **Solarized**,
+  **Catppuccin latte** and **Modern minimalist** on bright ones. Where a palette's own accent would be
   too faint to read on its panel it is lightened (or, on a bright ground,
   darkened) just far enough to be, so a scheme can differ a shade from the
   editor theme it is named after. The meters, scopes and maps take their
@@ -12405,21 +12420,48 @@ Under **3D view**:
 
 #### Undocked — modules in their own windows
 
-Any of the three big modules can be **pulled out into its own OS window**:
+Any of the big modules can be **pulled out into its own OS window**:
 
-- the **Panadapter** (spectrum + waterfall);
+- the **Panadapter** — SP1, the spectrum and waterfall;
+- the **AUX SP** — a second spectrum and waterfall, the same radio seen twice;
 - the **Operating panel** (the mode's decoder list, transcript and controls);
 - the **Controls** — the whole top strip: the frequency readout, the S-meter and
-  the receiver and transmitter controls (SDRuno's "RX control").
+  the receiver and transmitter controls (SDRuno's "RX control");
+- the **Band & mode selector** — the band list and the mode rows in a window of
+  their own, where they lay out in **five columns**.
 
 Set each under its row on this tab — **Docked in this window** (the default) or
 **Undocked — its own window**. Closing an undocked window docks it again, and its
 size and place are remembered for next time.
 
+You can also do it from the window itself: the **🪟 WINDOWS** chip at the right of
+the **radio-tab strip** — the row of radio names at the top of the main window —
+opens a list of the module windows (**SP1 — the spectrum**, **SP2 (AUX) — a second
+spectrum**, **Operating panel**, **RX control**, **Band & mode**), each with a
+**DOCKED** / **IN ITS OWN WINDOW** toggle, and **DOCK ALL WINDOWS** to bring them
+all back. The
+chip is lit while any of them is out of the main window. It acts on the radio you
+are looking at.
+
+This is the same arrangement as the rows on this tab, from the face of the program
+— a window arrangement is something you change while watching the program, not
+while watching a settings page.
+
 Undocking the **Controls** is the biggest change: the main window loses its top
 strip and becomes the spectrum and the decoders, while the strip lives in the
 control window — which is SDRuno's **RX control**, and it carries the
-**band/mode selector** with it, so the controls and the bands are one window.
+**band keypad** and the **band/mode selector** with it, so the controls and the
+bands are one window. The keypad is SDRuno's too: **Bands** and **MHz** above,
+ten keys laid out like a calculator (7 8 9 / 4 5 6 / 1 2 3, with 0 centred
+underneath), **Clear** and **Enter** below. Each key names the band it goes to
+and the bands rise with the digits, so **1** is 160 m and **9** is 11 m; a press
+tunes there, staying in the mode you are in. Press **MHz** and the same keys type
+a frequency instead — **in kilohertz**, so `14074` is 14.074 MHz — and **Enter**
+tunes it and puts the keys back to bands. The full band list stays beside the
+keypad rather than behind it: the keypad carries the ten HF allocations, and
+everything else (60 m, the VHF and UHF bands, the CB channels, the broadcast
+services) is a chip in the list as it always was. A key for a band your radio
+cannot receive is greyed, and says which range the radio published.
 The main window keeps its radio-tab strip and, when nothing is left in it, shows
 a plain face rather than a black hole (the band selector is already in the
 control window). Undocking the other two is the same idea one module down.
@@ -12427,13 +12469,33 @@ Undocking the Controls does not first flip it to a phone-shaped strip: the
 control window is a desktop console whatever its own height, because it opens
 wide and short and a compact strip there was the first thing to look wrong.
 
+Undocking the **band/mode selector** is the widest surface of all: as a docked
+column it cannot be much more than 280 pt — the operating panels below it are
+built for about 680 pt, and a wider column squeezes them — so its window is
+where the mode sections lay out in **five columns** (SDRuno's band panel). Open
+it from the **⇱ WINDOW** chip in the band popup, from the docked column's
+header, or from the **🪟 WINDOWS** menu. While it is out the docked column is not
+drawn, so there is one selector on screen; closing the window docks it again.
+
 When everything is undocked there is nothing left of the radio to draw in the
 main window's centre, so the **band/mode selector fills it** rather than leaving
 an empty panel. A voice mode, which has no operating panel, opens no panel window
 at all; a notice says so once. The undocked panadapter window carries a large
 frequency readout with the **mode and signal level** beneath it, so the second
 monitor says what you would otherwise glance back at the main window for. A
-**Dock all windows** button appears under the rows once anything is out.
+**Dock all windows** / **UNDOCK ALL WINDOWS** buttons appear under the rows: one
+brings every module home, the other puts every module in a window of its own (a
+module with nothing to show, like the operating panel in a voice mode, opens no
+window). Each is shown only while it would do something. The same pair is in the
+**🪟 WINDOWS** menu on the radio-tab strip.
+
+**Workspaces** save a whole arrangement and put it back: under the undocked
+rows, type a name and **SAVE CURRENT** to store which modules are in their own
+windows and where those windows are, then click a saved name to recall it. The
+**×** beside a name forgets it, and a name you save again replaces the earlier
+one. Up to ten — SDRuno's limit. A workspace is the window arrangement only;
+what is *on* is the station's, not the workspace's. They live in
+`workspaces.json` beside the rest of the configuration.
 
 The **tool windows** — the scanner, the schedule, the logbook, the spots list,
 the signal-id guide and the rest — can go to their own windows too. Each carries
@@ -12444,6 +12506,31 @@ session-only, like its position inside the main window — where it sat is not
 remembered across a restart. Their app-ids are `sdroxide-tool-<name>` (e.g.
 `sdroxide-tool-scanner`, `sdroxide-tool-mail`), so one rule can float them all.
 
+Every menu tool window has one, and each remembers its own size: **Settings**,
+SCHEDULE, RECORDINGS, SPOTS, PUBLIC SDRS, the voice keyer, and the AIS / ADS-B /
+VDL2 / FSQ Contacts and per-mode setup panels. The WEFAX chart viewer is the one
+exception and stays docked — it belongs to the chart you picked rather than to
+the menu, so it opens and closes with that chart.
+
+Settings is the one worth putting on a second monitor: it opens in the middle of
+the screen the first time and will not be dragged narrower than its tabs can
+use, so the whole box survives a move rather than becoming a column of clipped
+controls.
+
+| Tool window | Application id |
+|---|---|
+| Settings | `sdroxide-tool-settings` |
+| Schedule | `sdroxide-tool-schedule` |
+| Recordings | `sdroxide-tool-recordings` |
+| Spots | `sdroxide-tool-spots` |
+| Public SDRs | `sdroxide-tool-public-sdrs` |
+| Voice keyer | `sdroxide-tool-voice-keyer` |
+| AIS setup | `sdroxide-tool-ais-setup` |
+| ADS-B setup | `sdroxide-tool-adsb-setup` |
+| VDL2 setup | `sdroxide-tool-vdl2-setup` |
+| FSQ contacts | `sdroxide-tool-fsq-contacts` |
+| Digital-mode setup | `sdroxide-tool-digi-setup` |
+
 **The app does not place the window on Wayland.** A Wayland client is given no
 absolute position, so on niri, sway or GNOME the window opens where the
 compositor tiles it. To float it and pin it to a monitor, give it a **window
@@ -12451,9 +12538,11 @@ rule** matching its application id:
 
 | Module | Application id |
 |---|---|
-| Panadapter | `sdroxide-panadapter` |
+| Panadapter (SP1) | `sdroxide-panadapter` |
+| AUX SP (second spectrum) | `sdroxide-panadapter-aux` |
 | Operating panel | `sdroxide-panel` |
 | Controls | `sdroxide-controls` |
+| Band & mode selector | `sdroxide-bandmenu` |
 | Tool windows | `sdroxide-tool-<name>` |
 
 For **niri**, in `~/.config/niri/config.kdl` (use your own output names —
@@ -15544,6 +15633,14 @@ volume it compensates — so it cannot make the speaker play louder than full
 volume would, nor clip it. Narrow modes (SSB, CW) carry little treble, so there
 it is mostly a bass lift.
 
+Both the **Tone** shelves and **LOUDNESS** are **off by default** — nothing
+changes until you tick the box — and both are **per-mode settings**
+([Per-mode settings](#per-mode-settings-the-reset-chip)): what you set is
+remembered for the mode you are in, every other mode keeps its own (off until
+you set it there too), and the value comes back with the mode and after a
+restart. The circular-arrow reset chip and **Settings → General → RESET EVERY
+MODE** switch them back off. They shape the main receiver's speaker audio only.
+
 ### 10.7 Signal identification
 
 **SIG ID**, beside **JOBS** in the SWL LOG window, opens a guide to what is on the
@@ -17523,6 +17620,7 @@ floating RTS is the *receive* state, and test it.
 | 1 – 9, 0 (numpad) | Transmit voice-keyer slots 1–10 (nothing if the slot is empty). |
 | − (numpad) | Stop a voice-keyer message. |
 | Space (CW, with **KEY** on) | The straight key: carrier while held, and re-bindable as **CW straight key** in Settings → Controls ([2.14](#214-cw-decoding-and-keyboard-sending)). |
+| Ctrl+W | Open Settings on the **UI** page, where saved window arrangements (**Workspaces**) are listed ([6.4](#64-controls-keyboard-mouse-and-midi)). |
 | F1 | Open this manual (works even while typing). |
 
 Shortcuts are ignored while typing in a text field.

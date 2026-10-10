@@ -9,13 +9,15 @@
 //!
 //! What it does do, proven off air: the OFDM front end syncs, the FIC decodes,
 //! and the ensemble and **service list** come up — including a multiplex that
-//! advertises no ensemble label, which some do. What it does **not** do: play a
-//! station reliably. The DAB+ audio path decodes the first service of a capture
-//! and then fails on others, and faad2 refuses most Access Units with
-//! `FAAD_DECODE_ERROR` (bit errors) on **every** service — the reference
-//! `dabradio` decoder (fdk-aac) takes the same Access Units cleanly. That is the
-//! open problem, and it is a decoder problem, not a plumbing one: the frames
-//! reaching the AAC step are byte-identical in size and Reed–Solomon-clean.
+//! advertises no ensemble label, which some do. What it long did **not** do was
+//! play a station cleanly: faad2 used to refuse most Access Units on **every**
+//! service while the reference `dabradio` decoder (fdk-aac) took them cleanly,
+//! which chopped the audio. The cause was ours: faad2 is built with
+//! `DRM_SUPPORT` for the DRM receiver, and in that mode it rejects any frame
+//! whose fill element carries something other than SBR data (error 30) — which
+//! DAB+ encoders send routinely. `sdroxide-faad2` now patches that refusal at
+//! build time; on an off-air capture (8B, BFM BUSINESS) the decoded audio went
+//! from 6.1 s to 9.1 s of a 10 s recording, the rest being sync acquisition.
 //!
 //! ## The licence constraint that shapes any future fix
 //!

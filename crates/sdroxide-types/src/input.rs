@@ -107,6 +107,12 @@ pub enum Action {
     ToggleSpots,
     ToggleMemories,
     ToggleVoice,
+    /// Open the saved window arrangements — Settings → UI, where a workspace is
+    /// saved, recalled and deleted. Its own action rather than a reuse of
+    /// [`Action::ToggleSettings`] because this one *opens* the window on the
+    /// page that has the workspaces in it, and a toggle would close the window
+    /// an operator just used to save one.
+    Workspaces,
 
     // ── Spoken announcements; also client-local only ─────────────────────────
     /// Read the whole radio out: band, frequency, mode, VFO, split, and SWR
@@ -158,7 +164,7 @@ impl Action {
                 "Display"
             }
             ToggleHelp | ToggleSettings | ToggleLogbook | ToggleSpots | ToggleMemories
-            | ToggleVoice => "Windows",
+            | ToggleVoice | Workspaces => "Windows",
             SpeakStatus | SpeakRepeat | SpeechSilence | SpeechToggle => "Speech",
         }
     }
@@ -223,6 +229,7 @@ impl Action {
             ToggleSpots => "Spots window",
             ToggleMemories => "Memories window",
             ToggleVoice => "Voice keyer window",
+            Workspaces => "Workspaces window",
             SpeakStatus => "Speak status",
             SpeakRepeat => "Repeat last announcement",
             SpeechSilence => "Stop speaking",
@@ -316,6 +323,7 @@ impl Action {
             ToggleSpots,
             ToggleMemories,
             ToggleVoice,
+            Workspaces,
             SpeakStatus,
             SpeakRepeat,
             SpeechSilence,
@@ -547,6 +555,12 @@ impl KeyBinding {
             // is long for keying). Only armed by the CW panel's KEY toggle, so
             // it types a space everywhere else.
             KeyBinding::momentary(KeyChord::plain("Space"), Action::CwStraight),
+            // The workspaces live on Settings → UI, so the shortcut opens the
+            // settings window on that page rather than a window of its own.
+            KeyBinding::toggle(
+                KeyChord { key: "W".to_string(), ctrl: true, ..KeyChord::default() },
+                Action::Workspaces,
+            ),
         ];
         // Numpad 1–9 then 0 play slots 1–10; numpad "−" stops a message early.
         for slot in 0..crate::VOICE_SLOTS as u8 {
@@ -920,7 +934,7 @@ impl InputSettings {
     /// The current shipped-defaults generation. Bumped whenever a release adds
     /// a *new* default binding — see [`Self::migrate`] for why that is not
     /// free.
-    pub const SCHEMA: u32 = 2;
+    pub const SCHEMA: u32 = 3;
 
     /// Bindings introduced at each schema step, so a saved file picks up a new
     /// action's default instead of silently losing the key.
@@ -937,7 +951,7 @@ impl InputSettings {
     /// action at all — a binding they moved, disabled or deleted after the
     /// migration ran is theirs, and the stamped `schema` is what stops this
     /// putting it back.
-    const ADDED: &'static [(u32, Action)] = &[(1, Action::CwStraight)];
+    const ADDED: &'static [(u32, Action)] = &[(1, Action::CwStraight), (3, Action::Workspaces)];
 
     /// Bring a loaded file up to [`Self::SCHEMA`], reporting whether it had to
     /// be touched — and so whether it is worth writing back. The stamp is
@@ -1174,5 +1188,51 @@ mod tests {
         let bytes = postcard::to_allocvec(&settings).expect("encodes");
         let back: InputSettings = postcard::from_bytes(&bytes).expect("decodes");
         assert_eq!(back, settings);
+    }
+
+    /// Ctrl+W is bound to the workspaces by default. Without this the whole
+    /// shortcut is dead on every operator who already has an `input.json` — the
+    /// migration below is what saves them, and this says what it is saving.
+    #[test]
+    fn ctrl_w_is_the_workspaces_by_default() {
+        let b = KeyBinding::defaults()
+            .into_iter()
+            .find(|b| b.action == Action::Workspaces)
+            .expect("Ctrl+W ships bound to the workspaces");
+        assert!(b.chord.ctrl, "the shortcut is Ctrl+W: {:?}", b.chord);
+        assert_eq!(b.chord.key, "W");
+    }
+
+    /// A file written before this default existed picks it up, and only if the
+    /// operator has no binding for that action at all.
+    #[test]
+    fn an_existing_file_picks_up_the_workspaces_key() {
+        let mut cfg = InputSettings::default();
+        cfg.keys.retain(|b| b.action != Action::Workspaces);
+        cfg.schema = 2;
+        assert!(cfg.migrate(), "an older stamp means a write-back");
+        let got: Vec<_> = cfg.keys.iter().filter(|b| b.action == Action::Workspaces).collect();
+        assert_eq!(got.len(), 1, "exactly one binding for the action");
+        assert_eq!(got[0].chord.label(), "Ctrl+W");
+        // ...and the stamp is what stops it coming back a second time.
+        assert!(!cfg.migrate());
+        assert_eq!(cfg.keys.iter().filter(|b| b.action == Action::Workspaces).count(), 1);
+    }
+
+    /// The new variant rides the wire inside `InputSettings`; the register's
+    /// claim for v199 is that it survives postcard. Appended last, so no other
+    /// action's number moves.
+    #[test]
+    fn the_workspaces_survive_a_postcard_round_trip() {
+        let mut settings = InputSettings::default();
+        settings.keys.retain(|b| b.action != Action::Workspaces);
+        let bytes = postcard::to_allocvec(&settings).expect("encodes");
+        let back: InputSettings = postcard::from_bytes(&bytes).expect("decodes");
+        assert_eq!(back, settings);
+        // And the variant itself, on its own: a bare `Action` is what the
+        // bindings editor sends when a remote client learns the key map.
+        let bytes = postcard::to_allocvec(&Action::Workspaces).expect("encodes a bare action");
+        let back: Action = postcard::from_bytes(&bytes).expect("decodes");
+        assert_eq!(back, Action::Workspaces);
     }
 }

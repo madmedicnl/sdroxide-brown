@@ -90,6 +90,9 @@ pub fn run_multi(
     // A sanitized command line (radio-0 overrides stripped) for radios created
     // at runtime from the tab strip.
     factory_cli: crate::Cli,
+    // Another sdroxide found on this machine at start-up, worded for the
+    // banner — see `crate::other_instance`.
+    other_instance: Option<String>,
 ) -> Result<()> {
     let gate = Arc::new(TxGate::new());
     let sync = Arc::new(StoreSync::new());
@@ -202,12 +205,12 @@ pub fn run_multi(
         "sdroxide",
         options,
         Box::new(move |cc| {
-            Ok(Box::new(sdroxide_ui::MultiApp::new(
-                cc,
-                tabs,
-                Some(factory),
-                Some(remote_factory()),
-            )))
+            let mut multi =
+                sdroxide_ui::MultiApp::new(cc, tabs, Some(factory), Some(remote_factory()));
+            if let Some(w) = other_instance {
+                multi.warn_other_instance(w);
+            }
+            Ok(Box::new(multi))
         }),
     )
     .map_err(|e| anyhow::anyhow!("eframe: {e}"))

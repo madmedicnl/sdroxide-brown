@@ -1740,12 +1740,33 @@ use sdroxide_types::{
 /// whole, so this is the same appended-field break as every version before it.
 /// A downstream (fork) change, appended last.
 ///
-/// v198: `RadioState` gains `rx_loudness` (bool) on its tail and `Command`
-/// gains `SetRxLoudness(bool)` last — LOUDNESS in the receive EQ, a bass and
-/// treble lift that follows the volume. `RadioState` rides whole, so this is
-/// the same appended-field break as v195. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 198;
-const VERSION_BYTE: u8 = 0x13;
+/// v198: `UiTheme` gains `Calm`, the blue/white SDRuno-style theme. A fieldless
+/// enum is encoded by discriminant, and the catch-all [`UiTheme::Default`] must
+/// stay the **last** variant for serde's `#[serde(other)]`, where a typo in a
+/// hand-edited config degrades to the default theme — so `Calm` is inserted
+/// before it and **`Default`'s discriminant moves 16 → 17**. `UiTheme` rides
+/// [`ClientScreen`]'s `theme` field, so this is a wire change: a v197 peer
+/// would read the moved `Default` as `Calm`. A downstream (fork) change.
+/// v199: [`Action`] gains `Workspaces` on its tail — the Ctrl+W shortcut that
+/// opens the Settings window on the UI page, where the saved window
+/// arrangements are listed. An `Action` discriminant is on the wire for the
+/// first time only because it rides `InputSettings`, which travels whole inside
+/// [`ClientMsg::SetClientBindings`] / [`ServerMsg::ClientBindings`] behind the
+/// operator's opt-in; the new variant is last, so every action below it keeps
+/// its number. A v198 peer that reads a `Workspaces` key has no variant for
+/// it and refuses the whole bindings document — which is why this is a version
+/// bump rather than a silent loss of the operator's key map. `PROTO_VERSION`
+/// 198 → 199, `VERSION_BYTE` 0x13 → 0x14. A downstream (fork) change.
+///
+/// v200: the receive tone and LOUDNESS are per-mode settings of the main
+/// receiver. `RadioState::rx_tone` moves into [`sdroxide_types::RxState`] as
+/// `tone`, `RxState` gains `loudness` (bool) after it, and `Command` gains
+/// `SetRxLoudness(bool)` last. Removing a mid-struct field from `RadioState`
+/// shifts every field after it and `RxState` rides it twice, so a v199 peer
+/// would misread the whole state — hence the bump. `VERSION_BYTE` is left at
+/// 0x14. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 200;
+const VERSION_BYTE: u8 = 0x14;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3042,14 +3063,18 @@ mod tests {
         assert_eq!(decode::<ClientMsg>(&encode(&whole).unwrap()).unwrap(), whole);
     }
 
-    /// LOUDNESS crosses the wire both ways: the command, and the state's tail
-    /// field that tells a remote client the switch's real position.
+    /// LOUDNESS and the tone cross the wire both ways: the command, and the
+    /// receiver fields that tell a remote client their real position.
     #[test]
     fn roundtrip_rx_loudness() {
         for on in [false, true] {
             let m = ClientMsg::Command(Command::SetRxLoudness(on));
             assert_eq!(decode::<ClientMsg>(&encode(&m).unwrap()).unwrap(), m);
-            let st = ServerMsg::State(RadioState { rx_loudness: on, ..RadioState::default() });
+            let mut state = RadioState::default();
+            state.rx[0].loudness = on;
+            state.rx[0].tone.enabled = on;
+            state.rx[0].tone.low.gain_db = if on { 6.0 } else { 0.0 };
+            let st = ServerMsg::State(state);
             assert_eq!(decode::<ServerMsg>(&encode(&st).unwrap()).unwrap(), st);
         }
     }

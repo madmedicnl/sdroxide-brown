@@ -257,6 +257,13 @@ pub(in crate::app) struct SettingsIo<'a> {
     pluto_copy_report: &'a mut bool,
     apply_iface: &'a mut bool,
     ui_edit: &'a mut sdroxide_types::UiSettings,
+    /// The saved window arrangements (SDRuno's workspaces), edited on the UI tab
+    /// and handed back to be persisted by the caller.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    workspaces: &'a mut Vec<sdroxide_types::Workspace>,
+    /// The name being typed for the next **SAVE CURRENT** on the UI tab.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    workspace_name: &'a mut String,
     /// Who may connect to this machine's server, or `None` where this client
     /// is in no position to say — a remote one, and every browser one. Those
     /// credentials are `config.toml` on the machine the radio is attached to,
@@ -1132,6 +1139,11 @@ impl SdroxideApp {
         let mut ranges = self.range_edit.clone();
         let mut rx_site = self.rx_site_edit.clone();
         let mut ui_edit = self.ui_settings;
+        // The workspaces are cloned out and handed back like `ui_edit`: the
+        // settings window is drawn from `&self`, so its changes travel through
+        // `io` and are committed by the caller.
+        let mut workspaces = self.workspaces.clone();
+        let mut workspace_name = self.workspace_name.clone();
         // Only where the engine is in this process: see `SettingsIo`.
         let owns_server = !self.ctrl.engine_is_remote();
         let mut access_edit = self.remote_access.clone();
@@ -1180,7 +1192,6 @@ impl SdroxideApp {
 
         let mut tab = self.settings_tab;
         let mut upload_tab = self.settings_upload_tab;
-        let mut open = self.show_settings;
         // The 3D window owns the live copy of its own settings — `view.solar3d`
         // is only the snapshot persisted from it — so this is read out of the
         // window here and handed back to it below, the way `ui_edit` is.
@@ -1198,178 +1209,186 @@ impl SdroxideApp {
         // again — so the width drifted with wherever the operator had been
         // while the height stayed at egui's 420 pt default no matter how tall
         // the display was.
-        let want =
-            egui::vec2(crate::layout::window_w(ctx, 900.0), crate::layout::window_h(ctx, 760.0));
-        let resp = egui::Window::new("Settings")
-            // Pinned id, versioned: egui persists the remembered size and
-            // position under it, and the suffix drops the stale (often very
-            // wide, always 420 pt tall) geometry left by the builds before this
-            // one. Position is centred on first use because it goes with it.
-            .id(crate::layout::salted_id(ctx, "settings-window-v2"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_pos(ctx.content_rect().center() - want * 0.5)
-            .default_size(want)
-            .min_width(crate::layout::window_w(ctx, 380.0))
-            .min_height(crate::layout::window_h(ctx, 300.0))
-            .vscroll(true)
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                bars.restore(ui);
-                // On the frame the dialog opens, jump back to the origin so
-                // the tab bar is on screen. Instant, not animated: a leftover
-                // offset gliding away would look like the window scrolling by
-                // itself. Two calls, because a scroll area only acts on
-                // targets set inside its own content and discards the axis it
-                // doesn't scroll — this one reaches the window's vertical bar,
-                // the one below reaches the horizontal region.
-                let jump_to_origin = std::mem::take(&mut self.settings_scroll_top);
-                if jump_to_origin {
-                    ui.scroll_to_cursor_animation(
-                        Some(egui::Align::TOP),
-                        egui::style::ScrollAnimation::none(),
-                    );
-                }
-                // The tabs that are wider than the window get a scrollbar
-                // instead of widening it: the Controls tables and the TLE
-                // element editors are laid out at fixed widths, and egui grows a
-                // window to whatever its content asked for and never gives the
-                // width back. Text still wraps at the window's width — pinning
-                // the body's max width is what keeps `available_width` finite
-                // inside a horizontally scrollable region.
-                let body_w = ui.available_width();
-                egui::ScrollArea::horizontal().show_themed(ui, |ui| {
+        // A tool window like every other: the ⇱ chip in the title bar puts the
+        // settings box in a window of its own, which is where it belongs once
+        // the waterfall is on a second monitor. The pinned `egui::Window` id is
+        // given up with it, so the docked size starts once more at the default.
+        self.show_settings = self.tool_window_sized(
+            ctx,
+            "settings",
+            "Settings",
+            [900.0, 760.0],
+            // A floor rather than none: the tabs are laid out at fixed widths
+            // and become a column of clipped controls if dragged much narrower.
+            [380.0, 300.0],
+            // And in the middle of the screen the first time, as the pinned
+            // window was: a 900x760 box in a corner is under the top bar.
+            true,
+            // Already known open — the `!self.show_settings` arm returned.
+            true,
+            |me, ui| {
+                // The window's own vertical scrollbar. `egui::Window`'s
+                // `vscroll` provided it before, and its bar kept the scroll
+                // palette because egui built the bar's `Ui` *before*
+                // `bars.restore` handed the body its normal palette back — so
+                // the scroll area has to be built first and the restore done
+                // inside it, or the bar loses its accent. An undocked window
+                // has no frame to scroll in at all, so it needs this either way.
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    bars.restore(ui);
+                    // On the frame the dialog opens, jump back to the origin so
+                    // the tab bar is on screen. Instant, not animated: a leftover
+                    // offset gliding away would look like the window scrolling by
+                    // itself. Two calls, because a scroll area only acts on
+                    // targets set inside its own content and discards the axis it
+                    // doesn't scroll — this one reaches the window's vertical bar,
+                    // the one below reaches the horizontal region.
+                    let jump_to_origin = std::mem::take(&mut me.settings_scroll_top);
                     if jump_to_origin {
                         ui.scroll_to_cursor_animation(
                             Some(egui::Align::TOP),
                             egui::style::ScrollAnimation::none(),
                         );
                     }
-                    ui.set_max_width(body_w);
-                    self.settings_body(
-                        ui,
-                        cmds,
-                        &mut SettingsIo {
-                            iface_opts: &iface_opts,
-                            radio_edit: &mut radio_edit,
-                            // Both of these questions are asked of the machine
-                            // the radio is on, which may not be this one: it
-                            // answers the device lists over the session, and
-                            // stays quiet only if it was built without a way to.
-                            can_probe: self.probes_answered && self.probe_waiting == 0,
-                            local_engine: owns_server,
-                            converter_hz: &mut converter_hz,
-                            ranges: &mut ranges,
-                            rx_site: &mut rx_site,
-                            audio_pick: &mut audio_pick,
-                            swl_report: &mut swl_report,
-                            swl_report_pick: &self.swl_report_pick,
-                            hpsdr_discover: &mut hpsdr_discover,
-                            profile_name: &mut profile_name,
-                            digi_reseed: &mut digi_reseed,
-                            rtlsdr_rescan: &mut rtlsdr_rescan,
-                            rx888_rescan: &mut rx888_rescan,
-                            airspyhf_rescan: &mut airspyhf_rescan,
-                            airspyhf_copy_report: &mut airspyhf_copy_report,
-                            elad_rescan: &mut elad_rescan,
-                            elad_copy_report: &mut elad_copy_report,
-                            lime_rescan: &mut lime_rescan,
-                            lime_copy_report: &mut lime_copy_report,
-                            hackrf_rescan: &mut hackrf_rescan,
-                            settings_export: &mut settings_export,
-                            settings_import: &mut settings_import,
-                            recordings_choose: &mut recordings_choose,
-                            recordings_reset: &mut recordings_reset,
-                            hackrf_copy_report: &mut hackrf_copy_report,
-                            airspy_rescan: &mut airspy_rescan,
-                            airspy_copy_report: &mut airspy_copy_report,
-                            hydrasdr_rescan: &mut hydrasdr_rescan,
-                            hydrasdr_copy_report: &mut hydrasdr_copy_report,
-                            sdrplay_rescan: &mut sdrplay_rescan,
-                            fobos_rescan: &mut fobos_rescan,
-                            soapy_rescan: &mut soapy_rescan,
-                            tci_test: &mut tci_test,
-                            smartsdr_discover: &mut smartsdr_discover,
-                            smartsdr_test: &mut smartsdr_test,
-                            icomnet_test: &mut icomnet_test,
-                            spyserver_test: &mut spyserver_test,
-                            kiwi_test: &mut kiwi_test,
-                            icomnet_copy_report: &mut icomnet_copy_report,
-                            smartsdr_copy_report: &mut smartsdr_copy_report,
-                            pluto_discover: &mut pluto_discover,
-                            pluto_test: &mut pluto_test,
-                            pluto_copy_report: &mut pluto_copy_report,
-                            apply_iface: &mut apply_iface,
-                            ui_edit: &mut ui_edit,
-                            access_edit: owns_server.then_some(&mut access_edit),
-                            #[cfg(not(target_arch = "wasm32"))]
-                            remote_edit: &mut remote_edit,
-                            #[cfg(not(target_arch = "wasm32"))]
-                            remote_connect: &mut remote_connect,
-                            digi_edit: &mut digi_edit,
-                            audio_rescan: &mut audio_rescan,
-                            digi_seeded,
-                            net_edit: &mut net_edit,
-                            net_seeded: self.net_cfg_seeded,
-                            net_cmds: &mut net_cmds,
-                            rbn_cmds: &mut rbn_cmds,
-                            net_apply: &mut net_apply,
-                            bc_reload: &mut bc_reload,
-                            bc_refetch: &mut bc_refetch,
-                            bc_fetching: self.broadcast_fetch.is_some(),
-                            bc_status: self.broadcast_fetch_status.as_ref(),
-                            speech_edit: &mut speech_edit,
-                            speech_voices: &self.speech_voices,
-                            speech_status: &speech_status,
-                            speech_test: &mut speech_test,
-                            alerts_edit: &mut alerts_edit,
-                            alerts_status: &alerts_status,
-                            alerts_test: &mut alerts_test,
-                            speech_on,
-                            alerts_say: &mut alerts_say,
-                            net_sync: &mut net_sync,
-                            tci_srv_edit: &mut tci_srv_edit,
-                            tci_srv_apply: &mut tci_srv_apply,
-                            rigctld_edit: &mut rigctld_edit,
-                            rigctld_apply: &mut rigctld_apply,
-                            wsjtx_edit: &mut wsjtx_edit,
-                            wsjtx_apply: &mut wsjtx_apply,
-                            rot_edit: &mut rot_edit,
-                            rot_apply: &mut rot_apply,
-                            relay_edit: &mut relay_edit,
-                            relay_apply: &mut relay_apply,
-                            relay_test: &mut relay_test,
-                            input_edit: &mut input_edit,
-                            key_capture: &mut key_capture,
-                            midi_learn: &mut midi_learn,
-                            midi_rescan: &mut midi_rescan,
-                            sat_edit: &mut sat_edit,
-                            sat_seeded: self.sat_cfg_seeded,
-                            sat_ui: &mut sat_ui,
-                            sat_subs: &sat_subs,
-                            sat_sub_refresh: &mut sat_sub_refresh,
-                            #[cfg(not(target_arch = "wasm32"))]
-                            solar_cloud_march: Some(&mut solar_cloud_march),
-                            #[cfg(target_arch = "wasm32")]
-                            solar_cloud_march: None,
-                            radio_tabs: &mut radio_tab_reqs,
-                            radio_name_edit: &mut radio_name_edit,
-                            region_edit: &mut region_edit,
-                            cb_plan_edit: &mut cb_plan_edit,
-                            cb_tx_edit: &mut cb_tx_edit,
-                            tx_eq_edit: &mut tx_eq_edit,
-                            tab: &mut tab,
-                            upload_tab: &mut upload_tab,
-                        },
-                    );
+                    // The tabs that are wider than the window get a scrollbar
+                    // instead of widening it: the Controls tables and the TLE
+                    // element editors are laid out at fixed widths, and egui grows a
+                    // window to whatever its content asked for and never gives the
+                    // width back. Text still wraps at the window's width — pinning
+                    // the body's max width is what keeps `available_width` finite
+                    // inside a horizontally scrollable region.
+                    let body_w = ui.available_width();
+                    egui::ScrollArea::horizontal().show_themed(ui, |ui| {
+                        if jump_to_origin {
+                            ui.scroll_to_cursor_animation(
+                                Some(egui::Align::TOP),
+                                egui::style::ScrollAnimation::none(),
+                            );
+                        }
+                        ui.set_max_width(body_w);
+                        me.settings_body(
+                            ui,
+                            cmds,
+                            &mut SettingsIo {
+                                iface_opts: &iface_opts,
+                                radio_edit: &mut radio_edit,
+                                // Both of these questions are asked of the machine
+                                // the radio is on, which may not be this one: it
+                                // answers the device lists over the session, and
+                                // stays quiet only if it was built without a way to.
+                                can_probe: me.probes_answered && me.probe_waiting == 0,
+                                local_engine: owns_server,
+                                converter_hz: &mut converter_hz,
+                                ranges: &mut ranges,
+                                rx_site: &mut rx_site,
+                                audio_pick: &mut audio_pick,
+                                swl_report: &mut swl_report,
+                                swl_report_pick: &me.swl_report_pick,
+                                hpsdr_discover: &mut hpsdr_discover,
+                                profile_name: &mut profile_name,
+                                digi_reseed: &mut digi_reseed,
+                                rtlsdr_rescan: &mut rtlsdr_rescan,
+                                rx888_rescan: &mut rx888_rescan,
+                                airspyhf_rescan: &mut airspyhf_rescan,
+                                airspyhf_copy_report: &mut airspyhf_copy_report,
+                                elad_rescan: &mut elad_rescan,
+                                elad_copy_report: &mut elad_copy_report,
+                                lime_rescan: &mut lime_rescan,
+                                lime_copy_report: &mut lime_copy_report,
+                                hackrf_rescan: &mut hackrf_rescan,
+                                settings_export: &mut settings_export,
+                                settings_import: &mut settings_import,
+                                recordings_choose: &mut recordings_choose,
+                                recordings_reset: &mut recordings_reset,
+                                hackrf_copy_report: &mut hackrf_copy_report,
+                                airspy_rescan: &mut airspy_rescan,
+                                airspy_copy_report: &mut airspy_copy_report,
+                                hydrasdr_rescan: &mut hydrasdr_rescan,
+                                hydrasdr_copy_report: &mut hydrasdr_copy_report,
+                                sdrplay_rescan: &mut sdrplay_rescan,
+                                fobos_rescan: &mut fobos_rescan,
+                                soapy_rescan: &mut soapy_rescan,
+                                tci_test: &mut tci_test,
+                                smartsdr_discover: &mut smartsdr_discover,
+                                smartsdr_test: &mut smartsdr_test,
+                                icomnet_test: &mut icomnet_test,
+                                spyserver_test: &mut spyserver_test,
+                                kiwi_test: &mut kiwi_test,
+                                icomnet_copy_report: &mut icomnet_copy_report,
+                                smartsdr_copy_report: &mut smartsdr_copy_report,
+                                pluto_discover: &mut pluto_discover,
+                                pluto_test: &mut pluto_test,
+                                pluto_copy_report: &mut pluto_copy_report,
+                                apply_iface: &mut apply_iface,
+                                ui_edit: &mut ui_edit,
+                                workspaces: &mut workspaces,
+                                workspace_name: &mut workspace_name,
+                                access_edit: owns_server.then_some(&mut access_edit),
+                                #[cfg(not(target_arch = "wasm32"))]
+                                remote_edit: &mut remote_edit,
+                                #[cfg(not(target_arch = "wasm32"))]
+                                remote_connect: &mut remote_connect,
+                                digi_edit: &mut digi_edit,
+                                audio_rescan: &mut audio_rescan,
+                                digi_seeded,
+                                net_edit: &mut net_edit,
+                                net_seeded: me.net_cfg_seeded,
+                                net_cmds: &mut net_cmds,
+                                rbn_cmds: &mut rbn_cmds,
+                                net_apply: &mut net_apply,
+                                bc_reload: &mut bc_reload,
+                                bc_refetch: &mut bc_refetch,
+                                bc_fetching: me.broadcast_fetch.is_some(),
+                                bc_status: me.broadcast_fetch_status.as_ref(),
+                                speech_edit: &mut speech_edit,
+                                speech_voices: &me.speech_voices,
+                                speech_status: &speech_status,
+                                speech_test: &mut speech_test,
+                                alerts_edit: &mut alerts_edit,
+                                alerts_status: &alerts_status,
+                                alerts_test: &mut alerts_test,
+                                speech_on,
+                                alerts_say: &mut alerts_say,
+                                net_sync: &mut net_sync,
+                                tci_srv_edit: &mut tci_srv_edit,
+                                tci_srv_apply: &mut tci_srv_apply,
+                                rigctld_edit: &mut rigctld_edit,
+                                rigctld_apply: &mut rigctld_apply,
+                                wsjtx_edit: &mut wsjtx_edit,
+                                wsjtx_apply: &mut wsjtx_apply,
+                                rot_edit: &mut rot_edit,
+                                rot_apply: &mut rot_apply,
+                                relay_edit: &mut relay_edit,
+                                relay_apply: &mut relay_apply,
+                                relay_test: &mut relay_test,
+                                input_edit: &mut input_edit,
+                                key_capture: &mut key_capture,
+                                midi_learn: &mut midi_learn,
+                                midi_rescan: &mut midi_rescan,
+                                sat_edit: &mut sat_edit,
+                                sat_seeded: me.sat_cfg_seeded,
+                                sat_ui: &mut sat_ui,
+                                sat_subs: &sat_subs,
+                                sat_sub_refresh: &mut sat_sub_refresh,
+                                #[cfg(not(target_arch = "wasm32"))]
+                                solar_cloud_march: Some(&mut solar_cloud_march),
+                                #[cfg(target_arch = "wasm32")]
+                                solar_cloud_march: None,
+                                radio_tabs: &mut radio_tab_reqs,
+                                radio_name_edit: &mut radio_name_edit,
+                                region_edit: &mut region_edit,
+                                cb_plan_edit: &mut cb_plan_edit,
+                                cb_tx_edit: &mut cb_tx_edit,
+                                tx_eq_edit: &mut tx_eq_edit,
+                                tab: &mut tab,
+                                upload_tab: &mut upload_tab,
+                            },
+                        );
+                    });
                 });
-            });
+            },
+        );
         bars.pop(ctx);
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
-        self.show_settings = open;
         self.settings_tab = tab;
         self.settings_upload_tab = upload_tab;
         self.profile_name_edit = profile_name;
@@ -1792,6 +1811,11 @@ impl SdroxideApp {
             // Live: fps + averaging flow to the engine via the spectrum-config
             // diff next frame; waterfall speed is read each frame. Persist too.
             self.ui_settings = ui_edit;
+            if workspaces != self.workspaces {
+                self.workspaces = workspaces;
+                crate::app::persist::save_workspaces(&self.workspaces);
+            }
+            self.workspace_name = workspace_name;
             persist_ui_settings(&self.ui_settings);
         }
         if &speech_edit != self.speech.settings() {
@@ -3164,6 +3188,15 @@ impl SdroxideApp {
                     io.swl_report,
                     io.swl_report_pick,
                 );
+                // Native only, like the undocked rows: the browser keeps every
+                // module in its one window and has nothing to arrange.
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    ui.add_space(10.0);
+                    ui.separator();
+                    ui.add_space(6.0);
+                    ui_tab::workspaces_section(ui, io.ui_edit, io.workspaces, io.workspace_name);
+                }
                 ui.add_space(10.0);
                 ui.separator();
                 ui.add_space(6.0);
@@ -4701,8 +4734,7 @@ mod dab_rate_advice_tests {
     /// the advice's second branch is the one to revisit.
     #[test]
     fn every_device_rate_lands_below_the_dab_margin() {
-        for &r in &[1_024_000.0, 2_048_000.0, 2_400_000.0, 5_000_000.0, 8_000_000.0, 16_000_000.0]
-        {
+        for &r in &[1_024_000.0, 2_048_000.0, 2_400_000.0, 5_000_000.0, 8_000_000.0, 16_000_000.0] {
             assert!(dab_rate_advice(r).is_some(), "{r:.0} sps: expected advice");
         }
     }

@@ -17,6 +17,7 @@ mod kiwisdr_source;
 mod lime_source;
 mod local_controller;
 mod null_source;
+mod other_instance;
 mod panadapter_source;
 mod pluto_source;
 mod rtlsdr_source;
@@ -368,9 +369,15 @@ fn main() -> anyhow::Result<()> {
         return gui_main::run_remote(&url);
     }
 
+    // Before the radios open: once this window has them, a second reader of
+    // the same device is already breaking up both streams.
+    let other_instance = other_instance::check();
+    if let Some(w) = &other_instance {
+        tracing::warn!("{w}");
+    }
     let radios = boot_radios(&mut cli, &settings)?;
     let factory_cli = secondary_cli(&cli);
-    gui_main::run_multi(radios, &settings, cli.tx_ham_only(&settings), factory_cli)
+    gui_main::run_multi(radios, &settings, cli.tx_ham_only(&settings), factory_cli, other_instance)
 }
 
 /// Everything `main` resolved for one radio before it is put on screen or on

@@ -25,7 +25,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::{AgcMode, Mode, NrLevel};
+use crate::{AgcMode, Mode, NrLevel, TxEqState};
 
 /// The values a mode starts with, and what the operator has changed them to.
 ///
@@ -58,6 +58,12 @@ pub struct ModeProfile {
     pub wfm_stereo: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub binaural: Option<bool>,
+    /// The receive tone — main receiver only, see [`crate::RxState::tone`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tone: Option<TxEqState>,
+    /// LOUDNESS — main receiver only, see [`crate::RxState::loudness`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loudness: Option<bool>,
 }
 
 /// Float equality by representation, for [`ModeProfile::trim_against`].
@@ -80,6 +86,8 @@ impl ModeProfile {
             && self.auto_notch.is_none()
             && self.wfm_stereo.is_none()
             && self.binaural.is_none()
+            && self.tone.is_none()
+            && self.loudness.is_none()
     }
 
     /// This profile with `base` filling in every field it does not speak to.
@@ -93,6 +101,8 @@ impl ModeProfile {
             auto_notch: self.auto_notch.or(base.auto_notch),
             wfm_stereo: self.wfm_stereo.or(base.wfm_stereo),
             binaural: self.binaural.or(base.binaural),
+            tone: self.tone.or(base.tone),
+            loudness: self.loudness.or(base.loudness),
         }
     }
 
@@ -126,6 +136,12 @@ impl ModeProfile {
         if self.binaural == default.binaural {
             self.binaural = None;
         }
+        if self.tone == default.tone {
+            self.tone = None;
+        }
+        if self.loudness == default.loudness {
+            self.loudness = None;
+        }
     }
 
     /// Whether the live settings of `rx` all match this profile.
@@ -141,6 +157,8 @@ impl ModeProfile {
             && self.auto_notch.is_none_or(|v| v == rx.auto_notch)
             && self.wfm_stereo.is_none_or(|v| v == rx.wfm_stereo)
             && self.binaural.is_none_or(|v| v == rx.binaural)
+            && self.tone.is_none_or(|v| v == rx.tone)
+            && self.loudness.is_none_or(|v| v == rx.loudness)
     }
 
     /// Write every field this profile has an opinion about into `rx`.
@@ -172,6 +190,12 @@ impl ModeProfile {
         }
         if let Some(v) = self.binaural {
             rx.binaural = v;
+        }
+        if let Some(v) = self.tone {
+            rx.tone = v;
+        }
+        if let Some(v) = self.loudness {
+            rx.loudness = v;
         }
     }
 }
@@ -301,5 +325,89 @@ mod tests {
         let back: ModeProfiles = serde_json::from_str(&json).unwrap();
         assert_eq!(back, profiles);
         assert_eq!(back.overrides(Mode::Ft8).unwrap().auto_notch, Some(true));
+    }
+
+    /// LOUDNESS and the receive tone are the operator's to switch on: every
+    /// mode starts with both off and the shelves flat.
+    #[test]
+    fn the_tone_and_loudness_start_off_in_every_mode() {
+        for mode in Mode::ALL {
+            let p = mode.default_profile();
+            assert_eq!(p.loudness, Some(false), "{mode:?} starts with LOUDNESS on");
+            assert_eq!(p.tone, Some(TxEqState::default()), "{mode:?} starts with a tone set");
+            assert!(!p.tone.unwrap().enabled);
+        }
+        // And a fresh receiver agrees with its mode's defaults on both.
+        let rx = crate::RxState::with_mode(Mode::Am);
+        assert!(!rx.loudness && !rx.tone.enabled);
+    }
+
+    /// Ticked in one mode, LOUDNESS and the tone stay with that mode: another
+    /// mode comes up with its own (off) values, and coming back brings them.
+    #[test]
+    fn the_tone_and_loudness_are_remembered_per_mode() {
+        let mut profiles = ModeProfiles::default();
+        let mut tone = TxEqState::default();
+        tone.enabled = true;
+        tone.low.gain_db = 6.0;
+        let mut over = ModeProfile { tone: Some(tone), loudness: Some(true), ..Default::default() };
+        over.trim_against(&Mode::Am.default_profile());
+        profiles.set(Mode::Am, over);
+
+        let mut rx = crate::RxState::with_mode(Mode::Am);
+        profiles.effective(Mode::Am).apply_to(&mut rx);
+        assert!(rx.loudness);
+        assert_eq!(rx.tone, tone);
+
+        // Another mode lays its own defaults on: off, flat.
+        profiles.effective(Mode::Usb).apply_to(&mut rx);
+        assert!(!rx.loudness);
+        assert_eq!(rx.tone, TxEqState::default());
+
+        // Back to AM, and the operator's values return.
+        profiles.effective(Mode::Am).apply_to(&mut rx);
+        assert!(rx.loudness);
+        assert_eq!(rx.tone, tone);
+    }
+
+    /// Switching them back off is "back to the default", so the mode forgets
+    /// them — and the reset chip then has nothing to offer for them.
+    #[test]
+    fn switching_the_tone_and_loudness_back_off_forgets_them() {
+        let default = Mode::Usb.default_profile();
+        let mut over = ModeProfile { loudness: Some(true), ..Default::default() };
+        over.trim_against(&default);
+        assert!(!over.is_empty());
+        over.loudness = Some(false);
+        over.tone = Some(TxEqState::default());
+        over.trim_against(&default);
+        assert!(over.is_empty());
+        let mut rx = crate::RxState::with_mode(Mode::Usb);
+        assert!(default.agrees_with(&rx));
+        rx.loudness = true;
+        assert!(!default.agrees_with(&rx), "LOUDNESS on must show the reset chip");
+    }
+
+    /// The tone and LOUDNESS ride `modeprofiles.json` like every other per-mode
+    /// value, and only when they were changed.
+    #[test]
+    fn the_tone_and_loudness_round_trip_through_the_file() {
+        let mut profiles = ModeProfiles::default();
+        let mut tone = TxEqState::default();
+        tone.enabled = true;
+        tone.high.gain_db = -3.0;
+        profiles.set(
+            Mode::Usb,
+            ModeProfile { tone: Some(tone), loudness: Some(true), ..Default::default() },
+        );
+        let json = serde_json::to_string(&profiles).unwrap();
+        assert!(json.contains("\"loudness\":true"), "{json}");
+        let back: ModeProfiles = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, profiles);
+        // A file written before these existed still loads, with no opinion on them.
+        let old: ModeProfiles =
+            serde_json::from_str(r#"{"modes":{"Usb":{"auto_notch":true}}}"#).unwrap();
+        let p = old.overrides(Mode::Usb).unwrap();
+        assert_eq!((p.tone, p.loudness), (None, None));
     }
 }
