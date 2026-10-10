@@ -126,3 +126,52 @@ impl Drop for AacDecoder {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Pack `(value, bits)` fields MSB-first, zero-padded to a whole byte.
+    fn pack(fields: &[(u32, u32)]) -> Vec<u8> {
+        let mut out = Vec::new();
+        let (mut acc, mut n) = (0u32, 0u32);
+        for &(v, bits) in fields {
+            for i in (0..bits).rev() {
+                acc = (acc << 1) | ((v >> i) & 1);
+                n += 1;
+                if n == 8 {
+                    out.push(acc as u8);
+                    (acc, n) = (0, 0);
+                }
+            }
+        }
+        if n > 0 {
+            out.push((acc << (8 - n)) as u8);
+        }
+        out
+    }
+
+    /// A silent AAC-LC frame (one SCE with no bands) followed by a fill element
+    /// carrying one byte of plain padding — the shape DAB+ encoders send. faad2
+    /// built for DRM refused every such frame, which chopped DAB+ audio.
+    #[test]
+    fn a_frame_padded_with_a_fill_element_decodes() {
+        // AudioSpecificConfig: AAC-LC, 48 kHz, mono.
+        let asc = pack(&[(2, 5), (3, 4), (1, 4), (0, 3)]);
+        let au = pack(&[
+            (0, 3),   // ID_SCE
+            (0, 4),   // element_instance_tag
+            (100, 8), // global_gain
+            (0, 11),  // ics_info: long window, max_sfb 0, no prediction
+            (0, 3),   // no pulse, TNS or gain control
+            (6, 3),   // ID_FIL
+            (1, 4),   // count: one byte
+            (0, 8),   // EXT_FILL
+            (7, 3),   // ID_END
+        ]);
+        let mut dec = AacDecoder::new().expect("faad2");
+        assert!(dec.configure(&asc), "faad2 took the config");
+        let pcm: usize = (0..4).map(|_| dec.decode_au(&au).len()).sum();
+        assert!(pcm > 0, "every frame carrying a fill element was refused");
+    }
+}
