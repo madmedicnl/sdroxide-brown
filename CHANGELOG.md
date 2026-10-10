@@ -13,7 +13,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
-## [2.0.5_brown] - 2026-10-10
+## [2.0.6_brown] - 2026-10-10
 
 Windows you can move, and six fixes from the field.
 
@@ -40,12 +40,14 @@ Windows you can move, and six fixes from the field.
 
 `PROTO_VERSION` 199 (from 198) — Ctrl+W is a new bound action, and a client and a server must agree on it.
 
+- The JTTY panel gets **FREQ** (the meeting points the WSJT-X team proposed for the test period, with the dial free to go anywhere), **CLEAR RX** and **SAVE**, from the start rather than after the first decode.
+
 ### Not proven
 
 - The CB flag fix. The report came from a German division-13 station whose callsign nobody could afterwards recall, so the cause was found by probing the grammar rather than from the station itself. If the call was an ordinary two-letter one, the cause is still open.
 - Everything from the Pluto and manual work (#29, #30, #34): no Pluto on this bench, and the receiver labels and the dedupe have not been looked at on a real board.
 - The dial-hold and zoom fixes are unit-tested against the reported behaviour, not a real station.
-- **JTTY's FREQ / CLEAR RX / SAVE chips (#35) are not in this release** — that PR conflicts with the merged dial-hold work and was left for its author to rebase.
+- JTTY has not been worked on the air.
 
 ## [2.0.4_brown] - 2026-10-09
 
