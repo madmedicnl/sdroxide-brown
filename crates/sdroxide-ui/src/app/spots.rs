@@ -436,15 +436,34 @@ impl SdroxideApp {
 
     /// The live-spots window: source filters, a fuzzy search box, a
     /// click-to-tune list of current DX-cluster / POTA / SOTA / PSK-Reporter
-    /// spots and broadcast stations, and the feed status line.
+    /// spots and broadcast stations, and the feed status line. The body carries
+    /// its two asks — a spot picked, and the setup chip — back to the tail.
     pub(in crate::app) fn spots_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
-        let worked_entities = self.worked_entities().clone();
-        let mut open = self.show_spots;
         let mut clicked: Option<Spot> = None;
         let mut open_setup = false;
+        let open =
+            self.tool_window(ctx, "spots", "SPOTS", [580.0, 480.0], self.show_spots, |me, ui| {
+                me.spots_body(ui, &mut clicked, &mut open_setup)
+            });
+        self.show_spots = open;
+        if open_setup {
+            // Open the main Settings dialog on the Spots tab.
+            self.show_settings = true;
+            self.settings_tab = SettingsTab::Spots;
+        }
+        if let Some(s) = clicked {
+            self.select_spot(&s, cmds);
+        }
+    }
+
+    /// The spots list's body, split out so the shell can draw it in a window of
+    /// its own.
+    fn spots_body(&mut self, ui: &mut egui::Ui, clicked: &mut Option<Spot>, open_setup: &mut bool) {
+        crate::chrome::window_body_bg(ui);
+        let worked_entities = self.worked_entities().clone();
         let now = now_unix();
         self.refresh_broadcast_spots(now);
-        // Cloned out of `self` because the window closure needs `&mut self`.
+        // Cloned out of `self` because the rest of the body needs `&mut self`.
         let spots = self.merged_spots();
         // Chip order has to match `SpotKind::index`: the loop below indexes
         // `spot_kinds_shown` positionally. HeardMe has no chip: it is the map
@@ -458,194 +477,151 @@ impl SdroxideApp {
             (SpotKind::FreeDv, "FREEDV"),
             (SpotKind::Broadcast, "BC"),
         ];
-        let resp = egui::Window::new("SPOTS")
-            .id(crate::layout::salted_id(ctx, "SPOTS"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 580.0))
-            .default_height(crate::layout::window_h(ctx, 480.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                ui.horizontal(|ui| {
-                    for (i, (kind, label)) in labels.iter().enumerate() {
-                        // SWL mode has no DX cluster / POTA / SOTA feed to show,
-                        // so it shows no chip for one.
-                        if self.swl_mode()
-                            && matches!(kind, SpotKind::DxCluster | SpotKind::Pota | SpotKind::Sota)
-                        {
-                            continue;
-                        }
-                        let chip = crate::chrome::chip(ui, self.view.spot_kinds_shown[i], *label);
-                        let chip = if *kind == SpotKind::Broadcast {
-                            chip.on_hover_text("Longwave & shortwave broadcast stations on air now")
-                        } else {
-                            chip
-                        };
-                        if chip.clicked() {
-                            self.view.spot_kinds_shown[i] = !self.view.spot_kinds_shown[i];
-                        }
-                    }
-                    if crate::chrome::chip(ui, self.spot_in_view_only, "IN VIEW")
-                        .on_hover_text("Only spots inside the panadapter span")
-                        .clicked()
-                    {
-                        self.spot_in_view_only = !self.spot_in_view_only;
-                    }
-                    if crate::chrome::chip(ui, self.view.spots_openings, "OPENINGS")
-                        .on_hover_text(
-                            "Band-opening detections: paths whose recent activity surged \
-                             past their own 3-hour baseline",
-                        )
-                        .clicked()
-                    {
-                        self.view.spots_openings = !self.view.spots_openings;
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if crate::chrome::chip(ui, false, "⚙ SETUP")
-                            .on_hover_text("Feeds, lookup & upload settings")
-                            .clicked()
-                        {
-                            open_setup = true;
-                        }
-                    });
-                });
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 5.0;
-                    ui.label(RichText::new("⌕").color(crate::theme::CYAN_DIM()).size(14.0));
-                    crate::chrome::field(
-                        ui,
-                        egui::TextEdit::singleline(&mut self.spot_search)
-                            .desired_width(200.0)
-                            .hint_text("call, station, site, frequency")
-                            .text_color(crate::theme::TEXT_STRONG()),
-                    );
-                    if !self.spot_search.trim().is_empty()
-                        && ui.button("✕").on_hover_text("Clear the search").clicked()
-                    {
-                        self.spot_search.clear();
-                    }
-                });
-                if let Some(s) = &self.net_status {
-                    ui.label(RichText::new(s).size(11.0).color(crate::theme::gray(150)));
+        ui.horizontal(|ui| {
+            for (i, (kind, label)) in labels.iter().enumerate() {
+                // SWL mode has no DX cluster / POTA / SOTA feed to show,
+                // so it shows no chip for one.
+                if self.swl_mode()
+                    && matches!(kind, SpotKind::DxCluster | SpotKind::Pota | SpotKind::Sota)
+                {
+                    continue;
                 }
-                // Upload and lookup results — the rolling `net_log`, which had
-                // no reader anywhere. Collapsed to one row by default, since the
-                // SPOTS window is about the spots; opened, it answers "did that
-                // QSO upload, and if not, why".
-                if !self.net_log.is_empty() {
-                    egui::CollapsingHeader::new(
-                        RichText::new(format!("NET LOG ({})", self.net_log.len()))
-                            .size(11.0)
-                            .color(crate::theme::CYAN_DIM()),
-                    )
-                    .id_salt("spots-net-log")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        for line in &self.net_log {
-                            ui.label(RichText::new(line).monospace().size(10.5));
-                        }
-                    });
-                }
-                ui.separator();
-                // Band-opening detections from the same feeds (adapted from
-                // OpenHamClock): a path whose recent activity surged past its
-                // own 3-hour baseline. Behind the OPENINGS chip, and split
-                // from the spot list by a draggable handle, so a band surge
-                // can be given most of the window or squeezed back to a
-                // sliver. Strongest first — opening, then active, then closing
-                // sloughing off. `avail_h` is everything left below this
-                // point, and the openings share and the handle subtract from
-                // it, leaving the rest to the spots.
-                let show_openings = self.view.spots_openings && !self.band_openings.is_empty();
-                let avail_h = ui.available_height().max(130.0);
-                const HANDLE_H: f32 = 7.0;
-                let openings_h = if show_openings {
-                    (avail_h * self.view.spots_openings_fraction)
-                        .clamp(70.0, (avail_h - HANDLE_H - 120.0).max(70.0))
+                let chip = crate::chrome::chip(ui, self.view.spot_kinds_shown[i], *label);
+                let chip = if *kind == SpotKind::Broadcast {
+                    chip.on_hover_text("Longwave & shortwave broadcast stations on air now")
                 } else {
-                    0.0
+                    chip
                 };
-                // Filter by the category chips, then rank by how well each row
-                // matched the query. With no query the natural frequency order
-                // is kept; with one, the best matches come first, because the
-                // whole point of typing is to get the wanted row to the top.
-                let query = self.spot_search.trim();
-                let visible: Vec<&Spot> = spots.iter().filter(|s| self.spot_visible(s)).collect();
-                let mut rows: Vec<(&Spot, i32)> = visible
-                    .iter()
-                    .filter_map(|s| {
-                        crate::fuzzy::score_terms(&spot_haystack(s), query).map(|sc| (*s, sc))
-                    })
-                    .collect();
-                if !query.is_empty() {
-                    rows.sort_by_key(|r| std::cmp::Reverse(r.1));
+                if chip.clicked() {
+                    self.view.spot_kinds_shown[i] = !self.view.spot_kinds_shown[i];
                 }
-                if show_openings {
-                    let openings = self.band_openings.clone();
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), openings_h),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            egui::ScrollArea::vertical()
-                                .id_salt("OPENINGS")
-                                .auto_shrink([false, false])
-                                .show(ui, |ui| {
-                                    for o in &openings {
-                                        opening_row(ui, o, now);
-                                        ui.add_space(2.0);
-                                    }
-                                });
-                        },
-                    );
-                    let h = crate::chrome::split_handle(
-                        ui,
-                        egui::vec2(ui.available_width(), HANDLE_H),
-                        None,
-                    );
-                    if h.dragged() {
-                        self.view.spots_openings_fraction =
-                            ((openings_h + h.drag_delta().y) / avail_h.max(1.0)).clamp(0.08, 0.8);
-                    }
-                    let rest = (avail_h - openings_h - HANDLE_H).max(0.0);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), rest),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            spot_rows_pane(
-                                ui,
-                                &rows,
-                                query,
-                                visible.len(),
-                                now,
-                                &worked_entities,
-                                &mut clicked,
-                            );
-                        },
-                    );
-                } else {
-                    spot_rows_pane(
-                        ui,
-                        &rows,
-                        query,
-                        visible.len(),
-                        now,
-                        &worked_entities,
-                        &mut clicked,
-                    );
+            }
+            if crate::chrome::chip(ui, self.spot_in_view_only, "IN VIEW")
+                .on_hover_text("Only spots inside the panadapter span")
+                .clicked()
+            {
+                self.spot_in_view_only = !self.spot_in_view_only;
+            }
+            if crate::chrome::chip(ui, self.view.spots_openings, "OPENINGS")
+                .on_hover_text(
+                    "Band-opening detections: paths whose recent activity surged \
+                     past their own 3-hour baseline",
+                )
+                .clicked()
+            {
+                self.view.spots_openings = !self.view.spots_openings;
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if crate::chrome::chip(ui, false, "⚙ SETUP")
+                    .on_hover_text("Feeds, lookup & upload settings")
+                    .clicked()
+                {
+                    *open_setup = true;
                 }
             });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
+        });
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 5.0;
+            ui.label(RichText::new("⌕").color(crate::theme::CYAN_DIM()).size(14.0));
+            crate::chrome::field(
+                ui,
+                egui::TextEdit::singleline(&mut self.spot_search)
+                    .desired_width(200.0)
+                    .hint_text("call, station, site, frequency")
+                    .text_color(crate::theme::TEXT_STRONG()),
+            );
+            if !self.spot_search.trim().is_empty()
+                && ui.button("✕").on_hover_text("Clear the search").clicked()
+            {
+                self.spot_search.clear();
+            }
+        });
+        if let Some(s) = &self.net_status {
+            ui.label(RichText::new(s).size(11.0).color(crate::theme::gray(150)));
         }
-        self.show_spots = open;
-        if open_setup {
-            // Open the main Settings dialog on the Spots tab.
-            self.show_settings = true;
-            self.settings_tab = SettingsTab::Spots;
+        // Upload and lookup results — the rolling `net_log`, which had
+        // no reader anywhere. Collapsed to one row by default, since the
+        // SPOTS window is about the spots; opened, it answers "did that
+        // QSO upload, and if not, why".
+        if !self.net_log.is_empty() {
+            egui::CollapsingHeader::new(
+                RichText::new(format!("NET LOG ({})", self.net_log.len()))
+                    .size(11.0)
+                    .color(crate::theme::CYAN_DIM()),
+            )
+            .id_salt("spots-net-log")
+            .default_open(false)
+            .show(ui, |ui| {
+                for line in &self.net_log {
+                    ui.label(RichText::new(line).monospace().size(10.5));
+                }
+            });
         }
-        if let Some(s) = clicked {
-            self.select_spot(&s, cmds);
+        ui.separator();
+        // Band-opening detections from the same feeds (adapted from
+        // OpenHamClock): a path whose recent activity surged past its
+        // own 3-hour baseline. Behind the OPENINGS chip, and split
+        // from the spot list by a draggable handle, so a band surge
+        // can be given most of the window or squeezed back to a
+        // sliver. Strongest first — opening, then active, then closing
+        // sloughing off. `avail_h` is everything left below this
+        // point, and the openings share and the handle subtract from
+        // it, leaving the rest to the spots.
+        let show_openings = self.view.spots_openings && !self.band_openings.is_empty();
+        let avail_h = ui.available_height().max(130.0);
+        const HANDLE_H: f32 = 7.0;
+        let openings_h = if show_openings {
+            (avail_h * self.view.spots_openings_fraction)
+                .clamp(70.0, (avail_h - HANDLE_H - 120.0).max(70.0))
+        } else {
+            0.0
+        };
+        // Filter by the category chips, then rank by how well each row
+        // matched the query. With no query the natural frequency order
+        // is kept; with one, the best matches come first, because the
+        // whole point of typing is to get the wanted row to the top.
+        let query = self.spot_search.trim();
+        let visible: Vec<&Spot> = spots.iter().filter(|s| self.spot_visible(s)).collect();
+        let mut rows: Vec<(&Spot, i32)> = visible
+            .iter()
+            .filter_map(|s| crate::fuzzy::score_terms(&spot_haystack(s), query).map(|sc| (*s, sc)))
+            .collect();
+        if !query.is_empty() {
+            rows.sort_by_key(|r| std::cmp::Reverse(r.1));
+        }
+        if show_openings {
+            let openings = self.band_openings.clone();
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), openings_h),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("OPENINGS")
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            for o in &openings {
+                                opening_row(ui, o, now);
+                                ui.add_space(2.0);
+                            }
+                        });
+                },
+            );
+            let h =
+                crate::chrome::split_handle(ui, egui::vec2(ui.available_width(), HANDLE_H), None);
+            if h.dragged() {
+                self.view.spots_openings_fraction =
+                    ((openings_h + h.drag_delta().y) / avail_h.max(1.0)).clamp(0.08, 0.8);
+            }
+            let rest = (avail_h - openings_h - HANDLE_H).max(0.0);
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), rest),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    spot_rows_pane(ui, &rows, query, visible.len(), now, &worked_entities, clicked);
+                },
+            );
+        } else {
+            spot_rows_pane(ui, &rows, query, visible.len(), now, &worked_entities, clicked);
         }
     }
 }

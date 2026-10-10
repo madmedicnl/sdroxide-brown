@@ -85,13 +85,66 @@ fn truncate(s: &str, n: usize) -> String {
 }
 
 impl SdroxideApp {
-    /// The SCHEDULE window. Returns nothing; tuning and logging are done by the
-    /// commands and the entry form it fills in.
+    /// The SCHEDULE window. Tuning and logging are done by the commands and the
+    /// entry form it fills in, after the window has closed the borrow of the log
+    /// — so the body carries the three asks back and the tail acts on them.
     pub(in crate::app) fn schedule_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
-        if !self.schedule.show {
-            return;
+        let mut tune: Option<BroadcastStation> = None;
+        let mut log: Option<BroadcastStation> = None;
+        let mut fav_toggle: Option<(String, bool)> = None;
+        let open = self.tool_window(
+            ctx,
+            "schedule",
+            "SCHEDULE",
+            [820.0, 560.0],
+            self.schedule.show,
+            |me, ui| me.schedule_body(ui, &mut tune, &mut log, &mut fav_toggle),
+        );
+        self.schedule.show = open;
+
+        if let Some((name, on)) = fav_toggle {
+            self.broadcast_favs.retain(|n| n != &name);
+            if on {
+                self.broadcast_favs.push(name);
+                self.broadcast_favs.sort();
+            }
+            crate::app::persist::persist_broadcast_favourites(&self.broadcast_favs);
         }
-        let mut open = self.schedule.show;
+        if let Some(s) = tune {
+            cmds.push(Command::SetVfo { vfo: Vfo::A, hz: s.freq_hz() });
+            cmds.push(Command::SetMode { rx: RxId::Main, mode: s.mode() });
+        }
+        if let Some(s) = log {
+            let smeter = self.meters.map(|m| m.s_dbm);
+            let grid = self.my_grid();
+            let antenna = self.swl_antenna.clone();
+            self.swl_edit = Some(SwlEditForm::from_station(
+                s.freq_hz(),
+                s.mode(),
+                &s.name,
+                &s.lang,
+                &s.site,
+                &s.email,
+                &s.address,
+                smeter,
+                grid,
+                antenna,
+            ));
+            self.show_swl = true;
+        }
+    }
+
+    /// The schedule's body: the filters, the on-air list and its row actions.
+    /// Split out of [`Self::schedule_window`] so the shell can draw it in a
+    /// window of its own; the three row asks go back through the parameters.
+    fn schedule_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        tune: &mut Option<BroadcastStation>,
+        log: &mut Option<BroadcastStation>,
+        fav_toggle: &mut Option<(String, bool)>,
+    ) {
+        crate::chrome::window_body_bg(ui);
         let now = now_unix() as i64;
         let at = schedule_time(now, &self.schedule);
 
@@ -135,218 +188,168 @@ impl SdroxideApp {
         };
         let count = rows.len();
 
-        let mut tune: Option<BroadcastStation> = None;
-        let mut log: Option<BroadcastStation> = None;
-        let mut fav_toggle: Option<(String, bool)> = None;
-        let resp = egui::Window::new("SCHEDULE")
-            .id(crate::layout::salted_id(ctx, "SCHEDULE"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 820.0))
-            .default_height(crate::layout::window_h(ctx, 560.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("At");
-                    if crate::chrome::chip(ui, self.schedule.use_now, "NOW").clicked() {
-                        self.schedule.use_now = true;
+        ui.horizontal_wrapped(|ui| {
+            ui.label("At");
+            if crate::chrome::chip(ui, self.schedule.use_now, "NOW").clicked() {
+                self.schedule.use_now = true;
+            }
+            let mut hh = self.schedule.hhmm as i32;
+            let r = ui.add_enabled(
+                !self.schedule.use_now,
+                egui::DragValue::new(&mut hh)
+                    .speed(1.0)
+                    .range(0..=2359)
+                    .custom_formatter(|v, _| hhmm_text(v as u16)),
+            );
+            if r.changed() {
+                self.schedule.hhmm = hh.clamp(0, 2359) as u16;
+            }
+            if ui.button("set time").clicked() {
+                self.schedule.use_now = false;
+            }
+            ui.separator();
+            ui.label("Find");
+            crate::chrome::field(
+                ui,
+                egui::TextEdit::singleline(&mut self.schedule.query)
+                    .desired_width(150.0)
+                    .hint_text("BBC, Ascension…"),
+            );
+            ui.label("Language");
+            crate::chrome::field(
+                ui,
+                egui::TextEdit::singleline(&mut self.schedule.lang).desired_width(90.0),
+            );
+            ui.label("Target");
+            crate::chrome::field(
+                ui,
+                egui::TextEdit::singleline(&mut self.schedule.target).desired_width(90.0),
+            );
+            ui.label("Band");
+            egui::ComboBox::from_id_salt("sched-band")
+                .width(72.0)
+                .selected_text(if self.schedule.band.is_empty() {
+                    "any".to_string()
+                } else {
+                    self.schedule.band.clone()
+                })
+                .show_ui(ui, |ui| {
+                    for b in BAND_FILTERS {
+                        let label = if b.is_empty() { "any" } else { b };
+                        ui.selectable_value(&mut self.schedule.band, b.to_string(), label);
                     }
-                    let mut hh = self.schedule.hhmm as i32;
-                    let r = ui.add_enabled(
-                        !self.schedule.use_now,
-                        egui::DragValue::new(&mut hh)
-                            .speed(1.0)
-                            .range(0..=2359)
-                            .custom_formatter(|v, _| hhmm_text(v as u16)),
-                    );
-                    if r.changed() {
-                        self.schedule.hhmm = hh.clamp(0, 2359) as u16;
-                    }
-                    if ui.button("set time").clicked() {
-                        self.schedule.use_now = false;
-                    }
-                    ui.separator();
-                    ui.label("Find");
-                    crate::chrome::field(
-                        ui,
-                        egui::TextEdit::singleline(&mut self.schedule.query)
-                            .desired_width(150.0)
-                            .hint_text("BBC, Ascension…"),
-                    );
-                    ui.label("Language");
-                    crate::chrome::field(
-                        ui,
-                        egui::TextEdit::singleline(&mut self.schedule.lang).desired_width(90.0),
-                    );
-                    ui.label("Target");
-                    crate::chrome::field(
-                        ui,
-                        egui::TextEdit::singleline(&mut self.schedule.target).desired_width(90.0),
-                    );
-                    ui.label("Band");
-                    egui::ComboBox::from_id_salt("sched-band")
-                        .width(72.0)
-                        .selected_text(if self.schedule.band.is_empty() {
-                            "any".to_string()
-                        } else {
-                            self.schedule.band.clone()
-                        })
-                        .show_ui(ui, |ui| {
-                            for b in BAND_FILTERS {
-                                let label = if b.is_empty() { "any" } else { b };
-                                ui.selectable_value(&mut self.schedule.band, b.to_string(), label);
-                            }
-                        });
-                    if crate::chrome::chip(ui, self.schedule.favourites_only, "★ FAVS")
-                        .on_hover_text("Only the stations you have starred")
-                        .clicked()
-                    {
-                        self.schedule.favourites_only = !self.schedule.favourites_only;
-                    }
-                    if crate::chrome::chip(ui, self.schedule.solar_time, "SOLAR TIME")
-                        .on_hover_text(
-                            "Show each row's local time at the transmitter — the Sun's clock, \
-                             four minutes a degree from its longitude, not a civil time zone. \
-                             It knows nothing of daylight saving or zone borders, so it is \
-                             labelled solar rather than local.",
-                        )
-                        .clicked()
-                    {
-                        self.schedule.solar_time = !self.schedule.solar_time;
-                    }
-                    ui.separator();
-                    ui.label(
-                        RichText::new(format!("{} UTC", crate::time::utc_clock(now)))
-                            .monospace()
-                            .color(crate::theme::CYAN()),
-                    );
-                    // The build, beside the clock — see the SWL LOG window.
-                    ui.label(
-                        RichText::new(format!("v{}", sdroxide_version::VERSION))
-                            .size(10.5)
-                            .color(crate::theme::gray(120)),
-                    )
-                    .on_hover_text(sdroxide_version::LONG_VERSION);
                 });
-                ui.add_space(2.0);
-                ui.label(
-                    RichText::new(format!(
-                        "{count} on air at {} UTC",
-                        if self.schedule.use_now {
-                            "now".to_string()
-                        } else {
-                            hhmm_text(self.schedule.hhmm)
+            if crate::chrome::chip(ui, self.schedule.favourites_only, "★ FAVS")
+                .on_hover_text("Only the stations you have starred")
+                .clicked()
+            {
+                self.schedule.favourites_only = !self.schedule.favourites_only;
+            }
+            if crate::chrome::chip(ui, self.schedule.solar_time, "SOLAR TIME")
+                .on_hover_text(
+                    "Show each row's local time at the transmitter — the Sun's clock, \
+                     four minutes a degree from its longitude, not a civil time zone. \
+                     It knows nothing of daylight saving or zone borders, so it is \
+                     labelled solar rather than local.",
+                )
+                .clicked()
+            {
+                self.schedule.solar_time = !self.schedule.solar_time;
+            }
+            ui.separator();
+            ui.label(
+                RichText::new(format!("{} UTC", crate::time::utc_clock(now)))
+                    .monospace()
+                    .color(crate::theme::CYAN()),
+            );
+            // The build, beside the clock — see the SWL LOG window.
+            ui.label(
+                RichText::new(format!("v{}", sdroxide_version::VERSION))
+                    .size(10.5)
+                    .color(crate::theme::gray(120)),
+            )
+            .on_hover_text(sdroxide_version::LONG_VERSION);
+        });
+        ui.add_space(2.0);
+        ui.label(
+            RichText::new(format!(
+                "{count} on air at {} UTC",
+                if self.schedule.use_now {
+                    "now".to_string()
+                } else {
+                    hhmm_text(self.schedule.hhmm)
+                }
+            ))
+            .size(11.0)
+            .color(crate::theme::gray(150)),
+        );
+        ui.separator();
+        egui::ScrollArea::vertical().auto_shrink([false, false]).id_salt("sched-list").show(
+            ui,
+            |ui| {
+                for s in &rows {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(format!("{:>6}", s.freq_khz.round() as i64)).monospace(),
+                        );
+                        ui.label(
+                            RichText::new(broadcast::metre_band(s.freq_khz).unwrap_or(""))
+                                .size(11.0)
+                                .color(crate::theme::CYAN()),
+                        );
+                        ui.label(RichText::new(truncate(&s.name, 30)).strong());
+                        ui.label(
+                            RichText::new(truncate(&s.lang, 12))
+                                .size(11.0)
+                                .color(crate::theme::gray(160)),
+                        );
+                        ui.label(
+                            RichText::new(truncate(&s.target, 12))
+                                .size(11.0)
+                                .color(crate::theme::gray(160)),
+                        );
+                        ui.label(
+                            RichText::new(truncate(&s.site, 18))
+                                .size(11.0)
+                                .color(crate::theme::gray(140)),
+                        );
+                        if self.schedule.solar_time
+                            && let Some(lon) = s.lon
+                        {
+                            let (_, _, _, h, mi, _) = sdroxide_types::utc_ymd_hms(now);
+                            let local =
+                                broadcast::local_solar_hhmm(h as u16 * 100 + mi as u16, lon);
+                            ui.label(
+                                RichText::new(local.clone())
+                                    .size(11.0)
+                                    .monospace()
+                                    .color(crate::theme::gray(140)),
+                            )
+                            .on_hover_text(format!(
+                                "{local} local solar time at {}, {lon:.1}°",
+                                s.site,
+                            ));
                         }
-                    ))
-                    .size(11.0)
-                    .color(crate::theme::gray(150)),
-                );
-                ui.separator();
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .id_salt("sched-list")
-                    .show(ui, |ui| {
-                        for s in &rows {
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new(format!("{:>6}", s.freq_khz.round() as i64))
-                                        .monospace(),
-                                );
-                                ui.label(
-                                    RichText::new(broadcast::metre_band(s.freq_khz).unwrap_or(""))
-                                        .size(11.0)
-                                        .color(crate::theme::CYAN()),
-                                );
-                                ui.label(RichText::new(truncate(&s.name, 30)).strong());
-                                ui.label(
-                                    RichText::new(truncate(&s.lang, 12))
-                                        .size(11.0)
-                                        .color(crate::theme::gray(160)),
-                                );
-                                ui.label(
-                                    RichText::new(truncate(&s.target, 12))
-                                        .size(11.0)
-                                        .color(crate::theme::gray(160)),
-                                );
-                                ui.label(
-                                    RichText::new(truncate(&s.site, 18))
-                                        .size(11.0)
-                                        .color(crate::theme::gray(140)),
-                                );
-                                if self.schedule.solar_time
-                                    && let Some(lon) = s.lon
-                                {
-                                    let (_, _, _, h, mi, _) = sdroxide_types::utc_ymd_hms(now);
-                                    let local = broadcast::local_solar_hhmm(
-                                        h as u16 * 100 + mi as u16,
-                                        lon,
-                                    );
-                                    ui.label(
-                                        RichText::new(local.clone())
-                                            .size(11.0)
-                                            .monospace()
-                                            .color(crate::theme::gray(140)),
-                                    )
-                                    .on_hover_text(format!(
-                                        "{local} local solar time at {}, {lon:.1}°",
-                                        s.site,
-                                    ));
-                                }
-                                let fav = self.broadcast_favs.iter().any(|n| n == &s.name);
-                                if ui
-                                    .small_button(if fav { "★" } else { "☆" })
-                                    .on_hover_text("Favourite this station")
-                                    .clicked()
-                                {
-                                    fav_toggle = Some((s.name.clone(), !fav));
-                                }
-                                if ui.small_button("TUNE").clicked() {
-                                    tune = Some(s.clone());
-                                }
-                                if ui.small_button("LOG").clicked() {
-                                    log = Some(s.clone());
-                                }
-                            });
+                        let fav = self.broadcast_favs.iter().any(|n| n == &s.name);
+                        if ui
+                            .small_button(if fav { "★" } else { "☆" })
+                            .on_hover_text("Favourite this station")
+                            .clicked()
+                        {
+                            *fav_toggle = Some((s.name.clone(), !fav));
+                        }
+                        if ui.small_button("TUNE").clicked() {
+                            *tune = Some(s.clone());
+                        }
+                        if ui.small_button("LOG").clicked() {
+                            *log = Some(s.clone());
                         }
                     });
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
-        self.schedule.show = open;
+                }
+            },
+        );
+
         self.schedule.cache = rows;
         self.schedule.cache_key = Some(key);
-
-        if let Some((name, on)) = fav_toggle {
-            self.broadcast_favs.retain(|n| n != &name);
-            if on {
-                self.broadcast_favs.push(name);
-                self.broadcast_favs.sort();
-            }
-            crate::app::persist::persist_broadcast_favourites(&self.broadcast_favs);
-        }
-        if let Some(s) = tune {
-            cmds.push(Command::SetVfo { vfo: Vfo::A, hz: s.freq_hz() });
-            cmds.push(Command::SetMode { rx: RxId::Main, mode: s.mode() });
-        }
-        if let Some(s) = log {
-            let smeter = self.meters.map(|m| m.s_dbm);
-            let grid = self.my_grid();
-            let antenna = self.swl_antenna.clone();
-            self.swl_edit = Some(SwlEditForm::from_station(
-                s.freq_hz(),
-                s.mode(),
-                &s.name,
-                &s.lang,
-                &s.site,
-                &s.email,
-                &s.address,
-                smeter,
-                grid,
-                antenna,
-            ));
-            self.show_swl = true;
-        }
     }
 }

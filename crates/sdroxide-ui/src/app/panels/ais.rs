@@ -511,175 +511,155 @@ impl SdroxideApp {
         ctx: &egui::Context,
         cmds: &mut Vec<Command>,
     ) {
-        if !self.show_ais_setup {
-            return;
-        }
-        let mut open = self.show_ais_setup;
         // Edited as a copy and diffed at the end, the way the ADS-B window
         // does: the engine persists whatever arrives and echoes it back in the
         // state, so there is no apply step and no way for the two copies to
         // drift.
         let mut cfg = self.state.ais;
-        let resp = egui::Window::new("AIS Setup")
-            .id(crate::layout::salted_id(ctx, "AisSetup"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(false)
-            .default_width(crate::layout::window_w(ctx, 420.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("Channels");
-                    for (i, ch) in sdroxide_ais_channels().iter().enumerate() {
-                        let on = cfg.channel_enabled(i);
-                        if crate::chrome::chip(ui, on, format!("AIS {}", ch.0))
-                            .on_hover_text(format!(
-                                "{:.3} MHz — marine channel {}. A ship alternates between the \
-                                 two, so switching one off halves how often every vessel is \
-                                 heard.",
-                                ch.1 / 1e6,
-                                ch.2
-                            ))
-                            .clicked()
-                        {
-                            cfg.channels ^= 1 << i;
-                        }
-                    }
-                });
-                ui.add_space(4.0);
-                egui::Grid::new("ais-cfg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                    ui.label("Drop from chart after");
-                    ui.horizontal(|ui| {
-                        ui.add(
-                            egui::DragValue::new(&mut cfg.drop_map_s).range(10..=3600).suffix(" s"),
-                        );
-                        ui.label(RichText::new("without a position report").size(9.5).weak());
-                    });
-                    ui.end_row();
-                    ui.label("");
-                    ui.label(
-                        RichText::new(
-                            "Five minutes by default, not ADS-B's ten seconds: a vessel at \
-                             anchor reports once every three minutes, and a shorter window \
-                             would blank most of a harbour between two perfectly good \
-                             reports. Past it the ship comes off the chart and its row \
-                             greys — it is not faded, because a dim symbol at a stale \
-                             position is still a claim about where a ship is, in the same \
-                             ink as the true ones.",
-                        )
-                        .size(10.0)
-                        .weak(),
-                    );
-                    ui.end_row();
-
-                    ui.label("Drop from list after");
-                    ui.horizontal(|ui| {
-                        ui.add(
-                            egui::DragValue::new(&mut cfg.drop_list_s)
-                                .range(i64::from(cfg.drop_map_s)..=21_600)
-                                .suffix(" s"),
-                        );
-                        ui.label(RichText::new("with nothing heard at all").size(9.5).weak());
-                    });
-                    ui.end_row();
-                    ui.label("");
-                    ui.label(
-                        RichText::new(
-                            "The message carrying a ship's name comes round every six \
-                             minutes, so a short list window keeps throwing vessels away \
-                             just before they say what they are called.",
-                        )
-                        .size(10.0)
-                        .weak(),
-                    );
-                    ui.end_row();
-
-                    ui.label("Trail length");
-                    ui.horizontal(|ui| {
-                        ui.add(
-                            egui::DragValue::new(&mut cfg.trail_minutes)
-                                .range(0..=360)
-                                .suffix(" min"),
-                        );
-                        ui.label(RichText::new("of history behind each target").size(9.5).weak());
-                    });
-                    ui.end_row();
-                    ui.label("");
-                    ui.label(
-                        RichText::new(
-                            "In minutes rather than in points, because AIS reporting rates \
-                             span two orders of magnitude: a fixed count would be eighty \
-                             seconds of a ferry and two hours of an anchored tanker, drawn \
-                             identically. Zero switches trails off.",
-                        )
-                        .size(10.0)
-                        .weak(),
-                    );
-                    ui.end_row();
-
-                    ui.label("Speed vector");
-                    ui.horizontal(|ui| {
-                        ui.add(
-                            egui::DragValue::new(&mut cfg.vector_minutes)
-                                .speed(0.5)
-                                .range(0.0..=60.0)
-                                .suffix(" min"),
-                        );
-                        ui.label(
-                            RichText::new("how far ahead the vector reaches").size(9.5).weak(),
-                        );
-                    });
-                    ui.end_row();
-
-                    ui.label("Slot threshold");
-                    ui.horizontal(|ui| {
-                        ui.add(
-                            egui::DragValue::new(&mut cfg.threshold_db).range(3..=30).suffix(" dB"),
-                        );
-                        ui.label(
-                            RichText::new("above the channel's learned noise floor")
-                                .size(9.5)
-                                .weak(),
-                        );
-                    });
-                    ui.end_row();
-
-                    ui.label("Track at most");
-                    ui.add(
-                        egui::DragValue::new(&mut cfg.max_vessels)
-                            .range(10..=5000)
-                            .suffix(" vessels"),
-                    );
-                    ui.end_row();
-                });
-                ui.separator();
-                ui.label(
-                    RichText::new(
-                        "AIS is receive-only here and always will be: it is a \
-                         safety-of-life service, and putting false vessel traffic on it is \
-                         not something a licence covers.",
-                    )
-                    .size(10.0)
-                    .weak(),
-                );
-                ui.label(
-                    RichText::new(
-                        "Fill in My grid in the digimode setup for ranges and bearings, and \
-                         so the chart frames itself around where you are rather than around \
-                         whatever is furthest away.",
-                    )
-                    .size(10.0)
-                    .weak(),
-                );
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
+        let open = self.tool_window(
+            ctx,
+            "ais-setup",
+            "AIS Setup",
+            [420.0, 420.0],
+            self.show_ais_setup,
+            |me, ui| me.ais_setup_body(ui, &mut cfg),
+        );
         let cfg = cfg.sane();
         if cfg != self.state.ais {
             cmds.push(Command::SetAisConfig(cfg));
         }
         self.show_ais_setup = open;
+    }
+
+    /// The AIS setup's body, split out so the shell can draw it in a window of
+    /// its own.
+    fn ais_setup_body(&mut self, ui: &mut egui::Ui, cfg: &mut sdroxide_types::AisSettings) {
+        crate::chrome::window_body_bg(ui);
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Channels");
+            for (i, ch) in sdroxide_ais_channels().iter().enumerate() {
+                let on = cfg.channel_enabled(i);
+                if crate::chrome::chip(ui, on, format!("AIS {}", ch.0))
+                    .on_hover_text(format!(
+                        "{:.3} MHz — marine channel {}. A ship alternates between the \
+                         two, so switching one off halves how often every vessel is \
+                         heard.",
+                        ch.1 / 1e6,
+                        ch.2
+                    ))
+                    .clicked()
+                {
+                    cfg.channels ^= 1 << i;
+                }
+            }
+        });
+        ui.add_space(4.0);
+        egui::Grid::new("ais-cfg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
+            ui.label("Drop from chart after");
+            ui.horizontal(|ui| {
+                ui.add(egui::DragValue::new(&mut cfg.drop_map_s).range(10..=3600).suffix(" s"));
+                ui.label(RichText::new("without a position report").size(9.5).weak());
+            });
+            ui.end_row();
+            ui.label("");
+            ui.label(
+                RichText::new(
+                    "Five minutes by default, not ADS-B's ten seconds: a vessel at \
+                     anchor reports once every three minutes, and a shorter window \
+                     would blank most of a harbour between two perfectly good \
+                     reports. Past it the ship comes off the chart and its row \
+                     greys — it is not faded, because a dim symbol at a stale \
+                     position is still a claim about where a ship is, in the same \
+                     ink as the true ones.",
+                )
+                .size(10.0)
+                .weak(),
+            );
+            ui.end_row();
+
+            ui.label("Drop from list after");
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::DragValue::new(&mut cfg.drop_list_s)
+                        .range(i64::from(cfg.drop_map_s)..=21_600)
+                        .suffix(" s"),
+                );
+                ui.label(RichText::new("with nothing heard at all").size(9.5).weak());
+            });
+            ui.end_row();
+            ui.label("");
+            ui.label(
+                RichText::new(
+                    "The message carrying a ship's name comes round every six \
+                     minutes, so a short list window keeps throwing vessels away \
+                     just before they say what they are called.",
+                )
+                .size(10.0)
+                .weak(),
+            );
+            ui.end_row();
+
+            ui.label("Trail length");
+            ui.horizontal(|ui| {
+                ui.add(egui::DragValue::new(&mut cfg.trail_minutes).range(0..=360).suffix(" min"));
+                ui.label(RichText::new("of history behind each target").size(9.5).weak());
+            });
+            ui.end_row();
+            ui.label("");
+            ui.label(
+                RichText::new(
+                    "In minutes rather than in points, because AIS reporting rates \
+                     span two orders of magnitude: a fixed count would be eighty \
+                     seconds of a ferry and two hours of an anchored tanker, drawn \
+                     identically. Zero switches trails off.",
+                )
+                .size(10.0)
+                .weak(),
+            );
+            ui.end_row();
+
+            ui.label("Speed vector");
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::DragValue::new(&mut cfg.vector_minutes)
+                        .speed(0.5)
+                        .range(0.0..=60.0)
+                        .suffix(" min"),
+                );
+                ui.label(RichText::new("how far ahead the vector reaches").size(9.5).weak());
+            });
+            ui.end_row();
+
+            ui.label("Slot threshold");
+            ui.horizontal(|ui| {
+                ui.add(egui::DragValue::new(&mut cfg.threshold_db).range(3..=30).suffix(" dB"));
+                ui.label(RichText::new("above the channel's learned noise floor").size(9.5).weak());
+            });
+            ui.end_row();
+
+            ui.label("Track at most");
+            ui.add(egui::DragValue::new(&mut cfg.max_vessels).range(10..=5000).suffix(" vessels"));
+            ui.end_row();
+        });
+        ui.separator();
+        ui.label(
+            RichText::new(
+                "AIS is receive-only here and always will be: it is a \
+                 safety-of-life service, and putting false vessel traffic on it is \
+                 not something a licence covers.",
+            )
+            .size(10.0)
+            .weak(),
+        );
+        ui.label(
+            RichText::new(
+                "Fill in My grid in the digimode setup for ranges and bearings, and \
+                 so the chart frames itself around where you are rather than around \
+                 whatever is furthest away.",
+            )
+            .size(10.0)
+            .weak(),
+        );
     }
 }
 

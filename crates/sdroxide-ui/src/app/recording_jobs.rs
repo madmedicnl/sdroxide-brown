@@ -114,100 +114,29 @@ impl SdroxideApp {
         }
     }
 
-    /// The RECORDINGS window: the jobs list and its form.
+    /// The RECORDINGS window: the jobs list and its form. The body carries its
+    /// asks back and the tail acts on them, after the window has closed the
+    /// borrow of the jobs list.
     pub(in crate::app) fn recordings_window(
         &mut self,
         ctx: &egui::Context,
         cmds: &mut Vec<Command>,
     ) {
-        if !self.jobs.show {
-            return;
-        }
-        let mut open = self.jobs.show;
         let mut new_job = false;
         let mut save = false;
         let mut cancel = false;
         let mut edit: Option<u64> = None;
         let mut delete: Option<u64> = None;
-        let rows = self.recording_jobs.clone();
-        let resp = egui::Window::new("RECORDINGS")
-            .id(crate::layout::salted_id(ctx, "RECORDINGS"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_width(crate::layout::window_w(ctx, 720.0))
-            .default_height(crate::layout::window_h(ctx, 480.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                ui.horizontal(|ui| {
-                    if crate::chrome::chip(ui, false, "+ NEW JOB").clicked() {
-                        new_job = true;
-                    }
-                    if let Some(s) = &self.jobs.status {
-                        ui.label(RichText::new(s).size(11.0).color(crate::theme::CYAN()));
-                    }
-                    if self.jobs.running.is_some() {
-                        ui.label(
-                            RichText::new("● recording").size(11.0).color(crate::theme::ALERT()),
-                        );
-                    }
-                });
-                if self.jobs.edit.is_some() {
-                    ui.add_space(4.0);
-                    self.job_form(ui, &mut save, &mut cancel);
-                }
-                ui.separator();
-                egui::ScrollArea::vertical().auto_shrink([false, false]).id_salt("jobs-list").show(
-                    ui,
-                    |ui| {
-                        if rows.is_empty() {
-                            ui.label(
-                                RichText::new(
-                                    "No scheduled recordings — press + NEW JOB to add one.",
-                                )
-                                .color(crate::theme::gray(150)),
-                            );
-                        }
-                        for j in &rows {
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new(j.utc_text()).monospace().size(11.0));
-                                ui.label(
-                                    RichText::new(format!("{:>6} kHz", j.freq_hz.round() as i64))
-                                        .monospace(),
-                                );
-                                ui.label(RichText::new(j.mode.label()).size(11.0));
-                                ui.label(RichText::new(truncate(&j.name, 26)).strong());
-                                ui.label(
-                                    RichText::new(format!("{} min", j.duration_s / 60))
-                                        .size(11.0)
-                                        .color(crate::theme::gray(160)),
-                                );
-                                ui.label(
-                                    RichText::new(j.kind.label())
-                                        .size(11.0)
-                                        .color(crate::theme::gray(160)),
-                                );
-                                if j.done {
-                                    ui.label(
-                                        RichText::new("done")
-                                            .size(10.5)
-                                            .color(crate::theme::gray(130)),
-                                    );
-                                }
-                                if ui.small_button("edit").clicked() {
-                                    edit = Some(j.id);
-                                }
-                                if ui.small_button("del").clicked() {
-                                    delete = Some(j.id);
-                                }
-                            });
-                        }
-                    },
-                );
-            });
-        if let Some(r) = &resp {
-            crate::chrome::paint_window_border(ctx, &r.response);
-        }
+        let open = self.tool_window(
+            ctx,
+            "recordings",
+            "RECORDINGS",
+            [720.0, 480.0],
+            self.jobs.show,
+            |me, ui| {
+                me.recordings_body(ui, &mut new_job, &mut save, &mut cancel, &mut edit, &mut delete)
+            },
+        );
         self.jobs.show = open;
 
         if new_job {
@@ -219,6 +148,15 @@ impl SdroxideApp {
             self.jobs.date = date_str(now);
             self.jobs.time = time_str(now);
             self.jobs.edit = Some(j);
+        }
+        // Load the picked job into the form. This was the local the old window
+        // set and never read, so the **edit** button did nothing at all.
+        if let Some(id) = edit {
+            if let Some(j) = self.recording_jobs.iter().find(|x| x.id == id) {
+                self.jobs.date = date_str(j.at_unix as i64);
+                self.jobs.time = time_str(j.at_unix as i64);
+                self.jobs.edit = Some(j.clone());
+            }
         }
         if save {
             if let Some(mut j) = self.jobs.edit.take() {
@@ -240,6 +178,78 @@ impl SdroxideApp {
             persist_recording_jobs(&self.recording_jobs);
         }
         let _ = cmds;
+    }
+
+    /// The recordings list's body, split out so the shell can draw it in a
+    /// window of its own.
+    fn recordings_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        new_job: &mut bool,
+        save: &mut bool,
+        cancel: &mut bool,
+        edit: &mut Option<u64>,
+        delete: &mut Option<u64>,
+    ) {
+        crate::chrome::window_body_bg(ui);
+        let rows = self.recording_jobs.clone();
+        ui.horizontal(|ui| {
+            if crate::chrome::chip(ui, false, "+ NEW JOB").clicked() {
+                *new_job = true;
+            }
+            if let Some(s) = &self.jobs.status {
+                ui.label(RichText::new(s).size(11.0).color(crate::theme::CYAN()));
+            }
+            if self.jobs.running.is_some() {
+                ui.label(RichText::new("● recording").size(11.0).color(crate::theme::ALERT()));
+            }
+        });
+        if self.jobs.edit.is_some() {
+            ui.add_space(4.0);
+            self.job_form(ui, save, cancel);
+        }
+        ui.separator();
+        egui::ScrollArea::vertical().auto_shrink([false, false]).id_salt("jobs-list").show(
+            ui,
+            |ui| {
+                if rows.is_empty() {
+                    ui.label(
+                        RichText::new("No scheduled recordings — press + NEW JOB to add one.")
+                            .color(crate::theme::gray(150)),
+                    );
+                }
+                for j in &rows {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(j.utc_text()).monospace().size(11.0));
+                        ui.label(
+                            RichText::new(format!("{:>6} kHz", j.freq_hz.round() as i64))
+                                .monospace(),
+                        );
+                        ui.label(RichText::new(j.mode.label()).size(11.0));
+                        ui.label(RichText::new(truncate(&j.name, 26)).strong());
+                        ui.label(
+                            RichText::new(format!("{} min", j.duration_s / 60))
+                                .size(11.0)
+                                .color(crate::theme::gray(160)),
+                        );
+                        ui.label(
+                            RichText::new(j.kind.label()).size(11.0).color(crate::theme::gray(160)),
+                        );
+                        if j.done {
+                            ui.label(
+                                RichText::new("done").size(10.5).color(crate::theme::gray(130)),
+                            );
+                        }
+                        if ui.small_button("edit").clicked() {
+                            *edit = Some(j.id);
+                        }
+                        if ui.small_button("del").clicked() {
+                            *delete = Some(j.id);
+                        }
+                    });
+                }
+            },
+        );
     }
 
     fn job_form(&mut self, ui: &mut egui::Ui, save: &mut bool, cancel: &mut bool) {
