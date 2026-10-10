@@ -2199,7 +2199,7 @@ impl SdroxideApp {
     /// Test is marked in flight the moment it goes out. Split out so an
     /// undocked window's own commands are dispatched exactly as the main
     /// window's — there is one place that decides, not two that can drift.
-    fn dispatch_commands(&mut self, cmds: Vec<Command>) {
+    pub(in crate::app) fn dispatch_commands(&mut self, cmds: Vec<Command>) {
         // Any stop control — STOP QSO, STOP TX, a bound Abort TX — disarms auto
         // mode. An unattended run must never be left sequencing after the
         // operator has told the radio to stop, whatever route they used.
@@ -2217,6 +2217,7 @@ impl SdroxideApp {
                 self.login_tests_pending.insert(*t);
                 self.login_tests.remove(t);
             }
+            self.dial_hold.note(&c);
             self.ctrl.send(c);
         }
     }
@@ -2474,7 +2475,12 @@ impl SdroxideApp {
                 // throwing it away on a QSY would blank the wideband strip and
                 // re-read every image store for nothing.
                 RadioEvent::CapabilitiesUpdated(c) => self.caps = Some(c),
-                RadioEvent::State(s) => {
+                RadioEvent::State(mut s) => {
+                    // The dial and centre this screen has just sent outrank a
+                    // snapshot that has not caught up with them yet — or CTR
+                    // recentres on the old dial for a frame and the waterfall
+                    // shakes. See `dial_hold`.
+                    self.dial_hold.apply(&mut s, now);
                     let prev_vfo = self.state.active_freq_hz();
                     let prev_rate = self.state.sample_rate;
                     let prev_mode = self.state.rx[0].mode;
