@@ -109,6 +109,13 @@ be locked with no way out. Desktop tier: no padlock. Guard:
 `app::touch_lock_tests` (verified failing with the filter removed: `+ tuned
 through the lock`).
 
+Its partner is **Wake lock** (Settings → UI, under Simple UI,
+`UiSettings::keep_screen_on`, off by default, not in `ClientScreen` — it is per
+device): the browser's Screen Wake Lock, re-asked every frame it is wanted and
+missing because the browser drops it whenever the page is hidden
+(`wake_lock::keep_awake`). Needs https; the row says when it is unavailable,
+refused, or (installed program) browser-only. Not driven in a real browser here.
+
 ## Session 2026-10-08, later: PRs merged, DAB to the radio tab, eQSL QTH, release resilience
 
 **The open PRs are merged and the worktrees are gone.** #22 (SSTV KEEP DIAL),

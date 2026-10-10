@@ -50,6 +50,7 @@ pub mod theme;
 mod time;
 mod touch_lock;
 mod view;
+mod wake_lock;
 pub mod waterfall_gpu;
 mod wefax;
 mod widgets;
