@@ -26,6 +26,7 @@ pub(in crate::app) mod bands;
 pub(in crate::app) mod contest;
 #[cfg(all(not(target_arch = "wasm32"), target_os = "linux"))]
 pub(in crate::app) mod cw_key;
+pub(in crate::app) mod dial_hold;
 pub(in crate::app) mod drm;
 pub(in crate::app) mod enigma;
 pub(in crate::app) mod frame;
@@ -474,6 +475,9 @@ pub struct SdroxideApp {
     /// Result of the last PlutoSDR "Test connection".
     pluto_test_result: Option<TestOutcome>,
     seen_first_state: bool,
+    /// The dial and the centre this screen has just sent, held against
+    /// engine snapshots that have not caught up with them. See [`dial_hold`].
+    dial_hold: dial_hold::DialHold,
     show_memories: bool,
     /// The RDS window. Opened from the RDS chip in the receive menu, which only
     /// appears on WFM.
@@ -1733,6 +1737,7 @@ impl SdroxideApp {
             pluto_devices: Vec::new(),
             pluto_test_result: None,
             seen_first_state: false,
+            dial_hold: dial_hold::DialHold::default(),
             show_memories: false,
             show_rds: false,
             show_drm: false,
@@ -2782,6 +2787,73 @@ mod tests {
         }
     }
 
+    /// A controller whose event queue the test keeps a handle on, so engine
+    /// snapshots can be fed in after the app has been built over it.
+    struct SharedController(
+        std::rc::Rc<std::cell::RefCell<std::collections::VecDeque<RadioEvent>>>,
+    );
+
+    impl RadioController for SharedController {
+        fn send(&mut self, _cmd: Command) {}
+        fn poll_event(&mut self) -> Option<RadioEvent> {
+            self.0.borrow_mut().pop_front()
+        }
+    }
+
+    /// Kevin's report: with CTR lit, stepping the dial with the arrow keys made
+    /// the waterfall jump, flicker and shake until the keys were let go — and
+    /// not at all with CTR off.
+    ///
+    /// A key writes the new dial into the state at once and sends `SetVfo`;
+    /// CTR then recentres and sends `SetCenter`. The engine's next snapshot is
+    /// often its answer to an *earlier* command, and adopting it as it stood
+    /// put the old dial and the old centre back, so CTR recentred on the old
+    /// dial and moved the front end back, then forward again on the next
+    /// snapshot. A late snapshot must not pull either value back.
+    #[test]
+    fn a_late_snapshot_does_not_pull_the_dial_or_the_centre_back() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-dial-hold-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let events = std::rc::Rc::new(std::cell::RefCell::new(std::collections::VecDeque::new()));
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(
+            &ctx,
+            None,
+            None,
+            Box::new(SharedController(events.clone())),
+            0,
+            true,
+        );
+        app.state.active_vfo = sdroxide_types::Vfo::A;
+        let (dial, centre) = (7_100_000.0, 7_000_000.0);
+        let mut engine = app.state.clone();
+        (engine.vfo_a_hz, engine.center_hz) = (dial, centre);
+
+        // One step right: the optimistic echo and the two commands, as the
+        // key binding and CTR leave them.
+        (app.state.vfo_a_hz, app.state.center_hz) = (dial + 100.0, centre + 100.0);
+        app.dispatch_commands(vec![
+            Command::SetVfo { vfo: sdroxide_types::Vfo::A, hz: dial + 100.0 },
+            Command::SetCenter(centre + 100.0),
+        ]);
+
+        // The engine's answer to the command before.
+        events.borrow_mut().push_back(RadioEvent::State(engine.clone()));
+        app.drain_events(&ctx, 1.0);
+        assert_eq!(app.state.vfo_a_hz, dial + 100.0, "a late snapshot pulled the dial back");
+        assert_eq!(app.state.center_hz, centre + 100.0, "a late snapshot pulled the centre back");
+
+        // Its answer to this one: adopted, and from here the engine's word stands.
+        (engine.vfo_a_hz, engine.center_hz) = (dial + 100.0, centre + 100.0);
+        events.borrow_mut().push_back(RadioEvent::State(engine.clone()));
+        app.drain_events(&ctx, 1.1);
+        assert_eq!((app.state.vfo_a_hz, app.state.center_hz), (dial + 100.0, centre + 100.0));
+    }
+
     /// JTTY's panel offers the FREQ picker, CLEAR RX and SAVE from the start —
     /// before anything has been heard, since FREQ is how an operator gets onto
     /// a JTTY frequency at all.
@@ -3325,6 +3397,79 @@ mod tests {
         assert!(
             app.dab_scan.is_none(),
             "the scan still holds a block after {ticks} ticks ({t:.0} s) — it never ends"
+        );
+    }
+
+    /// The settings box opens in the middle of the screen, not tucked into the
+    /// corner where the top bar covers it.
+    ///
+    /// It used to be a pinned `egui::Window` that put itself in the middle, and
+    /// that `default_pos` was lost when it became a tool window — the very next
+    /// build drew it at `x 15.4..916.6 y 15.4..776.6` in a 1920x1080 window, so
+    /// its whole tab bar sat under the 187 pt top bar. The test says where the
+    /// body lands rather than only that it does not panic, because a box drawn
+    /// in the wrong place still draws.
+    #[test]
+    fn the_settings_box_opens_below_the_top_bar() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-setbox-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.show_settings = true;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1920.0, 1080.0),
+            )),
+            ..Default::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest());
+        });
+        // The window's own frame is the largest inked rect near its 900x760
+        // default, so take the widest that fits rather than guessing at a shape
+        // type — a rounded frame is a Path, not a Rect.
+        let win = out
+            .shapes
+            .iter()
+            // Intersected with the clip rect: a shape clipped against the
+            // viewport still reports its full *unclipped* bounds, and one
+            // hanging off the top of the screen then reads as a 1041 pt tall
+            // rect that happens to be near the window's width. This is the same
+            // trap the page-overflow probe in `multi.rs` records — measure the
+            // ink, not the geometry.
+            .map(|cs| cs.shape.visual_bounding_rect().intersect(cs.clip_rect))
+            .filter(|b| {
+                b.is_finite()
+                    && !b.is_negative()
+                    && b.width() > 700.0
+                    && b.width() < 1100.0
+                    && b.height() > 500.0
+            })
+            .fold(None::<egui::Rect>, |acc: Option<egui::Rect>, b| {
+                Some(match acc {
+                    Some(a) if a.width() * a.height() >= b.width() * b.height() => a,
+                    _ => b,
+                })
+            })
+            .expect("the settings box should have painted something its own size");
+        // Handed back before the assertions, so a failure here reports its own
+        // message instead of aborting inside epaint's dropped-texture check.
+        out.drop_without_applying_deltas();
+        assert!(
+            win.min.y > 150.0,
+            "the settings box opened at y {:.0}, under the top bar: {:?}",
+            win.min.y,
+            win,
+        );
+        assert!(
+            win.max.x <= 1920.0 && win.max.y <= 1080.0,
+            "the settings box does not fit the screen: {:?}",
+            win,
         );
     }
 }

@@ -81,7 +81,43 @@ pub fn discover(timeout: Duration) -> Vec<PlutoDevice> {
             Err(e) => tracing::debug!("PlutoSDR: {address} is not a Pluto: {e}"),
         }
     }
-    out.into_values().collect()
+    one_per_board(out.into_values().collect())
+}
+
+/// One entry per physical board.
+///
+/// A Pluto with both its USB cable and an Ethernet port connected answers on
+/// two addresses — the USB gadget's [`crate::DEFAULT_ADDRESS`] and its LAN one —
+/// and listing it twice reads as two radios. The serial says which answers are
+/// the same board; of those, the LAN address is kept, since the USB link is
+/// the one an operator can unplug without losing the radio. A board that does
+/// not report a serial cannot be matched and is kept as it is.
+fn one_per_board(found: Vec<PlutoDevice>) -> Vec<PlutoDevice> {
+    let usb = |d: &PlutoDevice| d.ip == crate::DEFAULT_ADDRESS;
+    let mut kept: Vec<PlutoDevice> = Vec::with_capacity(found.len());
+    for dev in found {
+        let twin = (!dev.serial.is_empty())
+            .then(|| kept.iter().position(|k| k.serial == dev.serial))
+            .flatten();
+        match twin {
+            Some(i) => {
+                let dropped = if usb(&kept[i]) && !usb(&dev) {
+                    std::mem::replace(&mut kept[i], dev)
+                } else {
+                    dev
+                };
+                tracing::info!(
+                    "PlutoSDR: {} and {} are the same board (serial {}) — listing {}",
+                    dropped.ip,
+                    kept[i].ip,
+                    dropped.serial,
+                    kept[i].ip
+                );
+            }
+            None => kept.push(dev),
+        }
+    }
+    kept
 }
 
 /// Open `address` and report what is on the other end, or why not — the
@@ -123,4 +159,42 @@ fn test_inner(address: &str, timeout: Duration, trace: &Trace) -> Result<String>
         s.push_str(&format!(" (assumed: {})", phy.limits.assumed.join(", ")));
     }
     Ok(s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dev(ip: &str, serial: &str) -> PlutoDevice {
+        PlutoDevice {
+            ip: ip.into(),
+            hostname: String::new(),
+            model: "FISHBall-PlutoSky (Z7020-AD9361)".into(),
+            firmware: "tezuka-v0.3.23".into(),
+            serial: serial.into(),
+            iiod_version: "0.26".into(),
+        }
+    }
+
+    fn ips(v: &[PlutoDevice]) -> Vec<&str> {
+        v.iter().map(|d| d.ip.as_str()).collect()
+    }
+
+    #[test]
+    fn one_board_on_usb_and_ethernet_is_listed_once_on_ethernet() {
+        // BTreeMap order: the USB address sorts first, as it does in discover().
+        let found = vec![dev("192.168.2.1", "VRJB"), dev("192.168.4.1", "VRJB")];
+        assert_eq!(ips(&one_per_board(found)), ["192.168.4.1"]);
+        // And the other way round.
+        let found = vec![dev("192.168.4.1", "VRJB"), dev("192.168.2.1", "VRJB")];
+        assert_eq!(ips(&one_per_board(found)), ["192.168.4.1"]);
+    }
+
+    #[test]
+    fn different_boards_and_unknown_serials_are_all_kept() {
+        let found = vec![dev("192.168.2.1", "AAAA"), dev("192.168.4.1", "BBBB")];
+        assert_eq!(ips(&one_per_board(found)), ["192.168.2.1", "192.168.4.1"]);
+        let found = vec![dev("192.168.2.1", ""), dev("192.168.4.1", "")];
+        assert_eq!(ips(&one_per_board(found)), ["192.168.2.1", "192.168.4.1"]);
+    }
 }

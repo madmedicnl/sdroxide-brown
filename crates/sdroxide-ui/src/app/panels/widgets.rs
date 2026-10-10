@@ -89,20 +89,7 @@ pub(in crate::app) fn station_card(
     ui.separator();
     // Worked before? The one thing that decides whether this decode is worth
     // acting on, spelled out rather than compressed into a four-letter badge.
-    let band_label = if band.is_empty() { "this band".to_string() } else { band.to_string() };
-    let (worked, col) = if novelty.new_dxcc {
-        ("New entity — never worked, on any band".to_string(), crate::theme::PINK())
-    } else if novelty.new_dxcc_band {
-        (format!("New entity on {band_label}"), crate::theme::YELLOW())
-    } else if novelty.new_grid {
-        ("New grid square".to_string(), crate::theme::CYAN())
-    } else if novelty.new_call {
-        ("Not worked before".to_string(), crate::theme::CYAN_DIM())
-    } else if novelty.dupe {
-        (format!("Worked before on {band_label}"), crate::theme::gray(130))
-    } else {
-        ("Worked before, but not on this band".to_string(), crate::theme::gray(150))
-    };
+    let (worked, col) = worked_before_line(novelty, band);
     ui.label(RichText::new(worked).size(12.0).color(col));
 
     if let Some(target) = d.cq_to.as_deref() {
@@ -133,6 +120,38 @@ pub(in crate::app) fn station_card(
 /// The width is *reserved*, not requested: a plain `allocate_ui` shrinks to its
 /// content, so a short callsign would collapse the column and shift everything
 /// after it out of alignment down the list.
+/// The one line that says what working this station would be worth against the
+/// log, and in what colour. Pure, because the wording is the thing that goes
+/// wrong: it is the sentence an operator reads before deciding whether to
+/// answer.
+pub(in crate::app) fn worked_before_line(
+    novelty: sdroxide_types::Novelty,
+    band: &str,
+) -> (String, egui::Color32) {
+    let band_label = if band.is_empty() { "this band".to_string() } else { band.to_string() };
+    if novelty.new_dxcc {
+        ("New entity — never worked, on any band".to_string(), crate::theme::PINK())
+    } else if novelty.new_dxcc_band {
+        (format!("New entity on {band_label}"), crate::theme::YELLOW())
+    } else if novelty.new_grid {
+        ("New grid square".to_string(), crate::theme::CYAN())
+    } else if novelty.new_call {
+        ("Not worked before".to_string(), crate::theme::CYAN_DIM())
+    } else if novelty.dupe {
+        (format!("Worked before on {band_label}"), crate::theme::gray(130))
+    } else if band.is_empty() {
+        // No ADIF band for this one, so "not on this band" is a question with no
+        // answer — and on 11 m it is a nonsense one, since a CB callsign exists
+        // only on the citizens' band and there is no other band it could have
+        // been worked on. ADIF has no 11 m enumeration (`adif_band` returns ""
+        // for 24.99–28.0 MHz on purpose), which is also why a worked-before CB
+        // station could never reach the dupe branch above.
+        ("Worked before".to_string(), crate::theme::gray(150))
+    } else {
+        ("Worked before, but not on this band".to_string(), crate::theme::gray(150))
+    }
+}
+
 pub(in crate::app) fn row_cell(
     ui: &mut egui::Ui,
     w: f32,
@@ -526,5 +545,49 @@ mod tests {
             let p = slot_phase_s(SLOT as f64 + 3.7, t.slot_s, 0);
             assert!((0.0..t.slot_s).contains(&p), "{}: {p}", speed.label());
         }
+    }
+}
+
+#[cfg(test)]
+mod worked_before_tests {
+    use super::worked_before_line;
+    use sdroxide_types::Novelty;
+
+    /// A station worked before, on a band ADIF does not enumerate, must not be
+    /// told it was worked "but not on this band".
+    ///
+    /// The operator's report, on 11 m: *"it says 'worked before but not on this
+    /// band' which is wrong. CB callsigns are only on 11M so what other band
+    /// should that station have been worked on?"* — right, and unreachable to
+    /// fix any other way, because `adif_band` deliberately returns `""` there
+    /// (ADIF's list runs 12m, 10m, 8m with nothing in between), so `novelty()`
+    /// sets `per_band` false and `dupe` can never be true on the citizens' band.
+    /// Every worked-before CB station therefore fell into this last branch.
+    #[test]
+    fn on_a_band_with_no_adif_name_it_says_worked_before_and_nothing_more() {
+        let n = Novelty::default(); // worked before, not a dupe, nothing new
+        let (line, _) = worked_before_line(n, "");
+        assert_eq!(line, "Worked before", "11 m has no ADIF band to differ from");
+        assert!(!line.contains("band"), "the band clause is the whole bug: {line:?}");
+    }
+
+    /// ...and it must not swallow the cases that *do* have a band.
+    #[test]
+    fn a_real_band_still_says_which_band() {
+        let n = Novelty::default();
+        let (line, _) = worked_before_line(n, "20m");
+        assert_eq!(line, "Worked before, but not on this band");
+        let dupe = Novelty { dupe: true, ..Novelty::default() };
+        let (line, _) = worked_before_line(dupe, "20m");
+        assert_eq!(line, "Worked before on 20m");
+    }
+
+    /// A station never heard before is unaffected — it is a new call, and that
+    /// outranks every wording question here.
+    #[test]
+    fn a_new_call_still_says_so() {
+        let n = Novelty { new_call: true, ..Novelty::default() };
+        assert_eq!(worked_before_line(n, "").0, "Not worked before");
+        assert_eq!(worked_before_line(n, "20m").0, "Not worked before");
     }
 }

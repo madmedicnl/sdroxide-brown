@@ -9811,6 +9811,17 @@ ten boards: the original Pluto, PlutoPlus, ANTSDR E200/E310, Fishball/PlutoSky,
 SignalSDR Pro, LibreSDR/ZynqSDR, Pluto Nano and the PCIe and Mini
 OpenSDRLab boards.
 
+**As of today (10/2026), we recommend tezuka firmware v0.3.21: stable and
+tested.** Versions v0.3.19 and v0.3.23 are not stable.
+
+**Power the Pluto from a supply that delivers at least 3 A, and give it an
+exact 5 V at the board.** The Pluto needs a precise 5 V at its own input, and
+the supply cable loses some of it on the way there. We recommend a laboratory
+(bench) supply set to **5.15 V** at its output, so that the board receives
+exactly 5 V. A supply that falls short shows up as `EAGAIN` errors on the
+stream, and running the board away from a precise 5 V exposes you to errors and
+crashes.
+
 Nothing has to be configured in sdroxide to use it. The tuning range, the
 sample rate and the on-the-wire sample format are all read off the device as it
 connects rather than assumed, so a board running tezuka reports its own limits
@@ -12412,7 +12423,9 @@ Any of the big modules can be **pulled out into its own OS window**:
 - the **AUX SP** — a second spectrum and waterfall, the same radio seen twice;
 - the **Operating panel** (the mode's decoder list, transcript and controls);
 - the **Controls** — the whole top strip: the frequency readout, the S-meter and
-  the receiver and transmitter controls (SDRuno's "RX control").
+  the receiver and transmitter controls (SDRuno's "RX control");
+- the **Band & mode selector** — the band list and the mode rows in a window of
+  their own, where they lay out in **five columns**.
 
 Set each under its row on this tab — **Docked in this window** (the default) or
 **Undocked — its own window**. Closing an undocked window docks it again, and its
@@ -12421,8 +12434,9 @@ size and place are remembered for next time.
 You can also do it from the window itself: the **🪟 WINDOWS** chip at the right of
 the **radio-tab strip** — the row of radio names at the top of the main window —
 opens a list of the module windows (**SP1 — the spectrum**, **SP2 (AUX) — a second
-spectrum**, **Operating panel**, **RX control**), each with a **DOCKED** /
-**IN ITS OWN WINDOW** toggle, and **DOCK ALL WINDOWS** to bring them all back. The
+spectrum**, **Operating panel**, **RX control**, **Band & mode**), each with a
+**DOCKED** / **IN ITS OWN WINDOW** toggle, and **DOCK ALL WINDOWS** to bring them
+all back. The
 chip is lit while any of them is out of the main window. It acts on the radio you
 are looking at.
 
@@ -12451,6 +12465,14 @@ control window). Undocking the other two is the same idea one module down.
 Undocking the Controls does not first flip it to a phone-shaped strip: the
 control window is a desktop console whatever its own height, because it opens
 wide and short and a compact strip there was the first thing to look wrong.
+
+Undocking the **band/mode selector** is the widest surface of all: as a docked
+column it cannot be much more than 280 pt — the operating panels below it are
+built for about 680 pt, and a wider column squeezes them — so its window is
+where the mode sections lay out in **five columns** (SDRuno's band panel). Open
+it from the **⇱ WINDOW** chip in the band popup, from the docked column's
+header, or from the **🪟 WINDOWS** menu. While it is out the docked column is not
+drawn, so there is one selector on screen; closing the window docks it again.
 
 When everything is undocked there is nothing left of the radio to draw in the
 main window's centre, so the **band/mode selector fills it** rather than leaving
@@ -12481,6 +12503,31 @@ session-only, like its position inside the main window — where it sat is not
 remembered across a restart. Their app-ids are `sdroxide-tool-<name>` (e.g.
 `sdroxide-tool-scanner`, `sdroxide-tool-mail`), so one rule can float them all.
 
+Every menu tool window has one, and each remembers its own size: **Settings**,
+SCHEDULE, RECORDINGS, SPOTS, PUBLIC SDRS, the voice keyer, and the AIS / ADS-B /
+VDL2 / FSQ Contacts and per-mode setup panels. The WEFAX chart viewer is the one
+exception and stays docked — it belongs to the chart you picked rather than to
+the menu, so it opens and closes with that chart.
+
+Settings is the one worth putting on a second monitor: it opens in the middle of
+the screen the first time and will not be dragged narrower than its tabs can
+use, so the whole box survives a move rather than becoming a column of clipped
+controls.
+
+| Tool window | Application id |
+|---|---|
+| Settings | `sdroxide-tool-settings` |
+| Schedule | `sdroxide-tool-schedule` |
+| Recordings | `sdroxide-tool-recordings` |
+| Spots | `sdroxide-tool-spots` |
+| Public SDRs | `sdroxide-tool-public-sdrs` |
+| Voice keyer | `sdroxide-tool-voice-keyer` |
+| AIS setup | `sdroxide-tool-ais-setup` |
+| ADS-B setup | `sdroxide-tool-adsb-setup` |
+| VDL2 setup | `sdroxide-tool-vdl2-setup` |
+| FSQ contacts | `sdroxide-tool-fsq-contacts` |
+| Digital-mode setup | `sdroxide-tool-digi-setup` |
+
 **The app does not place the window on Wayland.** A Wayland client is given no
 absolute position, so on niri, sway or GNOME the window opens where the
 compositor tiles it. To float it and pin it to a monitor, give it a **window
@@ -12492,6 +12539,7 @@ rule** matching its application id:
 | AUX SP (second spectrum) | `sdroxide-panadapter-aux` |
 | Operating panel | `sdroxide-panel` |
 | Controls | `sdroxide-controls` |
+| Band & mode selector | `sdroxide-bandmenu` |
 | Tool windows | `sdroxide-tool-<name>` |
 
 For **niri**, in `~/.config/niri/config.kdl` (use your own output names —
@@ -17552,6 +17600,7 @@ floating RTS is the *receive* state, and test it.
 | 1 – 9, 0 (numpad) | Transmit voice-keyer slots 1–10 (nothing if the slot is empty). |
 | − (numpad) | Stop a voice-keyer message. |
 | Space (CW, with **KEY** on) | The straight key: carrier while held, and re-bindable as **CW straight key** in Settings → Controls ([2.14](#214-cw-decoding-and-keyboard-sending)). |
+| Ctrl+W | Open Settings on the **UI** page, where saved window arrangements (**Workspaces**) are listed ([6.4](#64-controls-keyboard-mouse-and-midi)). |
 | F1 | Open this manual (works even while typing). |
 
 Shortcuts are ignored while typing in a text field.

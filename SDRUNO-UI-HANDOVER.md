@@ -33,8 +33,9 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
 |---|---|---|
 | MAIN | the `MultiApp` shell + the radio tab strip | exists (no separate window) |
 | RX Control | the **Controls** module (`sdroxide-controls`) | built: strip, band keypad, band/mode list |
-| MAIN SP (SP1) | the **Panadapter** module (`sdroxide-panadapter`) | built, **no toolbar yet** |
-| AUX SP (SP2) | a second panadapter window | not built |
+| MAIN SP (SP1) | the **Panadapter** module (`sdroxide-panadapter`) | built, with its toolbar |
+| AUX SP (SP2) | `DetachableModule::AuxPanadapter` | built |
+| RX-control band panel | `DetachableModule::BandMenu` (`sdroxide-bandmenu`) | built (2026-10-10): the band/mode selector in its own window, five columns |
 | SCANNER / RECORDER / MEM. PANEL / … | the **tool windows** with the ⇱ WINDOW chip | mechanism done; ~13 tools converted, the rest need their bodies extracted |
 | PLUGINS | the decoders are modes, not plugins | n/a |
 
@@ -72,27 +73,55 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
 4. ~~**The MAIN window's buttons.**~~ **BUILT (2026-10-09)** — the **🪟 WINDOWS**
    chip on the radio-tab strip: the four module windows by their SDRuno names,
    each a toggle, plus **DOCK ALL WINDOWS**. See the note below.
-5. **The rest of the tool windows** — **partly done (2026-10-09): awards,
-   logbook, grid tracker, memories and the SWL log are converted.** Left, and why
-   each is not mechanical:
-   - **SPOTS** and **PUBLIC SDRS** compute values before the window and act on
-     them after (`clicked` / `open_setup`, `picked` / `refresh` / `answer`), and
-     those would have to come back through an app field. That is a design
-     decision, not a body extraction — do it deliberately.
-   - **SCHEDULE** and **RECORDINGS** return several `&mut` locals to their
-     caller (`fav_toggle`, `tune`, `log`; `new_job`, `save`, `cancel`, `delete`),
-     so their bodies need those as parameters rather than capturing them.
-   - **Voice keyer** and the per-mode setup windows (AIS / ADS-B / VDL2 / FSQ /
-     WEFAX) are not started.
-   The shape to copy is the five that are done: extract the body, take the window
-   through `self.tool_window(ctx, "<id>", "<Title>", [w, h], self.show_x, |me, ui|
-   me.x_body(...))`, and keep the tail in the caller.
+5. ~~**The rest of the tool windows.**~~ **BUILT (2026-10-10)** — every window on
+   this list now goes through `self.tool_window`, so each has a **⇱** chip and a
+   remembered geometry. **Item 5 is closed.** The `&mut` locals and the pre/post
+   values were the whole difficulty and none of it turned out to be a design
+   decision: a body takes them as `&mut` parameters and returns through them,
+   exactly as the existing five already did.
+
+   | window | id | size | carried back |
+   |---|---|---|---|
+   | SCHEDULE | `schedule` | 820×560 | `tune`, `log`, `fav_toggle` |
+   | RECORDINGS | `recordings` | 720×480 | `new_job`, `save`, `cancel`, `edit`, `delete` |
+   | SPOTS | `spots` | 580×480 | `clicked`, `open_setup` |
+   | PUBLIC SDRS | `public-sdrs` | 980×520 | `refresh`, `picked`, `answer` |
+   | VOICE KEYER | `voice-keyer` | 600×400 | — (commands emitted in the body) |
+   | AIS setup | `ais-setup` | 420×420 | config copy/diff |
+   | ADS-B setup | `adsb-setup` | 400×420 | config copy/diff |
+   | VDL2 setup | `vdl2-setup` | 420×460 | config copy/diff |
+   | FSQ Contacts | `fsq-contacts` | 320×360 | `changed`, `set_target` |
+   | digimode setup | `digi-setup` | 420×460 | dynamic mode title |
+
+   **A real bug fell out of it**: RECORDINGS' **edit** button was dead — the
+   `edit` local was set and never read, so choosing a job and pressing EDIT did
+   nothing at all. It now loads the selected job into the form. That is the
+   "a control that can silently do nothing" rule finding a second instance in
+   code this refactor touched.
+
+   **Settings joined them (2026-10-10)** — id `settings`, app-id
+   `sdroxide-tool-settings`. It needed two things the other ten did not:
+   `tool_window_sized` grew a `min_size` and a `centre_first`, because the
+   settings tabs are laid out at fixed widths (a narrow box is a column of
+   clipped controls) and a 900x760 window in a corner sits *under* the 187 pt
+   top bar. **Rendering it caught the second one**: the conversion dropped the
+   old `default_pos` and the box opened at `x 15.4..916.6 y 15.4..776.6` in a
+   1920x1080 window, entirely under the top bar. Pinned by
+   `the_settings_box_opens_below_the_top_bar`, verified failing with the
+   centring off (`the settings box opened at y 15, under the top bar`).
+   Its window's `vscroll` is now an explicit `ScrollArea::vertical()`, built
+   *before* `bars.restore(ui)` so the scrollbar keeps its accent.
+
+   **WEFAX is the one deliberate omission.** Its only window is the per-chart
+   **viewer** (`panels/wefax.rs`), opened from a selected chart and carrying that
+   chart's own title, size and state — not a menu tool. A fixed tool id would
+   make one window serve every chart, and a ⇱ chip on a viewer that exists only
+   while a chart is selected buys nothing. Leave it docked.
 6. ~~**Workspace save/recall** — SDRuno records up to ten named workspaces.~~
    **BUILT (2026-10-09)** — `sdroxide_types::Workspace`, a `workspaces.json` list,
-   and a **Workspaces** section on Settings → UI. See the note below. The one
-   piece of SDRuno's SAVE WS not done is the **Ctrl+W shortcut**: `Action` is on
-   the wire, so a new binding is a `PROTO_VERSION` bump for a convenience the
-   menu already offers. Add it deliberately, not in passing.
+   and a **Workspaces** section on Settings → UI. See the note below. **Ctrl+W is
+   built too (2026-10-10)** — `Action::Workspaces` appended last, `PROTO_VERSION`
+   198 → 199, schema stamp 2 → 3 so an existing `input.json` picks the key up.
 
 ## The band keypad as built (2026-10-09) — and where it deliberately stops
 
@@ -258,68 +287,58 @@ Source: `https://icas.to/sdrplay/SDRuno/sdruno-usermanual-jpn-1a-140.htm`
   shorter list a newer build would carry) and
   `sdroxide-config/tests/workspaces_round_trip.rs` (through the real loader, with
   a bad row proving the list costs only itself).
-- **Not done**: the Ctrl+W shortcut — `Action` rides the wire, so it is a
-  `PROTO_VERSION` bump; the menu does the job meanwhile.
+- **Ctrl+W (2026-10-10)**: `Action::Workspaces`, appended last on the enum,
+  `PROTO_VERSION` 198 → **199** (`VERSION_BYTE` 0x13 → 0x14), schema stamp
+  2 → **3** with `(3, Action::Workspaces)` in `InputSettings::ADDED` — so an
+  operator who already has an `input.json` **gets the key** rather than a dead
+  shortcut, and one who rebound or deleted it keeps their choice.
+  **It opens the Settings window on the UI page** rather than toggling: the
+  workspaces are a section of that page, there is no workspaces window of its
+  own, and a toggle would close the window an operator just used to save one.
+  `UiSink` carries a `workspaces: &mut bool` for the same reason it carries
+  `speech` — picking the page is `frame.rs`'s call. **Not tested at frame
+  level**: the dispatch arm is
+  (`ui::input::tests::the_workspaces_action_asks_for_the_ui_page_rather_than_toggling`,
+  verified failing against a toggle arm), but `frame.rs`'s four-line
+  follow-through has no harness in that module — `SdroxideApp` needs an
+  `eframe::CreationContext` and a `RadioController`.
 
-## The band/mode window (item 1) — the todo (2026-10-10)
+## The band/mode window as built (2026-10-10) — SDRuno's RX-control band panel
 
-**Why.** The band/mode selector's docked column cannot be wider than ~280 pt: the
-operating panels below it are built for ~680 pt (the FT8 QSO pane runs on under
-~677, the image panel and `digi_panel` have been made to scale but the rest have
-not), so a wider dock squeezes them and they overrun the dock — the #643 guard
-rejects it. A **five-across** grid needs ~500 pt, which only a panel of its own
-can be. That is SDRuno's shape anyway: its RX control / band panel is a separate
-window, not a column sharing width with the receiver. So the band/mode selector
-gets its **own detachable window** — the operator's "SDRuno cloned workarea".
+**Why it exists.** The docked column cannot be wider than ~280 pt: the operating
+panels below it are built for ~680 pt, so a selector showing its modes in five
+columns would squeeze them and overrun (the #643 guard). A window of its own can
+be as wide as the operator likes with the operating panel keeping its full width
+— which is SDRuno's shape anyway, and the operator's "SDRuno cloned workarea".
 
-The machinery is all there (`UNDOCKED-HANDOVER.md`): a module is a
-`DetachableModule` variant + a `detached_spec` + a `show_detached_module` arm +
-(where not always present) a `*_window_wanted` predicate. No `PROTO_VERSION`
-bump — a new `DetachableModule` variant is local `config.toml`.
-
-**The todo, in order.**
-
-1. **`DetachableModule::BandMenu`**, appended last (the registry extends safely —
-   `detached_slots` reads any length; the proof tests are in the AUX SP note).
-2. **`detached_spec`**: app-id `sdroxide-bandmenu`, title *Band & mode*,
-   `default_size` **wide** — ~[520, 720], five columns — with a `min_size` that
-   still fits three columns. Geometry persists like the others.
-3. **`show_detached_module` arm**: draw `self.band_menu_body(ui, cmds)` (which is
-   `band_mode_menu` without its frame — already shared with the docked column).
-   It needs the same "menu for a wide window" path, so check `mode_chip_grid`
-   gives five columns at 520 pt (it does — `MODE_GRID_COLS = 5`).
-4. **`band_menu_window_wanted`**: true whenever `detached[BandMenu]` is set. It is
-   an operator-opened window, not one that follows a mode, so the predicate is
-   just the flag (unlike `module_window_wanted`, which also needs layers/focus).
-5. **The entry points** — this is the part that is not mechanical:
-   - the band chip's popup gets a **⇱ WINDOW** chip beside the existing **DOCK**,
-     setting `DetachableModule::BandMenu` detached;
-   - the docked column's header gets the same ⇱ (beside UNDOCK);
-   - the strip's **🪟 WINDOWS** chip lists it by itself (`module_window_name`
-     walks the registry) — update `the_windows_menu_offers_every_module_by_name`;
-   - Settings → UI gets a row by itself (`DetachableModule::ALL`), whose hover
-     names the app-id for a Niri/window rule.
-6. **When the window is out**, decide the docked column: hide it (the window *is*
-   the selector) or leave both. Recommendation: **hide the docked column while
-   the window is out**, so there is one selector on screen, matching the
-   one-owner rule the 3D window and SP1 already follow.
-7. **The phone keeps the popup** — a window is a desktop/tablet surface. The
-   window itself is native-only (`#[cfg(not(target_arch = "wasm32"))]`), like the
-   console.
-8. **Workspaces** pick it up automatically (`DetachableModule::ALL`); no work.
-9. **Tests**: `the_windows_menu_offers_every_module_by_name` gains its row; a
-   render test that the wide window lays the mode sections in five columns (drive
-   `band_menu_body` at 520 pt and count the chips per row); the registry-safety
-   tests already cover the extra slot.
-10. **Gate**: `cargo check --workspace --all-targets` silent, `cargo test -p
-    sdroxide-ui --release`, and the wasm check (native-only, so it should be
-    unaffected).
-11. **Docs**: a note in this file and in `AGENTS.md`; the manual's *Undocked*
-    section.
-
-**Open decisions to make on the day, not now:** the default size; whether the
-docked column hides or coexists (recommend hides); whether the band chip's popup
-gains a ⇱ beside DOCK or the WINDOWS chip is the only way out (recommend both).
+- **`DetachableModule::BandMenu`**, appended (slot 4), app-id
+  `sdroxide-bandmenu`, window title *band & mode*, opening at **560×760** — wide
+  enough for `mode_chip_grid`'s five columns, which the docked column never could
+  be. `min_size` is the shared 360×240; the grid falls back to fewer columns, and
+  then to a wrapped row, as the window narrows.
+- **One body, two surfaces.** `show_detached_module`'s `M::BandMenu` arm draws
+  the same `band_menu_body` the docked column draws, in a scroll area, so the
+  window and the dock cannot come apart. At this width the mode sections lay in
+  **five columns** — `the_band_window_lays_the_modes_in_five_columns` pins it
+  (via the pure `mode_grid_cols`), and that the docked column is fewer.
+- **`band_menu_detached()`** is the whole predicate — undocked **and** focused.
+  Unlike the spectrum modules it needs nothing else present: a selector is always
+  meaningful, so there is never an empty window to explain.
+- **The entry points**: a **⇱ WINDOW** chip in the band popup beside **DOCK**, and
+  the same on the docked column's header. The strip's **🪟 WINDOWS** menu
+  (`module_window_name`) and Settings → UI (`DetachableModule::ALL`) pick it up
+  by themselves — the registry-safety tests already cover the extra slot.
+- **One selector on screen.** While the window is out the docked column is not
+  drawn (`band_dock_panel` returns early), matching the one-owner rule SP1 and the
+  3D window follow. Opening the window clears `band_docked`, so the two never
+  fight.
+- **Workspaces** include it automatically (`DetachableModule::ALL`); closing the
+  window docks it again (`handle_detached_outcome`).
+- **Native-only** (a window is a desktop surface); the phone keeps the popup, and
+  the wasm check is unaffected.
+- **Not seen in a running window** — the detached viewport no-ops under the
+  headless harness, so the arm's own draw is untested here; the registry, the
+  predicate, the menu name and the five-column rule are.
 
 ## House notes for whoever picks this up
 

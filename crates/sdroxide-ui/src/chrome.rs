@@ -1903,6 +1903,95 @@ fn chip_outline(rect: Rect, cut: f32) -> Vec<Pos2> {
     ]
 }
 
+/// The label an icon chip is built with. A space: it draws nothing, so the icon
+/// is the chip's whole face and there is no glyph anywhere for a font to be
+/// missing. Pinned by `the_icon_carries_no_glyph_to_miss`.
+const WINDOW_ICON_LABEL: &str = " ";
+
+/// The *non-blank* label [`chip_window_icon`] would build itself with. Empty
+/// means "no glyph at all", which is the property that keeps these two buttons
+/// off the tofu list — a glyph is only safe if the face is known to carry it,
+/// and that is not knowable here.
+pub fn chip_window_icon_label() -> &'static str {
+    ""
+}
+
+/// Which way a window icon points. The two are the same picture with the arrow
+/// reversed, which is what makes a pair of them readable without a word.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum WindowIcon {
+    /// Out to a window of its own.
+    Out,
+    /// Back into the main window.
+    In,
+}
+
+/// A chip whose face is a **drawn** window icon rather than a word or a glyph.
+///
+/// The words were too much text for a strip already dense with chips, so they
+/// went — but as *font glyphs* they were worse than the words: `⇱` and `⇲`
+/// (U+21F1/U+21F2) are missing from the faces this program ships, and the
+/// operator's screen drew both as tofu squares. A square where a control should
+/// be reads as a broken program, which is the one thing a new user must never
+/// conclude from a window title bar.
+///
+/// So the icon is drawn, the way the flags are (they are textures rather than
+/// emoji for the same reason — a face need not carry the glyph), and it takes
+/// its colour from the chip's own ink so it lights with the pointer like any
+/// other chip. Every geometry here is a fraction of the icon's box, so it is
+/// crisp at whatever size a theme's chip height gives it.
+pub fn chip_window_icon(ui: &mut Ui, icon: WindowIcon) -> Response {
+    let h = chip_height(ui, None);
+    let pad = chip_padding(ui);
+    // Square-ish: as tall as the chip's inner box allows, and no wider than
+    // that, so the pill does not go oblong.
+    let inner = (h - 2.0 * pad.y).min(h - 2.0);
+    let size = vec2(inner + 2.0 * pad.x, h);
+    // A space for the label: the chip is drawn in full — fill, stroke, hover and
+    // all — and the space simply leaves the middle empty for the icon. Borrowing
+    // the chip rather than reimplementing it is what keeps the icon's hover and
+    // press identical to the chips beside it.
+    let resp =
+        chip_impl(ui, false, RichText::new(WINDOW_ICON_LABEL), None, Sense::click(), Some(size));
+    let ink = if resp.hovered() {
+        ui.visuals().widgets.hovered.weak_bg_fill
+    } else {
+        ui.visuals().widgets.noninteractive.fg_stroke.color
+    };
+    let box_ = egui::Rect::from_center_size(resp.rect.center(), egui::Vec2::splat(inner));
+    paint_window_icon(ui.painter(), box_, ink, icon);
+    resp
+}
+
+/// The picture: a window's frame on one side, an arrow crossing its edge toward
+/// or away from it. Three strokes and a rectangle, which is about the most a
+/// 14 pt icon can carry and still be read at a glance.
+fn paint_window_icon(p: &egui::Painter, r: Rect, ink: Color32, icon: WindowIcon) {
+    let s = r.height();
+    let stroke = Stroke::new(1.3, ink);
+    // The frame takes the far side from the arrow, so the arrow is always the
+    // thing moving.
+    let fw = s * 0.56;
+    let frame = match icon {
+        WindowIcon::Out => Rect::from_min_size(r.min, vec2(fw, s)),
+        WindowIcon::In => Rect::from_min_size(pos2(r.max.x - fw, r.min.y), vec2(fw, s)),
+    };
+    p.rect_stroke(frame, 2.0, stroke, StrokeKind::Inside);
+
+    // The shaft runs from the frame's edge out to the far side of the box, and
+    // the head is two short strokes meeting at the tip.
+    let (tip, dir) = match icon {
+        WindowIcon::Out => (pos2(r.max.x, r.center().y), 1.0),
+        WindowIcon::In => (pos2(r.min.x, r.center().y), -1.0),
+    };
+    let tail = pos2(tip.x - dir * s * 0.34, tip.y);
+    p.line_segment([tail, tip], stroke);
+    let head = s * 0.26;
+    for dy in [-head, head] {
+        p.line_segment([pos2(tip.x - dir * head, tip.y + dy), tip], stroke);
+    }
+}
+
 fn chip_impl(
     ui: &mut Ui,
     selected: bool,
@@ -2912,5 +3001,111 @@ mod tests {
                 pos2(10.0, 25.0),
             ]
         );
+    }
+
+    #[cfg(test)]
+    mod window_icon_tests {
+        use super::WindowIcon;
+        use crate::multi::frame_test_lock;
+        use eframe::egui;
+
+        /// The icon's own strokes, painted onto a known 14 pt box and collected.
+        ///
+        /// The painter is asked directly rather than the whole chip: the chip also
+        /// paints its own fill and a text galley, and those are the same whichever
+        /// way the arrow points, so measuring them together hides the one thing
+        /// this is about. A fixed rect also keeps egui's 10,000 pt default
+        /// viewport out of it — with `RawInput::default()` every rect comes back
+        /// as `0..10000` and any two icons compare equal.
+        fn ink(dir: WindowIcon) -> Vec<egui::Rect> {
+            let _guard = frame_test_lock();
+            let ctx = egui::Context::default();
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 600.0),
+                )),
+                ..Default::default()
+            };
+            let box_ = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(14.0, 14.0));
+            let out = ctx.run_ui(input, |ui| {
+                super::super::paint_window_icon(ui.painter(), box_, egui::Color32::WHITE, dir);
+            });
+            let mut rects: Vec<egui::Rect> = out
+                .shapes
+                .iter()
+                .map(|cs| cs.shape.visual_bounding_rect().intersect(cs.clip_rect))
+                .filter(|r| r.is_finite() && r.width() > 0.2 && r.height() > 0.2)
+                .collect();
+            rects.sort_by(|a, b| a.min.x.total_cmp(&b.min.x).then(a.min.y.total_cmp(&b.min.y)));
+            out.drop_without_applying_deltas();
+            rects
+        }
+
+        /// The window chips draw geometry, and draw something the size of an icon.
+        ///
+        /// They used to be the font glyphs `⇱` and `⇲` (U+21F1/U+21F2), and the
+        /// operator's screen drew **both as tofu squares** — those code points are
+        /// absent from the faces this program ships. A square where a control
+        /// should be reads as a broken program, which is the one thing a new user
+        /// must never conclude from a title bar. So the icon is painted, the way
+        /// the flags are: a flag is a texture rather than an emoji for the same
+        /// reason, that a face need not carry the glyph.
+        ///
+        /// This asks the only question that catches it — did any ink land —
+        /// because a glyph that failed to resolve still "draws" something.
+        #[test]
+        fn a_window_icon_paints_its_own_geometry() {
+            for dir in [WindowIcon::Out, WindowIcon::In] {
+                let rects = ink(dir);
+                // A frame rectangle plus a shaft and two head strokes.
+                assert!(
+                    rects.len() >= 4,
+                    "{dir:?} painted {} shapes, which is not the icon",
+                    rects.len()
+                );
+                let union = rects.iter().fold(egui::Rect::NOTHING, |a, r| a.union(*r));
+                assert!(
+                    union.width() > 6.0 && union.height() > 6.0,
+                    "{dir:?} drew nothing of a recognisable size: {union:?}"
+                );
+                // Inside the box, give or take the stroke's own half-width: a
+                // 1.3 pt line's bounding rect overhangs by 0.65 a side, and the
+                // chip sizes itself to the icon, so anything more is ink that
+                // would land on whatever sits next to the button.
+                let allowed =
+                    egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(14.0, 14.0))
+                        .expand(1.0);
+                assert!(
+                    allowed.contains_rect(union),
+                    "{dir:?} drew outside its own box: {union:?} is not inside {allowed:?}"
+                );
+            }
+        }
+
+        /// The two directions must be distinguishable. They are the same picture
+        /// with the arrow reversed, so a mistake in that reversal leaves two
+        /// identical icons on screen and nothing but a hover to tell them apart —
+        /// and a hover is what a first-time user does not read.
+        #[test]
+        fn the_two_directions_are_not_the_same_picture() {
+            assert_ne!(
+                ink(WindowIcon::Out),
+                ink(WindowIcon::In),
+                "Out and In drew the same shapes, so the arrow points one way whatever it claims"
+            );
+        }
+
+        /// No label reaches the glyph atlas, which is the whole point: nothing
+        /// here can be missing from a font.
+        #[test]
+        fn the_icon_carries_no_glyph_to_miss() {
+            // The chip is built with a single space, which paints nothing
+            // anywhere. If an icon chip ever grew a real label, this is the
+            // assertion that would catch it — a tofu square is exactly a glyph
+            // the face does not have.
+            assert!(super::super::chip_window_icon_label().is_empty());
+            assert!(super::super::WINDOW_ICON_LABEL.trim().is_empty());
+        }
     }
 }

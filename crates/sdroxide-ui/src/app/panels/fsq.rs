@@ -433,75 +433,16 @@ impl SdroxideApp {
 
     /// Editable FSQ contacts book (add / select-as-target / delete).
     fn fsq_contacts_window(&mut self, ctx: &egui::Context) {
-        let mut open = self.fsq_show_contacts;
         let mut changed = false;
         let mut set_target: Option<String> = None;
-        egui::Window::new("FSQ Contacts")
-            .id(crate::layout::salted_id(ctx, "FSQ Contacts"))
-            .open(&mut open)
-            .frame(crate::chrome::window_frame())
-            .resizable(false)
-            .default_width(crate::layout::window_w(ctx, 320.0))
-            .show(ctx, |ui| {
-                crate::chrome::window_body_bg(ui);
-                ui.horizontal(|ui| {
-                    crate::chrome::field(
-                        ui,
-                        egui::TextEdit::singleline(&mut self.fsq_new_contact)
-                            .desired_width(140.0)
-                            .hint_text("callsign"),
-                    );
-                    let can_add = !self.fsq_new_contact.trim().is_empty();
-                    if ui.add_enabled(can_add, egui::Button::new("Add")).clicked() {
-                        let id = self.fsq_contacts.iter().map(|c| c.id).max().unwrap_or(0) + 1;
-                        self.fsq_contacts.push(sdroxide_types::FsqContact {
-                            id,
-                            call: self.fsq_new_contact.trim().to_uppercase(),
-                            name: String::new(),
-                            note: String::new(),
-                        });
-                        self.fsq_new_contact.clear();
-                        changed = true;
-                    }
-                });
-                ui.separator();
-                let mut to_delete: Option<u64> = None;
-                egui::ScrollArea::vertical().max_height(260.0).show_themed(ui, |ui| {
-                    for c in &mut self.fsq_contacts {
-                        ui.horizontal(|ui| {
-                            if ui.button("TO").clicked() {
-                                set_target = Some(c.call.clone());
-                            }
-                            ui.label(RichText::new(&c.call).monospace().strong());
-                            if crate::chrome::field(
-                                ui,
-                                egui::TextEdit::singleline(&mut c.name)
-                                    .hint_text("name")
-                                    .desired_width(120.0),
-                            )
-                            .changed()
-                            {
-                                changed = true;
-                            }
-                            if crate::chrome::chip_accent(
-                                ui,
-                                false,
-                                "DEL",
-                                crate::theme::PINK(),
-                                crate::theme::INK_ON_CYAN(),
-                            )
-                            .clicked()
-                            {
-                                to_delete = Some(c.id);
-                            }
-                        });
-                    }
-                });
-                if let Some(id) = to_delete {
-                    self.fsq_contacts.retain(|c| c.id != id);
-                    changed = true;
-                }
-            });
+        let open = self.tool_window(
+            ctx,
+            "fsq-contacts",
+            "FSQ Contacts",
+            [320.0, 360.0],
+            self.fsq_show_contacts,
+            |me, ui| me.fsq_contacts_body(ui, &mut changed, &mut set_target),
+        );
         if let Some(t) = set_target {
             self.fsq_target = t;
             self.fsq_show_contacts = false;
@@ -510,5 +451,73 @@ impl SdroxideApp {
             fsq_save_contacts(&self.fsq_contacts);
         }
         self.fsq_show_contacts = open;
+    }
+
+    /// The FSQ contacts book's body, split out so the shell can draw it in a
+    /// window of its own.
+    fn fsq_contacts_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        changed: &mut bool,
+        set_target: &mut Option<String>,
+    ) {
+        crate::chrome::window_body_bg(ui);
+        ui.horizontal(|ui| {
+            crate::chrome::field(
+                ui,
+                egui::TextEdit::singleline(&mut self.fsq_new_contact)
+                    .desired_width(140.0)
+                    .hint_text("callsign"),
+            );
+            let can_add = !self.fsq_new_contact.trim().is_empty();
+            if ui.add_enabled(can_add, egui::Button::new("Add")).clicked() {
+                let id = self.fsq_contacts.iter().map(|c| c.id).max().unwrap_or(0) + 1;
+                self.fsq_contacts.push(sdroxide_types::FsqContact {
+                    id,
+                    call: self.fsq_new_contact.trim().to_uppercase(),
+                    name: String::new(),
+                    note: String::new(),
+                });
+                self.fsq_new_contact.clear();
+                *changed = true;
+            }
+        });
+        ui.separator();
+        let mut to_delete: Option<u64> = None;
+        egui::ScrollArea::vertical().max_height(260.0).show_themed(ui, |ui| {
+            for c in &mut self.fsq_contacts {
+                ui.horizontal(|ui| {
+                    if ui.button("TO").clicked() {
+                        *set_target = Some(c.call.clone());
+                    }
+                    ui.label(RichText::new(&c.call).monospace().strong());
+                    if crate::chrome::field(
+                        ui,
+                        egui::TextEdit::singleline(&mut c.name)
+                            .hint_text("name")
+                            .desired_width(120.0),
+                    )
+                    .changed()
+                    {
+                        *changed = true;
+                    }
+                    if crate::chrome::chip_accent(
+                        ui,
+                        false,
+                        "DEL",
+                        crate::theme::PINK(),
+                        crate::theme::INK_ON_CYAN(),
+                    )
+                    .clicked()
+                    {
+                        to_delete = Some(c.id);
+                    }
+                });
+            }
+        });
+        if let Some(id) = to_delete {
+            self.fsq_contacts.retain(|c| c.id != id);
+            *changed = true;
+        }
     }
 }

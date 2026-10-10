@@ -38,6 +38,10 @@ pub(crate) struct UiSink<'a> {
     pub spots: &'a mut bool,
     pub memories: &'a mut bool,
     pub voice: &'a mut bool,
+    /// [`Action::Workspaces`] pressed this frame. Collected for the same reason
+    /// as `speech`: the workspaces are edited on a settings page, and choosing
+    /// that page is this module's caller's to make.
+    pub workspaces: &'a mut bool,
     /// Speech actions triggered this frame, for the caller to act on.
     ///
     /// Collected rather than applied here because answering them needs the
@@ -445,6 +449,7 @@ pub(crate) fn apply_action(
         ToggleSpots => *ui.spots = !*ui.spots,
         ToggleMemories => *ui.memories = !*ui.memories,
         ToggleVoice => *ui.voice = !*ui.voice,
+        Workspaces => *ui.workspaces = true,
         SpeakStatus | SpeakRepeat | SpeechSilence | SpeechToggle => ui.speech.push(act),
         _ => {}
     }
@@ -1141,7 +1146,7 @@ mod tests {
 
     fn sink<'a>(
         view: &'a mut ViewState,
-        flags: &'a mut [bool; 6],
+        flags: &'a mut [bool; 7],
         speech: &'a mut Vec<Action>,
     ) -> UiSink<'a> {
         let (help, rest) = flags.split_at_mut(1);
@@ -1149,7 +1154,8 @@ mod tests {
         let (logbook, rest) = rest.split_at_mut(1);
         let (spots, rest) = rest.split_at_mut(1);
         let (memories, rest) = rest.split_at_mut(1);
-        let (voice, _) = rest.split_at_mut(1);
+        let (voice, rest) = rest.split_at_mut(1);
+        let (workspaces, _) = rest.split_at_mut(1);
         UiSink {
             view,
             help: &mut help[0],
@@ -1158,6 +1164,7 @@ mod tests {
             spots: &mut spots[0],
             memories: &mut memories[0],
             voice: &mut voice[0],
+            workspaces: &mut workspaces[0],
             speech,
             rig_squelch: false,
             // The clamp these tests exercise is a no-op at zero span, which is
@@ -1175,7 +1182,7 @@ mod tests {
         let mut state =
             RadioState { vfo_a_hz: 14_074_000.0, active_vfo: Vfo::A, ..RadioState::default() };
         let mut view = ViewState::default();
-        let mut flags = [false; 6];
+        let mut flags = [false; 7];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1201,7 +1208,7 @@ mod tests {
             state.rx[0].mode = from;
             state.hd_radio_unavailable = unavailable.then(|| "no libnrsc5 here".to_string());
             let mut view = ViewState::default();
-            let mut flags = [false; 6];
+            let mut flags = [false; 7];
             let mut speech_acts = Vec::new();
             let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
             let mut cmds = Vec::new();
@@ -1236,7 +1243,7 @@ mod tests {
             let mut state =
                 RadioState { vfo_a_hz: hz, active_vfo: Vfo::A, ..RadioState::default() };
             let mut view = ViewState::default();
-            let mut flags = [false; 6];
+            let mut flags = [false; 7];
             let mut speech_acts = Vec::new();
             let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
             let mut cmds = Vec::new();
@@ -1279,7 +1286,7 @@ mod tests {
     fn tuning_never_goes_negative() {
         let mut state = RadioState { vfo_a_hz: 100.0, ..RadioState::default() };
         let mut view = ViewState::default();
-        let mut flags = [false; 6];
+        let mut flags = [false; 7];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1298,7 +1305,7 @@ mod tests {
     fn momentary_ptt_follows_the_button() {
         let mut state = RadioState::default();
         let mut view = ViewState::default();
-        let mut flags = [false; 6];
+        let mut flags = [false; 7];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1329,7 +1336,7 @@ mod tests {
         state.tx.ptt = true;
 
         let mut view = ViewState::default();
-        let mut flags = [false; 6];
+        let mut flags = [false; 7];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1360,7 +1367,7 @@ mod tests {
     fn one_shot_actions_ignore_release() {
         let mut state = RadioState::default();
         let mut view = ViewState::default();
-        let mut flags = [false; 6];
+        let mut flags = [false; 7];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1387,7 +1394,7 @@ mod tests {
     fn absolute_fader_maps_into_range() {
         let mut state = RadioState::default();
         let mut view = ViewState::default();
-        let mut flags = [false; 6];
+        let mut flags = [false; 7];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1410,7 +1417,7 @@ mod tests {
         let mut state = RadioState::default();
         let before = state.vfo_a_hz;
         let mut view = ViewState::default();
-        let mut flags = [false; 6];
+        let mut flags = [false; 7];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1432,7 +1439,7 @@ mod tests {
         state.rx[0] = sdroxide_types::RxState::with_mode(Mode::Usb);
 
         let mut view = ViewState::default();
-        let mut flags = [false; 6];
+        let mut flags = [false; 7];
         let mut speech_acts = Vec::new();
         let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
         let mut cmds = Vec::new();
@@ -1490,7 +1497,7 @@ mod tests {
     fn ui_only_actions_emit_no_commands() {
         let mut state = RadioState::default();
         let mut view = ViewState::default();
-        let mut flags = [false; 6];
+        let mut flags = [false; 7];
         let mut cmds = Vec::new();
         {
             let mut speech_acts = Vec::new();
@@ -1515,6 +1522,35 @@ mod tests {
         assert!(cmds.is_empty());
         assert!(flags[0], "help window should have toggled open");
         assert!(view.span() > 0.0, "fit should have set a span");
+    }
+
+    /// The workspaces shortcut does not toggle a window of its own — it asks
+    /// the caller to open Settings on the page that has them, and it *opens*
+    /// rather than flips, so pressing it twice does not close the window an
+    /// operator just used to save an arrangement.
+    #[test]
+    fn the_workspaces_action_asks_for_the_ui_page_rather_than_toggling() {
+        let mut state = RadioState::default();
+        let mut view = ViewState::default();
+        let mut flags = [false; 7];
+        let mut speech_acts = Vec::new();
+        let mut cmds = Vec::new();
+        {
+            let mut ui = sink(&mut view, &mut flags, &mut speech_acts);
+            apply_action(
+                Action::Workspaces,
+                ActionInput::Press,
+                ButtonMode::Toggle,
+                &mut state,
+                &mut ui,
+                &mut cmds,
+            );
+            // A window flag of its own would be index 1..=6; the workspaces
+            // flag is the seventh, and only that one moved.
+            assert!(!flags[1], "settings must not be toggled by the shortcut");
+        }
+        assert!(flags[6], "the caller must be told to open the workspaces");
+        assert!(cmds.is_empty(), "this is client-local: nothing reaches the engine");
     }
 
     #[test]

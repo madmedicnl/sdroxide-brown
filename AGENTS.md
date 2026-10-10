@@ -42,17 +42,36 @@
 > `sdroxide-config/tests/detached_slots_survive_a_module_count.rs` and
 > `ui::tests::the_detached_list_loads_at_any_length`.
 >
+> **The band/mode selector is its own window now (2026-10-10)** —
+> `DetachableModule::BandMenu`, app-id `sdroxide-bandmenu`, opening 560×760.
+> This is the SDRuno RX-control band panel, and it exists because the **docked
+> column cannot be wider than ~280 pt**: the operating panels below it are built
+> for ~680 pt, so a docked selector showing its modes in five columns would
+> squeeze them and overrun the dock (the #643 guard). In its own window the mode
+> sections lay in **five columns** and the operating panel keeps its full width.
+> `band_menu_body` is the one body, drawn by the window and the dock alike; while
+> the window is out the docked column is not drawn (one selector on screen). The
+> entry points are a **⇱ WINDOW** chip in the band popup and on the dock header;
+> the **🪟 WINDOWS** menu and Settings → UI pick it up from
+> `DetachableModule::ALL`. `the_band_window_lays_the_modes_in_five_columns` pins
+> the five columns (and that the dock is fewer) through the pure `mode_grid_cols`.
+>
 > **Items 1–4 are built, so the window set is the SDRuno one**: the band keypad
 > (console), SP1 with its toolbar, AUX SP as a second spectrum, and the MAIN
 > window's own **🪟 WINDOWS** button on the radio-tab strip that opens each of
-> them by its SDRuno name. **Item 6, workspaces, is also built** — saved named
-> window arrangements in `workspaces.json`, edited on Settings → UI; the only
-> piece left is the Ctrl+W shortcut (a `PROTO_VERSION` bump, so deliberately not
-> done in passing). **Item 5 is part-done**: awards, logbook, grid tracker,
-> memories and the SWL log go through `self.tool_window`; the rest (SPOTS, PUBLIC
-> SDRS, SCHEDULE, RECORDINGS, voice keyer, per-mode setups) need their results or
-> captured `&mut` locals threaded, which is per-window work, not mechanical —
-> `SDRUNO-UI-HANDOVER.md` says which and why.
+> them by its SDRuno name. **Item 6, workspaces, is built** — saved named
+> window arrangements in `workspaces.json`, edited on Settings → UI, with a
+> **Ctrl+W** shortcut that opens that page (`Action::Workspaces`, `PROTO_VERSION`
+> 198 → 199, bindings schema stamp 2 → 3 so an existing `input.json` picks the
+> key up). **Item 5 is built too**: every menu tool window goes through
+> `self.tool_window`, so each has a ⇱ chip and a remembered geometry — the table
+> in `SDRUNO-UI-HANDOVER.md` item 5 lists them and the locals each carries back.
+> The `&mut` locals turned out **not** to be a design problem, and the refactor
+> found a **dead EDIT button** in RECORDINGS on the way. **WEFAX is deliberately
+> left docked**: its only window is a per-chart viewer, not a menu tool.
+> **Settings is a tool window too** (`sdroxide-tool-settings`), and it is the one
+> that needed `tool_window_sized`'s `min_size` and `centre_first` — a 900x760 box
+> in a corner lands under the top bar, which only rendering it showed.
 >
 > **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
 > mid-flight — read it before touching ALE). **FST4W**
