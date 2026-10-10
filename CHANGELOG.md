@@ -13,25 +13,39 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+## [2.0.5_brown] - 2026-10-10
+
+Windows you can move, and six fixes from the field.
+
 ### Added
 
-- The band and mode selector is a window of its own (**⇱ WINDOW**), in five columns, because a docked column cannot be wide enough.
-- Every remaining menu tool window can be undocked, Settings included: SCHEDULE, RECORDINGS, SPOTS, PUBLIC SDRS, the voice keyer and the per-mode setup panels.
+- The band and mode selector is a window of its own, in five columns — a docked column cannot be wide enough.
+- Every menu tool window can be undocked, Settings included: SCHEDULE, RECORDINGS, SPOTS, PUBLIC SDRS, the voice keyer and the per-mode setup panels.
 - **Ctrl+W** opens Settings on the UI page, where the saved window arrangements are listed.
+- Two tuning steps: **6.25 kHz** (dPMR, NXDN) and **12.5 kHz** (narrow FM, PMR446, DMR). A step now prints as many decimals as it has, so 6.25 kHz is not read as "6.2".
 
 ### Fixed
 
+- With **CTR** on, stepping the dial with the arrow keys made the waterfall jump, flicker and shake until the keys were let go.
+- Zooming out past the end of the window shook the panadapter for as long as the wheel kept pushing.
+- A Pluto with both USB and Ethernet plugged in was listed twice, as two radios.
+- A CB station whose callsign is a shape only the wide grammar accepts (`13ABC123`) decoded and then showed no country and no flag.
+- On 11 m, a station worked before no longer says it was worked "but not on this band" — a CB callsign exists only on the citizens' band, so there is no other band it could have been on.
 - RECORDINGS' **EDIT** button did nothing; it now loads the chosen job into the form.
-- A CB station whose callsign is a shape only the wide grammar accepts (three letters, e.g. `13ABC123`) decoded and then showed no country and no flag.
-- A station worked before, on a band ADIF gives no name — 11 m — no longer says it was worked "but not on this band". A CB callsign exists only on the citizens' band, so there is no other band it could have been on.
 
 ### Changed
 
-- The **WINDOW** and **DOCK** buttons are now a drawn icon — a window's frame with an arrow crossing it, pointing out to a window of its own or back into the main one — with the wording on hover. They were text, then font arrows that this program's own faces do not carry and that drew as empty squares; the icon is painted, the way the flags are.
+- **WINDOW** and **DOCK** are a drawn icon — a window's frame with an arrow crossing it — instead of words, and instead of font arrows that this program's own faces do not carry and that drew as empty squares. The wording is on hover.
+- On a Pluto+ or 2R2T, the receiver choice reads **RX1 only** / **RX2 only** and says how to listen on both. It picks the one chain the board runs; it does not turn a board into two receivers.
 
-### Changed
+`PROTO_VERSION` 199 (from 198) — Ctrl+W is a new bound action, and a client and a server must agree on it.
 
-- `PROTO_VERSION` 199 (from 198) — the Ctrl+W action is a new bound action. A client and a server must agree on it.
+### Not proven
+
+- The CB flag fix. The report came from a German division-13 station whose callsign nobody could afterwards recall, so the cause was found by probing the grammar rather than from the station itself. If the call was an ordinary two-letter one, the cause is still open.
+- Everything from the Pluto and manual work (#29, #30, #34): no Pluto on this bench, and the receiver labels and the dedupe have not been looked at on a real board.
+- The dial-hold and zoom fixes are unit-tested against the reported behaviour, not a real station.
+- **JTTY's FREQ / CLEAR RX / SAVE chips (#35) are not in this release** — that PR conflicts with the merged dial-hold work and was left for its author to rebase.
 
 ## [2.0.4_brown] - 2026-10-09
 
