@@ -3420,6 +3420,20 @@ fn test_result_line(ui: &mut egui::Ui, result: &Option<crate::app::settings::Tes
     }
 }
 
+/// The Pluto receiver choice as the operator reads it: one radio runs one
+/// chain, and saying "only" keeps it from reading as a dual-receive switch.
+fn pluto_rx_label(rx: u8) -> String {
+    format!("RX{} only", rx + 1)
+}
+
+/// Shown beside the Pluto receiver choice, always: which chain this radio
+/// runs is the first thing a two-chain board asks for.
+const PLUTO_CHOOSE_RECEIVER: &str = "Please choose your receiver";
+
+/// How to hear both chains, in the receiver's tooltip.
+const PLUTO_BOTH_CHAINS_HINT: &str = "To listen on both antennas: add a second radio on the same \
+     address and set it to RX2. Both radios share the same frequency.";
+
 /// PlutoSDR interface: address, front-end settings, and the diagnostic report.
 ///
 /// Two things about the layout are deliberate. The gain, AGC and ppm controls
@@ -3501,25 +3515,30 @@ pub(in crate::app) fn settings_pluto_tab(
         // HPSDR the chains are not independently tunable — one synthesiser
         // serves both — so RX2 is a second *antenna*, not a second frequency.
         ui.label("Receiver");
-        let shown = format!("RX{}", cfg.pluto.rx + 1);
-        ComboBox::from_id_salt("pluto_rx")
-            .selected_text(shown)
-            .show_styled(ui, |ui| {
-                for rx in 0u8..2 {
-                    if ui.selectable_label(cfg.pluto.rx == rx, format!("RX{}", rx + 1)).clicked() {
-                        cfg.pluto.rx = rx;
+        ui.horizontal(|ui| {
+            ComboBox::from_id_salt("pluto_rx")
+                .selected_text(pluto_rx_label(cfg.pluto.rx))
+                .show_styled(ui, |ui| {
+                    for rx in 0u8..2 {
+                        if ui.selectable_label(cfg.pluto.rx == rx, pluto_rx_label(rx)).clicked() {
+                            cfg.pluto.rx = rx;
+                        }
                     }
-                }
-            })
-            .response
-            .on_hover_text(
-                "A Pluto+ or a revision-C Pluto unlocked to 2R2T can serve two radio \
-                 tabs from one box — this radio on RX1 and another on RX2, each on its \
-                 own antenna. The two chains share the one oscillator, so retuning \
-                 either radio moves both; what RX2 buys is a second antenna on the \
-                 same spectrum (diversity), not a second band. The transmitter belongs \
-                 to the RX1 radio. A stock 1R1T Pluto refuses RX2 when it connects.",
-            );
+                })
+                .response
+                .on_hover_ui(|ui| {
+                    ui.label(
+                        "A Pluto+ or a revision-C Pluto unlocked to 2R2T has two receive \
+                         chains. One radio runs one of them. The two chains share the one \
+                         oscillator, so retuning either radio moves both; what RX2 buys \
+                         is a second antenna on the same spectrum (diversity), not a \
+                         second band. The transmitter belongs to the RX1 radio. A stock \
+                         1R1T Pluto refuses RX2 when it connects.",
+                    );
+                    ui.label(RichText::new(PLUTO_BOTH_CHAINS_HINT).color(crate::theme::YELLOW()));
+                });
+            ui.label(RichText::new(PLUTO_CHOOSE_RECEIVER).color(crate::theme::YELLOW()));
+        });
         ui.end_row();
 
         ui.label("Sample rate").on_hover_text(
@@ -8681,4 +8700,63 @@ fn find_atsmini() -> Option<String> {
         let _ = w.join();
     }
     found.lock().ok().and_then(|f| f.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Everything the Pluto tab draws as text, one line per label.
+    fn pluto_tab_text(rx: u8) -> String {
+        fn walk(s: &egui::Shape, out: &mut String) {
+            match s {
+                egui::Shape::Text(t) => {
+                    out.push_str(t.galley.text());
+                    out.push('\n');
+                }
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        let mut cfg = sdroxide_types::RadioConfig::default();
+        cfg.pluto.rx = rx;
+        let mut edit = Some(cfg);
+        let (mut discover, mut test, mut copy) = (false, false, false);
+        let mut cmds = Vec::new();
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1280.0, 900.0),
+            )),
+            ..Default::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            settings_pluto_tab(
+                ui,
+                &[],
+                &mut edit,
+                &mut discover,
+                &mut test,
+                &mut copy,
+                &None,
+                true,
+                &mut cmds,
+            )
+        });
+        let mut text = String::new();
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut text));
+        text
+    }
+
+    #[test]
+    fn the_pluto_receiver_says_one_chain_and_asks_for_a_choice() {
+        let rx1 = pluto_tab_text(0);
+        assert!(rx1.lines().any(|l| l == "RX1 only"), "{rx1}");
+        assert!(rx1.lines().any(|l| l == PLUTO_CHOOSE_RECEIVER), "{rx1}");
+        assert!(!rx1.lines().any(|l| l == "RX1"), "a bare RX1 reads as a dual-receive switch");
+        let rx2 = pluto_tab_text(1);
+        assert!(rx2.lines().any(|l| l == "RX2 only"), "{rx2}");
+        assert!(rx2.lines().any(|l| l == PLUTO_CHOOSE_RECEIVER), "{rx2}");
+    }
 }
