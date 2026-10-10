@@ -162,60 +162,8 @@ pub(crate) fn load_ui_settings(
 pub(crate) fn load_ui_settings(
     storage: Option<&dyn eframe::Storage>,
 ) -> sdroxide_types::UiSettings {
-    let mut ui: sdroxide_types::UiSettings =
-        storage.and_then(|s| eframe::get_value(s, "ui_settings")).unwrap_or_default();
-    // The bindings answer has a key of its own, written the moment it is given
-    // (see `persist_bindings_choice`), so it wins over a `ui_settings` blob the
-    // periodic save may not have caught up with.
-    if let Some((share, declined)) = storage
-        .and_then(|s| s.get_string(BINDINGS_CHOICE_KEY))
-        .and_then(|v| parse_bindings_choice(&v))
-    {
-        ui.client_share_bindings = share;
-        ui.client_bindings_declined = declined;
-    }
-    ui
+    storage.and_then(|s| eframe::get_value(s, "ui_settings")).unwrap_or_default()
 }
-
-/// The browser key the bindings answer is kept under, beside `ui_settings`.
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-const BINDINGS_CHOICE_KEY: &str = "client_bindings_choice";
-
-/// `"share,declined"` as two `0`/`1` digits — small enough to read by eye in
-/// the browser's storage inspector.
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-pub(in crate::app) fn format_bindings_choice(share: bool, declined: bool) -> String {
-    format!("{},{}", u8::from(share), u8::from(declined))
-}
-
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-pub(in crate::app) fn parse_bindings_choice(v: &str) -> Option<(bool, bool)> {
-    let (a, b) = v.trim().split_once(',')?;
-    let bit = |x: &str| match x {
-        "0" => Some(false),
-        "1" => Some(true),
-        _ => None,
-    };
-    Some((bit(a)?, bit(b)?))
-}
-
-/// Write the bindings answer **now**, not at the next periodic save.
-///
-/// On the web `ui_settings` reaches the browser only through eframe's `save()`,
-/// which runs every 30 s or on a lost focus — and only from the station-writer
-/// tab. A reload (F5) inside that window dropped the answer, so "Keep mine (and
-/// stop asking)" was asked again on every session.
-#[cfg(target_arch = "wasm32")]
-pub(in crate::app) fn persist_bindings_choice(share: bool, declined: bool) {
-    let Some(store) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) else {
-        return;
-    };
-    let _ = store.set_item(BINDINGS_CHOICE_KEY, &format_bindings_choice(share, declined));
-}
-
-/// Native writes `config.toml` on change already; nothing extra to do.
-#[cfg(not(target_arch = "wasm32"))]
-pub(in crate::app) fn persist_bindings_choice(_share: bool, _declined: bool) {}
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(in crate::app) fn persist_ui_settings(ui: &sdroxide_types::UiSettings) {
