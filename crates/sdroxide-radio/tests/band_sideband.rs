@@ -122,6 +122,14 @@ fn sstv_on_40m_and_80m_is_lower_sideband() {
     }
 }
 
+/// Kevin's report: on 60 m (5.357 MHz) the SSTV marker sat above the dial.
+/// Below 10 MHz SSTV is LSB, 60 m included.
+#[test]
+fn sstv_on_60m_is_lower_sideband() {
+    let (lo, hi) = filter_after(&[tune(CH_60M), sstv()]);
+    assert!(lo < 0.0 && hi <= 0.0, "60 m SSTV should be LSB, got {lo}..{hi} Hz");
+}
+
 #[test]
 fn tuning_across_the_boundary_flips_the_sideband() {
     // The mode is entered on 20 m and the band changed underneath it — the case
