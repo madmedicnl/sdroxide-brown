@@ -556,6 +556,12 @@ struct PanadapterInputs {
 }
 
 impl eframe::App for SdroxideApp {
+    /// The anti-touch lock works on the input itself, before any widget reads
+    /// it — see [`crate::touch_lock`].
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        crate::touch_lock::filter(ctx, raw_input);
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let now = ctx.input(|i| i.time);

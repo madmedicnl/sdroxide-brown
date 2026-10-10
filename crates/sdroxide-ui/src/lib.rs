@@ -48,6 +48,7 @@ mod solar3d;
 mod sstv;
 pub mod theme;
 mod time;
+mod touch_lock;
 mod view;
 pub mod waterfall_gpu;
 mod wefax;
