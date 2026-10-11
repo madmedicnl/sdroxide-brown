@@ -380,3 +380,10 @@ tolerance; for *presets*, lift the wire dimensions of the wire antennas; and min
 the Knowledge pages for the ground-height, stacking and matching behaviour the
 solver should show. **Attribute the site** if a design or a figure is carried
 into the program or the manual.
+
+**The concrete numbers pulled from it are in
+[`docs/antenna-reference-values.md`](antenna-reference-values.md)** — most
+usefully a fully-dimensioned **4-element OWA Yagi at 8.42 dBi / 50 Ω**, which is
+straight-element (no bends) and so a perfect solver acceptance test; the dipole
+as the 2.14 dBi reference; the ground-height behaviour; and the stacking formula
+`57 / (−3 dB beamwidth)`.
