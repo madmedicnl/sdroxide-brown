@@ -25,17 +25,30 @@ fn main() {
     }
     let freq_hz = mhz * 1e6;
 
-    println!("f = {mhz} MHz   lambda = {:.3} m ({:.2} ft)\n", ant::wavelength_m(freq_hz), ant::wavelength_m(freq_hz) / 0.3048);
+    println!(
+        "f = {mhz} MHz   lambda = {:.3} m ({:.2} ft)\n",
+        ant::wavelength_m(freq_hz),
+        ant::wavelength_m(freq_hz) / 0.3048
+    );
 
     for d in ant::all(freq_hz) {
         println!("{:<22} {}", d.name, d.notes);
         for dim in &d.dims {
-            println!("    {:<22} {:>8.3} m  ({:>7.2} ft)", dim.what, dim.metres, dim.metres / 0.3048);
+            println!(
+                "    {:<22} {:>8.3} m  ({:>7.2} ft)",
+                dim.what,
+                dim.metres,
+                dim.metres / 0.3048
+            );
         }
         if let Some((r, x)) = d.feed_z {
             let swr = ant::swr_50(r, x);
-            println!("    {:<22} {r:.0}{}{:.0}j ohm  ->  SWR {swr:.2}:1 at 50 ohm",
-                "nominal feed", if x < 0.0 { "-" } else { "+" }, x);
+            println!(
+                "    {:<22} {r:.0}{}{:.0}j ohm  ->  SWR {swr:.2}:1 at 50 ohm",
+                "nominal feed",
+                if x < 0.0 { "-" } else { "+" },
+                x
+            );
         }
         println!();
     }
