@@ -221,32 +221,41 @@ The realistic caveat to repeat to anyone who asks: a from-scratch MoM engine is
 a project, and phase 1 alone covers most real CB/SWL questions (is my dipole the
 right length, and why is my SWR high here).
 
-## Open questions
+## Decisions (2026-10-11)
 
-1. **Obstacle overlay scope — DECIDED: attenuation-only.** Vegetation +
-   knife-edge, as in §E, labelled an approximation. No terrain/DEM model. (The
-   rest — RX feed, shapes, optimizer-in-v1, `.maa` import, persistence, presets,
-   units, CB-first, 3D — are still open.)
-2. **TX-only or also RX?** Standalone tool, or does a finished design feed the
-   receive side — e.g. a modelled takeoff angle overlaid on the propagation map?
-3. **Shape coverage.** Just wire antennas (dipole, vertical, delta loop, GP,
-   Yagi), or also the non-wire ones (magnetic loop, quad)? Quad/loop work in MoM
-   but the closed-form calculator is a different formula set for each.
-4. **Calculator first, or straight to the solver?** Phase 1 is quick and covers
-   most real questions; the solver is the project. Do both, or skip the
-   calculator and put correct lengths inside the presets instead?
-5. **Optimizer in v1?** It is MMANA's most-used advanced feature and also its
-   biggest bulk. Ship without it at first?
-6. **Import `.maa`?** Reading MMANA's own file format would let users bring
-   existing models in for free (it is plain text). Wanted, or our JSON only?
-7. **Persistence.** Own file (`antennas.json`, like `memories.json`, easy to share)
-   or a `UiSettings` field? Own file reads better.
-8. **Presets.** Ship the CB/SWL ones (11 m dipoles/verticals, the `band_segments.rs`
-   bands) or start empty?
-9. **Units.** Metres only, or MMANA-style feet/inches/λ and the `R`/`I`/`F`
-   constants (`R/4` = λ/4)? The equation box is a lot of parser for a niche reach.
-10. **CB/SWL-first or general HF?** Which shapes and which bands get the presets
-    and the worked examples in the manual?
-11. **Far field fidelity.** A 2D azimuth + elevation pair is the useful minimum;
-    is an interactive 3D hemisphere wanted for v1, given we already have a 3D
-    renderer (the solar scene) to reuse?
+1. **Obstacle overlay — attenuation-only.** Vegetation + knife-edge, as in §E,
+   labelled an approximation. No terrain/DEM model.
+2. **TX first, RX nice-to-have.** The tool is a transmit-pattern designer; feeding
+   the predicted takeoff into the receive/propagation side is a later extra, not
+   a v1 requirement.
+3. **Shapes: wire, delta loop, stick (vertical), … expandable.** Start with the
+   wire family and grow the list; magnetic loop/quad can come later.
+4. **Calculator first.** Phase 1 (the closed-form calculator) is the agreed start;
+   the solver follows.
+5. **Optimizer: later.** Wanted, but not at the beginning.
+6. **Import `.maa`: definitely.** Reading MMANA's own plain-text format lets users
+   bring existing models in.
+7. **Persistence: own JSON** (`antennas.json`, like `memories.json` — easy to
+   share, no `UiSettings`/wire change).
+8. **Presets: yes.** Ship the common CB/SWL shapes.
+9. **Units: metres *and* MMANA's feet/inches/λ, plus the `R`/`I`/`F` equation
+   box** (`R/4` = λ/4). So the expression parser is in scope, not a nicety.
+10. **CB/SWL-first.** The audience and the worked examples are the 11 m / SWL
+    operator.
+
+Still open:
+
+- **Far-field fidelity.** A 2D azimuth + elevation pair is the useful minimum; a
+  3D hemisphere can reuse the solar scene's renderer. Recommendation: **start
+  with the 2D polar pair** (exact angles and nulls are readable on it) and add a
+  **3D toggle** once the solver works — the 3D looks better but reads worse for
+  engineering, so it should complement the 2D, not replace it.
+
+## Consequences for the plan
+
+- The **calculator's presets** (decision 8) and the **`.maa` reader** (6) mean
+  `tools/antenna` grows a small file-format module before the solver does.
+- The **equation box** (9) is its own little parser over `R`/`I`/`F` and the
+  four operators — cheap, but it is work, not a checkbox.
+- The **RF engine** stays as in §B–§D; decisions 2, 3 and 5 only move *when*
+  things land, not *what* they are.
