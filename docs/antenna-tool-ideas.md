@@ -297,33 +297,30 @@ solver task (B); the model only stores the parameters.
 
 **B — Solver (the risky half; validated before C is built on it)**
 
-*The core is built and validated for junction-free shapes — see
-`tools/antenna/src/solver.rs`. A centre-fed dipole of the preset length solves
-to ~70 + j9 Ω at 27.265 MHz (SWR 1.46); the near-singular self term was the hard
-part and is handled.*
+*The core is built and validated — see `tools/antenna/src/solver.rs`. A dipole
+of the preset length solves to ~70 + j9 Ω at 27.265 MHz (SWR 1.46); a 3-element
+Yagi comes out at 7.5 dBi with 15 dB front-to-back. The near-singular self term
+was the hard part and is handled.*
 
 - [x] Golden reference values — a **short** dipole's input resistance against
-      `20π²(l/λ)²` (7.7 Ω vs 7.9 Ω at 0.2 λ) is the proof; a thin dipole
-      **resonates** at ≈0.47–0.48 λ with a **≈73 Ω** resistance is the classic
-      check. Both are live tests, not ignored.
-- [x] **Triangular (rooftop) current basis, Galerkin, reduced kernel** — the
-      basis whose charge is piecewise-constant, so the self term is a `ln(Δ/a)`
-      and the reactance comes out right. Pulse-basis point-charge is gone.
+      `20π²(l/λ)²` (7.7 Ω vs 7.9 Ω at 0.2 λ); a thin dipole **resonates** at
+      ≈0.47–0.48 λ with a **≈73 Ω** resistance; a λ/2 dipole has **~2.15 dBi**
+      and no front-to-back. All live tests.
+- [x] **Triangular (rooftop) current basis, Galerkin, reduced kernel.**
 - [x] Delta-gap source at a node; complex solve; `Zin = V/I_feed`.
-- [x] Uniform segmentation honouring a fixed per-wire count and a
-      segments-per-wavelength default (denser than MMANA's, ~80/λ, because this
-      solver integrates numerically).
-- [x] **Junction detection** — a shape whose wires meet is *refused*, not solved
-      wrong (delta loop, inverted-V, ground plane until junctions land).
-- [-] **Junction handling** — Kirchhoff at a shared node (delta loop, inverted-V,
-      ground plane). The next solver item.
+- [x] Uniform segmentation (fixed per-wire or ~80/λ auto).
+- [x] **Junction handling** — wires that meet share one node/current (Kirchhoff
+      comes free). The delta loop solves.
+- [x] **Far-field gain/F-B and a frequency sweep** (`max_gain`,
+      `front_to_back_db`, `sweep`).
+- [ ] **Bend-feed model** — a feed on a bend or multi-way junction is currently
+      **refused** (the delta gap has no single direction there); this blocks the
+      inverted-V apex and the ground-plane star. The next solver item.
 - [ ] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — the model holds
       them; the solver does not yet apply them.
 - [ ] Ground models — perfect (image) and real (Fresnel, εr/σ presets), with the
       <0.2 λ accuracy caveat. (Until then the vertical preset is a free-space
-      wire, not a monopole.)
-- [ ] Frequency-sweep outputs and far-field gain/F-B. MMANA's DM1/DM2/SC/EC
-      tapering (an accuracy/speed refinement).
+      wire, not a monopole.) MMANA's DM1/DM2/SC/EC tapering.
 
 **C — Patterns**
 - [ ] 2D azimuth + elevation polar plots (the readable view — do this first).

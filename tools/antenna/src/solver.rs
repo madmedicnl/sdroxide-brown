@@ -55,6 +55,7 @@ use crate::model::{Antenna, Pos, Seg};
 
 const MU0: f64 = 1.256_637_062_12e-6;
 const EPS0: f64 = 8.854_187_812_8e-12;
+const ETA0: f64 = 376.730_313_668;
 
 /// Points closer than this (metres) are the same node.
 const JUNCTION_TOL: f64 = 1e-6;
@@ -198,6 +199,16 @@ fn build_mesh(a: &Antenna, cfg: &SolverConfig) -> Mesh {
 
 // ── the solve ────────────────────────────────────────────────────────────────
 
+/// A segment reduced to what the far field needs: its current, direction and
+/// midpoint.
+#[derive(Clone, Copy, Debug)]
+pub struct FarSeg {
+    pub mid: [f64; 3],
+    pub dir: [f64; 3],
+    pub len: f64,
+    pub current: Complex64,
+}
+
 /// A solved model.
 #[derive(Clone, Debug)]
 pub struct Solution {
@@ -208,6 +219,10 @@ pub struct Solution {
     pub unknowns: Vec<usize>,
     pub feed_unknown: usize,
     pub zin: Complex64,
+    /// Input power, ½·Re(V·I_f*).
+    pub power_w: f64,
+    /// Segments with their currents, for the far field.
+    pub segments: Vec<FarSeg>,
 }
 
 /// Solve one model at its own frequency.
@@ -306,8 +321,111 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     if i_feed.norm() == 0.0 {
         return Err("the feed current came out zero".into());
     }
-    let zin = Complex64::new(src.volts, 0.0) / i_feed;
-    Ok(Solution { freq_hz: a.freq_hz, currents, unknowns, feed_unknown, zin })
+    let volts = Complex64::new(src.volts, 0.0);
+    let zin = volts / i_feed;
+    let power_w = 0.5 * (volts * i_feed.conj()).re;
+
+    // Per-segment current (the tent's midpoint value) for the far field.
+    let mut node_current = vec![Complex64::new(0.0, 0.0); m.node_pts.len()];
+    for (ui, &node) in unknowns.iter().enumerate() {
+        node_current[node] = currents[ui];
+    }
+    let segments = m
+        .segs
+        .iter()
+        .map(|s| FarSeg {
+            mid: scale(add(s.from, s.to), 0.5),
+            dir: s.dir,
+            len: s.len,
+            current: 0.5 * (node_current[s.a] + node_current[s.b]),
+        })
+        .collect();
+
+    Ok(Solution { freq_hz: a.freq_hz, currents, unknowns, feed_unknown, zin, power_w, segments })
+}
+
+/// The far-field vector pattern factor `F(θ,φ)`, as a complex 3-vector:
+/// `Σ I_n Δ_n [ŝ_n − (ŝ_n·r̂)r̂] e^{jk r̂·r_n}`.
+fn far_factor(sol: &Solution, theta_deg: f64, phi_deg: f64, k: f64) -> [Complex64; 3] {
+    let th = theta_deg.to_radians();
+    let ph = phi_deg.to_radians();
+    let rhat = [th.sin() * ph.cos(), th.sin() * ph.sin(), th.cos()];
+    let mut f = [Complex64::new(0.0, 0.0); 3];
+    for s in &sol.segments {
+        let dd = dot(s.dir, rhat);
+        let proj = [s.dir[0] - dd * rhat[0], s.dir[1] - dd * rhat[1], s.dir[2] - dd * rhat[2]];
+        let phase = k * dot(rhat, s.mid);
+        let e = Complex64::from_polar(s.len, phase) * s.current;
+        for (fi, pi) in f.iter_mut().zip(proj) {
+            *fi += e * pi;
+        }
+    }
+    f
+}
+
+/// Gain in dBi toward `(θ, φ)` (θ from +z, φ from +x).
+pub fn gain_dbi(sol: &Solution, theta_deg: f64, phi_deg: f64) -> f64 {
+    let k = 2.0 * PI * sol.freq_hz / C;
+    let f = far_factor(sol, theta_deg, phi_deg, k);
+    let fmag2 = f.iter().map(|c| c.norm_sqr()).sum::<f64>();
+    // U = k²η|F|²/(32π²);  G = 4πU/P_in = k²η|F|²/(8π P_in).
+    let gain = k * k * ETA0 * fmag2 / (8.0 * PI * sol.power_w);
+    if gain <= 0.0 { f64::NEG_INFINITY } else { 10.0 * gain.log10() }
+}
+
+/// The peak gain in dBi and where it points, over a coarse grid.
+pub fn max_gain(sol: &Solution) -> (f64, f64, f64) {
+    let mut best = (f64::NEG_INFINITY, 90.0, 0.0);
+    let mut th = 0.0;
+    while th <= 180.0 {
+        let mut ph = 0.0;
+        while ph < 360.0 {
+            let g = gain_dbi(sol, th, ph);
+            if g > best.0 {
+                best = (g, th, ph);
+            }
+            ph += 5.0;
+        }
+        th += 2.0;
+    }
+    best
+}
+
+/// Front-to-back in dB: peak gain minus the gain the opposite way.
+pub fn front_to_back_db(sol: &Solution) -> f64 {
+    let (g, th, ph) = max_gain(sol);
+    let back = gain_dbi(sol, 180.0 - th, if ph < 180.0 { ph + 180.0 } else { ph - 180.0 });
+    g - back
+}
+
+/// One point of a frequency sweep.
+#[derive(Clone, Copy, Debug)]
+pub struct SweepPoint {
+    pub freq_hz: f64,
+    pub zin: Complex64,
+    pub swr: f64,
+}
+
+/// Solve a model across a band. `steps` points from `f0` to `f1` inclusive.
+pub fn sweep(
+    a: &Antenna,
+    f0: f64,
+    f1: f64,
+    steps: usize,
+    z0: f64,
+    cfg: &SolverConfig,
+) -> Vec<SweepPoint> {
+    let n = steps.max(2);
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let f = f0 + (f1 - f0) * i as f64 / (n - 1) as f64;
+        let mut model = a.clone();
+        model.freq_hz = f;
+        if let Ok(sol) = analyze(&model, cfg) {
+            out.push(SweepPoint { freq_hz: f, zin: sol.zin, swr: swr(sol.zin, z0) });
+        }
+    }
+    out
 }
 
 /// The Galerkin interaction of one test piece with one source piece.
@@ -505,6 +623,38 @@ mod tests {
     fn swr_reads_the_match() {
         assert!((swr(Complex64::new(50.0, 0.0), 50.0) - 1.0).abs() < 1e-9);
         assert!((swr(Complex64::new(100.0, 0.0), 50.0) - 2.0).abs() < 1e-9);
+    }
+
+    /// The far field is right: a λ/2 dipole has ~2.15 dBi peak gain and no
+    /// front-to-back (it is symmetric).
+    #[test]
+    fn a_half_wave_dipole_has_about_2_dbi_and_no_front_to_back() {
+        let f = 30e6;
+        let lam = C / f;
+        let a = Antenna::wire_with_feed(
+            f,
+            "d",
+            [-lam / 4.0, 0.0, 0.0],
+            [lam / 4.0, 0.0, 0.0],
+            lam / 10_000.0,
+            Seg::Fixed(80),
+        );
+        let sol = analyze(&a, &SolverConfig::default()).unwrap();
+        let (g, _, _) = max_gain(&sol);
+        assert!((g - 2.15).abs() < 0.5, "peak gain {g:.2} dBi should be ~2.15");
+        let fb = front_to_back_db(&sol);
+        assert!(fb.abs() < 0.5, "a dipole has no front-to-back, got {fb:.2} dB");
+    }
+
+    /// The sweep spans the band it is asked for and every point is usable.
+    #[test]
+    fn the_sweep_spans_the_band() {
+        let a = dipole(0.475, 60);
+        let pts = sweep(&a, 29e6, 31e6, 5, 50.0, &SolverConfig::default());
+        assert_eq!(pts.len(), 5);
+        assert!((pts[0].freq_hz - 29e6).abs() < 1.0);
+        assert!((pts[4].freq_hz - 31e6).abs() < 1.0);
+        assert!(pts.iter().all(|p| p.swr.is_finite() && p.swr >= 1.0), "{pts:?}");
     }
 
     #[test]

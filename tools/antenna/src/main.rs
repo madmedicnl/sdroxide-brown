@@ -117,21 +117,26 @@ fn presets(mhz: f64, freq_hz: f64) {
 }
 
 fn solve(mhz: f64, freq_hz: f64) {
-    use ant::solver::{SolverConfig, analyze, swr};
-    println!("# feed impedance and SWR (50 ohm) at {mhz} MHz");
+    use ant::solver::{SolverConfig, analyze, front_to_back_db, max_gain, swr};
+    println!("# feed impedance, SWR (50 ohm), gain and front-to-back at {mhz} MHz");
     println!(
         "# a feed on a straight-through node only; a feed at a bend is refused, not guessed\n"
     );
     for a in ant::presets::catalog(freq_hz) {
         match analyze(&a, &SolverConfig::default()) {
-            Ok(sol) => println!(
-                "{:<32} Zin = {:>7.1} {:+.1}j ohm   SWR {:.2}:1",
-                a.name,
-                sol.zin.re,
-                sol.zin.im,
-                swr(sol.zin, 50.0)
-            ),
-            Err(e) => println!("{:<32} — {e}", a.name),
+            Ok(sol) => {
+                let (g, th, ph) = max_gain(&sol);
+                println!(
+                    "{:<31} Zin {:>6.1} {:+.1}j  SWR {:.2}:1   gain {:.1} dBi @ {th:.0}/{ph:.0}   F/B {:.1} dB",
+                    a.name,
+                    sol.zin.re,
+                    sol.zin.im,
+                    swr(sol.zin, 50.0),
+                    g,
+                    front_to_back_db(&sol),
+                );
+            }
+            Err(e) => println!("{:<31} — {e}", a.name),
         }
     }
 }
