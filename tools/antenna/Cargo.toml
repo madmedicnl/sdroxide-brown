@@ -18,6 +18,7 @@ name = "antenna"
 path = "src/main.rs"
 
 [dependencies]
+num-complex = "0.4"
 serde = { version = "1", features = ["derive"] }
 # `float_roundtrip` matters: the default float parser is best-effort and shifts
 # the last bit of a coordinate, so a saved design would not reload byte-identical

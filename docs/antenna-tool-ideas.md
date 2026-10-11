@@ -293,14 +293,35 @@ segmentation types the `.maa` file and `antennas.json` both hold. The
 solver task (B); the model only stores the parameters.
 
 **B — Solver (the risky half; validated before C is built on it)**
-- [ ] Wire geometry model + segmentation (DM1/DM2/SC/EC tapering).
-- [ ] Thin-wire MoM EFIE core — reduced kernel, pulse basis, point matching →
-      `[Z][I] = [V]`, doubled with the delta-gap source.
-- [ ] Lumped loads on a segment (R+jX, L, C, parallel-LC trap).
+
+*Started and blocked at the first hurdle — see `tools/antenna/src/solver.rs`'s
+module doc. The real part of a dipole's feed impedance lands (~73 Ω), the
+reactance does not, and a wrong impedance must not ship.*
+
+- [x] Golden reference values — the λ/2 dipole at **73 + j42.5 Ω** (Balanis, and
+      what MMANA/NEC reproduce) is the anchor; the resonant-length check
+      (~0.47 λ) is the second. Both tests are written and currently `#[ignore]`d
+      against the unvalidated core.
+- [~] Wire geometry + segmentation — **uniform segmentation** honouring a fixed
+      per-wire count and a segments-per-wavelength default. MMANA's DM1/DM2/SC/EC
+      **tapering** is not implemented (an accuracy refinement; uniform is the
+      correct simpler choice).
+- [~] Thin-wire MoM EFIE core — reduced kernel, pulse basis, point matching,
+      delta-gap source, complex solve and the far-field sum are assembled. **The
+      scalar-potential self term is wrong** (a point charge at each boundary sits
+      at `R = a` and swamps the vector-potential term), so the reactance is off by
+      several times and sign-flipped. **Blocked, not done.**
+- [ ] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — the model holds
+      them; the solver does not yet apply them.
 - [ ] Ground models — perfect (image) and real (Fresnel, εr/σ presets), with
       the <0.2 λ accuracy caveat carried in the UI.
-- [ ] Frequency sweep outputs (Zin, SWR, gain, F/B) **and the golden regression
-      tests**, each verified to fail when the kernel is deliberately broken.
+- [ ] Frequency sweep outputs and the golden regression tests.
+
+**The blocker, precisely.** The fix is a basis whose charge is piecewise-constant
+on the segments rather than a point at their ends — a **triangular (rooftop)
+current basis** — so the self term integrates to `ln(Δ/a)` instead of `1/a`. That
+is a rewrite of the unknown set and the feed handling, not a tweak. Do that first
+next session; everything else in B is believed sound around it.
 
 **C — Patterns**
 - [ ] 2D azimuth + elevation polar plots (the readable view — do this first).
