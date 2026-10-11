@@ -390,3 +390,11 @@ usefully a fully-dimensioned **4-element OWA Yagi at 8.42 dBi / 50 Ω**, which i
 straight-element (no bends) and so a perfect solver acceptance test; the dipole
 as the 2.14 dBi reference; the ground-height behaviour; and the stacking formula
 `57 / (−3 dB beamwidth)`.
+
+**And the RSR-DF Analyzer manual** (the site's RSR200B DF/MW-DX program) is
+noted in [`docs/rsr-df-manual-notes.md`](rsr-df-manual-notes.md): its coherent
+two-antenna **phase-DF relation** and **`d/λ` baseline spacing/ambiguity** table
+are what milestone D (stacking) needs and the basis of any future array feature,
+and its **Azimuth Map** (antenna heading + −3 dB beamwidth drawn as a lobe
+sector) is the shape of the RX nice-to-have — the antenna tool's pattern feeding
+a receive-side map.
