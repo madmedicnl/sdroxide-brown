@@ -54,6 +54,11 @@
 //! often-quoted 73 + j42.5; that 73 Ω is the *resonant* value, which the solver
 //! reproduces at resonance. The exact-`λ/2` figure assumes a sinusoidal current;
 //! this is the reduced-kernel Galerkin result for a delta-gap feed.
+//!
+//! A shape whose wires *meet* solves too (the delta loop gives a plausible
+//! 107 − j70 Ω), but there is no reference value here to pin it — treat unfed
+//! junctions as plausible, not proven; and a feed *at* a non-collinear junction
+//! is refused outright (see below).
 
 use num_complex::Complex64;
 use std::f64::consts::PI;
@@ -267,13 +272,14 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     let si = (base + src.at.offset as isize).clamp(0, nseg as isize - 1) as usize;
     let (feed_a, feed_b) = (m.segs[m.wire_segs[fw][si]].a, m.segs[m.wire_segs[fw][si]].b);
 
-    // A feed at a bend or a multi-way junction needs a *source-between-terminals*
-    // model (the two wires are the source's terminals, not one shared node) that
-    // is not built yet; this solver gets it wrong, so refuse rather than answer.
+    // Refuse a feed at a bend or a multi-way junction. The shared-node junction
+    // basis is fine for a *collinear* through-connection, but a non-collinear
+    // one (the inverted-V apex, the ground-plane star) is not modelled
+    // correctly yet — it would answer ~6 Ω for a ~50 Ω antenna — so refuse.
     for node in [feed_a, feed_b] {
         let inc = &m.incident[node];
         let bad = match inc.len() {
-            0 | 1 => false, // a free end is fine
+            0 | 1 => false,
             2 => {
                 let (s0, s1) = (inc[0], inc[1]);
                 dot(m.segs[s0].dir, m.segs[s1].dir).abs() < 0.9999
@@ -282,8 +288,8 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
         };
         if bad {
             return Err(
-                "the feed sits where wires meet at an angle — feeding a bend or junction needs a \
-                 source-between-terminals model that is not built yet"
+                "the feed sits at a bend or junction — a non-collinear wire junction is not \
+                 modelled correctly yet, so this shape cannot be solved"
                     .into(),
             );
         }

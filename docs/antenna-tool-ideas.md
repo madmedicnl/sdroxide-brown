@@ -307,20 +307,23 @@ was the hard part and is handled.*
       ≈0.47–0.48 λ with a **≈73 Ω** resistance; a λ/2 dipole has **~2.15 dBi**
       and no front-to-back. All live tests.
 - [x] **Triangular (rooftop) current basis, Galerkin, reduced kernel.**
-- [x] Delta-gap source at a node; complex solve; `Zin = V/I_feed`.
+- [x] Complex solve.
 - [x] Uniform segmentation (fixed per-wire or ~80/λ auto).
 - [x] **Junction handling** — wires that meet share one node/current (Kirchhoff
       comes free). The delta loop solves.
 - [x] **Far-field gain/F-B and a frequency sweep** (`max_gain`,
       `front_to_back_db`, `sweep`).
 - [x] The feed is a delta gap over a **segment** (MMANA's `w#c`/`w#b`/`w#e`
-      name a segment), which is correct for any *straight* feed.
-- [ ] **Bend/junction feed — a source-between-terminals model.** Feeding a bend
-      or multi-way junction (the inverted-V apex, the ground-plane star) is
-      refused: there the two wires are the source's two *terminals*, not one
-      shared node, and this solver shares the node, so it would answer ~4 Ω for
-      an inverted-V that is really ~50 Ω. The next solver item, and a prism
-      rather than a tweak.
+      name a segment), which is correct for a straight feed and for a
+      *collinear* through-connection.
+- [ ] **Non-collinear junction/model.** A feed at a bend or multi-way junction is
+      **refused** — the shared-node junction basis gets it wrong (it answers
+      ~6 Ω for a ~50 Ω inverted-V, and fine segmentation does not change it, so
+      it is the basis, not the quadrature). Feeding there needs a
+      **source-between-terminals** model (the two wires are the source's two
+      terminals, not one shared node). Unfed junctions (the delta loop's corners)
+      give a plausible ~107 Ω, but **no reference value here pins them** — treat
+      them as plausible, not proven. The next solver item, and a genuine project.
 - [ ] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — the model holds
       them; the solver does not yet apply them.
 - [x] **Ground — free space and perfect (image method).** Validated: a
