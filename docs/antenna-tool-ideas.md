@@ -353,3 +353,30 @@ was the hard part and is handled.*
 - [ ] Manual section, README entry and a quick-start.
 - [ ] RX nice-to-have (decision 2): feed the predicted takeoff into the
       receive/propagation side.
+
+## Reference resource: dx-antennas.com (operator, 2026-10-11)
+
+A CB/11 m (and HF) antenna site — <https://dx-antennas.com/> — with two things we
+can use directly and one to mine:
+
+- **Wire antennas** (<https://dx-antennas.com/wire-antennas/>): *The Dipole*,
+  *Double Extended Zeppelin*, *Hentenna*, *Loops*, *Saturn "Bi Square"*, *2el
+  Moxon*, *3el Skyrex* — named, dimensioned designs, good **presets**, and where
+  they quote gain/patterns, **golden values** to test the solver against.
+- **Knowledge** (<https://dx-antennas.com/additional-information/>): articles
+  that map onto what the solver still owes — *Gain versus boom length*, *How
+  high should I place my beam?*, *How high should I place my vertical?*, *Mast
+  and coax influence on a vertical*, *Radiation patterns*, *RF choke*, *S.W.R*,
+  *Stacking / co-phasing Yagis*, the *Gamma-match*, and the *Avanti Sigma IV*
+  article. The height ones are the ground/height deliverable, the stacking one is
+  milestone D's stacking, and the gamma-match is a matching feature to consider.
+- Its **Yagi and quad catalogues** list many designs with a **dBi figure in the
+  page title** (e.g. "3,82 M 4el OWA Yagi 8,42 dBi") — ready-made acceptance
+  targets for the far-field test.
+
+**How to use it when the work resumes:** for the *golden reference values*, take
+a design's quoted gain and pattern and assert the solver reproduces it within a
+tolerance; for *presets*, lift the wire dimensions of the wire antennas; and mine
+the Knowledge pages for the ground-height, stacking and matching behaviour the
+solver should show. **Attribute the site** if a design or a figure is carried
+into the program or the manual.
