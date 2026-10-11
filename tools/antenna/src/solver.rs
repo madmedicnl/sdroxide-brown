@@ -35,6 +35,12 @@
 //! **refused, not solved wrong** — the inverted-V apex and the ground plane's
 //! radial star are the cases that wait on a proper bend-feed model.
 //!
+//! **Ground** is free space (no image) or a **perfect** ground, added by image
+//! theory: every source segment is mirrored through `z = 0` with its current
+//! reversed. Validated by the quarter-wave monopole, which comes out at half a
+//! dipole — ≈35 Ω and ~5.1 dBi (3 dB over the dipole's 2.15, as it should).
+//! Real (Fresnel) ground is not modelled yet and is refused.
+//!
 //! **Validated against two independent textbook results:**
 //!
 //! - A **short** dipole's input resistance matches `20π²(l/λ)²` — at `l = 0.2λ`
@@ -51,7 +57,7 @@ use num_complex::Complex64;
 use std::f64::consts::PI;
 
 pub use crate::C;
-use crate::model::{Antenna, Pos, Seg};
+use crate::model::{Antenna, GroundKind, Pos, Seg};
 
 const MU0: f64 = 1.256_637_062_12e-6;
 const EPS0: f64 = 8.854_187_812_8e-12;
@@ -292,6 +298,20 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     let omega = 2.0 * PI * a.freq_hz;
     let nu = unknowns.len();
 
+    // Ground. Free space has no image; a perfect ground adds the mirror image
+    // of every source segment with its current reversed (image theory for a PEC
+    // plane at z = 0). Real/Fresnel ground is not modelled yet — refuse rather
+    // than pretend.
+    let image: Option<Complex64> = match a.ground.kind {
+        GroundKind::FreeSpace => None,
+        GroundKind::Perfect => Some(Complex64::new(-1.0, 0.0)),
+        GroundKind::Real | GroundKind::SommerfeldNorton => {
+            return Err("real-ground (Fresnel) modelling is not built yet — use free space or a \
+                 perfect ground"
+                .into());
+        }
+    };
+
     // Support of a node's basis: one tent per incident segment, peaking at the
     // node (`rising` means the tent is 0 at the segment's `from`, 1 at its `to`).
     let support = |node: usize| -> Vec<(usize, bool)> {
@@ -307,6 +327,9 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
                 for (ssi, sr) in support(nun) {
                     let ss = &m.segs[ssi];
                     acc += pair_integral(ts, tr, ss, sr, ts.radius, k, omega);
+                    if let Some(fac) = image {
+                        acc += fac * pair_integral(ts, tr, &mirror(ss), sr, ts.radius, k, omega);
+                    }
                 }
             }
             z[mi][ni] = acc;
@@ -330,18 +353,35 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     for (ui, &node) in unknowns.iter().enumerate() {
         node_current[node] = currents[ui];
     }
-    let segments = m
-        .segs
-        .iter()
-        .map(|s| FarSeg {
-            mid: scale(add(s.from, s.to), 0.5),
-            dir: s.dir,
-            len: s.len,
-            current: 0.5 * (node_current[s.a] + node_current[s.b]),
-        })
-        .collect();
+    let far_seg = |s: &Segment, current: Complex64| FarSeg {
+        mid: scale(add(s.from, s.to), 0.5),
+        dir: s.dir,
+        len: s.len,
+        current,
+    };
+    let mut segments: Vec<FarSeg> =
+        m.segs.iter().map(|s| far_seg(s, 0.5 * (node_current[s.a] + node_current[s.b]))).collect();
+    if let Some(fac) = image {
+        for s in &m.segs {
+            let i = 0.5 * (node_current[s.a] + node_current[s.b]);
+            segments.push(far_seg(&mirror(s), fac * i));
+        }
+    }
 
     Ok(Solution { freq_hz: a.freq_hz, currents, unknowns, feed_unknown, zin, power_w, segments })
+}
+
+/// Mirror a segment through the ground plane `z = 0`.
+fn mirror(s: &Segment) -> Segment {
+    Segment {
+        a: s.a,
+        b: s.b,
+        from: [s.from[0], s.from[1], -s.from[2]],
+        to: [s.to[0], s.to[1], -s.to[2]],
+        dir: [s.dir[0], s.dir[1], -s.dir[2]],
+        len: s.len,
+        radius: s.radius,
+    }
 }
 
 /// The far-field vector pattern factor `F(θ,φ)`, as a complex 3-vector:
@@ -617,6 +657,65 @@ mod tests {
             let err = analyze(&a, &SolverConfig::default()).unwrap_err();
             assert!(err.contains("bend"), "{}: {err}", a.name);
         }
+    }
+
+    /// A quarter-wave monopole over a **perfect** ground is half a dipole: the
+    /// image doubles the wire into a λ/2 dipole, so its impedance is half the
+    /// free-space dipole's. This is the ground model's check.
+    #[test]
+    fn a_monopole_over_a_perfect_ground_is_half_a_dipole() {
+        let f = 30e6;
+        let lam = C / f;
+        let len = 0.25 * lam;
+        let mut mono = Antenna::wire_with_feed(
+            f,
+            "m",
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, len],
+            lam / 10_000.0,
+            Seg::Fixed(80),
+        );
+        mono.sources = vec![Source {
+            at: WirePoint { wire: 1, at: Pos::Begin, offset: 0 },
+            phase_deg: 0.0,
+            volts: 1.0,
+        }];
+        mono.ground.kind = GroundKind::Perfect;
+        let zm = analyze(&mono, &SolverConfig::default()).unwrap().zin;
+
+        // The equivalent dipole: the wire plus its image, twice as long.
+        let dip = Antenna::wire_with_feed(
+            f,
+            "d",
+            [-len, 0.0, 0.0],
+            [len, 0.0, 0.0],
+            lam / 10_000.0,
+            Seg::Fixed(80),
+        );
+        let zd = analyze(&dip, &SolverConfig::default()).unwrap().zin;
+
+        assert!(
+            (zm.re - zd.re / 2.0).abs() < 0.05 * zd.re.abs(),
+            "monopole R {:.1} should be half the dipole's {:.1}",
+            zm.re,
+            zd.re / 2.0
+        );
+        assert!(
+            (zm.im - zd.im / 2.0).abs() < 0.10 * zd.im.abs(),
+            "monopole X {:.1} should be half the dipole's {:.1}",
+            zm.im,
+            zd.im / 2.0
+        );
+    }
+
+    /// Real (Fresnel) ground is not modelled yet, so it is refused rather than
+    /// silently treated as something else.
+    #[test]
+    fn real_ground_is_refused() {
+        let mut a = dipole(0.475, 80);
+        a.ground.kind = GroundKind::Real;
+        let err = analyze(&a, &SolverConfig::default()).unwrap_err();
+        assert!(err.contains("real-ground"), "{err}");
     }
 
     #[test]

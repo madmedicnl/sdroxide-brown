@@ -255,6 +255,8 @@ impl Antenna {
                 phase_deg: 0.0,
                 volts: 1.0,
             }],
+            // A bare wire is in free space; a caller that wants ground sets it.
+            ground: Ground { kind: GroundKind::FreeSpace, ..Ground::default() },
             ..Antenna::default()
         }
     }

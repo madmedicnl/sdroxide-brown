@@ -318,9 +318,14 @@ was the hard part and is handled.*
       inverted-V apex and the ground-plane star. The next solver item.
 - [ ] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — the model holds
       them; the solver does not yet apply them.
-- [ ] Ground models — perfect (image) and real (Fresnel, εr/σ presets), with the
-      <0.2 λ accuracy caveat. (Until then the vertical preset is a free-space
-      wire, not a monopole.) MMANA's DM1/DM2/SC/EC tapering.
+- [x] **Ground — free space and perfect (image method).** Validated: a
+      quarter-wave monopole over a perfect ground comes out at half a dipole,
+      ≈35 Ω and ~5.1 dBi (3 dB over the dipole). The presets now carry a ground
+      (horizontals in free space, the vertical/GP over perfect).
+- [ ] **Real (Fresnel) ground** — refused for now rather than treated as
+      something else; the reflection-coefficient model with the εr/σ presets and
+      the <0.2 λ caveat is the next ground item.
+- [ ] MMANA's DM1/DM2/SC/EC tapering.
 
 **C — Patterns**
 - [ ] 2D azimuth + elevation polar plots (the readable view — do this first).

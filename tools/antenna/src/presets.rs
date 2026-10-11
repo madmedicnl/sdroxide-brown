@@ -20,14 +20,16 @@ fn center_feed(wire: u32) -> Source {
 /// A centre-fed horizontal half-wave dipole at `height_m`.
 pub fn dipole(freq_hz: f64, height_m: f64) -> Antenna {
     let total = K * wavelength_m(freq_hz) / 2.0;
-    Antenna::wire_with_feed(
+    let mut a = Antenna::wire_with_feed(
         freq_hz,
         "Half-wave dipole",
         [-total / 2.0, 0.0, height_m],
         [total / 2.0, 0.0, height_m],
         WIRE_RADIUS_M,
         Seg::AutoTaper,
-    )
+    );
+    a.ground.kind = GroundKind::FreeSpace;
+    a
 }
 
 /// An inverted-V: two legs from one apex, at roughly 90° between them.
@@ -60,7 +62,7 @@ pub fn inverted_v(freq_hz: f64, apex_height_m: f64) -> Antenna {
         }],
         ..Antenna::default()
     };
-    a.ground = Ground { kind: GroundKind::Real, ..Ground::default() };
+    a.ground = Ground { kind: GroundKind::FreeSpace, ..Ground::default() };
     a
 }
 
@@ -80,7 +82,7 @@ pub fn vertical(freq_hz: f64) -> Antenna {
         phase_deg: 0.0,
         volts: 1.0,
     }];
-    a.ground = Ground { kind: GroundKind::Real, ..Ground::default() };
+    a.ground = Ground { kind: GroundKind::Perfect, ..Ground::default() };
     a
 }
 
@@ -143,7 +145,7 @@ pub fn delta_loop(freq_hz: f64, height_m: f64) -> Antenna {
             phase_deg: 0.0,
             volts: 1.0,
         }],
-        ground: Ground { kind: GroundKind::Real, ..Ground::default() },
+        ground: Ground { kind: GroundKind::FreeSpace, ..Ground::default() },
         ..Antenna::default()
     }
 }
@@ -179,7 +181,7 @@ pub fn yagi(freq_hz: f64, elements: usize, height_m: f64) -> Antenna {
         wires,
         // The driven element is wire 2.
         sources: vec![center_feed(2)],
-        ground: Ground { kind: GroundKind::Real, ..Ground::default() },
+        ground: Ground { kind: GroundKind::FreeSpace, ..Ground::default() },
         ..Antenna::default()
     }
 }
