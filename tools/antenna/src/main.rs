@@ -119,7 +119,9 @@ fn presets(mhz: f64, freq_hz: f64) {
 fn solve(mhz: f64, freq_hz: f64) {
     use ant::solver::{SolverConfig, analyze, swr};
     println!("# feed impedance and SWR (50 ohm) at {mhz} MHz");
-    println!("# junction-free shapes only for now; the rest are refused, not guessed\n");
+    println!(
+        "# a feed on a straight-through node only; a feed at a bend is refused, not guessed\n"
+    );
     for a in ant::presets::catalog(freq_hz) {
         match analyze(&a, &SolverConfig::default()) {
             Ok(sol) => println!(
