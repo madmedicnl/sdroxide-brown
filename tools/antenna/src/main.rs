@@ -18,12 +18,18 @@ fn main() {
     let mut expr: Option<String> = None;
     let mut convert: Option<String> = None;
     let mut to: Option<String> = None;
+    let mut pattern_out: Option<String> = None;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--presets" => mode = Mode::Presets,
             "--solve" => mode = Mode::Solve,
+            "--pattern" => {
+                i += 1;
+                pattern_out = args.get(i).cloned();
+                mode = Mode::Pattern;
+            }
             "--expr" => {
                 i += 1;
                 expr = args.get(i).cloned();
@@ -65,6 +71,7 @@ fn main() {
         Mode::Calc => calc(freq_mhz, freq_hz),
         Mode::Presets => presets(freq_mhz, freq_hz),
         Mode::Solve => solve(freq_mhz, freq_hz),
+        Mode::Pattern => pattern(pattern_out.as_deref(), freq_mhz, freq_hz),
         Mode::Expr => do_expr(expr.as_deref().unwrap_or(""), freq_hz),
         Mode::Convert => do_convert(convert.as_deref().unwrap_or(""), to.as_deref(), freq_hz),
     }
@@ -74,6 +81,7 @@ enum Mode {
     Calc,
     Presets,
     Solve,
+    Pattern,
     Expr,
     Convert,
 }
@@ -141,6 +149,29 @@ fn solve(mhz: f64, freq_hz: f64) {
     }
 }
 
+fn pattern(path: Option<&str>, mhz: f64, freq_hz: f64) {
+    use ant::solver::{SolverConfig, analyze, cut, polar_svg};
+    let out = path.unwrap_or("antenna-pattern.svg");
+    let a = ant::presets::dipole(freq_hz, ant::presets::DEFAULT_HEIGHT_M);
+    match analyze(&a, &SolverConfig::default()) {
+        Ok(sol) => {
+            let az = cut(&sol, true, 90.0, 5.0);
+            let svg = polar_svg(&format!("Dipole azimuth, {mhz:.3} MHz"), &az, -20.0);
+            match std::fs::write(out, svg) {
+                Ok(()) => println!("wrote {out}"),
+                Err(e) => {
+                    eprintln!("could not write {out}: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    }
+}
+
 fn do_expr(text: &str, freq_hz: f64) {
     let c = Consts::at_freq(freq_hz);
     match eval(text, c) {
@@ -187,6 +218,7 @@ fn print_help() {
     println!("antenna [MHz]                     closed-form dimensions (default 27.265)");
     println!("antenna --presets [MHz]           the CB/SWL shape presets, as .maa");
     println!("antenna --solve [MHz]             solve the presets: Zin and SWR");
+    println!("antenna --pattern FILE [MHz]      write the dipole azimuth pattern as SVG");
     println!("antenna --expr \"R/4\" [MHz]        evaluate an MMANA dimension expression");
     println!("antenna --convert 17ft --to m     convert a length between units");
 }

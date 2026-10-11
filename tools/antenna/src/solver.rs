@@ -582,6 +582,77 @@ pub fn swr(zin: Complex64, z0: f64) -> f64 {
     (1.0 + g) / (1.0 - g)
 }
 
+/// Gain (dBi) sampled around a circle. `fixed_deg` is held and `sweep` runs
+/// 0…360 — an azimuth cut (hold θ=90) or an elevation cut (hold φ=0/90).
+pub fn cut(sol: &Solution, fixed_is_theta: bool, fixed_deg: f64, step_deg: f64) -> Vec<(f64, f64)> {
+    let mut out = Vec::new();
+    let mut a = 0.0;
+    while a < 360.0 {
+        let g =
+            if fixed_is_theta { gain_dbi(sol, fixed_deg, a) } else { gain_dbi(sol, a, fixed_deg) };
+        out.push((a, g));
+        a += step_deg;
+    }
+    out
+}
+
+/// A 2D polar plot of a gain cut, as an SVG string. Angle 0 is up and increases
+/// clockwise; `floor_dbi` is the centre of the chart, the peak is the rim.
+pub fn polar_svg(title: &str, samples: &[(f64, f64)], floor_dbi: f64) -> String {
+    let size = 440.0_f64;
+    let c = size / 2.0;
+    let rmax = c - 34.0;
+    let peak = samples.iter().map(|s| s.1).fold(f64::NEG_INFINITY, f64::max);
+    let floor = floor_dbi.min(peak - 1.0);
+    let norm = |g: f64| ((g - floor) / (peak - floor)).clamp(0.0, 1.0);
+
+    let mut s = String::new();
+    s.push_str(&format!(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='{size}' height='{size}' viewBox='0 0 {size} {size}'>\n"
+    ));
+    s.push_str(&format!("<rect width='{size}' height='{size}' fill='white'/>\n"));
+    for k in 1..=4 {
+        let rr = rmax * k as f64 / 4.0;
+        s.push_str(&format!("<circle cx='{c}' cy='{c}' r='{rr:.1}' fill='none' stroke='#ccc'/>\n"));
+        let db = floor + (peak - floor) * k as f64 / 4.0;
+        s.push_str(&format!(
+            "<text x='{:.1}' y='{c}' font-size='9' fill='#888'>{db:.0}</text>\n",
+            c + 3.0
+        ));
+    }
+    for a in (0..360).step_by(30) {
+        let rad = (a as f64).to_radians();
+        let (sx, cy) = (rad.sin(), rad.cos());
+        s.push_str(&format!(
+            "<line x1='{c}' y1='{c}' x2='{:.1}' y2='{:.1}' stroke='#eee'/>\n",
+            c + rmax * sx,
+            c - rmax * cy
+        ));
+        s.push_str(&format!(
+            "<text x='{:.1}' y='{:.1}' font-size='10' text-anchor='middle' fill='#555'>{a}\u{b0}</text>\n",
+            c + (rmax + 16.0) * sx,
+            c - (rmax + 16.0) * cy
+        ));
+    }
+    let pts: Vec<String> = samples
+        .iter()
+        .map(|(a, g)| {
+            let rad = a.to_radians();
+            let rr = rmax * norm(*g);
+            format!("{:.1},{:.1}", c + rr * rad.sin(), c - rr * rad.cos())
+        })
+        .collect();
+    s.push_str(&format!(
+        "<polygon points='{}' fill='#2a7' fill-opacity='0.25' stroke='#186' stroke-width='1.5'/>\n",
+        pts.join(" ")
+    ));
+    s.push_str(&format!(
+        "<text x='{c}' y='22' font-size='14' text-anchor='middle'>{title}   peak {peak:.1} dBi</text>\n"
+    ));
+    s.push_str("</svg>\n");
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -754,6 +825,19 @@ mod tests {
         assert!((pts[0].freq_hz - 29e6).abs() < 1.0);
         assert!((pts[4].freq_hz - 31e6).abs() < 1.0);
         assert!(pts.iter().all(|p| p.swr.is_finite() && p.swr >= 1.0), "{pts:?}");
+    }
+
+    /// The pattern cut produces a well-formed polar SVG.
+    #[test]
+    fn the_pattern_cut_becomes_svg() {
+        let sol = analyze(&dipole(0.475, 60), &SolverConfig::default()).unwrap();
+        let az = cut(&sol, true, 90.0, 10.0);
+        assert_eq!(az.len(), 36);
+        assert!(az.iter().all(|(_, g)| g.is_finite()));
+        let svg = polar_svg("test", &az, -20.0);
+        assert!(svg.starts_with("<svg"));
+        assert!(svg.contains("<polygon"));
+        assert!(svg.contains("peak"));
     }
 
     #[test]

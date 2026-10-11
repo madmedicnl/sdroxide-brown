@@ -328,7 +328,9 @@ was the hard part and is handled.*
 - [ ] MMANA's DM1/DM2/SC/EC tapering.
 
 **C — Patterns**
-- [ ] 2D azimuth + elevation polar plots (the readable view — do this first).
+- [~] **2D polar plots** — the far-field cut and the SVG generator exist in the
+      prototype (`cut`, `polar_svg`, `--pattern FILE`); the real deliverable is
+      the same geometry drawn in the app's tool window (milestone E).
 - [ ] 3D hemisphere toggle, reusing the solar-scene renderer.
 
 **D — Advanced (only once A–C are honest)**
