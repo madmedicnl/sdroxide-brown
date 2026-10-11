@@ -3,11 +3,16 @@
 > **Status: idea, not a plan.** Written down so it is not lost and not
 > re-derived. Operator's ask, 2026-10-11.
 >
-> **A prototype now exists, off `main`, on branch `fork/antenna-tool`:**
-> `tools/antenna/` — a standalone cargo workspace (like `tools/rsp1-capture`) with
-> the **calculator** half only (closed-form lengths + SWR), 8 tests, `cargo run
-> -- 27.265`. Not a workspace member, not wired into the program, not pushed.
-> Decision so far: **obstacle overlay is attenuation-only** (open question 1).
+> **A prototype exists, off `main`, on branch `fork/antenna-tool`:**
+> `tools/antenna/` — a standalone cargo workspace (like `tools/rsp1-capture`).
+> **Milestone A (the tool layer) is built:** the closed-form calculator (dipole,
+> inverted-V, verticals, ground plane, delta/quad loop, Yagi start) with SWR; the
+> data model (wires/source/loads/ground/segmentation); the `.maa` reader and
+> writer; `antennas.json`; the `R`/`I`/`F` equation box and length units; and the
+> CB/SWL presets. 27 tests, `cargo run -- 27.265`. Not a workspace member, not
+> wired into the program, not pushed. The one A item deferred is the egui tool
+> window (it belongs to integration, E). Decisions: **attenuation-only obstacles**
+> and the rest recorded below.
 
 ## The wish, in his words
 
@@ -270,14 +275,22 @@ reimplementing MMANA, stop — a wrong solver is worse than none.** Keep it on
 **A — Tool layer (low risk, shippable on its own)**
 - [ ] Collect golden reference values for the solver tests — a dipole's Zin, a
       known delta loop, a known Yagi's gain and F/B — from NEC/MMANA/ARRL
-      examples. Prerequisite for B's tests, do it first.
-- [ ] `.maa` reader and writer (MMANA's plain-text model format).
-- [ ] `antennas.json` persistence (own file, like `memories.json`).
-- [ ] The `R`/`I`/`F` equation parser and unit conversion (m / ft / in / λ).
-- [ ] CB/SWL shape presets, and the shape list made **expandable** (wire, delta
-      loop, stick/vertical, GP, Yagi first).
-- [ ] The calculator tool-window UI — a simple view (freq → lengths) with an
-      advanced panel (presets, equation box, units).
+      examples. Prerequisite for B's tests, do it first. *(Deferred to B — it is
+      solver work, not tool work.)*
+- [x] `.maa` reader and writer (MMANA's plain-text model format) — both variants
+      read, variant B written; MMANA's own example is the fixture.
+- [x] `antennas.json` persistence (own file, like `memories.json`) — serde, with
+      the `float_roundtrip` feature so a coordinate reloads bit-identical.
+- [x] The `R`/`I`/`F` equation parser and unit conversion (m / ft / in / λ).
+- [x] CB/SWL shape presets, and the shape list made **expandable** — dipole,
+      inverted-V, vertical (stick), ground plane, delta loop, Yagi.
+- [ ] The calculator tool-window UI — **moved to E (integration)**: it cannot
+      exist in the standalone prototype, only once the code is in the program.
+
+The data model (`model.rs`) is also in place — the wire/source/load/ground /
+segmentation types the `.maa` file and `antennas.json` both hold. The
+*segmentation algorithm* (turning DM1/DM2/SC/EC into concrete counts) is still a
+solver task (B); the model only stores the parameters.
 
 **B — Solver (the risky half; validated before C is built on it)**
 - [ ] Wire geometry model + segmentation (DM1/DM2/SC/EC tapering).

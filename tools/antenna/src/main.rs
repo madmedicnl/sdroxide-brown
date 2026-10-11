@@ -1,36 +1,86 @@
-//! `antenna <MHz>` — print the closed-form dimensions for the common wire
-//! antennas at a frequency, and the SWR they present against 50 ohms.
+//! `antenna` — the prototype's front door. The real home is a tool window in
+//! sdroxide; this is how the pieces are exercised while they are settled.
 //!
-//! This is the prototype's front door and nothing more: a way to look at the
-//! numbers while the shapes and the arithmetic are settled. The real home is a
-//! tool window in sdroxide.
+//! ```text
+//! antenna [MHz]                     closed-form dimensions (default 27.265)
+//! antenna --presets [MHz]           the CB/SWL shape presets, as .maa
+//! antenna --expr "R/4" [MHz]        evaluate an MMANA dimension expression
+//! antenna --convert 17ft --to m [MHz]   convert a length between units
+//! ```
 
+use ant::expr::{Consts, LengthUnit, eval, parse_length};
 use antenna_model as ant;
 
 fn main() {
-    let mut args = std::env::args().skip(1);
-    let mhz: f64 = match args.next() {
-        Some(a) => match a.parse() {
-            Ok(v) => v,
-            Err(_) => {
-                eprintln!("usage: antenna <freq_mhz>   (e.g. antenna 27.265)");
-                std::process::exit(2);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut mode = Mode::Calc;
+    let mut freq_mhz = 27.265_f64;
+    let mut expr: Option<String> = None;
+    let mut convert: Option<String> = None;
+    let mut to: Option<String> = None;
+
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--presets" => mode = Mode::Presets,
+            "--expr" => {
+                i += 1;
+                expr = args.get(i).cloned();
+                mode = Mode::Expr;
             }
-        },
-        None => 27.265,
-    };
-    if mhz <= 0.0 {
+            "--convert" => {
+                i += 1;
+                convert = args.get(i).cloned();
+                mode = Mode::Convert;
+            }
+            "--to" => {
+                i += 1;
+                to = args.get(i).cloned();
+            }
+            "-h" | "--help" => {
+                print_help();
+                return;
+            }
+            other => match other.parse::<f64>() {
+                Ok(v) => {
+                    freq_mhz = v;
+                }
+                Err(_) => {
+                    eprintln!("unrecognised argument: {other}");
+                    print_help();
+                    std::process::exit(2);
+                }
+            },
+        }
+        i += 1;
+    }
+    if freq_mhz <= 0.0 {
         eprintln!("frequency must be positive");
         std::process::exit(2);
     }
-    let freq_hz = mhz * 1e6;
+    let freq_hz = freq_mhz * 1e6;
 
+    match mode {
+        Mode::Calc => calc(freq_mhz, freq_hz),
+        Mode::Presets => presets(freq_mhz, freq_hz),
+        Mode::Expr => do_expr(expr.as_deref().unwrap_or(""), freq_hz),
+        Mode::Convert => do_convert(convert.as_deref().unwrap_or(""), to.as_deref(), freq_hz),
+    }
+}
+
+enum Mode {
+    Calc,
+    Presets,
+    Expr,
+    Convert,
+}
+
+fn calc(mhz: f64, freq_hz: f64) {
     println!(
         "f = {mhz} MHz   lambda = {:.3} m ({:.2} ft)\n",
         ant::wavelength_m(freq_hz),
         ant::wavelength_m(freq_hz) / 0.3048
     );
-
     for d in ant::all(freq_hz) {
         println!("{:<22} {}", d.name, d.notes);
         for dim in &d.dims {
@@ -52,4 +102,62 @@ fn main() {
         }
         println!();
     }
+}
+
+fn presets(mhz: f64, freq_hz: f64) {
+    println!("# CB/SWL presets at {mhz} MHz\n");
+    for a in ant::presets::catalog(freq_hz) {
+        println!("# {} — {} wire(s)", a.name, a.wires.len());
+        print!("{}", ant::maa::write(&a));
+        println!();
+    }
+}
+
+fn do_expr(text: &str, freq_hz: f64) {
+    let c = Consts::at_freq(freq_hz);
+    match eval(text, c) {
+        Ok(m) => {
+            println!("{text} = {m:.6} m  ({:.4} ft, {:.6} lambda)", m / 0.3048, m / c.lambda_m)
+        }
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn do_convert(value: &str, to: Option<&str>, freq_hz: f64) {
+    let lam = ant::wavelength_m(freq_hz);
+    let metres = match parse_length(value, lam) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    };
+    let want = to.unwrap_or("m");
+    let u = LengthUnit::ALL
+        .iter()
+        .copied()
+        .find(|u| {
+            u.suffix() == want
+                || u.label() == want
+                || matches!((u, want), (LengthUnit::Metres, "m"))
+        })
+        .unwrap_or(LengthUnit::Metres);
+    println!(
+        "{value} = {:.4} m = {:.4} ft = {:.4} in = {:.6} lambda",
+        metres,
+        LengthUnit::Feet.from_metres(metres, lam),
+        LengthUnit::Inches.from_metres(metres, lam),
+        LengthUnit::Wavelength.from_metres(metres, lam),
+    );
+    println!("  (asked for {want}: {:.4} {})", u.from_metres(metres, lam), u.suffix());
+}
+
+fn print_help() {
+    println!("antenna [MHz]                     closed-form dimensions (default 27.265)");
+    println!("antenna --presets [MHz]           the CB/SWL shape presets, as .maa");
+    println!("antenna --expr \"R/4\" [MHz]        evaluate an MMANA dimension expression");
+    println!("antenna --convert 17ft --to m     convert a length between units");
 }

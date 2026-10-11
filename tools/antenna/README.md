@@ -11,20 +11,29 @@ builds without the vendored submodules.
 
 ## What it is now
 
-The **calculator** half only — closed-form dimensions and SWR arithmetic, no
-method-of-moments engine. Given a frequency it prints the wire lengths for a
-dipole, inverted-V, quarter-wave and 5/8-wave vertical, ground plane, delta loop,
-quad loop and a Yagi starting layout.
+The **tool layer** (milestone A) — no method-of-moments engine yet:
+
+- `lib.rs` — the closed-form calculator (dimensions + SWR) and a Yagi start.
+- `model.rs` — the data model: wires, source, loads, ground, segmentation.
+- `maa.rs` — MMANA-GAL `.maa` read/write (both variants read, B written).
+- `store.rs` — `antennas.json` save/load.
+- `expr.rs` — the `R`/`I`/`F` equation box and the length units.
+- `presets.rs` — the CB/SWL shape presets (dipole, inverted-V, stick, ground
+  plane, delta loop, Yagi), built from the same lengths as the calculator.
 
 ```
-cargo run -- 27.265
+cargo run -- 27.265                              # dimensions table
+cargo run -- --presets 27.265                    # presets, as .maa
+cargo run -- --expr "5*R/8" 27.265               # the equation box
+cargo run -- --convert 17ft --to m               # unit conversion
 cargo test
 ```
 
 ## What comes next
 
-The solver (`Zin`, SWR across a band, patterns, ground), then an obstacle
-attenuation overlay — see the ideas doc for the formulas and the phasing.
+The solver — feed Z, SWR across a band, patterns and the ground model — then the
+optimizer and the attenuation-only obstacle overlay. See the ideas doc for the
+formulas and the phasing.
 
 ## Note on the shortening factor
 

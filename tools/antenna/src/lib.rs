@@ -12,6 +12,10 @@
 //! rather than letting the calculator look exact.
 
 pub mod expr;
+pub mod maa;
+pub mod model;
+pub mod presets;
+pub mod store;
 
 /// Speed of light, m/s.
 pub const C: f64 = 299_792_458.0;

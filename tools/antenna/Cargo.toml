@@ -16,3 +16,10 @@ path = "src/lib.rs"
 [[bin]]
 name = "antenna"
 path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+# `float_roundtrip` matters: the default float parser is best-effort and shifts
+# the last bit of a coordinate, so a saved design would not reload byte-identical
+# and the round-trip test would (correctly) fail.
+serde_json = { version = "1", features = ["float_roundtrip"] }
