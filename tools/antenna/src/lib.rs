@@ -11,6 +11,8 @@
 //! solver is what turns it into a real number, and the doc for the tool says so
 //! rather than letting the calculator look exact.
 
+pub mod expr;
+
 /// Speed of light, m/s.
 pub const C: f64 = 299_792_458.0;
 
@@ -68,12 +70,9 @@ pub fn dipole(freq_hz: f64) -> Design {
 /// An inverted-V: a dipole with the legs sloped down from a centre support.
 pub fn inverted_v(freq_hz: f64) -> Design {
     let leg = K * wavelength_m(freq_hz) / 4.0;
-    Design::new(
-        "Inverted-V",
-        "apex 90-120 deg; legs slope down from one centre support",
-    )
-    .dim("each leg", leg)
-    .z(50.0, 0.0)
+    Design::new("Inverted-V", "apex 90-120 deg; legs slope down from one centre support")
+        .dim("each leg", leg)
+        .z(50.0, 0.0)
 }
 
 /// A quarter-wave vertical (monopole) over a ground plane.
@@ -106,14 +105,11 @@ pub fn ground_plane(freq_hz: f64) -> Design {
 pub fn delta_loop(freq_hz: f64) -> Design {
     let lam = wavelength_m(freq_hz);
     let perimeter = 1.02 * lam;
-    Design::new(
-        "Full-wave delta loop",
-        "equilateral triangle; feed the bottom centre or a corner",
-    )
-    .dim("perimeter", perimeter)
-    .dim("each side", perimeter / 3.0)
-    .dim("height (equilateral)", 0.866 * perimeter / 3.0)
-    .z(110.0, 0.0)
+    Design::new("Full-wave delta loop", "equilateral triangle; feed the bottom centre or a corner")
+        .dim("perimeter", perimeter)
+        .dim("each side", perimeter / 3.0)
+        .dim("height (equilateral)", 0.866 * perimeter / 3.0)
+        .z(110.0, 0.0)
 }
 
 /// A full-wave square (quad) loop.
@@ -213,10 +209,7 @@ mod tests {
             let metres = dipole(f_mhz * 1e6).dims[0].metres;
             let feet = metres / 0.3048;
             let rule = 468.0 / f_mhz;
-            assert!(
-                (feet - rule).abs() / rule < 0.005,
-                "{f_mhz} MHz: {feet} ft vs {rule}"
-            );
+            assert!((feet - rule).abs() / rule < 0.005, "{f_mhz} MHz: {feet} ft vs {rule}");
         }
     }
 
