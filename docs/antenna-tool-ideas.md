@@ -259,3 +259,49 @@ Still open:
   four operators — cheap, but it is work, not a checkbox.
 - The **RF engine** stays as in §B–§D; decisions 2, 3 and 5 only move *when*
   things land, not *what* they are.
+
+## Todo (from the feasibility assessment, 2026-10-11)
+
+Ordered to ship the low-risk half first, then prove the risky half before more
+UI is built around it. **Milestone gate: if this starts to look like
+reimplementing MMANA, stop — a wrong solver is worse than none.** Keep it on
+`fork/antenna-tool`, unpushed, until it is worth merging.
+
+**A — Tool layer (low risk, shippable on its own)**
+- [ ] Collect golden reference values for the solver tests — a dipole's Zin, a
+      known delta loop, a known Yagi's gain and F/B — from NEC/MMANA/ARRL
+      examples. Prerequisite for B's tests, do it first.
+- [ ] `.maa` reader and writer (MMANA's plain-text model format).
+- [ ] `antennas.json` persistence (own file, like `memories.json`).
+- [ ] The `R`/`I`/`F` equation parser and unit conversion (m / ft / in / λ).
+- [ ] CB/SWL shape presets, and the shape list made **expandable** (wire, delta
+      loop, stick/vertical, GP, Yagi first).
+- [ ] The calculator tool-window UI — a simple view (freq → lengths) with an
+      advanced panel (presets, equation box, units).
+
+**B — Solver (the risky half; validated before C is built on it)**
+- [ ] Wire geometry model + segmentation (DM1/DM2/SC/EC tapering).
+- [ ] Thin-wire MoM EFIE core — reduced kernel, pulse basis, point matching →
+      `[Z][I] = [V]`, doubled with the delta-gap source.
+- [ ] Lumped loads on a segment (R+jX, L, C, parallel-LC trap).
+- [ ] Ground models — perfect (image) and real (Fresnel, εr/σ presets), with
+      the <0.2 λ accuracy caveat carried in the UI.
+- [ ] Frequency sweep outputs (Zin, SWR, gain, F/B) **and the golden regression
+      tests**, each verified to fail when the kernel is deliberately broken.
+
+**C — Patterns**
+- [ ] 2D azimuth + elevation polar plots (the readable view — do this first).
+- [ ] 3D hemisphere toggle, reusing the solar-scene renderer.
+
+**D — Advanced (only once A–C are honest)**
+- [ ] Optimizer over chosen variables (jX / SWR / gain / F-B / elevation).
+- [ ] Obstacle attenuation overlay — vegetation + knife-edge, **labelled an
+      approximation** (decision 1).
+- [ ] Stacking and wire scaling (MMANA's Make stack / Wire scale).
+
+**E — Integration**
+- [ ] Promote `tools/antenna` → `crates/sdroxide-ant`, wire the tool window
+      (`self.tool_window`), then merge the branch to `main`.
+- [ ] Manual section, README entry and a quick-start.
+- [ ] RX nice-to-have (decision 2): feed the predicted takeoff into the
+      receive/propagation side.
