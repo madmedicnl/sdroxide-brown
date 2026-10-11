@@ -686,7 +686,7 @@ pub fn polar_svg(title: &str, samples: &[(f64, f64)], floor_dbi: f64) -> String 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Source, WirePoint};
+    use crate::model::{Ground, GroundKind, Source, Wire, WirePoint};
 
     /// A thin centre-fed dipole of a given length in wavelengths, at radius
     /// λ/10000 (thin, and in the `a ≪ Δ ≪ λ` window at 80 segments).
@@ -868,6 +868,47 @@ mod tests {
         assert!(svg.starts_with("<svg"));
         assert!(svg.contains("<polygon"));
         assert!(svg.contains("peak"));
+    }
+
+    /// The acceptance test on a **real, published design**: the 4-element OWA
+    /// Yagi from dx-antennas.com (19DX348), boom 3.82 m, quoted **8.42 dBi** and
+    /// **50 Ω** at 27.555 MHz, F/B < 22 dB. Straight parallel elements (no
+    /// bends), so the solver models it — and it reproduces the published figures
+    /// without tuning. Source: <https://dx-antennas.com/>.
+    #[test]
+    fn an_owa_yagi_matches_the_published_gain_and_impedance() {
+        let f = 27.555e6;
+        let h = 10.0;
+        let r = 0.011; // 22 mm element → 11 mm radius
+        let el = |half: f64, y: f64| Wire {
+            from: [-half, y, h],
+            to: [half, y, h],
+            radius_m: r,
+            seg: Seg::Fixed(60),
+        };
+        let a = Antenna {
+            name: "4el OWA".into(),
+            freq_hz: f,
+            wires: vec![
+                el(2.736, 0.0),   // reflector
+                el(2.657, 1.329), // radiator
+                el(2.523, 1.834), // director 1
+                el(2.4062, 3.82), // director 2
+            ],
+            sources: vec![Source {
+                at: WirePoint { wire: 2, at: Pos::Center, offset: 0 },
+                phase_deg: 0.0,
+                volts: 1.0,
+            }],
+            ground: Ground { kind: GroundKind::FreeSpace, ..Ground::default() },
+            ..Antenna::default()
+        };
+        let sol = analyze(&a, &SolverConfig::default()).unwrap();
+        let (g, _, _) = max_gain(&sol);
+        assert!((g - 8.42).abs() < 0.7, "gain {g:.2} dBi, published 8.42");
+        assert!((sol.zin.re - 50.0).abs() < 12.0, "R {:.1} Ω, published ~50", sol.zin.re);
+        assert!(sol.zin.im.abs() < 30.0, "X {:.1} Ω should be small", sol.zin.im);
+        assert!(front_to_back_db(&sol) > 12.0, "F/B {:.1} dB", front_to_back_db(&sol));
     }
 
     #[test]

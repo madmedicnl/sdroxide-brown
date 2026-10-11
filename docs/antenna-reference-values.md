@@ -10,7 +10,7 @@
 | Design | Gain | Z | F/B | Fit for our solver |
 |---|---|---|---|---|
 | Half-wave dipole (freespace) | **2.14 dBi** (0 dBd — the reference) | ~70 Ω (20–100 with height/polarisation) | — | Straight single wire — **already validated (~2.1 dBi)** |
-| **4-element OWA Yagi** @ 27.555 MHz | **8.42 dBi** | 50 Ω | <22 dB | Parallel straight elements, no bends — **ideal acceptance test** |
+| **4-element OWA Yagi** @ 27.555 MHz | **8.42 dBi** | 50 Ω | <22 dB | Parallel straight elements, no bends — **live acceptance test: the solver gives 8.52 dBi / 51.5 + j1.3 Ω / F-B 18.6 dB** |
 | 2-element Moxon @ 27.555 MHz | 5.94 dBi | 50 Ω | <37 dB (H) | Folded tips = bends, so it waits on the bend model |
 
 `dBi = dBd + 2.14`. The site prefers **dBi** precisely because dBd can be gamed.
