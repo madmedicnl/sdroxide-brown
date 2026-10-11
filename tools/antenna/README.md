@@ -20,10 +20,15 @@ The **tool layer** (milestone A) — no method-of-moments engine yet:
 - `expr.rs` — the `R`/`I`/`F` equation box and the length units.
 - `presets.rs` — the CB/SWL shape presets (dipole, inverted-V, stick, ground
   plane, delta loop, Yagi), built from the same lengths as the calculator.
+- `solver.rs` — the method-of-moments solver (triangular/rooftop basis, Galerkin,
+  reduced kernel), validated against the textbook dipole values for
+  **junction-free** shapes; shapes whose wires meet are refused until junction
+  handling lands.
 
 ```
 cargo run -- 27.265                              # dimensions table
 cargo run -- --presets 27.265                    # presets, as .maa
+cargo run -- --solve 27.265                      # Zin and SWR of the presets
 cargo run -- --expr "5*R/8" 27.265               # the equation box
 cargo run -- --convert 17ft --to m               # unit conversion
 cargo test
@@ -31,9 +36,9 @@ cargo test
 
 ## What comes next
 
-The solver — feed Z, SWR across a band, patterns and the ground model — then the
-optimizer and the attenuation-only obstacle overlay. See the ideas doc for the
-formulas and the phasing.
+Junction handling (delta loop, inverted-V, ground plane), lumped loads, ground
+models, the frequency sweep and far-field gain/F-B, then the 2D polar plots.
+See the ideas doc for the formulas and the phasing.
 
 ## Note on the shortening factor
 

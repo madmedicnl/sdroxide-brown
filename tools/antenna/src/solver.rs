@@ -1,74 +1,83 @@
 //! The method-of-moments solver — the thin-wire EFIE, from the wire model to a
-//! feed impedance and a radiation pattern.
+//! feed impedance.
 //!
-//! # ⚠️ WORK IN PROGRESS — NOT VALIDATED, DO NOT CUT WIRE ON THESE NUMBERS
+//! **Triangular (rooftop) current basis, Galerkin testing, reduced kernel.** The
+//! current is piecewise-linear along each wire, so its derivative — the charge —
+//! is piecewise-*constant* on the segments. That is the whole reason for this
+//! basis: with the charge spread along a segment the scalar-potential self term
+//! integrates to a `ln(Δ/a)`, where a point charge at a segment boundary would
+//! sit at the wire radius and give a `1/a` that swamps the vector-potential term
+//! and wrecks the reactance. (That failure is what the earlier pulse-basis
+//! version hit; this replaces it.)
 //!
-//! The **real part** of the feed impedance is right (a λ/2 dipole lands near
-//! 73 Ω), but the **reactance is wrong**, and a wrong impedance is worse than a
-//! blank one. The cause is known and diagnosed below; it is not committed as
-//! usable and it is not reachable from the CLI or any other surface.
-//!
-//! **The diagnosis.** The scalar potential is built from a **point charge at
-//! each segment boundary** (`Q = ΔI/jω`). Evaluated at the wire surface that
-//! charge sits at distance = the wire radius, so `G ≈ 1/a` is enormous, and the
-//! scalar-potential self term swamps the vector-potential term instead of
-//! cancelling it — the reactance comes out several times too large and with the
-//! wrong sign (measured −134 Ω where +42.5 is wanted, and +757 Ω with the
-//! charge sign reversed). The pulse-basis / point-charge potential is simply too
-//! singular. The fix is a **basis whose charge is piecewise-constant on the
-//! segments rather than a point at their ends** — a **triangular (rooftop)
-//! current basis**, where `ρ_i = (I_i − I_{i+1})/jωΔ_i` is spread along segment
-//! `i` and the self term integrates to a `ln(Δ/a)`, not a `1/a`. That is a
-//! rewrite of the unknown set and the feed handling, not a tweak, so it is left
-//! for its own session.
-//!
-//! What *is* believed sound: the segmentation, the interaction-matrix assembly,
-//! the delta-gap source, the complex solve, and the far-field/pattern machinery
-//! built on the currents. Only the scalar-potential self term is wrong.
-//!
-//! The formulation is the **mixed-potential electric-field integral equation**
-//! with a **pulse basis and point matching**, on the **reduced kernel** (source
-//! on the wire axis, field point on its surface, so R = sqrt(d² + a²) never
-//! vanishes). It is the family NEC and MININEC belong to; NEC-2's documentation
-//! is the reference this is written against.
-//!
-//! On the surface of the wire,
+//! The mixed-potential EFIE on the wire surface,
 //!
 //! ```text
-//!   E^i + E^s = 0          (tangentially)
+//!   E^i + E^s = 0                     (tangentially)
 //!   E^s = -jωA - ∇φ
 //!   A   = (μ0/4π) ∫ I(s') ŝ' G ds'
-//!   φ   = (1/jω)(1/4πε0) ∫ (dI/ds') G ds'      (continuity)
-//!   G   = e^{-jkR}/R
+//!   φ   = (1/4πε0) ∫ ρ(s') G ds',   ρ = -(1/jω) dI/ds'
+//!   G   = e^{-jkR}/R,               R = sqrt(|r-r'|² + a²)
 //! ```
 //!
-//! With the current constant on each segment, the charge lives at the segment
-//! boundaries as a jump `(I_j - I_{j-1})/jω`, and the equation is assembled into
-//! the dense complex system `[Z][I] = [V]`. The feed is a delta gap: `V/Δ` on the
-//! feed segment alone.
+//! is tested with the same triangle that expands the current (Galerkin), giving
+//! the dense complex system `[Z][I] = [V]`. The feed is a delta gap at a node:
+//! `V` on that basis function alone, so `Zin = V / I_feed`.
 //!
-//! **Junction-free wires only, for now.** A single wire (a dipole, a vertical)
-//! and several parallel wires (a Yagi) are handled correctly. Where two or more
-//! wires *meet* — a delta loop's corners, an inverted-V's apex, a ground plane's
-//! radials — the currents must satisfy Kirchhoff at the junction, and that is a
-//! separate basis-function treatment still to be added. A model with junctions
-//! is refused rather than solved wrong.
+//! **Validated against two independent textbook results** (the tests below):
+//!
+//! - A **short** dipole's input resistance matches `20π²(l/λ)²` — e.g. at
+//!   `l = 0.2λ` the solver gives ≈ 7.7 Ω against the formula's 7.9 Ω.
+//! - A thin dipole **resonates** (zero reactance) at ≈ 0.47–0.48 λ, not 0.5 λ,
+//!   and its **resonant resistance is ≈ 73 Ω** — the classic figure.
+//!
+//! Note the exact-`λ/2` value: a thin centre-fed dipole at exactly 0.5 λ comes
+//! out near **80 + j46 Ω**, a little above the often-quoted 73 + j42.5. That
+//! 73 Ω is the *resonant* resistance (the solver reproduces it at resonance);
+//! the idealised 73 + j42.5 assumes a sinusoidal current, while this is the
+//! reduced-kernel Galerkin result for a delta-gap feed. The short-dipole match
+//! is the proof the formulation is sound, not the λ/2 figure.
+//!
+//! **Junction-free wires only, for now.** A single wire (dipole, vertical) and
+//! several separate wires (a Yagi) are handled. Where wires *meet* — a delta
+//! loop's corners, an inverted-V's apex — the current must satisfy Kirchhoff at
+//! the junction, which is a separate treatment still to add; such a model is
+//! refused rather than solved wrong.
 
 use num_complex::Complex64;
 use std::f64::consts::PI;
 
-use crate::model::{Antenna, Seg};
-
 pub use crate::C;
+use crate::model::{Antenna, Pos, Seg, Source};
 
 const MU0: f64 = 1.256_637_062_12e-6;
 const EPS0: f64 = 8.854_187_812_8e-12;
 
-fn c64(re: f64, im: f64) -> Complex64 {
-    Complex64::new(re, im)
-}
+// 8-point Gauss–Legendre nodes and weights on [-1, 1]. The reduced kernel's
+// `1/sqrt(u²+a²)` is sharply peaked when a segment is only a few radii long, so
+// a low-order rule under-integrates the self term and biases the resistance up.
+const GX: [f64; 8] = [
+    -0.960_289_856_497_536_3,
+    -0.796_666_477_413_626_7,
+    -0.525_532_409_916_329,
+    -0.183_434_642_495_649_8,
+    0.183_434_642_495_649_8,
+    0.525_532_409_916_329,
+    0.796_666_477_413_626_7,
+    0.960_289_856_497_536_3,
+];
+const GW: [f64; 8] = [
+    0.101_228_536_290_376_3,
+    0.222_381_034_453_374_5,
+    0.313_706_645_877_887_3,
+    0.362_683_783_378_362,
+    0.362_683_783_378_362,
+    0.313_706_645_877_887_3,
+    0.222_381_034_453_374_5,
+    0.101_228_536_290_376_3,
+];
 
-// ── small vector helpers ─────────────────────────────────────────────────────
+// ── vector helpers ───────────────────────────────────────────────────────────
 
 fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
@@ -89,39 +98,51 @@ fn dist(a: [f64; 3], b: [f64; 3]) -> f64 {
 
 // ── geometry ─────────────────────────────────────────────────────────────────
 
-/// One solved-for wire segment.
+/// One wire segment, with its wire and local index so a node's two support
+/// segments can be found.
 #[derive(Clone, Debug)]
-pub struct Segment {
-    pub from: [f64; 3],
-    pub to: [f64; 3],
-    pub mid: [f64; 3],
-    pub dir: [f64; 3],
-    pub len: f64,
-    pub radius: f64,
-    pub wire: usize,
+struct Segment {
+    from: [f64; 3],
+    to: [f64; 3],
+    dir: [f64; 3],
+    len: f64,
 }
 
-/// How finely to cut the wires into segments.
+/// How finely to cut the wires. A fixed per-wire count is honoured; otherwise
+/// `segs_per_wavelength` sets the density (MMANA's DM2 in spirit).
 #[derive(Clone, Copy, Debug)]
 pub struct SolverConfig {
-    /// Segments per wavelength for an automatically segmented wire (MMANA's
-    /// DM2 in spirit). Ignored where a wire names a fixed count.
     pub segs_per_wavelength: f64,
 }
 
 impl Default for SolverConfig {
     fn default() -> SolverConfig {
-        SolverConfig { segs_per_wavelength: 20.0 }
+        // Denser than MMANA's DM2 ≈ 20: this solver integrates numerically, so
+        // it needs more segments than NEC-style analytic kernels for the same
+        // accuracy. ~40 a half-wave is the reliable floor.
+        SolverConfig { segs_per_wavelength: 80.0 }
     }
 }
 
-/// Cut the model's wires into segments.
-pub fn segment(a: &Antenna, cfg: &SolverConfig) -> Vec<Segment> {
+struct Mesh {
+    /// Node points, `[wire][node]`, `segments(wire)+1` of them.
+    nodes: Vec<Vec<[f64; 3]>>,
+    /// Segments, `[wire][seg]`.
+    segs: Vec<Vec<Segment>>,
+    radius: Vec<f64>,
+}
+
+fn mesh(a: &Antenna, cfg: &SolverConfig) -> Mesh {
     let lambda = C / a.freq_hz;
-    let mut out = Vec::new();
-    for (wi, w) in a.wires.iter().enumerate() {
+    let mut nodes = Vec::new();
+    let mut segs = Vec::new();
+    let mut radius = Vec::new();
+    for w in &a.wires {
         let len = dist(w.from, w.to);
         if len <= 0.0 {
+            nodes.push(vec![w.from]);
+            segs.push(Vec::new());
+            radius.push(w.radius_m);
             continue;
         }
         let n = match w.seg {
@@ -129,53 +150,21 @@ pub fn segment(a: &Antenna, cfg: &SolverConfig) -> Vec<Segment> {
             _ => ((cfg.segs_per_wavelength * len / lambda).round() as u32).max(2),
         };
         let dir = scale(sub(w.to, w.from), 1.0 / len);
-        for i in 0..n {
-            let t0 = i as f64 / n as f64;
-            let t1 = (i + 1) as f64 / n as f64;
-            let from = add(w.from, scale(sub(w.to, w.from), t0));
-            let to = add(w.from, scale(sub(w.to, w.from), t1));
-            let seg_len = dist(from, to);
-            let mid = scale(add(from, to), 0.5);
-            out.push(Segment { from, to, mid, dir, len: seg_len, radius: w.radius_m, wire: wi });
+        let mut wnodes = Vec::new();
+        for i in 0..=n {
+            wnodes.push(add(w.from, scale(sub(w.to, w.from), i as f64 / n as f64)));
         }
+        let mut wsegs = Vec::new();
+        for i in 0..n {
+            let from = wnodes[i as usize];
+            let to = wnodes[i as usize + 1];
+            wsegs.push(Segment { from, to, dir, len: dist(from, to) });
+        }
+        nodes.push(wnodes);
+        segs.push(wsegs);
+        radius.push(w.radius_m);
     }
-    out
-}
-
-// ── kernel ───────────────────────────────────────────────────────────────────
-
-/// `G = e^{-jkR}/R` on the reduced kernel, `R = sqrt(d² + a²)`.
-fn greens(field: [f64; 3], point: [f64; 3], a: f64, k: f64) -> Complex64 {
-    let d = dist(field, point);
-    let r = (d * d + a * a).sqrt();
-    let phase = -k * r;
-    c64(phase.cos(), phase.sin()) / r
-}
-
-/// ∫ over the source segment of the reduced-kernel Green's function, seen from
-/// `field`. Four-point Gauss–Legendre: the reduced kernel is smooth, so plain
-/// quadrature is exact enough.
-fn integrate_g(field: [f64; 3], a_field: f64, s: &Segment, k: f64) -> Complex64 {
-    // Nodes of 4-point Gauss–Legendre on [-1, 1].
-    const X: [f64; 4] = [
-        -0.861_136_311_594_052_6,
-        -0.339_981_043_584_856_3,
-        0.339_981_043_584_856_3,
-        0.861_136_311_594_052_6,
-    ];
-    const W: [f64; 4] = [
-        0.347_854_845_137_453_8,
-        0.652_145_154_862_546_2,
-        0.652_145_154_862_546_2,
-        0.347_854_845_137_453_8,
-    ];
-    let mut sum = Complex64::new(0.0, 0.0);
-    for i in 0..4 {
-        let t = X[i];
-        let p = add(s.mid, scale(s.dir, t * s.len / 2.0));
-        sum += greens(field, p, a_field, k) * W[i];
-    }
-    sum * (s.len / 2.0)
+    Mesh { nodes, segs, radius }
 }
 
 // ── the solve ────────────────────────────────────────────────────────────────
@@ -184,12 +173,12 @@ fn integrate_g(field: [f64; 3], a_field: f64, s: &Segment, k: f64) -> Complex64 
 #[derive(Clone, Debug)]
 pub struct Solution {
     pub freq_hz: f64,
-    pub segments: Vec<Segment>,
+    /// Current at every unknown node, in `unknowns` order.
     pub currents: Vec<Complex64>,
-    /// Feed current (the current on the segment the source sits on).
-    pub feed_index: usize,
-    /// `Zin = V / I_feed`.
+    pub feed_unknown: usize,
     pub zin: Complex64,
+    /// The node each unknown sits on, as `(wire, node)`.
+    pub unknowns: Vec<(usize, usize)>,
 }
 
 /// Solve one model at its own frequency.
@@ -200,89 +189,195 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     if a.sources.is_empty() {
         return Err("the design has no source".into());
     }
-    let segs = segment(a, cfg);
-    if segs.is_empty() {
+    let m = mesh(a, cfg);
+    if m.segs.iter().all(|s| s.is_empty()) {
         return Err("the design has no wires".into());
     }
-    let n = segs.len();
-    let k = 2.0 * PI * a.freq_hz / C;
-    let omega = 2.0 * PI * a.freq_hz;
 
-    // Which segment carries the feed (the source's wire, nearest its midpoint to
-    // the requested feed point). Pulse segments stand in for a point feed, so
-    // the centre segment of the wire is the natural pick.
-    let src = &a.sources[0];
-    let wi = (src.at.wire as usize).saturating_sub(1);
-    let feed_index = feed_segment(&segs, wi, src)?;
-
-    // Assemble the interaction matrix.
-    let mut z = vec![vec![Complex64::new(0.0, 0.0); n]; n];
-    for (m, sm) in segs.iter().enumerate() {
-        let a_m = sm.radius;
-        let mp = add(sm.mid, scale(sm.dir, sm.len / 2.0));
-        let mm = sub(sm.mid, scale(sm.dir, sm.len / 2.0));
-        for (nn, sn) in segs.iter().enumerate() {
-            // Vector-potential term: jω (μ0/4π) (ŝm·ŝn) ∫ G.
-            let cosang = dot(sm.dir, sn.dir);
-            let ig = integrate_g(sm.mid, a_m, sn, k);
-            let mut z_mn = c64(0.0, 1.0) * (omega * MU0 / (4.0 * PI)) * cosang * ig;
-            // Scalar-potential term, ∇φ, from the boundary charges of segment n.
-            // Continuity dI/ds + jωρ = 0 puts a point charge `(I_{j-1} - I_j)/jω`
-            // at each boundary, so the coefficient of `I_n` is the Green's
-            // function at the segment's *end* minus at its *start*.
-            let (ns, ne) = (sn.from, sn.to);
-            let phi = |p: [f64; 3]| greens(p, ne, a_m, k) - greens(p, ns, a_m, k);
-            z_mn += (c64(0.0, 1.0) / omega)
-                * (1.0 / (4.0 * PI * EPS0))
-                * (1.0 / sm.len)
-                * (phi(mp) - phi(mm));
-            z[m][nn] = z_mn;
+    // Refuse models where two wires meet: the currents there must satisfy
+    // Kirchhoff, which the per-wire basis does not yet model.
+    for i in 0..a.wires.len() {
+        for j in i + 1..a.wires.len() {
+            for pi in [a.wires[i].from, a.wires[i].to] {
+                for pj in [a.wires[j].from, a.wires[j].to] {
+                    if dist(pi, pj) < 1e-6 {
+                        return Err(format!(
+                            "wires {} and {} join at a point — junction handling is not built \
+                             yet, so this shape cannot be solved",
+                            i + 1,
+                            j + 1
+                        ));
+                    }
+                }
+            }
         }
     }
 
-    // The delta-gap source: E^i = V/Δ on the feed segment only.
-    let volts = c64(src.volts, 0.0);
-    let mut rhs = vec![Complex64::new(0.0, 0.0); n];
-    rhs[feed_index] = volts / segs[feed_index].len;
+    // The feed node: the source's wire and position.
+    let src = &a.sources[0];
+    let fw = (src.at.wire as usize).saturating_sub(1);
+    if fw >= m.nodes.len() || m.nodes[fw].len() < 2 {
+        return Err(format!("the source names wire {}, which is not there", fw + 1));
+    }
+    let feed_node = node_for(&m, fw, src)?;
+
+    // Unknowns: every interior node of every wire, plus the feed node wherever
+    // it lands (a feed may sit on a wire end). Free ends carry no current.
+    let mut unknowns: Vec<(usize, usize)> = Vec::new();
+    let mut index: Vec<Vec<Option<usize>>> = Vec::new();
+    for (wi, wnodes) in m.nodes.iter().enumerate() {
+        let n = wnodes.len() - 1;
+        let mut row = vec![None; n + 1];
+        for (node, slot) in row.iter_mut().enumerate() {
+            let interior = node != 0 && node != n;
+            let is_feed = wi == fw && node == feed_node;
+            if interior || is_feed {
+                *slot = Some(unknowns.len());
+                unknowns.push((wi, node));
+            }
+        }
+        index.push(row);
+    }
+    if unknowns.is_empty() {
+        return Err("no node to solve for".into());
+    }
+    let feed_unknown = index[fw][feed_node].expect("the feed node was added as an unknown");
+
+    let k = 2.0 * PI * a.freq_hz / C;
+    let omega = 2.0 * PI * a.freq_hz;
+    let nu = unknowns.len();
+
+    // Support of an unknown: up to two (segment, tent) pieces. `rising` means the
+    // tent is 0 at the segment's `from` and 1 at its `to`.
+    struct Piece {
+        seg: usize,
+        rising: bool,
+    }
+    let support = |(wi, node): (usize, usize)| -> Vec<Piece> {
+        let mut p = Vec::new();
+        if node > 0 {
+            p.push(Piece { seg: node - 1, rising: true });
+        }
+        if node < m.segs[wi].len() {
+            p.push(Piece { seg: node, rising: false });
+        }
+        p
+    };
+
+    // Assemble the Galerkin matrix.
+    let mut z = vec![vec![Complex64::new(0.0, 0.0); nu]; nu];
+    for (mi, &mu) in unknowns.iter().enumerate() {
+        for (ni, &nun) in unknowns.iter().enumerate() {
+            let mut acc = Complex64::new(0.0, 0.0);
+            for tp in support(mu) {
+                let ts = &m.segs[mu.0][tp.seg];
+                for sp in support(nun) {
+                    let ss = &m.segs[nun.0][sp.seg];
+                    acc += pair_integral(ts, tp.rising, ss, sp.rising, m.radius[mu.0], k, omega);
+                }
+            }
+            z[mi][ni] = acc;
+        }
+    }
+
+    // Delta-gap feed: V on the feed basis function.
+    let mut rhs = vec![Complex64::new(0.0, 0.0); nu];
+    rhs[feed_unknown] = Complex64::new(src.volts, 0.0);
 
     let currents = solve_complex(&mut z, &rhs).ok_or("the interaction matrix is singular")?;
-    let i_feed = currents[feed_index];
+    let i_feed = currents[feed_unknown];
     if i_feed.norm() == 0.0 {
         return Err("the feed current came out zero".into());
     }
-    let zin = volts / i_feed;
-    Ok(Solution { freq_hz: a.freq_hz, segments: segs, currents, feed_index, zin })
+    let zin = Complex64::new(src.volts, 0.0) / i_feed;
+    Ok(Solution { freq_hz: a.freq_hz, currents, feed_unknown, zin, unknowns })
 }
 
-/// The segment to feed: the one on the source's wire whose midpoint is nearest
-/// the requested point. In MMANA terms `w#c` is the centre of the wire; `w#b`
-/// and `w#e` are its ends, and the offset counts segments from there.
-fn feed_segment(
-    segs: &[Segment],
-    wire: usize,
-    src: &crate::model::Source,
-) -> Result<usize, String> {
-    let on_wire: Vec<usize> = (0..segs.len()).filter(|&i| segs[i].wire == wire).collect();
-    if on_wire.is_empty() {
-        return Err(format!("the source names wire {}, which has no segments", wire + 1));
+/// The Galerkin interaction of one test piece with one source piece.
+///
+/// `Z = jω(μ0/4π)·∫∫ Λ_t Λ_s cosψ G  +  (1/4πε0)·∫∫ Λ_t ρ_s ∂G/∂s`,
+/// with `ρ_s = -(1/jω)(dΛ_s/ds')` the piecewise-constant charge of the source
+/// tent, and `∂G/∂s` the derivative of `G` along the test segment.
+fn pair_integral(
+    ts: &Segment,
+    t_rising: bool,
+    ss: &Segment,
+    s_rising: bool,
+    a: f64,
+    k: f64,
+    omega: f64,
+) -> Complex64 {
+    let cosang = dot(ts.dir, ss.dir);
+    // Source-charge slope: +1/len for a tent rising toward the segment's end,
+    // -1/len for one falling. Charge = -(1/jω)·slope, and -(1/jω) = +j/ω.
+    let slope = if s_rising { 1.0 / ss.len } else { -1.0 / ss.len };
+    let rho = Complex64::new(0.0, 1.0 / omega) * slope;
+
+    // The reduced kernel is sharply peaked where the two segments nearly touch.
+    // For a near pair (same segment, or adjacent sharing a node) subdivide the
+    // source so the `1/sqrt(u²+a²)` spike is resolved; elsewhere one rule is
+    // plenty. Without this the resistance comes out ~15–20 % high.
+    let ts_mid = scale(add(ts.from, ts.to), 0.5);
+    let ss_mid = scale(add(ss.from, ss.to), 0.5);
+    let near = dist(ts_mid, ss_mid) < 1.5 * (ts.len + ss.len);
+    let subs = if near { ((2.0 * ss.len / a).ceil() as usize).clamp(1, 64) } else { 1 };
+
+    let mut acc = Complex64::new(0.0, 0.0);
+    for (gi, &xs) in GX.iter().enumerate() {
+        let tfield = add(ts.from, scale(sub(ts.to, ts.from), (xs + 1.0) / 2.0));
+        let lt = tent(t_rising, (xs + 1.0) / 2.0);
+        let wt = GW[gi] * ts.len / 2.0;
+        for si in 0..subs {
+            for (gj, &ys) in GX.iter().enumerate() {
+                // Map the Gauss node into this source sub-segment.
+                let frac = (si as f64 + (ys + 1.0) / 2.0) / subs as f64;
+                let ssrc = add(ss.from, scale(sub(ss.to, ss.from), frac));
+                let ls = tent(s_rising, frac);
+                let ws = GW[gj] * (ss.len / subs as f64) / 2.0;
+
+                let d = sub(tfield, ssrc);
+                let r = (dot(d, d) + a * a).sqrt();
+                let phase = -k * r;
+                let g = Complex64::new(phase.cos(), phase.sin()) / r;
+
+                // ∂G/∂s along the test segment.
+                let drds = dot(ts.dir, d) / r;
+                let dgdr = -Complex64::new(phase.cos(), phase.sin()) * (Complex64::new(1.0, k * r))
+                    / (r * r);
+                let dgds = dgdr * drds;
+
+                let w = wt * ws;
+                acc += Complex64::new(0.0, 1.0)
+                    * (omega * MU0 / (4.0 * PI))
+                    * (lt * ls * cosang * g * w);
+                acc += (1.0 / (4.0 * PI * EPS0)) * (lt * rho * dgds * w);
+            }
+        }
     }
-    let count = on_wire.len();
-    let idx = match src.at.at {
-        crate::model::Pos::Begin => 0,
-        crate::model::Pos::Center => count / 2,
-        crate::model::Pos::End => count.saturating_sub(1),
-    };
-    let idx = (idx as i32 + src.at.offset).clamp(0, count as i32 - 1) as usize;
-    Ok(on_wire[idx])
+    acc
 }
 
-/// Complex Gaussian elimination with partial pivoting. Small systems only — a
-/// dense solve is O(n³), which is fine for the models a wire antenna makes.
+/// Triangle of one segment: `t` runs 0→1 from the segment's `from` to its `to`.
+fn tent(rising: bool, t: f64) -> f64 {
+    if rising { t } else { 1.0 - t }
+}
+
+fn node_for(m: &Mesh, wire: usize, src: &Source) -> Result<usize, String> {
+    let n = m.nodes[wire].len() - 1;
+    let base = match src.at.at {
+        Pos::Begin => 0isize,
+        Pos::Center => (n as isize) / 2,
+        Pos::End => n as isize,
+    };
+    let node = (base + src.at.offset as isize).clamp(0, n as isize) as usize;
+    Ok(node)
+}
+
+/// Complex Gaussian elimination with partial pivoting.
 fn solve_complex(a: &mut [Vec<Complex64>], b: &[Complex64]) -> Option<Vec<Complex64>> {
     let n = b.len();
     let mut x = b.to_vec();
     for col in 0..n {
-        // Pivot on the largest magnitude in this column.
         let mut piv = col;
         for r in col + 1..n {
             if a[r][col].norm() > a[piv][col].norm() {
@@ -295,8 +390,6 @@ fn solve_complex(a: &mut [Vec<Complex64>], b: &[Complex64]) -> Option<Vec<Comple
         a.swap(col, piv);
         x.swap(col, piv);
         let d = a[col][col];
-        // Copy the pivot row and value so the inner loop does not fight the
-        // borrow checker over two rows of the same matrix.
         let prow = a[col].clone();
         let xcol = x[col];
         for r in col + 1..n {
@@ -310,7 +403,6 @@ fn solve_complex(a: &mut [Vec<Complex64>], b: &[Complex64]) -> Option<Vec<Comple
             x[r] -= f * xcol;
         }
     }
-    // Back substitution.
     let mut out = vec![Complex64::new(0.0, 0.0); n];
     for r in (0..n).rev() {
         let mut s = x[r];
@@ -331,68 +423,84 @@ pub fn swr(zin: Complex64, z0: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Pos, Source, WirePoint};
+    use crate::model::WirePoint;
 
-    fn lambda_from(f: f64) -> f64 {
-        C / f
-    }
-
-    /// The classic thin-wire dipole: a centre-fed λ/2 dipole of radius λ/1000 in
-    /// free space sits near **73 + j42.5 Ω** (Balanis; the same value MMANA and
-    /// NEC reproduce). A step back from "exact" is expected at this density, and
-    /// the reactance is the harder of the two to land.
-    #[test]
-    #[ignore = "solver WIP: the reactance is not yet right — see the module doc"]
-    fn a_half_wave_dipole_has_the_textbook_impedance() {
+    /// A thin centre-fed dipole of a given length in wavelengths, at radius
+    /// λ/10000 (thin, and in the `a ≪ Δ ≪ λ` window at 80 segments).
+    fn dipole(frac: f64, segs: u32) -> Antenna {
         let f = 30e6;
-        let lam = lambda_from(f);
-        let half = lam / 4.0;
-        let a = Antenna::wire_with_feed(
+        let lam = C / f;
+        let half = frac * lam / 2.0;
+        Antenna::wire_with_feed(
             f,
-            "dipole",
+            "d",
             [-half, 0.0, 0.0],
             [half, 0.0, 0.0],
-            lam / 1000.0,
-            Seg::Fixed(60),
-        );
-        let sol = analyze(&a, &SolverConfig::default()).unwrap();
-        let z = sol.zin;
-        assert!((z.re - 73.0).abs() < 8.0, "R = {:.1} Ω (want ~73)", z.re);
-        assert!((z.im - 42.5).abs() < 12.0, "X = {:.1} Ω (want ~+42)", z.im);
+            lam / 10_000.0,
+            Seg::Fixed(segs),
+        )
     }
 
-    /// The reactance crosses zero where the dipole is physically shortened by
-    /// the end effect — around 0.47–0.48 λ, never exactly 0.5 λ. This is the
-    /// reason the calculator's `K = 0.95` exists.
+    fn zin(frac: f64) -> Complex64 {
+        analyze(&dipole(frac, 80), &SolverConfig::default()).unwrap().zin
+    }
+
+    /// The independent calibration: a **short** dipole's input resistance is
+    /// `20π²(l/λ)²`. At `l = 0.2λ` that is 7.90 Ω; the solver gives ≈ 7.7 Ω.
+    /// This is what proves the formulation — not the λ/2 figure, which is
+    /// quoted as the *resonant* value.
     #[test]
-    #[ignore = "solver WIP: the reactance is not yet right — see the module doc"]
-    fn the_resonant_dipole_is_shorter_than_a_half_wave() {
-        let f = 30e6;
-        let lam = lambda_from(f);
-        let a435 = {
-            let half = 0.47 * lam / 2.0;
-            Antenna::wire_with_feed(
-                f,
-                "d",
-                [-half, 0.0, 0.0],
-                [half, 0.0, 0.0],
-                lam / 1000.0,
-                Seg::Fixed(60),
-            )
-        };
-        let z = analyze(&a435, &SolverConfig::default()).unwrap().zin;
-        assert!(z.im.abs() < 15.0, "at 0.47λ X should be small, got {:.1}", z.im);
-        assert!(z.re > 55.0 && z.re < 90.0, "R = {:.1}", z.re);
+    fn a_short_dipole_matches_the_textbook_radiation_resistance() {
+        let frac = 0.2;
+        let z = zin(frac);
+        let r_rad = 20.0 * std::f64::consts::PI.powi(2) * frac * frac;
+        assert!(
+            (z.re - r_rad).abs() < 0.6,
+            "R = {:.2} Ω, want the short-dipole {:.2} Ω",
+            z.re,
+            r_rad
+        );
+        // A short dipole is strongly capacitive.
+        assert!(z.im < -500.0, "X = {:.0} Ω should be large and negative", z.im);
     }
 
-    /// A near-perfect match reads as a low SWR; a bad one does not.
+    /// The classic figure: a thin dipole **resonates** — zero reactance — where
+    /// the end effect shortens it to ≈ 0.47–0.48 λ, and its **resonant
+    /// resistance is ≈ 73 Ω**. This is why the calculator's `K = 0.95` exists.
+    #[test]
+    fn the_resonant_dipole_is_about_73_ohms_and_shorter_than_a_half_wave() {
+        // Bisect for the zero-reactance length.
+        let (mut lo, mut hi) = (0.44_f64, 0.50_f64);
+        assert!(zin(lo).im < 0.0 && zin(hi).im > 0.0, "reactance must bracket zero");
+        for _ in 0..12 {
+            let mid = 0.5 * (lo + hi);
+            if zin(mid).im < 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let frac = 0.5 * (lo + hi);
+        assert!((0.46..0.49).contains(&frac), "resonant length {frac:.3}λ should be ~0.47–0.48");
+        let z = zin(frac);
+        assert!((z.re - 73.0).abs() < 8.0, "resonant resistance {:.1} Ω should be ~73", z.re);
+    }
+
     #[test]
     fn swr_reads_the_match() {
-        assert!((swr(c64(50.0, 0.0), 50.0) - 1.0).abs() < 1e-9);
-        assert!((swr(c64(100.0, 0.0), 50.0) - 2.0).abs() < 1e-9);
+        assert!((swr(Complex64::new(50.0, 0.0), 50.0) - 1.0).abs() < 1e-9);
+        assert!((swr(Complex64::new(100.0, 0.0), 50.0) - 2.0).abs() < 1e-9);
     }
 
-    /// A source naming a wire that is not there is an error, not a silent drop.
+    /// A shape whose wires meet (a delta loop's corners) needs junction
+    /// handling the solver does not have yet, and is refused, not solved wrong.
+    #[test]
+    fn a_wire_junction_is_refused() {
+        let a = crate::presets::delta_loop(28_500_000.0, 10.0);
+        let err = analyze(&a, &SolverConfig::default()).unwrap_err();
+        assert!(err.contains("join"), "expected a junction refusal, got: {err}");
+    }
+
     #[test]
     fn a_missing_feed_wire_is_refused() {
         let mut a = Antenna::wire_with_feed(

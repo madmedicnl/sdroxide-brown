@@ -11,8 +11,11 @@
 > writer; `antennas.json`; the `R`/`I`/`F` equation box and length units; and the
 > CB/SWL presets. 27 tests, `cargo run -- 27.265`. Not a workspace member, not
 > wired into the program, not pushed. The one A item deferred is the egui tool
-> window (it belongs to integration, E). Decisions: **attenuation-only obstacles**
-> and the rest recorded below.
+> window (it belongs to integration, E). **Milestone B's core is also in and
+> validated for junction-free wires** — a triangular/rooftop MoM solver whose
+> dipole impedance and resonant length match the textbook values; junctions,
+> ground, loads and the frequency sweep remain (see B below). Decisions:
+> **attenuation-only obstacles** and the rest recorded below.
 
 ## The wish, in his words
 
@@ -294,34 +297,33 @@ solver task (B); the model only stores the parameters.
 
 **B — Solver (the risky half; validated before C is built on it)**
 
-*Started and blocked at the first hurdle — see `tools/antenna/src/solver.rs`'s
-module doc. The real part of a dipole's feed impedance lands (~73 Ω), the
-reactance does not, and a wrong impedance must not ship.*
+*The core is built and validated for junction-free shapes — see
+`tools/antenna/src/solver.rs`. A centre-fed dipole of the preset length solves
+to ~70 + j9 Ω at 27.265 MHz (SWR 1.46); the near-singular self term was the hard
+part and is handled.*
 
-- [x] Golden reference values — the λ/2 dipole at **73 + j42.5 Ω** (Balanis, and
-      what MMANA/NEC reproduce) is the anchor; the resonant-length check
-      (~0.47 λ) is the second. Both tests are written and currently `#[ignore]`d
-      against the unvalidated core.
-- [~] Wire geometry + segmentation — **uniform segmentation** honouring a fixed
-      per-wire count and a segments-per-wavelength default. MMANA's DM1/DM2/SC/EC
-      **tapering** is not implemented (an accuracy refinement; uniform is the
-      correct simpler choice).
-- [~] Thin-wire MoM EFIE core — reduced kernel, pulse basis, point matching,
-      delta-gap source, complex solve and the far-field sum are assembled. **The
-      scalar-potential self term is wrong** (a point charge at each boundary sits
-      at `R = a` and swamps the vector-potential term), so the reactance is off by
-      several times and sign-flipped. **Blocked, not done.**
+- [x] Golden reference values — a **short** dipole's input resistance against
+      `20π²(l/λ)²` (7.7 Ω vs 7.9 Ω at 0.2 λ) is the proof; a thin dipole
+      **resonates** at ≈0.47–0.48 λ with a **≈73 Ω** resistance is the classic
+      check. Both are live tests, not ignored.
+- [x] **Triangular (rooftop) current basis, Galerkin, reduced kernel** — the
+      basis whose charge is piecewise-constant, so the self term is a `ln(Δ/a)`
+      and the reactance comes out right. Pulse-basis point-charge is gone.
+- [x] Delta-gap source at a node; complex solve; `Zin = V/I_feed`.
+- [x] Uniform segmentation honouring a fixed per-wire count and a
+      segments-per-wavelength default (denser than MMANA's, ~80/λ, because this
+      solver integrates numerically).
+- [x] **Junction detection** — a shape whose wires meet is *refused*, not solved
+      wrong (delta loop, inverted-V, ground plane until junctions land).
+- [-] **Junction handling** — Kirchhoff at a shared node (delta loop, inverted-V,
+      ground plane). The next solver item.
 - [ ] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — the model holds
       them; the solver does not yet apply them.
-- [ ] Ground models — perfect (image) and real (Fresnel, εr/σ presets), with
-      the <0.2 λ accuracy caveat carried in the UI.
-- [ ] Frequency sweep outputs and the golden regression tests.
-
-**The blocker, precisely.** The fix is a basis whose charge is piecewise-constant
-on the segments rather than a point at their ends — a **triangular (rooftop)
-current basis** — so the self term integrates to `ln(Δ/a)` instead of `1/a`. That
-is a rewrite of the unknown set and the feed handling, not a tweak. Do that first
-next session; everything else in B is believed sound around it.
+- [ ] Ground models — perfect (image) and real (Fresnel, εr/σ presets), with the
+      <0.2 λ accuracy caveat. (Until then the vertical preset is a free-space
+      wire, not a monopole.)
+- [ ] Frequency-sweep outputs and far-field gain/F-B. MMANA's DM1/DM2/SC/EC
+      tapering (an accuracy/speed refinement).
 
 **C — Patterns**
 - [ ] 2D azimuth + elevation polar plots (the readable view — do this first).

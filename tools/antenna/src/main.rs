@@ -23,6 +23,7 @@ fn main() {
     while i < args.len() {
         match args[i].as_str() {
             "--presets" => mode = Mode::Presets,
+            "--solve" => mode = Mode::Solve,
             "--expr" => {
                 i += 1;
                 expr = args.get(i).cloned();
@@ -63,6 +64,7 @@ fn main() {
     match mode {
         Mode::Calc => calc(freq_mhz, freq_hz),
         Mode::Presets => presets(freq_mhz, freq_hz),
+        Mode::Solve => solve(freq_mhz, freq_hz),
         Mode::Expr => do_expr(expr.as_deref().unwrap_or(""), freq_hz),
         Mode::Convert => do_convert(convert.as_deref().unwrap_or(""), to.as_deref(), freq_hz),
     }
@@ -71,6 +73,7 @@ fn main() {
 enum Mode {
     Calc,
     Presets,
+    Solve,
     Expr,
     Convert,
 }
@@ -110,6 +113,24 @@ fn presets(mhz: f64, freq_hz: f64) {
         println!("# {} — {} wire(s)", a.name, a.wires.len());
         print!("{}", ant::maa::write(&a));
         println!();
+    }
+}
+
+fn solve(mhz: f64, freq_hz: f64) {
+    use ant::solver::{SolverConfig, analyze, swr};
+    println!("# feed impedance and SWR (50 ohm) at {mhz} MHz");
+    println!("# junction-free shapes only for now; the rest are refused, not guessed\n");
+    for a in ant::presets::catalog(freq_hz) {
+        match analyze(&a, &SolverConfig::default()) {
+            Ok(sol) => println!(
+                "{:<32} Zin = {:>7.1} {:+.1}j ohm   SWR {:.2}:1",
+                a.name,
+                sol.zin.re,
+                sol.zin.im,
+                swr(sol.zin, 50.0)
+            ),
+            Err(e) => println!("{:<32} — {e}", a.name),
+        }
     }
 }
 
@@ -158,6 +179,7 @@ fn do_convert(value: &str, to: Option<&str>, freq_hz: f64) {
 fn print_help() {
     println!("antenna [MHz]                     closed-form dimensions (default 27.265)");
     println!("antenna --presets [MHz]           the CB/SWL shape presets, as .maa");
+    println!("antenna --solve [MHz]             solve the presets: Zin and SWR");
     println!("antenna --expr \"R/4\" [MHz]        evaluate an MMANA dimension expression");
     println!("antenna --convert 17ft --to m     convert a length between units");
 }
