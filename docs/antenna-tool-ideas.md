@@ -313,9 +313,14 @@ was the hard part and is handled.*
       comes free). The delta loop solves.
 - [x] **Far-field gain/F-B and a frequency sweep** (`max_gain`,
       `front_to_back_db`, `sweep`).
-- [ ] **Bend-feed model** — a feed on a bend or multi-way junction is currently
-      **refused** (the delta gap has no single direction there); this blocks the
-      inverted-V apex and the ground-plane star. The next solver item.
+- [x] The feed is a delta gap over a **segment** (MMANA's `w#c`/`w#b`/`w#e`
+      name a segment), which is correct for any *straight* feed.
+- [ ] **Bend/junction feed — a source-between-terminals model.** Feeding a bend
+      or multi-way junction (the inverted-V apex, the ground-plane star) is
+      refused: there the two wires are the source's two *terminals*, not one
+      shared node, and this solver shares the node, so it would answer ~4 Ω for
+      an inverted-V that is really ~50 Ω. The next solver item, and a prism
+      rather than a tweak.
 - [ ] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — the model holds
       them; the solver does not yet apply them.
 - [x] **Ground — free space and perfect (image method).** Validated: a

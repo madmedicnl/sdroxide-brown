@@ -19,8 +19,10 @@
 //! ```
 //!
 //! is tested with the same triangle that expands the current (Galerkin), giving
-//! the dense complex system `[Z][I] = [V]`. The feed is a delta gap at a node:
-//! `V` on that basis function alone, so `Zin = V / I_feed`.
+//! the dense complex system `[Z][I] = [V]`. The feed is a delta gap over a
+//! **segment** — MMANA's `w#c`/`w#b`/`w#e` name a segment, not a node: the
+//! impressed field `V/Δ` over that segment excites its two node basis functions
+//! by `V/2` each, and `Zin = V / I_segment`.
 //!
 //! **Junctions are handled by sharing the node.** Wires whose ends meet within a
 //! tolerance collapse to one graph node with one current unknown, whose basis is
@@ -29,11 +31,11 @@
 //! A free end (one incident segment) carries no current and is not an unknown
 //! unless it is fed.
 //!
-//! **A feed must sit on a straight-through node** (or a free end). The delta gap
-//! is a gap in a straight wire; feeding a bend or a multi-way junction has no
-//! single gap direction and this solver gets it wrong, so such a design is
-//! **refused, not solved wrong** — the inverted-V apex and the ground plane's
-//! radial star are the cases that wait on a proper bend-feed model.
+//! **A feed must sit on a straight-through segment** (or a segment ending at a
+//! free end). Feeding a bend or a multi-way junction needs a
+//! **source-between-terminals** model — the two wires are the source's two
+//! terminals, not one shared node — which is not built yet, so such a design is
+//! **refused, not solved wrong** (the inverted-V apex and the ground-plane star).
 //!
 //! **Ground** is free space (no image) or a **perfect** ground, added by image
 //! theory: every source segment is mirrored through `z = 0` with its current
@@ -129,8 +131,8 @@ struct Mesh {
     segs: Vec<Segment>,
     /// Segments incident on each node.
     incident: Vec<Vec<usize>>,
-    /// The graph nodes of each wire, in order (for locating the feed).
-    wire_nodes: Vec<Vec<usize>>,
+    /// The global segment indices of each wire, in order (for locating the feed).
+    wire_segs: Vec<Vec<usize>>,
 }
 
 /// How finely to cut the wires. A fixed per-wire count is honoured; otherwise
@@ -163,11 +165,11 @@ fn build_mesh(a: &Antenna, cfg: &SolverConfig) -> Mesh {
     let lambda = C / a.freq_hz;
     let mut node_pts: Vec<[f64; 3]> = Vec::new();
     let mut segs: Vec<Segment> = Vec::new();
-    let mut wire_nodes: Vec<Vec<usize>> = Vec::new();
+    let mut wire_segs: Vec<Vec<usize>> = Vec::new();
     for w in &a.wires {
         let len = dist(w.from, w.to);
         if len <= 0.0 {
-            wire_nodes.push(Vec::new());
+            wire_segs.push(Vec::new());
             continue;
         }
         let n = match w.seg {
@@ -180,9 +182,11 @@ fn build_mesh(a: &Antenna, cfg: &SolverConfig) -> Mesh {
             let p = add(w.from, scale(sub(w.to, w.from), i as f64 / n as f64));
             ids.push(find_or_add(&mut node_pts, p));
         }
+        let mut local_segs = Vec::new();
         for i in 0..n {
             let from = node_pts[ids[i]];
             let to = node_pts[ids[i + 1]];
+            local_segs.push(segs.len());
             segs.push(Segment {
                 a: ids[i],
                 b: ids[i + 1],
@@ -193,14 +197,14 @@ fn build_mesh(a: &Antenna, cfg: &SolverConfig) -> Mesh {
                 radius: w.radius_m,
             });
         }
-        wire_nodes.push(ids);
+        wire_segs.push(local_segs);
     }
     let mut incident = vec![Vec::new(); node_pts.len()];
     for (si, s) in segs.iter().enumerate() {
         incident[s.a].push(si);
         incident[s.b].push(si);
     }
-    Mesh { node_pts, segs, incident, wire_nodes }
+    Mesh { node_pts, segs, incident, wire_segs }
 }
 
 // ── the solve ────────────────────────────────────────────────────────────────
@@ -244,47 +248,53 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
         return Err("the design has no wires".into());
     }
 
-    // The feed node.
+    // The feed is a **segment**, not a node — MMANA's `w#c`/`w#b`/`w#e` name a
+    // segment. A delta gap over a segment has a well-defined direction whatever
+    // the geometry, so a bend or a junction can be fed correctly: the impressed
+    // field V/Δ over the feed segment excites the two node basis functions that
+    // overlap it by V/2 each.
     let src = &a.sources[0];
     let fw = (src.at.wire as usize).saturating_sub(1);
-    if fw >= m.wire_nodes.len() || m.wire_nodes[fw].len() < 2 {
+    if fw >= m.wire_segs.len() || m.wire_segs[fw].is_empty() {
         return Err(format!("the source names wire {}, which is not there", fw + 1));
     }
-    let n = m.wire_nodes[fw].len() - 1;
+    let nseg = m.wire_segs[fw].len();
     let base = match src.at.at {
         Pos::Begin => 0isize,
-        Pos::Center => (n as isize) / 2,
-        Pos::End => n as isize,
+        Pos::Center => (nseg as isize) / 2,
+        Pos::End => nseg as isize - 1,
     };
-    let li = (base + src.at.offset as isize).clamp(0, n as isize) as usize;
-    let feed_node = m.wire_nodes[fw][li];
+    let si = (base + src.at.offset as isize).clamp(0, nseg as isize - 1) as usize;
+    let (feed_a, feed_b) = (m.segs[m.wire_segs[fw][si]].a, m.segs[m.wire_segs[fw][si]].b);
 
-    // A delta-gap feed is a gap in a *straight* wire. Feeding a bend or a
-    // multi-way junction is a different model (the gap has no single direction)
-    // and this solver gets it wrong — refuse rather than answer wrongly.
-    let incidents = &m.incident[feed_node];
-    let feed_ok = match incidents.len() {
-        1 => true, // a free end: a series source, fine
-        2 => {
-            let (s0, s1) = (incidents[0], incidents[1]);
-            dot(m.segs[s0].dir, m.segs[s1].dir).abs() > 0.9999
+    // A feed at a bend or a multi-way junction needs a *source-between-terminals*
+    // model (the two wires are the source's terminals, not one shared node) that
+    // is not built yet; this solver gets it wrong, so refuse rather than answer.
+    for node in [feed_a, feed_b] {
+        let inc = &m.incident[node];
+        let bad = match inc.len() {
+            0 | 1 => false, // a free end is fine
+            2 => {
+                let (s0, s1) = (inc[0], inc[1]);
+                dot(m.segs[s0].dir, m.segs[s1].dir).abs() < 0.9999
+            }
+            _ => true,
+        };
+        if bad {
+            return Err(
+                "the feed sits where wires meet at an angle — feeding a bend or junction needs a \
+                 source-between-terminals model that is not built yet"
+                    .into(),
+            );
         }
-        _ => false,
-    };
-    if !feed_ok {
-        return Err(
-            "the feed sits where wires meet at an angle — feeding a bend or junction is not \
-             modelled yet, so this shape cannot be solved"
-                .into(),
-        );
     }
 
-    // Unknowns: every node with two or more segments (a bend, junction or a
-    // through-connection), plus the feed node wherever it lands.
+    // Unknowns: every node with two or more segments (a bend, junction or
+    // through-connection), plus both nodes of the feed segment.
     let mut unknowns: Vec<usize> = Vec::new();
     let mut index = vec![None; m.node_pts.len()];
     for (node, slot) in index.iter_mut().enumerate() {
-        if m.incident[node].len() >= 2 || node == feed_node {
+        if m.incident[node].len() >= 2 || node == feed_a || node == feed_b {
             *slot = Some(unknowns.len());
             unknowns.push(node);
         }
@@ -292,7 +302,10 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     if unknowns.is_empty() {
         return Err("no node to solve for".into());
     }
-    let feed_unknown = index[feed_node].expect("the feed node was added");
+    let (ia, ib) = (
+        index[feed_a].expect("the feed node was added"),
+        index[feed_b].expect("the feed node was added"),
+    );
 
     let k = 2.0 * PI * a.freq_hz / C;
     let omega = 2.0 * PI * a.freq_hz;
@@ -337,10 +350,13 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     }
 
     let mut rhs = vec![Complex64::new(0.0, 0.0); nu];
-    rhs[feed_unknown] = Complex64::new(src.volts, 0.0);
+    let half_v = Complex64::new(src.volts / 2.0, 0.0);
+    rhs[ia] += half_v;
+    rhs[ib] += half_v;
 
     let currents = solve_complex(&mut z, &rhs).ok_or("the interaction matrix is singular")?;
-    let i_feed = currents[feed_unknown];
+    // The current at the feed is the segment's midpoint value.
+    let i_feed = 0.5 * (currents[ia] + currents[ib]);
     if i_feed.norm() == 0.0 {
         return Err("the feed current came out zero".into());
     }
@@ -368,7 +384,15 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
         }
     }
 
-    Ok(Solution { freq_hz: a.freq_hz, currents, unknowns, feed_unknown, zin, power_w, segments })
+    Ok(Solution {
+        freq_hz: a.freq_hz,
+        currents,
+        unknowns,
+        feed_unknown: ia,
+        zin,
+        power_w,
+        segments,
+    })
 }
 
 /// Mirror a segment through the ground plane `z = 0`.
