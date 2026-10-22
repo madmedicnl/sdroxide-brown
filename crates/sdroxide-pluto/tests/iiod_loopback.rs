@@ -204,6 +204,10 @@ struct DeviceState {
     /// `rf_port_select` takes only the port the part is already on and answers
     /// `-EINVAL` to any other (issue #314).
     ports_locked: bool,
+    /// Hold every `READBUF` back for the airtime of the samples it carries, at this
+    /// rate, the way a real device does. `None` answers instantly, which is what
+    /// the protocol tests want and what makes a receive thread look busy.
+    readbuf_paced_at: Option<f64>,
 }
 
 /// The sample-rate floor a stock Pluto publishes — and refuses.
@@ -690,6 +694,10 @@ fn serve(
                 };
                 let want: usize = words[2].parse().unwrap_or(0);
                 let sets = want / set.len();
+                let paced_at = state.lock().expect("lock").readbuf_paced_at;
+                if let Some(rate) = paced_at {
+                    std::thread::sleep(Duration::from_secs_f64(sets as f64 / rate));
+                }
                 let mut data = Vec::with_capacity(sets * set.len());
                 for _ in 0..sets {
                     data.extend_from_slice(&set);
@@ -2248,4 +2256,63 @@ fn a_chain_found_in_the_wrong_mode_is_put_right_and_the_gain_retried() {
         g.get("ad9361-phy/INPUT/voltage1/gain_control_mode") == Some("manual")
             && g.get("ad9361-phy/INPUT/voltage1/hardwaregain").is_some_and(|v| v.starts_with("11"))
     });
+}
+
+/// CPU seconds each thread of this process has used, by name, from `/proc`.
+#[cfg(target_os = "linux")]
+fn thread_cpu() -> std::collections::BTreeMap<String, f64> {
+    let tick = 100.0;
+    let mut out = std::collections::BTreeMap::new();
+    for e in std::fs::read_dir("/proc/self/task").expect("task dir").flatten() {
+        let Ok(stat) = std::fs::read_to_string(e.path().join("stat")) else { continue };
+        let (Some(open), Some(close)) = (stat.find('('), stat.rfind(')')) else { continue };
+        let name = stat[open + 1..close].to_string();
+        let f: Vec<&str> = stat[close + 2..].split(' ').collect();
+        let ticks: f64 = f[11].parse::<f64>().unwrap_or(0.0) + f[12].parse::<f64>().unwrap_or(0.0);
+        *out.entry(format!("{name}#{}", e.file_name().to_string_lossy())).or_insert(0.0) +=
+            ticks / tick;
+    }
+    out
+}
+
+/// Where the CPU goes when a Pluto streams at line rate and the engine drains it
+/// the way `PlutoSource::take` does. A measurement, not an assertion.
+#[cfg(target_os = "linux")]
+#[test]
+fn cpu_probe_streaming_at_line_rate() {
+    let secs: f64 = std::env::var("PROBE_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(5.0);
+    let fake = Fake::start_with(
+        DeviceState { readbuf_paced_at: Some(RATE), ..DeviceState::default() },
+        CONTEXT_XML.to_string(),
+    );
+    let mut cfg = config();
+    cfg.buffer_samples = 32768;
+    let mut handle =
+        PlutoHandle::open(&fake.address(), &cfg, 435_000_000.0).expect("open the fake Pluto");
+    let mut buf = vec![0f32; 16384 * 2];
+    let warm = Instant::now();
+    while warm.elapsed() < Duration::from_secs(1) {
+        if handle.rx_read(&mut buf) == 0 {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+    let before = thread_cpu();
+    let t0 = Instant::now();
+    let mut got = 0usize;
+    while t0.elapsed().as_secs_f64() < secs {
+        let n = handle.rx_read(&mut buf);
+        if n == 0 {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        got += n / 2;
+    }
+    let wall = t0.elapsed().as_secs_f64();
+    let after = thread_cpu();
+    eprintln!("delivered {:.2} Msps over {wall:.1}s", got as f64 / wall / 1e6);
+    for (k, v) in &after {
+        let d = v - before.get(k).copied().unwrap_or(0.0);
+        if d > 0.0 {
+            eprintln!("  {k:<32} {:5.1} % of a core", 100.0 * d / wall);
+        }
+    }
 }
