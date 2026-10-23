@@ -1,5 +1,5 @@
 //! Run whichever of our decoders fits over the whole corpus and print one line
-//! per mode. This is the measurement behind `MODE-PROGRESS.md`: the sample is
+//! per mode. This is the measurement behind `docs/internal/MODE-PROGRESS.md`: the sample is
 //! the gate, and a mode that does not read its own text says so here.
 //!
 //!     cargo run --release -p sdroxide-dsp --example corpus_survey

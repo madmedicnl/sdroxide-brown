@@ -1046,7 +1046,7 @@ mod tests {
                 );
             }
             // The gate is the two that read as clean copies. The rest are named
-            // in `MODE-PROGRESS.md` with their figures: HELLX9 and FSKH245 are
+            // in `docs/internal/MODE-PROGRESS.md` with their figures: HELLX9 and FSKH245 are
             // the poor ones left, and a score here is a measurement, not a
             // promise, so only what has been shown to work is asserted.
             if name == "FELDHELL" {

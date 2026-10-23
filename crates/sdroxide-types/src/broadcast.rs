@@ -146,7 +146,7 @@ pub fn decode_latin1(bytes: &[u8]) -> String {
 /// One enum, and the point of it is that **`Eibi` is first and is what the
 /// program does by default.** Nothing about the existing path changes: the
 /// switch is where a *second* schedule plugs in, not a rewrite of the one that is
-/// already here. `SWL-HANDOVER.md` stage 1.
+/// already here. `docs/internal/SWL-HANDOVER.md` stage 1.
 ///
 /// A variant is **not** a per-source settings block — it says how to *read*,
 /// nothing about whether the schedule is active, and the active choice is a
@@ -201,7 +201,7 @@ impl ScheduleSource {
     /// HFCC is a **pair**: its rows name stations by a three-letter code that a
     /// companion file resolves. A single-file assumption is not a simplification
     /// here, it is a way of showing a schedule full of `WCR` as if it were a
-    /// schedule — see `SWL-HANDOVER.md` §4.
+    /// schedule — see `docs/internal/SWL-HANDOVER.md` §4.
     pub fn needs_companion_file(self) -> bool {
         matches!(self, ScheduleSource::Hfcc)
     }
@@ -1540,7 +1540,7 @@ more text
 #[cfg(test)]
 mod tests {
     /// **The EiBi acceptance test for the source-abstraction work** (#69,
-    /// `SWL-HANDOVER.md` stage 1): EiBi becomes *source #1* rather than *the*
+    /// `docs/internal/SWL-HANDOVER.md` stage 1): EiBi becomes *source #1* rather than *the*
     /// source, and the price of that refactor is that this program's schedule
     /// must come out of it byte-for-byte identical.
     ///
@@ -1566,7 +1566,7 @@ mod tests {
         println!("EiBi: {} stations, digest {digest:#018x}", stations.len());
         assert_eq!(
             digest, 0xe6fe_c537_410d_8cde,
-            "the EiBi parse changed — see SWL-HANDOVER.md; a count alone would not \
+            "the EiBi parse changed — see docs/internal/SWL-HANDOVER.md; a count alone would not \
              have caught a station that lost a field. Last moved deliberately on \
              2026-10-18, when the 114 DRM rows came back: the delta was measured \
              row by row against the fixture before this number was touched."

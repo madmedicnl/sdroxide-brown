@@ -7,7 +7,7 @@
 > **quotes are left as they were said** — do not rewrite a quote to fix a name.
 >
 > **The mode work is the live queue, and it has its own brief.**
-> [`MODE-PHASE-4-PROMPT.md`](MODE-PHASE-4-PROMPT.md) is what a session starts with
+> [`MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md) is what a session starts with
 > now: **finish the missing modes and get TX working for everything fldigi can
 > transmit**, and **vendor a mode when the port and the bench have both been
 > exhausted** — which supersedes the "port it, do not vendor it" rule of 2026-10-21,
@@ -21,7 +21,7 @@
 > modes), then the loose ends behind them. Its "current truth" section is the
 > state **as it stood then** — four families wired receive-only, `PROTO_VERSION`
 > 226, a hundred commits local and none pushed — and its "do not re-derive" list
-> is the day of measurement traps that cost this phase its time. [`MODE-PROGRESS.md`](MODE-PROGRESS.md)
+> is the day of measurement traps that cost this phase its time. [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md)
 > is the journal, one line per mode. **The dated sections below are a history**,
 > newest first: where they disagree with that brief, the brief is right.
 >
@@ -48,14 +48,14 @@
 > that section.
 >
 > **The next project is undocked mode** (detachable windows — the waterfall on a
-> second monitor): read [`UNDOCKED-HANDOVER.md`](UNDOCKED-HANDOVER.md) top to
+> second monitor): read [`UNDOCKED-HANDOVER.md`](docs/internal/UNDOCKED-HANDOVER.md) top to
 > bottom — it is the fresh handover and it carries the todo list. Item 1 (the
 > state) is done; **item 2, extracting the panadapter draw out of `frame.rs`, is
 > the only risky step** and is deliberately on its own.
 >
 > **And the shape it is being built toward is SDRuno's** — a set of windows for
 > the spectrum, the receiver control, the scanner and so on. The window map and
-> the remaining todo are in [`SDRUNO-UI-HANDOVER.md`](SDRUNO-UI-HANDOVER.md);
+> the remaining todo are in [`SDRUNO-UI-HANDOVER.md`](docs/internal/SDRUNO-UI-HANDOVER.md);
 > the operator expects to **switch models when the work reaches MAIN SP** (the
 > panadapter window's toolbar), so that file says where the seam is.
 >
@@ -117,17 +117,17 @@
 > that needed `tool_window_sized`'s `min_size` and `centre_first` — a 900x760 box
 > in a corner lands under the top bar, which only rendering it showed.
 >
-> **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](ALE-HANDOVER.md), issue #262,
+> **Live handovers.** **ALE** ([`ALE-HANDOVER.md`](docs/internal/ALE-HANDOVER.md), issue #262,
 > mid-flight — read it before touching ALE). **FST4W**
-> ([`FST4W-HANDOVER.md`](FST4W-HANDOVER.md) — planned, not built; the verdict is
-> do not ship as wired). **Olivia** ([`OLIVIA-HANDOVER.md`](OLIVIA-HANDOVER.md)
+> ([`FST4W-HANDOVER.md`](docs/internal/FST4W-HANDOVER.md) — planned, not built; the verdict is
+> do not ship as wired). **Olivia** ([`OLIVIA-HANDOVER.md`](docs/internal/OLIVIA-HANDOVER.md)
 > — receive proven on the air; the open item is whether a real fldigi can copy
 > *our* transmission). **STANAG 4285** — receive built and locking real
 > captures; the payload needs Annex E. The standard is transcribed in
-> [`STANAG4285-EDITION1.md`](STANAG4285-EDITION1.md) and
-> [`STANAG4285-HANDOVER.md`](STANAG4285-HANDOVER.md) carries the state.
+> [`STANAG4285-EDITION1.md`](docs/internal/STANAG4285-EDITION1.md) and
+> [`STANAG4285-HANDOVER.md`](docs/internal/STANAG4285-HANDOVER.md) carries the state.
 > The **CW keyer is built and benched** (`353d136f`, "all works!"); its design is
-> [`CW-HANDOVER.md`](CW-HANDOVER.md), its outcome is §10 below.
+> [`CW-HANDOVER.md`](docs/internal/CW-HANDOVER.md), its outcome is §10 below.
 >
 > **Phone UI is delegated — off our list** (2026-10-09). The 1.9.17 phone
 > *crash* is real and this fork's own phone layouts are still documented in the
@@ -145,7 +145,7 @@
 > *not yet verifiable*, and those paragraphs are **history, not the state**.
 > Same shape as the phone UI being delegated on 2026-10-09.
 >
-> **The SWL schedule-sources work is in [`SWL-HANDOVER.md`](SWL-HANDOVER.md)** —
+> **The SWL schedule-sources work is in [`SWL-HANDOVER.md`](docs/internal/SWL-HANDOVER.md)** —
 > fork-only, from fork issue #69, **scoped but not written**. It is the second
 > broadcast schedule source (bebepip runs **Aoki**; **HFCC** also, and it needs a
 > *pair* of files), plus the listener's own stations as a real source, plus
@@ -234,7 +234,7 @@ station stays receive-only whichever tab is chosen.
 ## The mode roadmap — what to build next, in order (2026-10-19)
 
 **The queue, cheapest first.** Detail, measurements and the reasoning are in
-[`MODE-ROADMAP.md`](MODE-ROADMAP.md); this is the order and nothing else, kept
+[`MODE-ROADMAP.md`](docs/internal/MODE-ROADMAP.md); this is the order and nothing else, kept
 here because it is the thing to look at when starting a session.
 
 1. ~~**Verify the modes we already ship against a second corpus**~~ — **done
@@ -255,7 +255,7 @@ here because it is the thing to look at when starting a session.
    controls refuse, and **Annex E is transcribed and built** — the code, the
    interleaver, SOM/EOM and an ITA2 reading, proven on a loopback. What it needs
    now is a **real coded transmission**: the night's captures are uncoded or idle
-   and produce no SOM. See [`STANAG4285-HANDOVER.md`](STANAG4285-HANDOVER.md).
+   and produce no SOM. See [`STANAG4285-HANDOVER.md`](docs/internal/STANAG4285-HANDOVER.md).
 5. **One item from the hours table per day** after that: Contestia (after the
    Olivia fix, not before), MT63, DominoEX, RS_ID.
 
@@ -2996,13 +2996,13 @@ withdrawn on 2026-10-01 over a faad2 fault, that fault was found and fixed
 anything but SBR, and DAB+ encoders pad almost every Access Unit that way), and
 Kevin confirmed it on the air on 2026-10-11. `DAB_ENABLED` is `true`. The
 history and the licence-shaped options that turned out to be unnecessary are in
-[`ROADMAP.md`](ROADMAP.md) under DAB — kept as history, not as the state.
+[`ROADMAP.md`](docs/internal/ROADMAP.md) under DAB — kept as history, not as the state.
 
 ## Repository layout and how to work on it
 
 - `main` → this fork, `origin` = `madmedicnl/sdroxide-brown`. The only repository to
   push to; the old `swl` branch and its fork are gone.
-- The plan for the listener side lives in [`ROADMAP.md`](ROADMAP.md).
+- The plan for the listener side lives in [`ROADMAP.md`](docs/internal/ROADMAP.md).
 
 ## What this build is called (fork identity, deliberately light)
 
@@ -3632,7 +3632,7 @@ merged code still calls everything `sdroxide`.
     dropped.
   - `dividebysandwich/sdroxide#483` — a request for a DAB/DAB+ decoder, so it
     can be used over a SpyServer like the other decoders. Scoped on the issue;
-    the plan now lives in [`ROADMAP.md`](ROADMAP.md) under Phase 3, and it
+    the plan now lives in [`ROADMAP.md`](docs/internal/ROADMAP.md) under Phase 3, and it
     supersedes the details below where they differ. The enabling find is
     **`dabradio`** (MIT, `xoolive/desperado`) — the full OFDM/FIC/MSC/Viterbi/RS
     chain plus pure-Rust MP2. Re-checked against **0.5.0** (2026-09-21): still

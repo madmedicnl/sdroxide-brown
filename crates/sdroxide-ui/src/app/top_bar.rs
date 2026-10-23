@@ -11480,7 +11480,7 @@ mod tests {
     /// more of them than the docked column does.**
     ///
     /// The second half is the reason the selector has a window of its own
-    /// (SDRUNO-UI-HANDOVER.md, item 1). The first is what the operator reported
+    /// (docs/internal/SDRUNO-UI-HANDOVER.md, item 1). The first is what the operator reported
     /// on 2026-10-23: the band pad ran to the edge of the column while the mode
     /// rows below it stopped two thirds of the way across, because every cell
     /// in the old grid was sized for the widest label in its group — one

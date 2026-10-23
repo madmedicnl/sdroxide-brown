@@ -1961,7 +1961,7 @@ impl MfskMode {
 /// Only the two 2000 Hz variants are offered: MT63-1K and MT63-500 arrive one
 /// Hadamard row high through this receiver (every character 32 codes out), which
 /// is a carrier-phase fault at the narrower bandwidths and is recorded in
-/// `MODE-PROGRESS.md`. They are named here so the day it is fixed they are two
+/// `docs/internal/MODE-PROGRESS.md`. They are named here so the day it is fixed they are two
 /// appended variants rather than a new field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Mt63Mode {

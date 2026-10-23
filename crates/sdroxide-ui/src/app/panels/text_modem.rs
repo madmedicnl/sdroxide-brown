@@ -976,7 +976,7 @@ impl SdroxideApp {
                          but not yet through the live receiver: the lock searches the symbol \
                          phase and the polarity but not the band centre, and a search that \
                          does was found to trade one variant for another. See \
-                         MODE-PROGRESS.md.",
+                         docs/internal/MODE-PROGRESS.md.",
                     );
                 }
                 Mode::Mfsk => {

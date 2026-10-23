@@ -4,7 +4,7 @@
 //! in the right part and station info in the left part where they can
 //! immediately add a comment and hit log."*
 //!
-//! **`SWL-HANDOVER.md` §12** has the design and what already exists. The short
+//! **`docs/internal/SWL-HANDOVER.md` §12** has the design and what already exists. The short
 //! version: the reception log (`swl_log.rs`) already has the comment and the
 //! schedule pre-fill, and no window anywhere in the tree is map-driven — so this
 //! is a map-first way to fill the same log, not a new log.
@@ -442,7 +442,7 @@ use crate::time::now_unix;
 pub(in crate::app) const LISTEN_APP_ID: &str = "swl-listen";
 
 impl SdroxideApp {
-    /// Open LISTEN. A **window**, not a docked panel — `SWL-HANDOVER.md` §12 for
+    /// Open LISTEN. A **window**, not a docked panel — `docs/internal/SWL-HANDOVER.md` §12 for
     /// why: the docked column caps near 280 pt and a map beside station info
     /// wants about 700, so docked it squeezes whatever is below it.
     pub(in crate::app) fn listen_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {

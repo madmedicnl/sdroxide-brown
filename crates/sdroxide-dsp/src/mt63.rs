@@ -1224,7 +1224,7 @@ mod tests {
     }
 
     /// What each MT63 recording gives, measured. The sample is the gate, so a
-    /// mode that does not read its text says so here and in `MODE-PROGRESS.md`
+    /// mode that does not read its text says so here and in `docs/internal/MODE-PROGRESS.md`
     /// rather than being called working.
     ///
     /// State, 2026-10-21: **MT63-2KS and MT63-2KL decode their whole text**;

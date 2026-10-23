@@ -595,7 +595,7 @@ pub struct Solar3dWindow {
 /// given no absolute window position, so `pos` is `None` there and the
 /// compositor places the window. The **app-id** the window carries
 /// (`sdroxide-panadapter`) is what a compositor rule matches on to float it and
-/// pin it to a monitor — see `UNDOCKED-HANDOVER.md`.
+/// pin it to a monitor — see `docs/internal/UNDOCKED-HANDOVER.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct DetachedWindow {
     /// Inner (drawing-area) size in points.

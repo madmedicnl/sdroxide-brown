@@ -1,6 +1,6 @@
 //! STANAG 4285 — the receive side, uncoded rates.
 //!
-//! Transcribed from the standard itself (`STANAG4285-EDITION1.md`) rather than
+//! Transcribed from the standard itself (`docs/internal/STANAG4285-EDITION1.md`) rather than
 //! from somebody's description of it, and **receive-only**: no modulator, and the
 //! coded rates (Annex E) are not built.
 //!

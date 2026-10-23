@@ -3,7 +3,7 @@
 //! (This lives beside `mfsk.rs`, which is the tone generator and symbol clock
 //! the multi-tone modes share; this file is the modem itself.)
 //!
-//! A port of the reference described in `MODE-ROADMAP.md` under "MFSK16: the
+//! A port of the reference described in `docs/internal/MODE-ROADMAP.md` under "MFSK16: the
 //! spec", which itself was read out of the keyboard-mode family in OnAir
 //! (`core/src/hfdig/hfdig_kbd_mfsk.cpp` and `hfdig_kbd_dsp.h`, GPL-3.0). OnAir
 //! is credited in the README's Acknowledgements; nothing here is copied by name.

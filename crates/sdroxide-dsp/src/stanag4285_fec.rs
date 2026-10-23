@@ -1,7 +1,7 @@
 //! STANAG 4285 Annex E — the coded rates: the convolutional code, the
 //! interleaver and the message framing.
 //!
-//! Transcribed from Annex E of the standard (`STANAG4285-EDITION1.md`, "Annex E"),
+//! Transcribed from Annex E of the standard (`docs/internal/STANAG4285-EDITION1.md`, "Annex E"),
 //! and **none of it is cryptography**: a constraint-length-7 rate-1/2
 //! convolutional code, a convolutional interleaver and a start/end-of-message
 //! convention. The traffic's own encryption, where there is any, sits above this

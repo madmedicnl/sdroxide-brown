@@ -450,7 +450,7 @@ struct DetachedWindowSpec {
 }
 
 /// The window spec for a module. The `app_id`s are a public contract — the
-/// operator's own compositor rules match on them (`UNDOCKED-HANDOVER.md`), so
+/// operator's own compositor rules match on them (`docs/internal/UNDOCKED-HANDOVER.md`), so
 /// changing one is a user-visible change.
 #[cfg(not(target_arch = "wasm32"))]
 fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec {

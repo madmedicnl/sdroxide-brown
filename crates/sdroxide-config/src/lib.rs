@@ -3416,7 +3416,7 @@ fn cached_schedule() -> Option<Vec<sdroxide_types::BroadcastStation>> {
 /// One source, not all of them: EiBi, Aoki and HFCC overlap heavily, so reading
 /// all three would paint one station on the waterfall two or three times, and the
 /// label is there so a station can be **identified** — three copies of it is
-/// worse than none. `SWL-HANDOVER.md`, fork #69.
+/// worse than none. `docs/internal/SWL-HANDOVER.md`, fork #69.
 ///
 /// A source that is **not** currently downloaded is simply absent: the fallback
 /// to the compiled-in EiBi list happens above this, so an operator who selects

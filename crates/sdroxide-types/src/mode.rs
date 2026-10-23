@@ -445,7 +445,7 @@ pub enum Mode {
     /// The variant is [`crate::DigiConfig::mfsk_mode`], because the eleven are
     /// one modem at different symbol rates rather than eleven decoders. Every
     /// variant in the corpus decodes its own recording or is named in
-    /// `MODE-PROGRESS.md`, and both halves are built.
+    /// `docs/internal/MODE-PROGRESS.md`, and both halves are built.
     ///
     /// Appended for the same reason as [`Mode::Hell`].
     Mfsk,
@@ -624,7 +624,7 @@ impl Mode {
     ///
     /// * **Olivia** — locks but its symbol clock wanders; it fails the
     ///   independent corpus, and the fault is diagnosed in
-    ///   `MODE-PROGRESS.md` §4.
+    ///   `docs/internal/MODE-PROGRESS.md` §4.
     /// * **THOR** — fails the same corpus and is not diagnosed at all.
     /// * **RIFP** — a draft specification (`draft-dulaunoy-rifp-00`), which has
     ///   never been seen on the air by this project.
