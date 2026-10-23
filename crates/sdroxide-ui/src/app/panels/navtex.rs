@@ -81,6 +81,22 @@ pub(super) fn navtex_list_header(
         crate::chrome::row_tail(ui, |ui| {
             super::clear_rx_chip_at(ui, cmds, !st.messages.is_empty() || st.live.is_some());
             super::save_rx_chip_for(ui, status);
+            // Detach chip: pull the panel into its own window.
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let detached = self.ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex);
+                let (icon, hover) = if detached {
+                    ("⇱", "DOCK — return this panel into the main window")
+                } else {
+                    ("⇱", "WINDOW — move this panel into its own OS window")
+                };
+                if crate::chrome::chip(ui, detached, RichText::new(icon).size(10.5))
+                    .on_hover_text(hover)
+                    .clicked()
+                {
+                    self.set_module_detached(sdroxide_types::DetachableModule::Navtex, !detached);
+                }
+            }
             if crate::chrome::chip(ui, rev, RichText::new("REV").size(10.5))
                 .on_hover_text(
                     "Swap the mark and space tones, for a signal received on the other \
@@ -289,7 +305,9 @@ impl SdroxideApp {
 
         let body = match selected {
             Some(m) => m.text.clone(),
-            None => st.text.clone(),
+            // Only show the loose text when the receiver is actually in
+            // sync: otherwise it is noise decoded as characters.
+            None => if st.in_sync { st.text.clone() } else { String::new() },
         };
         egui::ScrollArea::vertical()
             .id_salt("navtex-body")

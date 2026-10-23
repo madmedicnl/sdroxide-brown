@@ -469,7 +469,7 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
         // underneath, and a wide window would just be dial with margins.
         M::Rotor => ("antenna rotator", [420.0, 520.0]),
         M::Dsc => ("DSC", [640.0, 480.0]),
-        M::Navtex => ("NAVTEX", [640.0, 480.0]),
+        M::Navtex => ("NAVTEX", [900.0, 600.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
