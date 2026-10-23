@@ -33,12 +33,15 @@ const CHANNELS: &[(f64, &str)] = &[
 ///
 /// Wrapped: on a phone the row is wider than the screen, and a plain one ran
 /// REV off its edge.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn navtex_list_header(
     ui: &mut egui::Ui,
     st: &NavtexStatus,
     status: Option<&sdroxide_types::DigiStatus>,
     cmds: &mut Vec<Command>,
     rev: bool,
+    ui_settings: &sdroxide_types::UiSettings,
+    detach: &mut bool,
 ) -> bool {
     let mut flip = false;
     ui.horizontal_wrapped(|ui| {
@@ -84,7 +87,8 @@ pub(super) fn navtex_list_header(
             // Detach chip: pull the panel into its own window.
             #[cfg(not(target_arch = "wasm32"))]
             {
-                let detached = self.ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex);
+                let detached =
+                    ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex);
                 let (icon, hover) = if detached {
                     ("⇱", "DOCK — return this panel into the main window")
                 } else {
@@ -94,7 +98,9 @@ pub(super) fn navtex_list_header(
                     .on_hover_text(hover)
                     .clicked()
                 {
-                    self.set_module_detached(sdroxide_types::DetachableModule::Navtex, !detached);
+                    // Asked for, not done here: this is a free function so the
+                    // phone-width layout test can draw it without an app.
+                    *detach = true;
                 }
             }
             if crate::chrome::chip(ui, rev, RichText::new("REV").size(10.5))
@@ -199,13 +205,21 @@ impl SdroxideApp {
         st: &NavtexStatus,
         panel_h: f32,
     ) {
-        if navtex_list_header(
+        let mut detach = false;
+        let rev_pressed = navtex_list_header(
             ui,
             st,
             self.digi_status.as_ref(),
             cmds,
             self.digi_cfg_edit.navtex_reverse,
-        ) {
+            &self.ui_settings,
+            &mut detach,
+        );
+        if detach {
+            let on = !self.ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex);
+            self.set_module_detached(sdroxide_types::DetachableModule::Navtex, on);
+        }
+        if rev_pressed {
             self.digi_cfg_edit.navtex_reverse = !self.digi_cfg_edit.navtex_reverse;
             if self.digi_cfg_seeded {
                 cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
