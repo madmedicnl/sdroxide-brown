@@ -18849,6 +18849,20 @@ impl Engine {
             for a in out.iter_mut() {
                 *a = (*a * gain).clamp(-1.0, 1.0);
             }
+        } else {
+            // **A gain of one is not "nothing to do".** The modem's headroom and
+            // the operator's level fold into one number, and two of them can
+            // cancel — the IFK transmitter's full scale against a level of 50 %
+            // made exactly 1.0, so nothing was applied and 1.02 of waveform went
+            // to the rig past full scale. Clamping here costs two compares a
+            // sample and keeps the promise that what leaves is inside the scale.
+            for a in out.iter_mut() {
+                if *a > 1.0 {
+                    *a = 1.0;
+                } else if *a < -1.0 {
+                    *a = -1.0;
+                }
+            }
         }
         // CW: keep a copy of the keyed sidetone for the local speakers, so a
         // `Sound card (MCW)` operator hears what they are sending. The samples

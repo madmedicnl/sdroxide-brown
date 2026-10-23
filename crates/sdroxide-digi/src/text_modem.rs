@@ -774,6 +774,26 @@ impl DigiEngine for TextModemController {
         self.mode
     }
 
+    /// **What this family's transmitter actually puts out.**
+    ///
+    /// The trait's default is 0.5 — 6 dB of headroom that the older modems
+    /// synthesise at, which the engine divides back out so a full Drive is a
+    /// full transmitter (issue #131). The IFK transmitter behind THOR and
+    /// DominoEX does not leave that headroom: it generates its own waveform at
+    /// full scale, and saying otherwise made the engine double it. The engine's
+    /// clamp hid the doubling at 100 % and *undid the operator's level* at 50 %,
+    /// where the modem's 0.5 and the level's 0.5 cancelled to a gain of exactly
+    /// one and nothing was applied at all — a mode transmitting at full scale
+    /// however far the rail was turned down, and 1.02 leaking past full scale
+    /// on the way. `a_mode_with_no_level_of_its_own_takes_the_carrier_default`
+    /// is the guard.
+    fn tx_peak(&self) -> f32 {
+        match self.tx {
+            TxModem::Thor(_) => 1.0,
+            _ => 0.5,
+        }
+    }
+
     fn on_rx_audio(&mut self, tap: &[f32]) {
         self.scratch8.clear();
         match &mut self.rx_rs {
