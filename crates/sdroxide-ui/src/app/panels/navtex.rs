@@ -215,6 +215,7 @@ impl SdroxideApp {
             &self.ui_settings,
             &mut detach,
         );
+        #[cfg(not(target_arch = "wasm32"))]
         if detach {
             let on = !self.ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex);
             self.set_module_detached(sdroxide_types::DetachableModule::Navtex, on);
