@@ -47,7 +47,6 @@ rest.
 - **[Listening quick-start](docs/listening-quickstart.en.md)** ([Nederlands](docs/listening-quickstart.nl.md) · [Français](docs/listening-quickstart.fr.md) · [Italiano](docs/listening-quickstart.it.md)).
 - **[Pi Zero 2 W headless SWL station](docs/pi-zero-2w-swl.en.md)** ([Nederlands](docs/pi-zero-2w-swl.nl.md) · [Français](docs/pi-zero-2w-swl.fr.md) · [Italiano](docs/pi-zero-2w-swl.it.md)).
 - **[QO-100 Quick-start Guide](docs/qo100-quickstart.en.md)** ([Türkçe](docs/qo100-quickstart.tr.md)).
-- **[ROADMAP.md](docs/internal/ROADMAP.md)** — where the listener work goes next.
 
 ## Quick start
 
