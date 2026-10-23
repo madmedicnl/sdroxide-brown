@@ -3120,6 +3120,23 @@ pub struct DigiConfig {
     /// (`PROTO_VERSION` 234 → 235).
     #[serde(default)]
     pub wavelog_station_id: u32,
+    /// WEFAX receive sensitivity, -5..=+5. 0 = the thresholds measured from the
+    /// chart's own phasing signal, which is the reference behaviour.
+    ///
+    /// This is not an audio gain, unlike SSTV's: a fax is frequency modulated,
+    /// so signal strength does not change the greys (`1500` Hz black to `2300`
+    /// Hz white). It scales the detector's *thresholds* instead — `+` accepts a
+    /// weaker, fainter or noisier chart, `−` waits for a clean signal before it
+    /// starts or ends a page.
+    ///
+    /// Appended last, so this is a wire change (`PROTO_VERSION` 236 → 237).
+    #[serde(default)]
+    pub wefax_rx_sensitivity: i8,
+    /// WEFAX receive is using its reference thresholds. When true,
+    /// `wefax_rx_sensitivity` is ignored and the slider sits at 0. Moving the
+    /// slider off 0 clears this.
+    #[serde(default = "yes")]
+    pub wefax_rx_auto: bool,
 }
 
 fn cw_default_tx_idle_s() -> f32 {
@@ -3381,6 +3398,8 @@ impl Default for DigiConfig {
             psk_coded: PskCoded::default(),
             domino_mode: DominoMode::default(),
             wavelog_station_id: 0,
+            wefax_rx_sensitivity: 0,
+            wefax_rx_auto: true,
         }
     }
 }

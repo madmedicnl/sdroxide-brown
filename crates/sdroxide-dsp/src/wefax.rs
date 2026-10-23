@@ -290,6 +290,18 @@ enum AudioTone {
     Other,
 }
 
+/// Scale a threshold that must be *reached*: a share of a window's energy.
+///
+/// `2 − k` and not `1 / k`. Dividing is the obvious form and it breaks at the
+/// low end: the reference purity is 0.6, so `−5` would ask for 1.5 — a share no
+/// window can hold — and the detector would stop hearing a start or a stop tone
+/// at all, which silences the mode instead of steadying it. `2 − k` keeps every
+/// fraction inside `(0, 1)`, moves the reference 0.6 to 0.24 at `+5` and 0.96 at
+/// `−5`, is monotonic, and is exactly `1.0` at the reference setting.
+fn fraction_threshold(f: f32, k: f64) -> f32 {
+    f * (2.0 - k) as f32
+}
+
 /// Detector for a start or stop signal sent as a literal audio tone.
 ///
 /// The standard describes both as the subcarrier alternating black/white, which
@@ -308,6 +320,11 @@ struct AudioToneDetect {
     spec: Vec<Complex32>,
     scratch: Vec<Complex32>,
     hz_per_bin: f64,
+    /// Threshold multiplier from the operator's sensitivity setting: the purity
+    /// is scaled by [`fraction_threshold`] and the pitch tolerance multiplied,
+    /// so `+` believes a fainter tone and `−` demands a cleaner one. Exactly
+    /// `1.0` at the reference setting, so the default reading is untouched.
+    scale: f64,
 }
 
 impl AudioToneDetect {
@@ -324,7 +341,18 @@ impl AudioToneDetect {
             spec,
             scratch,
             hz_per_bin: rate / n as f64,
+            scale: 1.0,
         }
+    }
+
+    /// Set the threshold multiplier (see [`WefaxRx::sens_k`]).
+    fn set_scale(&mut self, scale: f64) {
+        self.scale = scale;
+    }
+
+    /// Share of the low audio a line must hold to be a start or stop tone.
+    fn purity_threshold(&self) -> f32 {
+        fraction_threshold(AUDIO_TONE_PURITY, self.scale)
     }
 
     fn reset(&mut self) {
@@ -361,13 +389,13 @@ impl AudioToneDetect {
         // A Hann window spreads a line over a few bins either side.
         let held: f32 =
             power[peak.saturating_sub(3)..=(peak + 3).min(power.len() - 1)].iter().sum();
-        if held < total * AUDIO_TONE_PURITY {
+        if held < total * self.purity_threshold() {
             return Some(AudioTone::Other);
         }
         let hz = peak as f64 * self.hz_per_bin;
-        Some(if (hz - START_AUDIO_HZ).abs() <= START_AUDIO_TOL_HZ {
+        Some(if (hz - START_AUDIO_HZ).abs() <= START_AUDIO_TOL_HZ * self.scale {
             AudioTone::Start
-        } else if (hz - STOP_TONE_HZ).abs() <= STOP_AUDIO_TOL_HZ {
+        } else if (hz - STOP_TONE_HZ).abs() <= STOP_AUDIO_TOL_HZ * self.scale {
             AudioTone::Stop
         } else {
             AudioTone::Other
@@ -595,6 +623,8 @@ pub struct WefaxRx {
     lead_skipped: u32,
     /// No page is begun by phasing alone before this sample: see [`IDLE_HOLD_S`].
     idle_hold_until: u64,
+    /// The operator's receive sensitivity, `-5..=+5`. See [`WefaxRx::sens_k`].
+    sensitivity: i8,
 }
 
 /// How long a tone-detector window is, in seconds. Long enough that a chart's
@@ -702,6 +732,16 @@ const FLAT_MEAN: f32 = 0.45;
 const BLACK_RANGE_HZ: (f64, f64) = (1300.0, 1700.0);
 const WHITE_RANGE_HZ: (f64, f64) = (2100.0, 2500.0);
 const SPAN_RANGE_HZ: (f64, f64) = (600.0, 1000.0);
+
+/// A calibration window widened — or narrowed — about its own centre by `k`.
+///
+/// At `k = 1.0` the arithmetic is exact, so each window is the constant itself:
+/// black, white and the span are a centre ±200 Hz. See [`WefaxRx::sens_k`].
+fn cal_range(range: (f64, f64), k: f64) -> (f64, f64) {
+    let mid = 0.5 * (range.0 + range.1);
+    let half = 0.5 * (range.1 - range.0) * k;
+    (mid - half, mid + half)
+}
 /// Give up looking for the phasing pulse after this long and start the picture
 /// anyway — a misaligned chart beats no chart.
 const PHASE_TIMEOUT_S: f64 = 35.0;
@@ -794,6 +834,7 @@ impl WefaxRx {
             lead_phasing: None,
             lead_skipped: 0,
             idle_hold_until: 0,
+            sensitivity: 0,
         }
     }
 
@@ -838,6 +879,60 @@ impl WefaxRx {
 
     pub fn slant_ppm(&self) -> f32 {
         self.slant_ppm as f32
+    }
+
+    /// The operator's receive sensitivity, `-5..=+5`; see [`WefaxRx::sens_k`].
+    pub fn sensitivity(&self) -> i8 {
+        self.sensitivity
+    }
+
+    /// Set the receive sensitivity, `-5..=+5`, clamped.
+    ///
+    /// A fax is frequency modulated, so signal strength does not change the
+    /// greys — this moves the decoder's *thresholds* instead. See
+    /// [`WefaxRx::sens_k`] for what is scaled and what deliberately is not.
+    pub fn set_sensitivity(&mut self, sensitivity: i8) {
+        self.sensitivity = sensitivity.clamp(-5, 5);
+        let k = self.sens_k();
+        self.audio_tone.set_scale(k);
+    }
+
+    /// Threshold multiplier from the sensitivity setting: `1 + 0.12·s`, so
+    /// `0.4` at `-5` and `1.6` at `+5`.
+    ///
+    /// `+` is more sensitive: a threshold said to *accept* something is widened
+    /// (the tone pitch tolerance, the audio start/stop window, the phasing
+    /// agreement and the black/white calibration window are all multiplied),
+    /// and one that must be *reached* is lowered (the audio tone's purity, the
+    /// subcarrier share and the periodic share, through
+    /// [`fraction_threshold`]). `−` does the opposite: it waits for a cleaner
+    /// signal.
+    ///
+    /// Exactly `1.0` at the reference setting, and multiplying by it is exact,
+    /// so `0` reproduces the decoder's own behaviour bit for bit.
+    fn sens_k(&self) -> f64 {
+        1.0 + 0.12 * f64::from(self.sensitivity)
+    }
+
+    /// How far a measured crossing rate may sit from the nominal one.
+    fn tone_tol(&self) -> f64 {
+        TONE_TOL * self.sens_k()
+    }
+
+    /// How far from its nominal pitch a phasing pulse may repeat, as a fraction.
+    fn rephase_tol(&self) -> f64 {
+        REPHASE_TOL * self.sens_k()
+    }
+
+    /// Share of a window's audio energy that must lie in the subcarrier's band.
+    fn subcarrier_share(&self) -> f32 {
+        fraction_threshold(SUBCARRIER_SHARE, self.sens_k())
+    }
+
+    /// Share of a window's brightness variation that must sit at the tone's own
+    /// pitch.
+    fn periodic_share(&self) -> f32 {
+        fraction_threshold(PERIODIC_SHARE, self.sens_k())
     }
 
     /// Smoothed input level, for the panel's tuning meter.
@@ -1009,7 +1104,13 @@ impl WefaxRx {
         }
         let (black, white) = (black / f64::from(blacks), white / f64::from(whites));
         let span = white - black;
-        let ok = |v: f64, r: (f64, f64)| v >= r.0 && v <= r.1;
+        // The windows move with the sensitivity setting; at the reference they
+        // are the constants themselves.
+        let k = self.sens_k();
+        let ok = |v: f64, r: (f64, f64)| {
+            let (lo, hi) = cal_range(r, k);
+            v >= lo && v <= hi
+        };
         if ok(black, BLACK_RANGE_HZ) && ok(white, WHITE_RANGE_HZ) && ok(span, SPAN_RANGE_HZ) {
             self.black_hz = black;
             self.white_hz = white;
@@ -1159,18 +1260,19 @@ impl WefaxRx {
     fn start_tone(&mut self, level: f32, required: u32) -> Option<Ioc> {
         let window = (self.rate * TONE_WINDOW_S) as u32;
         let rate = self.start_det.push(level, window)?;
-        let in_band = self.band_sub >= self.band_raw * SUBCARRIER_SHARE;
+        let in_band = self.band_sub >= self.band_raw * self.subcarrier_share();
         self.band_raw = 0.0;
         self.band_sub = 0.0;
         // Crossings per window → crossings per second → the alternation rate,
         // which is half the crossing rate.
         let alt_hz = rate / TONE_WINDOW_S / 2.0;
+        let (tone_tol, periodic_share) = (self.tone_tol(), self.periodic_share());
         let candidate = Ioc::ALL.into_iter().find(|i| {
             let want = i.start_tone_hz();
-            in_band && self.start_det.swing && (alt_hz - want).abs() <= want * TONE_TOL
+            in_band && self.start_det.swing && (alt_hz - want).abs() <= want * tone_tol
         });
         let hit = candidate.filter(|i| {
-            self.level_spec.share(self.start_det.window(), i.start_tone_hz()) >= PERIODIC_SHARE
+            self.level_spec.share(self.start_det.window(), i.start_tone_hz()) >= periodic_share
         });
         match hit {
             Some(ioc) if ioc == self.start_ioc => {
@@ -1231,7 +1333,7 @@ impl WefaxRx {
         // Circular: a pulse sitting on the line boundary reads as ≈0 on one
         // line and ≈n on the next, and that is the same place.
         let d = (skew - self.rephase_skew).abs();
-        let moved = d.min(n - d) > n * REPHASE_TOL;
+        let moved = d.min(n - d) > n * self.rephase_tol();
         self.rephase_lines =
             if self.rephase_lines > 0 && moved { 1 } else { self.rephase_lines + 1 };
         self.rephase_skew = skew;
@@ -1277,13 +1379,14 @@ impl WefaxRx {
                 // Same two conditions as a start signal: it has to be the
                 // subcarrier swinging, not a plain audio tone or a steady
                 // carrier that the discriminator reads as noise.
-                let in_band = self.band_sub >= self.band_raw * SUBCARRIER_SHARE;
+                let in_band = self.band_sub >= self.band_raw * self.subcarrier_share();
                 self.band_raw = 0.0;
                 self.band_sub = 0.0;
                 if in_band
                     && self.stop_det.swing
-                    && (alt_hz - STOP_TONE_HZ).abs() <= STOP_TONE_HZ * TONE_TOL
-                    && self.level_spec.share(self.stop_det.window(), STOP_TONE_HZ) >= PERIODIC_SHARE
+                    && (alt_hz - STOP_TONE_HZ).abs() <= STOP_TONE_HZ * self.tone_tol()
+                    && self.level_spec.share(self.stop_det.window(), STOP_TONE_HZ)
+                        >= self.periodic_share()
                 {
                     self.stop_run += 1;
                     self.stop_miss = 0;
@@ -2558,6 +2661,66 @@ mod tests {
         rx.start_manual(&mut ev);
         assert!(rx.receiving(), "START from idle did nothing: {:?}", story(&ev));
     }
+
+    /// Auto is the decoder that shipped: exactly `1.0`, and every threshold the
+    /// constant beside it. `+` widens, `−` narrows, and the ends are the ends of
+    /// the slider.
+    #[test]
+    fn the_reference_sensitivity_is_the_decoder_as_it_was() {
+        let mut rx = WefaxRx::new(RATE);
+        assert_eq!(rx.sensitivity(), 0, "a new decoder did not start at the reference");
+        assert_eq!(rx.sens_k(), 1.0, "the reference multiplier is not exactly one");
+        assert_eq!(rx.tone_tol(), TONE_TOL, "the reference crossing tolerance moved");
+        assert_eq!(rx.rephase_tol(), REPHASE_TOL, "the reference phasing tolerance moved");
+
+        rx.set_sensitivity(5);
+        assert!(rx.tone_tol() > TONE_TOL, "+ did not widen the crossing tolerance");
+        assert!(rx.rephase_tol() > REPHASE_TOL, "+ did not widen the phasing tolerance");
+        let wide = cal_range(BLACK_RANGE_HZ, rx.sens_k());
+
+        rx.set_sensitivity(-5);
+        assert!(rx.tone_tol() < TONE_TOL, "− did not narrow the crossing tolerance");
+        assert!(rx.rephase_tol() < REPHASE_TOL, "− did not narrow the phasing tolerance");
+        let narrow = cal_range(BLACK_RANGE_HZ, rx.sens_k());
+        assert!(wide.1 - wide.0 > BLACK_RANGE_HZ.1 - BLACK_RANGE_HZ.0, "{wide:?}");
+        assert!(narrow.1 - narrow.0 < BLACK_RANGE_HZ.1 - BLACK_RANGE_HZ.0, "{narrow:?}");
+
+        // Off the end of the slider is off the end, not wherever the value landed.
+        rx.set_sensitivity(9);
+        assert_eq!(rx.sensitivity(), 5);
+        rx.set_sensitivity(-9);
+        assert_eq!(rx.sensitivity(), -5);
+    }
+
+    /// The three thresholds that are *shares* stay shares at every setting.
+    ///
+    /// They are scaled as `f · (2 − k)` and not `f / k`: at `−5` dividing asks
+    /// for 1.5 of a window's energy in one line, which no signal can hold, so the
+    /// detector would hear no start or stop tone at all — not a strict decoder, a
+    /// deaf one. `2 − k` keeps every fraction inside `(0, 1)` and is monotonic.
+    #[test]
+    fn a_fraction_threshold_stays_inside_the_share_it_measures() {
+        let mut rx = WefaxRx::new(RATE);
+        for s in -5..=5i8 {
+            rx.set_sensitivity(s);
+            for f in [rx.audio_tone.purity_threshold(), rx.subcarrier_share(), rx.periodic_share()]
+            {
+                assert!(f > 0.0 && f < 1.0, "at {s:+}: {f:.2} is not a share of anything");
+            }
+        }
+
+        rx.set_sensitivity(0);
+        assert_eq!(rx.audio_tone.purity_threshold(), AUDIO_TONE_PURITY);
+        assert_eq!(rx.subcarrier_share(), SUBCARRIER_SHARE);
+        assert_eq!(rx.periodic_share(), PERIODIC_SHARE);
+
+        // `+` is the more sensitive direction, so the share it must reach falls.
+        rx.set_sensitivity(-5);
+        let strict = rx.audio_tone.purity_threshold();
+        rx.set_sensitivity(5);
+        let loose = rx.audio_tone.purity_threshold();
+        assert!(loose < AUDIO_TONE_PURITY && AUDIO_TONE_PURITY < strict, "{loose} < {strict}");
+    }
 }
 
 /// Start and stop signals that arrive as plain audio tones.
@@ -2729,6 +2892,39 @@ mod audio_tone_tests {
         let a: Vec<f32> = sine(300.0, 8.0).iter().map(|s| 0.1 * s + 0.6 * noise()).collect();
         let ev = feed(&mut rx, &a);
         assert!(ev.is_empty(), "{ev:?}");
+    }
+
+    /// The last verdict the decoder's own tone detector reaches on a second of
+    /// `hz` at `sensitivity`, asked through `set_sensitivity` so the test drives
+    /// the same path the slider does.
+    fn verdict(hz: f64, sensitivity: i8) -> AudioTone {
+        let mut rx = rx();
+        rx.set_sensitivity(sensitivity);
+        let mut last = AudioTone::Other;
+        for i in 0..RATE as usize {
+            let a = (0.5 * (TAU * hz * i as f64 / RATE).sin()) as f32;
+            if let Some(v) = rx.audio_tone.push(a) {
+                last = v;
+            }
+        }
+        last
+    }
+
+    /// `+` listens to a fainter, mistuned tone and `−` will not.
+    ///
+    /// 210 Hz is the one tone inside the detector's band (`200..520`) that is
+    /// further than the reference 75 Hz from both the 300 Hz start pitch and the
+    /// 450 Hz stop pitch — 225 would be inside the start window and 375 inside
+    /// both — so it is the single tone whose verdict the setting decides.
+    #[test]
+    fn the_sensitivity_setting_widens_the_audio_tone_window() {
+        assert_eq!(verdict(210.0, 0), AudioTone::Other, "210 Hz was a tone at the reference");
+        assert_eq!(
+            verdict(210.0, 5),
+            AudioTone::Start,
+            "+5 did not reach a tone 90 Hz off the start pitch"
+        );
+        assert_eq!(verdict(210.0, -5), AudioTone::Other, "−5 took a tone 90 Hz off");
     }
 }
 
