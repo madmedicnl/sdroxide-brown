@@ -7720,7 +7720,7 @@ impl Engine {
             // mode and none of its behaviour — no callsign, no transmitter, and
             // a framing of its own — and nothing further down would notice it
             // had been handed a maritime safety broadcast.
-            Box::new(NavtexController::new(self.digi_config.clone(), tap_rate))
+            Box::new(NavtexController::new_with_config_dir(self.digi_config.clone(), tap_rate, self.store.dir().ok()))
         } else if mode == Mode::Acars {
             // The same shape of thing as NAVTEX: the framing is its own and
             // nothing further down would notice it had been handed an airline
