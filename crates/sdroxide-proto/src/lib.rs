@@ -2000,8 +2000,8 @@ use sdroxide_types::{
 /// `TestPictureUpload`, [`sdroxide_types::RadioEvent`] gains `PictureUpload`,
 /// and `ServerMsg` gains `PictureUpload` so a remote screen can see the answer.
 /// All appended. `PROTO_VERSION` 236 → 237, `VERSION_BYTE` 0x38 → 0x39.
-pub const PROTO_VERSION: u16 = 237;
-const VERSION_BYTE: u8 = 0x39;
+pub const PROTO_VERSION: u16 = 238;
+const VERSION_BYTE: u8 = 0x3A;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
