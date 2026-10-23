@@ -3120,6 +3120,18 @@ pub struct DigiConfig {
     /// (`PROTO_VERSION` 234 → 235).
     #[serde(default)]
     pub wavelog_station_id: u32,
+    /// SSTV receive sensitivity, -5..=+5. 0 = the automatic level (Auto).
+    /// Adjusts the signal level fed to the decoder: negative attenuates,
+    /// positive boosts. Does not change the decoder itself.
+    ///
+    /// Appended last, so this is a wire change (`PROTO_VERSION` 237 → 238).
+    #[serde(default)]
+    pub sstv_rx_sensitivity: i8,
+    /// SSTV receive is in automatic level mode. When true,
+    /// `sstv_rx_sensitivity` is ignored and the slider sits at 0. Moving the
+    /// slider off 0 clears this. Appended last for the reason above.
+    #[serde(default = "yes")]
+    pub sstv_rx_auto: bool,
     /// WEFAX receive sensitivity, -5..=+5. 0 = the thresholds measured from the
     /// chart's own phasing signal, which is the reference behaviour.
     ///
@@ -3129,7 +3141,7 @@ pub struct DigiConfig {
     /// weaker, fainter or noisier chart, `−` waits for a clean signal before it
     /// starts or ends a page.
     ///
-    /// Appended last, so this is a wire change (`PROTO_VERSION` 236 → 237).
+    /// Appended last, so this is a wire change (`PROTO_VERSION` 238 → 239).
     #[serde(default)]
     pub wefax_rx_sensitivity: i8,
     /// WEFAX receive is using its reference thresholds. When true,
@@ -3398,6 +3410,8 @@ impl Default for DigiConfig {
             psk_coded: PskCoded::default(),
             domino_mode: DominoMode::default(),
             wavelog_station_id: 0,
+            sstv_rx_sensitivity: 0,
+            sstv_rx_auto: true,
             wefax_rx_sensitivity: 0,
             wefax_rx_auto: true,
         }

@@ -483,6 +483,9 @@ pub enum RadioEvent {
     /// [`crate::Command::WavelogSync`]. The last page of a run has `done` set.
     /// Appended last, and local like [`RadioEvent::WavelogProbe`].
     WavelogBatch(Box<crate::WavelogBatch>),
+    /// How a received-picture FTP upload, or a test of the settings, went.
+    /// Appended last, for the usual reason.
+    PictureUpload(crate::PictureUploadStatus),
 }
 
 /// Snapshot of the frontend's switchable sound devices (native clients).

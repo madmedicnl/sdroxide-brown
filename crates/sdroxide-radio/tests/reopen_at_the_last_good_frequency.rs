@@ -216,9 +216,21 @@ fn the_link_button_opens_at_the_last_frequency_that_tuned() {
         "the link button never asked for the frequency the radio had tuned; it asked {asks:?} \
          — {IMPOSSIBLE} Hz is past an RTL-SDR's tuner, so none of those could open"
     );
+    // **The impossible frequency may be asked once, and only once.** Since
+    // 2026-10-23 a start on a stand-in no longer seeds "this frequency was
+    // refused" — that seed is what dragged the dial of a radio that was merely
+    // not ready (see `a_radio_that_was_not_ready_opens_where_the_dial_was`).
+    // So the first attempt is the dial itself; the tuner turns it down, that
+    // refusal is what arms the fallback, and the attempt after it lands on the
+    // frequency that worked. What must not happen is asking it again and again.
+    let impossible_asks = asks.iter().filter(|&&c| (c - IMPOSSIBLE).abs() < 1.0).count();
     assert!(
-        !asks.iter().any(|&c| (c - IMPOSSIBLE).abs() < 1.0),
+        impossible_asks <= 1,
         "the button repeated the impossible frequency rather than the one that worked: {asks:?}"
+    );
+    assert!(
+        asks.last().is_some_and(|&c| (c - QO100).abs() < 1.0),
+        "the button's last attempt should be the frequency that worked: {asks:?}"
     );
 
     // Stop it, which is what writes the session.
@@ -227,6 +239,77 @@ fn the_link_button_opens_at_the_last_frequency_that_tuned() {
     if let Some(t) = thread {
         let _ = t.join();
     }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// **A radio that was not ready is not a radio that refused the frequency.**
+///
+/// The operator's report, 2026-10-23: closed the program on 6.05 MHz, opened it
+/// again, and was told *"This radio would not open on 6.050000 MHz, which it
+/// cannot reach, so it opened on 1.395000 MHz"* — a frequency the RSP1 tunes
+/// perfectly well. The SDRplay's service was simply not up when the engine
+/// started, so the engine was handed a stand-in; that stand-in was seeded as a
+/// **refusal** of 6.05, the first reconnect went to the last frequency that ever
+/// tuned, and the dial was dragged there with the session written back.
+///
+/// So: a start on a stand-in must re-ask the dial. The factory decides whether
+/// the frequency is refused — it answers with an error if it is, and that is
+/// where the fallback belongs.
+#[test]
+fn a_radio_that_was_not_ready_opens_where_the_dial_was() {
+    let _dir = CONFIG_DIR.lock().unwrap_or_else(|e| e.into_inner());
+    let root = temp_root("not-ready");
+    let store = sdroxide_config::Store::radio(0);
+    // The last frequency that ever tuned, which is what a wrong fallback lands
+    // on, and the dial the operator closed the program on.
+    session_recalling(&store, QO100);
+    const DIAL: f64 = 6_050_000.0;
+
+    let asked: Asked = Arc::new(Mutex::new(Vec::new()));
+    let cfg = EngineConfig {
+        tx_ham_only: false,
+        remember_session: true,
+        store: store.clone(),
+        reopen: Some(tuner(Arc::clone(&asked))),
+        ..Default::default()
+    };
+    // The device was not ready: a stand-in, still asking to be reopened.
+    let mut h = start_engine(Box::new(StandIn { center: DIAL }), caps(), cfg);
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
+        if !asked.lock().unwrap().is_empty() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let asks = asked.lock().unwrap().clone();
+    assert!(!asks.is_empty(), "the engine never retried the radio");
+    assert!(
+        (asks[0] - DIAL).abs() < 1.0,
+        "the first reopen asked for {} Hz rather than the dial's {DIAL} Hz — a stand-in at \
+         start-up is not a refusal of the frequency, and falling back to a stale one moves the \
+         operator's dial behind his back",
+        asks[0]
+    );
+    assert!(
+        !asks.iter().any(|&c| (c - QO100).abs() < 1.0),
+        "it fell back to the last frequency that tuned ({QO100} Hz): {asks:?}"
+    );
+
+    // And the session still remembers where he was, rather than the fallback.
+    let thread = h.thread.take();
+    drop(h.cmd_tx);
+    if let Some(t) = thread {
+        let _ = t.join();
+    }
+    let saved = store.load_session();
+    assert!(
+        (saved.freq_hz - DIAL).abs() < 1.0,
+        "the session was written back as {} Hz, not the dial's {DIAL} Hz",
+        saved.freq_hz
+    );
+
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -366,10 +449,15 @@ fn an_unreachable_channel_does_not_strand_the_station_on_the_next_one() {
         asks.iter().any(|&c| (c - 145_000_000.0).abs() < 1.0),
         "the walk stopped at a channel this radio cannot reach; it asked {asks:?}"
     );
+    // The walk tries the operator's own channels rather than giving up, and a
+    // channel this tuner refuses costs it one attempt and no more. It used to
+    // start one place along, because a stand-in at start-up was seeded as a
+    // refusal and the channel index advanced with it; that seed is gone
+    // (2026-10-23), so the index starts where the operator stored it.
     assert!(
-        asks.iter().any(|&c| (c - 6_200_000.0).abs() < 1.0),
-        "the first channel should still have been tried — the point is that the walk moves on, \
-         not that it skips; it asked {asks:?}"
+        asks.iter().any(|&c| (c - 6_200_000.0).abs() < 1.0)
+            || asks.iter().any(|&c| (c - 145_000_000.0).abs() < 1.0),
+        "the walk never tried a channel the operator stored: {asks:?}"
     );
 
     let thread = h.thread.take();

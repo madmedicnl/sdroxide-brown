@@ -1133,7 +1133,7 @@ impl SdroxideApp {
                         |ui| {
                             let hover = format!(
                                 "{}\n\nClick to cycle meter face: bar / trace",
-                                smeter::hover_text(self.meters.as_ref())
+                                smeter::hover_text(self.meters.as_ref(), self.meter_is_audio())
                             );
                             let resp =
                                 smeter::show(ui, self.meters.as_ref(), style.compact(), true)
@@ -2241,7 +2241,7 @@ impl SdroxideApp {
         crate::chrome::module_bare_flush_h(ui, w, h, |ui| {
             let hover = format!(
                 "{}\n\nClick to cycle meter face: {}",
-                smeter::hover_text(self.meters.as_ref()),
+                smeter::hover_text(self.meters.as_ref(), self.meter_is_audio()),
                 if compact { "bar / trace" } else { "needle / bar / trace" }
             );
             let resp = smeter::show(ui, self.meters.as_ref(), shown, outline).on_hover_text(hover);
@@ -5274,6 +5274,18 @@ impl SdroxideApp {
              fraction of rated power the rig is asked for.\n\n{trim}\n\nSettings → Radio → \
              Transmit drive by band."
         )
+    }
+
+    /// Whether the S-meter on this screen is really the **audio level**.
+    ///
+    /// True for a front end that hands us demodulated audio — a rig on a sound
+    /// card, and a transceiver feeding a separate panadapter — because neither
+    /// reports a signal strength of its own: there is no DDC and no demodulator
+    /// here, so the only thing that can be measured is the audio. What the
+    /// operator needs to know is that the needle follows that audio, so noise
+    /// on the card or a rig whose AGC is pumping moves it.
+    fn meter_is_audio(&self) -> bool {
+        self.caps.as_ref().is_some_and(|c| c.audio_mode || c.rx_audio_external)
     }
 
     /// Whether the ELAD FDM-DUO's own power buttons apply: a CAT radio whose
