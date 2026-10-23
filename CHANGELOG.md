@@ -13,7 +13,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
-## [2.1.0.1_brown] - 2026-10-23
+## [2.1.0.2_brown] - 2026-10-23
 
 ### Added
 - **THOR, all fifteen variants, receive and transmit** — the program was wired to a THOR receiver that read nothing at all.
