@@ -4395,12 +4395,25 @@ fn engine_thread(
         // there is nothing for it to fall back to.
         session.as_ref().map_or(0.0, |s| s.last_good_vfo_hz),
     );
-    // A stand-in is the record of a refused open: the program is running
-    // precisely because the radio would not come up on what it was handed. So
-    // the first replacement attempt is already the second try, and must not
-    // repeat the first — otherwise the link button's very first press re-asks
-    // for the impossible number and the operator has to press it twice.
-    let seeded_refused_center_hz = source.needs_reopen().then_some(source_center_hz);
+    // **A stand-in at start-up is not a refusal of the frequency.**
+    //
+    // This used to seed `refused_center_hz` with the centre it was handed, on
+    // the reasoning that "the program is running precisely because the radio
+    // would not come up on it". That is true when the *tuner* turned the
+    // frequency down (#72) and false when the radio was simply **not ready** —
+    // an SDRplay whose service is still coming up, a rig that is switched off,
+    // a dongle a moment behind. Seeding then made the first reconnect go to the
+    // fallback, which is the last frequency that ever tuned, so the dial was
+    // dragged from where the operator left it to a stale one and a notice
+    // blamed the frequency for it: *"would not open on 6.050000 MHz, which it
+    // cannot reach"* — about a frequency the hardware was never asked for.
+    //
+    // The factory is the one that knows: a frequency the radio cannot tune
+    // comes back as an error and is recorded as a refusal at that point
+    // (`poll_reconnect`'s `Err` arm, `reopen_source`'s), and only then does the
+    // fallback apply. A device that was not there is retried on the same
+    // centre, which is what the operator left on the dial.
+    let seeded_refused_center_hz: Option<f64> = None;
     // Held separately from what this front end can carry: a start on a stand-in
     // (a radio switched off, a rig that isn't there yet) must not be the thing
     // that forgets it — see `Engine::want_decimation`.
