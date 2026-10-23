@@ -1767,7 +1767,7 @@ fn the_gpo_pins_are_slaved_to_the_radio_and_keyed_by_an_over() {
 /// A GPO pair keys from the enable state machine, so it can only work in TDD —
 /// and TDD is one direction at a time however good the link is. Both of those
 /// silently disagree with settings the operator may have left behind, so both
-/// are overridden and both are said out loud.
+/// are overridden; only the first is a status line now (see the assertion).
 #[test]
 fn gpo_ptt_wins_over_fdd_and_full_duplex_and_says_so() {
     let fake = Fake::start();
@@ -1781,7 +1781,16 @@ fn gpo_ptt_wins_over_fdd_and_full_duplex_and_says_so() {
         PlutoHandle::open(&fake.address(), &cfg, 145_500_000.0).expect("open the fake Pluto");
     let status = handle.open_status().unwrap_or_default();
     assert!(status.contains("TDD"), "the override should be named, got {status:?}");
-    assert!(status.contains("full duplex"), "and so should the other, got {status:?}");
+    // **The full-duplex half is the tooltip's, not the status line's.** With TDD
+    // in use the link being half duplex is expected behaviour rather than a
+    // fault to acknowledge, so its home is the Duplex row's tooltip (7dba64ab,
+    // which moved it off the main window's banner). Pinning the absence keeps
+    // that deliberate: a status line reappearing here would be a second place
+    // saying the same thing, and the one the operator dismissed.
+    assert!(
+        !status.contains("full duplex"),
+        "the half-duplex consequence belongs to the settings tooltip now: {status:?}"
+    );
     wait_for("the receive buffer", || fake.state.lock().unwrap().rx_buffer_open);
 
     {
