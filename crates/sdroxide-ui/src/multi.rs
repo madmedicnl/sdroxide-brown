@@ -244,6 +244,7 @@ fn module_window_name(m: sdroxide_types::DetachableModule) -> &'static str {
         M::Rotor => "Antenna rotator",
         M::Dsc => "DSC decoder",
         M::Navtex => "NAVTEX decoder",
+        M::Aprs => "APRS decoder",
     }
 }
 
