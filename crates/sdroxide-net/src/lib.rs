@@ -20,7 +20,9 @@ mod pskupload;
 mod rbn;
 mod socketio;
 mod sota;
+mod tls_pin;
 mod upload;
+mod wavelog;
 mod wsjtcb;
 mod wsprnet;
 

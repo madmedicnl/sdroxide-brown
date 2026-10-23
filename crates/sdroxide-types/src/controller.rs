@@ -470,6 +470,19 @@ pub enum RadioEvent {
     /// itself and finds the edges on its own end, which is also where its own
     /// playout delay is known.
     HeardFrame(crate::HeardEdge),
+    /// What a Wavelog connection check found, beyond its pass or fail: the
+    /// station locations to offer, the key's rights, and the fingerprint of a
+    /// certificate the operator is being asked to trust. Follows the
+    /// [`RadioEvent::LoginTest`] for the same check, and like that one it is
+    /// local: the engine's machine reached the server, and a remote client
+    /// cannot see it.
+    ///
+    /// Boxed for the reason [`RadioEvent::DabSlide`] is. Appended last.
+    WavelogProbe(Box<crate::WavelogProbe>),
+    /// One page of QSOs downloaded from Wavelog, answering
+    /// [`crate::Command::WavelogSync`]. The last page of a run has `done` set.
+    /// Appended last, and local like [`RadioEvent::WavelogProbe`].
+    WavelogBatch(Box<crate::WavelogBatch>),
 }
 
 /// Snapshot of the frontend's switchable sound devices (native clients).

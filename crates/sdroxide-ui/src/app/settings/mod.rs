@@ -38,7 +38,7 @@ use self::controls::settings_controls_tab;
 use self::general::{cb_plan_combo, region_combo, remote_access_settings, signed_in_station};
 use self::net::{
     broadcast_stations_settings, net_heading, net_row, net_secret, operator_identity_note,
-    rbn_block, settings_freedv_tab,
+    rbn_block, settings_freedv_tab, wavelog_section,
 };
 use self::profiles::settings_profiles_tab;
 use self::radio::{
@@ -4211,6 +4211,7 @@ impl SdroxideApp {
                     UploadTarget::ClubLog => &mut io.net_edit.auto_upload_clublog,
                     UploadTarget::Wrl => &mut io.net_edit.auto_upload_wrl,
                     UploadTarget::Log11Dx => &mut io.net_edit.auto_upload_log11dx,
+                    UploadTarget::Wavelog => &mut io.net_edit.wavelog.auto_upload,
                 };
                 ui.add_enabled_ui(auto_on, |ui| {
                     crate::chrome::checkbox(
@@ -4235,6 +4236,9 @@ impl SdroxideApp {
                 }
                 ui.add_space(4.0);
                 match target {
+                    UploadTarget::Wavelog => {
+                        wavelog_section(ui, self, cmds, &mut io.net_edit.wavelog);
+                    }
                     UploadTarget::QrzLogbook => {
                         net_secret(ui, "QRZ log key", &mut io.net_edit.qrz_logbook_key, 200.0);
                         ui.label(

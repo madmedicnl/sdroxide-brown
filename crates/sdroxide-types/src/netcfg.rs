@@ -409,6 +409,13 @@ pub struct NetworkConfig {
     /// well as RBN's. Appended last, as the wire requires.
     #[serde(default = "RbnConfig::second")]
     pub rbn2: RbnConfig,
+
+    // ── Wavelog ──
+    /// The operator's **own** logbook server, with its address, its API key and
+    /// — where it has a self-signed certificate — the one certificate to accept.
+    /// Appended last, as the wire requires.
+    #[serde(default)]
+    pub wavelog: crate::WavelogConfig,
 }
 
 impl Default for NetworkConfig {
@@ -447,6 +454,7 @@ impl Default for NetworkConfig {
             swl_id: String::new(),
             eqsl_qth_nickname: String::new(),
             rbn2: RbnConfig::second(),
+            wavelog: crate::WavelogConfig::default(),
         }
     }
 }

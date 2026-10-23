@@ -55,6 +55,197 @@ pub(in crate::app) fn rbn_block(
     });
 }
 
+/// The operator's own **Wavelog**: address, key, certificate pin, station
+/// location, and the two things that make it a logbook rather than a box that
+/// takes uploads — a download, and a test that says what the server answered.
+///
+/// Its own section rather than a row beside eQSL and Club Log, because it is a
+/// different kind of service: theirs are companies with one endpoint and an
+/// account, this is a server somebody runs, at an address they type, whose
+/// certificate may be its own.
+pub(in crate::app) fn wavelog_section(
+    ui: &mut egui::Ui,
+    app: &crate::app::SdroxideApp,
+    cmds: &mut Vec<sdroxide_types::Command>,
+    cfg: &mut sdroxide_types::WavelogConfig,
+) {
+    super::note_rich(
+        ui,
+        "Wavelog is a logbook **you** run, at an address you give it. Contacts logged here          are uploaded to the station location you pick, and contacts it already holds can be          pulled back so \"worked before\" knows about QSOs made from another program, another          rig or its own web form.",
+        Some(11.0),
+        None,
+    );
+    net_row(ui, "Address", &mut cfg.url, 300.0);
+    ui.label(
+        RichText::new(
+            "Where the Wavelog front page is: https://log.example.org, or its LAN address. \
+             /index.php is accepted either way.",
+        )
+        .size(10.5)
+        .color(crate::theme::gray(140)),
+    );
+    net_secret(ui, "API key", &mut cfg.api_key, 220.0);
+    ui.label(
+        RichText::new(
+            "An API key from Wavelog's own API page. A read/write key is needed to upload; \
+             a read-only one can only download.",
+        )
+        .size(10.5)
+        .color(crate::theme::gray(140)),
+    );
+
+    // The station location, once the server has said which ones it has. Until
+    // then a number the operator cannot check, which is why the test button
+    // comes before it.
+    let stations = app.wavelog_probe.as_ref().map(|p| p.stations.clone()).unwrap_or_default();
+    ui.horizontal(|ui| {
+        if !stations.is_empty() {
+            ui.add_sized([96.0, 22.0], egui::Label::new("Station"));
+            let current = stations.iter().find(|s| s.id == cfg.station_id).map(|s| s.name.clone());
+            egui::ComboBox::from_id_salt("wavelog-station")
+                .width(220.0)
+                .selected_text(current.unwrap_or_else(|| "pick one".into()))
+                .show_ui(ui, |ui| {
+                    for st in &stations {
+                        let label = if st.callsign.trim().is_empty() {
+                            st.name.clone()
+                        } else {
+                            format!("{} ({})", st.name, st.callsign)
+                        };
+                        ui.selectable_value(&mut cfg.station_id, st.id, label);
+                    }
+                });
+        } else {
+            ui.add_sized([96.0, 22.0], egui::Label::new("Station"));
+            ui.label(
+                RichText::new("test the connection to list the locations")
+                    .size(10.5)
+                    .color(crate::theme::gray(150)),
+            );
+        }
+    });
+    // The pin, when the server answered with a certificate of its own.
+    if let Some(pin) = app.wavelog_probe.as_ref().and_then(|p| p.untrusted_cert.clone()) {
+        ui.horizontal(|ui| {
+            ui.add_sized([96.0, 22.0], egui::Label::new("Certificate"));
+            ui.label(
+                RichText::new(format!("its own — {}…", &pin[..pin.len().min(16)]))
+                    .size(10.5)
+                    .color(crate::theme::YELLOW()),
+            );
+            if crate::chrome::chip(ui, !cfg.cert_sha256.is_empty(), "TRUST")
+                .on_hover_text(
+                    "Accept **this** certificate and no other, for this server. A pin rather \
+                     than \"accept anything\": if it ever changes, the connection is refused \
+                     and said so rather than quietly going to whatever answers at that address.",
+                )
+                .clicked()
+            {
+                cfg.cert_sha256 = pin;
+            }
+        });
+    }
+
+    ui.horizontal(|ui| {
+        let pending = app.login_tests_pending.contains(&sdroxide_types::LoginTarget::Wavelog);
+        if ui
+            .add_enabled(!pending, egui::Button::new("Test Wavelog"))
+            .on_hover_text(
+                "Ask the server whether this address and key work, and list its station \
+                 locations. Applies the settings first; logs nothing.",
+            )
+            .clicked()
+        {
+            // The edited copy, not the applied one: the engine tests what it
+            // has, so a key typed a moment ago would otherwise be checked
+            // against the old one — see `login_test_row`.
+            cmds.push(sdroxide_types::Command::SetNetworkConfig(app.net_edit_snapshot()));
+            cmds.push(sdroxide_types::Command::TestLogin(sdroxide_types::LoginTarget::Wavelog));
+        }
+        if let Some(r) = app.login_tests.get(&sdroxide_types::LoginTarget::Wavelog) {
+            let (mark, colour) = if r.ok {
+                ("✔", crate::theme::GREEN())
+            } else {
+                ("✖", Color32::from_rgb(255, 120, 120))
+            };
+            ui.label(RichText::new(format!("{mark} {}", r.message)).size(11.0).color(colour));
+        }
+    });
+
+    ui.add_space(6.0);
+    crate::chrome::checkbox(ui, &mut cfg.download, "Download contacts from Wavelog");
+    ui.add_enabled_ui(cfg.download, |ui| {
+        net_row_int(ui, "Every (min)", &mut cfg.sync_interval_min);
+        if !stations.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("Locations").size(11.0));
+                for st in &stations {
+                    let mut on = cfg.download_station_ids.contains(&st.id)
+                        || (cfg.download_station_ids.is_empty() && st.id == cfg.station_id);
+                    if crate::chrome::chip(ui, on, st.name.as_str()).clicked() {
+                        on = !on;
+                        let mut ids = cfg.download_station_ids.clone();
+                        if ids.is_empty() {
+                            // The empty list means "the one uploads go to", so
+                            // the first tick has to say that one explicitly.
+                            ids.push(cfg.station_id);
+                            ids.retain(|i| *i != st.id || on);
+                            if on && !ids.contains(&st.id) {
+                                ids.push(st.id);
+                            }
+                        } else if on {
+                            if !ids.contains(&st.id) {
+                                ids.push(st.id);
+                            }
+                        } else {
+                            ids.retain(|i| *i != st.id);
+                        }
+                        cfg.download_station_ids = ids;
+                    }
+                }
+            });
+        }
+    });
+    ui.horizontal(|ui| {
+        if ui
+            .add_enabled(
+                cfg.is_configured() && !app.wavelog_sync_running,
+                egui::Button::new("Download now"),
+            )
+            .on_hover_text(
+                "Bring in what Wavelog has added since the last download, and mark contacts \
+                 it already holds as uploaded. Nothing already in the logbook is changed.",
+            )
+            .clicked()
+        {
+            app.wavelog_sync_request.set(true);
+        }
+        if let Some(s) = &app.wavelog_sync_status {
+            ui.label(RichText::new(s).size(11.0).color(crate::theme::gray(170)));
+        }
+    });
+    super::note_at(
+        ui,
+        "Only contacts logged **here** are uploaded automatically; Wavelog's own backlog is \
+         sent by ticking a QSO in the logbook, so nothing leaves this machine that you did \
+         not choose.",
+        Some(10.5),
+    );
+}
+
+/// A whole-number field for the network settings tabs.
+fn net_row_int(ui: &mut egui::Ui, label: &str, val: &mut u32) {
+    ui.horizontal(|ui| {
+        ui.add_sized([96.0, 22.0], egui::Label::new(label));
+        let mut v = *val as i64;
+        if crate::chrome::field(ui, egui::DragValue::new(&mut v).range(1..=1440).speed(1.0))
+            .changed()
+        {
+            *val = v.clamp(1, 1440) as u32;
+        }
+    });
+}
+
 /// A labelled single-line text field for the network settings tabs.
 pub(in crate::app) fn net_row(ui: &mut egui::Ui, label: &str, val: &mut String, w: f32) {
     ui.horizontal(|ui| {

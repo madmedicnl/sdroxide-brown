@@ -93,6 +93,7 @@ mod uvpacket;
 mod vdl2;
 mod voice;
 mod wefax;
+mod wavelog;
 mod winlink;
 mod wsjtx;
 mod wspr;
@@ -361,6 +362,11 @@ pub use vdl2::{
 pub use voice::{VOICE_MAX_LEN_S, VOICE_SLOTS, VoiceSlotInfo, VoiceStatus, slot_label};
 pub use wefax::{
     WEFAX_STATIONS, WefaxChartMeta, WefaxIoc, WefaxLpm, WefaxStation, WefaxStatus, shift_fax_rows,
+};
+pub use wavelog::{
+    WavelogBatch, WavelogConfig, WavelogMerge, WavelogProbe, WavelogResync, WavelogStation,
+    WavelogSyncState, apply_resync, fingerprint_display, merge_from_wavelog, plan_resync,
+    same_contact,
 };
 pub use winlink::{
     DEFAULT_CMS_ADDRESS, MAIL_PAGE_MAX, MailAttachment, MailDraft, MailEntry, MailFolder,

@@ -2253,6 +2253,20 @@ pub fn save_qso_log(log: &[sdroxide_types::QsoRecord]) -> Result<(), ConfigError
     save_json("qso_log.json", &log)
 }
 
+/// How far each Wavelog station location has been downloaded into the logbook.
+///
+/// Kept beside `qso_log.json` rather than in `config.toml`, because it
+/// describes what the log **holds**: a cursor that outlived the log it was for
+/// would claim contacts were merged that are not there, and the next sync would
+/// skip them.
+pub fn load_wavelog_sync() -> sdroxide_types::WavelogSyncState {
+    load_json("wavelog_sync.json")
+}
+
+pub fn save_wavelog_sync(state: &sdroxide_types::WavelogSyncState) -> Result<(), ConfigError> {
+    save_json("wavelog_sync.json", state)
+}
+
 /// Favourite broadcast stations (`broadcast_favourites.json`), by name — the
 /// stations a listener comes back to.
 pub fn load_broadcast_favourites() -> Vec<String> {

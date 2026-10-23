@@ -1290,6 +1290,21 @@ pub struct SdroxideApp {
     login_tests:
         std::collections::HashMap<sdroxide_types::LoginTarget, sdroxide_types::LoginTestResult>,
     login_tests_pending: std::collections::HashSet<sdroxide_types::LoginTarget>,
+    /// What the last Wavelog connection check found — the station locations the
+    /// settings offer, and a certificate waiting to be trusted. Not persisted,
+    /// for the reason `login_tests` is not.
+    pub(in crate::app) wavelog_probe: Option<sdroxide_types::WavelogProbe>,
+    /// How far each Wavelog station location has been downloaded, kept beside
+    /// the logbook it describes.
+    pub(in crate::app) wavelog_sync: sdroxide_types::WavelogSyncState,
+    /// A download is running (asked for by the settings tab or the logbook).
+    pub(in crate::app) wavelog_sync_running: bool,
+    /// The last download's outcome, for the settings tab.
+    pub(in crate::app) wavelog_sync_status: Option<String>,
+    /// A download the settings tab asked for (or the logbook's own button),
+    /// picked up by the frame's tick. A cell because the settings are drawn
+    /// through `&self`.
+    pub(in crate::app) wavelog_sync_request: std::cell::Cell<bool>,
     /// Inbox for an ADIF file chosen via the native "Import" dialog (a picker
     /// thread writes; the UI drains it each frame).
     adif_import_inbox: crate::download::LoadInbox,
@@ -2218,6 +2233,11 @@ impl SdroxideApp {
             net_log: Vec::new(),
             login_tests: std::collections::HashMap::new(),
             login_tests_pending: std::collections::HashSet::new(),
+            wavelog_probe: None,
+            wavelog_sync: crate::app::persist::load_wavelog_sync(),
+            wavelog_sync_running: false,
+            wavelog_sync_status: None,
+            wavelog_sync_request: std::cell::Cell::new(false),
             adif_import_inbox: Arc::new(Mutex::new(None)),
             settings_import_inbox: Arc::new(Mutex::new(None)),
             settings_transfer_note: None,

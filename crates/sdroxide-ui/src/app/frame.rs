@@ -1656,6 +1656,11 @@ impl eframe::App for SdroxideApp {
             }
         }
 
+        // A Wavelog download the settings tab asked for. Here rather than in
+        // the settings page because it becomes a `Command`, and the settings
+        // page is drawn through `&self`.
+        self.wavelog_tick(&mut cmds);
+
         // Flush queued lookups / uploads accumulated during window rendering.
         for call in std::mem::take(&mut self.pending_lookups) {
             cmds.push(Command::LookupCallsign { call });
@@ -3223,6 +3228,12 @@ impl SdroxideApp {
                     ));
                     self.login_tests.insert(r.target, r);
                 }
+                // Wavelog's probe knows more than pass or fail — the station
+                // locations to choose from, and a certificate waiting to be
+                // trusted — so it arrives beside the verdict for the settings
+                // page to fill its lists from.
+                RadioEvent::WavelogProbe(p) => self.wavelog_probe = Some(*p),
+                RadioEvent::WavelogBatch(b) => self.on_wavelog_batch(*b),
                 RadioEvent::Notice(n) => {
                     if self.focused {
                         self.speech.announcer.on_notice(n.as_deref(), now);

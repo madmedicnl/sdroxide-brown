@@ -1958,8 +1958,31 @@ use sdroxide_types::{
 /// even though appending it moves nothing else. No new message and no new field.
 /// `PROTO_VERSION` 233 → 234, `VERSION_BYTE` 0x35 → 0x36. A downstream (fork)
 /// change.
-pub const PROTO_VERSION: u16 = 234;
-const VERSION_BYTE: u8 = 0x36;
+/// v235: **Wavelog**, the operator's own web logbook (upstream #666), ported by
+/// hand. All of it appended, and none of it separable — a v234 peer handed any
+/// one of these reads the tail of the message carrying it out of step:
+///
+/// * [`sdroxide_types::NetworkConfig`] gains `wavelog`
+///   ([`sdroxide_types::WavelogConfig`]: address, API key, pinned certificate,
+///   default station location, auto-upload, which locations to download and how
+///   often, and the live radio status). It rides whole inside
+///   `Command::SetNetworkConfig`.
+/// * [`sdroxide_types::DigiConfig`] gains `wavelog_station_id` — the location is
+///   part of the operating identity, since Wavelog refuses a QSO whose station
+///   callsign is not the location's. It rides `SetDigiConfig`/`DigiStatus`.
+/// * [`sdroxide_types::QsoRecord`] gains `wavelog_sent` and `wavelog_origin`,
+///   and [`sdroxide_types::UploadResult`] gains `retryable`. Both ride inside
+///   `RadioEvent`s that cross the link.
+/// * `UploadTarget` and `LoginTarget` each gain `Wavelog`, appended, so no
+///   surviving discriminant moved.
+/// * [`sdroxide_types::Command::WavelogSync`] appended. Its answers,
+///   `RadioEvent::WavelogBatch` and `RadioEvent::WavelogProbe`, stay on the
+///   machine the engine runs on and have no `ServerMsg`.
+///
+/// `PROTO_VERSION` 234 → 235, `VERSION_BYTE` 0x36 → 0x37. Upstream's change,
+/// brought in by hand.
+pub const PROTO_VERSION: u16 = 235;
+const VERSION_BYTE: u8 = 0x37;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {

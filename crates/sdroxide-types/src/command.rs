@@ -1337,6 +1337,18 @@ pub enum Command {
         id: u32,
         color: Option<[u8; 3]>,
     },
+    /// Download QSOs from Wavelog: each `(station location, cursor)` from the
+    /// record after the cursor on, a page at a time. Each page comes back as a
+    /// [`crate::RadioEvent::WavelogBatch`]; the logbook and the cursors live
+    /// with the screen, so it is the screen that says where to start.
+    ///
+    /// `full` asks for everything (the cursors are ignored) for a resync the
+    /// operator reviews before anything changes. Ignored while a download is
+    /// already running. Appended for the usual reason.
+    WavelogSync {
+        stations: Vec<(u32, u64)>,
+        full: bool,
+    },
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.
