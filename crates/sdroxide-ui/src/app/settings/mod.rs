@@ -79,6 +79,8 @@ pub(in crate::app) enum SettingsTab {
     /// kind it is, and whether it keys the transmitter or only the trainer.
     Cw,
     Ui,
+    /// Which panels are pulled out into their own OS windows.
+    Detachable,
     Alerts,
     Controls,
     Spots,
@@ -116,6 +118,7 @@ impl SettingsTab {
             Self::Audio,
             Self::Cw,
             Self::Ui,
+            Self::Detachable,
             Self::Alerts,
             Self::Controls,
             Self::Spots,
@@ -152,6 +155,7 @@ const SETTINGS_GROUPS: &[(&str, &[(SettingsTab, &str)])] = &[
             (SettingsTab::Audio, "Audio"),
             (SettingsTab::Cw, "CW"),
             (SettingsTab::Ui, "UI"),
+            (SettingsTab::Detachable, "Detachable"),
         ],
     ),
     (
@@ -3712,6 +3716,64 @@ impl SdroxideApp {
                     io.speech_test,
                 );
             }
+            SettingsTab::Detachable => {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    use sdroxide_types::DetachableModule;
+                    ui.label(RichText::new("Detachable windows").size(14.0).strong().color(crate::theme::CYAN()));
+                    ui.add_space(6.0);
+                    note(
+                        ui,
+                        "Pull a panel out into its own OS window. Closing the window docks it again.",
+                    );
+                    ui.add_space(6.0);
+                    for module in DetachableModule::ALL {
+                        let mut on = io.ui_edit.is_detached(module);
+                        ui.label(module.label());
+                        ComboBox::from_id_salt(("detachable", module))
+                            .selected_text(if on {
+                                "Undocked — its own window"
+                            } else {
+                                "Docked in this window"
+                            })
+                            .show_styled(ui, |ui| {
+                                ui.selectable_value(&mut on, false, "Docked in this window");
+                                ui.selectable_value(&mut on, true, "Undocked — its own window");
+                            });
+                        ui.label(RichText::new(module.app_id()).weak().size(9.5));
+                        ui.end_row();
+                        io.ui_edit.set_detached(module, on);
+                    }
+                    let any_out = DetachableModule::ALL.iter().any(|m| io.ui_edit.is_detached(*m));
+                    let any_in = DetachableModule::ALL.iter().any(|m| !io.ui_edit.is_detached(*m));
+                    if any_out || any_in {
+                        ui.label("");
+                        ui.horizontal(|ui| {
+                            if any_out
+                                && crate::chrome::chip(ui, false, "DOCK ALL")
+                                    .clicked()
+                            {
+                                for m in DetachableModule::ALL {
+                                    io.ui_edit.set_detached(m, false);
+                                }
+                            }
+                            if any_in
+                                && crate::chrome::chip(ui, false, "UNDOCK ALL")
+                                    .clicked()
+                            {
+                                for m in DetachableModule::ALL {
+                                    io.ui_edit.set_detached(m, true);
+                                }
+                            }
+                        });
+                        ui.end_row();
+                    }
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    note(ui, "Detachable windows are native only.");
+                }
+            }
             SettingsTab::Alerts => {
                 alerts_settings(
                     ui,
@@ -5572,6 +5634,7 @@ mod settings_menu_tests {
         SettingsTab::Audio,
         SettingsTab::Cw,
         SettingsTab::Ui,
+        SettingsTab::Detachable,
         SettingsTab::Alerts,
         SettingsTab::Controls,
         SettingsTab::Spots,
