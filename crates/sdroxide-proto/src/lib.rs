@@ -2000,8 +2000,15 @@ use sdroxide_types::{
 /// `TestPictureUpload`, [`sdroxide_types::RadioEvent`] gains `PictureUpload`,
 /// and `ServerMsg` gains `PictureUpload` so a remote screen can see the answer.
 /// All appended. `PROTO_VERSION` 236 → 237, `VERSION_BYTE` 0x38 → 0x39.
-pub const PROTO_VERSION: u16 = 237;
-const VERSION_BYTE: u8 = 0x39;
+/// v238: [`sdroxide_types::DigiConfig`] gains `sstv_rx_sensitivity` (i8) and
+/// `sstv_rx_auto` (bool) on its tail, after `wavelog_station_id` — an SSTV
+/// receive sensitivity control (-5..=+5) with an Auto mode. `DigiConfig` rides
+/// `SetDigiConfig`/`DigiStatus` whole, so the appended fields move both.
+/// Appended by hand under the register's own rule (the number was taken twice
+/// on two branches; the later one moves). `PROTO_VERSION` 237 → 238,
+/// `VERSION_BYTE` 0x39 → 0x3A.
+pub const PROTO_VERSION: u16 = 238;
+const VERSION_BYTE: u8 = 0x3A;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
