@@ -215,10 +215,16 @@ impl SdroxideApp {
             &self.ui_settings,
             &mut detach,
         );
+        // Windows are a native arrangement: the browser has no second OS
+        // window to move the panel into, so the chip is not drawn there and
+        // neither is this.
+        #[cfg(not(target_arch = "wasm32"))]
         if detach {
             let on = !self.ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex);
             self.set_module_detached(sdroxide_types::DetachableModule::Navtex, on);
         }
+        #[cfg(target_arch = "wasm32")]
+        let _ = detach;
         if rev_pressed {
             self.digi_cfg_edit.navtex_reverse = !self.digi_cfg_edit.navtex_reverse;
             if self.digi_cfg_seeded {
