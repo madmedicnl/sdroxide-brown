@@ -1,8 +1,12 @@
 # Upstream picks — the journal
 
 The operator's instruction, 2026-10-23: **pick up four things from upstream
-and work autonomously, keeping track here.** The four, in the order he gave
-them:
+and work autonomously, keeping track here.** Two are in (Wavelog, the ELAD
+controls), one is not applicable to this tree (the mic stutter — see below),
+and one is scoped and **not started**: the SSTV FTP upload, at the bottom.
+Everything pushed to `main`; no release cut.
+
+The four, in the order he gave them:
 
 1. **Wavelog** — the self-hosted web logbook, as an upload and download target.
 2. **The mic stutter** — upstream's `6fd0fea6`, "TX Audio chain solve stuttering
