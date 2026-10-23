@@ -13,27 +13,42 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
-### Fixed
-- **The browser client gets its sound back after a long spell in the background.** A playback context the browser had stopped was never replaced, so the page stayed silent for the rest of the session with nothing on screen to say why.
-- **The browser client follows the output device when one is connected while the page is open** — a headset brought in mid-session left the sound on the device the page had started on, with nothing to say why.
-- **DAB plays at the other modes' level**, 9 dB down from where it was, and its VU meter swings with the music instead of sitting between 0 and +4.
-- **WEFAX starts on its own phasing signal, with no start tone**, and a carrier standing on the channel starts nothing — a real recording under a 2.3 kHz carrier never started, or started on the chart's own detail.
-- **WEFAX no longer ends a page on noise** — discriminator noise at the stop tone's rate cut a real chart 7 minutes early; a stop tone has to be periodic now.
-- **WEFAX follows a subcarrier that has drifted** — black and white are re-measured from the phasing signal, so ±100 Hz of tuning error or Doppler does not wash the chart out.
-- **WEFAX ends on a carrier left on after the chart at any frequency**, not only one above white.
+## [2.1.0_brown] - 2026-10-23
 
 ### Added
-- **The S-meter calibration is back, at ±5 S-units** — Kevin's original revision of the per-radio correction, which he says worked perfectly. Per radio, display only, saved with the radio.
-- **A WAV recording beside the MP3** — the REC row offers **MP3**, **WAV** and **MONO**; WAV is uncompressed 16-bit PCM at 48 kHz, in the same folder with the same stamped name, and the chip has to be pressed to start it.
+- **THOR, all fifteen variants, receive and transmit** — the program was wired to a THOR receiver that read nothing at all.
+- **MFSK (eleven variants), Contestia and MT63, receive and transmit**, each read back through the console's own objects.
+- **DominoEX, all nine variants**, and **thirty-two coded PSK waveforms** — BPSK63F, the `R` set and the `C`/`RC` banks; QPSK is selectable for the first time.
+- **DTMF** — the sixteen touch tones, decoded to their digits.
+- **STANAG 4285** — the receiver locks real captures, and Annex E (the code, the interleaver and an ITA2 reading) is built.
+- **Wavelog**, your own logbook server — upload each QSO and download the contacts it already holds.
+- **An Aoki schedule from a file** — the `.zip` Aoki publishes or the `.txt` inside it, from Settings → Spots.
+- **SSTV pictures to an FTP server**, in QSSTV's layout, with the sender's callsign in the caption.
+- **The FDM-DUO's own power steps** (1 W / 3 W / 5 W / MAX) beside Drive, with forward and reflected power.
+- **Receive sensitivity for SSTV and WEFAX** (−5 to +5, with Auto), **a WAV recording** beside the MP3, and the **S-meter calibration** back at ±5.
+- **Per-memory label colour** on the waterfall, and **Swap I/Q** for SDR sources.
+
+### Fixed
+- **A radio that was not ready is no longer taken for a frequency it cannot tune** — the "would not open on 6.050 MHz" notice moved the dial to a stale one and lost it.
+- **A digital mode's readout no longer moves the dial** by the mode's tone offset (#156).
+- **The mode panel's chips no longer draw over each other** on a narrow window.
+- **NAVTEX reads real signals** — the discriminator was inverted — and keeps its messages when the panel closes.
+- **WEFAX starts on its own phasing signal**, follows a drifted subcarrier, and no longer ends a page on noise.
+- **DAB plays at the other modes' level** and its VU meter follows the music; the **browser client gets its sound back** after a long spell in the background.
+- **The S-meter says when it is really the audio level**, which is all a demod-audio radio can report.
 
 ### Changed
-- **A release can no longer happen by itself.** The daily cron in the release workflow built the whole matrix every day and then published nothing, because the release is gated on a tag. It is gone; a release now takes a tag or a deliberate dispatch, and the nightly is the only thing that publishes on its own.
-
-### Added
-- **`SDROXIDE_SETTINGS_TRACE=1` labels every settings row with its own y-coordinate**, so an overlap in a screenshot is a number rather than an argument. Off unless the variable is set.
+- **LISTEN hides the transmit controls and is remembered** (#146); OPERATE restores the radio's own setting and never grants transmit.
+- **The band menu's chip rows fill the column**, and an operating panel can no longer be pushed into the docked column.
+- **The waterfall's broadcast names** are the tuned station by default, the whole band with **BC ALL** or **Ctrl+B**.
+- **A release can no longer happen by itself** — the nightly cron is gone, and a release takes a tag.
 
 ### Needs feedback
-- **WEFAX on your own recordings.** Put a recording in the recordings folder, play it from PLAYBACK in WEFAX mode, and tell me whether the page starts by itself and ends at the stop tone — especially with a carrier on the channel or a weak start tone.
+- **STANAG 4285's payload**: a real coded transmission, and whether it prints.
+- **SSTV to FTP** and **Wavelog**: your own server, and how the first picture and the first sync go.
+- **The FDM-DUO buttons** (1 W through MAX) and **THOR and DominoEX on the air**, both directions.
+
+Thank you to **r/shortwave**, **r/shortwaveplus**, **Jarvis** and **F4NRM** for the testing, the feedback and the code in this release — a good deal of what is above is theirs. Feedback is very much appreciated, in the issues or the discussions.
 
 ## [2.0.13.1_brown] - 2026-10-16
 
