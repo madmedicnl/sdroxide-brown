@@ -30,6 +30,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ### Fixed
 - **A radio that was not ready is no longer taken for a frequency it cannot tune** — the "would not open on 6.050 MHz" notice moved the dial to a stale one and lost it.
+- **THOR and DominoEX transmit at the level you set** — their transmitter is full scale, so the level was cancelling out and the over went out at 100 % however far the rail was turned down.
 - **A digital mode's readout no longer moves the dial** by the mode's tone offset (#156).
 - **The mode panel's chips no longer draw over each other** on a narrow window.
 - **NAVTEX reads real signals** — the discriminator was inverted — and keeps its messages when the panel closes.
