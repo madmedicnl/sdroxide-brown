@@ -1256,6 +1256,10 @@ fn handle_event(shared: &Shared, ev: RadioEvent) {
             // engine's machine is the one that reached the server.
             RadioEvent::WavelogProbe(_) => None,
             RadioEvent::WavelogBatch(_) => None,
+            // Forwarded, unlike the two above: the settings are edited from
+            // whichever screen, but only the station connects, so a remote
+            // screen has no other way to learn whether they work.
+            RadioEvent::PictureUpload(st) => Some(ServerMsg::PictureUpload(st)),
             // Native-only, like `Qo100Status`: the ATS Mini's memory table is
             // answered on the machine the radio is attached to and is not on
             // the wire.

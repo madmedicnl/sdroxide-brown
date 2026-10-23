@@ -1357,6 +1357,18 @@ pub enum Command {
     ///
     /// Appended for the usual reason — postcard numbers variants by position.
     SetRigPowerStep(u8),
+    /// Replace the received-picture FTP upload settings (`picupload.json`).
+    /// Boxed: the struct is large next to most commands.
+    ///
+    /// Appended for the usual reason — postcard numbers variants by position.
+    SetPictureUploadConfig(Box<crate::PictureUploadConfig>),
+    /// Try the given settings — connect, log in, change directory, put and
+    /// delete a small file — without saving them, and answer with
+    /// [`crate::RadioEvent::PictureUpload`]. The settings being edited are
+    /// tested, so a mistake is found before it is applied.
+    ///
+    /// Appended for the usual reason — postcard numbers variants by position.
+    TestPictureUpload(Box<crate::PictureUploadConfig>),
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.

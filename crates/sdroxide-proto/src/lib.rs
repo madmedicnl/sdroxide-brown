@@ -1992,8 +1992,16 @@ use sdroxide_types::{
 /// None of it is separable from the rest: a v235 peer handed a `TxMeters` frame
 /// reads its tail out of step. `PROTO_VERSION` 235 → 236, `VERSION_BYTE`
 /// 0x37 → 0x38.
-pub const PROTO_VERSION: u16 = 236;
-const VERSION_BYTE: u8 = 0x38;
+/// v237: **received pictures to an FTP server** (upstream, by joscandreu),
+/// ported by hand. [`sdroxide_types::StationConfig`] gains `picture_upload`
+/// on its tail — the station decodes and saves the pictures, so that is where
+/// they are sent from, and a remote screen only edits the settings.
+/// [`sdroxide_types::Command`] gains `SetPictureUploadConfig` and
+/// `TestPictureUpload`, [`sdroxide_types::RadioEvent`] gains `PictureUpload`,
+/// and `ServerMsg` gains `PictureUpload` so a remote screen can see the answer.
+/// All appended. `PROTO_VERSION` 236 → 237, `VERSION_BYTE` 0x38 → 0x39.
+pub const PROTO_VERSION: u16 = 237;
+const VERSION_BYTE: u8 = 0x39;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -2490,6 +2498,15 @@ pub enum ServerMsg {
     /// Appended last, for the usual reason.
     Pi4Spots(Vec<sdroxide_types::Pi4Spot>),
 
+    /// `RadioEvent::PictureUpload`: how a received-picture FTP upload, or a
+    /// test of its settings, went. Forwarded, unlike `LoginTest`: the settings
+    /// are edited from whichever screen, but only the station connects, so a
+    /// remote screen has no other way to learn whether they work. It names the
+    /// server and the certificate it presented, nothing of the account.
+    ///
+    /// Appended last, for the usual reason.
+    PictureUpload(sdroxide_types::PictureUploadStatus),
+
     /// A client's stored screen settings, replayed on connect when it has any
     /// on the server — the profile's own set, or the station default when the
     /// profile has none (then `profile` is `None`). Also sent back after a
@@ -2652,6 +2669,39 @@ mod tests {
         assert_eq!(back, m);
 
         let m = ServerMsg::Profiles(vec!["Contest".into(), "DX".into()]);
+        let back: ServerMsg = decode(&encode(&m).unwrap()).unwrap();
+        assert_eq!(back, m);
+
+        // The picture upload: both commands, the answer, and the settings
+        // riding the station bundle's tail. A remote screen edits them and has
+        // no other way to learn whether the station can reach the server.
+        let cfg = sdroxide_types::PictureUploadConfig {
+            enabled: true,
+            host: "ftp.example.org".into(),
+            verify: sdroxide_types::TlsVerify::Pinned,
+            pinned_sha256: "ab".repeat(32),
+            ..Default::default()
+        };
+        for c in [
+            ClientMsg::Command(Command::SetPictureUploadConfig(Box::new(cfg.clone()))),
+            ClientMsg::Command(Command::TestPictureUpload(Box::new(cfg.clone()))),
+        ] {
+            let back: ClientMsg = decode(&encode(&c).unwrap()).unwrap();
+            assert_eq!(back, c);
+        }
+        let m = ServerMsg::PictureUpload(sdroxide_types::PictureUploadStatus {
+            ok: false,
+            message: "login: 530".into(),
+            unix: 1_700_000_000,
+            fingerprint: Some("cd".repeat(32)),
+            is_test: true,
+        });
+        let back: ServerMsg = decode(&encode(&m).unwrap()).unwrap();
+        assert_eq!(back, m);
+        let m = ServerMsg::StationConfig(Box::new(sdroxide_types::StationConfig {
+            picture_upload: cfg,
+            ..Default::default()
+        }));
         let back: ServerMsg = decode(&encode(&m).unwrap()).unwrap();
         assert_eq!(back, m);
 

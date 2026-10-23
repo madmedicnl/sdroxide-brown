@@ -40,7 +40,7 @@ WEFAX; nothing here may refactor or "improve" any of them on the way past.
 | Wavelog | **done** (see below) | `wavelog: the operator's own logbook, picked up from upstream #666` |
 | Mic stutter | **not applicable** (see below) | — |
 | ELAD controls | **done** (see below) | `ELAD FDM-DUO: its own power steps, and Drive within them` |
-| SSTV FTP upload | pending | — |
+| SSTV FTP upload | **done** (see below) | `SSTV: received pictures go to an FTP server` |
 
 ## Wavelog
 
@@ -182,11 +182,44 @@ reflected power and SWR reading sensible while keyed.
 
 ## SSTV FTP upload
 
-Upstream: `95f24a42` and its follow-up `2f11d02e`.
+Upstream: `95f24a42` (joscandreu). Its follow-up `2f11d02e` is a **merge of
+upstream/main into their branch**, not part of this feature — it carries
+upstream's whole SSTV decoder rewrite (2,199 lines in `sstv.rs`), which is not
+ours to take and is not what this asked for.
 
-**Not started.** Scope measured: a new `sdroxide-picup` crate (FTP/FTPS client,
-rotation, stamping, a worker — ~1,050 lines), `NetworkConfig` fields, a
-`Command`, an engine hook after each received picture, and a settings row. It
-does **not** touch any of F4NRM's work if it is added *after* the picture is
-saved — the upload is a consumer of the finished file, not a change to the
-decoder or the panel — which is the condition the operator set. Start here.
+**Landed 2026-10-23.** The crate is upstream's, verbatim:
+`crates/sdroxide-picup` (FTP/FTPS over suppaftp, explicit and implicit TLS,
+system or pinned certificates, the QSSTV-style `image1…imageN` rotation, the
+caption stamp, `checknew.jpg`). Wiring, all of it additive:
+
+- `sdroxide-types/src/picupload.rs` — `PictureUploadConfig`, the security and
+  TLS choices, naming and format, `PictureUploadStatus`.
+- `StationConfig::picture_upload` (the station decodes and saves the pictures,
+  so that is where they are sent from), `Command::SetPictureUploadConfig` and
+  `TestPictureUpload`, `RadioEvent::PictureUpload`, and `ServerMsg::PictureUpload`
+  so a remote screen sees the answer.
+- `sdroxide-config`: `picupload.json` at the root, like the rotator's.
+- `sdroxide-digi`: `DigiAction::SstvId` — the FSK ID as an **event**, not only
+  as "the last callsign" in the status, so an upload can hold a picture for its
+  sender's callsign.
+- The engine: an uploader per engine (each radio uploads what it receives), the
+  picture held for up to four seconds for the FSK ID that follows it, WEFAX
+  charts and RIFP pictures sent directly (their sender is already known), a
+  failed upload noticed once every ten minutes rather than per picture, and a
+  flush-on-exit so a held picture is not lost and the web page gets QSSTV's
+  offline marker.
+- The settings section is upstream's own page, on the Uploads tab, with APPLY
+  like the rest of the tab.
+
+**The condition held.** Nothing of F4NRM's was touched: `panels/sstv.rs` is
+untouched, the decoder is untouched, and the single change in the SSTV path is
+one line in `digi/sstv_controller.rs` that pushes an action when an FSK ID is
+heard. The upload is a consumer of the finished file.
+
+Wire: `PROTO_VERSION` 236 → 237, `VERSION_BYTE` 0x38 → 0x39.
+
+**Not tested against a real FTP server here.** The crate's own tests pass (17,
+including the certificate and rotation ones), and the settings page and the
+round trip are compiled for both native and wasm; what needs a bench is a real
+server: explicit and implicit TLS, a self-signed certificate pinned by its
+fingerprint, and a picture appearing on the web page with its caption.
