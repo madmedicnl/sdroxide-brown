@@ -34,8 +34,8 @@ WEFAX; nothing here may refactor or "improve" any of them on the way past.
 | item | state | our commits |
 | --- | --- | --- |
 | Wavelog | **done** (see below) | `wavelog: the operator's own logbook, picked up from upstream #666` |
-| Mic stutter | to assess | — |
-| ELAD controls | pending | — |
+| Mic stutter | **not applicable** (see below) | — |
+| ELAD controls | **done** (see below) | `ELAD FDM-DUO: its own power steps, and Drive within them` |
 | SSTV FTP upload | pending | — |
 
 ## Wavelog
@@ -108,3 +108,81 @@ upstream's own download test failed here first.
 
 Gate: `cargo check --workspace --all-targets` silent, 958 ui + 127 net + 789
 types tests green, `rustfmt --check` clean on the files that were clean.
+
+## Mic stutter
+
+Upstream: `6fd0fea6`, "TX Audio chain solve stuttering mic when live testing".
+
+**Not applicable: the defect lives in a feature this fork does not carry.** The
+commit is not a standalone fix — it is the inside of upstream's *TX Audio chain
+window* (`crates/sdroxide-ui/src/app/tx_audio.rs`, 607 lines in that commit
+alone), which they added with `2cdd04a7`. The stutter was in that window's
+**live monitor**: the microphone is previewed through the chain on the speakers,
+and the microphone's chunks and the speaker's blocks run on two clocks, so
+handing samples on as they arrive leaves every block a little short and the
+shortfall plays as silence — a gap in nearly every block. Their cure is
+`LivePacer`, which primes a block-and-a-chunk before it starts playing and
+trims a backlog so the delay cannot creep up.
+
+We have none of that: there is no `txvoice` chain module and no `tx_audio.rs`
+here, and nothing in our TX path previews the microphone on the speakers, so
+there is nothing for `LivePacer` to pace. Taking it would mean taking the whole
+TX Audio chain — 1,000+ lines, three new wire items, a window — which is a
+feature port rather than a fix.
+
+**What would make it ours again:** a report of a stuttering microphone on
+transmit (as opposed to a stuttering *monitor*). That would be a different
+defect in `fill_tx_block`'s microphone path, and it should be reproduced before
+anything is changed.
+
+## ELAD controls
+
+Upstream: `e5772095` (AJ3G, #717) and its follow-up `35ffeebc`.
+
+**Taken: the FDM-DUO's own power controls.** `elad.rs` and `cat/lib.rs` applied
+clean (our copy of that file had drifted only by its mode digits):
+
+- Menu 34's `TP` register: nine watt steps plus MAX, now a *ceiling* the
+  operator chooses rather than something a slider writes. `set_power` is a
+  no-op for this family and `set_power_step` writes `TPnn;`.
+- `power_by_audio` / `audio_power_ceiling`: Drive and Tune set the output by
+  scaling the transmit audio within that ceiling. The scaling lives in
+  `AudioCatSource`: `tx_audio_gain`, and `write_tx_audio_scaled` (the old
+  `tx_write_audio` body, moved out unchanged) so the gain is applied once.
+  `DUO_AUDIO_POWER_CEILING = 0.24` is AJ3G's measurement on his own DUO — 8 W
+  by 24 % of full audio, flat above it — so the whole Drive slider lands on the
+  linear part of the radio.
+- **Reflected power** in `TxMeters`/`TxTelemetry` (`rfl_w`), read from `RP`.
+- `CatConfig::elad_tx_power` (as `TP`'s parameter, default 9 = MAX, which is
+  what was always sent before) rides `SetRadioConfig`; `Command::SetRigPowerStep`
+  is the live half.
+- The **buttons** are our own row beside Drive in the strip (`1W 3W 5W MAX`),
+  lit from the saved config, and they save the setting as well as sending it —
+  upstream's are laid out for their strip and ours is a different shape.
+
+**Not taken: the HobbyPCB Hardrock amplifier panel**, which shares that commit.
+It is a new crate (1,750 lines), a 2,159-line window, a safety-interlock
+document and its own settings page — a project of its own, and not what "take
+the ELAD controls" asks for. If it is ever wanted, `e5772095` is the source and
+`crates/sdroxide-hardrock` is where it starts.
+
+Wire: `CatConfig::elad_tx_power` and `TxMeters::rfl_w` both ride messages that
+cross the link, and `Command::SetRigPowerStep` is appended — **PROTO_VERSION
+235 → 236**, `VERSION_BYTE` 0x37 → 0x38**.
+
+**Not tested on a DUO here** — no ELAD on this bench. The `TP` frames, the
+audio gain arithmetic and the `RP` parsing are unit-tested (258 in the CAT
+crate green); the on-air check is a real DUO: 1 W/3 W/5 W/MAX changing the
+radio's own menu 34, Drive moving the output between them, and forward/
+reflected power and SWR reading sensible while keyed.
+
+## SSTV FTP upload
+
+Upstream: `95f24a42` and its follow-up `2f11d02e`.
+
+**Not started.** Scope measured: a new `sdroxide-picup` crate (FTP/FTPS client,
+rotation, stamping, a worker — ~1,050 lines), `NetworkConfig` fields, a
+`Command`, an engine hook after each received picture, and a settings row. It
+does **not** touch any of F4NRM's work if it is added *after* the picture is
+saved — the upload is a consumer of the finished file, not a change to the
+decoder or the panel — which is the condition the operator set. Start here.

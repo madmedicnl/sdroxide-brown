@@ -67,6 +67,7 @@ pub(in crate::app) mod speech;
 pub(in crate::app) mod spots;
 mod swl_log;
 pub(in crate::app) mod top_bar;
+pub(in crate::app) mod duo_power;
 /// The update check — native only (a browser has no updater to point at).
 #[cfg(not(target_arch = "wasm32"))]
 pub(in crate::app) mod update;

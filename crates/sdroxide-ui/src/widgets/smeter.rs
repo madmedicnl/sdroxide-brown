@@ -1458,7 +1458,7 @@ mod tests {
             adc_overload: None,
             adc_peak_dbfs: -30.0,
             adc_clip: 0.0,
-            tx: Some(TxMeters { fwd_w: None, swr: None, alc, po: None }),
+            tx: Some(TxMeters { fwd_w: None, swr: None, alc, po: None, rfl_w: None }),
             stereo: false,
             tone: None,
             passband_dbfs: f32::NEG_INFINITY,

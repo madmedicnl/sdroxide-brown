@@ -5485,7 +5485,7 @@ fn engine_thread(
                     // read `(Some(swr), Some(fwd))` until 17 August 2026, on the
                     // reasoning that a rig reporting SWR without power "cannot be
                     // vetted". That reasoning cost two failed live tests: the
-                    // CI-V driver sends `TxTelemetry { fwd_w: None, swr: Some(v) }`,
+                    // CI-V driver sends `TxTelemetry { fwd_w: None, swr: Some(v), rfl_w: None}`,
                     // so on every Icom the arm could never match and the guard
                     // was dead code. Requiring a figure the most common rig
                     // family never sends is not caution, it is a silent
@@ -5557,7 +5557,13 @@ fn engine_thread(
                     adc_peak_dbfs,
                     adc_clip,
                     adc_overload,
-                    tx: Some(TxMeters { fwd_w: tele.fwd_w, swr: tele.swr, alc, po: tele.po }),
+                    tx: Some(TxMeters {
+                        fwd_w: tele.fwd_w,
+                        swr: tele.swr,
+                        alc,
+                        po: tele.po,
+                        rfl_w: tele.rfl_w,
+                    }),
                     stereo: false,
                     tone: None,
                     // Transmitting: the receiver is stood down and whatever the
@@ -9551,6 +9557,13 @@ impl Engine {
             // sdroxide believes about a radio that has just been switched off is
             // the link's business to notice, and the reconnect that follows is
             // what puts a radio switched back on into a known state.
+            // The rig's own power setting, one of its numbered steps — the
+            // FDM-DUO's menu 34, from the buttons beside Drive. Nothing else
+            // changes: Drive goes on setting the output *within* it, by scaling
+            // the transmit audio (see `CatHandle::power_by_audio`).
+            SetRigPowerStep(code) => {
+                self.source.set_power_step(code);
+            }
             SetRigPower(on) => {
                 if !self.caps.commands_rig_power {
                     return;

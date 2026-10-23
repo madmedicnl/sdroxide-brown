@@ -1981,8 +1981,19 @@ use sdroxide_types::{
 ///
 /// `PROTO_VERSION` 234 → 235, `VERSION_BYTE` 0x36 → 0x37. Upstream's change,
 /// brought in by hand.
-pub const PROTO_VERSION: u16 = 235;
-const VERSION_BYTE: u8 = 0x37;
+/// v236: the **ELAD FDM-DUO's own power controls** (upstream #717, by AJ3G),
+/// ported by hand. [`sdroxide_types::CatConfig`] gains `elad_tx_power` — menu
+/// 34's `TP` parameter, 0 to 8 for its watt steps and 9 for MAX — which rides
+/// `SetRadioConfig`/`RadioConfig` whole. [`sdroxide_types::TxMeters`] gains
+/// `rfl_w` at its tail, the reflected power the DUO reports (`RP`), which rides
+/// every meter frame. [`sdroxide_types::Command::SetRigPowerStep`] is appended
+/// for the live half — the buttons beside Drive.
+///
+/// None of it is separable from the rest: a v235 peer handed a `TxMeters` frame
+/// reads its tail out of step. `PROTO_VERSION` 235 → 236, `VERSION_BYTE`
+/// 0x37 → 0x38.
+pub const PROTO_VERSION: u16 = 236;
+const VERSION_BYTE: u8 = 0x38;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {

@@ -1349,6 +1349,14 @@ pub enum Command {
         stations: Vec<(u32, u64)>,
         full: bool,
     },
+    /// Put the radio's own power setting on one of its numbered steps: the ELAD
+    /// FDM-DUO's menu 34 `TX POWER`, by its `TP` parameter (0 to 8 the watt
+    /// steps, 9 MAX), from the 1 W / 3 W / 5 W / MAX buttons beside Drive.
+    /// What survives a restart is [`crate::CatConfig::elad_tx_power`], sent
+    /// separately with [`Command::SetRadioConfig`]; this is the live half.
+    ///
+    /// Appended for the usual reason — postcard numbers variants by position.
+    SetRigPowerStep(u8),
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.
