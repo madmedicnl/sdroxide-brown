@@ -67,6 +67,7 @@ pub(in crate::app) mod speech;
 pub(in crate::app) mod spots;
 mod swl_log;
 pub(in crate::app) mod top_bar;
+pub(in crate::app) mod duo_power;
 /// The update check — native only (a browser has no updater to point at).
 #[cfg(not(target_arch = "wasm32"))]
 pub(in crate::app) mod update;
@@ -1271,6 +1272,17 @@ pub struct SdroxideApp {
     /// UI-owned editable copy, seeded from the engine like the configs above.
     wsjtx_edit: sdroxide_types::WsjtxConfig,
     wsjtx_seeded: bool,
+    // ── Received pictures → FTP ──
+    /// UI-owned editable copy, seeded from the engine like the configs above.
+    pub(in crate::app) picup_edit: sdroxide_types::PictureUploadConfig,
+    pub(in crate::app) picup_seeded: bool,
+    /// When a TEST went out, while its answer is awaited. Cleared by the
+    /// answer, or after a while if none comes (the station may have gone).
+    pub(in crate::app) picup_test_pending: Option<f64>,
+    /// The last TEST's answer, with the certificate the server presented.
+    pub(in crate::app) picup_test: Option<sdroxide_types::PictureUploadStatus>,
+    /// How the most recent picture upload went.
+    pub(in crate::app) picup_last: Option<sdroxide_types::PictureUploadStatus>,
     /// Live status from `RadioEvent::RigctldStatus`. Same shape as the TCI
     /// server's, so the two share one status type.
     rigctld_status: Option<TciServerStatus>,
@@ -1290,6 +1302,21 @@ pub struct SdroxideApp {
     login_tests:
         std::collections::HashMap<sdroxide_types::LoginTarget, sdroxide_types::LoginTestResult>,
     login_tests_pending: std::collections::HashSet<sdroxide_types::LoginTarget>,
+    /// What the last Wavelog connection check found — the station locations the
+    /// settings offer, and a certificate waiting to be trusted. Not persisted,
+    /// for the reason `login_tests` is not.
+    pub(in crate::app) wavelog_probe: Option<sdroxide_types::WavelogProbe>,
+    /// How far each Wavelog station location has been downloaded, kept beside
+    /// the logbook it describes.
+    pub(in crate::app) wavelog_sync: sdroxide_types::WavelogSyncState,
+    /// A download is running (asked for by the settings tab or the logbook).
+    pub(in crate::app) wavelog_sync_running: bool,
+    /// The last download's outcome, for the settings tab.
+    pub(in crate::app) wavelog_sync_status: Option<String>,
+    /// A download the settings tab asked for (or the logbook's own button),
+    /// picked up by the frame's tick. A cell because the settings are drawn
+    /// through `&self`.
+    pub(in crate::app) wavelog_sync_request: std::cell::Cell<bool>,
     /// Inbox for an ADIF file chosen via the native "Import" dialog (a picker
     /// thread writes; the UI drains it each frame).
     adif_import_inbox: crate::download::LoadInbox,
@@ -2208,6 +2235,11 @@ impl SdroxideApp {
             rigctld_seeded: false,
             wsjtx_edit: sdroxide_types::WsjtxConfig::default(),
             wsjtx_seeded: false,
+            picup_edit: sdroxide_types::PictureUploadConfig::default(),
+            picup_seeded: false,
+            picup_test_pending: None,
+            picup_test: None,
+            picup_last: None,
             rigctld_status: None,
             tci_srv_edit: sdroxide_types::TciServerConfig::default(),
             tci_srv_seeded: false,
@@ -2218,6 +2250,11 @@ impl SdroxideApp {
             net_log: Vec::new(),
             login_tests: std::collections::HashMap::new(),
             login_tests_pending: std::collections::HashSet::new(),
+            wavelog_probe: None,
+            wavelog_sync: crate::app::persist::load_wavelog_sync(),
+            wavelog_sync_running: false,
+            wavelog_sync_status: None,
+            wavelog_sync_request: std::cell::Cell::new(false),
             adif_import_inbox: Arc::new(Mutex::new(None)),
             settings_import_inbox: Arc::new(Mutex::new(None)),
             settings_transfer_note: None,

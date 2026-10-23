@@ -55,13 +55,20 @@ pub struct NavtexController {
     text: String,
     status_dirty: bool,
     last_status: Option<SystemTime>,
+    /// Where to persist the received messages, if anywhere. `None` for
+    /// controllers created without a config directory (tests).
+    config_dir: Option<std::path::PathBuf>,
 }
 
 impl NavtexController {
     pub fn new(cfg: DigiConfig, tap_rate: f64) -> Self {
+        Self::new_with_config_dir(cfg, tap_rate, None)
+    }
+
+    pub fn new_with_config_dir(cfg: DigiConfig, tap_rate: f64, config_dir: Option<std::path::PathBuf>) -> Self {
         let mut rx = NavtexRx::new(tap_rate);
         rx.set_reverse(cfg.navtex_reverse);
-        NavtexController {
+        let mut ctrl = NavtexController {
             cfg,
             rx,
             pending: String::new(),
@@ -70,6 +77,30 @@ impl NavtexController {
             text: String::new(),
             status_dirty: true,
             last_status: None,
+            config_dir,
+        };
+        ctrl.load_messages();
+        ctrl
+    }
+
+    /// Load persisted messages from disk, if any.
+    fn load_messages(&mut self) {
+        let Some(dir) = &self.config_dir else { return; };
+        let path = dir.join("navtex_messages.json");
+        if let Ok(data) = std::fs::read_to_string(&path) {
+            if let Ok(msgs) = serde_json::from_str::<Vec<NavtexMessage>>(&data) {
+                self.messages = msgs;
+                self.status_dirty = true;
+            }
+        }
+    }
+
+    /// Persist the current messages to disk.
+    fn save_messages(&self) {
+        let Some(dir) = &self.config_dir else { return; };
+        let path = dir.join("navtex_messages.json");
+        if let Ok(data) = serde_json::to_string_pretty(&self.messages) {
+            let _ = std::fs::write(&path, data);
         }
     }
 
@@ -182,6 +213,7 @@ impl NavtexController {
         while self.messages.len() > NAVTEX_MESSAGE_MAX {
             self.messages.remove(0);
         }
+        self.save_messages();
     }
 
     fn navtex_status(&self) -> NavtexStatus {
@@ -291,6 +323,15 @@ impl DigiEngine for NavtexController {
         self.pending.clear();
         self.text.clear();
         self.status_dirty = true;
+    }
+
+    fn clear_rx(&mut self) {
+        self.messages.clear();
+        self.live = None;
+        self.text.clear();
+        self.pending.clear();
+        self.status_dirty = true;
+        self.save_messages();
     }
 
     fn abort_tx(&mut self) {}

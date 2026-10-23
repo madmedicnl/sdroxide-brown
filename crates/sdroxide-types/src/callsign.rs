@@ -71,6 +71,9 @@ pub enum UploadTarget {
     /// The LOG11DX 11 m logbook, via the same JSON API its WSJT-X bridge uses.
     /// Appended for the reason [`UploadTarget::HamQth`] gives.
     Log11Dx,
+    /// The operator's **own** Wavelog, reached at whatever address they gave
+    /// it. Appended for the reason [`UploadTarget::HamQth`] gives.
+    Wavelog,
 }
 
 impl UploadTarget {
@@ -82,6 +85,7 @@ impl UploadTarget {
             UploadTarget::HamQth => "HamQTH",
             UploadTarget::Wrl => "WRL",
             UploadTarget::Log11Dx => "LOG11DX",
+            UploadTarget::Wavelog => "Wavelog",
         }
     }
 
@@ -100,13 +104,17 @@ impl UploadTarget {
             UploadTarget::HamQth => LoginTarget::HamQth,
             UploadTarget::Wrl => LoginTarget::Wrl,
             UploadTarget::Log11Dx => LoginTarget::Log11Dx,
+            UploadTarget::Wavelog => LoginTarget::Wavelog,
         }
     }
 
     /// Display order, which is deliberately not the declaration order above:
     /// the variants are numbered by the wire and appended to, while this is
     /// what the operator reads along a tab strip.
-    pub const ALL: [UploadTarget; 6] = [
+    pub const ALL: [UploadTarget; 7] = [
+        // The operator's own server first: it is the one they chose rather than
+        // signed up to, and the one whose address and key they had to type.
+        UploadTarget::Wavelog,
         UploadTarget::QrzLogbook,
         UploadTarget::Eqsl,
         UploadTarget::HamQth,
@@ -138,6 +146,10 @@ pub enum LoginTarget {
     /// The LOG11DX API token. Appended for the reason [`UploadTarget::HamQth`]
     /// gives.
     Log11Dx,
+    /// The operator's own Wavelog: its address and an API key from its own API
+    /// page — not a username and password. Appended for the reason
+    /// [`UploadTarget::HamQth`] gives.
+    Wavelog,
 }
 
 impl LoginTarget {
@@ -150,10 +162,11 @@ impl LoginTarget {
             LoginTarget::HamQth => "HamQTH",
             LoginTarget::Wrl => "World Radio League",
             LoginTarget::Log11Dx => "LOG11DX",
+            LoginTarget::Wavelog => "Wavelog",
         }
     }
 
-    pub const ALL: [LoginTarget; 7] = [
+    pub const ALL: [LoginTarget; 8] = [
         LoginTarget::Eqsl,
         LoginTarget::QrzLogbook,
         LoginTarget::HamQth,
@@ -161,6 +174,7 @@ impl LoginTarget {
         LoginTarget::Lotw,
         LoginTarget::Wrl,
         LoginTarget::Log11Dx,
+        LoginTarget::Wavelog,
     ];
 }
 
@@ -182,4 +196,10 @@ pub struct UploadResult {
     pub ok: bool,
     /// Server message or error detail.
     pub message: String,
+    /// On a failure, whether trying again later could succeed: the server was
+    /// unreachable or busy, not refusing this QSO. Only Wavelog says, since
+    /// only Wavelog keeps a retry queue; the other services leave it false.
+    /// Appended last, as the wire requires.
+    #[serde(default)]
+    pub retryable: bool,
 }

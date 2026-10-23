@@ -1337,6 +1337,38 @@ pub enum Command {
         id: u32,
         color: Option<[u8; 3]>,
     },
+    /// Download QSOs from Wavelog: each `(station location, cursor)` from the
+    /// record after the cursor on, a page at a time. Each page comes back as a
+    /// [`crate::RadioEvent::WavelogBatch`]; the logbook and the cursors live
+    /// with the screen, so it is the screen that says where to start.
+    ///
+    /// `full` asks for everything (the cursors are ignored) for a resync the
+    /// operator reviews before anything changes. Ignored while a download is
+    /// already running. Appended for the usual reason.
+    WavelogSync {
+        stations: Vec<(u32, u64)>,
+        full: bool,
+    },
+    /// Put the radio's own power setting on one of its numbered steps: the ELAD
+    /// FDM-DUO's menu 34 `TX POWER`, by its `TP` parameter (0 to 8 the watt
+    /// steps, 9 MAX), from the 1 W / 3 W / 5 W / MAX buttons beside Drive.
+    /// What survives a restart is [`crate::CatConfig::elad_tx_power`], sent
+    /// separately with [`Command::SetRadioConfig`]; this is the live half.
+    ///
+    /// Appended for the usual reason — postcard numbers variants by position.
+    SetRigPowerStep(u8),
+    /// Replace the received-picture FTP upload settings (`picupload.json`).
+    /// Boxed: the struct is large next to most commands.
+    ///
+    /// Appended for the usual reason — postcard numbers variants by position.
+    SetPictureUploadConfig(Box<crate::PictureUploadConfig>),
+    /// Try the given settings — connect, log in, change directory, put and
+    /// delete a small file — without saving them, and answer with
+    /// [`crate::RadioEvent::PictureUpload`]. The settings being edited are
+    /// tested, so a mistake is found before it is applied.
+    ///
+    /// Appended for the usual reason — postcard numbers variants by position.
+    TestPictureUpload(Box<crate::PictureUploadConfig>),
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.

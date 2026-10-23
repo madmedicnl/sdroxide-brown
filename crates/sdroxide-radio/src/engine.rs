@@ -301,6 +301,27 @@ fn lane_pool() -> Option<rayon::ThreadPool> {
 /// See [`sdroxide_dsp::SpectrumAnalyzer::with_hop_div`].
 const MAX_HOP_DIV: usize = 8;
 
+/// How long a received SSTV picture is held for the FSK ID that follows it, so
+/// the uploaded copy can say who sent it. The ID is sent a fraction of a second
+/// after the last line; this leaves room for a slow one without making a web
+/// page wait noticeably.
+const PICUP_ID_WAIT: Duration = Duration::from_secs(4);
+
+/// How often a failing picture upload may raise a notice.
+const PICUP_NOTICE_EVERY: Duration = Duration::from_secs(600);
+
+/// An SSTV picture waiting for its sender's FSK ID before it is uploaded.
+struct PendingUpload {
+    png: Vec<u8>,
+    name: String,
+    caption: sdroxide_picup::Caption,
+    at: Instant,
+}
+
+fn unix_now() -> i64 {
+    SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+}
+
 /// Where the decoder's tap is levelled to, as an RMS of full scale.
 ///
 /// The controller that reads it scales to sixteen-bit at 28000 and clips at
@@ -3505,6 +3526,17 @@ struct Engine {
     /// The external T/R switch's config as persisted (`relay.json`), announced
     /// in the station bundle the way the rotator's is.
     relay_cfg: sdroxide_types::RelayConfig,
+    /// Uploading received pictures to an FTP server (`picupload.json`),
+    /// announced in the station bundle like the rotator's.
+    picup_cfg: sdroxide_types::PictureUploadConfig,
+    /// The upload thread. Always there; it does nothing until enabled.
+    picup: sdroxide_picup::PictureUploader,
+    /// An SSTV picture held back for the FSK ID that follows it — see
+    /// [`PICUP_ID_WAIT`].
+    picup_pending: Option<PendingUpload>,
+    /// When a failed upload last raised a notice, so a dead server says so once
+    /// rather than with every picture.
+    picup_noticed: Option<Instant>,
     /// The switch itself, shared with every other engine. The driver behind it
     /// is built by the primary engine only — one station, one antenna line —
     /// but every engine publishes into it, because any of them keying is the
@@ -4363,12 +4395,25 @@ fn engine_thread(
         // there is nothing for it to fall back to.
         session.as_ref().map_or(0.0, |s| s.last_good_vfo_hz),
     );
-    // A stand-in is the record of a refused open: the program is running
-    // precisely because the radio would not come up on what it was handed. So
-    // the first replacement attempt is already the second try, and must not
-    // repeat the first — otherwise the link button's very first press re-asks
-    // for the impossible number and the operator has to press it twice.
-    let seeded_refused_center_hz = source.needs_reopen().then_some(source_center_hz);
+    // **A stand-in at start-up is not a refusal of the frequency.**
+    //
+    // This used to seed `refused_center_hz` with the centre it was handed, on
+    // the reasoning that "the program is running precisely because the radio
+    // would not come up on it". That is true when the *tuner* turned the
+    // frequency down (#72) and false when the radio was simply **not ready** —
+    // an SDRplay whose service is still coming up, a rig that is switched off,
+    // a dongle a moment behind. Seeding then made the first reconnect go to the
+    // fallback, which is the last frequency that ever tuned, so the dial was
+    // dragged from where the operator left it to a stale one and a notice
+    // blamed the frequency for it: *"would not open on 6.050000 MHz, which it
+    // cannot reach"* — about a frequency the hardware was never asked for.
+    //
+    // The factory is the one that knows: a frequency the radio cannot tune
+    // comes back as an error and is recorded as a refusal at that point
+    // (`poll_reconnect`'s `Err` arm, `reopen_source`'s), and only then does the
+    // fallback apply. A device that was not there is retried on the same
+    // centre, which is what the operator left on the dial.
+    let seeded_refused_center_hz: Option<f64> = None;
     // Held separately from what this front end can carry: a start on a stand-in
     // (a radio switched off, a rig that isn't there yet) must not be the thing
     // that forgets it — see `Engine::want_decimation`.
@@ -4852,6 +4897,10 @@ fn engine_thread(
         sat_lock: None,
         rot_cfg: sdroxide_types::RotatorConfig::default(),
         relay_cfg: sdroxide_types::RelayConfig::default(),
+        picup_cfg: sdroxide_types::PictureUploadConfig::default(),
+        picup: sdroxide_picup::PictureUploader::new(),
+        picup_pending: None,
+        picup_noticed: None,
         tr_switch: engine_cfg.tr_switch.clone(),
         relay_last_status: None,
         relay_pending: false,
@@ -4970,6 +5019,10 @@ fn engine_thread(
         engine.sync_rotator();
     }
     engine.relay_cfg = sdroxide_config::load_relay_config();
+    // Received pictures to an FTP server. Every engine uploads what it receives
+    // itself; the settings are the station's.
+    engine.picup_cfg = sdroxide_config::load_picture_upload_config();
+    engine.picup.set_config(engine.picup_cfg.clone());
     // One station, one antenna line: only the primary engine opens the switch.
     // Every engine still publishes into it — see `Engine::poll_tr_switch`.
     if engine.primary {
@@ -5168,6 +5221,7 @@ fn engine_thread(
         engine.poll_winlink();
         engine.poll_kiss_server();
         engine.poll_images();
+        engine.poll_picup();
         engine.poll_tle_refresh();
         engine.poll_sat_track();
         engine.poll_rotator_status();
@@ -5485,7 +5539,7 @@ fn engine_thread(
                     // read `(Some(swr), Some(fwd))` until 17 August 2026, on the
                     // reasoning that a rig reporting SWR without power "cannot be
                     // vetted". That reasoning cost two failed live tests: the
-                    // CI-V driver sends `TxTelemetry { fwd_w: None, swr: Some(v) }`,
+                    // CI-V driver sends `TxTelemetry { fwd_w: None, swr: Some(v), rfl_w: None}`,
                     // so on every Icom the arm could never match and the guard
                     // was dead code. Requiring a figure the most common rig
                     // family never sends is not caution, it is a silent
@@ -5557,7 +5611,13 @@ fn engine_thread(
                     adc_peak_dbfs,
                     adc_clip,
                     adc_overload,
-                    tx: Some(TxMeters { fwd_w: tele.fwd_w, swr: tele.swr, alc, po: tele.po }),
+                    tx: Some(TxMeters {
+                        fwd_w: tele.fwd_w,
+                        swr: tele.swr,
+                        alc,
+                        po: tele.po,
+                        rfl_w: tele.rfl_w,
+                    }),
                     stereo: false,
                     tone: None,
                     // Transmitting: the receiver is stood down and whatever the
@@ -5697,6 +5757,11 @@ impl RigDigest {
 
 impl Drop for Engine {
     fn drop(&mut self) {
+        // A picture held for its FSK ID goes now rather than not at all, and
+        // the web page is told the station has gone (QSSTV's offline marker).
+        // Bounded: closing never waits more than a few seconds on a server.
+        self.picup_flush();
+        self.picup.offline();
         // Where the radio was left, for the next start. Here as well as on the
         // periodic tick because a clean quit is the common case, and it would
         // otherwise lose up to one tick's worth of tuning.
@@ -7587,12 +7652,14 @@ impl Engine {
                         // immediately; the gallery entry follows from the
                         // worker, carrying the name it was filed under.
                         if let Some(name) = save_sstv_rx(&png) {
-                            self.gallery.entry(ImageKind::Sstv, name, None);
+                            self.gallery.entry(ImageKind::Sstv, name.clone(), None);
+                            self.picup_hold(&png, name, mode.label(), dial);
                         }
                         let _ =
                             self.event_tx.send(RadioEvent::SstvImage { image_id, mode, w, h, png });
                     }
                 }
+                DigiAction::SstvId(call) => self.picup_identified(call),
                 DigiAction::SstvStatus(s) => {
                     let _ = self.event_tx.send(RadioEvent::SstvStatus(s));
                 }
@@ -7605,7 +7672,8 @@ impl Engine {
                     // a two-megapixel PNG for nothing.
                     if let Some(png) = encode_png_gray(&gray, w, h) {
                         if let Some(name) = save_wefax_rx(&png, dial) {
-                            self.gallery.entry(ImageKind::Wefax, name, None);
+                            self.gallery.entry(ImageKind::Wefax, name.clone(), None);
+                            self.picup_send(ImageKind::Wefax, &png, name, "WEFAX", dial, None);
                         }
                         let _ = self.event_tx.send(RadioEvent::WefaxImage { image_id, w, h, png });
                     }
@@ -7625,7 +7693,9 @@ impl Engine {
                         // is the only chance the gallery has to record who sent
                         // the picture and how it was carried.
                         if let Some(name) = save_sstv_rx(&png) {
-                            self.gallery.entry(ImageKind::Sstv, name, Some(meta.clone()));
+                            self.gallery.entry(ImageKind::Sstv, name.clone(), Some(meta.clone()));
+                            let sender = meta.sender.clone();
+                            self.picup_send(ImageKind::Sstv, &png, name, "RIFP", dial, sender);
                         }
                         let _ = self.event_tx.send(RadioEvent::RifpImage { image_id, meta, png });
                     }
@@ -7740,7 +7810,7 @@ impl Engine {
             // mode and none of its behaviour — no callsign, no transmitter, and
             // a framing of its own — and nothing further down would notice it
             // had been handed a maritime safety broadcast.
-            Box::new(NavtexController::new(self.digi_config.clone(), tap_rate))
+            Box::new(NavtexController::new_with_config_dir(self.digi_config.clone(), tap_rate, self.store.dir().ok()))
         } else if mode == Mode::Acars {
             // The same shape of thing as NAVTEX: the framing is its own and
             // nothing further down would notice it had been handed an airline
@@ -9551,6 +9621,13 @@ impl Engine {
             // sdroxide believes about a radio that has just been switched off is
             // the link's business to notice, and the reconnect that follows is
             // what puts a radio switched back on into a known state.
+            // The rig's own power setting, one of its numbered steps — the
+            // FDM-DUO's menu 34, from the buttons beside Drive. Nothing else
+            // changes: Drive goes on setting the output *within* it, by scaling
+            // the transmit audio (see `CatHandle::power_by_audio`).
+            SetRigPowerStep(code) => {
+                self.source.set_power_step(code);
+            }
             SetRigPower(on) => {
                 if !self.caps.commands_rig_power {
                     return;
@@ -10424,11 +10501,18 @@ impl Engine {
                 return;
             }
             UploadQso { qso_id, adif, targets } => {
-                self.spots.upload(qso_id, adif, targets);
+                // The Wavelog location goes with the identity the QSO is
+                // logged under, which is the operating profile's.
+                let station = self.digi_config.wavelog_station_id;
+                self.spots.upload(qso_id, adif, targets, station);
                 return;
             }
             SyncConfirmations => {
                 self.spots.sync_confirmations();
+                return;
+            }
+            WavelogSync { stations, full } => {
+                self.spots.wavelog_sync(stations, full);
                 return;
             }
 
@@ -10796,6 +10880,21 @@ impl Engine {
                 if let Some(rot) = self.rotator.as_ref() {
                     rot.stop();
                 }
+                return;
+            }
+            SetPictureUploadConfig(cfg) => {
+                if let Err(e) = sdroxide_config::save_picture_upload_config(&cfg) {
+                    warn!("saving picture upload config: {e}");
+                }
+                self.picup_cfg = *cfg;
+                self.picup.set_config(self.picup_cfg.clone());
+                // A server that failed before may well be fixed now.
+                self.picup_noticed = None;
+                self.emit_station_config();
+                return;
+            }
+            TestPictureUpload(cfg) => {
+                self.picup.test(*cfg);
                 return;
             }
             SetRelayConfig(cfg) => {
@@ -13619,6 +13718,7 @@ impl Engine {
                 sat: self.sat_cfg.clone(),
                 rotator: self.rot_cfg.clone(),
                 relay: self.relay_cfg.clone(),
+                picture_upload: self.picup_cfg.clone(),
                 region: sdroxide_types::region(),
                 cb_plan: sdroxide_types::cb_plan(),
                 cb_tx_allowed: sdroxide_types::cb_tx_allowed(),
@@ -14427,6 +14527,78 @@ impl Engine {
         }
     }
 
+    /// Hand the uploader an SSTV picture once its FSK ID has had time to
+    /// arrive, and pass on how uploads went.
+    fn poll_picup(&mut self) {
+        if self.picup_pending.as_ref().is_some_and(|p| p.at.elapsed() >= PICUP_ID_WAIT) {
+            self.picup_flush();
+        }
+        for st in self.picup.poll() {
+            if !st.ok && !st.is_test {
+                let due = self.picup_noticed.is_none_or(|t| t.elapsed() >= PICUP_NOTICE_EVERY);
+                if due {
+                    self.picup_noticed = Some(Instant::now());
+                    self.notice(&format!("picture upload failed — {}", st.message));
+                }
+            }
+            let _ = self.event_tx.send(RadioEvent::PictureUpload(st));
+        }
+    }
+
+    /// Hold a just-saved SSTV picture for the FSK ID that may follow it.
+    fn picup_hold(&mut self, png: &[u8], name: String, mode: &str, dial: f64) {
+        if !self.picup.wants(ImageKind::Sstv) {
+            return;
+        }
+        // A picture still waiting has had its chance: the ID belongs to the
+        // newer one.
+        self.picup_flush();
+        let caption = sdroxide_picup::Caption {
+            unix: unix_now(),
+            dial_hz: dial,
+            mode: mode.to_string(),
+            call: None,
+        };
+        self.picup_pending =
+            Some(PendingUpload { png: png.to_vec(), name, caption, at: Instant::now() });
+    }
+
+    /// An FSK ID was heard: it names the picture being held, if there is one.
+    fn picup_identified(&mut self, call: String) {
+        if let Some(p) = self.picup_pending.as_mut() {
+            p.caption.call = Some(call);
+            self.picup_flush();
+        }
+    }
+
+    fn picup_flush(&mut self) {
+        if let Some(p) = self.picup_pending.take() {
+            self.picup.picture(ImageKind::Sstv, p.png, p.name, p.caption);
+        }
+    }
+
+    /// Queue a picture whose sender, if any, is already known.
+    fn picup_send(
+        &mut self,
+        kind: ImageKind,
+        png: &[u8],
+        name: String,
+        mode: &str,
+        dial: f64,
+        call: Option<String>,
+    ) {
+        if !self.picup.wants(kind) {
+            return;
+        }
+        let caption = sdroxide_picup::Caption {
+            unix: unix_now(),
+            dial_hz: dial,
+            mode: mode.to_string(),
+            call,
+        };
+        self.picup.picture(kind, png.to_vec(), name, caption);
+    }
+
     fn poll_spots(&mut self) {
         self.spots.set_dial(self.state.active_freq_hz());
 
@@ -14463,6 +14635,10 @@ impl Engine {
         self.spots.set_reporter_freq(freq);
         self.spots.set_reporter_visible(visible);
         self.spots.set_reporter_tx(tx);
+        // Wavelog's live radio status: deduplicated and paced on its own
+        // thread, like the reporter above, so pushing every tick costs nothing.
+        let (rx_freq, mode) = (self.state.rx_freq_hz(), self.state.rx[0].mode);
+        self.spots.wavelog_radio(self.state.tx_freq_hz(), rx_freq, mode);
 
         for ev in self.spots.poll() {
             let re = match ev {
@@ -14475,6 +14651,8 @@ impl Engine {
                 sdroxide_net::NetEvent::Confirmations(r) => RadioEvent::Confirmations(r),
                 sdroxide_net::NetEvent::WsprSpots(s) => RadioEvent::WsprSpots(s),
                 sdroxide_net::NetEvent::PropPaths(p) => RadioEvent::PropPaths(p),
+                sdroxide_net::NetEvent::WavelogProbe(p) => RadioEvent::WavelogProbe(Box::new(p)),
+                sdroxide_net::NetEvent::WavelogBatch(b) => RadioEvent::WavelogBatch(Box::new(b)),
             };
             let _ = self.event_tx.send(re);
         }

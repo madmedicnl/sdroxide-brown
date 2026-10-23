@@ -469,7 +469,7 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
         // underneath, and a wide window would just be dial with margins.
         M::Rotor => ("antenna rotator", [420.0, 520.0]),
         M::Dsc => ("DSC", [640.0, 480.0]),
-        M::Navtex => ("NAVTEX", [640.0, 480.0]),
+        M::Navtex => ("NAVTEX", [900.0, 600.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
@@ -1656,6 +1656,18 @@ impl eframe::App for SdroxideApp {
             }
         }
 
+        // A picture-upload TEST whose answer never came: the station went
+        // away, or dropped it. Give the button back rather than spin for ever.
+        // Past the connect, login and transfer timeouts the station applies.
+        if self.picup_test_pending.is_some_and(|t| crate::time::now_unix_f64() - t > 75.0) {
+            self.picup_test_pending = None;
+        }
+
+        // A Wavelog download the settings tab asked for. Here rather than in
+        // the settings page because it becomes a `Command`, and the settings
+        // page is drawn through `&self`.
+        self.wavelog_tick(&mut cmds);
+
         // Flush queued lookups / uploads accumulated during window rendering.
         for call in std::mem::take(&mut self.pending_lookups) {
             cmds.push(Command::LookupCallsign { call });
@@ -2671,6 +2683,10 @@ impl SdroxideApp {
                 self.login_tests_pending.insert(*t);
                 self.login_tests.remove(t);
             }
+            if let Command::TestPictureUpload(_) = &c {
+                self.picup_test_pending = Some(crate::time::now_unix_f64());
+                self.picup_test = None;
+            }
             self.dial_hold.note(&c);
             self.ctrl.send(c);
         }
@@ -3223,6 +3239,20 @@ impl SdroxideApp {
                     ));
                     self.login_tests.insert(r.target, r);
                 }
+                // Wavelog's probe knows more than pass or fail — the station
+                // locations to choose from, and a certificate waiting to be
+                // trusted — so it arrives beside the verdict for the settings
+                // page to fill its lists from.
+                RadioEvent::PictureUpload(st) => {
+                    if st.is_test {
+                        self.picup_test_pending = None;
+                        self.picup_test = Some(st);
+                    } else {
+                        self.picup_last = Some(st);
+                    }
+                }
+                RadioEvent::WavelogProbe(p) => self.wavelog_probe = Some(*p),
+                RadioEvent::WavelogBatch(b) => self.on_wavelog_batch(*b),
                 RadioEvent::Notice(n) => {
                     if self.focused {
                         self.speech.announcer.on_notice(n.as_deref(), now);
@@ -3644,6 +3674,10 @@ impl SdroxideApp {
                     if !self.wsjtx_seeded {
                         self.wsjtx_edit = c.wsjtx.clone();
                         self.wsjtx_seeded = true;
+                    }
+                    if !self.picup_seeded {
+                        self.picup_edit = c.picture_upload.clone();
+                        self.picup_seeded = true;
                     }
                     if !self.sat_cfg_seeded {
                         self.sat_cfg_edit = c.sat.clone();

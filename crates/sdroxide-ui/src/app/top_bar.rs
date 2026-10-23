@@ -1133,7 +1133,7 @@ impl SdroxideApp {
                         |ui| {
                             let hover = format!(
                                 "{}\n\nClick to cycle meter face: bar / trace",
-                                smeter::hover_text(self.meters.as_ref())
+                                smeter::hover_text(self.meters.as_ref(), self.meter_is_audio())
                             );
                             let resp =
                                 smeter::show(ui, self.meters.as_ref(), style.compact(), true)
@@ -2241,7 +2241,7 @@ impl SdroxideApp {
         crate::chrome::module_bare_flush_h(ui, w, h, |ui| {
             let hover = format!(
                 "{}\n\nClick to cycle meter face: {}",
-                smeter::hover_text(self.meters.as_ref()),
+                smeter::hover_text(self.meters.as_ref(), self.meter_is_audio()),
                 if compact { "bar / trace" } else { "needle / bar / trace" }
             );
             let resp = smeter::show(ui, self.meters.as_ref(), shown, outline).on_hover_text(hover);
@@ -5276,6 +5276,60 @@ impl SdroxideApp {
         )
     }
 
+    /// Whether the S-meter on this screen is really the **audio level**.
+    ///
+    /// True for a front end that hands us demodulated audio — a rig on a sound
+    /// card, and a transceiver feeding a separate panadapter — because neither
+    /// reports a signal strength of its own: there is no DDC and no demodulator
+    /// here, so the only thing that can be measured is the audio. What the
+    /// operator needs to know is that the needle follows that audio, so noise
+    /// on the card or a rig whose AGC is pumping moves it.
+    fn meter_is_audio(&self) -> bool {
+        self.caps.as_ref().is_some_and(|c| c.audio_mode || c.rx_audio_external)
+    }
+
+    /// Whether the ELAD FDM-DUO's own power buttons apply: a CAT radio whose
+    /// family is ELAD. Nothing else has a menu 34.
+    fn duo_presets_apply(&self) -> bool {
+        self.radio_cfg.as_ref().is_some_and(|r| {
+            r.backend == sdroxide_types::Backend::Cat
+                && r.cat.family == sdroxide_types::CatFamily::Elad
+        })
+    }
+
+    /// The FDM-DUO's power buttons: 1 W, 3 W, 5 W and MAX, which put the
+    /// radio's **own** setting (menu 34 `TX POWER`) on that step. Drive then
+    /// sets the power *within* it, by scaling the transmit audio — see
+    /// `CatHandle::power_by_audio` — so the two are a ceiling and a level, not
+    /// two controls fighting over one number.
+    ///
+    /// Its own buttons rather than a slider: the DUO's steps are what its
+    /// front panel offers, and a slider over a nine-entry register would
+    /// invent fractions that do not exist.
+    pub(in crate::app) fn tx_duo_presets(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        if !self.duo_presets_apply() {
+            return;
+        }
+        let current = self.radio_cfg.as_ref().map(|r| r.cat.elad_tx_power);
+        ui.horizontal(|ui| {
+            for &(label, code) in &crate::app::duo_power::PRESETS {
+                let lit = current == Some(code);
+                let resp = crate::chrome::chip(ui, lit, label)
+                    .on_hover_text(crate::app::duo_power::hover(code));
+                if resp.clicked() && !lit {
+                    if let Some(cfg) = self.radio_cfg.as_mut() {
+                        cfg.cat.elad_tx_power = code;
+                        cmds.push(Command::SetRadioConfig {
+                            cfg: Box::new(cfg.clone()),
+                            reopen: false,
+                        });
+                        cmds.push(Command::SetRigPowerStep(code));
+                    }
+                }
+            }
+        });
+    }
+
     /// The Drive label + rail + readout.
     pub(in crate::app) fn tx_drive(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
         let mut drive = self.state.tx.drive;
@@ -5638,6 +5692,10 @@ impl SdroxideApp {
                     ui.spacing_mut().slider_width = rail2;
                     self.tx_tune_chip(ui, cmds);
                     self.tx_tune_level(ui, cmds);
+                    // The FDM-DUO's own power steps, on the row below Drive:
+                    // they are the ceiling the two levels work within, and they
+                    // are four chips, so they go where there is room for four.
+                    self.tx_duo_presets(ui, cmds);
                 });
             });
             // The side rail stands apart from the rows' readouts, so it reads

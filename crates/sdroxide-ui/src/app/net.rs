@@ -15,6 +15,13 @@ use sdroxide_types::{
 use crate::app::SdroxideApp;
 use crate::app::persist::persist_qso_log;
 
+fn now_unix() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 /// Least time between two locator lookups driven by a heard list.
 const GRID_LOOKUP_INTERVAL_S: f64 = 1.5;
 
@@ -53,6 +60,9 @@ fn auto_upload_targets(cfg: &NetworkConfig) -> Vec<UploadTarget> {
     if cfg.auto_upload_log11dx {
         t.push(UploadTarget::Log11Dx);
     }
+    if cfg.wavelog.auto_upload && cfg.wavelog.is_configured() && cfg.wavelog.station_id != 0 {
+        t.push(UploadTarget::Wavelog);
+    }
     t
 }
 
@@ -79,6 +89,9 @@ pub(in crate::app) fn configured_upload_targets(cfg: &NetworkConfig) -> Vec<Uplo
     }
     if !cfg.log11dx_api_token.trim().is_empty() {
         t.push(UploadTarget::Log11Dx);
+    }
+    if cfg.wavelog.is_configured() {
+        t.push(UploadTarget::Wavelog);
     }
     t
 }
@@ -222,10 +235,84 @@ impl SdroxideApp {
                     UploadTarget::HamQth => rec.hamqth_sent = true,
                     UploadTarget::Wrl => rec.wrl_sent = true,
                     UploadTarget::Log11Dx => rec.log11dx_sent = true,
+                    UploadTarget::Wavelog => rec.wavelog_sent = true,
                 }
                 persist_qso_log(&self.qso_log);
             }
         }
+    }
+
+    /// One page of QSOs downloaded from Wavelog.
+    ///
+    /// Merged as it arrives rather than collected and applied at the end: a
+    /// first download can be a whole log, and a run that is interrupted half
+    /// way has then already brought in half the contacts and moved the cursor
+    /// with them — so the next sync resumes instead of starting again.
+    pub(in crate::app) fn on_wavelog_batch(&mut self, b: sdroxide_types::WavelogBatch) {
+        if b.done {
+            self.wavelog_sync_running = false;
+            if let Some(e) = b.error {
+                self.wavelog_sync_status = Some(format!("stopped: {e}"));
+                self.push_net_log(format!("Wavelog download stopped: {e}"));
+            }
+            return;
+        }
+        let next_id = self.qso_log.iter().map(|q| q.id).max().unwrap_or(0) + 1;
+        let merged = sdroxide_types::merge_from_wavelog(&mut self.qso_log, b.records, next_id);
+        self.wavelog_sync.advance(b.station_id, b.last_id);
+        self.wavelog_sync.last_sync_utc = now_unix();
+        crate::app::persist::persist_wavelog_sync(&self.wavelog_sync);
+        if merged.changed {
+            persist_qso_log(&self.qso_log);
+        }
+        self.wavelog_sync_status =
+            Some(format!("{} new, {} already here", merged.added, merged.matched));
+    }
+
+    /// The network settings as the settings page has them, for a Test button
+    /// that must check what the operator has just typed rather than what was
+    /// last applied.
+    pub(in crate::app) fn net_edit_snapshot(&self) -> NetworkConfig {
+        self.net_cfg_edit.clone()
+    }
+
+    /// Start a Wavelog download if the settings tab (or the logbook) asked for
+    /// one this frame.
+    ///
+    /// The stations and the cursors come from what the screen holds, which is
+    /// why this is here rather than in the engine: the logbook and the sync
+    /// position live with the client, and the engine is told only where to
+    /// start.
+    pub(in crate::app) fn wavelog_tick(&mut self, cmds: &mut Vec<Command>) {
+        if !self.wavelog_sync_request.take() || self.wavelog_sync_running {
+            return;
+        }
+        let cfg = &self.net_cfg_edit.wavelog;
+        if !cfg.is_configured() {
+            self.wavelog_sync_status =
+                Some("the address and the API key have to be filled in first".into());
+            return;
+        }
+        let stations = if cfg.download_station_ids.is_empty() {
+            // Nothing ticked means the one uploads go to: an operator who set a
+            // location up to log to expects it to be the one read back, and
+            // asking them to tick the same number twice is a trap.
+            vec![cfg.station_id]
+        } else {
+            cfg.download_station_ids.clone()
+        }
+        .into_iter()
+        .filter(|s| *s != 0)
+        .collect::<Vec<_>>();
+        if stations.is_empty() {
+            self.wavelog_sync_status =
+                Some("no station location to download from — test the connection first".into());
+            return;
+        }
+        let starts = self.wavelog_sync.starts(&cfg.url, &stations);
+        self.wavelog_sync_running = true;
+        self.wavelog_sync_status = Some("downloading…".into());
+        cmds.push(Command::WavelogSync { stations: starts, full: false });
     }
 
     pub(in crate::app) fn push_net_log(&mut self, line: String) {

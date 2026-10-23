@@ -170,7 +170,7 @@ pub use sdroxide_types::SmeterStyle;
 /// looking for SWR has no way to tell a radio that has no bridge from a reading
 /// that is missing (issue #373). So every line here names the quantity and its
 /// units, and the transmit case says outright when the radio measures nothing.
-pub fn hover_text(meters: Option<&Meters>) -> String {
+pub fn hover_text(meters: Option<&Meters>, audio_level: bool) -> String {
     let mut out = String::new();
     if let Some(tx) = meters.and_then(|m| m.tx.as_ref()) {
         out.push_str(
@@ -214,6 +214,30 @@ pub fn hover_text(meters: Option<&Meters>) -> String {
         return "No signal report yet — the receiver has not delivered a meter reading.".into();
     };
     let (s, over) = m.s_units();
+    if audio_level {
+        // **A demod-audio radio has no S-meter to report, so this is its audio.**
+        // The engine says so with `DeviceCaps::audio_mode`, and the number is
+        // the level of what the rig sends — its own AGC and squelch included.
+        // Saying it here is the difference between a reading and a mystery: the
+        // needle moves when the *audio* moves, which is why a noise on the
+        // sound card, a wireless mouse near the rig, or the rig's own AGC
+        // pumping all swing it while the signal has not changed at all.
+        out.push_str(&format!(
+            "Audio level: {:.0} dBFS{}{}.\n\nThis radio has **no S-meter of its own to \
+             report**, so this is the level of the audio it sends — measured here, with the \
+             rig's own AGC and squelch already applied. It follows the audio, not the RF: \
+             noise on the sound card, a wireless mouse near the rig, or the AGC pumping will \
+             all move it while the signal has not changed.",
+            m.s_dbm,
+            if over > 0.0 {
+                format!(" (S9 + {over:.0} dB on the audio scale)")
+            } else {
+                String::new()
+            },
+            "",
+        ));
+        return out;
+    }
     if over > 0.0 {
         out.push_str(&format!(
             "Received signal strength: S9 + {over:.0} dB ({:.0} dBm in the passband).",
@@ -1458,7 +1482,7 @@ mod tests {
             adc_overload: None,
             adc_peak_dbfs: -30.0,
             adc_clip: 0.0,
-            tx: Some(TxMeters { fwd_w: None, swr: None, alc, po: None }),
+            tx: Some(TxMeters { fwd_w: None, swr: None, alc, po: None, rfl_w: None }),
             stereo: false,
             tone: None,
             passband_dbfs: f32::NEG_INFINITY,
@@ -1467,6 +1491,36 @@ mod tests {
         assert_eq!(reading(Some(&keyed(None))).right, "ALC —", "a missing reading must say so");
         assert_eq!(reading(Some(&keyed(Some(0.0)))).right, "ALC 0%", "a real zero is a zero");
         assert_eq!(reading(Some(&keyed(Some(0.5)))).right, "ALC 50%");
+    }
+
+    /// **A demod-audio radio's "S-meter" is its audio level**, and the hover has
+    /// to say so. Without it the needle reads as a signal report, and an
+    /// operator is then right to ask why moving a wireless mouse swings it —
+    /// the mouse is noise in the audio, which is exactly what the number
+    /// measures. Pinned both ways: the flag changes the words, and an SDR whose
+    /// meter really is a signal strength is not told otherwise.
+    #[test]
+    fn a_meter_that_is_really_the_audio_level_says_so() {
+        let m = Meters {
+            s_dbm: -62.0,
+            pa_temp_c: None,
+            adc_overload: None,
+            adc_peak_dbfs: -30.0,
+            adc_clip: 0.0,
+            tx: None,
+            stereo: false,
+            tone: None,
+            passband_dbfs: f32::NEG_INFINITY,
+            puresignal: None,
+        };
+        let audio = super::hover_text(Some(&m), true);
+        assert!(audio.starts_with("Audio level"), "{audio}");
+        assert!(audio.contains("no S-meter of its own"), "{audio}");
+        assert!(audio.contains("wireless mouse"), "the case that prompted it: {audio}");
+
+        let signal = super::hover_text(Some(&m), false);
+        assert!(signal.contains("Received signal strength"), "{signal}");
+        assert!(!signal.contains("Audio level"), "{signal}");
     }
 
     #[test]

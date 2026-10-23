@@ -128,6 +128,7 @@ sdroxide-cat = { path = "crates/sdroxide-cat" }
 sdroxide-midi = { path = "crates/sdroxide-midi" }
 sdroxide-rigctld = { path = "crates/sdroxide-rigctld" }
 sdroxide-rotator = { path = "crates/sdroxide-rotator" }
+sdroxide-picup = { path = "crates/sdroxide-picup" }
 sdroxide-hpsdr = { path = "crates/sdroxide-hpsdr" }
 sdroxide-tci = { path = "crates/sdroxide-tci" }
 sdroxide-icomnet = { path = "crates/sdroxide-icomnet" }

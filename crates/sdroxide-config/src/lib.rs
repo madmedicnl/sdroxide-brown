@@ -2253,6 +2253,20 @@ pub fn save_qso_log(log: &[sdroxide_types::QsoRecord]) -> Result<(), ConfigError
     save_json("qso_log.json", &log)
 }
 
+/// How far each Wavelog station location has been downloaded into the logbook.
+///
+/// Kept beside `qso_log.json` rather than in `config.toml`, because it
+/// describes what the log **holds**: a cursor that outlived the log it was for
+/// would claim contacts were merged that are not there, and the next sync would
+/// skip them.
+pub fn load_wavelog_sync() -> sdroxide_types::WavelogSyncState {
+    load_json("wavelog_sync.json")
+}
+
+pub fn save_wavelog_sync(state: &sdroxide_types::WavelogSyncState) -> Result<(), ConfigError> {
+    save_json("wavelog_sync.json", state)
+}
+
 /// Favourite broadcast stations (`broadcast_favourites.json`), by name — the
 /// stations a listener comes back to.
 pub fn load_broadcast_favourites() -> Vec<String> {
@@ -2465,6 +2479,18 @@ pub fn load_rotator_config() -> sdroxide_types::RotatorConfig {
 
 pub fn save_rotator_config(cfg: &sdroxide_types::RotatorConfig) -> Result<(), ConfigError> {
     save_json("rotator.json", cfg)
+}
+
+/// Uploading received pictures to an FTP server. One server for the whole
+/// station, like the rotator, so it lives at the root rather than per radio.
+pub fn load_picture_upload_config() -> sdroxide_types::PictureUploadConfig {
+    load_json("picupload.json")
+}
+
+pub fn save_picture_upload_config(
+    cfg: &sdroxide_types::PictureUploadConfig,
+) -> Result<(), ConfigError> {
+    save_json("picupload.json", cfg)
 }
 
 /// The external transmit/receive switch — the relay board or contact closure

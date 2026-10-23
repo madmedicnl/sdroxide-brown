@@ -53,6 +53,7 @@ mod mode;
 mod morse_trainer;
 mod netcfg;
 mod pi4;
+mod picupload;
 mod pictures;
 pub mod playback;
 mod probe;
@@ -93,6 +94,7 @@ mod uvpacket;
 mod vdl2;
 mod voice;
 mod wefax;
+mod wavelog;
 mod winlink;
 mod wsjtx;
 mod wspr;
@@ -237,6 +239,10 @@ pub use netcfg::{
     PskConfig, RbnConfig, WsprNetConfig,
 };
 pub use pi4::{BURST_S as PI4_BURST_S, Pi4Spot, Pi4Status, SLOT_S as PI4_SLOT_S};
+pub use picupload::{
+    FtpSecurity, PictureUploadConfig, PictureUploadStatus, TlsVerify, UploadFormat, UploadNaming,
+    format_fingerprint, normalize_fingerprint,
+};
 pub use pictures::{
     IMAGE_NAME_MAX, IMAGE_PAGE_MAX, IMAGE_SLOT_THUMB_EDGE, IMAGE_SLOTS, IMAGE_SOURCE_MAX_EDGE,
     IMAGE_THUMB_EDGE, IMAGE_UPLOAD_MAX, ImageEntry, ImageKind, ImageListing, ImagePresets,
@@ -361,6 +367,11 @@ pub use vdl2::{
 pub use voice::{VOICE_MAX_LEN_S, VOICE_SLOTS, VoiceSlotInfo, VoiceStatus, slot_label};
 pub use wefax::{
     WEFAX_STATIONS, WefaxChartMeta, WefaxIoc, WefaxLpm, WefaxStation, WefaxStatus, shift_fax_rows,
+};
+pub use wavelog::{
+    WavelogBatch, WavelogConfig, WavelogMerge, WavelogProbe, WavelogResync, WavelogStation,
+    WavelogSyncState, apply_resync, fingerprint_display, merge_from_wavelog, plan_resync,
+    same_contact,
 };
 pub use winlink::{
     DEFAULT_CMS_ADDRESS, MAIL_PAGE_MAX, MailAttachment, MailDraft, MailEntry, MailFolder,

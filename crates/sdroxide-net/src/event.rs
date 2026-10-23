@@ -44,6 +44,13 @@ pub enum NetEvent {
     /// consumer that wants every last one of them, and never to the spot list,
     /// which would be buried.
     PropPaths(Vec<sdroxide_types::PropPath>),
+    /// A page of QSOs downloaded from the operator's Wavelog. The last page of
+    /// a run has `done` set, with the reason if it stopped early.
+    WavelogBatch(sdroxide_types::WavelogBatch),
+    /// What the operator's Wavelog said about itself when the connection was
+    /// tested: whether it answered, which station locations it has, and the
+    /// certificate fingerprint to trust if it is one of its own.
+    WavelogProbe(sdroxide_types::WavelogProbe),
 }
 
 /// A feed thread's full current view of its own spots (replaces the prior set

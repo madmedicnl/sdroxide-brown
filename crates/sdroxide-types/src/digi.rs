@@ -1284,6 +1284,18 @@ pub struct QsoRecord {
     /// [`Self::hamqth_sent`] gives.
     #[serde(default)]
     pub log11dx_sent: bool,
+    /// In the operator's Wavelog: uploaded from here and acknowledged, or
+    /// downloaded from it in the first place. Appended for the reason
+    /// [`Self::hamqth_sent`] gives.
+    #[serde(default)]
+    pub wavelog_sent: bool,
+    /// The Wavelog station location this contact was downloaded from, or 0 for
+    /// one logged here or imported from a file. A full resync may update or
+    /// remove a downloaded contact to match Wavelog; it never touches one with
+    /// no origin, which is the operator's own. Appended for the reason
+    /// [`Self::hamqth_sent`] gives.
+    #[serde(default)]
+    pub wavelog_origin: u32,
 }
 
 impl QsoRecord {
@@ -3098,13 +3110,26 @@ pub struct DigiConfig {
     /// Appended last, so this is a wire change (`PROTO_VERSION` 229 → 230).
     #[serde(default)]
     pub domino_mode: DominoMode,
-    /// SSTV receive sensitivity, -5..=+5. 0 = current automatic level (Auto).
+    /// Wavelog: which of the server's **station locations** a QSO logged under
+    /// this profile goes to, or 0 for the one configured as the default.
+    ///
+    /// Part of the *operating identity* rather than of the server's settings,
+    /// because Wavelog refuses a QSO whose `STATION_CALLSIGN` is not the
+    /// location's — so a profile that works as a portable call logs to the
+    /// portable location. Appended last, so this is a wire change
+    /// (`PROTO_VERSION` 234 → 235).
+    #[serde(default)]
+    pub wavelog_station_id: u32,
+    /// SSTV receive sensitivity, -5..=+5. 0 = the automatic level (Auto).
     /// Adjusts the signal level fed to the decoder: negative attenuates,
     /// positive boosts. Does not change the decoder itself.
+    ///
+    /// Appended last, so this is a wire change (`PROTO_VERSION` 237 → 238).
     #[serde(default)]
     pub sstv_rx_sensitivity: i8,
-    /// SSTV receive is in automatic level mode. When true, `sstv_rx_sensitivity`
-    /// is ignored and the slider sits at 0. Moving the slider off 0 clears this.
+    /// SSTV receive is in automatic level mode. When true,
+    /// `sstv_rx_sensitivity` is ignored and the slider sits at 0. Moving the
+    /// slider off 0 clears this. Appended last for the reason above.
     #[serde(default = "yes")]
     pub sstv_rx_auto: bool,
 }
@@ -3367,6 +3392,7 @@ impl Default for DigiConfig {
             thor_reverse: false,
             psk_coded: PskCoded::default(),
             domino_mode: DominoMode::default(),
+            wavelog_station_id: 0,
             sstv_rx_sensitivity: 0,
             sstv_rx_auto: true,
         }
@@ -3896,6 +3922,16 @@ fn record_from_fields(fields: &[(String, String)]) -> QsoRecord {
         r.freq_hz = f * 1e6;
     }
     r.mode = get("MODE").unwrap_or_default().to_ascii_uppercase();
+    // ADIF files FT4, JS8, Q65 and the like as SUBMODE under the **MFSK**
+    // umbrella, which is how Wavelog, LoTW and most loggers export them. The
+    // submode is the name an operator knows the mode by, and the one this
+    // program logs its own contacts under — so without this an imported FT4
+    // contact reads as "MFSK" and matches nothing.
+    if r.mode == "MFSK"
+        && let Some(sub) = get("SUBMODE").filter(|s| !s.is_empty())
+    {
+        r.mode = sub.to_ascii_uppercase();
+    }
     r.band = get("BAND").map(|b| b.to_ascii_lowercase()).unwrap_or_else(|| {
         if r.freq_hz > 0.0 { adif_band(r.freq_hz).to_string() } else { String::new() }
     });
@@ -4663,6 +4699,35 @@ mod tests {
         assert_eq!(recs.len(), 1);
         assert_eq!(recs[0].qth, "a<b>c<d");
         assert_eq!(recs[0].band, "20m");
+    }
+
+    /// **The submode is the mode an operator knows.** ADIF files FT4, JS8, Q65
+    /// and the rest as `MODE MFSK` plus a `SUBMODE`, which is how Wavelog, LoTW
+    /// and most loggers export them — and this program logs its own contacts
+    /// under the submode's name. Reading only `MODE` made every imported FT4
+    /// contact "MFSK", which matches nothing: not the decode rows, not the
+    /// worked-before check, not the mode chip.
+    #[test]
+    fn an_adif_submode_is_the_mode_the_contact_was_made_in() {
+        let recs = adif_to_qso_log(
+            "<call:5>EA1AA <band:3>20m <mode:4>MFSK <submode:3>FT4 \
+             <qso_date:8>20261011 <time_on:6>101500 <eor>",
+        );
+        assert_eq!(recs.len(), 1);
+        assert_eq!(recs[0].mode, "FT4", "the submode, not the MFSK umbrella");
+
+        // A plain MFSK contact (no submode) keeps its own name, and a submode
+        // under another mode is not this rule's business.
+        let recs = adif_to_qso_log(
+            "<call:5>EA1AA <band:3>20m <mode:4>MFSK <qso_date:8>20261011 \
+             <time_on:6>101500 <eor>",
+        );
+        assert_eq!(recs[0].mode, "MFSK");
+        let recs = adif_to_qso_log(
+            "<call:5>EA1AA <band:3>20m <mode:3>SSB <submode:3>USB \
+             <qso_date:8>20261011 <time_on:6>101500 <eor>",
+        );
+        assert_eq!(recs[0].mode, "SSB", "only the MFSK umbrella carries a mode name");
     }
 
     #[test]

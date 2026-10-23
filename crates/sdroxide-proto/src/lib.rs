@@ -1958,12 +1958,57 @@ use sdroxide_types::{
 /// even though appending it moves nothing else. No new message and no new field.
 /// `PROTO_VERSION` 233 → 234, `VERSION_BYTE` 0x35 → 0x36. A downstream (fork)
 /// change.
-/// v235: `DigiConfig` gains `sstv_rx_sensitivity` (i8) and `sstv_rx_auto`
-/// (bool) on its tail — SSTV receive sensitivity control (-5..=+5) with Auto.
-/// `PROTO_VERSION` 234 → 235, `VERSION_BYTE` 0x36 → 0x37. A downstream (fork)
-/// change.
-pub const PROTO_VERSION: u16 = 235;
-const VERSION_BYTE: u8 = 0x37;
+/// v235: **Wavelog**, the operator's own web logbook (upstream #666), ported by
+/// hand. All of it appended, and none of it separable — a v234 peer handed any
+/// one of these reads the tail of the message carrying it out of step:
+///
+/// * [`sdroxide_types::NetworkConfig`] gains `wavelog`
+///   ([`sdroxide_types::WavelogConfig`]: address, API key, pinned certificate,
+///   default station location, auto-upload, which locations to download and how
+///   often, and the live radio status). It rides whole inside
+///   `Command::SetNetworkConfig`.
+/// * [`sdroxide_types::DigiConfig`] gains `wavelog_station_id` — the location is
+///   part of the operating identity, since Wavelog refuses a QSO whose station
+///   callsign is not the location's. It rides `SetDigiConfig`/`DigiStatus`.
+/// * [`sdroxide_types::QsoRecord`] gains `wavelog_sent` and `wavelog_origin`,
+///   and [`sdroxide_types::UploadResult`] gains `retryable`. Both ride inside
+///   `RadioEvent`s that cross the link.
+/// * `UploadTarget` and `LoginTarget` each gain `Wavelog`, appended, so no
+///   surviving discriminant moved.
+/// * [`sdroxide_types::Command::WavelogSync`] appended. Its answers,
+///   `RadioEvent::WavelogBatch` and `RadioEvent::WavelogProbe`, stay on the
+///   machine the engine runs on and have no `ServerMsg`.
+///
+/// `PROTO_VERSION` 234 → 235, `VERSION_BYTE` 0x36 → 0x37. Upstream's change,
+/// brought in by hand.
+/// v236: the **ELAD FDM-DUO's own power controls** (upstream #717, by AJ3G),
+/// ported by hand. [`sdroxide_types::CatConfig`] gains `elad_tx_power` — menu
+/// 34's `TP` parameter, 0 to 8 for its watt steps and 9 for MAX — which rides
+/// `SetRadioConfig`/`RadioConfig` whole. [`sdroxide_types::TxMeters`] gains
+/// `rfl_w` at its tail, the reflected power the DUO reports (`RP`), which rides
+/// every meter frame. [`sdroxide_types::Command::SetRigPowerStep`] is appended
+/// for the live half — the buttons beside Drive.
+///
+/// None of it is separable from the rest: a v235 peer handed a `TxMeters` frame
+/// reads its tail out of step. `PROTO_VERSION` 235 → 236, `VERSION_BYTE`
+/// 0x37 → 0x38.
+/// v237: **received pictures to an FTP server** (upstream, by joscandreu),
+/// ported by hand. [`sdroxide_types::StationConfig`] gains `picture_upload`
+/// on its tail — the station decodes and saves the pictures, so that is where
+/// they are sent from, and a remote screen only edits the settings.
+/// [`sdroxide_types::Command`] gains `SetPictureUploadConfig` and
+/// `TestPictureUpload`, [`sdroxide_types::RadioEvent`] gains `PictureUpload`,
+/// and `ServerMsg` gains `PictureUpload` so a remote screen can see the answer.
+/// All appended. `PROTO_VERSION` 236 → 237, `VERSION_BYTE` 0x38 → 0x39.
+/// v238: [`sdroxide_types::DigiConfig`] gains `sstv_rx_sensitivity` (i8) and
+/// `sstv_rx_auto` (bool) on its tail, after `wavelog_station_id` — an SSTV
+/// receive sensitivity control (-5..=+5) with an Auto mode. `DigiConfig` rides
+/// `SetDigiConfig`/`DigiStatus` whole, so the appended fields move both.
+/// Appended by hand under the register's own rule (the number was taken twice
+/// on two branches; the later one moves). `PROTO_VERSION` 237 → 238,
+/// `VERSION_BYTE` 0x39 → 0x3A.
+pub const PROTO_VERSION: u16 = 238;
+const VERSION_BYTE: u8 = 0x3A;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -2460,6 +2505,15 @@ pub enum ServerMsg {
     /// Appended last, for the usual reason.
     Pi4Spots(Vec<sdroxide_types::Pi4Spot>),
 
+    /// `RadioEvent::PictureUpload`: how a received-picture FTP upload, or a
+    /// test of its settings, went. Forwarded, unlike `LoginTest`: the settings
+    /// are edited from whichever screen, but only the station connects, so a
+    /// remote screen has no other way to learn whether they work. It names the
+    /// server and the certificate it presented, nothing of the account.
+    ///
+    /// Appended last, for the usual reason.
+    PictureUpload(sdroxide_types::PictureUploadStatus),
+
     /// A client's stored screen settings, replayed on connect when it has any
     /// on the server — the profile's own set, or the station default when the
     /// profile has none (then `profile` is `None`). Also sent back after a
@@ -2622,6 +2676,39 @@ mod tests {
         assert_eq!(back, m);
 
         let m = ServerMsg::Profiles(vec!["Contest".into(), "DX".into()]);
+        let back: ServerMsg = decode(&encode(&m).unwrap()).unwrap();
+        assert_eq!(back, m);
+
+        // The picture upload: both commands, the answer, and the settings
+        // riding the station bundle's tail. A remote screen edits them and has
+        // no other way to learn whether the station can reach the server.
+        let cfg = sdroxide_types::PictureUploadConfig {
+            enabled: true,
+            host: "ftp.example.org".into(),
+            verify: sdroxide_types::TlsVerify::Pinned,
+            pinned_sha256: "ab".repeat(32),
+            ..Default::default()
+        };
+        for c in [
+            ClientMsg::Command(Command::SetPictureUploadConfig(Box::new(cfg.clone()))),
+            ClientMsg::Command(Command::TestPictureUpload(Box::new(cfg.clone()))),
+        ] {
+            let back: ClientMsg = decode(&encode(&c).unwrap()).unwrap();
+            assert_eq!(back, c);
+        }
+        let m = ServerMsg::PictureUpload(sdroxide_types::PictureUploadStatus {
+            ok: false,
+            message: "login: 530".into(),
+            unix: 1_700_000_000,
+            fingerprint: Some("cd".repeat(32)),
+            is_test: true,
+        });
+        let back: ServerMsg = decode(&encode(&m).unwrap()).unwrap();
+        assert_eq!(back, m);
+        let m = ServerMsg::StationConfig(Box::new(sdroxide_types::StationConfig {
+            picture_upload: cfg,
+            ..Default::default()
+        }));
         let back: ServerMsg = decode(&encode(&m).unwrap()).unwrap();
         assert_eq!(back, m);
 
