@@ -1105,13 +1105,25 @@ impl S4285Receiver {
         out: &mut Vec<S4285Message>,
     ) -> Vec<f32> {
         let frame = self.frame_symbols(start, phase);
+        let mut z = [C::default(); SCRAMBLED];
+        for k in 0..SCRAMBLED {
+            let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
+            let t = k as f32 / BAUD as f32;
+            z[k] = frame[SYNC + k].mul(sc.conj()).mul(C::from_phase(-offset * TAU * t));
+        }
+        // **The same channel line the frame itself is read through.** Without it
+        // the soft decisions keep the frame's residual phase, which is a different
+        // number every frame on anything that is not exactly on frequency — and a
+        // BPSK decision's whole content is its sign, so a rotating phase turns the
+        // code stream into noise while the constellation still reads 0.99 and the
+        // references still collapse. Measured: a 1 Hz/s ramp, well inside the
+        // standard's 3.5 Hz/s, took the message from readable to nothing.
+        let (m, b) = channel_line(&z);
         let mut data: Vec<C> = Vec::with_capacity(128);
         let mut sum = 0.0f32;
         for &(lo, hi) in &DATA_BLOCKS {
             for k in lo..hi {
-                let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
-                let t = k as f32 / BAUD as f32;
-                let c = frame[SYNC + k].mul(sc.conj()).mul(C::from_phase(-offset * TAU * t));
+                let c = z[k].mul(C::from_phase(-(m * k as f32 + b)));
                 sum += c.norm();
                 data.push(c);
             }
@@ -1340,7 +1352,7 @@ mod tests {
     /// a rectangular-pulse spectrum the receiver's own filter would have to
     /// truncate. Frame `n` carries `bits[n*128 ..]`, so the payload is a known
     /// sequence rather than noise.
-    fn modulate(bits: &[u8], frames: usize, rate: f64) -> Vec<f32> {
+    fn modulate(bits: &[u8], frames: usize, rate: f64, ramp_hz_s: f64) -> Vec<f32> {
         let sync = sync_symbols();
         let scr = scrambling();
         // Symbol phases on a 5-sample grid, then pulse-shaped.
@@ -1406,7 +1418,12 @@ mod tests {
                 // The phase is accumulated in f64 and reduced: `TAU * f * i` in
                 // f32 loses its fractional part within a second and the carrier
                 // lands on the wrong frequency entirely.
-                let ph = (TAU as f64 * 1800.0 * i as f64 / rate).rem_euclid(TAU as f64) as f32;
+                let t = i as f64 / rate;
+                // `ramp_hz_s` is a carrier *rate* error, in hertz per second: the
+                // phase is quadratic in time, which is what a drifting station and
+                // a free-running sound card both look like.
+                let ph = (TAU as f64 * (1800.0 * t + 0.5 * ramp_hz_s * t * t))
+                    .rem_euclid(TAU as f64) as f32;
                 0.5 * z.mul(C::from_phase(ph)).re
             })
             .collect()
@@ -1432,7 +1449,7 @@ mod tests {
         // constraint lengths when the symbols are perfect, and only bites when
         // they are not. Ten decibels is what Annex E's own tables say a 600 bps
         // rate needs (BER 3.4e-4 at 10 dB in 3 kHz).
-        let mut audio = modulate(&bits, 40, 12000.0);
+        let mut audio = modulate(&bits, 40, 12000.0, 0.0);
         let rms = (audio.iter().map(|v| v * v).sum::<f32>() / audio.len() as f32).sqrt();
         let noise = rms / 10f32.powf(10.0 / 20.0) * 1.4;
         let mut seed = 0x5EED_1234u32;
@@ -1471,8 +1488,8 @@ mod tests {
     /// interleaver's row structure against the standard (a loopback shares whatever
     /// convention both halves use); what proves that is a start-of-message pattern
     /// on real traffic, which is what the off-air captures are for.
-    #[test]
-    fn a_coded_message_survives_the_whole_chain() {
+    #[allow(clippy::too_many_lines)]
+    fn coded_round_trip(ramp_hz_s: f64) -> (Vec<u8>, Vec<S4285Message>) {
         use super::fec::{self, CodedRate};
         let rate = CodedRate::Bps600;
         // A payload whose bits are not all the same, so a decoder that drops
@@ -1504,7 +1521,7 @@ mod tests {
             .collect();
         // One frame's worth of padding so the last bits are carried.
         let frames = sent.len() / 128 + 2;
-        let mut audio = modulate(&sent, frames, 12000.0);
+        let mut audio = modulate(&sent, frames, 12000.0, ramp_hz_s);
         // Noise, because a noiseless loopback hides the decoder's own faults: the
         // forced start state at the front of each chunk is pulled right by the
         // metric within a few constraint lengths when the symbols are perfect, and
@@ -1536,10 +1553,38 @@ mod tests {
                 }
             }
         }
-        let m = got.first().unwrap_or_else(|| panic!("no coded message: {:?}", rx.report()));
-        assert_eq!(m.rate, rate, "the wrong rate named the message");
+        if got.is_empty() {
+            panic!("no coded message at {ramp_hz_s} Hz/s: {:?}", rx.report());
+        }
+        (payload, got)
+    }
+
+    /// The whole chain, over a channel that is exactly on frequency.
+    #[test]
+    fn a_coded_message_survives_the_whole_chain() {
+        use super::fec::CodedRate;
+        let (payload, got) = coded_round_trip(0.0);
+        let m = &got[0];
+        assert_eq!(m.rate, CodedRate::Bps600, "the wrong rate named the message");
         assert!(m.closed, "the EOM did not close the message");
         assert_eq!(m.bits, payload, "the message bits are not the ones that were sent");
+    }
+
+    /// The same chain on a channel that is **not** exactly on frequency.
+    ///
+    /// A 1 Hz/s ramp is well inside the 3.5 Hz/s the standard allows, and it is
+    /// the case that used to break the receiver outright: the soft decisions
+    /// handed to Annex E kept the frame's residual phase, so the bits going into
+    /// the code arrived rotated by a different amount every frame while the
+    /// constellation still read 0.99 and the references still collapsed at 0.998.
+    /// Verified failing against the code before `feed_coded` was given the same
+    /// channel line the frame itself is read through.
+    #[test]
+    fn a_coded_message_survives_a_carrier_ramp() {
+        for ramp in [1.0f64, 4.0] {
+            let (payload, got) = coded_round_trip(ramp);
+            assert_eq!(got[0].bits, payload, "the wrong bits at {ramp} Hz/s");
+        }
     }
 
     /// The negative that makes the lock a detector rather than a lamp: noise must
