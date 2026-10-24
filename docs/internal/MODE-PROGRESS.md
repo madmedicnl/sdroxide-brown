@@ -1222,6 +1222,42 @@ rate in the header, or a recording of something other than the mode's own
 waveform. The same measurement taken before another port attempt is what stops a
 fourth receiver being written against the wrong signal.
 
+### What the files contain, re-measured (2026-10-24) — the width claim was wrong
+
+The paragraph above says the 8PSK recordings measure **20–46 Hz wide**. They do
+not: that was a faulty width measurement (the −10 and −20 dB thresholds were
+being read off bins *above* the peak instead of beside it). Measured again, and
+each number with its method:
+
+| | BPSK125 | QPSK125 | 8PSK125 | 8PSK500 |
+|---|---|---|---|---|
+| carrier | 1800.8 Hz | 1735.0 Hz | 1806.6 Hz | 1988.3 Hz |
+| width at **−3 dB** | **125.0 Hz** | — | **124.5 Hz** | — |
+| in-band SNR (est.) | 27.8 dB | 27.7 dB | 28.2 dB | 15.8 dB |
+| differential 2-fold / 4-fold | **0.87 / 0.60** | 0.78 / **0.74** | 0.58 / 0.44 | 0.72 / 0.53 |
+
+So **the file is the right width for 125 baud** — 124.5 Hz at −3 dB, exactly what
+a 125-baud PSK occupies — and its level and SNR match the BPSK and QPSK files in
+the same corpus. The **baud line** is at 125.0 Hz with harmonics at 250 and 374
+(spectrum of the phase derivative), so it is a 125-baud signal.
+
+What does *not* fit is the constellation: BPSK125 shows its two differential
+phases at 0.87 and QPSK125 its four at 0.74, while every 8PSK file stays at
+0.44–0.58 however the symbol phase is chosen. Its differential phase histogram
+collapses onto 0° and 180° — which is what a signal with a **closed eye** looks
+like as much as what a BPSK looks like, and our BPSK decoder reads nothing from
+it either (`PskRx` at 125 baud over 1650–1950 Hz, best text empty).
+
+**So the honest state:** the files are 125-baud, right-width, right-level PSK
+signals whose constellation does not settle for us — not the "30 Hz wide" files
+the earlier note described. Whether that is fldigi's 8PSK being a waveform we do
+not model (a pilot, a vestigial sideband, or the π-rotation handled differently)
+or a damaged recording, **this bench cannot say**, and the next step is a
+*synthetic* 8PSK built the way fldigi builds one and compared against the file by
+the same statistic — plus an off-air or reference 8PSK recording. The slicer stays
+in, unproven, and nothing is wired to the panel until one of those two answers
+arrives.
+
 ### DTMF — eight tones, and two things the reference leaves to its squelch
 
 A small mode, done whole. fldigi's `src/dtmf/dtmf.cxx`: four row tones and four
