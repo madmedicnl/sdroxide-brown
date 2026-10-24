@@ -129,6 +129,21 @@ panel** with the Detachable settings page, the **decoded-text UDP feed**, the
 
 ## Parked, with the reason
 
+- **The Linux AppImage is missing from releases, and it is a decision to revisit.**
+  The AppImage step still works, but it lives on the `linux-x86_64-compat` job,
+  which was **dropped from normal releases at 1.9.20** on a download measurement
+  (21 of 31 assets never fetched once, all of them ARM or `-compat`). So a
+  release has no compat job and no AppImage. Three ways out, for the operator to
+  choose when he has looked at the workflow:
+  1. move the AppImage onto the regular `linux-x86_64` job — free, ships every
+     release, but inherits that build's **glibc 2.39** floor (breaks 22.04,
+     Debian 12, Mint 21 — the audience an AppImage is for);
+  2. **a small job of its own** in the `ubuntu:22.04` container that packages
+     only the AppImage — the recommended one;
+  3. attach one to an existing release with `gh release upload`, built **from
+     that tag** rather than `main`.
+  Nothing is started; this is a note so the finding is not re-derived.
+
 - **The four wide PSK banks** — PSK125C12, PSK500C4, PSK500RC4 and PSK1000C2 read
   0 of 3 words where every narrower bank reads 3 of 3. **Measured 2026-10-24**:
   sharpening the per-carrier filter changes nothing, so it is not transition

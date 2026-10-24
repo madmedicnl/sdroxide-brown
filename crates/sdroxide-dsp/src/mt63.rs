@@ -1175,8 +1175,16 @@ mod tests {
         for variant in [
             Mt63Variant { bandwidth: 2000, long: false },
             Mt63Variant { bandwidth: 2000, long: true },
+            Mt63Variant { bandwidth: 1000, long: false },
+            Mt63Variant { bandwidth: 1000, long: true },
+            Mt63Variant { bandwidth: 500, long: false },
+            Mt63Variant { bandwidth: 500, long: true },
         ] {
-            let mut tx = Mt63Tx::new(variant, variant.rate(), 1500.0);
+            // At a real audio rate, not the variant's own: a 500 Hz bank centred
+            // at 1500 needs 750 Hz of audio, and at the variant's natural 1000 Hz
+            // rate half of it would be over Nyquist — a fixture fault that reads
+            // as a receiver fault.
+            let mut tx = Mt63Tx::new(variant, 8000.0, 1500.0);
             tx.push_text("TEST THE EAGLE HAS LANDED");
             let mut audio = Vec::new();
             let mut block = vec![0.0f32; 400];
@@ -1187,7 +1195,7 @@ mod tests {
                 guard += 1;
             }
             assert!(tx.drained(), "{} never finished its transmission", variant.label());
-            let mut rx = Mt63Rx::new(variant.rate(), 1500.0, variant);
+            let mut rx = Mt63Rx::new(8000.0, 1500.0, variant);
             let (text, _) = rx.decode(&audio, 0);
             let clean = printable(&text);
             assert!(
@@ -1236,6 +1244,126 @@ mod tests {
     /// the short and the long pattern from the encoder's own bits.
     #[test]
     #[ignore]
+    /// Temporary probe: centre sweep of the corpus samples.
+    #[test]
+    #[ignore]
+    fn probe_mt63_centre() {
+        for name in ["MT63-2KS", "MT63-1KS", "MT63-1KL", "MT63-500S", "MT63-500L"] {
+            let path = format!("{}/../../samples/fldigi/{name}.wav", env!("CARGO_MANIFEST_DIR"));
+            let mut reader = hound::WavReader::open(&path).expect("open");
+            let spec = reader.spec();
+            let audio: Vec<f32> =
+                reader.samples::<i16>().map(|s| s.expect("s") as f32 / 32_768.0).collect();
+            let variant = Mt63Variant::named(name).unwrap();
+            let rate = spec.sample_rate as f64;
+            let want: Vec<&str> = if name.ends_with('S') {
+                vec!["EAGLE", "LANDED", "SDRBROWN"]
+            } else {
+                vec!["SDRBROWN", "TEST"]
+            };
+            let mut best = (0usize, 0.0f64, String::new());
+            let mut c = 1730.0f64;
+            while c <= 1755.0 {
+                let (t, _) = decode(&audio, rate, c, variant);
+                let p = printable(&t).to_uppercase();
+                let hits = want.iter().filter(|w| p.contains(*w)).count();
+                if hits > best.0 {
+                    best = (hits, c, printable(&t));
+                }
+                c += 0.5;
+            }
+            let t: String = best.2.chars().take(70).collect();
+            eprintln!("{name}: {}/{} words at centre {:.1} Hz: {t:?}", best.0, want.len(), best.1);
+        }
+    }
+
+    /// Temporary probe: phase sweep of the 500 Hz loopback.
+    #[test]
+    #[ignore]
+    fn probe_mt63_phase() {
+        for variant in [
+            Mt63Variant { bandwidth: 2000, long: false },
+            Mt63Variant { bandwidth: 1000, long: false },
+            Mt63Variant { bandwidth: 500, long: false },
+        ] {
+            let mut tx = Mt63Tx::new(variant, 8000.0, 1500.0);
+            tx.push_text("TEST THE EAGLE HAS LANDED");
+            let mut audio = Vec::new();
+            let mut block = vec![0.0f32; 400];
+            let mut guard = 0;
+            while !tx.drained() && guard < 4000 {
+                tx.next_block(&mut block);
+                audio.extend_from_slice(&block);
+                guard += 1;
+            }
+            let hop = (SYMBOL as f64 * 8000.0 / variant.rate()).round() as usize;
+            let mut best: Vec<(usize, String)> = Vec::new();
+            for phase in (0..hop).step_by((hop / 40).max(1)) {
+                let mut rx = Mt63Rx::new(8000.0, 1500.0, variant);
+                let (t, _) = rx.decode(&audio, phase);
+                let p = printable(&t);
+                let hits = ["TEST", "EAGLE", "LANDED"].iter().filter(|w| p.contains(*w)).count();
+                best.push((hits, format!("{phase}: {p}")));
+            }
+            best.sort_by_key(|(h, _)| std::cmp::Reverse(*h));
+            eprintln!("== {} best phases:", variant.label());
+            for (h, t) in best.iter().take(3) {
+                let t: String = t.chars().take(90).collect();
+                eprintln!("   {h}/3  {t}");
+            }
+        }
+    }
+
+    /// Temporary probe: which symbol hop reads the 1K and 500 samples?""
+    #[test]
+    #[ignore]
+    fn probe_mt63_hops() {
+        for name in ["MT63-2KS", "MT63-1KS", "MT63-500S"] {
+            let path = format!("{}/../../samples/fldigi/{name}.wav", env!("CARGO_MANIFEST_DIR"));
+            let mut reader = hound::WavReader::open(&path).expect("open");
+            let spec = reader.spec();
+            let audio: Vec<f32> =
+                reader.samples::<i16>().map(|s| s.expect("s") as f32 / 32_768.0).collect();
+            let variant = Mt63Variant::named(name).unwrap();
+            let rate = spec.sample_rate as f64;
+            let mut line = format!("{name}:");
+            for shift in [-500i32, -250, -100, 0, 100, 250, 500] {
+                let centre = 1740.0 + shift as f64;
+                let (t, snr) = decode(&audio, rate, centre, variant);
+                let p = printable(&t);
+                line.push_str(&format!(" c{shift:+}:{:?}", p.chars().skip(20).take(24).collect::<String>()));
+                let _ = snr;
+            }
+            eprintln!("{line}");
+            let mut line = String::new();
+            for div in [1usize, 2, 4] {
+                let mut best = (String::new(), 0.0f32);
+                let hop0 = (SYMBOL as f64 * rate / variant.rate()).round() as usize;
+                let hop = hop0 / div;
+                for phase in (0..hop).step_by((hop / 40).max(1)) {
+                    let mut rx = Mt63Rx::new(rate, 1740.0, variant);
+                    rx.hop = hop;
+                    for rev in [false, true] {
+                        let (t, snr) = rx.decode_with(&audio, phase, rev);
+                        let sc = textiness(&t) as f32 * 10.0 + snr;
+                        if sc > best.1 {
+                            best = (t, sc);
+                        }
+                    }
+                }
+                let p = printable(&best.0);
+                line.push_str(&format!(
+                    " hop/{}={} -> score {:.0} {:?}",
+                    div,
+                    hop,
+                    best.1,
+                    p.chars().take(60).collect::<String>()
+                ));
+            }
+            eprintln!("{line}");
+        }
+    }
+
     fn the_corpus_mt63_samples_are_measured() {
         use std::path::Path;
         let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../samples/fldigi");
