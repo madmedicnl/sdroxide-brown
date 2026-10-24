@@ -171,6 +171,33 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag, eleventh pass) — segment interleaver landed, band limits measured
+
+**Summary.** The interleaver now works in the standard's 32-symbol segments, so a
+fade is spread over ten seconds instead of a third of one. The two impaired-channel
+tests were re-baselined honestly (the impairment's cost comes out of the noise
+budget), and the band the tape arrives in finally has a number: 800–3000 Hz costs
+about 4 dB, and a low corner at 1000 Hz never decodes at any level. The captures
+still do not frame a message, so what is left is the demodulation of real signals,
+not the coding.
+
+**Done.** `ConvInterleaver::push` gathers 32 symbols per commutator step; the
+round-trip test measures the pipeline latency instead of assuming it; the flush in
+the test transmitter is derived from the depth (32·31·j + 102) and the audio gets two
+interleaver spans of margin; `coded_round_trip_noise` sets the noise budget, and the
+band and two-path tests now spend theirs on their impairment.
+
+**Numbers.** Span 11 904 symbols = 9.9 s at j = 12 (was 372 = 0.31 s). Round-trip
+64/64. Band sweep at 10/14/18/22/26 dB: 300–3300 ✓10, 300–2600 ✓10, 800–3000 ✓14
+(✗10), 1000–3300 ✗26. Captures: 0 messages, tape best SOM 28/32, 6348 capture 27/32.
+Tests 16 passed, gate silent, fmt clean.
+
+**Next.** The demodulation of real signals: our own signal reads 0.99 and decodes,
+the captures read 0.73–0.82 and do not, and with the coding now verified end to end
+the difference is in the symbols. The 0.93-reference capture is the test bed.
+
+---
+
 ## 2026-10-24 (stanag, tenth pass) — the segment interleaver, written and measured, not landed
 
 **Summary.** The interleaver is the wrong shape: the standard interleaves 32-symbol

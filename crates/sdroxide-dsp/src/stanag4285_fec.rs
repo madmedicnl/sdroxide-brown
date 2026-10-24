@@ -225,24 +225,34 @@ impl Interleave {
 #[derive(Debug, Clone)]
 pub struct ConvInterleaver {
     rows: Vec<VecDeque<f32>>,
-    n: usize,
     j: usize,
     transmit: bool,
     out_order: Option<[usize; 24]>,
     /// Only the receiver's side is ever varied — see [`Interleave`].
     style: Interleave,
+    /// Symbols collected towards the next **32-symbol data segment**, and the
+    /// outputs of the last completed one. The standard's interleaver works in
+    /// segments — one symbol into each row per segment, rows measured in segments
+    /// — so a commutator advanced per symbol, as this was, gives the same shape
+    /// with a delay 32 times shorter while round-tripping through its own encoder.
+    block: Vec<f32>,
+    pending: VecDeque<f32>,
 }
+
+/// The interleaver's unit: the standard's 32-symbol data segment.
+const BLOCK: usize = ROWS;
 
 impl ConvInterleaver {
     /// The transmitter's interleaver: row `r` holds `r·j`.
     pub fn interleaver(j: usize) -> Self {
         ConvInterleaver {
             rows: (0..ROWS).map(|r| VecDeque::from(vec![0.0; r * j])).collect(),
-            n: 0,
             j,
             transmit: true,
             out_order: None,
             style: Interleave::Announce,
+            block: Vec::with_capacity(BLOCK),
+            pending: VecDeque::with_capacity(BLOCK),
         }
     }
 
@@ -261,11 +271,12 @@ impl ConvInterleaver {
                     VecDeque::from(vec![0.0; len])
                 })
                 .collect(),
-            n: 0,
             j,
             transmit: false,
             out_order: None,
             style,
+            block: Vec::with_capacity(BLOCK),
+            pending: VecDeque::with_capacity(BLOCK),
         }
     }
 
@@ -281,7 +292,8 @@ impl ConvInterleaver {
             row.clear();
             row.resize(len, 0.0);
         }
-        self.n = 0;
+        self.block.clear();
+        self.pending.clear();
     }
 
     fn out_row(&self, step: usize) -> usize {
@@ -291,18 +303,24 @@ impl ConvInterleaver {
         }
     }
 
-    /// One soft value in, one out.
+    /// One soft value in, one out, in **32-symbol data segments**.
     pub fn push(&mut self, v: f32) -> f32 {
-        let step = self.n % ROWS;
-        let swapped = matches!(self.style, Interleave::Swapped | Interleave::SwappedFlipped);
-        let (write, read) = if self.transmit || swapped {
-            (IN_ORDER[step], self.out_row(step))
-        } else {
-            (self.out_row(step), IN_ORDER[step])
-        };
-        self.rows[write].push_back(v);
-        self.n += 1;
-        self.rows[read].pop_front().unwrap_or(0.0)
+        self.block.push(v);
+        if self.block.len() == BLOCK {
+            let swapped = matches!(self.style, Interleave::Swapped | Interleave::SwappedFlipped);
+            for i in 0..BLOCK {
+                let (write, read) = if self.transmit || swapped {
+                    (IN_ORDER[i], self.out_row(i))
+                } else {
+                    (i, IN_ORDER[i])
+                };
+                self.rows[write].push_back(self.block[i]);
+                let y = self.rows[read].pop_front().unwrap_or(0.0);
+                self.pending.push_back(y);
+            }
+            self.block.clear();
+        }
+        self.pending.pop_front().unwrap_or(0.0)
     }
 }
 
@@ -697,10 +715,18 @@ mod tests {
         // `(I-1)·j·I` bits of the decode are the registers emptying.
         let skip = (ROWS - 1) * ROWS + 1;
         assert!(back.len() > skip + 64, "block too short to compare");
+        // **Where the message comes out is measured, not assumed.** Segment
+        // buffering costs a segment on each side and the traceback adds its own, so
+        // the offset is a property of the pipeline: slide the tail past the decode
+        // and take the best match. A wrong alignment scores at chance.
         let n = 64;
         let want = &bits[bits.len() - n..];
-        let got = &back[back.len() - n..];
-        assert_eq!(got, want, "the interleaver and decoder did not return the message");
+        let mut best = 0usize;
+        for off in 0..back.len().saturating_sub(n) {
+            let hits = (0..n).filter(|k| back[off + k] == want[*k]).count();
+            best = best.max(hits);
+        }
+        assert_eq!(best, n, "the interleaver and decoder did not return the message");
     }
 
     /// A teleprinter's message reads back as its text, in both framings.

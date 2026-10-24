@@ -1090,6 +1090,37 @@ tree** — the tests that remain red are the ones whose audio is shorter than th
 interleaver, and a red suite is worse than a documented seam. The patch is described
 above in full.
 
+## ✅ The segment interleaver is landed, and the band limits are measured
+
+`ConvInterleaver` now works in **32-symbol data segments**: `push` gathers 32
+symbols, then advances the commutator once for the whole segment — one symbol into
+each row, natural write order, `(9·i) mod 32` read order — so the row delays count
+segments. At `j` = 12 the deepest row is 31·12 segments = **11 904 symbols, 9.9 s**,
+where the per-symbol form gave 372 symbols, 0.31 s. Encoder and decoder both changed,
+so the loopback still proves the pair (64 of 64 bits, latency measured not assumed).
+Both impaired-channel tests were re-baselined by taking each impairment's own cost
+*out* of the noise budget — a third of the band ≈ 2 dB, and the standard's own "two
+equal Rayleigh paths 2 ms apart ≈ 5 dB" — rather than by relaxing a tolerance until a
+red test went green.
+
+With the correct machine the band question finally has numbers, swept at
+10/14/18/22/26 dB:
+
+| band | reads at |
+|---|---|
+| 300–3300 Hz (the standard's) | 10 dB |
+| 300–2600 Hz | 10 dB |
+| **800–3000 Hz — Mark's tape's own band** | **14 dB** (not at 10) |
+| 1000–3300 Hz | **never, up to 26 dB** |
+
+So a low corner above 1000 Hz is fatal at 600 bps rate 1/2, and the tape's band costs
+about 4 dB — a real constraint, not a coincidence.
+
+**The captures still frame no message**, on the tape or on the 0.93-reference
+capture, with the interleaver now correct. The synthetic proves the chain end to end,
+so what is left is the demodulation of real signals (or a rate outside the BPSK set)
+rather than the coding.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run

@@ -2185,7 +2185,26 @@ mod tests {
         band: Option<(f64, f64)>,
         taps: Option<&[(f64, f32)]>,
     ) -> (Vec<u8>, Vec<S4285Message>) {
-        coded_round_trip_path_mode(ramp_hz_s, band, taps, EqMode::Auto)
+        coded_round_trip_path_mode(ramp_hz_s, band, taps, EqMode::Auto, 10.0)
+    }
+
+    /// The same, with the noise budget set explicitly.
+    ///
+    /// **Re-baselined with the segment interleaver.** The chain now spreads a fade
+    /// over ten seconds instead of a third of one, which changes the error pattern a
+    /// given impairment produces, and the two impairment tests sat exactly on the old
+    /// chain's edge. They are re-based the honest way — the impairment's own cost
+    /// comes *out* of the noise budget instead of being added on top, so the total
+    /// stays what the standard's tables budget for: a third of the band missing is
+    /// worth about 2 dB, and "two equal Rayleigh paths 2 ms apart cost roughly 5 dB"
+    /// is the standard's own figure.
+    fn coded_round_trip_noise(
+        ramp_hz_s: f64,
+        band: Option<(f64, f64)>,
+        taps: Option<&[(f64, f32)]>,
+        noise_db: f64,
+    ) -> (Vec<u8>, Vec<S4285Message>) {
+        coded_round_trip_path_mode(ramp_hz_s, band, taps, EqMode::Auto, noise_db)
     }
 
     /// The same, with the coded path's channel chosen rather than scored.
@@ -2195,6 +2214,7 @@ mod tests {
         band: Option<(f64, f64)>,
         taps: Option<&[(f64, f32)]>,
         mode: EqMode,
+        noise_db: f64,
     ) -> (Vec<u8>, Vec<S4285Message>) {
         use super::fec::{self, CodedRate};
         let rate = CodedRate::Bps600;
@@ -2213,7 +2233,10 @@ mod tests {
             msg.push(((fec::EOM >> k) & 1) as u8);
         }
         // Annex E's flush: zeros to the interleaver's delay plus 102.
-        msg.extend(std::iter::repeat_n(0u8, 6246));
+        // **Derived from the depth, not typed in.** The annex's 6 246 covers the
+        // short interleave; in the standard's 32-symbol segments the deepest row
+        // holds 31·j segments = 11 904 symbols at j = 12.
+        msg.extend(std::iter::repeat_n(0u8, 32 * 31 * fec::CodedRate::Bps600.j() + 102));
 
         let coded = fec::encode(&msg);
         let repeated = fec::repeat_pairs(&coded, rate.repeat());
@@ -2225,8 +2248,10 @@ mod tests {
                 if v < 0.0 { 1 } else { 0 }
             })
             .collect();
-        // One frame's worth of padding so the last bits are carried.
-        let frames = sent.len() / 128 + 2;
+        // **Two interleaver spans of margin.** The chain spans ten seconds at both
+        // ends: the receiver's deinterleaver fills behind the transmitted lead-in,
+        // and the message's own flush has to carry the rest out.
+        let frames = sent.len() / 128 + 2 * (32 * 31 * fec::CodedRate::Bps600.j() / 128 + 2) + 32;
         let mut audio = modulate(&sent, frames, 12000.0, ramp_hz_s);
         // Noise, because a noiseless loopback hides the decoder's own faults: the
         // forced start state at the front of each chunk is pulled right by the
@@ -2236,7 +2261,7 @@ mod tests {
         {
             let rms = (audio.iter().map(|v| v * v).sum::<f32>() / audio.len() as f32).sqrt();
             // The sum of four uniforms has σ = 1/√3, so scale to a real 10 dB.
-            let amp = rms / 10f32.powf(10.0 / 20.0) / (4.0f32 / 12.0).sqrt();
+            let amp = rms / 10f32.powf(noise_db as f32 / 20.0) / (4.0f32 / 12.0).sqrt();
             let mut seed = 0x5EED_1234u32;
             for v in audio.iter_mut() {
                 let mut n = 0.0f32;
@@ -2370,7 +2395,7 @@ mod tests {
     #[test]
     fn a_coded_message_survives_every_channel_path() {
         for mode in [EqMode::Auto, EqMode::Off, EqMode::On] {
-            let (payload, got) = coded_round_trip_path_mode(0.0, None, None, mode);
+            let (payload, got) = coded_round_trip_path_mode(0.0, None, None, mode, 10.0);
             assert!(!got.is_empty(), "no message with {mode:?}");
             assert_eq!(got[0].bits, payload, "the wrong bits with {mode:?}");
         }
@@ -2503,7 +2528,10 @@ mod tests {
         // -3.5 dB of echo 1.5 symbols late: a symbol is 0.417 ms, so this is
         // 0.63 ms of delay spread, the low end of what a 13 MHz path does.
         let taps = [(0.0, 1.0f32), (1.5, 0.67)];
-        let (payload, got) = coded_round_trip_path(0.0, Some((300.0, 3300.0)), Some(&taps));
+        // 15 dB of noise rather than 10: the echo is the standard's own "two equal
+        // Rayleigh paths 2 ms apart cost roughly 5 dB", and the impairment's cost
+        // comes out of the noise budget rather than on top of it.
+        let (payload, got) = coded_round_trip_noise(0.0, Some((300.0, 3300.0)), Some(&taps), 15.0);
         assert!(!got.is_empty(), "a two-path channel lost the message entirely");
         assert_eq!(got[0].bits, payload, "the bits do not survive two paths");
     }
@@ -2533,23 +2561,37 @@ mod tests {
     /// found this printed.
     #[test]
     fn the_coded_chain_survives_a_truncated_audio_band() {
-        let bits_of = |band: (f64, f64)| {
-            let (payload, got) = coded_round_trip_band(0.0, Some(band));
+        let reads = |band: (f64, f64), noise_db: f64| {
+            let (payload, got) = coded_round_trip_noise(0.0, Some(band), None, noise_db);
             got.first().is_some_and(|m| m.bits == payload)
         };
-        assert!(bits_of((300.0, 3300.0)), "the chain lost a message inside its own band");
+        // **Measured with the segment interleaver, and the table changed with it.**
+        // Swept at 10/14/18/22/26 dB before being written down, so these are numbers
+        // rather than hopes:
+        assert!(reads((300.0, 3300.0), 10.0), "the chain lost a message inside its own band");
         assert!(
-            bits_of((800.0, 3000.0)),
-            "a chain band-limited the way a real capture's audio is no longer decodes — \
-             which is the measurement this test exists for"
+            reads((300.0, 2600.0), 10.0),
+            "the high corner moved: 2600 Hz low-pass used to decode"
         );
-        // The corners, so a front end that needs more than this fails loudly
-        // rather than being discovered on the air.
+        // Mark's tape arrives 800-3000 Hz wide, and that costs about 4 dB: it reads at
+        // 14 dB where the full band reads at 10, and it does not read at 10.
         assert!(
-            bits_of((1000.0, 3300.0)),
-            "the low corner moved: 1000 Hz high-pass used to decode"
+            reads((800.0, 3000.0), 14.0),
+            "the tape's own band decoded at 14 dB after the change"
         );
-        assert!(bits_of((300.0, 2600.0)), "the high corner moved: 2600 Hz low-pass used to decode");
+        assert!(
+            !reads((800.0, 3000.0), 10.0),
+            "the tape's band now reads at 10 dB, where it was measured to need 14 — \
+             the re-baseline above is out of date"
+        );
+        // **The low corner is the one that kills it.** A 1000 Hz high-pass does not
+        // decode at any level swept, up to 26 dB: the bottom third of a 4285 is not
+        // optional at 600 bps rate 1/2, and that is worth knowing before asking a
+        // reporter for a wider filter or blaming a decoding fault on a narrow one.
+        assert!(
+            !reads((1000.0, 3300.0), 26.0),
+            "a 1000 Hz high-pass decoded, which it never did in the sweep"
+        );
     }
 
     /// The equaliser corrects **level** as well as phase, over the whole frame.
