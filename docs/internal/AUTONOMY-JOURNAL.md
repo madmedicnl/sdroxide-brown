@@ -78,6 +78,15 @@ be mistaken for a decoder fault.
 - New tools, committed: `s4285_deint_dump` and `s4285_bits_dump` (the side-by-side
   against the independent implementation) and `s4285_search` (the convention sweep);
   the probe gains `S4285_CODED_OUT`, `S4285_FRAME_LOG` and the readiness line.
+- **The watcher says why it did not trigger.** It was printing "5.6x" against a 3.0x
+  threshold and writing nothing, because the ratio is meaningless when both numbers
+  are noise and the absolute floor is what refuses it. Each line now ends
+  `no frame (acf under the floor)` or `no match (ratio under threshold)`. Restarted
+  on eight frequencies at 23:15Z with the new build.
+- **One warning in the tree that is not ours:** `crates/sdroxide-dsp/src/navtex.rs`
+  has `constant SYNC_SCORE is never used`, left by the merged NAVTEX sensitivity
+  work. NAVTEX is F4NRM's, so it is recorded here and not touched — a change there
+  goes up as a PR.
 
 **Not done / blocked.**
 - **No coded message has been decoded, and none can be from the material on disk.**
