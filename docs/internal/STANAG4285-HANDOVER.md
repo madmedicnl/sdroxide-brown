@@ -816,6 +816,19 @@ from 0.900 to 0.465 and the constellation from 0.396 to 0.211. Reverted. Whateve
 is smearing the data symbols, a symbol-long average at the *current* timing
 instants is not it.
 
+**The baseband IQ opened, and it needs its own tuning** (same day). The capture
+is 912 kSps, CF32, 58 s. Its spectrum puts the signal **600–3000 Hz above the
+dial** — 2.4 kHz wide, exactly what Mark measured on the air — so the suppressed
+carrier is at about **600 Hz** in the recording, not on the dial. Lifting it to
+the 1800 Hz a demod-audio feed carries and extracting 40 s of 12 kHz audio gives
+`/tmp/opencode/stanag/iq-40s-c1800.wav`: frame ACF **0.38** against a 0.03 noise
+floor, so something periodic is there, but the folded sync reaches only **0.24**
+and no frame is accepted. This capture was taken at **13:42**, forty-nine minutes
+after the audio file, so it is not necessarily the same transmission — and an idle
+4285 folds (see "The traps") while carrying no data. **The audio file remains the
+reference**; the IQ needs a per-capture carrier estimate before anything else is
+measured from it.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run
