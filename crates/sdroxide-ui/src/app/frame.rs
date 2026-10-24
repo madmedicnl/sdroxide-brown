@@ -1532,6 +1532,30 @@ impl eframe::App for SdroxideApp {
         self.swl_window(&ctx, &mut cmds);
         self.listen_window(&ctx, &mut cmds);
         self.schedule_window(&ctx, &mut cmds);
+        // Sync persisted mask -> show_* flags (so menu toggles take effect).
+        self.show_dsc = (self.ui_settings.tool_windows_open & TW_DSC) != 0;
+        self.show_navtex = (self.ui_settings.tool_windows_open & TW_NAVTEX) != 0;
+        self.show_aprs = (self.ui_settings.tool_windows_open & TW_APRS) != 0;
+        self.show_wefax = (self.ui_settings.tool_windows_open & TW_WEFAX) != 0;
+        self.show_sstv = (self.ui_settings.tool_windows_open & TW_SSTV) != 0;
+        self.show_dab = (self.ui_settings.tool_windows_open & TW_DAB) != 0;
+        self.show_js8 = (self.ui_settings.tool_windows_open & TW_JS8) != 0;
+        self.show_acars = (self.ui_settings.tool_windows_open & TW_ACARS) != 0;
+        self.show_hfdl = (self.ui_settings.tool_windows_open & TW_HFDL) != 0;
+        self.show_vdl2 = (self.ui_settings.tool_windows_open & TW_VDL2) != 0;
+        self.show_ais = (self.ui_settings.tool_windows_open & TW_AIS) != 0;
+        self.show_adsb = (self.ui_settings.tool_windows_open & TW_ADSB) != 0;
+        self.show_fsq = (self.ui_settings.tool_windows_open & TW_FSQ) != 0;
+        self.show_hell = (self.ui_settings.tool_windows_open & TW_HELL) != 0;
+        self.show_packet = (self.ui_settings.tool_windows_open & TW_PACKET) != 0;
+        self.show_wspr = (self.ui_settings.tool_windows_open & TW_WSPR) != 0;
+        self.show_pi4 = (self.ui_settings.tool_windows_open & TW_PI4) != 0;
+        self.show_text = (self.ui_settings.tool_windows_open & TW_TEXT) != 0;
+        self.show_uvpacket = (self.ui_settings.tool_windows_open & TW_UVPACKET) != 0;
+        self.show_jtty = (self.ui_settings.tool_windows_open & TW_JTTY) != 0;
+        self.show_ale = (self.ui_settings.tool_windows_open & TW_ALE) != 0;
+        self.show_rf_paint = (self.ui_settings.tool_windows_open & TW_RFPAINT) != 0;
+        self.show_image = (self.ui_settings.tool_windows_open & TW_IMAGE) != 0;
         if self.show_dsc { self.dsc_window(&ctx, &mut cmds); }
         if self.show_navtex { self.navtex_window(&ctx, &mut cmds); }
         if self.show_aprs { self.aprs_window(&ctx, &mut cmds); }
@@ -1539,25 +1563,25 @@ impl eframe::App for SdroxideApp {
         let mode = self.state.rx[0].mode;
         // Auto-open the floating window when entering the mode (once).
         if self.last_mode_for_tools != Some(mode) {
-            if mode.is_sstv() { self.show_sstv = true; }
-            if mode == sdroxide_types::Mode::Dab { self.show_dab = true; }
-            if mode.is_js8() { self.show_js8 = true; }
-            if mode == sdroxide_types::Mode::Acars { self.show_acars = true; }
-            if mode.is_hfdl() { self.show_hfdl = true; }
-            if mode.is_vdl2() { self.show_vdl2 = true; }
-            if mode.is_ais() { self.show_ais = true; }
-            if mode.is_adsb() { self.show_adsb = true; }
-            if mode.is_fsq() { self.show_fsq = true; }
-            if mode.is_hell() { self.show_hell = true; }
-            if mode.is_packet() { self.show_packet = true; }
-            if mode.is_wspr() { self.show_wspr = true; }
-            if mode.is_pi4() { self.show_pi4 = true; }
-            if mode.is_text_modem() { self.show_text = true; }
-            if mode == sdroxide_types::Mode::UvPacket { self.show_uvpacket = true; }
-            if mode == sdroxide_types::Mode::Jtty { self.show_jtty = true; }
-            if mode == sdroxide_types::Mode::Ale { self.show_ale = true; }
-            if mode.is_rf_paint() { self.show_rf_paint = true; }
-            if mode.is_image() { self.show_image = true; }
+            if mode.is_sstv() { self.show_sstv = true; self.ui_settings.tool_windows_open |= TW_SSTV; }
+            if mode == sdroxide_types::Mode::Dab { self.show_dab = true; self.ui_settings.tool_windows_open |= TW_DAB; }
+            if mode.is_js8() { self.show_js8 = true; self.ui_settings.tool_windows_open |= TW_JS8; }
+            if mode == sdroxide_types::Mode::Acars { self.show_acars = true; self.ui_settings.tool_windows_open |= TW_ACARS; }
+            if mode.is_hfdl() { self.show_hfdl = true; self.ui_settings.tool_windows_open |= TW_HFDL; }
+            if mode.is_vdl2() { self.show_vdl2 = true; self.ui_settings.tool_windows_open |= TW_VDL2; }
+            if mode.is_ais() { self.show_ais = true; self.ui_settings.tool_windows_open |= TW_AIS; }
+            if mode.is_adsb() { self.show_adsb = true; self.ui_settings.tool_windows_open |= TW_ADSB; }
+            if mode.is_fsq() { self.show_fsq = true; self.ui_settings.tool_windows_open |= TW_FSQ; }
+            if mode.is_hell() { self.show_hell = true; self.ui_settings.tool_windows_open |= TW_HELL; }
+            if mode.is_packet() { self.show_packet = true; self.ui_settings.tool_windows_open |= TW_PACKET; }
+            if mode.is_wspr() { self.show_wspr = true; self.ui_settings.tool_windows_open |= TW_WSPR; }
+            if mode.is_pi4() { self.show_pi4 = true; self.ui_settings.tool_windows_open |= TW_PI4; }
+            if mode.is_text_modem() { self.show_text = true; self.ui_settings.tool_windows_open |= TW_TEXT; }
+            if mode == sdroxide_types::Mode::UvPacket { self.show_uvpacket = true; self.ui_settings.tool_windows_open |= TW_UVPACKET; }
+            if mode == sdroxide_types::Mode::Jtty { self.show_jtty = true; self.ui_settings.tool_windows_open |= TW_JTTY; }
+            if mode == sdroxide_types::Mode::Ale { self.show_ale = true; self.ui_settings.tool_windows_open |= TW_ALE; }
+            if mode.is_rf_paint() { self.show_rf_paint = true; self.ui_settings.tool_windows_open |= TW_RFPAINT; }
+            if mode.is_image() { self.show_image = true; self.ui_settings.tool_windows_open |= TW_IMAGE; }
             self.last_mode_for_tools = Some(mode);
         }
         if mode.is_sstv() && self.show_sstv { self.sstv_window(&ctx, &mut cmds); }
@@ -4810,21 +4834,29 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "dsc", "DSC", [640.0, 480.0], self.show_dsc,
             |me, ui| { let h = ui.available_height(); me.dsc_panel(ui, cmds, h); });
         self.show_dsc = open;
+        if open { self.ui_settings.tool_windows_open |= TW_DSC; } else { self.ui_settings.tool_windows_open &= !TW_DSC; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn navtex_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "navtex", "NAVTEX", [900.0, 600.0], self.show_navtex,
             |me, ui| { let h = ui.available_height(); me.navtex_panel(ui, cmds, h); });
         self.show_navtex = open;
+        if open { self.ui_settings.tool_windows_open |= TW_NAVTEX; } else { self.ui_settings.tool_windows_open &= !TW_NAVTEX; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn aprs_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "aprs", "APRS", [760.0, 600.0], self.show_aprs,
             |me, ui| { let h = ui.available_height(); me.aprs_panel(ui, cmds, h); });
         self.show_aprs = open;
+        if open { self.ui_settings.tool_windows_open |= TW_APRS; } else { self.ui_settings.tool_windows_open &= !TW_APRS; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn wefax_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "wefax", "WEFAX", [900.0, 600.0], self.show_wefax,
             |me, ui| { let h = ui.available_height(); me.wefax_panel(ui, cmds, h); });
         self.show_wefax = open;
+        if open { self.ui_settings.tool_windows_open |= TW_WEFAX; } else { self.ui_settings.tool_windows_open &= !TW_WEFAX; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
 }
 
@@ -4833,16 +4865,22 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "sstv", "SSTV", [760.0, 600.0], self.show_sstv,
             |me, ui| { let h = ui.available_height(); me.image_panel(ui, cmds, sdroxide_types::Mode::Sstv); let _ = h; });
         self.show_sstv = open;
+        if open { self.ui_settings.tool_windows_open |= TW_SSTV; } else { self.ui_settings.tool_windows_open &= !TW_SSTV; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn dab_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "dab", "DAB", [720.0, 560.0], self.show_dab,
             |me, ui| { let h = ui.available_height(); me.dab_panel(ui, cmds, h); });
         self.show_dab = open;
+        if open { self.ui_settings.tool_windows_open |= TW_DAB; } else { self.ui_settings.tool_windows_open &= !TW_DAB; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn js8_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "js8", "JS8", [640.0, 480.0], self.show_js8,
             |me, ui| { let h = ui.available_height(); me.js8_panel(ui, cmds, h); });
         self.show_js8 = open;
+        if open { self.ui_settings.tool_windows_open |= TW_JS8; } else { self.ui_settings.tool_windows_open &= !TW_JS8; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
 }
 
@@ -4851,21 +4889,29 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "acars", "ACARS", [720.0, 560.0], self.show_acars,
             |me, ui| { let h = ui.available_height(); me.acars_panel(ui, cmds, h); });
         self.show_acars = open;
+        if open { self.ui_settings.tool_windows_open |= TW_ACARS; } else { self.ui_settings.tool_windows_open &= !TW_ACARS; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn hfdl_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "hfdl", "HFDL", [720.0, 560.0], self.show_hfdl,
             |me, ui| { let h = ui.available_height(); me.hfdl_panel(ui, cmds, h); });
         self.show_hfdl = open;
+        if open { self.ui_settings.tool_windows_open |= TW_HFDL; } else { self.ui_settings.tool_windows_open &= !TW_HFDL; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn vdl2_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "vdl2", "VDL2", [720.0, 560.0], self.show_vdl2,
             |me, ui| { let h = ui.available_height(); me.vdl2_panel(ui, cmds, h); });
         self.show_vdl2 = open;
+        if open { self.ui_settings.tool_windows_open |= TW_VDL2; } else { self.ui_settings.tool_windows_open &= !TW_VDL2; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn ais_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "ais", "AIS", [720.0, 560.0], self.show_ais,
             |me, ui| { let h = ui.available_height(); me.ais_panel(ui, cmds, h); });
         self.show_ais = open;
+        if open { self.ui_settings.tool_windows_open |= TW_AIS; } else { self.ui_settings.tool_windows_open &= !TW_AIS; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
 }
 
@@ -4874,21 +4920,29 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "adsb", "ADS-B", [720.0, 560.0], self.show_adsb,
             |me, ui| { let h = ui.available_height(); me.adsb_panel(ui, cmds, h); });
         self.show_adsb = open;
+        if open { self.ui_settings.tool_windows_open |= TW_ADSB; } else { self.ui_settings.tool_windows_open &= !TW_ADSB; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn fsq_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "fsq", "FSQ", [720.0, 560.0], self.show_fsq,
             |me, ui| { let h = ui.available_height(); me.fsq_panel(ui, cmds, h); });
         self.show_fsq = open;
+        if open { self.ui_settings.tool_windows_open |= TW_FSQ; } else { self.ui_settings.tool_windows_open &= !TW_FSQ; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn hell_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "hell", "HELL", [720.0, 560.0], self.show_hell,
             |me, ui| { let h = ui.available_height(); me.hell_panel(ui, cmds, h); });
         self.show_hell = open;
+        if open { self.ui_settings.tool_windows_open |= TW_HELL; } else { self.ui_settings.tool_windows_open &= !TW_HELL; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn packet_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "packet", "PACKET", [720.0, 560.0], self.show_packet,
             |me, ui| { let h = ui.available_height(); me.packet_panel(ui, cmds, h); });
         self.show_packet = open;
+        if open { self.ui_settings.tool_windows_open |= TW_PACKET; } else { self.ui_settings.tool_windows_open &= !TW_PACKET; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
 }
 
@@ -4897,21 +4951,29 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "wspr", "WSPR", [640.0, 480.0], self.show_wspr,
             |me, ui| { let h = ui.available_height(); me.wspr_panel(ui, cmds, h); });
         self.show_wspr = open;
+        if open { self.ui_settings.tool_windows_open |= TW_WSPR; } else { self.ui_settings.tool_windows_open &= !TW_WSPR; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn pi4_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "pi4", "PI4", [640.0, 480.0], self.show_pi4,
             |me, ui| { let h = ui.available_height(); me.pi4_panel(ui, cmds, h); });
         self.show_pi4 = open;
+        if open { self.ui_settings.tool_windows_open |= TW_PI4; } else { self.ui_settings.tool_windows_open &= !TW_PI4; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn text_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "text", "TEXT", [640.0, 480.0], self.show_text,
             |me, ui| { let h = ui.available_height(); me.text_modem_panel(ui, cmds, h); });
         self.show_text = open;
+        if open { self.ui_settings.tool_windows_open |= TW_TEXT; } else { self.ui_settings.tool_windows_open &= !TW_TEXT; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn uvpacket_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "uvpacket", "UVPACKET", [640.0, 480.0], self.show_uvpacket,
             |me, ui| { let h = ui.available_height(); me.uvpacket_panel(ui, cmds, h); });
         self.show_uvpacket = open;
+        if open { self.ui_settings.tool_windows_open |= TW_UVPACKET; } else { self.ui_settings.tool_windows_open &= !TW_UVPACKET; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
 }
 
@@ -4920,21 +4982,29 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "jtty", "JTTY", [640.0, 480.0], self.show_jtty,
             |me, ui| { let h = ui.available_height(); me.jtty_panel(ui, cmds, h); });
         self.show_jtty = open;
+        if open { self.ui_settings.tool_windows_open |= TW_JTTY; } else { self.ui_settings.tool_windows_open &= !TW_JTTY; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn ale_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "ale", "ALE", [640.0, 480.0], self.show_ale,
             |me, ui| { let h = ui.available_height(); me.ale_panel(ui, cmds, h); });
         self.show_ale = open;
+        if open { self.ui_settings.tool_windows_open |= TW_ALE; } else { self.ui_settings.tool_windows_open &= !TW_ALE; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn rf_paint_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "rfpaint", "RF PAINT", [640.0, 480.0], self.show_rf_paint,
             |me, ui| { let h = ui.available_height(); me.rf_paint_panel(ui, cmds, h); });
         self.show_rf_paint = open;
+        if open { self.ui_settings.tool_windows_open |= TW_RFPAINT; } else { self.ui_settings.tool_windows_open &= !TW_RFPAINT; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
     pub(in crate::app) fn image_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>, mode: sdroxide_types::Mode) {
         let open = self.tool_window(ctx, "image", "IMAGE", [760.0, 600.0], self.show_image,
             |me, ui| { me.image_panel(ui, cmds, mode); });
         self.show_image = open;
+        if open { self.ui_settings.tool_windows_open |= TW_IMAGE; } else { self.ui_settings.tool_windows_open &= !TW_IMAGE; }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
 }
 // Tool window bit indices (persisted in UiSettings.tool_windows_open).
