@@ -1532,6 +1532,17 @@ impl eframe::App for SdroxideApp {
         if self.show_navtex { self.navtex_window(&ctx, &mut cmds); }
         if self.show_aprs { self.aprs_window(&ctx, &mut cmds); }
         if self.show_wefax { self.wefax_window(&ctx, &mut cmds); }
+        let mode = self.state.rx[0].mode;
+        // Auto-open the floating window when entering the mode (once).
+        if self.last_mode_for_tools != Some(mode) {
+            if mode.is_sstv() { self.show_sstv = true; }
+            if mode == sdroxide_types::Mode::Dab { self.show_dab = true; }
+            if mode.is_js8() { self.show_js8 = true; }
+            self.last_mode_for_tools = Some(mode);
+        }
+        if mode.is_sstv() && self.show_sstv { self.sstv_window(&ctx, &mut cmds); }
+        if mode == sdroxide_types::Mode::Dab && self.show_dab { self.dab_window(&ctx, &mut cmds); }
+        if mode.is_js8() && self.show_js8 { self.js8_window(&ctx, &mut cmds); }
         self.recordings_window(&ctx, &mut cmds);
         self.poll_recording_jobs(&mut cmds);
         self.mail_window(&ctx, &mut cmds);
@@ -3983,13 +3994,13 @@ impl SdroxideApp {
             self.jtty_panel(ui, cmds, panel_h);
         } else if mode == Mode::Ale {
             self.ale_panel(ui, cmds, panel_h);
-        } else if mode.is_image() {
+        } else if mode.is_image() && !(mode.is_sstv() && self.show_sstv) {
             self.image_panel(ui, cmds, mode);
         } else if mode.is_rf_paint() {
             self.rf_paint_panel(ui, cmds, panel_h);
         } else if mode.is_adsb() {
             self.adsb_panel(ui, cmds, panel_h);
-        } else if mode == Mode::Dab {
+        } else if mode == Mode::Dab && !self.show_dab {
             self.dab_panel(ui, cmds, panel_h);
         } else if mode.is_vdl2() {
             self.vdl2_panel(ui, cmds, panel_h);
@@ -4007,7 +4018,7 @@ impl SdroxideApp {
             self.hell_panel(ui, cmds, panel_h);
         } else if is_text {
             self.text_modem_panel(ui, cmds, panel_h);
-        } else if mode.is_js8() {
+        } else if mode.is_js8() && !self.show_js8 {
             self.js8_panel(ui, cmds, panel_h);
         } else if mode.is_wspr() {
             self.wspr_panel(ui, cmds, panel_h);
@@ -4778,5 +4789,23 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "wefax", "WEFAX", [900.0, 600.0], self.show_wefax,
             |me, ui| { let h = ui.available_height(); me.wefax_panel(ui, cmds, h); });
         self.show_wefax = open;
+    }
+}
+
+impl SdroxideApp {
+    pub(in crate::app) fn sstv_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "sstv", "SSTV", [760.0, 600.0], self.show_sstv,
+            |me, ui| { let h = ui.available_height(); me.image_panel(ui, cmds, sdroxide_types::Mode::Sstv); let _ = h; });
+        self.show_sstv = open;
+    }
+    pub(in crate::app) fn dab_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "dab", "DAB", [720.0, 560.0], self.show_dab,
+            |me, ui| { let h = ui.available_height(); me.dab_panel(ui, cmds, h); });
+        self.show_dab = open;
+    }
+    pub(in crate::app) fn js8_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "js8", "JS8", [640.0, 480.0], self.show_js8,
+            |me, ui| { let h = ui.available_height(); me.js8_panel(ui, cmds, h); });
+        self.show_js8 = open;
     }
 }
