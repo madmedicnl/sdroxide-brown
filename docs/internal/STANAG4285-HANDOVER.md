@@ -1062,6 +1062,34 @@ faithful copy of the other implementation's block deinterleaver
 story — the delay *pattern* differs too, and the block form has to go into the
 receiver itself rather than be approximated by a deeper per-symbol one.
 
+## The 32-symbol interleaver: written, measured, **not landed**
+
+The block-form interleaver has been written and taken as far as its tests allow in
+one sitting. The change is: `ConvInterleaver::push` gathers **32 symbols**, then
+advances the commutator once for the whole segment (one symbol into each row, natural
+write order, `(9·i) mod 32` read order), which makes the row delays count segments —
+9.9 s at `j` = 12 instead of 0.31 s. The encoder and the decoder are both changed, so
+the loopback still proves the pair.
+
+Two results say the change is right and worth finishing:
+
+- **The pure interleaver round-trip passes**, once the test looks for the latency
+  instead of assuming it: the decoded stream is a whole number of segments behind the
+  encoder's input, and with the offset searched the 64-bit tail matched **64 of 64**.
+  So the pair really are inverses under the segment convention.
+- **On the band-limited receiver test the framer found the SOM 32 of 32** — the
+  trellis decoding, the message pattern matched exactly, which never happened before
+  the change. The message did not *close*: the audio in the test is too short for a
+  ten-second interleaver, so the EOM sits past the end.
+
+What is left is therefore plumbing, not design: the crate's tests and
+`s4285_test_signal` must send the standard's ten-second lead-in and a flush derived
+from the depth, and the latency comparison must either search for the offset or be
+given a helper that measures it. Until those are done the change is **not in the
+tree** — the tests that remain red are the ones whose audio is shorter than the
+interleaver, and a red suite is worse than a documented seam. The patch is described
+above in full.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run

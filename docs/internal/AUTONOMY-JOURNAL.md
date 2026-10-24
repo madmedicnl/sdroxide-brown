@@ -171,6 +171,34 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag, tenth pass) — the segment interleaver, written and measured, not landed
+
+**Summary.** The interleaver is the wrong shape: the standard interleaves 32-symbol
+data segments, this receiver advances its commutator every symbol, and the delays are
+32 times shorter as a result (0.31 s against 9.9 s, the ten-second long interleave
+every other source describes). I wrote the segment form and got two clear signals
+that it is right — the round-trip returns 64 of 64 bits once the test looks for the
+latency, and on the band-limited receiver test the framer matched the SOM **32 of
+32**, which no earlier version ever came close to. It is not in the tree: the tests
+whose audio is shorter than a ten-second interleaver stay red, and the lead-in and
+flush plumbing has to be redone with it.
+
+**Done.** The rewrite, twice, and the measurements above. Reverted to keep the suite
+green; the design and the exact patch are recorded in `STANAG4285-HANDOVER.md`.
+
+**Numbers.** Old form: max delay 31·12 = 372 symbols, 0.31 s. Segment form: 31·12
+segments = 11 904 symbols, 9.9 s. Round-trip 64/64 at the found offset; SOM 32/32 on
+the band-limited test with the segment form; no message closed because the test audio
+is ~200 frames where ~290 are needed.
+
+**Next, and it is mechanical.** Send the standard's ten-second lead-in from
+`s4285_test_signal` and from `coded_round_trip_path`, derive the flush from the depth
+(32·31·j + 102), give the tests a helper that measures the pipeline latency instead
+of assuming it, then land the segment interleaver and re-run the captures. Until that
+lands, nothing on the air can decode: this is the blocker.
+
+---
+
 ## 2026-10-24 (stanag, ninth pass) — the scrambler was seeded wrong, and the judge never worked
 
 **Summary.** Two findings, both big. First, our scrambler initialised its 9-stage
