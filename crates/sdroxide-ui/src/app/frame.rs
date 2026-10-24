@@ -3531,6 +3531,9 @@ impl SdroxideApp {
                     if self.focused {
                         self.speech.announcer.on_digi(&s, &self.state, now);
                     }
+                    if let Some(a) = &s.acars {
+                        a.messages.iter().for_each(|m| self.aircraft_registry.ingest_acars(m));
+                    }
                     self.digi_status = Some(s);
                     // Coded weather arrives as RTTY text, not as a decode, so
                     // it is picked up here rather than in the decode arm.
@@ -3613,8 +3616,16 @@ impl SdroxideApp {
                 // reconstructing badly.
                 RadioEvent::IsmReports(r) => self.ism_reports = r,
                 RadioEvent::IsmStatus(st) => self.ism_status = Some(st),
-                RadioEvent::AdsbStatus(st) => self.adsb_status = Some(st),
-                RadioEvent::Vdl2Status(st) => self.vdl2_status = Some(st),
+                RadioEvent::AdsbStatus(st) => {
+                    st.aircraft.iter().for_each(|a| self.aircraft_registry.ingest_adsb(a));
+                    self.aircraft_registry.expire(crate::time::now_unix());
+                    self.adsb_status = Some(st);
+                }
+                RadioEvent::Vdl2Status(st) => {
+                    st.messages.iter().for_each(|m| self.aircraft_registry.ingest_vdl2(m));
+                    self.aircraft_registry.expire(crate::time::now_unix());
+                    self.vdl2_status = Some(st);
+                }
                 RadioEvent::AisStatus(st) => self.ais_status = Some(st),
                 RadioEvent::DabStatus(st) => {
                     // Outside a sweep, a channel tuned by hand teaches the list
@@ -3674,6 +3685,8 @@ impl SdroxideApp {
                     // out of its rolling window: the table keeps an aircraft
                     // until thirty minutes of silence retires it.
                     self.hfdl_map.observe(&st.log, crate::time::now_unix());
+                    st.log.iter().for_each(|d| self.aircraft_registry.ingest_hfdl(d));
+                    self.aircraft_registry.expire(crate::time::now_unix());
                     self.hfdl_status = Some(st);
                 }
                 RadioEvent::SstvStatus(s) => {
