@@ -1100,6 +1100,31 @@ impl Mt63Receiver {
         };
         self.centre = centre;
         let spaces = text.chars().filter(|&c| c == ' ').count();
+        // **A real signal survives being re-read a hair off.** Decode the same
+        // buffer again with the symbol phase nudged by a fortieth of a symbol: a
+        // signal has a clock there and gives back the same characters, while noise
+        // — which has no clock, so any phase fits it equally — gives an unrelated
+        // draw. That is the temporal test the one-shot score cannot be: a noise
+        // buffer and the first attempt on a real signal both pass the content
+        // tests above (measured: textiness 48–76 and a Walsh median SNR near 3 for
+        // each), so what separates them is repeatability, not content.
+        let nudge = (hop / 40).max(1);
+        let mut again = Mt63Rx::new(self.rate, centre, self.variant);
+        let (second, _) = again.decode_with(&self.buf, (phase + nudge) % hop, reverse);
+        let (mut agree, mut total) = (0usize, 0usize);
+        for (a, b) in text.chars().zip(second.chars()) {
+            total += 1;
+            if a == b {
+                agree += 1;
+            }
+        }
+        let stable = total > 0 && agree * 10 >= total * 7;
+        if std::env::var("MT63_DEBUG").is_ok() {
+            eprintln!(
+                "stability: {agree}/{total} ({:.0}%) stable {stable} centre {centre:.1}",
+                if total > 0 { 100.0 * agree as f32 / total as f32 } else { 0.0 }
+            );
+        }
         if spaces < LOCK_MIN_SPACES || textiness(&text) < LOCK_MIN_TEXTINESS {
             // Nothing readable yet. Keep the newest audio and try again when
             // more has arrived.
