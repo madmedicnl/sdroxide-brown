@@ -918,16 +918,17 @@ impl S4285Receiver {
                     let t = k as f32 / BAUD as f32;
                     z[k] = frame[SYNC + k].mul(sc.conj()).mul(C::from_phase(-offset * TAU * t));
                 }
-                // The channel line first, then the data: on a real path the three
-                // reference blocks differ in phase, and a concentration measured
-                // on the raw data is dominated by that rotation rather than by the
-                // sampling instant — which makes the sweep answer noise.
-                let (m, b) = channel_line(&z);
+                // The channel first, then the data: on a real path the three
+                // reference blocks differ in phase *and level*, and a
+                // concentration measured on the raw data is dominated by that
+                // rotation rather than by the sampling instant — which makes the
+                // sweep answer noise.
+                let fit = ChannelFit::from_references(&z);
                 let (mut c2, mut c4, mut c8) = (C::default(), C::default(), C::default());
                 let mut n = 0.0f32;
                 for &(lo, hi) in &DATA_BLOCKS {
                     for k in lo..hi {
-                        let c = z[k].mul(C::from_phase(-(m * k as f32 + b)));
+                        let c = fit.apply(k, z[k]);
                         let a = c.arg();
                         c2 = c2.add(C::from_phase(2.0 * a));
                         c4 = c4.add(C::from_phase(4.0 * a));
@@ -1015,14 +1016,15 @@ impl S4285Receiver {
         }
         self.timing = phase.rem_euclid(1.0);
 
-        // The channel inside the frame, from its three reference blocks.
-        let (m, b) = channel_line(&z);
+        // The channel inside the frame, from its three reference blocks — phase
+        // and level. See `ChannelFit`.
+        let fit = ChannelFit::from_references(&z);
 
         let mut used = [false; 8];
         let mut data: Vec<C> = Vec::with_capacity(128);
         for &(lo, hi) in &DATA_BLOCKS {
             for k in lo..hi {
-                let c = z[k].mul(C::from_phase(-(m * k as f32 + b)));
+                let c = fit.apply(k, z[k]);
                 let idx = (c.arg() / std::f32::consts::FRAC_PI_4).round() as i32;
                 used[idx.rem_euclid(8) as usize] = true;
                 data.push(c);
@@ -1117,13 +1119,15 @@ impl S4285Receiver {
         // BPSK decision's whole content is its sign, so a rotating phase turns the
         // code stream into noise while the constellation still reads 0.99 and the
         // references still collapse. Measured: a 1 Hz/s ramp, well inside the
-        // standard's 3.5 Hz/s, took the message from readable to nothing.
-        let (m, b) = channel_line(&z);
+        // standard's 3.5 Hz/s, took the message from readable to nothing. The
+        // level is corrected with the phase (see `ChannelFit`), which is what a
+        // recording whose audio filter tilts across the frame needs.
+        let fit = ChannelFit::from_references(&z);
         let mut data: Vec<C> = Vec::with_capacity(128);
         let mut sum = 0.0f32;
         for &(lo, hi) in &DATA_BLOCKS {
             for k in lo..hi {
-                let c = z[k].mul(C::from_phase(-(m * k as f32 + b)));
+                let c = fit.apply(k, z[k]);
                 sum += c.norm();
                 data.push(c);
             }
@@ -1232,25 +1236,71 @@ const MIN_FRAME_ACF: f32 = 0.12;
 /// has to be derotated by the line, not by the ramp alone, or every data block
 /// after the first is rotated by whatever the channel did between them. On a
 /// clean file that difference is nil, which is exactly why it survived so long.
-fn channel_line(z: &[C; SCRAMBLED]) -> (f32, f32) {
-    let centres = [
-        (REF_BLOCKS[0].0 + REF_BLOCKS[0].1 - 1) as f32 / 2.0,
-        (REF_BLOCKS[1].0 + REF_BLOCKS[1].1 - 1) as f32 / 2.0,
-        (REF_BLOCKS[2].0 + REF_BLOCKS[2].1 - 1) as f32 / 2.0,
-    ];
-    let mut ph = [0.0f32; 3];
-    for (i, &(lo, hi)) in REF_BLOCKS.iter().enumerate() {
-        let mut acc = C::default();
-        for k in lo..hi {
-            acc = acc.add(z[k]);
+/// The complex channel across one frame, read from its three reference blocks.
+///
+/// A straight **phase** line was enough on a clean file and on the bench path, and
+/// it is not enough on a real station: the level and the phase both move inside
+/// the 107 ms frame, so the data reads as a smear while the references still
+/// collapse. The first real coded capture we were sent measures exactly that —
+/// references 0.69 / 0.76 / 0.61 and a data constellation of 0.34 — and its
+/// spectrum is 2.2 kHz wide, so the tilt is the recording's filter as much as the
+/// path. This fits **I and Q** linearly across the frame, interpolating between
+/// the reference blocks and extrapolating to the data blocks at either end, so a
+/// symbol is corrected in amplitude as well as in phase.
+///
+/// The slope is unambiguous because the carrier offset is taken off the symbols
+/// before this is called: left in, 55 Hz turns a whole circle over 48 symbols and
+/// the fit wraps. See `take_frame`.
+#[derive(Clone, Copy)]
+struct ChannelFit {
+    slope: C,
+    intercept: C,
+}
+
+/// The centres of the three reference blocks, in symbols from the frame head.
+const REF_CENTRES: [f32; 3] = [
+    (REF_BLOCKS[0].0 + REF_BLOCKS[0].1 - 1) as f32 / 2.0,
+    (REF_BLOCKS[1].0 + REF_BLOCKS[1].1 - 1) as f32 / 2.0,
+    (REF_BLOCKS[2].0 + REF_BLOCKS[2].1 - 1) as f32 / 2.0,
+];
+
+impl ChannelFit {
+    fn from_references(z: &[C; SCRAMBLED]) -> Self {
+        let mut g = [C::default(); 3];
+        for (i, &(lo, hi)) in REF_BLOCKS.iter().enumerate() {
+            let mut acc = C::default();
+            for k in lo..hi {
+                acc = acc.add(z[k]);
+            }
+            // The mean, not the sum: the level of the reference is the level the
+            // data has to be brought to.
+            g[i] = acc.scale(1.0 / (hi - lo) as f32);
         }
-        ph[i] = acc.arg();
+        let mean_c = (REF_CENTRES[0] + REF_CENTRES[1] + REF_CENTRES[2]) / 3.0;
+        let mean_g = g[0].add(g[1]).add(g[2]).scale(1.0 / 3.0);
+        let mut num = C::default();
+        let mut den = 0.0f32;
+        for i in 0..3 {
+            let dc = REF_CENTRES[i] - mean_c;
+            num = num.add(g[i].sub(mean_g).scale(dc));
+            den += dc * dc;
+        }
+        let slope = if den > 1e-6 { num.scale(1.0 / den) } else { C::default() };
+        let intercept = mean_g.sub(slope.scale(mean_c));
+        ChannelFit { slope, intercept }
     }
-    let m = ((ph[1] - ph[0]) * (centres[1] - centres[0])
-        + (ph[2] - ph[1]) * (centres[2] - centres[1]))
-        / ((centres[1] - centres[0]).powi(2) + (centres[2] - centres[1]).powi(2));
-    let b = (ph[0] + ph[1] + ph[2]) / 3.0 - m * (centres[0] + centres[1] + centres[2]) / 3.0;
-    (m, b)
+
+    /// The channel at symbol `k` of the frame (0 is the first data symbol).
+    fn at(&self, k: f32) -> C {
+        self.slope.scale(k).add(self.intercept)
+    }
+
+    /// One symbol, corrected to the reference's phase **and** level.
+    fn apply(&self, k: usize, z: C) -> C {
+        let g = self.at(k as f32);
+        let n2 = g.norm().powi(2);
+        if n2 > 1e-9 { z.mul(g.conj()).scale(1.0 / n2) } else { z }
+    }
 }
 
 /// The three reference blocks' concentrations with a carrier offset removed
@@ -1587,6 +1637,43 @@ mod tests {
         }
     }
 
+    /// The equaliser corrects **level** as well as phase, over the whole frame.
+    ///
+    /// This is what the first real coded capture we were sent needed: its audio
+    /// filter tilts the signal across the 107 ms frame, so a straight phase line
+    /// leaves the data smeared while the references still collapse (references
+    /// 0.69 / 0.76 / 0.61, constellation 0.34). The fit is read from the three
+    /// reference blocks and has to hold out to the **last** data block, which has
+    /// no reference block after it — that is the extrapolated end, and it is the
+    /// half a naively-interpolated fit gets wrong.
+    #[test]
+    fn the_channel_fit_recovers_level_and_phase_across_the_frame() {
+        // A channel that is linear in I/Q — which is what the fit models — with a
+        // level that falls from 1.22 to 0.86 and a phase that swings across the
+        // frame. Written this way the fit is exact, so the test measures the
+        // correction rather than the interpolation error.
+        let g = |k: f32| {
+            let t = k / 176.0;
+            C::new(1.22 - 0.36 * t, 0.40 - 0.55 * t)
+        };
+        let mut z = [C::default(); SCRAMBLED];
+        for k in 0..SCRAMBLED {
+            // References are symbol 0, i.e. +1: the fit reads the channel from
+            // them. Data carries a +1 BPSK symbol, so it must come back as +1.
+            z[k] = g(k as f32);
+        }
+        let fit = ChannelFit::from_references(&z);
+        for k in [0usize, 31, 48, 79, 96, 127, 144, 175] {
+            let c = fit.apply(k, z[k]);
+            assert!(
+                (c.norm() - 1.0).abs() < 0.02,
+                "symbol {k}: level {:.3}, not corrected",
+                c.norm()
+            );
+            assert!(c.arg().abs() < 0.04, "symbol {k}: phase {:.3} rad, not corrected", c.arg());
+        }
+    }
+
     /// The negative that makes the lock a detector rather than a lamp: noise must
     /// not lock, and neither must a strong carrier of a different shape.
     #[test]
@@ -1626,11 +1713,21 @@ mod tests {
         let path = std::env::var("SDROXIDE_S4285_SAMPLE").expect("set SDROXIDE_S4285_SAMPLE");
         let mut reader = hound::WavReader::open(&path).expect("open the wav");
         let spec = reader.spec();
-        let audio: Vec<f32> = match spec.sample_format {
+        let raw: Vec<f32> = match spec.sample_format {
             hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
             hound::SampleFormat::Int => {
                 reader.samples::<i16>().map(|s| s.unwrap() as f32 / 32_768.0).collect()
             }
+        };
+        // A capture can be stereo, and its samples are then interleaved: read as
+        // mono, the rate is effectively halved and two channels are spliced into
+        // one stream, so nothing locks and this gate measures nothing. The real
+        // coded capture we were sent was stereo for exactly that reason.
+        let ch = spec.channels.max(1) as usize;
+        let audio: Vec<f32> = if ch == 1 {
+            raw
+        } else {
+            raw.chunks(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect()
         };
         let mut rx = S4285Receiver::new(spec.sample_rate as f64, 1800.0);
         let mut refs = [0.0f64; 3];

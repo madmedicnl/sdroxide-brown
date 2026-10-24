@@ -20,12 +20,21 @@ use sdroxide_dsp::stanag4285_fec as fec;
 fn read_wav(path: &str) -> (Vec<f32>, f64) {
     let mut reader = hound::WavReader::open(path).expect("open the wav");
     let spec = reader.spec();
-    let audio = match spec.sample_format {
+    let raw: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.expect("s")).collect(),
         hound::SampleFormat::Int => match spec.bits_per_sample {
             16 => reader.samples::<i16>().map(|s| s.expect("s") as f32 / 32_768.0).collect(),
             _ => reader.samples::<i32>().map(|s| s.expect("s") as f32 / 2_147_483_648.0).collect(),
         },
+    };
+    // A capture can be stereo, and its samples are then interleaved: read as
+    // mono, the rate is effectively halved and two channels are spliced into one
+    // stream. The real coded capture we were sent was stereo. See `s4285_probe`.
+    let ch = spec.channels.max(1) as usize;
+    let audio = if ch == 1 {
+        raw
+    } else {
+        raw.chunks(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect()
     };
     (audio, spec.sample_rate as f64)
 }
