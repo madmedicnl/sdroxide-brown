@@ -3806,7 +3806,6 @@ impl SdroxideApp {
                     ("HD RADIO", crate::app::frame::TW_HD_RADIO),
                     ("ISM", crate::app::frame::TW_ISM),
                     ("CONTEST", crate::app::frame::TW_CONTEST),
-                    ("BANDS", crate::app::frame::TW_BANDS),
                     ("PUBLIC SDRS", crate::app::frame::TW_PUBLICSDR),
                     ("RECORDINGS", crate::app::frame::TW_RECORDINGS),
                     ("WEATHER", crate::app::frame::TW_WEATHER),
