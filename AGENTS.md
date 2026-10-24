@@ -302,6 +302,24 @@ a check cannot be run, do not open it: say what blocked it.
   SS9900v**, moving the S-meter with no app involved.
 - There is **no Pluto on this network** and no HackRF on the bench.
 
+## Focus until the operator says otherwise (2026-10-24)
+
+- **No UI work for now.** F4NRM is working through the detachable windows and the
+  layouts; two people editing the same screens is how both get worse. **Leave the
+  screens to him.** Exactly two exceptions: a **new mode** needs its own panel and
+  controls, or something is **very off** (a crash, unreadable ink, a control that
+  does the wrong thing).
+- **The programme is the modes that did not finish in 2.1.0.** **STANAG 4285
+  first** — the receiver locks real captures and Annex E is built, but the coded
+  payload has never been read off the air — then the rest of the half-done list
+  in [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md): the 8PSK vestigial
+  filter, the four wide `C`/`RC` PSK banks, the speeds that lose a word, and the
+  MT63/Contestia/DominoEX variants. `MODE-PHASE-4-PROMPT.md`'s five-column table
+  is the deliverable the operator asked for.
+- **The forbidden list still holds**, including the variants: Olivia, RTTY, FT8,
+  NAVTEX, WEFAX, SSTV, DAB, APRS, WFM, DSC, RDS are F4NRM's and are not part of
+  this programme, however half-done a journal line makes one look.
+
 ## Where the work stands
 
 State at 2026-10-24, and the thing to re-measure rather than trust:

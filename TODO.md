@@ -16,6 +16,14 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **Focus, set by the operator 2026-10-24: no UI work, and the modes are the
+   programme.** F4NRM is working through the detachable windows and the layout,
+   so the screens are his; the only UI we touch is a new mode's own panel, or
+   something **very off**. Our work is **STANAG 4285 first** — the coded payload
+   has never been read off the air — then the modes that did not finish in
+   2.1.0. The forbidden list still holds (Olivia, RTTY, FT8, NAVTEX, WEFAX, SSTV,
+   DAB, APRS, WFM, DSC, RDS), variants included.
+
 1. **The mode work — the live queue, and it has its own brief.**
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
    finish the missing modes and get TX working for everything fldigi can
@@ -23,6 +31,12 @@ maintainer's queue there, not a promise.
    exhausted**. [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md) is the
    journal and the measurements; the five-column mode table at the end of the
    brief is the deliverable.
+   - **STANAG 4285**: the receiver locks real captures, Annex E (the code, the
+     interleaver, SOM/EOM, an ITA2 reading) is built and proven on a loopback,
+     and what is missing is a **coded off-air transmission**. The frequencies and
+     the expected text are in
+     [`STANAG4285-HANDOVER.md`](docs/internal/STANAG4285-HANDOVER.md); an RSP1
+     capture of a French Navy test tape closes it.
    - What is left is mostly **measurement**, not code: THOR25/THOR44 and a
      second MFSK8 recording, a known-good FSQ recording, a BPSK1000 capture for
      the lock-time question, an ARDOP recording off air, and a THOR/DominoEX
