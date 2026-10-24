@@ -35,15 +35,20 @@ maintainer's queue there, not a promise.
    exhausted**. [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md) is the
    journal and the measurements; the five-column mode table at the end of the
    brief is the deliverable.
-   - **STANAG 4285 is parked on the bench**: the tape is in hand (FUF 13031.2 kHz,
-     23 Oct) and everything up to the payload reads, but the tape is **about 4 dB
-     in band** — measured three ways that agree (the least-squares residual over
-     the known sync, the data constellation 0.35, the reference blocks 0.65). A
-     4285 needs 10 dB and no equaliser closes 6 dB. **What it needs is a stronger
-     capture**: the tape on a quieter path, a better antenna for 13 MHz, or more
-     RF gain. What the session added and keeps: the offset refined against the
-     known sync (+92 → +1.5 Hz on the tape, folded sync 0.78 → 0.96), timing taken
-     from the sync, and an equaliser that decodes a two-path channel end to end.
+   - **STANAG 4285 is un-parked, and the bench request is withdrawn.** The tape was
+     called "about 4 dB in band" and that was wrong: it was the equaliser's
+     T-spaced model fighting the pulse. A half-symbol-spaced least-squares
+     equaliser takes the same recording from a **0.046** to a **0.790**
+     constellation (blocks 0.71/0.73/0.91/0.86), decodes a two-path synthetic
+     **6 dB** weaker than the plain path can, and costs a clean signal nothing.
+     The cleanest capture we have (`FUF …125317Z`) now reads data blocks at
+     **0.92–0.96**, and the panel no longer calls it "unknown" (the rate verdict
+     was backwards on clean BPSK and suppressed the text path). **Both tapes
+     carry the Annex E code** — measured, not assumed: their descrambled bits are
+     not ITA2 at any alignment or polarity, and carry no rate-1/16 period. So the
+     one remaining fault is the **coded chain**, on two good recordings and with
+     MultiPSK's text known: next is the symbol-for-symbol comparison against the
+     independent `luwangg/signal-analysis` decoder.
      See [`STANAG4285-HANDOVER.md`](docs/internal/STANAG4285-HANDOVER.md).
    - What is left is mostly **measurement**, not code: THOR25/THOR44 and a
      second MFSK8 recording, a known-good FSQ recording, a BPSK1000 capture for
@@ -102,14 +107,12 @@ maintainer's queue there, not a promise.
 
 ## Waiting on other people
 
-- **STANAG 4285 — one question for Mark: what rate does MultiPSK report?** His
-  recording locks here (sync 0.899, 242 frames) but its symbols sit at a ~-6 dB
-  per-symbol SNR with non-white impairment — reference blocks 0.55 where added
-  white noise at the same level gives 0.91 — so the chain sees no trellis at any
-  BPSK rate. MultiPSK's status line names the rate it is reading (600 / 300 / 150 /
-  75 bps, and whether it says "coded"), which decides whether we are 3 dB short in
-  the demodulator or looking at the wrong rate. A stronger capture of the same
-  station would answer it too.
+- **STANAG 4285 — one question for Mark: what rate does MultiPSK report?** Both
+  tapes now demodulate to a good BPSK eye here (data blocks 0.71–0.96, references
+  0.97–0.99) and neither frames an Annex E message, so the fault is in the coded
+  chain and not in the signal. MultiPSK's status line names the rate it is reading
+  (600 / 300 / 150 / 75 bps), which cuts the branch search from four to one. It is
+  no longer a question about the recording's strength — that was answered.
 - **ALE — a recording of one real burst.** The receiver, the FEC and the tone map
   are built and round-trip a synthesized word exactly; no off-air burst has ever
   decoded. The ask is now in the manual (§3.29) and in the changelog's *Needs
@@ -202,6 +205,17 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **STANAG 4285's equaliser, and the tape is not weak after all** — a
+  half-symbol-spaced least-squares equaliser replaces the T-spaced estimate-plus-
+  inverse, which could not describe a pulse and so never beat the plain symbols on
+  any real audio. The tape goes **0.046 → 0.790** constellation (blocks
+  0.71/0.73/0.91/0.86), a two-path synthetic decodes **6 dB** weaker than the plain
+  path can, the standard's own "two equal paths 2 ms apart" now decodes at 15 dB
+  where the plain path reads nothing at 18, and a clean signal costs nothing. The
+  rate verdict is a cascade now: the cleanest BPSK capture we have (0.933 / 0.760 /
+  0.357) was being reported **`unknown`**, which also suppressed its text path.
+  **The bench request for a stronger capture is withdrawn** — both tapes carry the
+  code, and the coded chain is the only suspect left.
 - **Map detail** — roads and first-order internal boundaries from Natural Earth
   1:10m, drawn from 8° and 40° of span (asset +2.7 MB). **PR #184**; asked for on
   Reddit as "the map is too imprecise".
