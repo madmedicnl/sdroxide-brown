@@ -919,6 +919,13 @@ default is **1800 Hz**. Probing the generated file at the probe's default gives
 broken modulator and cost a cycle here. It decodes at 1500 with 0.995 and one
 message. Read the generator's carrier before calling the receiver wrong.
 
+**A longer channel estimate is worse, measured** (same day). The least-squares
+channel covers 5 taps (two symbols, 0.8 ms) and HF multipath is 1–3 ms, so the
+taps were raised: at **13 taps / 29-tap equaliser** the tape's data constellation
+fell **0.396 → 0.312**, and at **9 / 17** it read **0.348**. Both worse than the
+default, so the delay spread that hurts this file is inside two symbols and a
+longer estimate spends more on its own noise than it recovers. Reverted to 5 / 9.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run

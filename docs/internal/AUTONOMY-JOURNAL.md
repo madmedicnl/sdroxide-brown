@@ -171,6 +171,25 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag, seventh pass) — longer channel estimates are worse
+
+**Summary.** One more equaliser variant measured and rejected in minutes: giving the
+channel estimate more delay spread (up to 5 ms, which is what HF multipath can be)
+makes the tape's constellation *worse*, not better. So whatever is closing the eye
+is inside two symbols, and the short estimate stays.
+
+**Numbers.** Data constellation 2-fold on Mark's file at 1850 Hz: default 5 taps /
+9-tap equaliser **0.396**; 9 / 17 → **0.348**; 13 / 29 → **0.312**. Reverted; tests
+green (16 passed, 1 ignored).
+
+**Next.** Within-frame amplitude/phase wander: the reference blocks read 0.55–0.61
+while the data read 0.396 in the same frames, and a timing error would hit both
+equally. The next measurement is a **piecewise per-block** channel estimate
+(sample-and-hold) in the coded path, judged first by the constellation and then by
+the metric.
+
+---
+
 ## 2026-10-24 (stanag, sixth pass) — the tape is not weak, it is smeared
 
 **Summary.** The one question worth answering next was whether Mark's recording is
