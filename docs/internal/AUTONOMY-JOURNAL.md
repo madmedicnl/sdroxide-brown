@@ -21,6 +21,53 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 (MT63) — the transmit fold, and the lock's acceptance is still the wall
+
+**Summary.** MT63's transmit half was broken for two of its six variants and is now
+right: our MT63-1K and MT63-500 signals were synthesised at a rate that put the whole
+bank above Nyquist, so they folded into a mirrored signal that nothing — including
+our own receiver — could read. All six variants now read their own transmission
+back. The receive half is half done: five of the six corpus samples decode whole,
+but only the batch decoder finds them, because the live lock still trusts the dial
+and the samples sit 20–50 Hz away. The measured centre that would fix that also lets
+the lock onto noise, and I could not separate the two in this session — that is the
+next piece of work, and it is written down rather than half-shipped.
+
+**Done.**
+- **The fold** (`a558d624`, swept into a STANAG commit by a `git add -A` in a shared
+  tree; named in `c8191c35`): the modulator synthesised at `variant.rate()` =
+  `2 × bandwidth` while the bank sits at `centre ± bandwidth/2`. Fine for 2K at
+  1500 Hz (500–1500 Hz at 4000 samples/s), broken for 1K (1000–1500 at 2000) and for
+  500 (1250–1750 at 1000): the whole bank above Nyquist, folded. Now
+  `max(2.2 × (centre + bandwidth/2), variant rate)` with the symbol length scaled to
+  match. `a_synthetic_mt63_transmission_reads_back` covers all six.
+- **The probes removed** (`c8191c35`): four debug functions and an orphaned gate that
+  the same sweep carried, two of which no longer compiled as written, and which made
+  the gate emit duplicate-attribute warnings. Plus a one-word `let mut` in
+  `sdroxide-types/src/ui.rs` that was the only other warning.
+- **Measured on the receive side:** with a 5 Hz centre sweep, 2KS 4/4 at 1665 Hz,
+  500S 4/4 at 1690, 2KL 2/2 at 1680, 500L 2/2 at 1720, 1KS 2/2 at 1705, 1KL nothing
+  anywhere. So the decoder handles the narrow banks; the *live* lock is the gap.
+- **Experiments that did not ship, with their numbers.** A measured centre (the
+  comb's outermost-carrier midpoint, `measure_centre`) plus text-first scoring took
+  500S from not locking to 4/4 and 1KS to 3/4 — and let the lock onto noise. A
+  character-agreement test between two decodes a hair apart separated them 71 %
+  against 58 %, too thin. A shared-word test also failed, because both decodes of
+  *noise* return the same wrong text — the nudge is smaller than the symbol, so it
+  measures determinism, not signal. A lopsided-histogram test (real decodes are
+  dominated by idle characters, noise is near-uniform) rejected real 2KL/1KS as well
+  as noise. None of it shipped: the tree is green and these are recorded for the next
+  attempt.
+
+**Not done / blocked.** The live lock's acceptance. What it needs is a test that is
+**temporal** — a decode that keeps reading as more audio arrives, versus one that
+changes — because the one-shot statistics genuinely overlap at the first attempt
+(both score textiness 48–76 and a Walsh median SNR near 3).
+
+**Next.** That temporal acceptance, then the live corpus gate for all six.
+
+---
+
 ## 2026-10-24 (STANAG) — the audio band was not the fault, and the data path is
 
 **Summary.** The one coded tape we have — a French Navy FUF test transmission —
