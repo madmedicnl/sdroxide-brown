@@ -513,7 +513,14 @@ impl MessageFramer {
             self.window = (self.window << 1) | bit as u32;
             self.filled += 1;
             self.since += 1;
-            if self.filled >= 32 && (self.window == SOM || self.window == SOM.reverse_bits()) {
+            // **The last 26 bits, not all 32.** Annex E's own decoding rule is "the
+            // last 26 bits of the SOM are correlated against the decoder output
+            // until they match; that is the start of the message" — and the SOM's
+            // top six bits are zeros, so requiring them is six bits of evidence
+            // that the standard does not ask for and that a marginal stream does
+            // not always have. The position the message starts at is unchanged: the
+            // 26 bits are the *last* 26 of the word, so they end where the 32 do.
+            if self.filled >= 32 && som_match(self.window) {
                 // Drop the SOM itself: a message starts after it.
                 self.collecting = true;
                 self.closed = false;
@@ -618,6 +625,19 @@ impl Ita2Framer {
         }
         None
     }
+}
+
+/// Does the last 26 received bits hold the SOM, in either bit order?
+///
+/// The window is the newest 32 bits with the newest at bit 0, so its **low 26
+/// bits** are the last 26 received. Each candidate pattern is compared on the
+/// same slice of the form the window would hold: for a least-significant-bit-first
+/// transmission the window holds the pattern reversed, so the comparison is
+/// against the reversed candidate's low 26 bits.
+fn som_match(window: u32) -> bool {
+    const TAIL: u32 = 0x03FF_FFFF;
+    let tail = window & TAIL;
+    [SOM, SOM.reverse_bits(), !SOM, (!SOM).reverse_bits()].iter().any(|c| tail == (c & TAIL))
 }
 
 /// A best reading of a message's bits as text.
@@ -965,6 +985,39 @@ mod tests {
         }
         let m = got.expect("no message framed");
         assert!(m.closed, "the EOM did not close the message");
+        assert_eq!(m.bits, msg, "the message bits are not the ones between SOM and EOM");
+    }
+
+    /// **Annex E matches 26 bits of the SOM, not 32, and this crate required 32.**
+    ///
+    /// The SOM's top six bits are zeros, so demanding them is six bits of evidence
+    /// the standard does not ask for — and on a marginal stream those are six ways
+    /// to lose a message. Measured on the one real coded tape, the best SOM the
+    /// decoder ever produced was **30 of 32**; whether the two wrong bits sat in
+    /// those six decided whether a message framed at all.
+    ///
+    /// Here the first six bits of the SOM are wrong and the message must still
+    /// frame. The old rule refuses this stream, which is what makes it a test.
+    #[test]
+    fn a_som_damaged_in_its_first_six_bits_still_frames() {
+        let msg: Vec<u8> = (0..64u32).map(|i| (i % 3 == 0) as u8).collect();
+        let mut wire = Vec::new();
+        for (k, bit) in (0..32).rev().map(|k| ((SOM >> k) & 1) as u8).enumerate() {
+            // The six most significant bits are the ones the annex does not match.
+            wire.push(if k < 6 { bit ^ 1 } else { bit });
+        }
+        wire.extend_from_slice(&msg);
+        for k in (0..32).rev() {
+            wire.push(((EOM >> k) & 1) as u8);
+        }
+        let mut f = MessageFramer::new(CodedRate::Bps75);
+        let mut got = None;
+        for b in wire {
+            if let Some(m) = f.push(b) {
+                got = Some(m);
+            }
+        }
+        let m = got.expect("a SOM damaged in its first six bits did not frame");
         assert_eq!(m.bits, msg, "the message bits are not the ones between SOM and EOM");
     }
 }
