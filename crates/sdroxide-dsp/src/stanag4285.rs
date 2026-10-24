@@ -569,6 +569,8 @@ pub struct S4285Receiver {
     scrambling: [C; SCRAMBLED],
     sync_diff: [f32; SYNC - 1],
     baudot: BaudotRx,
+    /// The uncoded path's 5N1.5 framer — see [`fec::Ita2Framer`].
+    ita2: fec::Ita2Framer,
     /// The eight Annex E branches: four BPSK rates, each with both signs.
     coded: Vec<CodedChain>,
     /// The rate a start-of-message pattern has been seen for, once one has.
@@ -666,6 +668,7 @@ impl S4285Receiver {
             scrambling: scrambling(),
             sync_diff: sync_differential(),
             baudot: BaudotRx::new(),
+            ita2: fec::Ita2Framer::new(),
             coded: Vec::new(),
             coded_rate: None,
             coded_messages: 0,
@@ -716,6 +719,7 @@ impl S4285Receiver {
         }
         self.coded_rate = None;
         self.bit_run.clear();
+        self.ita2.reset();
         self.report = S4285Report::default();
     }
 
@@ -929,14 +933,20 @@ impl S4285Receiver {
                     // unresolved one produces letters that look plausible and mean
                     // nothing, which is the one failure a listener cannot see. The
                     // bits are still on the event and in `bits()`.
+                    //
+                    // **5N1.5, across the whole transmission.** The bits are a
+                    // continuous teleprinter stream, not five-bit groups: a
+                    // character puts a start bit, five data bits and a stop bit on
+                    // the wire, so chunking each frame's 128 bits into fives is the
+                    // wrong width *and* restarts the alignment every frame — which
+                    // is why the uncoded path could never read ITA2 however clean
+                    // the signal was. See `fec::Ita2Framer`.
                     if f.rate != S4285Rate::Unknown {
-                        for value in f.bits.chunks(5) {
-                            let mut v = 0u8;
-                            for (i, b) in value.iter().enumerate() {
-                                v |= b << i;
-                            }
-                            if let Some(ch) = self.baudot.decode(v) {
-                                self.events_text.push(ch);
+                        for b in &f.bits {
+                            if let Some(v) = self.ita2.push(*b) {
+                                if let Some(ch) = self.baudot.decode(v) {
+                                    self.events_text.push(ch);
+                                }
                             }
                         }
                     }
@@ -2587,6 +2597,99 @@ mod tests {
             "a clean BPSK frame's 4-fold reads {:.3} — this test exists because that \
              is the number the old ratio rule choked on",
             r.constellation[1]
+        );
+    }
+
+    /// **The uncoded rates read their text, and that is a capability the mode did
+    /// not have.**
+    ///
+    /// A 1200 bps BPSK transmission can be a plain teleprinter — one bit per data
+    /// symbol, in order, with ITA2 5N1.5 characters on top. The receiver used to
+    /// cut each frame's 128 bits into groups of five, which cannot read ITA2 at
+    /// all: 5N1.5 puts **seven** bits on the wire per character, so the width is
+    /// wrong and the alignment restarts every frame. Measured on this fixture, the
+    /// old path emitted letters that meant nothing; with `fec::Ita2Framer` the text
+    /// comes back exactly.
+    ///
+    /// A noiseless loopback, deliberately: the subject here is the bit and character
+    /// layer, and noise would make a wrong reading indistinguishable from a right
+    /// one.
+    #[test]
+    fn an_uncoded_transmission_reads_its_text() {
+        // The text a French Navy test tape actually sends. No digits: ITA2 puts
+        // figures behind a shift, and this fixture is about the framing.
+        let text = "FAAA DE FUF ZNR UUUUU ZUI TESTING RYRYRYRYRYRYRYRY";
+        let bits = fec::ita2_bits(text);
+        assert!(bits.len() >= 256, "the fixture needs several frames: {}", bits.len());
+        // Acquisition needs its own window before the frames start, so the fixture
+        // is several repeats of the text rather than one pass.
+        let audio = modulate(&bits, bits.len().div_ceil(128) + 20, 12000.0, 0.0);
+        let mut rx = S4285Receiver::new(12000.0, 1800.0);
+        let mut got = String::new();
+        for chunk in audio.chunks(1024) {
+            for ev in rx.process(chunk) {
+                if let S4285Event::Text(t) = ev {
+                    got.push_str(&t);
+                }
+            }
+        }
+        let r = rx.report();
+        got.retain(|c| !c.is_whitespace());
+        assert!(
+            got.contains(&text.replace(' ', "")),
+            "an uncoded 1200 bps teleprinter did not read back: {:?} (locked {}, {} frames, rate {:?})",
+            got,
+            r.locked,
+            r.frames,
+            r.rate
+        );
+    }
+
+    /// The framer itself: an idle line is all ones, so the first zero after it is
+    /// a start bit, and arbitrary junk resynchronises within a few characters.
+    #[test]
+    fn the_ita2_framer_syncs_on_an_idle_line_and_recovers_from_junk() {
+        let bits = fec::ita2_bits("RYRY TEST");
+        let want: Vec<char> = "RYRY TEST".chars().collect();
+
+        // An idle line is mark (ones): the very first character must frame.
+        let mut f = fec::Ita2Framer::new();
+        for _ in 0..64 {
+            assert!(f.push(1).is_none(), "idle ones framed a character");
+        }
+        let mut values = Vec::new();
+        for b in &bits {
+            if let Some(v) = f.push(*b) {
+                values.push(v);
+            }
+        }
+        assert_eq!(
+            values.len(),
+            want.len(),
+            "idle line: {} of {} characters",
+            values.len(),
+            want.len()
+        );
+        let letters: Vec<char> =
+            values.iter().map(|v| fec::ITA2_LETTERS[*v as usize & 31]).collect();
+        assert_eq!(letters, want, "idle line: {:?}", letters);
+
+        // Junk that is not a framed character: it may burst for a character or two
+        // before the stop bit fails, but it has to synchronise and stay there.
+        let mut f = fec::Ita2Framer::new();
+        for b in [1u8, 1, 0, 0, 1, 0, 1, 0, 0, 1] {
+            f.push(b);
+        }
+        let mut letters = String::new();
+        for b in &bits {
+            if let Some(v) = f.push(*b) {
+                letters.push(fec::ITA2_LETTERS[v as usize & 31]);
+            }
+        }
+        assert!(
+            letters.contains("RYRY TEST"),
+            "the framer did not recover from junk: {:?}",
+            letters
         );
     }
 

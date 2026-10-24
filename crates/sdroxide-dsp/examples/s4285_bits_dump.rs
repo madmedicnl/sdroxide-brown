@@ -2,9 +2,11 @@
 //! implementation's chunking, and print the bits.
 //!
 //!     cargo run --release -p sdroxide-dsp --example s4285_bits_dump -- \
-//!         ours.soft 256 0
+//!         ours.soft 256 0 1
 //!
-//! Arguments: `<soft> [chunk_symbols] [swapped]`. `chunk_symbols` is how many soft
+//! Arguments: `<soft> [chunk_symbols] [swapped] [repeat]`. `repeat` is the coded
+//! rate's pair repetition (1, 2, 4 or 8 for 600/300/150/75 bps), averaged on the
+//! deinterleaved values exactly as the receiver does it. `chunk_symbols` is how many soft
 //! decisions one Viterbi run consumes (the reference decoder uses 256 = 128 pairs);
 //! `swapped` feeds each pair as (T2, T1) instead of (T1, T2), which is the one
 //! convention a loopback can never falsify — our encoder and decoder share it.
@@ -24,6 +26,7 @@ fn main() {
     }
     let chunk: usize = a.get(1).and_then(|v| v.parse().ok()).unwrap_or(256);
     let swapped = a.get(2).is_some_and(|v| v == "1");
+    let times: usize = a.get(3).and_then(|v| v.parse().ok()).unwrap_or(1);
     let text = std::fs::read_to_string(&a[0]).expect("read the soft stream");
     // **The trace is two values per symbol** — the in-phase and the quadrature
     // parts, because that is what the QPSK chain is fed — so a BPSK rate's stream
@@ -34,6 +37,8 @@ fn main() {
     let soft: Vec<f32> = all.iter().step_by(2).copied().collect();
     let mut de = ConvInterleaver::deinterleaver(12);
     let deint: Vec<f32> = soft.iter().map(|v| de.push(*v)).collect();
+    // The lower rates average the repeated pairs on the deinterleaved stream.
+    let deint: Vec<f32> = if times > 1 { fec::average_pairs(&deint, times) } else { deint };
     let mut bits = Vec::new();
     for c in deint.chunks(chunk) {
         if c.len() < chunk {

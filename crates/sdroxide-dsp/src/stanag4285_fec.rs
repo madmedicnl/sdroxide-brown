@@ -531,10 +531,94 @@ impl MessageFramer {
 }
 
 /// ITA2 letters, in the order the five-bit code numbers them.
-const ITA2_LETTERS: [char; 32] = [
+pub const ITA2_LETTERS: [char; 32] = [
     ' ', 'E', '\n', 'A', ' ', 'S', 'I', 'U', '\r', 'D', 'R', 'J', 'N', 'F', 'C', 'K', 'T', 'Z',
     'L', 'W', 'H', 'Y', 'P', 'Q', 'O', 'B', 'G', ' ', 'M', 'X', 'V', ' ',
 ];
+
+/// The bits of ITA2 text in **5N1.5** framing: one start bit, five data bits least
+/// significant first, then one and a half stop bits, which is what a 75 baud
+/// teleprinter sends and what a test tape carries.
+///
+/// The stop bits are written as two ones: 1.5 bits of stop is what a mechanical
+/// printer needs and two is what a receiver can always see, and a reader that
+/// accepts "at least one" reads either.
+pub fn ita2_bits(text: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(text.len() * 8);
+    for ch in text.to_uppercase().chars() {
+        let Some(v) = ITA2_LETTERS.iter().position(|c| *c == ch) else { continue };
+        out.push(0); // start
+        for i in 0..5 {
+            out.push((v as u8 >> i) & 1);
+        }
+        out.push(1);
+        out.push(1);
+    }
+    out
+}
+
+/// A **5N1.5 teleprinter framer** over one continuous bit stream.
+///
+/// The uncoded rates carry one bit per data symbol, in order, so a teleprinter
+/// transmission is a single character stream across the whole transmission — not
+/// five bits per frame. This hunts for a start bit (a zero), takes the five data
+/// bits least significant first, and requires a stop bit (a one) before the next
+/// start, which is what makes it self-synchronising.
+///
+/// It exists because the receiver used to chunk each frame's 128 bits into fives,
+/// which can never read ITA2: 5N1.5 puts **seven** bits on the wire per character,
+/// so five-bit groups are the wrong width *and* restart every frame. Measured on a
+/// synthetic 1200 bps transmission of `RYRY TEST 12345`, the old path produced
+/// letters that meant nothing and this one returns the text.
+#[derive(Debug, Clone, Default)]
+pub struct Ita2Framer {
+    /// Bits held since the last character, oldest first.
+    buf: VecDeque<u8>,
+    /// Characters that passed the framing test.
+    pub chars: u64,
+}
+
+impl Ita2Framer {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn reset(&mut self) {
+        self.buf.clear();
+    }
+
+    /// Feed one bit; returns the five-bit ITA2 value when a framed character
+    /// completes.
+    pub fn push(&mut self, bit: u8) -> Option<u8> {
+        self.buf.push_back(bit & 1);
+        // Nothing before a start bit is a character.
+        while self.buf.front() == Some(&1) {
+            self.buf.pop_front();
+        }
+        // A start bit, five data bits and the first stop bit.
+        while self.buf.len() >= 7 {
+            if self.buf[6] == 1 {
+                let mut v = 0u8;
+                for i in 0..5 {
+                    v |= self.buf[i + 1] << i;
+                }
+                // Drop start and data; the stop bit becomes the next leading one.
+                for _ in 0..6 {
+                    self.buf.pop_front();
+                }
+                self.chars += 1;
+                return Some(v);
+            }
+            // A zero where a stop bit belongs: this is not the framing, so give up
+            // one bit and look for the next start.
+            self.buf.pop_front();
+            while self.buf.front() == Some(&1) {
+                self.buf.pop_front();
+            }
+        }
+        None
+    }
+}
 
 /// A best reading of a message's bits as text.
 ///
