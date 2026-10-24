@@ -21,6 +21,57 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-25 (STANAG 4285) — a plain teleprinter transmission now reads, and the sweep is off for the storm
+
+**Summary.** A STANAG 4285 station sending **uncoded** text — the simple 1200 bps
+mode, no error correction — could never have been read by this program, however
+strong the signal: the character layer was cutting the bits into the wrong size of
+group, seven bits of a teleprinter character were being read five at a time, and the
+alignment was thrown away at every frame. That is fixed and proved: a synthetic
+transmission of the text a French Navy test tape actually sends now comes back
+letter for letter, where the old code produced gibberish. Nothing else changed, and
+nothing here needs a radio — which is why I did it tonight rather than leave the
+receiver sitting under a thunderstorm.
+
+**Done.**
+- **`fec::Ita2Framer`** (`f3998d16`) — a streaming 5N1.5 framer: hunt for a start
+  bit, take five data bits least significant first, require a stop bit before the
+  next start. It runs across the whole transmission instead of per frame, so it is
+  self-synchronising and it survives a noisy start.
+- **`fec::ita2_bits`** — builds a 5N1.5 bit stream from text, for fixtures.
+- **Tests, both verified failing on the old code:**
+  - `an_uncoded_transmission_reads_its_text`: a noiseless 1200 bps transmission of
+    "FAAA DE FUF ZNR UUUUU ZUI TESTING RYRYRYRYRYRYRYRY" reads back exactly. Old
+    path: `CPWXNU?09/,8-9156,52?98#75$!62&4766:4'/#0&$!62&47#0&6!-9885!3-9&026!...`.
+  - `the_ita2_framer_syncs_on_an_idle_line_and_recovers_from_junk`: an idle line is
+    all ones, so the first zero frames the first character; arbitrary junk costs a
+    character or two and then it settles.
+- **Checks:** `cargo test --release -p sdroxide-dsp` **494 + 26 + 14 + 1 + 8 + 14 +
+  8 + 5 passed, 0 failed**; `cargo check --workspace --all-targets` silent apart
+  from the four NAVTEX warnings that are not ours; wasm check clean; `rustfmt
+  --check` clean.
+
+**Not done / blocked.**
+- **The local sweep is stopped, deliberately.** The operator reports a bad storm:
+  the RSP1 is on an outdoor antenna, the band is static, and a capture is not worth
+  taking or leaving the radio listening through it. Nothing was recorded.
+- **The KiwiSDR route is blocked on one host name.** A receiver in France would not
+  care about the storm here, and the tree already speaks KiwiSDR — but
+  `kiwisdr.com/public/` is now behind a click-through gate that needs a browser, and
+  the handover's example host (`f6abj-kiwihf.ddns.net:8073`) is dead. **One host:port
+  from the listing is all it needs** — the operator can read one off
+  `rx.kiwisdr.com` in a browser, and then a capture of 6348 or 5215.6 kHz through it
+  is a first-class route.
+- **The coded payload is still waiting on material**: 93 continuous frames above 0.9
+  reference concentration, and no recording we have reaches it (see the entry
+  below).
+
+**Next.** If the operator supplies a KiwiSDR address, record a tape through it and
+score it with the probe's `coded readiness` line. Otherwise the next no-radio item
+is the standard's own start-of-message rule: Annex E says the **last 26 bits** of
+the SOM are correlated against the decoder output, and this crate requires all 32 —
+64 times less sensitive on a marginal signal.
+
 ## 2026-10-25 (STANAG 4285) — a real bug in the deinterleaver, and the tape is too short
 
 **Summary.** I found and fixed a genuine fault in the part of the STANAG decoder that
