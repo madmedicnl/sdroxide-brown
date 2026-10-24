@@ -39,6 +39,15 @@
                 <Component Id="MainExe" Guid="DE7788FB-C6E5-47E2-87D8-F24D5E6ADBE5">
                     <File Id="SdroxideExe" Source="$(var.BinDir)/sdroxide.exe" KeyPath="yes" />
                 </Component>
+                <Component Id="MinGWLibgcc" Guid="BD91C960-622D-42C3-B20D-C29F8001F83B">
+                    <File Id="MinGWLibgccDll" Source="$(var.BinDir)/libgcc_s_seh-1.dll" KeyPath="yes" />
+                </Component>
+                <Component Id="MinGWLibstdcpp" Guid="5E9E4EE8-948E-437B-8D40-DF53EA6B9388">
+                    <File Id="MinGWLibstdcppDll" Source="$(var.BinDir)/libstdc++-6.dll" KeyPath="yes" />
+                </Component>
+                <Component Id="MinGWLibwinpthread" Guid="92FA9E37-C984-4A7B-9EA3-5C56A5495751">
+                    <File Id="MinGWLibwinpthreadDll" Source="$(var.BinDir)/libwinpthread-1.dll" KeyPath="yes" />
+                </Component>
                 <Component Id="LicenseFile" Guid="95058D49-1291-4D03-BDAF-26452BD61AF4">
                     <File Id="LicenseTxt" Source="LICENSE" Name="LICENSE.txt" KeyPath="yes" />
                 </Component>
@@ -113,6 +122,9 @@
 
         <Feature Id="Main">
             <ComponentRef Id="MainExe" />
+            <ComponentRef Id="MinGWLibgcc" />
+            <ComponentRef Id="MinGWLibstdcpp" />
+            <ComponentRef Id="MinGWLibwinpthread" />
             <ComponentRef Id="LicenseFile" />
             <ComponentRef Id="Rx888FirmwareLicenseFile" />
             <ComponentRef Id="VoiceLicenseFile" />
