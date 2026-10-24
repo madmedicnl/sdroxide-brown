@@ -1552,6 +1552,26 @@ impl eframe::App for SdroxideApp {
         self.show_ale = (self.ui_settings.tool_windows_open & TW_ALE) != 0;
         self.show_rf_paint = (self.ui_settings.tool_windows_open & TW_RFPAINT) != 0;
         self.show_image = (self.ui_settings.tool_windows_open & TW_IMAGE) != 0;
+        // Sync existing tool windows.
+        self.schedule.show = (self.ui_settings.tool_windows_open & TW_SCHEDULE) != 0;
+        self.show_listen = (self.ui_settings.tool_windows_open & TW_LISTEN) != 0;
+        self.show_logbook = (self.ui_settings.tool_windows_open & TW_LOGBOOK) != 0;
+        self.show_settings = (self.ui_settings.tool_windows_open & TW_SETTINGS) != 0;
+        self.show_swl = (self.ui_settings.tool_windows_open & TW_SWL_LOG) != 0;
+        self.show_spots = (self.ui_settings.tool_windows_open & TW_SPOTS) != 0;
+        self.show_scanner = (self.ui_settings.tool_windows_open & TW_SCANNER) != 0;
+        self.show_awards = (self.ui_settings.tool_windows_open & TW_AWARDS) != 0;
+        self.show_grid = (self.ui_settings.tool_windows_open & TW_GRID) != 0;
+        self.show_sat = (self.ui_settings.tool_windows_open & TW_SAT) != 0;
+        self.show_memories = (self.ui_settings.tool_windows_open & TW_MEMORIES) != 0;
+        self.show_extras = (self.ui_settings.tool_windows_open & TW_EXTRAS) != 0;
+        self.show_rds = (self.ui_settings.tool_windows_open & TW_RDS) != 0;
+        self.show_drm = (self.ui_settings.tool_windows_open & TW_DRM) != 0;
+        self.show_hd = (self.ui_settings.tool_windows_open & TW_HD_RADIO) != 0;
+        self.show_ism = (self.ui_settings.tool_windows_open & TW_ISM) != 0;
+        self.show_contest = (self.ui_settings.tool_windows_open & TW_CONTEST) != 0;
+        self.show_bands = (self.ui_settings.tool_windows_open & TW_BANDS) != 0;
+        self.show_public_sdrs = (self.ui_settings.tool_windows_open & TW_PUBLICSDR) != 0;
         if self.show_dsc { self.dsc_window(&ctx, &mut cmds); }
         if self.show_navtex { self.navtex_window(&ctx, &mut cmds); }
         if self.show_aprs { self.aprs_window(&ctx, &mut cmds); }
@@ -1599,6 +1619,30 @@ impl eframe::App for SdroxideApp {
         if mode == sdroxide_types::Mode::Ale && self.show_ale { self.ale_window(&ctx, &mut cmds); }
         if mode.is_rf_paint() && self.show_rf_paint { self.rf_paint_window(&ctx, &mut cmds); }
         if mode.is_image() && self.show_image { self.image_window(&ctx, &mut cmds, mode); }
+        // Persist existing tool windows' mask (sync show_* -> mask).
+        if self.schedule.show { self.ui_settings.tool_windows_open |= TW_SCHEDULE; } else { self.ui_settings.tool_windows_open &= !TW_SCHEDULE; }
+        if self.show_listen { self.ui_settings.tool_windows_open |= TW_LISTEN; } else { self.ui_settings.tool_windows_open &= !TW_LISTEN; }
+        if self.show_logbook { self.ui_settings.tool_windows_open |= TW_LOGBOOK; } else { self.ui_settings.tool_windows_open &= !TW_LOGBOOK; }
+        if self.show_settings { self.ui_settings.tool_windows_open |= TW_SETTINGS; } else { self.ui_settings.tool_windows_open &= !TW_SETTINGS; }
+        if self.show_swl { self.ui_settings.tool_windows_open |= TW_SWL_LOG; } else { self.ui_settings.tool_windows_open &= !TW_SWL_LOG; }
+        if self.show_spots { self.ui_settings.tool_windows_open |= TW_SPOTS; } else { self.ui_settings.tool_windows_open &= !TW_SPOTS; }
+        if self.show_scanner { self.ui_settings.tool_windows_open |= TW_SCANNER; } else { self.ui_settings.tool_windows_open &= !TW_SCANNER; }
+        if self.show_awards { self.ui_settings.tool_windows_open |= TW_AWARDS; } else { self.ui_settings.tool_windows_open &= !TW_AWARDS; }
+        if self.show_grid { self.ui_settings.tool_windows_open |= TW_GRID; } else { self.ui_settings.tool_windows_open &= !TW_GRID; }
+        if self.show_sat { self.ui_settings.tool_windows_open |= TW_SAT; } else { self.ui_settings.tool_windows_open &= !TW_SAT; }
+        if self.show_memories { self.ui_settings.tool_windows_open |= TW_MEMORIES; } else { self.ui_settings.tool_windows_open &= !TW_MEMORIES; }
+        if self.show_extras { self.ui_settings.tool_windows_open |= TW_EXTRAS; } else { self.ui_settings.tool_windows_open &= !TW_EXTRAS; }
+        if self.show_rds { self.ui_settings.tool_windows_open |= TW_RDS; } else { self.ui_settings.tool_windows_open &= !TW_RDS; }
+        if self.show_drm { self.ui_settings.tool_windows_open |= TW_DRM; } else { self.ui_settings.tool_windows_open &= !TW_DRM; }
+        if self.show_hd { self.ui_settings.tool_windows_open |= TW_HD_RADIO; } else { self.ui_settings.tool_windows_open &= !TW_HD_RADIO; }
+        if self.show_ism { self.ui_settings.tool_windows_open |= TW_ISM; } else { self.ui_settings.tool_windows_open &= !TW_ISM; }
+        if self.show_contest { self.ui_settings.tool_windows_open |= TW_CONTEST; } else { self.ui_settings.tool_windows_open &= !TW_CONTEST; }
+        if self.show_bands { self.ui_settings.tool_windows_open |= TW_BANDS; } else { self.ui_settings.tool_windows_open &= !TW_BANDS; }
+        if self.show_public_sdrs { self.ui_settings.tool_windows_open |= TW_PUBLICSDR; } else { self.ui_settings.tool_windows_open &= !TW_PUBLICSDR; }
+        if self.ui_settings.tool_windows_open != self.prev_tool_windows_mask {
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+            self.prev_tool_windows_mask = self.ui_settings.tool_windows_open;
+        }
         self.recordings_window(&ctx, &mut cmds);
         self.poll_recording_jobs(&mut cmds);
         self.mail_window(&ctx, &mut cmds);
@@ -5027,3 +5071,30 @@ pub const TW_JTTY: u64 = 1 << 19;
 pub const TW_ALE: u64 = 1 << 20;
 pub const TW_RFPAINT: u64 = 1 << 21;
 pub const TW_IMAGE: u64 = 1 << 22;
+
+pub const TW_GRID: u64 = 1 << 23;
+pub const TW_MEMORIES: u64 = 1 << 24;
+pub const TW_EXTRAS: u64 = 1 << 25;
+pub const TW_BANDS: u64 = 1 << 26;
+pub const TW_CONTEST: u64 = 1 << 27;
+pub const TW_DRM: u64 = 1 << 28;
+pub const TW_ENIGMA: u64 = 1 << 29;
+pub const TW_HD_RADIO: u64 = 1 << 30;
+pub const TW_ISM: u64 = 1 << 31;
+pub const TW_MORSE: u64 = 1 << 32;
+pub const TW_RDS: u64 = 1 << 33;
+pub const TW_SAT: u64 = 1 << 34;
+pub const TW_SCANNER: u64 = 1 << 35;
+pub const TW_SIGNAL_ID: u64 = 1 << 36;
+pub const TW_SPOTS: u64 = 1 << 37;
+pub const TW_SWL_LOG: u64 = 1 << 38;
+pub const TW_WEATHER: u64 = 1 << 39;
+pub const TW_MAIL: u64 = 1 << 40;
+pub const TW_AWARDS: u64 = 1 << 41;
+pub const TW_RECORDINGS: u64 = 1 << 42;
+pub const TW_LISTEN: u64 = 1 << 43;
+pub const TW_LOGBOOK: u64 = 1 << 44;
+pub const TW_SETTINGS: u64 = 1 << 45;
+pub const TW_SCHEDULE: u64 = 1 << 46;
+pub const TW_PLAYBACK: u64 = 1 << 47;
+pub const TW_PUBLICSDR: u64 = 1 << 48;
