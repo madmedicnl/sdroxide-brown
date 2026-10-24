@@ -21,6 +21,35 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 (last) — 8PSK is in the program, and the ALE watch is stopped
+
+**Summary.** All three modes the operator named are now in the program. ALE and
+CIS-11 were already wired; **8PSK** is now a third choice beside BPSK and QPSK on
+the keyboard modes' modulation row — receive only, three bits per symbol. Its
+proof is a synthetic, because the test recordings for it turned out not to hold a
+clean 8PSK signal at all. The unattended ALE channel sweep was stopped as asked;
+it had finished four rounds over eleven channels with nothing heard.
+
+**Done.**
+- `PskModulation::Psk8` appended, wired into the plain PSK receiver, refused on
+  transmit with a reason, chip and hover text come from `ALL` so no layout
+  changed. Commit `41c83c87`, branch `fork/psk8`, **PR #174** (wire change:
+  **`PROTO_VERSION` 241 → 242, `VERSION_BYTE` 0x3D → 0x3E**).
+- Manual mode-table row and changelog line say "receive only, proven on a
+  synthetic".
+- Gate: workspace check silent; types 792, digi 542, ui 961; rustfmt clean.
+- ALE sweep: `pgrep -af "watch.py|rspcap"` → nothing. Its log's last four lines
+  are `quiet` on every channel, four rounds, ~33 minutes.
+
+**Not done / blocked.** 8PSK has no recording and no 8PSK modulator; the manual
+says both. A reference recording would turn "proven on a synthetic" into proven.
+
+**Next.** PR #173 (CIS-11) and #174 (8PSK) both wait on the operator's merge; the
+next unwired item is the four wide `C` PSK banks, whose recordings are good
+(0.83–0.85 of the bits) and whose fault is the demodulator's carrier separation.
+
+---
+
 ## 2026-10-24 (later) — 8PSK: the instrument is sound, so the files are the fault
 
 **Summary.** The question from the entry below is answered. Built a synthetic

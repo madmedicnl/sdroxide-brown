@@ -161,6 +161,9 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **8PSK in the program** — a third modulation choice beside BPSK and QPSK
+  (receive only, three bits per symbol), proven on a synthetic because the
+  corpus's 8PSK recordings carry no clean constellation. **PR #174** (242 / 0x3E).
 - **CIS-11 built** — the Russian meteorological teleprinter, receive only. Framing
   measured from the recordings (ten data bits + one odd parity, not the
   catalogues' "5 + parity"), 121 of 123 characters parity-valid on the off-air
