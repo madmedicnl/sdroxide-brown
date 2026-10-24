@@ -966,6 +966,27 @@ eye was already right and the smear is elsewhere.
 So the eye is where the receiver thinks it is and the equaliser's output still never
 beats the plain path, whatever group delay it is given (three are searched).
 
+**And then the question changed: his tape is about 4 dB in band.** The offset was
+the real fault and it is fixed (see below), and with it the *residual of the
+least-squares fit over the known sync* becomes a direct measurement of the tape's
+signal-to-noise ratio: 0.37 of the sync's own amplitude, i.e. **SNR ≈ 4 dB**, and
+the other two numbers agree independently — the data constellation at 0.35 and the
+reference blocks at 0.65 are both what 4 dB looks like. Nobody reads a 4285 at
+4 dB: the standard's own tables put 600 bps at 10 dB in 3 kHz, and even the coded
+chain cannot close a 6 dB gap. **So no amount of DSP finishes this tape.** It needs
+a stronger capture: the tape again on a quieter day, a better antenna for this
+channel, or a dab of RF gain — whichever the bench offers first.
+
+**What the session did fix, and it is not nothing.** The carrier offset was being
+read off three reference blocks, and on any path with an echo those three points
+bend into a ramp the search mistakes for a carrier error — measured on the
+two-path synthetic: **13 Hz where the truth is 0**, which rotates the frame by
+three radians across the sync. It is now refined against the 80 **known** sync
+symbols (`refine_offset`, five-hundredth-of-a-hertz steps over ±20 Hz). On his
+file that takes the offset from **+92 Hz to +1.5 Hz**, the sampling phase from
+0.10 to the correct **0.50**, the data constellation **0.234 → 0.347**, and the
+data blocks from 0.31/0.28/0.27/0.19 to **0.51/0.49/0.19/0.38**.
+
 **What is short is the model, not the eye.** A five-tap T-spaced FIR fitted to the
 sync does not describe a raised-cosine signal sampled off a two-path channel well
 enough to invert — the pulse's own memory is in the received samples and the fit

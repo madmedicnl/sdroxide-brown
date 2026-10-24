@@ -911,7 +911,7 @@ impl S4285Receiver {
         let channel = ls_channel(&r[..SYNC], &known, LS_TAPS);
         let energy: f32 =
             channel.as_ref().map(|h| h.iter().map(|v| v.norm() * v.norm()).sum()).unwrap_or(0.0);
-        let equaliser = channel.as_ref().and_then(|h| zf_equaliser(h, energy * 5e-3));
+        let equaliser = channel.as_ref().and_then(|h| zf_equaliser(h, energy * 1e-3));
 
         // **The filter's group delay is searched, not assumed.** The inverse is the
         // minimum-energy one, so where its unit pulse lands is a property of the
@@ -958,6 +958,36 @@ impl S4285Receiver {
             c[0] + c[1] + c[2]
         };
         if equaliser.is_some() && score(&equalised) > score(&plain) { equalised } else { plain }
+    }
+
+    /// Refine the carrier offset against the **known sync**, and not only against
+    /// the reference blocks.
+    ///
+    /// The reference blocks are three samples of the channel's phase across a
+    /// frame, and a two-path channel makes them read as a ramp: measured on the
+    /// synthetic two-path channel the search lands on **13 Hz where the truth is
+    /// 0**, which rotates the frame by nearly three radians across the sync and
+    /// leaves a least-squares channel unable to fit anything. The 80 known symbols
+    /// are 160 constraints rather than three points, so they answer the question
+    /// the references are being asked to guess at.
+    fn refine_offset(&self, start: u64, phase: f32, offset: f32) -> f32 {
+        let frame = self.frame_symbols(start, phase);
+        let sync = sync_symbols();
+        let mut best = (f32::INFINITY, offset);
+        let mut hz = offset - 20.0;
+        while hz <= offset + 20.0 {
+            let mut d = [C::default(); FRAME];
+            for (k, v) in d.iter_mut().enumerate() {
+                let t = k as f32 / BAUD as f32;
+                *v = frame[k].mul(C::from_phase(-hz * TAU * t));
+            }
+            let (res, _) = sync_fit(&d, &sync);
+            if res < best.0 {
+                best = (res, hz);
+            }
+            hz += 0.5;
+        }
+        best.1
     }
 
     fn take_frame(&mut self, start: u64) -> Option<S4285Frame> {
@@ -1009,6 +1039,10 @@ impl S4285Receiver {
             }
         }
         let (score, mut phase, reversed, offset) = best?;
+        // **Not from the references alone.** A two-path channel bends the three
+        // reference points into a ramp the search mistakes for a carrier error;
+        // the known sync symbols do not lie about it.
+        let offset = self.refine_offset(start, phase, offset);
         self.last_frame_usable = score >= MIN_CODED_REFERENCE;
         // **The sampling instant has to come from the data, not from the
         // references.** Sixteen identical symbols score equally well anywhere
@@ -2135,7 +2169,6 @@ mod tests {
     /// known symbols, then a computed inverse or a DFE seeded with it, rather than
     /// a loop left to find it.
     #[test]
-    #[ignore = "the equaliser works at the symbol level; on pulse-shaped audio the model is too short — see the note"]
     fn a_coded_message_survives_a_two_path_channel() {
         // -3.5 dB of echo 1.5 symbols late: a symbol is 0.417 ms, so this is
         // 0.63 ms of delay spread, the low end of what a 13 MHz path does.

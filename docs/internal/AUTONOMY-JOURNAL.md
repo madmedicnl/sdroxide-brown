@@ -93,9 +93,21 @@ in is **closed-form**: a least-squares channel from the known sync, then an
 explicit inverse or a DFE seeded with it. The adaptive attempt was reverted rather
 than left in, so nothing dead ships.
 
-**Not done / blocked.** The payload is still unread. The next step is a
-**fractionally-spaced channel estimate** (the model, not the eye) against the
-ignored two-path test. Material
+**Done, and the answer is the bench.** The offset was the real fault: it was read
+off three reference blocks, which any echo bends into a ramp — 13 Hz wrong on the
+two-path synthetic, +92 Hz wrong on his file. Refining it against the 80 **known**
+sync symbols takes it to +1.5 Hz, the sampling phase to the correct 0.50, and the
+data constellation from 0.234 to 0.347; the equaliser then decodes a two-path
+synthetic end to end (`a_coded_message_survives_a_two_path_channel`, now passing
+and no longer ignored).
+
+But the same fit gives the tape's in-band SNR directly — **≈ 4 dB**, agreeing with
+the constellation (0.35) and the reference blocks (0.65). A 4285 needs 10 dB; no
+equaliser closes a 6 dB gap. **So STANAG is parked pending a stronger capture**,
+and that is the one thing needed: the same tape on a quieter path, a better antenna
+for 13 MHz, or more RF gain.
+
+**Not done / blocked.** The payload is still unread, parked on the bench. Material
 already on the disk, so no bench. A *second* capture of the same tape on a quiet,
 steady path still needs the bench, and the watcher is the tool for it: a spread-out
 channel is a bad witness for a modem.
