@@ -5,7 +5,7 @@ on the repo. Last updated **2026-10-24** by madmedicnl's agent.
 
 State: `main` at crate **2.1.0**, `PROTO_VERSION` **243** (`VERSION_BYTE`
 `0x3F`) — 242 was 8PSK and 243 voice hunting, both merged on 2026-10-24, and
-**no PRs are open**. Latest release **v2.1.0.2_brown** (with
+**one PR is open** (aircraft online, PR B). Latest release **v2.1.0.2_brown** (with
 **v2.1.0.2.1_brown** as the current pre-release), five open issues. The rules are
 in [`AGENTS.md`](AGENTS.md); the history is in
 [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
@@ -28,11 +28,11 @@ maintainer's queue there, not a promise.
    straight to `main`. **RSP1 is not on the list** (the operator struck it off on
    2026-10-24: it is the bench's receiver and his only wideband one).
 
-0b. **Aircraft online info, PR B** — the clients (native, web, Chrome, remote) read
-   the relay of PR A: green "radio" and blue "online" badges, "—" with the reason
-   for an absent field, the thumbnail loaded in memory by the client. Needs a live
-   test of adsbdb and Planespotters first, and the screens are F4NRM's to look at.
-   Asked for by the operator.
+0b. **Aircraft online info, PR B — open for review.** The clients read the relay
+   of PR A; see *Recently done*. Left: a live run against a station with the relay
+   on, adsbdb and Planespotters answering, and a look at whether the CDN lets a
+   browser load the thumbnail. The screen is F4NRM's to look at. Asked for by the
+   operator.
 
 1. **The mode work — the live queue, and it has its own brief.**
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
@@ -210,6 +210,15 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **Aircraft online clients (PR B)** — the AIRCRAFT window's Cards view now asks
+  its own station's `GET /aircraft-info/{icao}` (web, Chrome, native remote; the
+  native local engine has no station and says so). Green "radio" and blue
+  "online" badges, a "radio" / "radio + online" badge at the top, the radio's own
+  data first and its registration winning; the thumbnail loaded in memory from
+  Planespotters' host with the credit and link kept when it cannot be. Disabled
+  or unsigned stops the questions for the session; a failure waits five minutes.
+  No browser storage, no wire change. **Not run against a real station or the
+  real services**; the full workspace check needs the network.
 - **Aircraft online relay (PR A)** — an optional server-side relay for an aircraft
   card's online fields (type, operator, route from adsbdb; a photo's URL, credit
   and link from Planespotters). Off unless `SDROXIDE_AIRCRAFT_ONLINE=1`; no key,

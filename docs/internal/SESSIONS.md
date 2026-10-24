@@ -35,6 +35,22 @@ server test crate cannot build in a sandbox without network (its dev-dependency
 pulls `sdroxide-rade`), and a blocking `ureq` sign-in on the server's own
 runtime hangs the test.
 
+### The clients (PR B)
+
+Each client asks **its own station**: the browser's same-origin `fetch` carries the
+sign-in cookie by itself; the native remote client trades the password it already
+holds for the cookie once and keeps it in memory; the native local engine has no
+station and shows "online indisponible" without asking. State is session memory
+only — no `localStorage`, `sessionStorage`, IndexedDB or settings field — because
+the durable cache is the station's. A switched-off relay or a missing sign-in ends
+the questions for the session; a failure, a 429 or an unknown aircraft waits five
+minutes. The thumbnail is loaded by the client from the address the relay gave,
+only if its host is `t.plnspttrs.net` (the client does not trust the station to
+have checked), with no cookie and no referrer; if the browser refuses it for want
+of CORS headers the card keeps the credit and the link. Radio data stays first and
+its registration beats the registry's. No wire change. The "nothing is saved" test
+saves a whole app holding an online answer and reads every stored value back.
+
 ---
 
 > ⚠️ **The paragraph below is wrong, and it is left as written because this is a

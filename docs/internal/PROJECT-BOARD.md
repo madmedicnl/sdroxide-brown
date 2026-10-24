@@ -76,8 +76,8 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
 ## Open (In Progress)
 
 - **Aircraft online info.** PR A (the optional server relay, off by default) is
-  up for review; PR B (the clients and their badges) follows once the real
-  adsbdb and Planespotters answers have been seen.
+  merged; PR B (the clients and their badges) is open for review. Still to do:
+  a live run against a real station and the real services.
 - **The mode work is the queue.** [`MODE-PHASE-4-PROMPT.md`](MODE-PHASE-4-PROMPT.md)
   — finish the modes, TX for everything fldigi can transmit, vendor when the port
   and the bench are exhausted. Journal and measurements:

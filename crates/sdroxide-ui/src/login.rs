@@ -767,13 +767,21 @@ pub fn cookie_fallback_stations() -> Vec<String> {
 /// browser path, and the tests at the bottom of this file pin both of these
 /// here rather than letting them be written blind and shipped untested.
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn http_base(station: &str) -> Option<String> {
+pub(crate) fn http_base(station: &str) -> Option<String> {
     for (ws, http) in [("wss://", "https://"), ("ws://", "http://")] {
         if let Some(rest) = station.strip_prefix(ws) {
             return Some(format!("{http}{rest}"));
         }
     }
     None
+}
+
+/// The sign-in another connection to this station had accepted this run, if
+/// there is one. Memory only: the aircraft relay's native client trades it for
+/// the station's cookie, as a browser does.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn session_access(station: &str) -> Option<RemoteAccess> {
+    SESSION_LOGINS.lock().unwrap_or_else(|e| e.into_inner()).get(station).cloned()
 }
 
 /// Where this station is asked to remember a sign-in.

@@ -29,6 +29,8 @@ pub(in crate::app) struct Line {
     pub label: &'static str,
     pub value: String,
     pub note: String,
+    /// Whether the radio has heard it, as opposed to the "—" of a gap.
+    pub present: bool,
 }
 
 /// The six hex digits of an ICAO address, as printed on a registration database.
@@ -139,8 +141,8 @@ fn line<T>(
     missing: &str,
 ) -> Line {
     match field {
-        Some(s) => Line { label, value: show(&s.value), note: provenance(s, now) },
-        None => Line { label, value: "—".to_string(), note: missing.to_string() },
+        Some(s) => Line { label, value: show(&s.value), note: provenance(s, now), present: true },
+        None => Line { label, value: "—".to_string(), note: missing.to_string(), present: false },
     }
 }
 
