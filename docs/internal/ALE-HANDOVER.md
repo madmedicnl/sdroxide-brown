@@ -210,9 +210,15 @@ median and found **no burst at all** — the band was flat noise with one narrow
 carrier at the dial. ALE is sporadic; a witness period on one frequency is not a
 verdict on the decoder.
 
-The two scripts are committed now as `tools/ale-probe/` (`scan.py` finds the
-shape, `cut.py` mixes a candidate down to the 8 kHz the decoder reads), so the
-next attempt is a command rather than a rewrite.
+The scripts are committed now as `tools/ale-probe/`: `scan.py` finds the shape,
+`cut.py` mixes a candidate down to the 8 kHz the decoder reads, and `watch.py`
+hops a list of channels unattended — capture, score, keep only what scored — so a
+long watch costs a directory of nothing.
+
+Two channels tried the same day, **11175 and 8992 kHz, 600 s each: nothing.** Both
+are military/government voice channels without a published schedule. The next
+watch is the amateur HFN channels, which sound about once an hour and are the
+predictable traffic there is.
 
 **The ask.** The manual has a **§3.29 ALE** and a mode-table row that say plainly
 that the decode is not proven on the air, with the channels and what to send: a

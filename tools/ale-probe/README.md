@@ -33,7 +33,20 @@ cd ../rsp1-capture && cargo build --release
 - The **audio centre is 1625 Hz** for ALE's text and data, which is exactly the
   block centre `cut.py` assumes.
 
-## 2. Scan for the shape
+## 2. Scan for the shape, or hop the channels
+
+`watch.py` does the whole job unattended: it hops a list of channels (the amateur
+HFLINK ones first, because they sound about hourly), captures a short slice of
+each with `rspcap`, scores it, and keeps only what scored.
+
+```sh
+python3 watch.py 3      # three rounds; about nine minutes a round at 45 s per channel
+```
+
+A round covers 11 channels: eight amateur HFN channels and three military ones,
+and a hit is left in `/tmp/opencode/ale-watch/` as `hit-<khz>-<utc>.f32`.
+
+## 2b. Scan one file for the shape
 
 ```sh
 python3 scan.py /tmp/opencode/ale-8992.f32
@@ -62,6 +75,9 @@ off-air test reads.
 - **2026-10-24, 11175 kHz, 600 s, 07:26–07:36 UTC**: nothing. No 2 kHz-wide
   burst anywhere in ±96 kHz, and a 15 s look at the dial band showed flat noise
   with one narrow carrier.
+- **2026-10-24, 8992 kHz, 600 s, 07:38–07:48 UTC**: nothing either, on a channel
+  that carries voice traffic rather than ALE. The military channels have no
+  schedule; the amateur sounding channels are the ones worth a long watch.
 - The capture settings that do work are above; the earlier failures in
   `docs/internal/ALE-HANDOVER.md` were a short-capture bug in the tool and a
   front end set by gain rather than left at default.
