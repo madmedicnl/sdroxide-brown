@@ -21,6 +21,49 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 (pause) — the debug suite, and the queue emptied into `main`
+
+**Summary.** Three things are now on `main` that were not this morning. The UI
+tests run again in debug — they had been aborting for everyone, taking 949
+passing tests down with them, because of a contract in the graphics layer that a
+dozen tests broke. The LISTEN tab really does hide the transmit controls now,
+whichever way you open the band menu, and the reporter's issue is answered by a
+build rather than by a promise. And 8PSK is in the program as a third modulation
+beside BPSK and QPSK. Nothing is open: no PRs, no numbers claimed, and the wire
+register sits at 243.
+
+**Done.**
+- **The debug UI suite** (`55269c28`, rebased as `5f932005`). `epaint`'s
+  `TexturesDelta::drop` is a `debug_assert!` that every delta was applied; a test
+  has no renderer, and twelve of them dropped a frame's `FullOutput` unread. The
+  first — the DAB logo tile — panicked *inside a destructor*, which is
+  non-unwinding, so the process aborted and the suite reported nothing.
+  `crate::test_support::run_frame` is the idiom now: run the frame, take the
+  deltas, return the rest. Twelve tests go through it, in `app/mod.rs`,
+  `app/settings/general.rs`, `theme.rs` and `tooltip_copy.rs`.
+  **Before: 12 failed and the binary aborted. After: 961 passed, 0 failed, 6
+  ignored** in debug — the same as `--release`, which is why this had gone
+  unseen: the release gate is the release one.
+- **PR #183 merged** (LISTEN tab, issue #146), **PR #174 merged** (8PSK).
+  #174 needed main folded in first: it conflicted in `CHANGELOG.md` and in the
+  `PROTO_VERSION` register, where #177 had taken 243 under it. Resolution keeps
+  both entries in order — 242 8PSK, 243 voice hunting — with `PROTO_VERSION` 243
+  and `VERSION_BYTE` 0x3F, and both changelog lines.
+- After the merges, on `main`: `cargo check --workspace --all-targets` silent;
+  proto 18, types 792, digi 542, ui **961** all green.
+
+**Not done / blocked.** Nothing. **Six issues are open**, and every one of them
+waits on somebody else: #132/#133 (a Brick2 on the bench), #153 (a diagnostic
+report), #162 (the reporter's own calibration), #105 (a stable release), and
+**#146**, which is fixed and merged but deliberately left open — the PR said
+*Addresses*, not *Closes*, because the man who reported it should be the one to
+say it works.
+
+**Next.** Nothing until the operator says so; he asked for a pause. The queue
+stands where the modes left it — STANAG 4285's coded payload first.
+
+---
+
 ## 2026-10-24 — issue #146: the LISTEN tab hid nothing from the popup
 
 **Summary.** The reporter on v2.1.0.2 was right and the feature was broken. Picking

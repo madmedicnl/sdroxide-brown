@@ -3,9 +3,9 @@
 What this fork is working on, kept here so it survives a session and is visible
 on the repo. Last updated **2026-10-24** by madmedicnl's agent.
 
-State: `main` at crate **2.1.0**, `PROTO_VERSION` **241**. Two wire numbers are
-claimed in open PRs and are not on `main` yet: **242** by PR #174 (8PSK) and
-**243** by the voice-hunting PR. Latest release **v2.1.0.2_brown** (with
+State: `main` at crate **2.1.0**, `PROTO_VERSION` **243** (`VERSION_BYTE`
+`0x3F`) — 242 was 8PSK and 243 voice hunting, both merged on 2026-10-24, and
+**no PRs are open**. Latest release **v2.1.0.2_brown** (with
 **v2.1.0.2.1_brown** as the current pre-release), five open issues. The rules are
 in [`AGENTS.md`](AGENTS.md); the history is in
 [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
@@ -17,18 +17,7 @@ maintainer's queue there, not a promise.
 
 ## Now
 
-0. **The UI test suite does not run in debug** — `cargo test -p sdroxide-ui --lib`
-   aborts, and has since egui 0.36. `epaint`'s `TexturesDelta::drop` is a
-   `debug_assert!`, and a dozen UI tests drop an `egui::FullOutput` without
-   applying or clearing its texture deltas; the first of them (the DAB logo
-   tile) aborts the whole binary, so 949 tests never report. **`cargo test
-   --release` passes, 961 green** — which is why it went unseen, the release gate
-   being the release one. The fix is one `out.textures_delta.clear()` per test
-   that draws a frame, or a shared frame helper; found while checking #146
-   (2026-10-24). Needs a go-ahead because it is a sweep across F4NRM's UI test
-   files.
-
-1. **Focus, set by the operator 2026-10-24: no UI work, and the modes are the
+0. **Focus, set by the operator 2026-10-24: no UI work, and the modes are the
    programme.** F4NRM is working through the detachable windows and the layout,
    so the screens are his; the only UI we touch is a new mode's own panel, or
    something **very off**. Our work is **STANAG 4285 first** — the coded payload
@@ -39,7 +28,7 @@ maintainer's queue there, not a promise.
    straight to `main`. **RSP1 is not on the list** (the operator struck it off on
    2026-10-24: it is the bench's receiver and his only wideband one).
 
-2. **The mode work — the live queue, and it has its own brief.**
+1. **The mode work — the live queue, and it has its own brief.**
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
    finish the missing modes and get TX working for everything fldigi can
    transmit, and **vendor a mode when the port and the bench have both been
@@ -73,7 +62,7 @@ maintainer's queue there, not a promise.
      as text, the reference waveform timing, a non-ASCII TX panic, burst tail
      loss and the stop button. A mode we ship, so it is this programme's work.
 
-3. **A decoded-text feed over UDP** — asked on Reddit (2026-10-24) and worth
+2. **A decoded-text feed over UDP** — asked on Reddit (2026-10-24) and worth
    having. What exists today is the **WSJT-X broadcast** (Settings → Servers):
    the FT8 family's decodes, status and logged QSOs, in WSJT-X's dialect. What
    does **not** exist is a generic feed for the text modes (RTTY, PSK, Olivia,
@@ -82,7 +71,7 @@ maintainer's queue there, not a promise.
    audio offset, text), off by default, next to the UDP audio sink that already
    exists in the engine. A `RadioConfig` field means a `PROTO_VERSION` bump.
 
-4. **Brick2** — the code half is merged (#170); the radio half is a report away.
+3. **Brick2** — the code half is merged (#170); the radio half is a report away.
    [`docs/internal/BRICK2-HANDOVER.md`](docs/internal/BRICK2-HANDOVER.md).
    - **#132 wrong frequency display** (Thetis 7.183 vs ours 7.223, 40 kHz, with
      the spectrum going unstable under a MIDI knob). **One answer needed** —
@@ -93,17 +82,17 @@ maintainer's queue there, not a promise.
      Invert spectrum, and one-switch-per-radio is now enforced (#170), so the
      generic Swap I/Q can no longer cancel it.
 
-5. **#162 NAVTEX frequency** — the reporter had to tune 516.6 kHz instead of
+4. **#162 NAVTEX frequency** — the reporter had to tune 516.6 kHz instead of
    518. The presets already tune the dial **1.710 kHz below the channel**
    (516.290 and 488.290), and that rule is pinned by a test, so this is his
    receiver's calibration (`ppm`) or the station's own offset. **Answer it, do
    not change the rule.**
 
-6. **#153 Pluto socket stalls** — APRS reception stops for a second or two and a
+5. **#153 Pluto socket stalls** — APRS reception stops for a second or two and a
    socket is being replaced mid-stream. Waiting on the **diagnostic report**
    (Settings → Radio → Copy Diagnostic Report) and the precise setup.
 
-7. **Detachable panels are F4NRM's** (discussion #166). Our part: any panel we
+6. **Detachable panels are F4NRM's** (discussion #166). Our part: any panel we
    touch gets made detachable and added to the Detachable page in Settings —
    APRS was the last one (#167).
 
@@ -186,17 +175,29 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **The debug UI suite runs again** — `cargo test -p sdroxide-ui --lib` aborted
+  on a `debug_assert!` inside `epaint`'s `TexturesDelta::drop`, which a dozen UI
+  tests tripped by dropping a frame unread; the abort took the other 949 tests
+  with it. One `test_support::run_frame` helper now takes the deltas, and the
+  twelve go through it: **961 passed, 0 failed** in debug, the same as release.
+  Test-only, straight to `main`.
+- **Issue #146 fixed and merged (#183)** — the LISTEN tab hid the transmit
+  controls only from the docked column and the detached window, because the
+  answer lived in a flag that just one of the three places drawing the band/mode
+  selector set. It is derived from the tab now, the tab says where the switch is
+  while it is off, and the manual documents it.
 - **Voice hunting in the scanner** — a **VOICE** switch in the SCAN window stops
   the scan only on channels that sound like somebody talking, passing over
   carriers, birdies, pagers and data bursts instead of stopping on them. The
   reading is shown as it runs (*passed 27.5550 · voice 18*), so a strong signal
   going by is explained rather than looking like a deaf scan. Independent
-  implementation from standard DSP — no code from VUERWERK, whose licence puts a
-  commercial licence on its originals. **A PR because it is the wire change**
-  (243 / 0x3F, renumbered from 242 which PR #174 claimed first).
+  implementation from standard DSP — no code from VUURWERK, whose licence puts a
+  commercial licence on its originals. **Merged as #177** (243 / 0x3F, renumbered
+  from 242 which #174 claimed first).
 - **8PSK in the program** — a third modulation choice beside BPSK and QPSK
   (receive only, three bits per symbol), proven on a synthetic because the
-  corpus's 8PSK recordings carry no clean constellation. **PR #174** (242 / 0x3E).
+  corpus's 8PSK recordings carry no clean constellation. **Merged as #174**
+  (242 / 0x3E).
 - **CIS-11 built** — the Russian meteorological teleprinter, receive only. Framing
   measured from the recordings (ten data bits + one odd parity, not the
   catalogues' "5 + parity"), 121 of 123 characters parity-valid on the off-air

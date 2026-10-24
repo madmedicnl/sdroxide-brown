@@ -7,8 +7,8 @@ rules are [`../../AGENTS.md`](../../AGENTS.md).
 Scripted via `gh project item-create` + `item-edit` once the `project` scope is
 granted (`gh auth refresh -h github.com -s project`).
 
-Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 241 on
-`main`; 242 claimed by PR #174 and 243 by the voice-hunting PR).
+Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
+`main`, no PRs open — 8PSK and voice hunting both merged).
 
 ## Achieved (Done)
 
@@ -20,8 +20,9 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 241 on
 
 **Modes**
 - **The mode-3 work**: PSK plain, coded (`BPSK63F` + the `R` set) and the
-  multi-carrier `C`/`RC` banks, MFSK (eleven), Contestia (nineteen), MT63,
-  DominoEX (nine), THOR (fifteen), DTMF, and **STANAG 4285** with Annex E.
+  multi-carrier `C`/`RC` banks, **8PSK receive** (proven on a synthetic), MFSK
+  (eleven), Contestia (nineteen), MT63, DominoEX (nine), THOR (fifteen), DTMF,
+  and **STANAG 4285** with Annex E.
 - Interoperable and field-confirmed: FT8/FT4/FT2 with WSJT-CB callsigns and the
   wide grammar, JS8, JT65/JT9, FST4, Q65, MSK144, FSK441 (RX and TX), JTTY,
   UVPacket, ALE (RX), Olivia (RX proven on air), RTTY, Hell, SYNOP/SHIP (BETA),
@@ -53,25 +54,20 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 241 on
 - CB: 11 m used in full (voice and all the digital modes), WSJT-CB
   interoperability, the channel plans, SSTV on 27.700, CB-first band handling.
 - **Voice hunting in the scanner** — a VOICE switch that stops a scan only where
-  somebody is talking, with the reading shown as it runs (in the PR, 243).
+  somebody is talking, with the reading shown as it runs (merged, 243 / 0x3F).
 
 **Health**
 - The gate is silent; the mode/band tables, `PROTO_VERSION` register, `Action`
   and `NrLevel` discriminant tests all hold.
+- **The debug UI suite runs again** — one `test_support::run_frame` helper takes
+  the `epaint` texture deltas a test has no renderer for; 961 green in debug and
+  release. Issue #146's LISTEN tab is fixed and merged (#183).
 - Branch and disk hygiene: 38 branches pruned and 900 GB of build artifacts
   removed; the site, the issue form with a required version field, and the
   offline-by-default rule.
 
 ## Open (In Progress)
 
-- **Issue #146, reopened** — LISTEN in the band/mode menu hid nothing from the
-  BAND chip's popup: the answer lived in a flag that only one of the three places
-  drawing the selector set. **PR #183** derives it from the tab instead, adds a
-  hint where the switch is, and documents it in the manual §2.4. It needs the
-  reporter to confirm before the issue closes.
-- **The debug UI suite does not run** — `cargo test -p sdroxide-ui --lib` aborts
-  on `epaint`'s `TexturesDelta` `debug_assert!`; `--release` is green (961). One
-  `out.textures_delta.clear()` per drawing test, across UI test files.
 - **The mode work is the queue.** [`MODE-PHASE-4-PROMPT.md`](MODE-PHASE-4-PROMPT.md)
   — finish the modes, TX for everything fldigi can transmit, vendor when the port
   and the bench are exhausted. Journal and measurements:

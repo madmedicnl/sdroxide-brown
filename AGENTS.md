@@ -283,8 +283,8 @@ a word instead of a conversation.
 `PROTO_VERSION` and `VERSION_BYTE` live in `crates/sdroxide-proto/src/lib.rs`,
 which is the **only** register that is kept current — one entry per bump, each
 naming both numbers (`239 → 240`, `VERSION_BYTE 0x3B → 0x3C`). Current on
-`main`: **241 / `0x3D`**; two numbers are claimed in open PRs — 242 by #174
-(8PSK) and 243 by the voice-hunting PR.
+`main`: **243 / `0x3F`** — 242 was 8PSK and 243 voice hunting, both merged
+2026-10-24. No numbers are claimed in an open PR.
 
 - **Append last, always.** A variant inserted mid-enum shifts every discriminant
   below it; a field inserted mid-struct shifts every field below it on a struct
