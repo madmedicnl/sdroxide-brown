@@ -21,6 +21,38 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 (rules) — F4NRM's list is a workflow, and the RSP1 is ours
+
+**Summary.** The list of things that belong to F4NRM has been read off the
+discussion itself rather than from memory, and it was wrong in two ways. The
+**RSP1 is not on it** — the operator struck it off in as many words, because it
+is his own receiver and the only wideband one on the bench — so RSP1 work is ours
+and needs nobody's permission. And the rest of the list is no longer a wall: a
+change that has to touch one of those decoders or radios, or one of his panels,
+goes up **as a PR** for him to read before it lands, which is what he asked for
+in that same discussion. Nothing changes about the part that matters: no
+unrequested refactor of a mode his radio group has confirmed.
+
+**Done.**
+- `AGENTS.md`: the section is renamed *"F4NRM's list — his to change, and a PR to
+  touch"*, quotes the operator's own correction, drops RSP1, and states the PR
+  rule with his sentence as the evidence: *"put any wire change or item that
+  touches these to put up as a PR and not implement them directly without you
+  having the chance to do look at them."*
+- `AGENTS.md`'s stop-list for an unattended session: F4NRM's list, his panels and
+  the wire now share one line — branch, tests, PR, carry on, never `main`.
+- `AGENTS.md`'s focus section and `TODO.md`'s item 0 carry the same reading, so
+  the queue cannot contradict the rules.
+- Read from the discussion itself (GraphQL, `discussion(number:155)`), not from
+  the paraphrase that was here.
+
+**Not done / blocked.** Nothing. The list itself is still F4NRM's to change, and
+this entry does not add to or remove from it beyond the operator's own correction.
+
+**Next.** Back to issue #146 (the LISTEN tab), which is what the session was on.
+
+---
+
 ## 2026-10-24 — voice hunting: the scanner stops on people, not on carriers
 
 **Summary.** The scanner can now hunt voices. A **VOICE** switch in the SCAN

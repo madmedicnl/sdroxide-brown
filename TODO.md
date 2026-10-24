@@ -22,8 +22,11 @@ maintainer's queue there, not a promise.
    so the screens are his; the only UI we touch is a new mode's own panel, or
    something **very off**. Our work is **STANAG 4285 first** — the coded payload
    has never been read off the air — then the modes that did not finish in
-   2.1.0. The forbidden list still holds (Olivia, RTTY, FT8, NAVTEX, WEFAX, SSTV,
-   DAB, APRS, WFM, DSC, RDS), variants included.
+   2.1.0. **F4NRM's list still holds** (Olivia, RTTY, FT8, NAVTEX, WEFAX, SSTV,
+   DAB, APRS, WFM, DSC, RDS), variants included — and a change that has to touch
+   one of those, or one of his panels, goes up **as a PR** for him to read, never
+   straight to `main`. **RSP1 is not on the list** (the operator struck it off on
+   2026-10-24: it is the bench's receiver and his only wideband one).
 
 1. **The mode work — the live queue, and it has its own brief.**
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
