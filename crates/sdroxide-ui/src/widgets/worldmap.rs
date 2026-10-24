@@ -491,10 +491,17 @@ pub fn ground_image(
     // Then the lines, stamped into the same grid — the weights are the ones
     // `draw_ground` uses, so a border and a river are as loud on a painted map
     // as they are on a stippled one.
-    for (layer, ink, weight, base, spread) in [
+    let mut layers = vec![
         (&crate::basemap::lines().rivers, map.river, 215.0, 0.42, 0.58),
         (&crate::basemap::lines().borders, map.border, 195.0, 0.62, 0.0),
-    ] {
+    ];
+    if lon_span <= 40.0 {
+        layers.push((&crate::basemap::lines().states, map.border, 150.0, 0.5, 0.0));
+    }
+    if lon_span <= 8.0 {
+        layers.push((&crate::basemap::lines().roads, map.city_label, 120.0, 0.7, 0.3));
+    }
+    for (layer, ink, weight, base, spread) in layers {
         let mut marks = vec![0u8; w * h];
         stamp_lines(layer, (clat, clon, lon_span, lat_span), (w, h), &mut marks);
         for (i, &rank) in marks.iter().enumerate() {
@@ -681,10 +688,23 @@ fn draw_ground(
     // the Danube reads as a different kind of thing from the brook feeding it.
     // A frontier has no such scale — a border is a border — so borders take the
     // whole layer at one weight.
-    for (layer, ink, weight, base, spread) in [
+    //
+    // **Detail has a zoom of its own.** Internal boundaries are worth drawing
+    // once a country fills the panel and are a grey smear on a continent, and a
+    // road is worth nothing until a region does — so each layer is gated on the
+    // span, which is also the only reason 2.7 MB of them is affordable in the
+    // asset.
+    let mut layers = vec![
         (&lines.rivers, map.river, 215.0, 0.42, 0.58),
         (&lines.borders, map.border, 195.0, 0.62, 0.0),
-    ] {
+    ];
+    if lon_span <= 40.0 {
+        layers.push((&lines.states, map.border, 150.0, 0.5, 0.0));
+    }
+    if lon_span <= 8.0 {
+        layers.push((&lines.roads, map.city_label, 120.0, 0.7, 0.3));
+    }
+    for (layer, ink, weight, base, spread) in layers {
         marks.fill(0);
         stamp_lines(layer, view, (cols, rows), &mut marks);
         for (i, &rank) in marks.iter().enumerate() {
