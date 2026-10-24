@@ -69,51 +69,58 @@ fn main() {
     for rate in fec::CodedRate::BPSK {
         // One bit per symbol for the BPSK rates: the trace carries two.
         let soft: Vec<f32> = traced.iter().step_by(2).copied().collect();
+        // **The depth is 32x what the receiver ships with.** The standard's long
+        // interleave is a ten-second delay: measured in 32-symbol blocks — which is
+        // how the independent implementation reads it — 31 rows of `j` blocks gives
+        // 31*12*32 = 11 904 symbols, 9.9 s at 1200 symbols per second. Our
+        // per-symbol commutator with the same `j` gives 372 symbols, 0.31 s, so the
+        // equivalent per-symbol depth is j = 384. Both are tried.
         let j = rate.j();
-        let flush = 31 * j * 32;
         for sign in [1.0f32, -1.0] {
             for style in fec::Interleave::ALL {
-                for phase in 0..32usize {
-                    let mut di = fec::ConvInterleaver::deinterleaver_with(j, style);
-                    for _ in 0..phase * 32 {
-                        di.push(0.0);
-                    }
-                    let mut out: Vec<f32> = Vec::with_capacity(soft.len());
-                    for v in &soft {
-                        out.push(di.push(v * sign));
-                    }
-                    if out.len() <= flush + 5_000 {
-                        continue;
-                    }
-                    let body = &out[flush..];
-                    let pairs = fec::average_pairs(body, rate.repeat());
-                    // **The judge is a framed message**, not the metric ratio: that
-                    // ratio reads 1.02x on a signal the receiver decodes, so it
-                    // cannot separate signal from noise. A message either closes or
-                    // it does not.
-                    let bits = fec::viterbi_decode(&pairs);
-                    let mut fr = fec::MessageFramer::new(rate);
-                    let mut found = 0usize;
-                    let mut first_len = 0usize;
-                    for b in bits {
-                        if let Some(m) = fr.push(b) {
-                            found += 1;
-                            first_len = m.bits.len();
-                            if m.closed {
-                                break;
+                for jj in [j, j * 32] {
+                    let flush = 31 * jj * 32;
+                    for phase in [0usize, 1, 2, 3, 4, 5, 6, 7] {
+                        let mut di = fec::ConvInterleaver::deinterleaver_with(jj, style);
+                        for _ in 0..phase * 32 {
+                            di.push(0.0);
+                        }
+                        let mut out: Vec<f32> = Vec::with_capacity(soft.len());
+                        for v in &soft {
+                            out.push(di.push(v * sign));
+                        }
+                        if out.len() <= flush + 5_000 {
+                            continue;
+                        }
+                        let body = &out[flush..];
+                        let pairs = fec::average_pairs(body, rate.repeat());
+                        // **The judge is a framed message**, not the metric ratio:
+                        // that ratio reads 1.02x on a signal the receiver decodes, so
+                        // it cannot separate signal from noise. A message either
+                        // closes or it does not.
+                        let bits = fec::viterbi_decode(&pairs);
+                        let mut fr = fec::MessageFramer::new(rate);
+                        let mut found = 0usize;
+                        let mut first_len = 0usize;
+                        for b in bits {
+                            if let Some(m) = fr.push(b) {
+                                found += 1;
+                                first_len = m.bits.len();
+                                if m.closed {
+                                    break;
+                                }
                             }
                         }
-                    }
-                    if found > 0 {
-                        best.push((
-                            found as f32,
-                            format!(
-                                "{} j{j} sign {sign:+.0} {} commutator phase {phase} -> {found} message(s), first {} bits, closed",
-                                rate.label(),
-                                style.label(),
-                                first_len
-                            ),
-                        ));
+                        if found > 0 {
+                            best.push((
+                                found as f32,
+                                format!(
+                                    "{} j{jj} sign {sign:+.0} {} phase {phase} -> {found} message(s), first {first_len} bits",
+                                    rate.label(),
+                                    style.label()
+                                ),
+                            ));
+                        }
                     }
                 }
             }

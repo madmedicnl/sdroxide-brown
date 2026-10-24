@@ -1035,6 +1035,33 @@ symbol for symbol. Anything that differs — the data-symbol ordering, the bit o
 the interleaver's bit-versus-symbol question — is then a fact rather than a
 hypothesis, and it is the comparison this fork has been missing all along.
 
+## ⛔ The interleaver is 32 times too short — a structural fault, not a tuning one
+
+The independent implementation interleaves **32-symbol data segments**: its
+`insert(i0, i0+32)` takes a whole segment, puts one symbol into each of the 32 rows,
+and sizes each row in `incr·(31-i)` **blocks**. This fork's `ConvInterleaver`
+advances its commutator **per symbol** with row `r` holding `(31-r)·j` **symbols**.
+Both are self-consistent, so a loopback through either passes — which is why it has
+survived to now — but they are not the same machine:
+
+| | max delay at `j` = 12 |
+|---|---|
+| this fork, per symbol | 31·12 = 372 symbols = **0.31 s** |
+| the standard's form, per 32-symbol block | 31·12 blocks = 11 904 symbols = **9.9 s** |
+
+9.9 s is the "long interleave, about ten seconds" that both Sigmira's manual and
+the WAVEOM description state, and that *virtually all real traffic uses* — so the
+block reading is the right one and this receiver has been deinterleaving with a
+filter 32× too short to spread a fade. Everything measured through it before now
+was measured through the wrong machine.
+
+Tested two ways on the strong capture, both with a **framed message** as the judge:
+the equivalent per-symbol depth `j` = 384, and this fork's commutator against a
+faithful copy of the other implementation's block deinterleaver
+(`s4285_block_check`). Neither frames a message yet, so the depth is not the whole
+story — the delay *pattern* differs too, and the block form has to go into the
+receiver itself rather than be approximated by a deeper per-symbol one.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run
