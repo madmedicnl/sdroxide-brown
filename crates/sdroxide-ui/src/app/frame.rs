@@ -468,9 +468,6 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
         // A compass wants to be near square: it is a dial with a readout
         // underneath, and a wide window would just be dial with margins.
         M::Rotor => ("antenna rotator", [420.0, 520.0]),
-        M::Dsc => ("DSC", [640.0, 480.0]),
-        M::Navtex => ("NAVTEX", [900.0, 600.0]),
-        M::Aprs => ("APRS", [760.0, 600.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
@@ -997,11 +994,7 @@ impl eframe::App for SdroxideApp {
             // NAVTEX's, each raised by its own window. The generic Panel module
             // covers every other one.
             let unavailable =
-                (self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel)
-                    || (mode == Mode::Dsc
-                        && self.ui_settings.is_detached(sdroxide_types::DetachableModule::Dsc))
-                    || (mode == Mode::Navtex
-                        && self.ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex)))
+                (self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel))
                     && !(mode.has_bottom_panel() || mode == Mode::Cw);
             if unavailable {
                 if self.panel_undock_notice_mode != Some(mode) {
@@ -1535,6 +1528,10 @@ impl eframe::App for SdroxideApp {
         self.swl_window(&ctx, &mut cmds);
         self.listen_window(&ctx, &mut cmds);
         self.schedule_window(&ctx, &mut cmds);
+        if self.show_dsc { self.dsc_window(&ctx, &mut cmds); }
+        if self.show_navtex { self.navtex_window(&ctx, &mut cmds); }
+        if self.show_aprs { self.aprs_window(&ctx, &mut cmds); }
+        if self.show_wefax { self.wefax_window(&ctx, &mut cmds); }
         self.recordings_window(&ctx, &mut cmds);
         self.poll_recording_jobs(&mut cmds);
         self.mail_window(&ctx, &mut cmds);
@@ -2358,30 +2355,6 @@ impl SdroxideApp {
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
                 self.dispatch_commands(cmds);
             }
-            M::Dsc => {
-                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    let h = ui.available_height();
-                    self.dsc_panel(ui, &mut cmds, h);
-                });
-                self.handle_detached_outcome(ctx, module, &spec, outcome);
-                self.dispatch_commands(cmds);
-            }
-            M::Navtex => {
-                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    let h = ui.available_height();
-                    self.navtex_panel(ui, &mut cmds, h);
-                });
-                self.handle_detached_outcome(ctx, module, &spec, outcome);
-                self.dispatch_commands(cmds);
-            }
-            M::Aprs => {
-                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    let h = ui.available_height();
-                    self.aprs_panel(ui, &mut cmds, h);
-                });
-                self.handle_detached_outcome(ctx, module, &spec, outcome);
-                self.dispatch_commands(cmds);
-            }
         }
     }
 
@@ -2713,13 +2686,7 @@ impl SdroxideApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            (self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel)
-                || (mode == Mode::Dsc
-                    && self.ui_settings.is_detached(sdroxide_types::DetachableModule::Dsc))
-                || (mode == Mode::Navtex
-                    && self.ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex))
-                || (mode.is_aprs()
-                    && self.ui_settings.is_detached(sdroxide_types::DetachableModule::Aprs)))
+            (self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel))
                 && self.focused
                 && (mode.has_bottom_panel() || mode == Mode::Cw)
         }
@@ -2814,21 +2781,6 @@ impl SdroxideApp {
         self.ui_settings.is_detached(sdroxide_types::DetachableModule::Rotor) && self.focused
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    fn dsc_detached(&self) -> bool {
-        self.ui_settings.is_detached(sdroxide_types::DetachableModule::Dsc) && self.focused
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn navtex_detached(&self) -> bool {
-        self.ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex) && self.focused
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn aprs_detached(&self) -> bool {
-        self.ui_settings.is_detached(sdroxide_types::DetachableModule::Aprs) && self.focused
-    }
-
     /// Which of this radio's modules the shell should emit as their own windows
     /// this frame, by [`sdroxide_types::DetachableModule::index`].
     ///
@@ -2849,9 +2801,6 @@ impl SdroxideApp {
             self.module_window_wanted(sdroxide_types::DetachableModule::AuxPanadapter);
         want[sdroxide_types::DetachableModule::BandMenu.index()] = self.band_menu_detached();
         want[sdroxide_types::DetachableModule::Rotor.index()] = self.rotor_detached();
-        want[sdroxide_types::DetachableModule::Dsc.index()] = self.dsc_detached();
-        want[sdroxide_types::DetachableModule::Navtex.index()] = self.navtex_detached();
-        want[sdroxide_types::DetachableModule::Aprs.index()] = self.aprs_detached();
         want
     }
 
@@ -4022,9 +3971,7 @@ impl SdroxideApp {
             self.atchat_panel(ui, cmds, panel_h);
         } else if mode.is_wefax() {
             self.wefax_panel(ui, cmds, panel_h);
-        } else if mode == Mode::Navtex
-            && !self.ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex)
-        {
+        } else if mode == Mode::Navtex {
             self.navtex_panel(ui, cmds, panel_h);
         } else if mode == Mode::Acars {
             self.acars_panel(ui, cmds, panel_h);
@@ -4050,11 +3997,7 @@ impl SdroxideApp {
             self.ais_panel(ui, cmds, panel_h);
         } else if mode.is_hfdl() {
             self.hfdl_panel(ui, cmds, panel_h);
-        } else if mode.is_aprs()
-            && !self
-                .ui_settings
-                .is_detached(sdroxide_types::DetachableModule::Aprs)
-        {
+        } else if mode.is_aprs() {
             self.aprs_panel(ui, cmds, panel_h);
         } else if mode.is_packet() {
             self.packet_panel(ui, cmds, panel_h);
@@ -4812,5 +4755,28 @@ mod bindings_offer_tests {
         let s = sdroxide_types::UiSettings::default();
         assert!(!s.client_share_bindings, "the opt-in is off by default");
         assert!(!s.client_bindings_declined, "and so is having been asked");
+    }
+}
+
+impl SdroxideApp {
+    pub(in crate::app) fn dsc_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "dsc", "DSC", [640.0, 480.0], self.show_dsc,
+            |me, ui| { let h = ui.available_height(); me.dsc_panel(ui, cmds, h); });
+        self.show_dsc = open;
+    }
+    pub(in crate::app) fn navtex_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "navtex", "NAVTEX", [900.0, 600.0], self.show_navtex,
+            |me, ui| { let h = ui.available_height(); me.navtex_panel(ui, cmds, h); });
+        self.show_navtex = open;
+    }
+    pub(in crate::app) fn aprs_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "aprs", "APRS", [760.0, 600.0], self.show_aprs,
+            |me, ui| { let h = ui.available_height(); me.aprs_panel(ui, cmds, h); });
+        self.show_aprs = open;
+    }
+    pub(in crate::app) fn wefax_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "wefax", "WEFAX", [900.0, 600.0], self.show_wefax,
+            |me, ui| { let h = ui.available_height(); me.wefax_panel(ui, cmds, h); });
+        self.show_wefax = open;
     }
 }

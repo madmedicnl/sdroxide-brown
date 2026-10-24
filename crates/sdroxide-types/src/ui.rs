@@ -648,21 +648,12 @@ pub enum DetachableModule {
     /// lock already steers the antenna from the SAT window, and this is the
     /// manual half — point at a callsign, a map, or a country. Appended last.
     Rotor,
-    /// The **DSC decoder** panel in its own window — the marine Digital Selective
-    /// Calling message list and reading pane. Appended last.
-    Dsc,
-    /// The **NAVTEX decoder** panel in its own window — the maritime safety
-    /// information message list and reading pane. Appended last.
-    Navtex,
-    /// The **APRS decoder** panel in its own window — stations, map and
-    /// messages. Appended last.
-    Aprs,
 }
 
 impl DetachableModule {
     /// How many detachable modules there are — the length of
     /// [`UiSettings::detached`], which is an array so `UiSettings` stays `Copy`.
-    pub const COUNT: usize = 9;
+    pub const COUNT: usize = 6;
 
     /// Every module, so a settings list or a test can walk them all.
     pub const ALL: [DetachableModule; DetachableModule::COUNT] = [
@@ -672,9 +663,6 @@ impl DetachableModule {
         DetachableModule::AuxPanadapter,
         DetachableModule::BandMenu,
         DetachableModule::Rotor,
-        DetachableModule::Dsc,
-        DetachableModule::Navtex,
-        DetachableModule::Aprs,
     ];
 
     /// This module's slot in [`UiSettings::detached`]. A plain array rather than
@@ -687,9 +675,6 @@ impl DetachableModule {
             DetachableModule::AuxPanadapter => 3,
             DetachableModule::BandMenu => 4,
             DetachableModule::Rotor => 5,
-            DetachableModule::Dsc => 6,
-            DetachableModule::Navtex => 7,
-            DetachableModule::Aprs => 8,
         }
     }
 
@@ -702,9 +687,6 @@ impl DetachableModule {
             DetachableModule::AuxPanadapter => "AUX SP (second spectrum)",
             DetachableModule::BandMenu => "Band & mode selector",
             DetachableModule::Rotor => "Antenna rotator",
-            DetachableModule::Dsc => "DSC decoder",
-            DetachableModule::Navtex => "NAVTEX decoder",
-            DetachableModule::Aprs => "APRS decoder",
         }
     }
 
@@ -719,9 +701,6 @@ impl DetachableModule {
             DetachableModule::AuxPanadapter => "sdroxide-panadapter-aux",
             DetachableModule::BandMenu => "sdroxide-bandmenu",
             DetachableModule::Rotor => "sdroxide-rotor",
-            DetachableModule::Dsc => "sdroxide-dsc",
-            DetachableModule::Navtex => "sdroxide-navtex",
-            DetachableModule::Aprs => "sdroxide-aprs",
         }
     }
 }
