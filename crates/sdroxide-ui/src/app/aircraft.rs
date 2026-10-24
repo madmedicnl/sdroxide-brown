@@ -12,9 +12,16 @@
 //! One radio hears one wideband mode at a time, so the column is a mode switch:
 //! a button sends `SetMode` exactly as the band menu does, and the map shows
 //! what that mode has heard.
+//!
+//! **Cards** is not a mode: it sets nothing on the radio. It swaps the map for
+//! the list of aircraft every mode has heard, merged per aircraft by
+//! [`super::aircraft_registry`] and worded by [`super::aircraft_card`], so the
+//! list survives a change of mode.
 
 use eframe::egui::{self, RichText};
 use sdroxide_types::{Command, Mode, RxId};
+
+use super::aircraft_card;
 
 /// The opening size of the window and its floor.
 const AIRCRAFT_SIZE: [f32; 2] = [920.0, 560.0];
@@ -53,6 +60,12 @@ const MODES: &[AirMode] = &[
 
 const COLUMN_W: f32 = 104.0;
 const BUTTON_H: f32 = 30.0;
+const LIST_W: f32 = 230.0;
+
+/// A mode button is lit only while the map is the thing on show.
+fn mode_chip_lit(chip: Mode, shown: Mode, cards_view: bool) -> bool {
+    !cards_view && chip == shown
+}
 
 impl super::SdroxideApp {
     pub(in crate::app) fn aircraft_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
@@ -127,23 +140,119 @@ impl super::SdroxideApp {
                     for m in MODES {
                         let b = crate::chrome::chip_sized(
                             ui,
-                            m.mode == shown,
+                            mode_chip_lit(m.mode, shown, self.aircraft_cards),
                             m.label,
                             egui::vec2(COLUMN_W - 8.0, BUTTON_H),
                         )
                         .on_hover_text(m.hover);
                         if b.clicked() {
                             self.aircraft_view = m.mode;
+                            self.aircraft_cards = false;
                             cmds.push(Command::SetMode { rx: RxId::Main, mode: m.mode });
                         }
+                    }
+                    ui.add_space(6.0);
+                    let n = self.aircraft_registry.len() + self.aircraft_registry.fallback_len();
+                    let b = crate::chrome::chip_sized(
+                        ui,
+                        self.aircraft_cards,
+                        format!("Cards {n}"),
+                        egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                    )
+                    .on_hover_text(
+                        "Every aircraft heard on ADS-B, VDL2, HFDL and ACARS, one card each — \
+                         kept for ten minutes, whichever mode the radio is on now",
+                    );
+                    if b.clicked() {
+                        self.aircraft_cards = !self.aircraft_cards;
                     }
                 },
             );
             ui.vertical(|ui| {
                 ui.set_min_width(ui.available_width());
-                self.aircraft_map(ui, cmds, shown, active, h);
+                if self.aircraft_cards {
+                    self.aircraft_cards_pane(ui, h);
+                } else {
+                    self.aircraft_map(ui, cmds, shown, active, h);
+                }
             });
         });
+    }
+
+    /// The list of aircraft on the left, the open card on the right.
+    fn aircraft_cards_pane(&mut self, ui: &mut egui::Ui, h: f32) {
+        let now = crate::time::now_unix();
+        let rows = aircraft_card::rows(&self.aircraft_registry, now);
+        if rows.is_empty() {
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new(
+                    "No aircraft heard yet. Cards fill from ADS-B, VDL2, HFDL and ACARS — \
+                     press one of them and listen. Nothing here needs the internet.",
+                )
+                .size(11.5)
+                .color(crate::theme::gray(160)),
+            );
+            return;
+        }
+        // A card that expired while open closes rather than showing stale text.
+        if let Some(sel) = &self.aircraft_card_sel {
+            if aircraft_card::lookup(&self.aircraft_registry, sel).is_none() {
+                self.aircraft_card_sel = None;
+            }
+        }
+        let sel = self.aircraft_card_sel.clone().unwrap_or_else(|| rows[0].key.clone());
+        let mut picked = None;
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui_with_layout(
+                egui::vec2(LIST_W, h),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    egui::ScrollArea::vertical().id_salt("aircraft_cards_list").show(ui, |ui| {
+                        for r in &rows {
+                            let text = format!(
+                                "{}   {}\n{}",
+                                r.title,
+                                super::util::fmt_age(r.age_s),
+                                r.detail
+                            );
+                            let on = r.key == sel;
+                            if ui.selectable_label(on, text).clicked() {
+                                picked = Some(r.key.clone());
+                            }
+                        }
+                    });
+                },
+            );
+            ui.separator();
+            ui.vertical(|ui| {
+                if let Some(card) = aircraft_card::lookup(&self.aircraft_registry, &sel) {
+                    ui.label(RichText::new(aircraft_card::title(&sel, card)).strong().size(15.0));
+                    ui.label(
+                        RichText::new(aircraft_card::detail(&sel, card))
+                            .size(11.0)
+                            .color(crate::theme::gray(160)),
+                    );
+                    ui.add_space(6.0);
+                    egui::Grid::new("aircraft_card_fields")
+                        .num_columns(3)
+                        .spacing([12.0, 4.0])
+                        .show(ui, |ui| {
+                            for l in aircraft_card::lines(card, now) {
+                                ui.label(RichText::new(l.label).color(crate::theme::gray(160)));
+                                ui.label(l.value);
+                                ui.label(
+                                    RichText::new(l.note).size(10.5).color(crate::theme::gray(130)),
+                                );
+                                ui.end_row();
+                            }
+                        });
+                }
+            });
+        });
+        if picked.is_some() {
+            self.aircraft_card_sel = picked;
+        }
     }
 
     /// The right-hand side: a line saying what the radio is doing, then the map.
@@ -208,6 +317,13 @@ mod tests {
                 m.label
             );
         }
+    }
+
+    #[test]
+    fn a_mode_button_is_lit_only_while_the_map_is_shown() {
+        assert!(mode_chip_lit(Mode::Adsb, Mode::Adsb, false));
+        assert!(!mode_chip_lit(Mode::Hfdl, Mode::Adsb, false));
+        assert!(!mode_chip_lit(Mode::Adsb, Mode::Adsb, true), "the Cards view lights Cards alone");
     }
 
     #[test]
