@@ -35,12 +35,18 @@ maintainer's queue there, not a promise.
    exhausted**. [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md) is the
    journal and the measurements; the five-column mode table at the end of the
    brief is the deliverable.
-   - **STANAG 4285**: the receiver locks real captures, Annex E (the code, the
-     interleaver, SOM/EOM, an ITA2 reading) is built and proven on a loopback,
-     and what is missing is a **coded off-air transmission**. The frequencies and
-     the expected text are in
-     [`STANAG4285-HANDOVER.md`](docs/internal/STANAG4285-HANDOVER.md); an RSP1
-     capture of a French Navy test tape closes it.
+   - **STANAG 4285**: the tape is in hand (FUF 13031.2 kHz, 23 Oct, known text)
+     and the receiver locks it, but the payload stays unread. **Measured
+     2026-10-24**: the audio band is not the fault (the coded chain decodes
+     through 800–3000 Hz and narrower — a test now pins it), and neither is the
+     tuning, the mono mix or the sideband. The data block concentration
+     (0.31/0.28/0.27/0.19) says the smear is **inside a 32-symbol block**, i.e.
+     delay spread of a symbol or more — so the next step is a
+     **fractionally-spaced decision-feedback equaliser**, test-first on synthetic
+     two-path channels. See
+     [`STANAG4285-HANDOVER.md`](docs/internal/STANAG4285-HANDOVER.md), "the audio
+     band is not the fault". A second capture on a quiet path still wants the
+     bench.
    - What is left is mostly **measurement**, not code: THOR25/THOR44 and a
      second MFSK8 recording, a known-good FSQ recording, a BPSK1000 capture for
      the lock-time question, an ARDOP recording off air, and a THOR/DominoEX
