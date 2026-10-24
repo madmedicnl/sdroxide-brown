@@ -597,7 +597,7 @@ target, is item 9).
 ## 11 m operating (CB)
 
 Both still design-stage. The reverse-engineering behind them is in
-[`AGENTS.md`](AGENTS.md) under "The LOG11DX WSJT bridge".
+[`AGENTS.md`](../../AGENTS.md) under "The LOG11DX WSJT bridge".
 
 - **Auto mode — FT8/FT4/FT2, any band this radio may transmit on, default
   off.** **v1 landed.** An unattended sequencer that answers a new station's CQ,

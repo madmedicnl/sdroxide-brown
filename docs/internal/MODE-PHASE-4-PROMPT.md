@@ -33,7 +33,7 @@ the thing the operator asked for, so it is not an afterthought.
 2. [`MODE-ROADMAP.md`](MODE-ROADMAP.md) — the queue, the reasoning, and the
    per-mode reference notes. Note that its "port it, do not vendor it" rule is
    superseded here.
-3. [`AGENTS.md`](AGENTS.md) — house rules, the bench, the wire, the release rules.
+3. [`AGENTS.md`](../../AGENTS.md) — house rules, the bench, the wire, the release rules.
 4. The per-mode references: [`STANAG4285-HANDOVER.md`](STANAG4285-HANDOVER.md),
    [`OLIVIA-HANDOVER.md`](OLIVIA-HANDOVER.md), [`CW-HANDOVER.md`](CW-HANDOVER.md).
 
