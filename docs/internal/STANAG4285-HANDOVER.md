@@ -923,11 +923,32 @@ cost roughly 5 dB" — and it is what a real 4285 receiver answers with an
 reach.
 
 So the remaining work is a receiver change of a known kind, and it is test-first on
-material already on the disk: build a synthetic channel with two paths a symbol or
-two apart (and a second with three), see what a simple fractionally-spaced
-decision-feedback equaliser recovers there, and then run it on his file. If the
-effective symbol SNR comes up from about 0 dB, the SOM should appear and the rate
-will name itself.
+material already on the disk: a synthetic channel with two paths a symbol apart is
+**`a_coded_message_survives_a_two_path_channel`**, added and ignored — it is the
+definition of done.
+
+### The first attempt at the equaliser, and what it established
+
+An **adaptive** fractionally-spaced FFE+DFE (NLMS, six T/2 taps and two decided
+symbols, trained on the frame's 80 known sync symbols) does not work here, and the
+reason is worth writing down rather than rediscovering:
+
+* it does **not converge** — the taps stall at the delay line's gain, the training
+  residual sits at **0.88** against a unit target whatever the step size or the
+  tap count, and it *lowers* the reference concentration (2.81 → 2.59) instead of
+  raising it;
+* the **inputs are not the reason**. Measured on the same frames: the sync is
+  recovered at the current sampling instant exactly — its correlation equals its
+  mean amplitude (0.250 against 0.252), sign for sign, on a clean channel and on
+  the two-path one alike. So the sequence, the timing and the phase reference are
+  all in hand;
+* what is left is the *method*: a loop started from a delay line has to discover a
+  four-times gain and a fractional delay at once, and on 80 symbols it does not.
+
+**So the way in is closed-form, not adaptive**: estimate the channel by least
+squares from the 80 known sync symbols (three to five T-spaced complex taps), then
+either invert it explicitly or seed a DFE with it. That is a bounded piece of work
+with a test already waiting for it.
 
 What still needs the bench: another capture of the same tape on a quiet, steady path
 — a spread-out channel is a bad witness for a modem, and the watcher is the tool for

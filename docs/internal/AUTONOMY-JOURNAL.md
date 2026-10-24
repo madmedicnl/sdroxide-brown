@@ -66,10 +66,23 @@ yet, and nothing is claimed to be.
 - `cargo test -p sdroxide-dsp --release --lib stanag` — **13 passed, 1 ignored**
   (the off-air gate); `rustfmt --edition 2024 --config-path rustfmt.toml` clean.
 
-**Not done / blocked.** The payload is still unread. The next step is a
-**fractionally-spaced decision-feedback equaliser**, test-first on synthetic two-
-and three-path channels a symbol or two apart, then on his file — material already
-on the disk, so no bench needed. A *second* capture of the same tape on a quiet,
+**Tried and recorded: the adaptive equaliser does not converge.** An NLMS
+fractionally-spaced FFE+DFE trained on the frame's 80 known sync symbols stalls at
+the delay line's gain — training residual **0.88** against a unit target, whatever
+the step size or tap count — and *lowers* the reference concentration (2.81 →
+2.59). The inputs are not the reason: measured, the sync is recovered exactly at
+the current timing (correlation 0.250 against a mean amplitude of 0.252, sign for
+sign, clean and two-path alike). So the method is wrong, not the material: a loop
+started from a delay line has to find a four-times gain and a fractional delay at
+once on 80 symbols, and does not. The test that fails
+(`a_coded_message_survives_a_two_path_channel`, ignored) is in place, and the way
+in is **closed-form**: a least-squares channel from the known sync, then an
+explicit inverse or a DFE seeded with it. The adaptive attempt was reverted rather
+than left in, so nothing dead ships.
+
+**Not done / blocked.** The payload is still unread, and the next step is the
+least-squares channel estimate and its inverse, against the ignored test. Material
+already on the disk, so no bench. A *second* capture of the same tape on a quiet,
 steady path still needs the bench, and the watcher is the tool for it: a spread-out
 channel is a bad witness for a modem.
 

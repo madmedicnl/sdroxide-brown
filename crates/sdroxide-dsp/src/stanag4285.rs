@@ -1568,10 +1568,19 @@ mod tests {
     }
 
     /// The same, through an audio chain that only passes `band`.
-    #[allow(clippy::too_many_lines)]
     fn coded_round_trip_band(
         ramp_hz_s: f64,
         band: Option<(f64, f64)>,
+    ) -> (Vec<u8>, Vec<S4285Message>) {
+        coded_round_trip_path(ramp_hz_s, band, None)
+    }
+
+    /// The same, through a multipath channel as well.
+    #[allow(clippy::too_many_lines)]
+    fn coded_round_trip_path(
+        ramp_hz_s: f64,
+        band: Option<(f64, f64)>,
+        taps: Option<&[(f64, f32)]>,
     ) -> (Vec<u8>, Vec<S4285Message>) {
         use super::fec::{self, CodedRate};
         let rate = CodedRate::Bps600;
@@ -1634,6 +1643,14 @@ mod tests {
             Some((lo, hi)) => band_limit(&audio, 12000.0, lo, hi),
             None => audio,
         };
+        // A real path arrives as several delayed copies of itself: the impairment
+        // the standard's own tables budget for ("two equal Rayleigh paths 2 ms
+        // apart cost roughly 5 dB") and the one a receiver answers with an
+        // equaliser.
+        let audio = match taps {
+            Some(t) => multipath(&audio, t),
+            None => audio,
+        };
         let mut rx = S4285Receiver::new(12000.0, 1800.0);
         let mut got: Vec<S4285Message> = Vec::new();
         for chunk in audio.chunks(1024) {
@@ -1684,6 +1701,27 @@ mod tests {
         out
     }
 
+    /// A multipath channel: the sum of `taps` scaled and delayed copies.
+    ///
+    /// `delay` is in **symbols**, at 2400 baud on 12 kHz audio, and a fractional
+    /// delay is interpolated — crude, but the point is to place energy a symbol
+    /// or two after the symbol that caused it, which is what a real path does and
+    /// what a phase fit cannot undo.
+    fn multipath(audio: &[f32], taps: &[(f64, f32)]) -> Vec<f32> {
+        let mut out = vec![0.0f32; audio.len()];
+        for &(delay, gain) in taps {
+            let d = delay * (12000.0 / BAUD);
+            let whole = d.floor() as usize;
+            let frac = (d - whole as f64) as f32;
+            for (k, v) in out.iter_mut().enumerate() {
+                let a = k.checked_sub(whole).map(|i| audio[i]).unwrap_or(0.0);
+                let b = k.checked_sub(whole + 1).map(|i| audio[i]).unwrap_or(0.0);
+                *v += gain * (a * (1.0 - frac) + b * frac);
+            }
+        }
+        out
+    }
+
     /// The whole chain, over a channel that is exactly on frequency.
     #[test]
     fn a_coded_message_survives_the_whole_chain() {
@@ -1710,6 +1748,38 @@ mod tests {
             let (payload, got) = coded_round_trip(ramp);
             assert_eq!(got[0].bits, payload, "the wrong bits at {ramp} Hz/s");
         }
+    }
+
+    /// **The impairment the one real coded tape has: two paths a symbol apart.**
+    ///
+    /// This is the definition of done for the next piece of work, and it is
+    /// ignored because that work is not built. The receiver cannot put the tape's
+    /// data symbols on a lattice (2/4/8-fold **0.234 / 0.070 / 0.080**) while its
+    /// sync and its sixteen-identical-symbol reference blocks are healthy, and its
+    /// data *blocks* are no better than the frame — so the damage is inside 32
+    /// symbols, which is delay spread and not a phase drift. This reproduces it on
+    /// a synthetic whose bits are known: the same coded transmission plus a copy
+    /// of itself 1.5 symbols late at two thirds the amplitude.
+    ///
+    /// **What the first attempt at fixing it established.** An adaptive
+    /// (NLMS) fractionally-spaced FFE+DFE trained on the 80 known sync symbols does
+    /// **not** converge here: the taps stall at the delay line's gain and the
+    /// training residual sits at 0.88 against a unit target, which measurably
+    /// *lowers* the reference concentration instead of raising it. The inputs are
+    /// not the reason — measured, the sync is recovered at the current timing
+    /// exactly (its correlation equals its mean amplitude, sign for sign), so a
+    /// closed-form estimate is the way in: a least-squares channel from the 80
+    /// known symbols, then a computed inverse or a DFE seeded with it, rather than
+    /// a loop left to find it.
+    #[test]
+    #[ignore = "needs an equaliser: see the note on this test for what the first attempt established"]
+    fn a_coded_message_survives_a_two_path_channel() {
+        // -3.5 dB of echo 1.5 symbols late: a symbol is 0.417 ms, so this is
+        // 0.63 ms of delay spread, the low end of what a 13 MHz path does.
+        let taps = [(0.0, 1.0f32), (1.5, 0.67)];
+        let (payload, got) = coded_round_trip_path(0.0, Some((300.0, 3300.0)), Some(&taps));
+        assert!(!got.is_empty(), "a two-path channel lost the message entirely");
+        assert_eq!(got[0].bits, payload, "the bits do not survive two paths");
     }
 
     /// **How much of the 300–3300 Hz band does the coded chain need?**
