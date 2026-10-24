@@ -3783,6 +3783,48 @@ impl SdroxideApp {
                         ui.end_row();
                     }
                 }
+                ui.add_space(10.0);
+                ui.label(RichText::new("Tool windows").size(12.0).strong().color(crate::theme::CYAN()));
+                ui.add_space(4.0);
+                note(ui, "Panels converted to floating windows. Their open state is remembered.");
+                ui.add_space(4.0);
+                let tool_windows: &[(&str, u64)] = &[
+                    ("DSC", crate::app::frame::TW_DSC),
+                    ("NAVTEX", crate::app::frame::TW_NAVTEX),
+                    ("APRS", crate::app::frame::TW_APRS),
+                    ("WEFAX", crate::app::frame::TW_WEFAX),
+                    ("SSTV", crate::app::frame::TW_SSTV),
+                    ("DAB", crate::app::frame::TW_DAB),
+                    ("JS8", crate::app::frame::TW_JS8),
+                    ("ACARS", crate::app::frame::TW_ACARS),
+                    ("HFDL", crate::app::frame::TW_HFDL),
+                    ("VDL2", crate::app::frame::TW_VDL2),
+                    ("AIS", crate::app::frame::TW_AIS),
+                    ("ADS-B", crate::app::frame::TW_ADSB),
+                    ("FSQ", crate::app::frame::TW_FSQ),
+                    ("HELL", crate::app::frame::TW_HELL),
+                    ("PACKET", crate::app::frame::TW_PACKET),
+                    ("WSPR", crate::app::frame::TW_WSPR),
+                    ("PI4", crate::app::frame::TW_PI4),
+                    ("TEXT", crate::app::frame::TW_TEXT),
+                    ("UVPACKET", crate::app::frame::TW_UVPACKET),
+                    ("JTTY", crate::app::frame::TW_JTTY),
+                    ("ALE", crate::app::frame::TW_ALE),
+                    ("RF PAINT", crate::app::frame::TW_RFPAINT),
+                    ("IMAGE", crate::app::frame::TW_IMAGE),
+                ];
+                for (name, bit) in tool_windows {
+                    let mut on = (io.ui_edit.tool_windows_open & bit) != 0;
+                    ui.label(*name);
+                    let label = if on { "Open" } else { "Closed" };
+                    crate::chrome::checkbox(ui, &mut on, label);
+                    if on {
+                        io.ui_edit.tool_windows_open |= bit;
+                    } else {
+                        io.ui_edit.tool_windows_open &= !bit;
+                    }
+                    ui.end_row();
+                }
                 #[cfg(target_arch = "wasm32")]
                 {
                     note(ui, "Detachable windows are native only.");
