@@ -768,13 +768,15 @@ it.
 
 ### Still open
 
-* **No real coded transmission has been decoded**, and the metric test above says
-  the ones on disk are not coded. A coded station is what the branch needs; the
-  panel now reports `SOM n/32` so the operator can see one being worked on.
+* **No real coded transmission has been decoded**, and the metric test says the
+  ones on disk are not coded — or not readable. A coded station is what the
+  branch needs; the panel reports `SOM n/32` so the operator can see one being
+  worked on.
 * **The over-the-air loopback**, which needs either an equaliser (Annex C/D — a
   channel estimate at the four reference points, amplitude as well as phase) or a
   bench path with a flatter passband. The rig's transmit filter is the current
-  suspect and the measurement above is what says so.
+  suspect and the measurement above is what says so. **The equaliser is now in**
+  — see the next section — and the bench path is still the suspect.
 * **The punctured 2/3 rate for 2400 bps is not built**: the annex does not say
   which of each four bits is dropped, and a guessed demapper is indistinguishable
   from a decode.
@@ -782,3 +784,50 @@ it.
   what it carries "message bits" and names no character set. ITA2 5N1.5 is what a
   75 baud tape should be, and the reader refuses a reading that does not look like
   text rather than printing letters that mean nothing.
+
+## 2026-10-24 — the equaliser, and a stereo capture that measured nothing
+
+Two changes, one of them a tooling fault that had been hiding the material.
+
+**A capture can be stereo, and ours were read as interleaved mono.** The probe,
+the FEC checker and the off-air gate each did `reader.samples()` and called the
+result mono. The first real coded capture we were sent — Mark (`markjfine`) on
+FUF Fort-de-France, 13031.2 kHz, 23 Oct, a Windows machine recording its own
+output — is **stereo 48 kHz**, so the probe read it at an effective 24 kHz with
+the two channels spliced together and reported `locked false`, every number zero.
+It looked exactly like "the receiver cannot read a coded tape" and it was a file
+the tool could not open. All three now mix to mono (and say why in a comment).
+**Suspect the instrument first** — the same lesson as the box-decimating WAV
+writer and the single-peak lock.
+
+**The channel fit is complex now, not a phase line.** `ChannelFit` reads the
+complex gain from the three reference blocks (mean of each block, so the level is
+the reference's), fits **I and Q** linearly across the frame and evaluates that
+fit at every symbol — interpolating between the blocks and **extrapolating** to
+the first and last data blocks, which have none on one side. Every symbol is then
+divided by the channel, so amplitude as well as phase is corrected. The three
+call sites use it: the sampling-phase sweep, the frame read and the Annex E soft
+decisions (one `channel_line`, as the handover already insists).
+
+Measured, same files, same tunings:
+
+| | before | after |
+|---|---|---|
+| our `6348.000-…045545Z` data constellation (2-fold) | 0.184 | **0.456** |
+| its rate verdict | unknown | **1200 BPSK uncoded, or a coded BPSK rate** |
+| FUF `13031.200-…150300Z` at 1800 Hz, frames locked | — (read as mono: 0) | 335 |
+| FUF, mean references | — | 0.63 / 0.70 / 0.57 |
+| FUF, data constellation | — | 0.23 (thread's figure on a mono copy: 0.335) |
+
+The guard is `the_channel_fit_recovers_level_and_phase_across_the_frame`: a
+synthetic channel that is linear in I/Q with a **falling level**, asserted to come
+back at unit magnitude through the extrapolated end. Verified failing with the
+correction reduced to phase only — `symbol 0: level 1.284, not corrected`.
+
+**The code is still invisible on Mark's tape**: `s4285_fec_check` puts every
+branch at 0.97–1.00× its own shuffled null, so the trellis sees nothing. With the
+level corrected, the remaining suspect is his audio chain: the file's spectrum
+runs about **800–3000 Hz**, where a 4285 is 300–3300, so the bottom third of the
+waveform is gone before it reaches us. That is the request already made on the
+thread — a wider filter and another minute of the same tape — not something to
+chase in the receiver.

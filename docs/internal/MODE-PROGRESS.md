@@ -1253,6 +1253,32 @@ transmitter that is the touch-tone specification rather than one of ours),
 `noise_does_not_produce_digits`, `a_held_key_is_one_digit`, and
 `a_dtmf_key_press_reads_through_the_controller`.
 
+## Phase 4 (2026-10-24) — STANAG 4285: the equaliser, and a stereo capture
+
+The operator's focus for this stretch is STANAG and the modes that did not ship in
+2.1.0, with the screens left to F4NRM. Two changes today, one of them a tooling
+fault that had been hiding the material:
+
+- **A capture can be stereo.** The probe, the FEC checker and the off-air gate all
+  read interleaved samples as mono, so the first real coded capture we were sent
+  (FUF 13031.2 kHz from Mark, `markjfine` — a Windows machine recording its own
+  output) came back `locked false`, every number zero. Mixed to mono, the same
+  file locks **335 frames** with references **0.63 / 0.70 / 0.57**. The receiver
+  was never at fault; the tool could not open the file.
+- **The channel fit is complex, not a phase line.** `ChannelFit` takes the level
+  and phase from the three reference blocks and fits **I and Q** across the frame,
+  extrapolating to the data blocks at either end, and divides it out of every
+  symbol. Our `6348.000-…045545Z` capture's data constellation goes **0.184 →
+  0.456** and its rate verdict from `unknown` to **1200 BPSK**. On Mark's file the
+  constellation is 0.23 (0.335 as measured on a mono copy) and the FEC metric is
+  still 0.97–1.00× its shuffled null at every branch — the tape's audio chain
+  spans about 800–3000 Hz where a 4285 needs 300–3300, which is the wide-filter
+  request already on his thread.
+
+Guard: `the_channel_fit_recovers_level_and_phase_across_the_frame`, verified
+failing with the correction reduced to phase only (`symbol 0: level 1.284, not
+corrected`).
+
 ## The table — every mode we carry, as it stands (2026-10-23)
 
 The brief's deliverable, now covering **everything the program ships** rather than
