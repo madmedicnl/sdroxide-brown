@@ -1542,6 +1542,10 @@ impl eframe::App for SdroxideApp {
             if mode.is_hfdl() { self.show_hfdl = true; }
             if mode.is_vdl2() { self.show_vdl2 = true; }
             if mode.is_ais() { self.show_ais = true; }
+            if mode.is_adsb() { self.show_adsb = true; }
+            if mode.is_fsq() { self.show_fsq = true; }
+            if mode.is_hell() { self.show_hell = true; }
+            if mode.is_packet() { self.show_packet = true; }
             self.last_mode_for_tools = Some(mode);
         }
         if mode.is_sstv() && self.show_sstv { self.sstv_window(&ctx, &mut cmds); }
@@ -1551,6 +1555,10 @@ impl eframe::App for SdroxideApp {
         if mode.is_hfdl() && self.show_hfdl { self.hfdl_window(&ctx, &mut cmds); }
         if mode.is_vdl2() && self.show_vdl2 { self.vdl2_window(&ctx, &mut cmds); }
         if mode.is_ais() && self.show_ais { self.ais_window(&ctx, &mut cmds); }
+        if mode.is_adsb() && self.show_adsb { self.adsb_window(&ctx, &mut cmds); }
+        if mode.is_fsq() && self.show_fsq { self.fsq_window(&ctx, &mut cmds); }
+        if mode.is_hell() && self.show_hell { self.hell_window(&ctx, &mut cmds); }
+        if mode.is_packet() && self.show_packet { self.packet_window(&ctx, &mut cmds); }
         self.recordings_window(&ctx, &mut cmds);
         self.poll_recording_jobs(&mut cmds);
         self.mail_window(&ctx, &mut cmds);
@@ -4006,7 +4014,7 @@ impl SdroxideApp {
             self.image_panel(ui, cmds, mode);
         } else if mode.is_rf_paint() {
             self.rf_paint_panel(ui, cmds, panel_h);
-        } else if mode.is_adsb() {
+        } else if mode.is_adsb() && !self.show_adsb {
             self.adsb_panel(ui, cmds, panel_h);
         } else if mode == Mode::Dab && !self.show_dab {
             self.dab_panel(ui, cmds, panel_h);
@@ -4018,11 +4026,11 @@ impl SdroxideApp {
             self.hfdl_panel(ui, cmds, panel_h);
         } else if mode.is_aprs() {
             self.aprs_panel(ui, cmds, panel_h);
-        } else if mode.is_packet() {
+        } else if mode.is_packet() && !self.show_packet {
             self.packet_panel(ui, cmds, panel_h);
-        } else if mode.is_fsq() {
+        } else if mode.is_fsq() && !self.show_fsq {
             self.fsq_panel(ui, cmds, panel_h);
-        } else if mode.is_hell() {
+        } else if mode.is_hell() && !self.show_hell {
             self.hell_panel(ui, cmds, panel_h);
         } else if is_text {
             self.text_modem_panel(ui, cmds, panel_h);
@@ -4838,5 +4846,28 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "ais", "AIS", [720.0, 560.0], self.show_ais,
             |me, ui| { let h = ui.available_height(); me.ais_panel(ui, cmds, h); });
         self.show_ais = open;
+    }
+}
+
+impl SdroxideApp {
+    pub(in crate::app) fn adsb_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "adsb", "ADS-B", [720.0, 560.0], self.show_adsb,
+            |me, ui| { let h = ui.available_height(); me.adsb_panel(ui, cmds, h); });
+        self.show_adsb = open;
+    }
+    pub(in crate::app) fn fsq_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "fsq", "FSQ", [720.0, 560.0], self.show_fsq,
+            |me, ui| { let h = ui.available_height(); me.fsq_panel(ui, cmds, h); });
+        self.show_fsq = open;
+    }
+    pub(in crate::app) fn hell_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "hell", "HELL", [720.0, 560.0], self.show_hell,
+            |me, ui| { let h = ui.available_height(); me.hell_panel(ui, cmds, h); });
+        self.show_hell = open;
+    }
+    pub(in crate::app) fn packet_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "packet", "PACKET", [720.0, 560.0], self.show_packet,
+            |me, ui| { let h = ui.available_height(); me.packet_panel(ui, cmds, h); });
+        self.show_packet = open;
     }
 }
