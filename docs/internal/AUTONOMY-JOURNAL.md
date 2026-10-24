@@ -62,6 +62,80 @@ twice; regenerable `target/` output was deleted.
 
 ---
 
+## 2026-10-24 (STANAG 4285) — the equaliser reads the tape, and the tape was never weak
+
+**Summary.** The one STANAG 4285 recording that was said to be too weak to finish
+now demodulates cleanly, and the reason was our own filter, not the radio: a
+receiver change takes the same minute of audio from an unreadable constellation to a
+usable one and makes the hardest channel the standard allows decode at all. So the
+request for a new capture is withdrawn — what is left is a fault in the part that
+undoes the error correction, and both tapes are good enough to hunt it on. Nothing
+new needs the bench. Also fixed: the program was labelling the *cleanest* BPSK
+signal we have ever recorded as "unknown rate", and showing nothing for it.
+
+**Done.**
+- **`ls_equaliser`** replaces the T-spaced `ls_channel` + `zf_equaliser` pair in the
+  coded and displayed paths. It is a direct least-squares filter over
+  **half-symbol-spaced** samples whose target is the symbol sent at each instant, so
+  it models the pulse as well as the path and its output is aligned without the
+  three-shift group-delay search. `LS_FRAC_TAPS = 19` (swept 9/13/19/25/33/41),
+  `LS_LOAD = 1e-2` (swept 0.003–0.3, moves the tape's constellation by 0.008).
+- **Numbers, same files, same tunings** (`S4285_EQ=off|on` on
+  `examples/s4285_probe`):
+  - tape `FUF-13031.200-…150300Z`: constellation **0.046 → 0.790**, data blocks
+    0.30/0.24/0.08/0.25 → **0.71/0.73/0.91/0.86**, refs 0.80/0.78/0.80 → 0.85/0.83/0.85.
+  - our `6348.000-…045545Z`: **0.728 → 0.859**; `…044640Z` unchanged (Auto keeps the
+    plain path); clean synthetic at 6 dB unchanged — the equaliser costs nothing.
+  - synthetic sweep, first level that decodes: 1.5-symbol echo plain 15 dB /
+    equaliser **8 dB**; two equal paths 2 ms apart plain never (18 dB) / equaliser
+    **15 dB**.
+- **Tests, and they fail without the fix.** `a_coded_message_survives_a_two_path_channel`
+  now asserts both halves — the plain path reads **no message** at 10 dB and the
+  equaliser reads it bit-exactly — and a new
+  `a_coded_message_survives_the_two_equal_paths_the_standard_budgets_for` does the
+  same at 4.8 symbols / 15 dB. Verified by making `ls_equaliser` return `None`:
+  both fail ("the equaliser did not read a two-path message at 10 dB", "two equal
+  paths 2 ms apart lost the message"), and pass again with it restored.
+  `the_least_squares_equaliser_undoes_a_symbol_level_echo` rewritten for the new
+  filter: 176 of 176 symbols, worst error 0.01.
+- **The rate verdict was backwards** (`rate_from_concentrations`): the old rule asked
+  the leading concentration to beat the runner by half again, which on a *clean*
+  BPSK frame reads 0.933/0.760/0.357 — ratio 1.23 — and answered **`unknown`**,
+  suppressing the uncoded text path. Now a cascade on which concentration stands up
+  first. One file in the corpus changes, and it is the right one:
+  `FUF-…125317Z` `unknown` → `1200 BPSK uncoded, or a coded BPSK rate`. Pinned by
+  `the_rate_verdict_is_right_on_the_cleanest_bpsk_frame` (all numbers off the air)
+  and `a_clean_synthetic_frame_is_reported_as_bpsk`.
+- **Checks:** `cargo check --workspace --all-targets` silent; `cargo test --release
+  -p sdroxide-dsp` **491 + 26 + 14 + 1 + 8 + 14 + 8 + 5 passed, 0 failed**;
+  `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui` clean;
+  `rustfmt --check` clean on both touched files; the off-air gate
+  (`SDROXIDE_S4285_SAMPLE=… --ignored`) passes at mean refs **0.816 / 0.826 / 0.831**
+  (was 0.61/0.70/0.57).
+- **The record corrected:** the "tape is about 4 dB in band, needs a stronger capture"
+  finding is **withdrawn** — it was the T-spaced fit's own failure read three ways.
+  Both tapes now read data blocks at 0.71–0.96 with references at 0.97–0.99.
+
+**Not done / blocked.**
+- **No real coded transmission has been decoded.** Not blocked on the bench any more:
+  both tapes are measured to *carry* the code (their descrambled bits are not ITA2 at
+  any of 7 alignments × 2 polarities × 2 bit orders — 0.22 against a 0.23 chance —
+  and show no rate-1/16 period), and both have a good eye. The fault is in the coded
+  chain, and it is now the only suspect.
+- **The interleaver/decoder comparison against the independent implementation** was
+  not built in this session; it is the next measurement, and it needs no radio.
+- **The uncoded character layer is still 5-bit chunking, not 5N1.5** — it cannot read
+  ITA2 text from a 1200 bps uncoded transmission at all. Recorded, not fixed: neither
+  tape is uncoded, so it is not on this path.
+
+**Next.** Build `luwangg/signal-analysis` (GPL, C++/octave) and run it over
+`FUF-13031.200-…125317Z`, then compare its decoded bit stream with ours symbol for
+symbol — data-symbol order, bit order, and whether the interleaver works in 32-symbol
+segments or bits. A framed message on the known text is the judge; the
+metric-versus-shuffled-null statistic is invalid and must not be used.
+
+---
+
 ## 2026-10-24 (aircraft) — an optional server relay for the aircraft card's online fields
 
 **Summary.** The aircraft card can now be given its internet fields (type,

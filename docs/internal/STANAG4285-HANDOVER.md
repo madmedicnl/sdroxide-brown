@@ -1377,3 +1377,126 @@ one function, `ls_channel`, and its test.
 What still needs the bench: another capture of the same tape on a quiet, steady path
 — a spread-out channel is a bad witness for a modem, and the watcher is the tool for
 finding a better minute of it.
+
+## 2026-10-24, fifth session — the equaliser is the missing piece, and the tape was never weak
+
+The previous session ended with "no amount of DSP finishes this tape … it needs a
+stronger capture" and "the next attempt should estimate the channel including the
+pulse". **The first was wrong, and the second was right.** The equaliser is now
+fractionally spaced, and on the same recording it takes the data from an unreadable
+**0.046** to a usable **0.790** (2-fold), with the data blocks at 0.71 / 0.73 / 0.91
+/ 0.86. The tape does not need a quieter day; it needed a filter that could describe
+a pulse.
+
+### What was wrong with the equaliser
+
+The old path estimated a **T-spaced** five-tap channel from the 80 known sync
+symbols and inverted it in closed form (`zf_equaliser`, the minimum-energy inverse),
+then searched three group delays for where its unit pulse had landed. Both halves
+were wrong for this signal:
+
+* **A T-spaced estimate cannot describe a pulse.** The raised cosine's own memory is
+  in the received samples, so a five-tap T-spaced fit leaves the pulse in the
+  residual and its inverse then fights it. Measured on the two-path synthetic, that
+  inverse made the known reference blocks collapse **worse** than the plain symbols
+  (2.81 → 2.02), so the frame's own gate declined it and the equaliser was never
+  used on the audio it existed for.
+* **The group delay was a guess at a property of the target.** The minimum-energy
+  inverse has a delay; three shifts is not a search, and getting it wrong samples
+  the data either side of itself.
+
+### What replaced it
+
+`ls_equaliser` — the direct least-squares filter over **half-symbol-spaced** samples.
+`rf[2n]` is the sample at symbol instant `n`, `rf[2n+1]` the one half a symbol later,
+and the filter minimises `Σ |Σ_j w[j]·rf[2n−j] − known[n]|²`. That is the normal
+equations `(AᴴA)w = Aᴴd` written out, and it is "undo the pulse, the echo and the
+sampling instant together" rather than "estimate a channel, invert it, and hope the
+two models agree". **The answer is aligned by construction** — the target is the
+symbol sent at `n`, not a delayed copy of it — so there is no group delay to search
+and the three-shift loop is gone. Diagonal loading is still needed (the filter is
+longer than the channel's memory, so the matrix is singular without it) and it is
+**not** a tuning knob: swept at 0.003 / 0.01 / 0.03 / 0.1 / 0.3 on the tape, the data
+constellation moved between 0.721 and 0.729 across the whole range.
+
+### The tap count is the tape's, not the synthetic's
+
+Swept on both, first noise level that decodes, `EqMode::On`:
+
+| taps | 1.5-symbol echo | two equal paths 2 ms apart | the tape's constellation |
+|---|---|---|---|
+| 9 | 8 dB | never (to 18 dB) | — |
+| 13 | 8 dB | never (to 18 dB) | — |
+| **19** | **8 dB** | **15 dB** | **0.790** |
+| 25 | 8 dB | 12 dB | 0.727 |
+| 33 / 41 | 8 dB | 12 dB | — |
+
+Nineteen is the choice because the tape is the material: 25 taps buys 3 dB on the
+standard's own 2 ms case with a fit that a fading path does not hold, and costs the
+real recording 0.063 of its eye.
+
+### Measured, same files, same tunings
+
+| | plain | equaliser |
+|---|---|---|
+| tape `FUF-13031.200-…150300Z`, 2/4/8-fold | 0.046 / 0.067 / 0.172 | **0.790 / 0.498 / 0.116** |
+| tape, data blocks | 0.30 / 0.24 / 0.08 / 0.25 | **0.71 / 0.73 / 0.91 / 0.86** |
+| tape, mean reference blocks | 0.80 / 0.78 / 0.80 | **0.85 / 0.83 / 0.85** |
+| our `6348.000-…045545Z`, constellation | 0.728 | **0.859** (Auto picks the equaliser) |
+| our `6348.000-…044640Z`, constellation | 0.728 | 0.728 (Auto keeps the plain path) |
+| clean synthetic | decodes at 6 dB | decodes at 6 dB — **costs nothing** |
+
+The last row is the one that lets `EqMode::On` be used without fear: the old inverse
+took a clean signal from 0.995 to 0.736 and lost its message, and the new one leaves
+it alone.
+
+### ⛔ "The tape is about 4 dB in band" is withdrawn
+
+That was measured three ways from the least-squares residual over the sync and the
+constellation, and all three were reading the T-spaced fit's own failure. With the
+equaliser the same recording reads data blocks at **0.91–0.96** in its best frames
+and reference blocks at **0.97–0.99**. **No stronger capture is needed**, and the
+bench request that stood in `TODO.md` is withdrawn.
+
+### The rate verdict was backwards, and the cleanest capture is the one it failed
+
+`FUF-13031.200-…125317Z` (Mark's second file, 24 Oct) is the best BPSK signal this
+station has ever recorded: **0.933 / 0.760 / 0.357**, data blocks **0.915 / 0.929 /
+0.938 / 0.960**, references 0.97 / 0.99 / 0.99. The panel called it **`unknown`**,
+because the old rule asked the leading concentration to beat the runner by half again
+— and on a *clean* BPSK frame 0 and π are both lattice points, so the 4-fold stands
+up at 0.76 against the 2-fold's 0.93 and the ratio is 1.23. The noisier a BPSK frame
+was, the more confidently it was called BPSK; `Unknown` also suppressed the uncoded
+text path, so the best signal of the set was the one that produced nothing.
+
+The verdict is a cascade now (`rate_from_concentrations`): the orders separate by
+**which concentration is the first to stand up**, because a phase stepping by π/2
+makes `e^(j2φ)` random and a phase stepping by π/4 does the same to the 4-fold. It
+changes exactly one file in the corpus — `125317Z`, `unknown` → `1200 BPSK uncoded,
+or a coded BPSK rate` — and the synthetic 1200 bps transmission is pinned to BPSK so
+a clean frame can never be called "unknown" again.
+
+### What is left is the coded chain, and it is now the only suspect
+
+Both real tapes carry the code, and neither frames a message with a good eye. Three
+measurements now say the fault is not in the material and not in the demodulator:
+
+* **Neither tape is uncoded ITA2.** Its descrambled data bits, read as 5N1.5 at every
+  bit alignment, both polarities and both bit orders, score **0.22** where chance is
+  0.23 — the tapes are not plain text, so they carry Annex E.
+* **The bits are random, with no rate-1/16 structure.** Autocorrelation of the
+  descrambled data falls monotonically with lag on both tapes (0.71 at 32, 0.66 at
+  128, 0.60 at 256, against a 0.53 bias baseline) — a slow drift, not a period. So
+  either the interleaver is doing its job, or the transmission has no interleaver;
+  nothing in the raw stream says which.
+* **The scrambler polarity is not it.** 285 frames descramble directly and 16
+  reversed in 301, so 5 % of frames are inverted, which rate-1/16 averaging absorbs.
+  `S4285_FRAME_LOG=1` in the probe prints this per frame.
+
+So the next measurement is the one this file has been asking for since the strong
+capture turned up: **build the independent `luwangg/signal-analysis` decoder and
+compare its decoded bits with ours symbol for symbol** on `FUF-13031.200-…125317Z`.
+Anything that differs — the data-symbol order, the bit order, the interleaver's
+segment-versus-bit question — is then a fact rather than a hypothesis. The metric
+judge must not be used for it: it is invalid (see the section above), and a framed
+message on a known text is the only judge that has ever been validated here.

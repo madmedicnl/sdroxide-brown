@@ -13,6 +13,12 @@
 //! concentrations and a rate verdict are the difference between "a 4285 is on
 //! this frequency" and a guess. Text is printed when it comes, and the raw
 //! payload bits are always available.
+//!
+//! `S4285_EQ=auto|off|on|dfe` picks the channel path, `S4285_SYMBOLS_OUT` and
+//! `S4285_SOFT_OUT` dump a frame's symbols and soft decisions, and
+//! `S4285_FRAME_LOG` prints one line per frame — which is how the scrambler
+//! polarity was found to be consistent across a real tape (285 direct against 16
+//! reversed in 301 frames, so it is not what stops the code being read).
 
 fn read_wav(path: &str) -> (Vec<f32>, f64) {
     let mut reader = hound::WavReader::open(path).expect("open the wav");
@@ -112,6 +118,15 @@ fn main() {
                         for v in &f.soft {
                             write!(fh, "{v:.4} ").expect("write");
                         }
+                    }
+                    if std::env::var("S4285_FRAME_LOG").is_ok() {
+                        println!(
+                            "FRAME {} rev={} refs={:?} const={:?}",
+                            frames.len(),
+                            f.reversed,
+                            f.reference,
+                            f.constellation
+                        );
                     }
                     frames.push(f)
                 }
