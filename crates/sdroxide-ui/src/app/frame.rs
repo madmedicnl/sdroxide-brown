@@ -683,7 +683,11 @@ impl eframe::App for SdroxideApp {
             crate::layout::tight_for(ui.max_rect().size(), self.ui_settings.layout),
         );
         // Publish the SWL flag so `tx_gated` can hide controls without
-        // threading the setting through every panel.
+        // threading the setting through every panel. The band/mode tab is
+        // remembered first: it is one of the four things that flag is made of,
+        // and the selector may have been drawn in any of three places since the
+        // last frame.
+        self.remember_band_tab();
         super::set_swl_active(self.swl_mode());
         crate::layout::set_short_tablet(
             &ctx,
