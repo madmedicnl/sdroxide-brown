@@ -35,6 +35,7 @@ pub(in crate::app) mod drm;
 pub(in crate::app) mod duo_power;
 pub(in crate::app) mod enigma;
 pub(in crate::app) mod aircraft;
+pub(in crate::app) mod aircraft_registry;
 pub(in crate::app) mod extras;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
@@ -598,6 +599,9 @@ pub struct SdroxideApp {
     /// own table rather than the decode log's, so an aircraft stays on the map
     /// after its earliest decodes have scrolled out of the log.
     hfdl_map: crate::hfdl_map::HfdlMapState,
+    /// One card per aircraft, merged across ADS-B, VDL2, HFDL and ACARS. Lives
+    /// here, not in a mode's status, so it survives a switch of mode.
+    aircraft_registry: aircraft_registry::AircraftRegistry,
     /// HFDL: filter for the decode log; matches a kind, a ground station or the
     /// payload details.
     hfdl_filter: String,
@@ -2022,6 +2026,7 @@ impl SdroxideApp {
             qo100_status: None,
             hfdl_status: None,
             hfdl_map: crate::hfdl_map::HfdlMapState::default(),
+            aircraft_registry: aircraft_registry::AircraftRegistry::default(),
             hfdl_filter: String::new(),
             // The settings trace is *for* the settings page, so turning it on
             // opens the window: a browser cannot be asked to click the chip,
