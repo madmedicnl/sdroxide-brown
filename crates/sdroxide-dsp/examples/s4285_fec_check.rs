@@ -74,13 +74,27 @@ fn judge(soft: &[f32]) -> Verdict {
                 // 24 at 1200 and 12 below it. A wrong `j` looks exactly like a wrong
                 // commutator: every branch at its null. So the few depths a 600 bps
                 // transmission could plausibly use are swept too.
-                let depths: Vec<usize> = match rate {
-                    fec::CodedRate::Bps600 => vec![3, 6, 12, 24, 48],
-                    _ => vec![rate.j()],
-                };
+                // **The depths a real transmission may use are the *long*
+                // interleave's, and they are an order of magnitude past what this
+                // receiver shipped with.** Independent descriptions of the mode —
+                // Sigmira's manual and the WAVECOM summary — put the long
+                // interleave at about a **ten-second** delay and say virtually all
+                // real traffic uses it, while the short one is about a second. With
+                // 31 rows, a one-second delay is `j` ≈ 40 and ten seconds is `j` ≈
+                // 400, so the shipped 12 and 24 are the short column and a sweep
+                // that stopped at 48 never left the short interleave's neighbourhood.
+                let depths: Vec<usize> = vec![rate.j(), 60, 120, 240, 480, 960];
                 for &j in &depths {
                     let mut di = fec::ConvInterleaver::deinterleaver_with(j, style);
-                    let stream: Vec<f32> = soft.iter().map(|v| di.push(v * sign)).collect();
+                    // **Two bits per symbol belong to the QPSK rate and one to the
+                    // others.** The traced stream carries both, so a BPSK branch
+                    // takes the in-phase half of it.
+                    let src: Vec<f32> = if rate == fec::CodedRate::Bps1200 {
+                        soft.to_vec()
+                    } else {
+                        soft.iter().step_by(2).copied().collect()
+                    };
+                    let stream: Vec<f32> = src.iter().map(|v| di.push(v * sign)).collect();
                     let pairs = fec::average_pairs(&stream, rate.repeat());
                     let (_, metric) = fec::viterbi_decode_with_metric(&pairs);
                     // The null: the same values, shuffled. Two shuffles, and the larger
@@ -111,7 +125,19 @@ fn judge(soft: &[f32]) -> Verdict {
 /// to survive the same question as every other number here: **what does it read
 /// on noise?** The same values shuffled are noise, and the answer is printed
 /// beside the real one.
-fn som_for(soft: &[f32], rate: fec::CodedRate, style: fec::Interleave, j: usize, sign: f32) -> u8 {
+fn som_for(
+    traced: &[f32],
+    rate: fec::CodedRate,
+    style: fec::Interleave,
+    j: usize,
+    sign: f32,
+) -> u8 {
+    let soft: Vec<f32> = if rate == fec::CodedRate::Bps1200 {
+        traced.to_vec()
+    } else {
+        traced.iter().step_by(2).copied().collect()
+    };
+    let soft = &soft[..];
     // **The receiver's own chunking, replicated**, because that is where the
     // quoted 31/32 came from: `CodedChain` decodes 256 pairs at a time from a
     // 64-pair overlap thrown away in front, so every chunk starts its Viterbi on

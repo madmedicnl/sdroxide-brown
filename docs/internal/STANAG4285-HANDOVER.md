@@ -952,6 +952,62 @@ the symbol-to-symbol phase scatter is 86–91°, so the blocks are not coherent 
 to locate — the frame layout is not contradicted, it is simply unreadable at this
 level.
 
+## The scrambler's initial state was wrong — this is the biggest fault found
+
+`scrambling()` built its 9-stage LFSR from **`1`**, one bit set, where the standard
+starts the register **all ones**. The sync preamble is transmitted *unscrambled*, so
+a receiver with the wrong scrambler still locks and still folds its frames — it
+just descrambles the reference blocks and the data into noise. On Mark's recording:
+
+| | before | after |
+|---|---|---|
+| reference blocks (mean) | 0.550 / 0.611 / 0.509 | 0.761 / 0.724 / 0.745 |
+| data constellation (2-fold) | 0.396 | 0.750 |
+| frames accepted | 242 | 451 |
+
+Confirmed against the independent GPL implementation `luwangg/signal-analysis`
+(same taps `state[0]^state[4]`, same three bits per symbol, same 8-phase mapping,
+all-ones start) and with the standard's own convention. The generator test in the
+crate used to assert the first symbol was phase index 1 — it now asserts 7, with the
+reason written on it.
+
+## The equaliser: added, measured, and **opt-in only**
+
+`EqMode::Dfe` is an LMS decision-feedback equaliser in the shape both other decoders
+use: eleven fractionally-spaced feedforward taps at five samples per symbol, four
+decision-feedback taps, `mu` 0.05, trained on the 80-symbol sync and corrected by
+the known reference blocks mid-frame, two passes.
+
+- On Mark's recording it lifts the data constellation **0.750 → 0.823** and the four
+  per-block figures from 0.66–0.80 to **0.81–0.87**.
+- On **our own clean signal it makes things worse** (0.995 → 0.736) and the message
+  stops framing, which is why it is **not the default**: `EqMode::Auto` stays, and
+  the DFE is asked for explicitly (`S4285_EQ=dfe` in the probe). Any future default
+  has to pass the loopback first.
+
+## ⛔ The metric-versus-shuffled-null judge is **invalid** — correct this in the record
+
+The statistic every sweep in this document was judged by — the Viterbi metric
+divided by the same values shuffled — reads **1.02× on our own clean 600 bps
+signal, which the receiver decodes correctly**. It cannot separate a decodable
+signal from noise, so **every "N× its null, therefore ruled out" conclusion taken
+with it is void**: the interleaver wirings, the depths, the QPSK axes, the
+commutator start phases, the channel-path comparison. They may still be true, but
+they were never evidence. The judge that has been validated is a **framed message**
+(and, second, the reported constellation), and both examples that say otherwise
+(`s4285_fec_check`, `s4285_align_check`, `s4285_qpsk_check`) should be read as
+diagnostics of the statistic, not of the mode.
+
+## Where the tape stands, measured
+
+- Carrier is **1800.0 Hz** exactly (residual offset −0.5 Hz at carrier 1800).
+- Audio band: signal fills 100–3700 Hz, centred on 1800, **no in-band spurs**; the
+  recording is healthy (peak −8.4 dBFS, no clipping).
+- Data constellation after the scrambler fix and the DFE: **0.823** 2-fold, 0.426
+  4-fold, 0.080 8-fold — consistent with BPSK data under about 18° of residual phase
+  wander, which is ~8.5 % raw symbol error. Rate 1/2 corrects that only marginally.
+- **No message is framed at any rate**, either sign, with or without the equaliser.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run

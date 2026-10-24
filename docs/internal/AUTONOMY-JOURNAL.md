@@ -171,6 +171,44 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag, ninth pass) — the scrambler was seeded wrong, and the judge never worked
+
+**Summary.** Two findings, both big. First, our scrambler initialised its 9-stage
+register to `1` instead of **all ones**, so on a real transmission the sync locked
+normally (it is sent unscrambled) while every reference block and every data symbol
+was descrambled into noise — reference blocks read 0.55 and the data constellation
+0.396. Seeded correctly they read **0.76** and **0.750**, and 451 frames are
+accepted instead of 242. Second, the statistic this whole effort has been judged by
+— the decoder metric against the same values shuffled — reads **1.02× on our own
+clean signal, which decodes**, so it never separated signal from noise and every
+"ruled out" conclusion drawn with it is void. With a decision-feedback equaliser
+added (0.396 → 0.823 data constellation) the tape is close but still frames no
+message.
+
+**Done.**
+- `scrambling()` seeded `0x1FF`; the crate's generator test updated to the correct
+  first symbol (phase index 7) with the reason on it.
+- `EqMode::Dfe`: LMS DFE, 11 fractionally-spaced feedforward taps, 4 feedback taps,
+  mu 0.05, trained on the sync and corrected on the reference blocks, two passes.
+  Opt-in, because it spoils a clean signal.
+- QPSK rates fed two soft bits per symbol in both bit orders; erasures and the
+  trace follow the stride.
+- Three diagnostic examples (interleaver conventions, commutator start phase, QPSK
+  axes) and the `S4285_EQ` probe knob.
+
+**Numbers.** refs 0.55 → 0.76 (0.95 best frames), constellation 0.396 → 0.750,
+frames 242 → 451; with the DFE 0.823 and per-block 0.81–0.87; clean-signal control
+under the DFE 0.995 → 0.736 (so not a default); the metric judge on that same clean
+signal **1.02×** — the reason to distrust it.
+
+**Next, in the order a second opinion recommends (and it agrees with both other
+decoders).** Verify the data-symbol mapping and the coded-bit ordering against the
+reference implementation — in particular whether the interleaver is fed bits (two
+per QPSK symbol) or symbols, and the direction of the 9i commutator — then the
+Viterbi framing. The equaliser has now had its turn.
+
+---
+
 ## 2026-10-24 (stanag, eighth pass) — sensitivity measured, and the tape is not noise-limited
 
 **Summary.** The chain's own limit is now a number per rate: it reads a message at
