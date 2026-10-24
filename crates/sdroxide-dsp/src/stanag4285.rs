@@ -193,6 +193,13 @@ pub struct S4285Frame {
     /// Annex E chains are fed from. Exposed so a probe can ask whether a capture
     /// carries the code at all, which the hard bits cannot answer.
     pub soft: Vec<f32>,
+    /// The 176 descrambled, channel-corrected symbols after the sync, oldest
+    /// first. A frame's structure is otherwise inferred from its four published
+    /// concentrations, which cannot say *where* an assumed layout went wrong:
+    /// with the raw symbols a probe can look for the runs of constant phase the
+    /// reference blocks are made of, and compare their positions with the ones the
+    /// standard says they occupy.
+    pub symbols: Vec<C>,
 }
 
 /// A message the Annex E layer assembled.
@@ -332,7 +339,15 @@ pub fn sync_differential() -> [f32; SYNC - 1] {
 /// The 176-symbol scrambling sequence, `Bk = e^(jnπ/4)` with
 /// `n = 4x₂ + 2x₁ + x₀`, the register advancing three positions per symbol.
 pub fn scrambling() -> [C; SCRAMBLED] {
-    let bits = lfsr(9, &[0, 4], SCRAMBLED * 3, 1);
+    // **Initialised to all ones.** This started at `1` — a single bit set — and
+    // the sequence differs from the first symbol on. The sync is transmitted
+    // *unscrambled*, so a receiver with the wrong scrambler still locks (0.90 on
+    // Mark's recording) and still folds its frames, while the reference blocks and
+    // the data come out smeared. Measured on that recording: references 0.55 of
+    // collapsed, data constellation 0.396. With all ones they read 0.845 and
+    // 0.750. All ones is the standard's own convention and it is what the
+    // independent s4285 implementation in `luwangg/signal-analysis` uses.
+    let bits = lfsr(9, &[0, 4], SCRAMBLED * 3, 0x1FF);
     let mut out = [C::default(); SCRAMBLED];
     for (k, o) in out.iter_mut().enumerate() {
         let n = 4 * bits[3 * k + 2] as i32 + 2 * bits[3 * k + 1] as i32 + bits[3 * k] as i32;
@@ -405,6 +420,10 @@ struct CodedChain {
     rate: fec::CodedRate,
     times: usize,
     sign: f32,
+    /// For a rate whose symbols carry **two** bits (QPSK), which of the two comes
+    /// first. Both orders are run: the annexes this fork was built from do not say,
+    /// and only the one that frames a message can be right.
+    swap: bool,
     deint: fec::ConvInterleaver,
     /// Deinterleaved soft values not yet decoded.
     soft: Vec<f32>,
@@ -415,11 +434,24 @@ struct CodedChain {
 }
 
 impl CodedChain {
+    /// Soft values this branch takes per data symbol: two for a QPSK rate, one
+    /// for the BPSK ones.
+    fn stride(&self) -> usize {
+        if self.rate == fec::CodedRate::Bps1200 { 2 } else { 1 }
+    }
+}
+
+impl CodedChain {
     fn new(rate: fec::CodedRate, sign: f32) -> Self {
+        Self::new_ordered(rate, sign, false)
+    }
+
+    fn new_ordered(rate: fec::CodedRate, sign: f32, swap: bool) -> Self {
         CodedChain {
             rate,
             times: rate.repeat(),
             sign,
+            swap,
             deint: fec::ConvInterleaver::deinterleaver(rate.j()),
             soft: Vec::new(),
             consumed: 0,
@@ -485,6 +517,35 @@ struct Lock {
 /// The receiver. Feed it audio at `rate_hz`; it acquires on a fold of the
 /// synchronisation, emits a frame per frame once locked, and text as the
 /// character layer decodes.
+/// Which of the two channel paths a coded frame is read through.
+///
+/// The frame's own reading (`take_frame`) already chooses between the plain
+/// symbols and the least-squares equaliser by asking which one collapses the
+/// known reference blocks harder, and that is the right question for a *displayed*
+/// constellation. It is not obviously the right question for the **code**: an
+/// equaliser that sharpens nine reference symbols per block can still leave the
+/// data's eye worse, and on a real recording the trellis has never been seen.
+/// So the choice is a parameter, swept against the metric in `s4285_fec_check`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EqMode {
+    /// Whichever path the reference blocks prefer, frame by frame. The default,
+    /// and what a station watching the constellation wants.
+    #[default]
+    Auto,
+    /// The plain symbols, with no equaliser at all.
+    Off,
+    /// The equaliser's output, whether or not the references prefer it.
+    On,
+    /// **An adaptive decision-feedback equaliser, run symbol by symbol.** This is
+    /// the one thing every other decoder for this mode has and this receiver did
+    /// not: a fractionally-spaced feedforward filter trained on the 80 sync
+    /// symbols, then decision-directed through the frame with the known reference
+    /// blocks correcting it, so that inter-symbol interference — which a line
+    /// through three reference points cannot see — is taken out of the data. See
+    /// [`S4285Receiver::dfe_symbols`].
+    Dfe,
+}
+
 pub struct S4285Receiver {
     rate: f64,
     carrier: f64,
@@ -516,6 +577,11 @@ pub struct S4285Receiver {
     coded_messages: u64,
     /// Messages ready to be handed out by the next `process` call.
     pending: Vec<S4285Message>,
+    /// How the coded path picks its channel — see [`EqMode`].
+    eq_mode: EqMode,
+    /// Every soft decision the Annex E chains were actually fed, erasures
+    /// included, when tracing is on — see [`S4285Receiver::coded_stream`].
+    coded_trace: Option<Vec<f32>>,
     /// The last frame reached the coded-chain floor, whether or not it was good
     /// enough to report. A frame that is merely poor must not cost the lock: the
     /// lock is about the frame *position*, which such a frame still proves.
@@ -530,6 +596,36 @@ pub struct S4285Receiver {
 const ACQ_SPAN: u64 = (ACQ_FRAMES as u64 + 1) * FRAME as u64 * SPS as u64;
 
 impl S4285Receiver {
+    /// Choose how the coded path picks its channel. Only the frames that feed the
+    /// Annex E chains are affected; the displayed frame keeps [`EqMode::Auto`].
+    pub fn set_eq_mode(&mut self, mode: EqMode) {
+        self.eq_mode = mode;
+    }
+
+    /// Start or stop recording the stream the Annex E chains are fed.
+    ///
+    /// **This is not the same stream as the frames' own soft decisions**, and the
+    /// difference matters to anything judging whether the code is there. A frame
+    /// too poor to report is still fed — as 128 zeros — so the interleaver stays
+    /// aligned with the frame index through a fade; those values never reach a
+    /// frame event. A judge that reads the frame events alone is therefore reading
+    /// a stream with holes that the decoder did not have, and a hole shifts every
+    /// soft decision after it by a whole frame.
+    pub fn trace_coded_stream(&mut self, on: bool) {
+        if on {
+            if self.coded_trace.is_none() {
+                self.coded_trace = Some(Vec::new());
+            }
+        } else {
+            self.coded_trace = None;
+        }
+    }
+
+    /// The values [`S4285Receiver::trace_coded_stream`] collected, in order.
+    pub fn coded_stream(&self) -> &[f32] {
+        self.coded_trace.as_deref().unwrap_or(&[])
+    }
+
     /// `rate_hz` is the audio tap rate; `carrier_hz` is the audio frequency of the
     /// suppressed carrier — 1800 Hz when the dial is on it, but a fixed-frequency
     /// log entry can be a kilohertz out, so it is a parameter.
@@ -556,6 +652,8 @@ impl S4285Receiver {
             coded_rate: None,
             coded_messages: 0,
             pending: Vec::new(),
+            eq_mode: EqMode::Auto,
+            coded_trace: None,
             last_frame_usable: false,
             bit_run: Vec::new(),
             events_text: String::new(),
@@ -866,7 +964,126 @@ impl S4285Receiver {
     /// the handover). It is used only on a frame where it makes the known
     /// reference symbols collapse harder than they already do, so a channel that
     /// needs no equalising is read exactly as before.
+    /// A decision-feedback equaliser over one frame, symbol by symbol.
+    ///
+    /// The receiver's channel model was a straight line through the three
+    /// reference blocks, and that is enough for phase and level but not for
+    /// **inter-symbol interference**: on Mark's recording the reference blocks
+    /// collapse at 0.76–0.95 while the data constellation sits at 0.75 of a
+    /// two-fold concentration, which is interference and not noise. Both other
+    /// decoders for this mode — Sigmira and `luwangg/signal-analysis` — answer it
+    /// with an LMS decision-feedback equaliser, and this is that, in the same
+    /// shape: a fractionally-spaced feedforward filter (eleven taps at five
+    /// samples per symbol, one symbol either side) plus a short decision-feedback
+    /// filter on the symbols already decided.
+    ///
+    /// The known symbols do the training and the correcting: the 80-symbol sync
+    /// at the head of the frame is a transition on almost every symbol, and the
+    /// three 16-symbol reference blocks — which the standard puts there for
+    /// exactly this — pull the equaliser back on track mid-frame. Between them the
+    /// filter is decision-directed.
+    ///
+    /// Returns the **descrambled** symbols, so everything downstream (the soft
+    /// decisions, the Annex E chains) is unchanged.
+    fn dfe_symbols(&self, start: u64, phase: f32, reversed: bool, offset: f32) -> [C; SCRAMBLED] {
+        // Swept on Mark's recording, judged by the data constellation the frame
+        // reports: 11 forward taps with 4 feedback taps over two passes reads
+        // 0.833 where the receiver's own channel fit reads 0.750, and both more
+        // taps and more passes measured worse (21/8 → 0.713, 15/6 over three →
+        // 0.761) because 256 symbols a frame is not enough to train a longer
+        // filter.
+        let (ff, fb, passes, mu) = (11usize, 4usize, 2usize, 0.05f32);
+        let centre = ff / 2;
+        let sync = sync_symbols();
+        let pos0 = start as f64 - self.base as f64 + (phase as f64) * SPS as f64;
+        // One sample vector per symbol, deramped so a carrier offset does not look
+        // like a channel ramp, then scaled to unit power so one step size works at
+        // any recording level.
+        let mut xs: Vec<Vec<C>> = Vec::with_capacity(FRAME);
+        for i in 0..FRAME {
+            let mut v = vec![C::default(); ff];
+            for (j, slot) in v.iter_mut().enumerate() {
+                let d = j as f64 - centre as f64;
+                let t = (i as f64 * SPS as f64 + d) / MODEM_RATE as f64;
+                *slot = self
+                    .at(pos0 + i as f64 * SPS as f64 + d)
+                    .mul(C::from_phase(-offset * TAU * t as f32));
+            }
+            xs.push(v);
+        }
+        let power = xs.iter().map(|v| v[centre].norm().powi(2)).sum::<f32>() / FRAME as f32;
+        let norm = if power > 1e-12 { 1.0 / power.sqrt() } else { 1.0 };
+        for v in xs.iter_mut() {
+            for c in v.iter_mut() {
+                *c = c.scale(norm);
+            }
+        }
+
+        let mut w = vec![C::default(); ff];
+        w[centre] = C::new(1.0, 0.0);
+        let mut b = vec![C::default(); fb];
+        let mut past = vec![C::default(); fb];
+        let mut out = [C::default(); SCRAMBLED];
+        // Two passes: the first trains the filter on the known symbols and its own
+        // decisions, the second reads the frame through the filter it has learnt.
+        for pass in 0..passes {
+            for i in 0..FRAME {
+                let mut y = C::default();
+                for (j, c) in xs[i].iter().enumerate() {
+                    y = y.add(c.mul(w[j]));
+                }
+                for (l, d) in past.iter().enumerate() {
+                    y = y.add(d.mul(b[l]));
+                }
+                let want = if i < SYNC {
+                    C::new(sync[i], 0.0)
+                } else {
+                    let k = i - SYNC;
+                    let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
+                    if REF_BLOCKS.iter().any(|&(lo, hi)| k >= lo && k < hi) {
+                        sc
+                    } else {
+                        // Decision-directed: decide on the descrambled symbol, then
+                        // return it to the transmitted (scrambled) domain, which is
+                        // the domain the interference lives in.
+                        let d = y.mul(sc.conj());
+                        let bit = if d.re >= 0.0 { 1.0 } else { -1.0 };
+                        sc.scale(bit)
+                    }
+                };
+                let err = y.sub(want);
+                for (j, c) in xs[i].iter().enumerate() {
+                    w[j] = w[j].sub(err.mul(c.conj()).scale(mu));
+                }
+                for l in 0..fb {
+                    b[l] = b[l].sub(err.mul(past[l].conj()).scale(mu));
+                }
+                // Shift the decided symbols into the feedback line, newest first.
+                for l in (1..fb).rev() {
+                    past[l] = past[l - 1];
+                }
+                past[0] = want;
+                if pass + 1 == passes && i >= SYNC {
+                    let k = i - SYNC;
+                    let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
+                    let mut y2 = C::default();
+                    for (j, c) in xs[i].iter().enumerate() {
+                        y2 = y2.add(c.mul(w[j]));
+                    }
+                    for (l, d) in past.iter().enumerate() {
+                        y2 = y2.add(d.mul(b[l]));
+                    }
+                    out[k] = y2.mul(sc.conj());
+                }
+            }
+        }
+        out
+    }
+
     fn coded_symbols(&self, start: u64, phase: f32, reversed: bool, offset: f32) -> [C; SCRAMBLED] {
+        if self.eq_mode == EqMode::Dfe {
+            return self.dfe_symbols(start, phase, reversed, offset);
+        }
         let frame = self.frame_symbols(start, phase);
         // The carrier comes off first: the estimate is taken against real ±1 sync
         // symbols, and a ramp left in looks like a channel that turns a whole
@@ -926,7 +1143,15 @@ impl S4285Receiver {
         let mut equalised = [C::default(); SCRAMBLED];
         if let Some(w) = &equaliser {
             let mid = (LS_EQ - 1) / 2;
-            let mut best = (score(&plain), equalised);
+            // **The fallback is the best shift, not a buffer of zeros.** Starting
+            // the comparison with `plain`'s score and a zero-filled candidate means
+            // the equaliser's output is left as zeros whenever no shift beats the
+            // plain symbols — invisible while the choice is only "is it better",
+            // and a frame of silence the moment something asks for the equalised
+            // symbols regardless (`EqMode::On`). Measured: a clean generated signal
+            // reported its reference blocks at 0.000 with the equaliser forced on,
+            // because it was reading zeros.
+            let mut best = (f32::NEG_INFINITY, plain);
             for shift in [mid, mid - 1, mid + 1] {
                 let mut cand = [C::default(); SCRAMBLED];
                 for k in 0..SCRAMBLED {
@@ -957,7 +1182,27 @@ impl S4285Receiver {
             let c = ramp_concentrations(z, 0.0);
             c[0] + c[1] + c[2]
         };
-        if equaliser.is_some() && score(&equalised) > score(&plain) { equalised } else { plain }
+        match self.eq_mode {
+            // The displayed frame's own rule, which is also the default here.
+            EqMode::Auto => {
+                if equaliser.is_some() && score(&equalised) > score(&plain) {
+                    equalised
+                } else {
+                    plain
+                }
+            }
+            EqMode::Off => plain,
+            EqMode::On => {
+                if equaliser.is_some() {
+                    equalised
+                } else {
+                    plain
+                }
+            }
+            // Unreachable: `coded_symbols` returns the DFE's own symbols before
+            // any of this runs.
+            EqMode::Dfe => plain,
+        }
     }
 
     /// Refine the carrier offset against the **known sync**, and not only against
@@ -1251,7 +1496,16 @@ impl S4285Receiver {
             let cut = self.bit_run.len() - 8192;
             self.bit_run.drain(..cut);
         }
+        let symbols: Vec<C> = {
+            let mut t = [C::default(); SCRAMBLED];
+            for k in 0..SCRAMBLED {
+                let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
+                t[k] = z[k].mul(sc.conj());
+            }
+            t.to_vec()
+        };
         Some(S4285Frame {
+            symbols,
             reference,
             carrier_offset_hz: offset,
             reversed,
@@ -1308,11 +1562,42 @@ impl S4285Receiver {
             for r in fec::CodedRate::BPSK {
                 for sign in [1.0f32, -1.0] {
                     self.coded.push(CodedChain::new(r, sign));
+                    // **A QPSK symbol carries two bits and the annex does not say
+                    // which of I and Q enters the code first.** A chain fed only the
+                    // in-phase part throws half of every symbol away, which is why
+                    // a QPSK capture could not decode at any rate.
+                    if r == fec::CodedRate::Bps1200 {
+                        self.coded.push(CodedChain::new_ordered(r, sign, true));
+                    }
                 }
             }
         }
         let soft: Vec<f32> = data.iter().map(|c| c.re * scale).collect();
+        // The same symbols as two bits each.
+        let mut soft2: Vec<f32> = Vec::with_capacity(data.len() * 2);
+        for c in &data {
+            soft2.push(c.re * scale);
+            soft2.push(c.im * scale);
+        }
+        // **The trace is the two-bit stream**, because that is what the QPSK chain
+        // is fed; a judge reading one bit per symbol would be judging a stream that
+        // chain never saw. The BPSK branches take every second value of it.
+        if let Some(t) = self.coded_trace.as_mut() {
+            t.extend_from_slice(&soft2);
+        }
         for chain in self.coded.iter_mut() {
+            if chain.rate == fec::CodedRate::Bps1200 {
+                for pair in soft2.chunks_exact(2) {
+                    let (first, second) =
+                        if chain.swap { (pair[1], pair[0]) } else { (pair[0], pair[1]) };
+                    chain.push(first, out);
+                    chain.push(second, out);
+                }
+                if chain.framer.best_som > self.report.best_som {
+                    self.report.best_som = chain.framer.best_som;
+                }
+                continue;
+            }
             for v in &soft {
                 chain.push(*v, out);
             }
@@ -1334,8 +1619,14 @@ impl S4285Receiver {
         if self.coded.is_empty() {
             return;
         }
+        if let Some(t) = self.coded_trace.as_mut() {
+            // Two values per symbol in the trace; a frame's worth.
+            t.extend(std::iter::repeat_n(0.0f32, 256));
+        }
         for chain in self.coded.iter_mut() {
-            for _ in 0..128 {
+            // A frame's worth for that chain's stride: a QPSK chain takes two
+            // values per symbol, so half a frame of zeros would shift it for good.
+            for _ in 0..128 * chain.stride() {
                 chain.push(0.0, out);
             }
         }
@@ -1723,9 +2014,13 @@ mod tests {
             seen[n] = true;
         }
         assert!(seen.iter().filter(|s| **s).count() >= 7, "the scrambler is not maximal");
-        // The first symbol of the sequence: the register is all zeros but its
-        // lowest stage, so n = 1 and the phase is one step.
-        assert_eq!(((scr[0].arg() / std::f32::consts::FRAC_PI_4).round() as i32) & 7, 1);
+        // **The register starts all ones**, which is the standard's convention and
+        // what the independent s4285 implementation uses; the first three stages
+        // are therefore 1,1,1, so the first symbol's phase index is 4+2+1 = 7. This
+        // assertion used to expect 1, from a register that started with a single
+        // bit set — the fault that left this receiver locking the sync of a real
+        // transmission while descrambling its reference blocks and data into noise.
+        assert_eq!(((scr[0].arg() / std::f32::consts::FRAC_PI_4).round() as i32) & 7, 7);
     }
 
     /// Is this scrambled offset a reference symbol?
@@ -1889,11 +2184,21 @@ mod tests {
     }
 
     /// The same, through a multipath channel as well.
-    #[allow(clippy::too_many_lines)]
     fn coded_round_trip_path(
         ramp_hz_s: f64,
         band: Option<(f64, f64)>,
         taps: Option<&[(f64, f32)]>,
+    ) -> (Vec<u8>, Vec<S4285Message>) {
+        coded_round_trip_path_mode(ramp_hz_s, band, taps, EqMode::Auto)
+    }
+
+    /// The same, with the coded path's channel chosen rather than scored.
+    #[allow(clippy::too_many_lines)]
+    fn coded_round_trip_path_mode(
+        ramp_hz_s: f64,
+        band: Option<(f64, f64)>,
+        taps: Option<&[(f64, f32)]>,
+        mode: EqMode,
     ) -> (Vec<u8>, Vec<S4285Message>) {
         use super::fec::{self, CodedRate};
         let rate = CodedRate::Bps600;
@@ -1965,6 +2270,8 @@ mod tests {
             None => audio,
         };
         let mut rx = S4285Receiver::new(12000.0, 1800.0);
+        rx.set_eq_mode(mode);
+        rx.trace_coded_stream(true);
         let mut got: Vec<S4285Message> = Vec::new();
         for chunk in audio.chunks(1024) {
             for ev in rx.process(chunk) {
@@ -1974,8 +2281,18 @@ mod tests {
             }
         }
         if got.is_empty() {
-            eprintln!("no coded message at {ramp_hz_s} Hz/s, band {band:?}: {:?}", rx.report());
+            eprintln!(
+                "no coded message at {ramp_hz_s} Hz/s, band {band:?}, {mode:?}: {:?}",
+                rx.report()
+            );
         }
+        // **The chains are fed whole frames and nothing else**, erasures included:
+        // 128 soft decisions per frame, in order. A stream with a hole in it
+        // desynchronises the interleaver for good, so this is the shape the
+        // recorded stream has to have before anything judges it.
+        let traced = rx.coded_stream().len();
+        assert!(traced > 0, "nothing traced into the coded stream");
+        assert_eq!(traced % 128, 0, "the coded stream is not whole frames: {traced}");
         (payload, got)
     }
 
@@ -2044,6 +2361,23 @@ mod tests {
         assert_eq!(m.rate, CodedRate::Bps600, "the wrong rate named the message");
         assert!(m.closed, "the EOM did not close the message");
         assert_eq!(m.bits, payload, "the message bits are not the ones that were sent");
+    }
+
+    /// **The coded chain reads the same message down all three channel paths.**
+    ///
+    /// The frame's own rule picks between the plain symbols and the equaliser by
+    /// asking which one collapses the nine known reference symbols per block
+    /// harder, and a real recording made it worth asking whether that is also the
+    /// right question for the *data* — so [`EqMode`] exists and had to be proved
+    /// not to break a signal known to be good. On the generated 600 bps
+    /// transmission, all three positions decode the message's own bits.
+    #[test]
+    fn a_coded_message_survives_every_channel_path() {
+        for mode in [EqMode::Auto, EqMode::Off, EqMode::On] {
+            let (payload, got) = coded_round_trip_path_mode(0.0, None, None, mode);
+            assert!(!got.is_empty(), "no message with {mode:?}");
+            assert_eq!(got[0].bits, payload, "the wrong bits with {mode:?}");
+        }
     }
 
     /// The same chain on a channel that is **not** exactly on frequency.

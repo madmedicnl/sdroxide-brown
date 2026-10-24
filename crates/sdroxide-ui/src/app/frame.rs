@@ -1532,54 +1532,68 @@ impl eframe::App for SdroxideApp {
         self.swl_window(&ctx, &mut cmds);
         self.listen_window(&ctx, &mut cmds);
         self.schedule_window(&ctx, &mut cmds);
-        // Sync persisted mask -> show_* flags (so menu toggles take effect).
-        self.show_dsc = (self.ui_settings.tool_windows_open & TW_DSC) != 0;
-        self.show_navtex = (self.ui_settings.tool_windows_open & TW_NAVTEX) != 0;
-        self.show_aprs = (self.ui_settings.tool_windows_open & TW_APRS) != 0;
-        self.show_wefax = (self.ui_settings.tool_windows_open & TW_WEFAX) != 0;
-        self.show_sstv = (self.ui_settings.tool_windows_open & TW_SSTV) != 0;
-        self.show_dab = (self.ui_settings.tool_windows_open & TW_DAB) != 0;
-        self.show_js8 = (self.ui_settings.tool_windows_open & TW_JS8) != 0;
-        self.show_acars = (self.ui_settings.tool_windows_open & TW_ACARS) != 0;
-        self.show_hfdl = (self.ui_settings.tool_windows_open & TW_HFDL) != 0;
-        self.show_vdl2 = (self.ui_settings.tool_windows_open & TW_VDL2) != 0;
-        self.show_ais = (self.ui_settings.tool_windows_open & TW_AIS) != 0;
-        self.show_adsb = (self.ui_settings.tool_windows_open & TW_ADSB) != 0;
-        self.show_fsq = (self.ui_settings.tool_windows_open & TW_FSQ) != 0;
-        self.show_hell = (self.ui_settings.tool_windows_open & TW_HELL) != 0;
-        self.show_packet = (self.ui_settings.tool_windows_open & TW_PACKET) != 0;
-        self.show_wspr = (self.ui_settings.tool_windows_open & TW_WSPR) != 0;
-        self.show_pi4 = (self.ui_settings.tool_windows_open & TW_PI4) != 0;
-        self.show_text = (self.ui_settings.tool_windows_open & TW_TEXT) != 0;
-        self.show_uvpacket = (self.ui_settings.tool_windows_open & TW_UVPACKET) != 0;
-        self.show_jtty = (self.ui_settings.tool_windows_open & TW_JTTY) != 0;
-        self.show_ale = (self.ui_settings.tool_windows_open & TW_ALE) != 0;
-        self.show_rf_paint = (self.ui_settings.tool_windows_open & TW_RFPAINT) != 0;
-        self.show_image = (self.ui_settings.tool_windows_open & TW_IMAGE) != 0;
+        // Sync persisted mask -> show_* flags, for the bits that changed under
+        // us since the end of the last frame: that is the Settings → Detachable
+        // menu. A flag a chip flipped this frame (MEM, SCAN, EXTRAS, a button in
+        // EXTRAS, the Settings button) has its bit still at the old value until
+        // the block below writes it, and must not be put back.
+        let (mask, outside) = (
+            self.ui_settings.tool_windows_open,
+            self.ui_settings.tool_windows_open ^ self.prev_tool_windows_mask,
+        );
+        macro_rules! sync {
+            ($flag:expr, $bit:expr) => {
+                if outside & $bit != 0 {
+                    $flag = mask & $bit != 0;
+                }
+            };
+        }
+        sync!(self.show_dsc, TW_DSC);
+        sync!(self.show_navtex, TW_NAVTEX);
+        sync!(self.show_aprs, TW_APRS);
+        sync!(self.show_wefax, TW_WEFAX);
+        sync!(self.show_sstv, TW_SSTV);
+        sync!(self.show_dab, TW_DAB);
+        sync!(self.show_js8, TW_JS8);
+        sync!(self.show_acars, TW_ACARS);
+        sync!(self.show_hfdl, TW_HFDL);
+        sync!(self.show_vdl2, TW_VDL2);
+        sync!(self.show_ais, TW_AIS);
+        sync!(self.show_adsb, TW_ADSB);
+        sync!(self.show_fsq, TW_FSQ);
+        sync!(self.show_hell, TW_HELL);
+        sync!(self.show_packet, TW_PACKET);
+        sync!(self.show_wspr, TW_WSPR);
+        sync!(self.show_pi4, TW_PI4);
+        sync!(self.show_text, TW_TEXT);
+        sync!(self.show_uvpacket, TW_UVPACKET);
+        sync!(self.show_jtty, TW_JTTY);
+        sync!(self.show_ale, TW_ALE);
+        sync!(self.show_rf_paint, TW_RFPAINT);
+        sync!(self.show_image, TW_IMAGE);
         // Sync existing tool windows.
-        self.schedule.show = (self.ui_settings.tool_windows_open & TW_SCHEDULE) != 0;
-        self.show_listen = (self.ui_settings.tool_windows_open & TW_LISTEN) != 0;
-        self.show_logbook = (self.ui_settings.tool_windows_open & TW_LOGBOOK) != 0;
-        self.show_settings = (self.ui_settings.tool_windows_open & TW_SETTINGS) != 0;
-        self.show_swl = (self.ui_settings.tool_windows_open & TW_SWL_LOG) != 0;
-        self.show_spots = (self.ui_settings.tool_windows_open & TW_SPOTS) != 0;
-        self.show_scanner = (self.ui_settings.tool_windows_open & TW_SCANNER) != 0;
-        self.show_awards = (self.ui_settings.tool_windows_open & TW_AWARDS) != 0;
-        self.show_grid = (self.ui_settings.tool_windows_open & TW_GRID) != 0;
-        self.show_sat = (self.ui_settings.tool_windows_open & TW_SAT) != 0;
-        self.show_memories = (self.ui_settings.tool_windows_open & TW_MEMORIES) != 0;
-        self.show_extras = (self.ui_settings.tool_windows_open & TW_EXTRAS) != 0;
-        self.show_aircraft = (self.ui_settings.tool_windows_open & TW_AIRCRAFT) != 0;
-        self.show_rds = (self.ui_settings.tool_windows_open & TW_RDS) != 0;
-        self.show_drm = (self.ui_settings.tool_windows_open & TW_DRM) != 0;
-        self.show_hd = (self.ui_settings.tool_windows_open & TW_HD_RADIO) != 0;
-        self.show_ism = (self.ui_settings.tool_windows_open & TW_ISM) != 0;
-        self.show_contest = (self.ui_settings.tool_windows_open & TW_CONTEST) != 0;
-        self.show_bands = (self.ui_settings.tool_windows_open & TW_BANDS) != 0;
-        self.show_public_sdrs = (self.ui_settings.tool_windows_open & TW_PUBLICSDR) != 0;
+        sync!(self.schedule.show, TW_SCHEDULE);
+        sync!(self.show_listen, TW_LISTEN);
+        sync!(self.show_logbook, TW_LOGBOOK);
+        sync!(self.show_settings, TW_SETTINGS);
+        sync!(self.show_swl, TW_SWL_LOG);
+        sync!(self.show_spots, TW_SPOTS);
+        sync!(self.show_scanner, TW_SCANNER);
+        sync!(self.show_awards, TW_AWARDS);
+        sync!(self.show_grid, TW_GRID);
+        sync!(self.show_sat, TW_SAT);
+        sync!(self.show_memories, TW_MEMORIES);
+        sync!(self.show_extras, TW_EXTRAS);
+        sync!(self.show_aircraft, TW_AIRCRAFT);
+        sync!(self.show_rds, TW_RDS);
+        sync!(self.show_drm, TW_DRM);
+        sync!(self.show_hd, TW_HD_RADIO);
+        sync!(self.show_ism, TW_ISM);
+        sync!(self.show_contest, TW_CONTEST);
+        sync!(self.show_bands, TW_BANDS);
+        sync!(self.show_public_sdrs, TW_PUBLICSDR);
         if self.show_dsc { self.dsc_window(&ctx, &mut cmds); }
         if self.show_navtex { self.navtex_window(&ctx, &mut cmds); }
-        if self.show_aprs { self.aprs_window(&ctx, &mut cmds); }
         if self.show_wefax { self.wefax_window(&ctx, &mut cmds); }
         let mode = self.state.rx[0].mode;
         // Auto-open the floating window when entering the mode (once).
@@ -1588,6 +1602,7 @@ impl eframe::App for SdroxideApp {
             if mode == sdroxide_types::Mode::Dab { self.show_dab = true; self.ui_settings.tool_windows_open |= TW_DAB; }
             if mode.is_js8() { self.show_js8 = true; self.ui_settings.tool_windows_open |= TW_JS8; }
             if mode == sdroxide_types::Mode::Acars { self.show_acars = true; self.ui_settings.tool_windows_open |= TW_ACARS; }
+            if mode.is_aprs() { self.show_aprs = true; self.ui_settings.tool_windows_open |= TW_APRS; }
             if mode.is_hfdl() { self.show_hfdl = true; self.ui_settings.tool_windows_open |= TW_HFDL; }
             if mode.is_vdl2() { self.show_vdl2 = true; self.ui_settings.tool_windows_open |= TW_VDL2; }
             if mode.is_ais() { self.show_ais = true; self.ui_settings.tool_windows_open |= TW_AIS; }
@@ -1609,6 +1624,7 @@ impl eframe::App for SdroxideApp {
         if mode == sdroxide_types::Mode::Dab && self.show_dab { self.dab_window(&ctx, &mut cmds); }
         if mode.is_js8() && self.show_js8 { self.js8_window(&ctx, &mut cmds); }
         if mode == sdroxide_types::Mode::Acars && self.show_acars { self.acars_window(&ctx, &mut cmds); }
+        if mode.is_aprs() && self.show_aprs { self.aprs_window(&ctx, &mut cmds); }
         if mode.is_hfdl() && self.show_hfdl { self.hfdl_window(&ctx, &mut cmds); }
         if mode.is_vdl2() && self.show_vdl2 { self.vdl2_window(&ctx, &mut cmds); }
         if mode.is_ais() && self.show_ais { self.ais_window(&ctx, &mut cmds); }
@@ -4115,7 +4131,7 @@ impl SdroxideApp {
             self.ais_panel(ui, cmds, panel_h);
         } else if mode.is_hfdl() && !self.show_hfdl {
             self.hfdl_panel(ui, cmds, panel_h);
-        } else if mode.is_aprs() {
+        } else if mode.is_aprs() && !self.show_aprs {
             self.aprs_panel(ui, cmds, panel_h);
         } else if mode.is_packet() && !self.show_packet {
             self.packet_panel(ui, cmds, panel_h);

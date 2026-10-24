@@ -102,6 +102,14 @@ maintainer's queue there, not a promise.
 
 ## Waiting on other people
 
+- **STANAG 4285 — one question for Mark: what rate does MultiPSK report?** His
+  recording locks here (sync 0.899, 242 frames) but its symbols sit at a ~-6 dB
+  per-symbol SNR with non-white impairment — reference blocks 0.55 where added
+  white noise at the same level gives 0.91 — so the chain sees no trellis at any
+  BPSK rate. MultiPSK's status line names the rate it is reading (600 / 300 / 150 /
+  75 bps, and whether it says "coded"), which decides whether we are 3 dB short in
+  the demodulator or looking at the wrong rate. A stronger capture of the same
+  station would answer it too.
 - **ALE — a recording of one real burst.** The receiver, the FEC and the tone map
   are built and round-trip a synthesized word exactly; no off-air burst has ever
   decoded. The ask is now in the manual (§3.29) and in the changelog's *Needs

@@ -2170,7 +2170,7 @@ mod client_screen_tests {
         let old: ClientScreen = serde_json::from_str(r#"{"simple_ui":true}"#).expect("old profile");
         assert_eq!(old.fft_size, 4096, "a profile from before the field keeps the default");
 
-        let mut mine = UiSettings::default();
+        let mine = UiSettings::default();
         // Simulate: the client carries 32768 from its ViewState.
         let mut carried = ClientScreen::from_settings(&mine);
         carried.fft_size = 32768;

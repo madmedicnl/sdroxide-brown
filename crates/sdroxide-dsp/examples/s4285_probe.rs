@@ -72,6 +72,14 @@ fn main() {
     );
 
     let mut rx = sdroxide_dsp::stanag4285::S4285Receiver::new(rate, carrier);
+    // `S4285_EQ=auto|off|on|dfe`, so a diagnostic run can ask for one channel path
+    // without a rebuild — the equaliser question is asked by comparing them.
+    match std::env::var("S4285_EQ").as_deref() {
+        Ok("off") => rx.set_eq_mode(sdroxide_dsp::stanag4285::EqMode::Off),
+        Ok("on") => rx.set_eq_mode(sdroxide_dsp::stanag4285::EqMode::On),
+        Ok("dfe") => rx.set_eq_mode(sdroxide_dsp::stanag4285::EqMode::Dfe),
+        _ => {}
+    }
     let mut frames = Vec::new();
     let mut text = String::new();
     let mut messages = 0usize;
@@ -79,6 +87,21 @@ fn main() {
         for ev in rx.process(chunk) {
             match ev {
                 sdroxide_dsp::stanag4285::S4285Event::Frame(f) => {
+                    // The frame's own symbols, for asking *where* an assumed layout
+                    // went wrong: the reference blocks are runs of constant phase
+                    // and their positions are a property of the transmission.
+                    if let Ok(path) = std::env::var("S4285_SYMBOLS_OUT") {
+                        use std::io::Write;
+                        let mut fh = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&path)
+                            .expect("open the symbol dump");
+                        for c in &f.symbols {
+                            write!(fh, "{:.5},{:.5} ", c.re, c.im).expect("write");
+                        }
+                        writeln!(fh).expect("newline");
+                    }
                     if let Ok(path) = std::env::var("S4285_SOFT_OUT") {
                         use std::io::Write;
                         let mut fh = std::fs::OpenOptions::new()

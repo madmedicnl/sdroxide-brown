@@ -766,6 +766,257 @@ On the air capture the same change takes the data from 0.25 to **0.384** — bet
 still not the ~0.9 a clean frame gives, so the smear is real and the path is doing
 it.
 
+## 2026-10-24 — Mark's Mac recording: 3.7 kHz, our own recorder, and the code is still hidden
+
+`markjfine` sent two more files, both kept in `~/s4285-captures/keepers/` and out of
+the tree: **`FUF-13031.200kHz-20261024-125317Z.wav`** — one minute, 48 kHz stereo,
+recorded **by our own recorder on his Mac** at 3.7 kHz of bandwidth, USB on
+13031.2 kHz, and copied by MultiPSK from about midway through — and
+**`…-134238Z.cf32.wav`**, a CF32 baseband IQ of the same channel (423 MB), the
+first time this mode has had the whole passband rather than what an audio chain
+passed.
+
+Measured on the audio file, our receiver, carrier swept:
+
+| carrier | lock | ACF | frames | data constellation | references | FEC (metric / null) |
+|---|---|---|---|---|---|---|
+| 1850 Hz | 0.899 | 0.706 | 242 | **0.396** | 0.55 / 0.61 / 0.51 | **0.96×** |
+| 1900 Hz | 0.896 | 0.706 | 242 | 0.395 | 0.55 / 0.61 / 0.50 | 0.96× |
+
+Two things worth keeping:
+
+* **The equaliser is working and still not enough.** The data constellation is
+  **0.396** where the previous recording gave 0.23–0.34, so the frame- and
+  block-level correction is doing its job on a cleaner waveform — and the trellis
+  metric is still **0.96–0.98× its own shuffled null** on every branch. The code
+  is not visible in the soft decisions while MultiPSK reads the same file, so the
+  gap is now firmly in our demodulator, not in the recording.
+* **`best SOM 31/32`** — the Annex E start-of-message correlator matching 31 of its
+  32 bits is the closest anything has come to a message: the framing is right and
+  the soft values are what is wrong.
+
+**The decision-directed tracker was built, measured, and ruled out** (same day).
+It ran on the data symbols after the reference-block fit — sign decision, residual
+angle against the decision axis, gain 0.15 — and the Annex E metric did not move:
+**0.96×** at 1850 Hz and **0.96–0.97×** at 1900 Hz, identical to four decimal
+places on the strongest branch. The code is therefore not being lost to per-symbol
+phase wander, and the change was reverted rather than left in the tree unproven.
+
+**The interleaver's conventions and depths are ruled out too** (same day, after
+`Interleave` was made selectable). On Mark's file at 1900 Hz, every combination of
+commutator wiring (`announce`, `swapped`, `rows-flipped`, `swapped+flipped`) and
+every depth a 600 bps transmission could plausibly use (`j` = 3, 6, 12, 24, 48)
+sits at **0.94–0.99×** its own shuffled null. No convention stands up, so neither
+the wiring nor the depth is what is hiding the code, and the annex's own figures
+stay the default. The sweep is committed in `s4285_fec_check`.
+
+**And a one-symbol matched filter made it worse.** Worth recording because it was
+the obvious next idea: a boxcar over one symbol before the decision took the lock
+from 0.900 to 0.465 and the constellation from 0.396 to 0.211. Reverted. Whatever
+is smearing the data symbols, a symbol-long average at the *current* timing
+instants is not it.
+
+**The baseband IQ opened, and it needs its own tuning** (same day). The capture
+is 912 kSps, CF32, 58 s. Its spectrum puts the signal **600–3000 Hz above the
+dial** — 2.4 kHz wide, exactly what Mark measured on the air — so the suppressed
+carrier is at about **600 Hz** in the recording, not on the dial. Lifting it to
+the 1800 Hz a demod-audio feed carries and extracting 40 s of 12 kHz audio gives
+`/tmp/opencode/stanag/iq-40s-c1800.wav`: frame ACF **0.38** against a 0.03 noise
+floor, so something periodic is there, but the folded sync reaches only **0.24**
+and no frame is accepted. This capture was taken at **13:42**, forty-nine minutes
+after the audio file, so it is not necessarily the same transmission — and an idle
+4285 folds (see "The traps") while carrying no data. **The audio file remains the
+reference**; the IQ needs a per-capture carrier estimate before anything else is
+measured from it.
+
+**The channel path is ruled out, and the equaliser had a latent fault** (same day,
+after `EqMode` was added). The coded path now takes `EqMode::{Auto, Off, On}` —
+`Auto` is the frame's own rule (whichever path collapses the nine known reference
+symbols per block harder), `Off` is the plain symbols, `On` forces the
+least-squares/ZF equaliser. Measured on Mark's file at 1850 Hz, 242 frames,
+30 976 soft decisions in each: **Auto 0.99×, Off 0.99×, On 1.00×** their own
+shuffled nulls. So the choice between them is not what is hiding the code.
+
+While making `On` mean anything, a fault fell out of `coded_symbols`: the
+comparison that picks the equaliser's group delay started from `(score(&plain),
+zero-filled buffer)`, so when no shift beat the plain symbols the "equalised"
+frame was **128 symbols of silence** — invisible while the choice is only "is it
+better", and fatal the moment anything asks for those symbols regardless. On a
+clean generated signal, forced `On` read its reference blocks at **0.000** and
+decoded nothing. Fixed to fall back to the best shift, and a test
+(`a_coded_message_survives_every_channel_path`) now decodes the message's own bits
+down all three paths.
+
+**`best SOM 31/32` is withdrawn as evidence.** It has been quoted here as "the
+framer almost found the pattern". Null-tested properly — the same chunked
+decoder, same interleaver, on the same values shuffled — every branch of the real
+stream reads **24–28/32**, and the noise reads **24–28/32**. A 27/32 is not
+evidence when its null is 26/32. The receiver's 31/32 comes from a stream that
+also carries erasure-filled frames (its chains are fed *before* the reference
+gate), so the receiver's own null has not been established; until it is, the
+number must not be quoted. The trellis metric, which does have a null, says no
+code on this file.
+
+**The judge was reading the wrong stream, and now does not** (same day). The
+Annex E chains are fed *before* the reference gate: a frame too poor to report is
+still fed as 128 zeros, so the interleaver stays aligned through a fade. Those
+values never reach a frame event, so `s4285_fec_check` was judging a stream with
+holes the decoder never had — and one hole shifts everything after it by a whole
+frame. `S4285Receiver::trace_coded_stream(true)` / `coded_stream()` now expose the
+stream the chains actually saw, and the check reads that.
+
+What the correct stream says: **71 168 soft decisions, not 30 976.** 242 frames are
+reported; **314 more of the 556 locked frames fall below `MIN_CODED_REFERENCE`**
+(0.30) and were being fed as erasures — 56 % of the pass. Judged on that stream the
+best branch is **1.00×** its own shuffled null, so the holes were not hiding a
+trellis either.
+
+**Erasures ruled out as the cause** (same day): with `MIN_CODED_REFERENCE` set to
+0.0, every locked frame contributes its real soft decisions — 555 frames,
+71 040 values — and the best branch is still **1.00×**. So the code is not hidden
+by the frames we decline to report.
+
+The SOM statistic, measured on the correct stream: **real 31/32 against 27/32
+shuffled** on the 300 bps branch, which reproduces the receiver's number. It is
+still not evidence: no branch ever reaches 32, no message ever closes, and the
+metric — the one statistic here with a proper null — sits at 1.00×. It is a
+1-in-200 near-miss on a long stream, not a decode.
+
+**Two front-end ideas measured and rejected the same day.** A **root raised cosine**
+matched filter before the decision (α = 0.2, 0.35, 0.5, four symbols either side,
+delay compensated) breaks acquisition outright — lock **0.900 → 0.465** and the
+constellation to ≤ 0.20 at every roll-off — so it is not the missing piece in this
+form. And the file's two channels are **identical** (dual mono): decoding L and R
+separately gives exactly the same lock (0.899), constellation (0.396) and frame
+count (242), so the mono mix costs nothing and gains nothing.
+
+**The tape's deficit is channel structure, not signal-to-noise — measured**
+(same day). Our own chain was calibrated against noise, the one thing about a
+recording that can be added deliberately: a generated 600 bps coded signal
+(`s4285_test_signal`) with white noise mixed in, constellation against noise in
+3 kHz —
+
+| noise | 2-fold concentration | message |
+|---|---|---|
+| clean | 0.995 | decodes |
+| 10 dB | 0.981 | decodes |
+| 6 dB | 0.959 | decodes |
+| 3 dB | 0.934 | decodes |
+| 2 dB | 0.921 | **still decodes** |
+
+Mark's tape reads **0.396**. If that were noise the signal would be far below
+2 dB — but 2 dB is 0.921 and decodes, so **SNR is not the tape's problem**. A
+constellation at 0.40 with references at 0.55 is ISI and timing wander: the eye is
+being closed by the channel, not filled by noise. That is what the equaliser is
+for, and it is the reason the interleaver, the depths, the phase tracker and the
+channel-path choice all came back at their nulls — none of them is a channel
+equaliser.
+
+**A bench trap worth writing down.** `s4285_test_signal` puts its sub-carrier at
+**1500 Hz** unless `S4285_TX_CARRIER` says otherwise, while `s4285_probe`'s
+default is **1800 Hz**. Probing the generated file at the probe's default gives
+0 frames, reference blocks 0.000 and a lock of 0.999 — which looks exactly like a
+broken modulator and cost a cycle here. It decodes at 1500 with 0.995 and one
+message. Read the generator's carrier before calling the receiver wrong.
+
+**A longer channel estimate is worse, measured** (same day). The least-squares
+channel covers 5 taps (two symbols, 0.8 ms) and HF multipath is 1–3 ms, so the
+taps were raised: at **13 taps / 29-tap equaliser** the tape's data constellation
+fell **0.396 → 0.312**, and at **9 / 17** it read **0.348**. Both worse than the
+default, so the delay spread that hurts this file is inside two symbols and a
+longer estimate spends more on its own noise than it recovers. Reverted to 5 / 9.
+
+**The chain's own sensitivity, measured per rate** (same day). Generating each
+coded rate and adding white noise until decoding stops:
+
+| rate | decodes at | constellation there | reference blocks there |
+|---|---|---|---|
+| 600 / 2 | 2 dB | 0.921 | — |
+| 150 / 8 | -6 dB | 0.612 | 0.905 |
+| 75 / 16 | -6 dB | 0.578 | 0.906 |
+
+So the chain is not insensitive: at -6 dB in 3 kHz it still reads a message, with
+the reference blocks at **0.90**. Mark's tape reads reference blocks at **0.55**
+and per-symbol phase scatter of about **87°**, which no amount of white noise
+produces — at that SNR our noise test still collapses the references at 0.90. The
+tape's impairment is therefore **not AWGN**: it is either fast phase wander or
+in-band interference, and it is the first time the tape's own numbers and the
+chain's threshold can be put side by side.
+
+**Frame structure checked against the tape itself.** The frame's 176 descrambled
+symbols are now exposed (`S4285Frame::symbols`, and `S4285_SYMBOLS_OUT` in the
+probe), so the reference blocks can be looked for rather than assumed: sliding a
+16-symbol coherence window over all 242 frames gives a flat profile at the noise
+floor (0.24–0.35 everywhere; a real reference block is 0.9+). Within a usable frame
+the symbol-to-symbol phase scatter is 86–91°, so the blocks are not coherent enough
+to locate — the frame layout is not contradicted, it is simply unreadable at this
+level.
+
+## The scrambler's initial state was wrong — this is the biggest fault found
+
+`scrambling()` built its 9-stage LFSR from **`1`**, one bit set, where the standard
+starts the register **all ones**. The sync preamble is transmitted *unscrambled*, so
+a receiver with the wrong scrambler still locks and still folds its frames — it
+just descrambles the reference blocks and the data into noise. On Mark's recording:
+
+| | before | after |
+|---|---|---|
+| reference blocks (mean) | 0.550 / 0.611 / 0.509 | 0.761 / 0.724 / 0.745 |
+| data constellation (2-fold) | 0.396 | 0.750 |
+| frames accepted | 242 | 451 |
+
+Confirmed against the independent GPL implementation `luwangg/signal-analysis`
+(same taps `state[0]^state[4]`, same three bits per symbol, same 8-phase mapping,
+all-ones start) and with the standard's own convention. The generator test in the
+crate used to assert the first symbol was phase index 1 — it now asserts 7, with the
+reason written on it.
+
+## The equaliser: added, measured, and **opt-in only**
+
+`EqMode::Dfe` is an LMS decision-feedback equaliser in the shape both other decoders
+use: eleven fractionally-spaced feedforward taps at five samples per symbol, four
+decision-feedback taps, `mu` 0.05, trained on the 80-symbol sync and corrected by
+the known reference blocks mid-frame, two passes.
+
+- On Mark's recording it lifts the data constellation **0.750 → 0.823** and the four
+  per-block figures from 0.66–0.80 to **0.81–0.87**.
+- On **our own clean signal it makes things worse** (0.995 → 0.736) and the message
+  stops framing, which is why it is **not the default**: `EqMode::Auto` stays, and
+  the DFE is asked for explicitly (`S4285_EQ=dfe` in the probe). Any future default
+  has to pass the loopback first.
+
+## ⛔ The metric-versus-shuffled-null judge is **invalid** — correct this in the record
+
+The statistic every sweep in this document was judged by — the Viterbi metric
+divided by the same values shuffled — reads **1.02× on our own clean 600 bps
+signal, which the receiver decodes correctly**. It cannot separate a decodable
+signal from noise, so **every "N× its null, therefore ruled out" conclusion taken
+with it is void**: the interleaver wirings, the depths, the QPSK axes, the
+commutator start phases, the channel-path comparison. They may still be true, but
+they were never evidence. The judge that has been validated is a **framed message**
+(and, second, the reported constellation), and both examples that say otherwise
+(`s4285_fec_check`, `s4285_align_check`, `s4285_qpsk_check`) should be read as
+diagnostics of the statistic, not of the mode.
+
+## Where the tape stands, measured
+
+- Carrier is **1800.0 Hz** exactly (residual offset −0.5 Hz at carrier 1800).
+- Audio band: signal fills 100–3700 Hz, centred on 1800, **no in-band spurs**; the
+  recording is healthy (peak −8.4 dBFS, no clipping).
+- Data constellation after the scrambler fix and the DFE: **0.823** 2-fold, 0.426
+  4-fold, 0.080 8-fold — consistent with BPSK data under about 18° of residual phase
+  wander, which is ~8.5 % raw symbol error. Rate 1/2 corrects that only marginally.
+- **No message is framed at any rate**, either sign, with or without the equaliser.
+
+**What that leaves.** The chain's own parameters, on the best file we have ever
+had. The old sweep of interleaver conventions (both commutator orders, both row
+arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run
+against the **2.2 kHz** recording, whose data concentration was 0.23–0.34; this one
+is 0.396 with a 0.899 lock, and a metric at exactly the null is what a *wrong
+interleaver* looks like as much as a noisy one. So the next measurement is that
+sweep again, on this file, with the metric-versus-null test as the judge — and the
+`CHUNK_PAIRS`/`VITERBI_OVERLAP` plumbing is the place it has to be parameterised.
+
 ### Still open
 
 * **No real coded transmission has been decoded**, and the metric test says the
