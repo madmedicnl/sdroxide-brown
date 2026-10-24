@@ -1578,7 +1578,6 @@ impl eframe::App for SdroxideApp {
         self.show_public_sdrs = (self.ui_settings.tool_windows_open & TW_PUBLICSDR) != 0;
         if self.show_dsc { self.dsc_window(&ctx, &mut cmds); }
         if self.show_navtex { self.navtex_window(&ctx, &mut cmds); }
-        if self.show_aprs { self.aprs_window(&ctx, &mut cmds); }
         if self.show_wefax { self.wefax_window(&ctx, &mut cmds); }
         let mode = self.state.rx[0].mode;
         // Auto-open the floating window when entering the mode (once).
@@ -1587,6 +1586,7 @@ impl eframe::App for SdroxideApp {
             if mode == sdroxide_types::Mode::Dab { self.show_dab = true; self.ui_settings.tool_windows_open |= TW_DAB; }
             if mode.is_js8() { self.show_js8 = true; self.ui_settings.tool_windows_open |= TW_JS8; }
             if mode == sdroxide_types::Mode::Acars { self.show_acars = true; self.ui_settings.tool_windows_open |= TW_ACARS; }
+            if mode.is_aprs() { self.show_aprs = true; self.ui_settings.tool_windows_open |= TW_APRS; }
             if mode.is_hfdl() { self.show_hfdl = true; self.ui_settings.tool_windows_open |= TW_HFDL; }
             if mode.is_vdl2() { self.show_vdl2 = true; self.ui_settings.tool_windows_open |= TW_VDL2; }
             if mode.is_ais() { self.show_ais = true; self.ui_settings.tool_windows_open |= TW_AIS; }
@@ -1608,6 +1608,7 @@ impl eframe::App for SdroxideApp {
         if mode == sdroxide_types::Mode::Dab && self.show_dab { self.dab_window(&ctx, &mut cmds); }
         if mode.is_js8() && self.show_js8 { self.js8_window(&ctx, &mut cmds); }
         if mode == sdroxide_types::Mode::Acars && self.show_acars { self.acars_window(&ctx, &mut cmds); }
+        if mode.is_aprs() && self.show_aprs { self.aprs_window(&ctx, &mut cmds); }
         if mode.is_hfdl() && self.show_hfdl { self.hfdl_window(&ctx, &mut cmds); }
         if mode.is_vdl2() && self.show_vdl2 { self.vdl2_window(&ctx, &mut cmds); }
         if mode.is_ais() && self.show_ais { self.ais_window(&ctx, &mut cmds); }
@@ -4112,7 +4113,7 @@ impl SdroxideApp {
             self.ais_panel(ui, cmds, panel_h);
         } else if mode.is_hfdl() && !self.show_hfdl {
             self.hfdl_panel(ui, cmds, panel_h);
-        } else if mode.is_aprs() {
+        } else if mode.is_aprs() && !self.show_aprs {
             self.aprs_panel(ui, cmds, panel_h);
         } else if mode.is_packet() && !self.show_packet {
             self.packet_panel(ui, cmds, panel_h);
