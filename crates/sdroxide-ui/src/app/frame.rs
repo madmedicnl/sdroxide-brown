@@ -1538,11 +1538,19 @@ impl eframe::App for SdroxideApp {
             if mode.is_sstv() { self.show_sstv = true; }
             if mode == sdroxide_types::Mode::Dab { self.show_dab = true; }
             if mode.is_js8() { self.show_js8 = true; }
+            if mode == sdroxide_types::Mode::Acars { self.show_acars = true; }
+            if mode.is_hfdl() { self.show_hfdl = true; }
+            if mode.is_vdl2() { self.show_vdl2 = true; }
+            if mode.is_ais() { self.show_ais = true; }
             self.last_mode_for_tools = Some(mode);
         }
         if mode.is_sstv() && self.show_sstv { self.sstv_window(&ctx, &mut cmds); }
         if mode == sdroxide_types::Mode::Dab && self.show_dab { self.dab_window(&ctx, &mut cmds); }
         if mode.is_js8() && self.show_js8 { self.js8_window(&ctx, &mut cmds); }
+        if mode == sdroxide_types::Mode::Acars && self.show_acars { self.acars_window(&ctx, &mut cmds); }
+        if mode.is_hfdl() && self.show_hfdl { self.hfdl_window(&ctx, &mut cmds); }
+        if mode.is_vdl2() && self.show_vdl2 { self.vdl2_window(&ctx, &mut cmds); }
+        if mode.is_ais() && self.show_ais { self.ais_window(&ctx, &mut cmds); }
         self.recordings_window(&ctx, &mut cmds);
         self.poll_recording_jobs(&mut cmds);
         self.mail_window(&ctx, &mut cmds);
@@ -3984,7 +3992,7 @@ impl SdroxideApp {
             self.wefax_panel(ui, cmds, panel_h);
         } else if mode == Mode::Navtex {
             self.navtex_panel(ui, cmds, panel_h);
-        } else if mode == Mode::Acars {
+        } else if mode == Mode::Acars && !self.show_acars {
             self.acars_panel(ui, cmds, panel_h);
         } else if mode == Mode::Dsc {
             self.dsc_panel(ui, cmds, panel_h);
@@ -4002,11 +4010,11 @@ impl SdroxideApp {
             self.adsb_panel(ui, cmds, panel_h);
         } else if mode == Mode::Dab && !self.show_dab {
             self.dab_panel(ui, cmds, panel_h);
-        } else if mode.is_vdl2() {
+        } else if mode.is_vdl2() && !self.show_vdl2 {
             self.vdl2_panel(ui, cmds, panel_h);
-        } else if mode.is_ais() {
+        } else if mode.is_ais() && !self.show_ais {
             self.ais_panel(ui, cmds, panel_h);
-        } else if mode.is_hfdl() {
+        } else if mode.is_hfdl() && !self.show_hfdl {
             self.hfdl_panel(ui, cmds, panel_h);
         } else if mode.is_aprs() {
             self.aprs_panel(ui, cmds, panel_h);
@@ -4807,5 +4815,28 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "js8", "JS8", [640.0, 480.0], self.show_js8,
             |me, ui| { let h = ui.available_height(); me.js8_panel(ui, cmds, h); });
         self.show_js8 = open;
+    }
+}
+
+impl SdroxideApp {
+    pub(in crate::app) fn acars_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "acars", "ACARS", [720.0, 560.0], self.show_acars,
+            |me, ui| { let h = ui.available_height(); me.acars_panel(ui, cmds, h); });
+        self.show_acars = open;
+    }
+    pub(in crate::app) fn hfdl_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "hfdl", "HFDL", [720.0, 560.0], self.show_hfdl,
+            |me, ui| { let h = ui.available_height(); me.hfdl_panel(ui, cmds, h); });
+        self.show_hfdl = open;
+    }
+    pub(in crate::app) fn vdl2_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "vdl2", "VDL2", [720.0, 560.0], self.show_vdl2,
+            |me, ui| { let h = ui.available_height(); me.vdl2_panel(ui, cmds, h); });
+        self.show_vdl2 = open;
+    }
+    pub(in crate::app) fn ais_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "ais", "AIS", [720.0, 560.0], self.show_ais,
+            |me, ui| { let h = ui.available_height(); me.ais_panel(ui, cmds, h); });
+        self.show_ais = open;
     }
 }
