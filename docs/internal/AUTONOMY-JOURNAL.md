@@ -21,6 +21,59 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 — issue #146: the LISTEN tab hid nothing from the popup
+
+**Summary.** The reporter on v2.1.0.2 was right and the feature was broken. Picking
+LISTEN in the band/mode menu is supposed to hide the transmit controls, and it
+did that only for someone who had already opened the selector as a docked column
+or a window — from the ordinary BAND chip popup, which is how everyone opens it,
+nothing happened. The answer is now read from the tab itself rather than from a
+flag that one of the three places drawing the menu remembered to set, so every
+way in works, and the LISTEN tab says where the switch is while it is off. It is
+**PR #178**, because the band/mode window is F4NRM's.
+
+**Done.**
+- `mod.rs`: `listen_tab_hides()` and the tab half of `swl_mode()` derived from
+  `ui_settings.listen_tab_hides_tx && band_menu_tab == Listen`; the stored
+  `listen_tab_swl` field is gone, so there is no flag left to forget. The
+  remembering keeps one seam, `remember_band_tab()`, called once a frame, and it
+  writes only when the answer has moved.
+- `top_bar.rs`: the `before`/persist block deleted from `band_menu_body` — it was
+  the only one of the three call sites that had it. `band_mode_menu` gains
+  `listen_hides_tx` so the tab can say where the switch is.
+- The LISTEN tab now carries one weak line while the setting is off: *"This tab
+  can hide the transmit controls too: turn on "hide TX on the LISTEN tab" in
+  Settings → UI"*. A hint and not a chip, because the switch asks once in
+  Settings and a chip here would be a way round that confirmation.
+- Manual §2.4 documents the setting, including the half that matters: it hides,
+  it never grants, and a receive-only radio stays receive-only.
+- **The test was the other half of the fault** and now moves the tab rather than
+  setting a flag: `app.band_menu_tab = Listen` then `assert!(app.swl_mode())`.
+  Verified to fail on the old behaviour ("picking LISTEN must hide them — nothing
+  else called").
+
+**Numbers.**
+- `cargo test --release -p sdroxide-ui --lib` — **961 passed, 0 failed, 6
+  ignored** (the whole crate, the release gate).
+- `cargo test -p sdroxide-ui --lib the_listen_tab` — passes in debug and release.
+
+**Found on the way, and not fixed: the debug UI suite does not run.** With egui
+0.36, `epaint`'s `TexturesDelta::drop` is a `debug_assert!`; a dozen UI tests drop
+an `egui::FullOutput` without applying or clearing its deltas, and the first of
+them — the DAB logo tile — **aborts the whole test binary**, so 949 tests never
+report. `cargo test --release` is green, which is why nobody has seen it: the
+release gate is the release one. The fix is one `out.textures_delta.clear()` per
+test that draws a frame. It is a sweep across F4NRM's UI test files, so it is in
+`TODO.md` under *Now* waiting for a go-ahead rather than done here — and it is
+why this entry's numbers are release numbers.
+
+**Not done / blocked.** No click-through of the popup itself: the test drives the
+tab the popup writes, not egui's pointer, and that seam is where the bug was.
+
+**Next.** PR #178 for F4NRM to read, then back to the mode queue.
+
+---
+
 ## 2026-10-24 (rules) — F4NRM's list is a workflow, and the RSP1 is ours
 
 **Summary.** The list of things that belong to F4NRM has been read off the

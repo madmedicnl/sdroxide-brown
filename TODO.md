@@ -17,7 +17,18 @@ maintainer's queue there, not a promise.
 
 ## Now
 
-0. **Focus, set by the operator 2026-10-24: no UI work, and the modes are the
+0. **The UI test suite does not run in debug** — `cargo test -p sdroxide-ui --lib`
+   aborts, and has since egui 0.36. `epaint`'s `TexturesDelta::drop` is a
+   `debug_assert!`, and a dozen UI tests drop an `egui::FullOutput` without
+   applying or clearing its texture deltas; the first of them (the DAB logo
+   tile) aborts the whole binary, so 949 tests never report. **`cargo test
+   --release` passes, 961 green** — which is why it went unseen, the release gate
+   being the release one. The fix is one `out.textures_delta.clear()` per test
+   that draws a frame, or a shared frame helper; found while checking #146
+   (2026-10-24). Needs a go-ahead because it is a sweep across F4NRM's UI test
+   files.
+
+1. **Focus, set by the operator 2026-10-24: no UI work, and the modes are the
    programme.** F4NRM is working through the detachable windows and the layout,
    so the screens are his; the only UI we touch is a new mode's own panel, or
    something **very off**. Our work is **STANAG 4285 first** — the coded payload
@@ -28,7 +39,7 @@ maintainer's queue there, not a promise.
    straight to `main`. **RSP1 is not on the list** (the operator struck it off on
    2026-10-24: it is the bench's receiver and his only wideband one).
 
-1. **The mode work — the live queue, and it has its own brief.**
+2. **The mode work — the live queue, and it has its own brief.**
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
    finish the missing modes and get TX working for everything fldigi can
    transmit, and **vendor a mode when the port and the bench have both been
@@ -62,7 +73,7 @@ maintainer's queue there, not a promise.
      as text, the reference waveform timing, a non-ASCII TX panic, burst tail
      loss and the stop button. A mode we ship, so it is this programme's work.
 
-2. **A decoded-text feed over UDP** — asked on Reddit (2026-10-24) and worth
+3. **A decoded-text feed over UDP** — asked on Reddit (2026-10-24) and worth
    having. What exists today is the **WSJT-X broadcast** (Settings → Servers):
    the FT8 family's decodes, status and logged QSOs, in WSJT-X's dialect. What
    does **not** exist is a generic feed for the text modes (RTTY, PSK, Olivia,
@@ -71,7 +82,7 @@ maintainer's queue there, not a promise.
    audio offset, text), off by default, next to the UDP audio sink that already
    exists in the engine. A `RadioConfig` field means a `PROTO_VERSION` bump.
 
-3. **Brick2** — the code half is merged (#170); the radio half is a report away.
+4. **Brick2** — the code half is merged (#170); the radio half is a report away.
    [`docs/internal/BRICK2-HANDOVER.md`](docs/internal/BRICK2-HANDOVER.md).
    - **#132 wrong frequency display** (Thetis 7.183 vs ours 7.223, 40 kHz, with
      the spectrum going unstable under a MIDI knob). **One answer needed** —
@@ -82,17 +93,17 @@ maintainer's queue there, not a promise.
      Invert spectrum, and one-switch-per-radio is now enforced (#170), so the
      generic Swap I/Q can no longer cancel it.
 
-4. **#162 NAVTEX frequency** — the reporter had to tune 516.6 kHz instead of
+5. **#162 NAVTEX frequency** — the reporter had to tune 516.6 kHz instead of
    518. The presets already tune the dial **1.710 kHz below the channel**
    (516.290 and 488.290), and that rule is pinned by a test, so this is his
    receiver's calibration (`ppm`) or the station's own offset. **Answer it, do
    not change the rule.**
 
-5. **#153 Pluto socket stalls** — APRS reception stops for a second or two and a
+6. **#153 Pluto socket stalls** — APRS reception stops for a second or two and a
    socket is being replaced mid-stream. Waiting on the **diagnostic report**
    (Settings → Radio → Copy Diagnostic Report) and the precise setup.
 
-6. **Detachable panels are F4NRM's** (discussion #166). Our part: any panel we
+7. **Detachable panels are F4NRM's** (discussion #166). Our part: any panel we
    touch gets made detachable and added to the Detachable page in Settings —
    APRS was the last one (#167).
 
@@ -119,9 +130,9 @@ maintainer's queue there, not a promise.
 On `main`, after **v2.1.0.2.1**: the Brick2 HPSDR work (paced transmit, the
 Hermes-emulation PA fix, one I/Q switch per radio), the **detachable APRS decoder
 panel** with the Detachable settings page, the **decoded-text UDP feed**, the
-**JTTY** rebuild, and the **CIS-11** mode (merged as PR #173, `PROTO_VERSION`
-241). Open: **PR #174** (8PSK, 242 / 0x3E) and the **voice-hunting** PR
-(243 / 0x3F).
+**JTTY** rebuild, the **CIS-11** mode (PR #173, `PROTO_VERSION` 241) and
+**voice hunting** (PR #177, 243 / 0x3F). Open: **PR #174** (8PSK, 242 / 0x3E) and
+**PR #183** (#146's LISTEN tab, no wire change).
 
 ## Parked, with the reason
 

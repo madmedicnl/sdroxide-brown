@@ -64,6 +64,14 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 241 on
 
 ## Open (In Progress)
 
+- **Issue #146, reopened** — LISTEN in the band/mode menu hid nothing from the
+  BAND chip's popup: the answer lived in a flag that only one of the three places
+  drawing the selector set. **PR #183** derives it from the tab instead, adds a
+  hint where the switch is, and documents it in the manual §2.4. It needs the
+  reporter to confirm before the issue closes.
+- **The debug UI suite does not run** — `cargo test -p sdroxide-ui --lib` aborts
+  on `epaint`'s `TexturesDelta` `debug_assert!`; `--release` is green (961). One
+  `out.textures_delta.clear()` per drawing test, across UI test files.
 - **The mode work is the queue.** [`MODE-PHASE-4-PROMPT.md`](MODE-PHASE-4-PROMPT.md)
   — finish the modes, TX for everything fldigi can transmit, vendor when the port
   and the bench are exhausted. Journal and measurements:

@@ -1573,6 +1573,7 @@ impl SdroxideApp {
                     self.daylight,
                     atsmini,
                     &mut self.show_ism,
+                    self.ui_settings.listen_tab_hides_tx,
                     cmds,
                 );
             });
@@ -2833,6 +2834,7 @@ impl SdroxideApp {
                 daylight,
                 atsmini,
                 &mut self.show_ism,
+                self.ui_settings.listen_tab_hides_tx,
                 cmds,
             );
         });
@@ -2942,7 +2944,6 @@ impl SdroxideApp {
     /// docked column and by [`Self::band_menu_fill`], so a change to the menu
     /// reaches both.
     pub(in crate::app) fn band_menu_body(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
-        let before = self.band_menu_tab;
         let mode = self.state.rx[0].mode;
         let stated = self.radio_cfg.as_ref().is_some_and(|c| !c.freq_ranges_rx.is_empty());
         let atsmini =
@@ -2959,24 +2960,14 @@ impl SdroxideApp {
             self.daylight,
             atsmini,
             &mut self.show_ism,
+            self.ui_settings.listen_tab_hides_tx,
             cmds,
         );
-        // **LISTEN hides the transmit controls; OPERATE never grants them.**
-        // Issue #146 asks for the tab to carry the listening screen, and this is
-        // the half of it that cannot loosen anything: the tab sets a flag that
-        // the app already ORs into `swl_mode()`, so a radio whose own setting
-        // says receive-only is unaffected, and the band lockout and the
-        // out-of-band warning are untouched. Going back to OPERATE restores
-        // exactly the state the operator had. Off by default, asked once, and
-        // remembered across a restart.
-        if self.band_menu_tab != before && self.ui_settings.listen_tab_hides_tx {
-            self.listen_tab_swl = self.band_menu_tab == BandMenuTab::Listen;
-            // Remembered, not session-only: the operator asked for the listening
-            // screen to survive a restart. The radio's own setting still decides
-            // what OPERATE means, so this can hide transmit and cannot grant it.
-            self.ui_settings.band_menu_listen = self.listen_tab_swl;
-            crate::app::persist::persist_ui_settings(&self.ui_settings);
-        }
+        // **LISTEN hides the transmit controls; OPERATE never grants them** —
+        // and the half of issue #146 that says so lives in `swl_mode` and
+        // `remember_band_tab`, not here. It used to live here, which is how the
+        // feature shipped doing nothing for anyone using the BAND chip's popup:
+        // this body is only one of the three places that draw the selector.
     }
 
     /// The band keypad against this radio's state — the console's RX-control
@@ -9093,6 +9084,11 @@ pub(in crate::app) fn band_mode_menu(
     // Whether the ISM decoder window is open — the chip lives in the Wideband
     // row now, so the menu needs to read and write it.
     show_ism: &mut bool,
+    // The operator's own setting: does the LISTEN tab carry the listening
+    // screen? Read here only to say where the switch is while it is off —
+    // issue #146 was reopened by a man who had every right to expect the tab to
+    // work and no way to find out that a setting existed.
+    listen_hides_tx: bool,
     cmds: &mut Vec<Command>,
 ) {
     if atsmini {
@@ -9107,6 +9103,20 @@ pub(in crate::app) fn band_mode_menu(
             }
         }
     });
+    // The tab can carry the listening screen, and until the operator turns that
+    // on it does not — so say where the switch is, on the tab that would do it
+    // and to the only person who cares. A hint rather than a control: the switch
+    // asks once in Settings, because it changes what the tab means.
+    if *tab == BandMenuTab::Listen && !listen_hides_tx {
+        ui.label(
+            egui::RichText::new(
+                "This tab can hide the transmit controls too: turn on \"hide TX on the \
+                 LISTEN tab\" in Settings \u{2192} UI",
+            )
+            .size(10.0)
+            .weak(),
+        );
+    }
     ui.add_space(6.0);
 
     let band = state.band;
@@ -11427,6 +11437,7 @@ mod tests {
                     true,
                     false,
                     &mut false,
+                    false,
                     cmds,
                 );
             })
@@ -11566,6 +11577,7 @@ mod tests {
                     true,
                     false,
                     &mut false,
+                    false,
                     &mut Vec::new(),
                 );
             });

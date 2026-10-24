@@ -384,6 +384,17 @@ band chip brings it back; while docked, that chip toggles the column. Docking is
 offered on the desktop layouts alone: a window narrow enough to be a phone
 undocks and keeps the popup.
 
+**LISTEN can also carry the listening screen** (issue #146). Turn on *hide TX on
+the LISTEN tab* in Settings → UI and the transmit controls disappear while that
+tab is picked, which is the SWL screen without going into Settings and back;
+**OPERATE** puts back exactly what this radio's own setting says. It cannot grant
+a transmitter: a radio configured receive-only stays receive-only whichever tab
+is chosen, and the band lockout and the out-of-band warning are untouched. The
+tab is remembered, so a station left listening comes back listening. It is off by
+default because it changes what the tab means, it asks once, and the LISTEN tab
+says where the switch is until it is on — a tab that quietly hid the transmitter
+for somebody who never asked would be worse than one that does not hide it.
+
 In the **OPERATE** tab a pair that cannot work is not offered: **a mode that
 does not apply on the current band is greyed**, with the reason on hover. FM
 broadcast is WFM alone, both airbands are AM, and 11 m is AM, NFM, SSB, CW and
