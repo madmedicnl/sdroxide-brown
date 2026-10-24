@@ -130,9 +130,9 @@ maintainer's queue there, not a promise.
 On `main`, after **v2.1.0.2.1**: the Brick2 HPSDR work (paced transmit, the
 Hermes-emulation PA fix, one I/Q switch per radio), the **detachable APRS decoder
 panel** with the Detachable settings page, the **decoded-text UDP feed**, the
-**JTTY** rebuild, and the **CIS-11** mode (merged as PR #173, `PROTO_VERSION`
-241). Open: **PR #174** (8PSK, 242 / 0x3E) and the **voice-hunting** PR
-(243 / 0x3F).
+**JTTY** rebuild, the **CIS-11** mode (PR #173, `PROTO_VERSION` 241) and
+**voice hunting** (PR #177, 243 / 0x3F). Open: **PR #174** (8PSK, 242 / 0x3E) and
+**PR #183** (#146's LISTEN tab, no wire change).
 
 ## Parked, with the reason
 
