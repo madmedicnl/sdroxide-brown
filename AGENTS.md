@@ -131,6 +131,12 @@ style preferences.
 - **Ask a reporter one thing, not three.** A report is usually enough to work
   from; ask the question that decides the fix and leave the rest until it is
   answered.
+- **Be kind, polite and to the point with contributors — especially the ones
+  supplying data.** A person who records a test tape, runs a measurement or sends
+  a file is giving us their own time and bench, and is the reason a mode like
+  STANAG 4285 can be finished at all (discussion #165 is the model: one clear
+  thank-you, what the file settled, what it did not, and at most one request).
+  No defensiveness, no lecture, no wall of detail.
 - **A measurement that disagrees with a report is the first suspect.** Before
   writing a fix, ask in this order and stop at the first "no": is it *visible*
   (the reporter's words taken literally)? does the instrument measure *the thing
