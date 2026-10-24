@@ -304,6 +304,14 @@ pub struct Mt63Tx {
     phase: Vec<f64>,
     /// Per-sample phase increment of each carrier.
     step: Vec<f64>,
+    /// The rate the carriers are synthesised at, and the symbol length there.
+    ///
+    /// **Not the variant's own rate.** A bank whose audio sits at 1500 Hz cannot
+    /// be built at 1000 or 2000 samples per second — everything above Nyquist
+    /// folds — and that is what made our own MT63-1K and MT63-500 transmissions
+    /// unreadable while 2K's worked by luck of the fold.
+    synth_rate: f64,
+    hop: usize,
     q: VecDeque<(u8, Option<usize>)>,
     total: usize,
     sent: usize,
@@ -317,7 +325,13 @@ pub struct Mt63Tx {
 
 impl Mt63Tx {
     pub fn new(variant: Mt63Variant, out_rate: f64, centre: f64) -> Self {
-        let rate = variant.rate();
+        // The synthesis rate has to clear the top carrier by a margin: the band's
+        // highest carrier is `centre + bandwidth/2`, so anything at or below twice
+        // that folds it back in. The variant's own rate (2 × bandwidth) only works
+        // when the centre is low enough, which is why 2K transmitted correctly and
+        // 1K and 500 did not.
+        let rate = (2.2 * (centre + variant.bandwidth as f64 / 2.0)).max(variant.rate());
+        let hop = (SYMBOL as f64 * rate / variant.rate()).round() as usize;
         let rate_out =
             if (out_rate - rate).abs() > 0.5 { MonoResampler::new(rate, out_rate) } else { None };
         let mut step = Vec::with_capacity(CARRIERS);
@@ -335,6 +349,8 @@ impl Mt63Tx {
             variant,
             centre,
             rate_out,
+            synth_rate: rate,
+            hop,
             out: VecDeque::new(),
             sym: Vec::new(),
             res: Vec::new(),
@@ -361,7 +377,7 @@ impl Mt63Tx {
         if variant != self.variant || (centre - self.centre).abs() > 0.5 {
             let q = std::mem::take(&mut self.q);
             let (total, sent) = (self.total, self.sent);
-            let out_rate = if self.rate_out.is_some() { 0.0 } else { self.variant.rate() };
+            let out_rate = if self.rate_out.is_some() { 0.0 } else { self.synth_rate };
             *self = Mt63Tx::new(variant, out_rate, centre);
             self.q = q;
             self.total = total;
@@ -409,7 +425,7 @@ impl Mt63Tx {
     /// updates `TxVect`, then `ProcessTxVect` builds the window).
     fn symbol(&mut self, ch: u8) {
         let bits = self.enc.process(ch);
-        let hop = SYMBOL;
+        let hop = self.hop;
         for k in 0..CARRIERS {
             // fldigi: a 1 advances the phase by its own turn only, a 0 by the
             // turn **plus half a cycle**.

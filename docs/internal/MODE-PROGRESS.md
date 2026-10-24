@@ -1495,3 +1495,50 @@ Nothing blocks the work above — every mode has a measurement. These would move
 - **A bench recording of BPSK1000 for the lock-time question** (2026-10-21). The operator's own offer: the RSP1 can record while fldigi plays into the CRT. What it settles is whether the receiver's lost head is the receiver (a clean, known transmission is decoded from the start) or the sample (the sweep's own window). The rig needs a hand for the frequency and to arm it.
 - **An off-air ARDOP recording.** The reference-made WAVs prove the modem against `ardopcf`'s own modulator; a live or third-party recording would prove it against a station, and would also exercise the RS correction on real fading.
 - **A known-good fldigi on the same box for the THOR/DominoEX tone-step convention.** The port is in `ifk.rs` and reproduces OnAir's receiver, but the steps do not match the air. The corpus cannot say which side is wrong without a decoder to compare against on the same recording.
+
+## 2026-10-24 (MT63) — our own 1K and 500 transmissions were folding
+
+A TX bug, found while chasing the four corpus samples that would not read, and it is
+the kind a loopback cannot catch when the loopback is only run on 2K:
+
+**The modulator synthesised at the variant's own rate — `2 × bandwidth` — while the
+bank sits at `centre ± bandwidth/2`.** For MT63-2K at 1500 Hz that is 500–1500 Hz at
+4000 samples/s, which is fine. For 1K it is 1000–1500 Hz at 2000 samples/s, with
+Nyquist at 1000, and for 500 it is 1250–1750 Hz at 1000 samples/s, with Nyquist at
+500: **the whole bank above Nyquist, folded.** So every MT63-1K and MT63-500 we
+transmitted was a mirrored, aliased signal, and our own receiver could not read it
+back — which is what `a_synthetic_mt63_transmission_reads_back` failing on 500S was
+saying. 2K worked by luck of its own arithmetic.
+
+The synthesis rate is now `max(2.2 × (centre + bandwidth/2), variant rate)` with the
+symbol length scaled to match, and the resampler does the rest. All six variants read
+their own transmission back (`a_synthetic_mt63_transmission_reads_back`, 6/6).
+
+**And the receive side, measured with a centre sweep:** five of the six corpus
+samples decode whole at their own centre —
+
+| sample | centre | result |
+|---|---|---|
+| 2KS | 1665 Hz | 4/4 words |
+| 500S | 1690 Hz | 4/4 |
+| 2KL | 1680 Hz | 2/2 |
+| 500L | 1720 Hz | 2/2 |
+| 1KS | 1705 Hz | 2/2 |
+| 1KL | — | nothing at any centre tried |
+
+so the receiver reads the narrow banks when it is given the right centre. What it
+does **not** do is find that centre itself: the live lock searches the operator's
+dial, and the corpus sits 20–50 Hz away. A measured centre (the midpoint of the
+comb's outermost carriers, which `measure_centre` already computes) fixes that
+outright — 500S went from not locking to 4/4 and 1KS to 3/4 — **but it also lets the
+lock onto noise**, because the acceptance test cannot tell the two apart: measured,
+a noise buffer and the first attempt on a real signal both score textiness 48–76 and
+a Walsh median SNR of about 3. That is the same wall the journal already records
+("the lock's own acceptance is the weak part"), and it needs a **temporal** test — a
+decode that stays good as more audio arrives — rather than a better one-shot score.
+The experiment was reverted rather than shipped with a red test; the measurement is
+here for the next session.
+
+Host: the handover's figures (1KL aside) came from the batch decoder with a 5 Hz
+centre sweep, not from the live path — `cargo test -p sdroxide-dsp --release --lib
+the_corpus_variants_are_measured -- --ignored`.
