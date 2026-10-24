@@ -1586,6 +1586,8 @@ mod tests {
                         s,
                         &mut cmds,
                         true,
+                        &mut DigiConfig::default(),
+                        false,
                     )
                 });
                 rows.push(("NAVTEX", r.response.rect));
