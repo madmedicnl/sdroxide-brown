@@ -45,8 +45,24 @@ maintainer's queue there, not a promise.
    - **Eight spread modes still read nothing** and are the next build: 8PSK's
      vestigial filter is the open question, and the four wide `C` PSK banks need
      the demodulator's carrier separation (the recording is not the fault).
+   - **JTTY: take upstream's rewrite by hand.** Upstream's #597 was our port;
+     they then fixed it properly in six commits (`0d24a5a9`, `25350c0f`,
+     `6771f6fa`, `33f6a8fa`, `53085277` and the 1500 Hz centre before them) —
+     772 lines across `jtty_controller.rs` and `dsp/jtty.rs`: TX refusal reason,
+     the TX row kept on screen, slow AGC, the frequency search, four-letter words
+     as text, the reference waveform timing, a non-ASCII TX panic, burst tail
+     loss and the stop button. A mode we ship, so it is this programme's work.
 
-2. **Brick2** — the code half is merged (#170); the radio half is a report away.
+2. **A decoded-text feed over UDP** — asked on Reddit (2026-10-24) and worth
+   having. What exists today is the **WSJT-X broadcast** (Settings → Servers):
+   the FT8 family's decodes, status and logged QSOs, in WSJT-X's dialect. What
+   does **not** exist is a generic feed for the text modes (RTTY, PSK, Olivia,
+   THOR, MFSK, DominoEX, Hell, CW, NAVTEX, STANAG) or the wideband rows. Shape:
+   one stored address per radio, one JSON line per decode (UTC, dial, mode,
+   audio offset, text), off by default, next to the UDP audio sink that already
+   exists in the engine. A `RadioConfig` field means a `PROTO_VERSION` bump.
+
+3. **Brick2** — the code half is merged (#170); the radio half is a report away.
    [`docs/internal/BRICK2-HANDOVER.md`](docs/internal/BRICK2-HANDOVER.md).
    - **#132 wrong frequency display** (Thetis 7.183 vs ours 7.223, 40 kHz, with
      the spectrum going unstable under a MIDI knob). **One answer needed** —
@@ -57,17 +73,17 @@ maintainer's queue there, not a promise.
      Invert spectrum, and one-switch-per-radio is now enforced (#170), so the
      generic Swap I/Q can no longer cancel it.
 
-3. **#162 NAVTEX frequency** — the reporter had to tune 516.6 kHz instead of
+4. **#162 NAVTEX frequency** — the reporter had to tune 516.6 kHz instead of
    518. The presets already tune the dial **1.710 kHz below the channel**
    (516.290 and 488.290), and that rule is pinned by a test, so this is his
    receiver's calibration (`ppm`) or the station's own offset. **Answer it, do
    not change the rule.**
 
-4. **#153 Pluto socket stalls** — APRS reception stops for a second or two and a
+5. **#153 Pluto socket stalls** — APRS reception stops for a second or two and a
    socket is being replaced mid-stream. Waiting on the **diagnostic report**
    (Settings → Radio → Copy Diagnostic Report) and the precise setup.
 
-5. **Detachable panels are F4NRM's** (discussion #166). Our part: any panel we
+6. **Detachable panels are F4NRM's** (discussion #166). Our part: any panel we
    touch gets made detachable and added to the Detachable page in Settings —
    APRS was the last one (#167).
 
