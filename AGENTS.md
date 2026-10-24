@@ -1,15 +1,18 @@
 # Agent notes — SDR Oxide Brown, the CB and SWL fork
 
 Read this first. It is the live brief: who is who, what must not be touched, the
-house rules, the wire, the gate, releases, and where the work stands. Where a
-number here can be re-measured, re-measure it rather than trusting it.
+house rules, **how to keep working when the operator walks away**, the wire, the
+gate, releases, and where the work stands. Where a number here can be
+re-measured, re-measure it rather than trusting it.
 
 The detail behind any rule — the measurements, the wrong turns, the session that
 found it — is in [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md), kept
 verbatim as a record. Handovers for anything still live are in
 [`docs/internal/`](docs/internal/README.md). The day's queue is
-[`TODO.md`](TODO.md) and the three-column view is
-[`docs/internal/PROJECT-BOARD.md`](docs/internal/PROJECT-BOARD.md).
+[`TODO.md`](TODO.md), the three-column view is
+[`docs/internal/PROJECT-BOARD.md`](docs/internal/PROJECT-BOARD.md), and the
+running record of unattended work is
+[`docs/internal/AUTONOMY-JOURNAL.md`](docs/internal/AUTONOMY-JOURNAL.md).
 
 ## Who is who
 
@@ -187,6 +190,78 @@ style preferences.
   used** — only the model embedded in the binary is ever parsed, never an
   operator- or network-supplied one. If a `cargo-audit`/`cargo-deny` config is
   ever added, those ids go in its ignore list with that note.
+
+## Working on your own — the standing order
+
+The operator does not want to sit in front of the screen holding the session's
+hand. **When the end goal is clear and the boundaries are set, the default is to
+keep going, not to ask.** He asked for this on 2026-10-24, in as many words: he
+is tired of saying "go on".
+
+**A task is clear when all four can be written down.** Take them from this file,
+`TODO.md`, the handover or the tree; if one of them genuinely cannot be
+established, ask that one question and then work — do not ask for the rest.
+
+- the **end goal**, with a definition of done that can be checked: a passing
+  test, a real capture decoding, the gate run, a screenshot that shows the ink.
+  "Improve X" is not a definition of done.
+- the **boundaries**: the crates and files, and which rules above apply — the
+  forbidden list, the wire, no UI, no release.
+- **how you will know it failed**, not only how you will know it passed.
+- **what needs the bench**: anything off the air or on a radio is a stop. It is
+  not a reason to guess, and it is not a reason to stop the session either.
+
+**Then work the queue end to end.** Take the next item in `TODO.md`, finish it,
+record it, take the next one. A plan that already sits inside the boundaries
+does not need approval — say in one line what you are doing and do it.
+
+**These stop the item; nothing else does.** Write down why, and move to the next
+item — a blocked item is not a blocked session.
+
+- anything on the forbidden list, or a panel that belongs to F4NRM.
+- a change that touches the wire: branch, bump, register line, test, **PR**, then
+  carry on with something else. Never hold a whole session for a PR.
+- a release or a tag. Never; the operator and F4NRM cut those.
+- deleting branches, history, or work you did not create.
+- a measurement that needs a radio, an off-air recording, or another person.
+- a decision that is genuinely his: which of two products to build, a licence
+  question, a public reply in his name, money.
+- a check you cannot run here (the wasm target, a platform build). Say so in the
+  journal and never claim the result.
+
+**Keep the journal as you go, not at the end.**
+[`docs/internal/AUTONOMY-JOURNAL.md`](docs/internal/AUTONOMY-JOURNAL.md), newest
+first, one entry per work item, written when the item ends — sessions are closed
+without warning. Each entry carries the item, what was done, **the commands and
+the numbers that say whether it worked**, the commits, what is still open, and
+the plain-language summary at the top. Never rewrite an old entry to look
+better; correct it with a new line.
+
+**The queue moves when the work moves** — not batched at the end of a session.
+
+- **A task arrives** — put it in `TODO.md` under *Now* (one line: what, why, and
+  where it came from) and in the board's *In Progress*, **before** starting it.
+- **A task finishes** — move it in `TODO.md` to *Recently done* under today's
+  date with one line, and to the board's *Achieved*; take it out of *In
+  Progress*. If a re-measurable number changed (crate version,
+  `PROTO_VERSION`, open issues and PRs), fix it in *Where the work stands* and
+  in `TODO.md`'s state line too.
+- **A task blocks** — put it under *Waiting on other people* with the single
+  question, and carry on.
+- The board is scripted (`gh project item-create` + `item-edit`). If the
+  `project` scope is not granted, update `PROJECT-BOARD.md` itself and say in the
+  journal that the GitHub board is behind.
+
+**A finished task gets a plain-language summary** — the first thing in the reply,
+and the top of its journal entry. Three or four sentences for a man who has been
+away and has not read the diff: what changed for him in the program, what he can
+now do or see, what is still not done, and what you are doing next. No crate
+names, no file paths, no "refactored the demodulator" — that belongs in the entry
+and the commit message. **If you cannot demonstrate it, it is not finished**: say
+what is missing rather than calling it done.
+
+**Then say where you stopped and why, in one line** — so he can restart you with
+a word instead of a conversation.
 
 ## The wire
 

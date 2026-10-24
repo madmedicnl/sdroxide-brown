@@ -1,9 +1,9 @@
 # Working notes
 
 These are the fork's own working documents — design handovers, the mode journal
-and roadmap, the project board view, and the notes on which upstream work was
-taken and why. They are kept because a session starts from them, not because a
-user needs them.
+and roadmap, the autonomy journal, the project board view, and the notes on which
+upstream work was taken and why. They are kept because a session starts from
+them, not because a user needs them.
 
 Nothing here describes how to **use** the program: that is the
 [User Manual](../USER_MANUAL.md), and the [README](../../README.md) is the
@@ -13,6 +13,7 @@ queue is [`../../TODO.md`](../../TODO.md).
 | file | what it is |
 | --- | --- |
 | `SESSIONS.md` | The agent notes as they accumulated (2026-09-25 … 10-24): the record of why. |
+| `AUTONOMY-JOURNAL.md` | The running record of unattended work: one entry per item, newest first. |
 | `MODE-PHASE-4-PROMPT.md` | The live brief for the mode work: finish the modes, give them a voice. |
 | `MODE-PROGRESS.md` | The mode journal, one line per mode, with the measurements. |
 | `MODE-ROADMAP.md` | The mode queue and the reasoning behind its order. |
