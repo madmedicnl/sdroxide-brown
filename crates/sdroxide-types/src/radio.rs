@@ -236,6 +236,24 @@ impl Backend {
             Backend::None => "Not configured",
         }
     }
+
+    /// Whether this interface conjugates I/Q in its **own** settings, so
+    /// [`RadioConfig::swap_iq`] must not be applied on top of it.
+    ///
+    /// Three do, each in the layer that owns its stream: CAT on a sound card
+    /// ([`CatConfig::invert_spectrum`]), OpenHPSDR
+    /// ([`HpsdrConfig::invert_spectrum`], on by default because a Hermes-Lite
+    /// needs it) and SmartSDR ([`SmartSdrConfig::swap_iq`]). Conjugating again
+    /// in the engine cancels it exactly, so an operator who turns both on sees
+    /// nothing change — a switch that appears to do nothing, which is the
+    /// report a Brick2 owner makes when they follow "tick Swap I/Q" and the
+    /// board's own inversion is already in force (fork issue #133).
+    ///
+    /// `Auto` is left out on purpose: it resolves to one of the two at runtime
+    /// and the stored flag is the only switch a SoapySDR-detected radio has.
+    pub fn inverts_iq_itself(self) -> bool {
+        matches!(self, Backend::Cat | Backend::Hpsdr | Backend::SmartSdr)
+    }
 }
 
 /// One device from a SoapySDR enumeration. Wasm-safe so the list can cross the
@@ -7718,6 +7736,23 @@ pub const SMETER_CAL_MAX: i8 = 5;
 pub const DB_PER_S_UNIT: f32 = 6.0;
 
 impl RadioConfig {
+    /// Whether the engine is to conjugate this radio's I/Q.
+    ///
+    /// [`Self::swap_iq`] is the per-radio switch for a receiver whose I and Q
+    /// are the other way round — and it is honoured only where the interface
+    /// has no inversion of its own. Three do (see
+    /// [`Backend::inverts_iq_itself`]), each in the layer that owns the stream,
+    /// and a second conjugation further up cancels the first exactly: the
+    /// operator turns the switch on, nothing changes, and a working radio
+    /// reads as a broken switch. So one switch per radio, and this is the one
+    /// place that decides which.
+    ///
+    /// The stored flag is left alone either way — a `radio.json` that named a
+    /// SoapySDR before and an HPSDR after keeps its answer for the next one.
+    pub fn swaps_iq(&self) -> bool {
+        self.swap_iq && !self.backend.inverts_iq_itself()
+    }
+
     /// The S-meter calibration in dB, to be added to
     /// [`Meters::s_dbm`](crate::Meters::s_dbm): [`Self::smeter_cal`] S-units of
     /// [`DB_PER_S_UNIT`] each, held to the offered range so a hand-edited
@@ -8282,6 +8317,31 @@ mod tests {
         let cfg: SmartSdrConfig = serde_json::from_str(r#"{}"#).expect("parses");
         assert!(!cfg.swap_iq);
         assert!(!SmartSdrConfig::default().swap_iq);
+    }
+
+    /// One I/Q switch per radio. CAT on a sound card, OpenHPSDR and SmartSDR
+    /// each conjugate in their own layer, so the generic per-radio switch is
+    /// not applied on top of them — two conjugations cancel exactly, and an
+    /// operator who follows "tick Swap I/Q" on a Brick2, whose board already
+    /// inverts, would see nothing happen at all (fork issue #133).
+    ///
+    /// The stored flag is deliberately left alone: a `radio.json` that named a
+    /// SoapySDR before and an HPSDR after keeps its answer for the next one.
+    #[test]
+    fn a_radio_that_inverts_its_own_iq_is_not_inverted_twice() {
+        for backend in [Backend::Cat, Backend::Hpsdr, Backend::SmartSdr] {
+            assert!(backend.inverts_iq_itself(), "{backend:?}");
+            let cfg = RadioConfig { backend, swap_iq: true, ..RadioConfig::default() };
+            assert!(!cfg.swaps_iq(), "{backend:?} would be conjugated twice");
+            assert!(cfg.swap_iq, "{backend:?}: the stored answer is kept");
+        }
+        for backend in [Backend::Soapy, Backend::SdrPlay, Backend::RtlSdr, Backend::Pluto] {
+            assert!(!backend.inverts_iq_itself(), "{backend:?}");
+            let off = RadioConfig { backend, ..RadioConfig::default() };
+            assert!(!off.swaps_iq(), "{backend:?} is off until asked");
+            let on = RadioConfig { swap_iq: true, ..off };
+            assert!(on.swaps_iq(), "{backend:?} has no switch of its own");
+        }
     }
 
     /// The sound-card rig's copy of the same setting goes the other way: every

@@ -71,10 +71,21 @@ fn parse_response(pkt: &[u8]) -> Option<HpsdrDevice> {
         if status != 0x02 && status != 0x03 {
             return None;
         }
+        // An HL2 — and the Brick2, which is a Hermes-Lite in a box — can run
+        // gateware that reports board id 1, "Hermes emulation". Named a
+        // Hermes, it never had its onboard PA switched on and its front-end
+        // gain register was never written (#578). Its HL2-only fields still
+        // give it away: 0x13 is the receiver count and 0x14[5:0] the build id
+        // (5, 3 or 2); a Metis or Hermes leaves both zero.
+        let board = if pkt[10] == 1 && looks_like_hl2(pkt) {
+            "Hermes-Lite 2 (Hermes emulation)".to_string()
+        } else {
+            board_name(1, pkt[10])
+        };
         return Some(HpsdrDevice {
             ip: String::new(),
             mac: fmt_mac(&pkt[3..9]),
-            board: board_name(1, pkt[10]),
+            board,
             protocol: 1,
             in_use: status == 0x03,
         });
@@ -93,6 +104,11 @@ fn parse_response(pkt: &[u8]) -> Option<HpsdrDevice> {
         }
     }
     None
+}
+
+/// The HL2-only fields of a Protocol 1 discovery reply. See [`parse_response`].
+fn looks_like_hl2(pkt: &[u8]) -> bool {
+    pkt.len() > 0x14 && pkt[0x13] != 0 && matches!(pkt[0x14] & 0x3F, 2 | 3 | 5)
 }
 
 /// Destination addresses to send discovery requests to: the global broadcast
@@ -248,6 +264,29 @@ mod tests {
         assert_eq!(d.board, "Hermes-Lite 2");
         assert!(d.in_use);
         assert!(d.supported()); // Protocol 1 is now driven
+    }
+
+    /// #578: a Brick2 (an HL2 in a box) may run gateware that reports board
+    /// id 1, "Hermes emulation". Named a Hermes, its PA is never switched on
+    /// and its gain register never written, so it transmits nothing at the
+    /// antenna jack. Its HL2-only fields still give it away.
+    #[test]
+    fn parse_p1_response_hl2_in_hermes_emulation() {
+        let mut pkt = [0u8; 60];
+        pkt[0] = 0xEF;
+        pkt[1] = 0xFE;
+        pkt[2] = 0x02;
+        pkt[10] = 1; // Hermes emulation
+        pkt[0x13] = 4; // receiver count
+        pkt[0x14] = 0x05; // build id
+        let d = parse_response(&pkt).expect("parsed");
+        assert!(crate::net::board_is_hermes_lite(&d.board), "{}", d.board);
+
+        // A real Hermes, and a Metis, leave those fields zero.
+        pkt[0x13] = 0;
+        pkt[0x14] = 0;
+        let d = parse_response(&pkt).expect("parsed");
+        assert_eq!(d.board, "Hermes (ANAN-10/10E/100/100B)");
     }
 
     /// The Hermes-Lite's name is matched on by prefix, and the commercial
