@@ -104,6 +104,12 @@ LAYERS = {
     "rivers": f"{BASE}/physical/ne_10m_rivers_lake_centerlines_scale_rank.zip",
     "urban": f"{BASE}/cultural/ne_10m_urban_areas.zip",
     "places": f"{BASE}/cultural/ne_10m_populated_places.zip",
+    # The detail a listener means when they say a map is "too imprecise": the
+    # coast is already Natural Earth's finest, and what is missing is the roads
+    # and the internal boundaries that make a zoomed-in map read as a place.
+    "roads": f"{BASE}/cultural/ne_10m_roads.zip",
+    "railroads": f"{BASE}/cultural/ne_10m_railroads.zip",
+    "states": f"{BASE}/cultural/ne_10m_admin_1_states_provinces_lines.zip",
 }
 
 
@@ -444,15 +450,33 @@ def build_lines() -> bytes:
     detail bounded only by Natural Earth's own.
     """
     layers = []
-    for name, ranked in (("borders", False), ("rivers", True)):
+    # (name, ranked, field, detail-only). The last two are *detail*: worth
+    # nothing at continental zoom and most of the bytes there, so they ride only
+    # the finest level — the zoom at which a map is close enough to draw them.
+    # **Railroads are deliberately not here**: 1.7 MB of the file for lines that
+    # at any zoom this map opens in are indistinguishable from roads, and the
+    # browser carries the same asset.
+    plan = (
+        ("borders", True, None, False),
+        ("rivers", True, "strokeweig", False),
+        ("roads", True, "scalerank", True),
+        ("states", False, None, True),
+    )
+    for name, ranked, field, detail in plan:
         shp = fetch(name, LAYERS[name], CACHE)
-        if ranked:
-            rows = list(dbf(fetch(name, LAYERS[name], CACHE, "dbf"), {"strokeweig"}))
-            # 0.15…2.0 of stroke weight over the sixteen ranks a nibble holds.
-            ranks = [
-                min(15, max(0, round((float(r["strokeweig"] or 0.2) - 0.15) * 8.0)))
-                for r in rows
-            ]
+        if ranked and field:
+            rows = list(dbf(fetch(name, LAYERS[name], CACHE, "dbf"), {field}))
+            if field == "strokeweig":
+                # 0.15…2.0 of stroke weight over the sixteen ranks a nibble holds.
+                ranks = [
+                    min(15, max(0, round((float(r[field] or 0.2) - 0.15) * 8.0)))
+                    for r in rows
+                ]
+            else:
+                # Natural Earth's `scalerank` runs 0 (a motorway) to 10 (a minor
+                # road); invert it so a bigger road has the higher rank, which is
+                # the convention the reader and the draw weights already use.
+                ranks = [min(15, max(0, 15 - int(float(r[field] or 10)))) for r in rows]
         else:
             ranks = None
         parts = []
@@ -465,7 +489,15 @@ def build_lines() -> bytes:
         levels = []
         for eps in LINE_LEVELS:
             encoded, count = [], 0
+            if detail and eps >= 0.005:
+                levels.append(struct.pack("<fI", eps, 0))
+                continue
             for rank, pts in parts:
+                # Roads are the only layer with a class worth filtering on: the
+                # ten Natural Earth ranks run from a motorway to a farm track,
+                # and the tracks are most of the bytes and none of the picture.
+                if name == "roads" and rank < 8:
+                    continue
                 # The coarser levels are for a map showing a continent at a
                 # time, where a creek is a smudge and a border is the point.
                 if eps >= 0.05 and rank and rank < (2 if eps < 0.2 else 5):

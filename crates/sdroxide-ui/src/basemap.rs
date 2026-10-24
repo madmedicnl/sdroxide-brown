@@ -276,6 +276,13 @@ impl LineLayer {
 pub struct Lines {
     pub borders: LineLayer,
     pub rivers: LineLayer,
+    /// Roads, drawn only when the map is close enough for them to be a road
+    /// rather than a smudge — the finest level only, see `build_lines`.
+    pub roads: LineLayer,
+    /// First-order internal boundaries. Same rule: they are detail at the zoom
+    /// where a country fills the panel, and noise at the zoom where a continent
+    /// does.
+    pub states: LineLayer,
 }
 
 /// Parsed on the first map frame and kept for the session (about 4 MB).
@@ -359,12 +366,18 @@ fn parse_lines(blob: &'static [u8]) -> Lines {
         layers.push(LineLayer { levels });
     }
     // A file that arrived short leaves empty layers rather than none at all,
-    // so the map draws what it has instead of panicking on the way past.
-    while layers.len() < 2 {
+    // so the map draws what it has instead of panicking on the way past. An
+    // older `lines.bin` has only borders and rivers; it still loads.
+    while layers.len() < 4 {
         layers.push(LineLayer { levels: vec![LineLevel { eps: 1.0, parts: Vec::new() }] });
     }
     let mut it = layers.into_iter();
-    Lines { borders: it.next().expect("two layers"), rivers: it.next().expect("two layers") }
+    Lines {
+        borders: it.next().expect("four layers"),
+        rivers: it.next().expect("four layers"),
+        roads: it.next().expect("four layers"),
+        states: it.next().expect("four layers"),
+    }
 }
 
 /// Start the decode on a thread of its own, so the first map frame does not
@@ -577,6 +590,28 @@ mod tests {
         assert!(std::ptr::eq(b.level(1e-6), &b.levels[0]), "past the data, stay at the finest");
         let coarse = b.level(90.0);
         assert!(std::ptr::eq(coarse, b.levels.last().expect("a level")));
+    }
+
+    /// **The detail layers are in the shipped asset.** Roads and internal
+    /// boundaries are the answer to "the map is too imprecise", and they are
+    /// only in `lines.bin` if the baker was re-run — an asset regenerated from
+    /// a stale cache, or a checkout that kept the old file, leaves the map
+    /// looking exactly as it did and no test would notice.
+    #[test]
+    fn the_detail_layers_are_in_the_asset() {
+        let lines = lines();
+        let detail = |l: &LineLayer| l.levels.first().map(|v| v.parts.len()).unwrap_or(0);
+        assert!(detail(&lines.borders) > 500, "borders: {}", detail(&lines.borders));
+        assert!(detail(&lines.rivers) > 500, "rivers: {}", detail(&lines.rivers));
+        assert!(detail(&lines.roads) > 1000, "roads: {}", detail(&lines.roads));
+        assert!(detail(&lines.states) > 1000, "states: {}", detail(&lines.states));
+        // The detail rides only the finest level: the coarse ones are for a
+        // continent view, where a road is a smudge and is not drawn.
+        assert_eq!(
+            lines.roads.levels.iter().filter(|l| !l.parts.is_empty()).count(),
+            1,
+            "roads should be in the finest level only"
+        );
     }
 
     /// The table is sorted, spelled in ASCII, and has the places in it a
