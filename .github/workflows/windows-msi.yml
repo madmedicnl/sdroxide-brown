@@ -187,11 +187,37 @@ jobs:
           # CARGO_BUILD_TARGET (the MSYS2/MinGW toolchain, set above) makes
           # cargo write to a target-specific directory rather than
           # target/release.
-          BIN_DIR="target/$CARGO_BUILD_TARGET/release"
+          mkdir -p stage/sdroxide
+          BIN_SRC="target/$CARGO_BUILD_TARGET/release"
+          cp "$BIN_SRC/sdroxide.exe" stage/sdroxide/
+          # Ship the MinGW runtime DLLs beside the executable so a plain
+          # Windows box (without MSYS2/PothosSDR) can start sdroxide.exe.
+          # They come from the same MINGW64 toolchain that built the binary.
+          cp /mingw64/bin/libgcc_s_seh-1.dll stage/sdroxide/
+          cp /mingw64/bin/libstdc++-6.dll stage/sdroxide/
+          cp /mingw64/bin/libwinpthread-1.dll stage/sdroxide/
+          BIN_DIR="stage/sdroxide"
           dotnet tool install --global wix --version 5.0.2
           wix build packaging/windows/main.wxs -arch x64 \
             -d Version="$CARGO_VERSION" -d BinDir="$BIN_DIR" \
             -o "out/$PKG.msi"
+
+          # Verify the MinGW runtime DLLs shipped in the package.
+          echo "Files in stage/sdroxide/:"
+          ls -l stage/sdroxide/
+          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            if [[ ! -f "stage/sdroxide/$dll" ]]; then
+              echo "::error::$dll missing from package"
+              exit 1
+            fi
+            size=$(stat -c%s "stage/sdroxide/$dll")
+            arch=$(objdump -f "stage/sdroxide/$dll" | grep -i "file format" | head -n1)
+            echo "$dll: $size bytes, $arch"
+            if ! objdump -f "stage/sdroxide/$dll" | grep -qi "pei-x86-64"; then
+              echo "::error::$dll is not a 64-bit PE"
+              exit 1
+            fi
+          done
 
       - uses: actions/upload-artifact@v7
         with:
