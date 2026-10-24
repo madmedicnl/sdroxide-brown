@@ -20,6 +20,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 - **JTTY, brought up to the reference's own standard** — upstream's six follow-up commits, taken whole: the 1500 Hz centre, four-letter words packed as text, the reference waveform timing, the frequency search around the operator's tuning, one line per message, a non-ASCII transmit panic, the burst tail and the stop button.
 
 ### Added
+- **Voice hunting in the scanner** — press **VOICE** and it stops only on channels that sound like somebody talking, passing over carriers, birdies and data bursts instead of stopping on them. The reading is shown while it runs, so a strong signal going by says *voice 18* rather than leaving you wondering.
 - **CIS-11 (TORG-11)**, the Russian meteorological teleprinter, receive only — the receiver finds its own tones and reads real transmissions with 121 of 123 characters parity-valid; the character layer is still unproven.
 - **Decoded text over UDP** — one JSON line per decode for a script of your own: the FT8 family, WSPR and every keyboard mode (RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell), with the dial it was heard on.
 

@@ -2029,8 +2029,22 @@ use sdroxide_types::{
 /// every mode field of a status, so appending one moves them.
 /// `PROTO_VERSION` 240 → 241, `VERSION_BYTE` 0x3C → 0x3D. A downstream (fork)
 /// change.
-pub const PROTO_VERSION: u16 = 241;
-const VERSION_BYTE: u8 = 0x3D;
+/// v243: **voice hunting** — the scanner learns to stop only on channels that
+/// sound like somebody talking. [`sdroxide_types::ScannerConfig`] gains
+/// `voice_only` on its tail, and [`sdroxide_types::ScanState`] gains `voice`,
+/// the last reading the detector took and the channel it was taken on, so a
+/// remote screen can say why the scan went past a strong signal. Both ride
+/// whole — `ScannerConfig` in `SetScannerConfig`/`ServerMsg::Scanner`,
+/// `ScanState` inside every `RadioState` — so a v242 peer handed either reads
+/// its tail out of step. `#[serde(default)]` on both, so a stored
+/// `scanner.json` and a settings file written before this existed load
+/// unchanged. **This branch took 242 first and then moved**: PR #174
+/// (`fork/psk8`) had claimed it, and the later of two colliding branches moves,
+/// so the gap at 242 is that PR's to fill.
+/// `PROTO_VERSION` 242 → 243, `VERSION_BYTE` 0x3E → 0x3F. A downstream (fork)
+/// change.
+pub const PROTO_VERSION: u16 = 243;
+const VERSION_BYTE: u8 = 0x3F;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -2929,11 +2943,26 @@ mod tests {
             skip: vec![3, 9],
             skip_freq_hz: vec![145_312_500.0, 145_600_000.0],
             skip_freq_for: (144_000_000.0, 146_000_000.0, 12_500.0),
+            voice_only: true,
             ..Default::default()
         });
         let bytes = encode(&scanner).unwrap();
         let back: ServerMsg = decode(&bytes).unwrap();
         assert_eq!(back, scanner);
+
+        // The voice reading rides inside every state frame, which is the only
+        // way a remote screen can say why the scan went past a strong signal.
+        let state = ServerMsg::State(sdroxide_types::RadioState {
+            scan: sdroxide_types::ScanState {
+                running: true,
+                holding: false,
+                voice: Some(sdroxide_types::ScanVoice { freq_hz: 27_555_000, score: 18 }),
+            },
+            ..Default::default()
+        });
+        let bytes = encode(&state).unwrap();
+        let back: ServerMsg = decode(&bytes).unwrap();
+        assert_eq!(back, state);
 
         // RIFP carries pixels, a manifest summary, and a per-chunk map.
         let rifp = [

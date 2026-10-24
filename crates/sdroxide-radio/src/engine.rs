@@ -29,8 +29,9 @@ use sdroxide_drm::DrmDemod;
 use sdroxide_dsp::{
     AdcMeter, Agc, AutoNotch, Binaural, Cessb, ComplexResampler, DcBlock, Ddc, Decimator,
     DeepFilterNr, Demodulator, Duc, Modulator, MonoResampler, Nco, NeuralNr, NoiseBlanker, Nr2,
-    ParametricEq, ReplayBuffer, SpecBleachNr, SpectralNr, SpectrumAnalyzer, StereoResampler,
-    SubToneGen, ToneBurst, channel_target_at, hd_radio_is_am, make_demod, make_modulator,
+    ParametricEq, ReplayBuffer, SpecBleachNr, SpectralNr, SpectrumAnalyzer, SpeechDetector,
+    StereoResampler, SubToneGen, ToneBurst, channel_target_at, hd_radio_is_am, make_demod,
+    make_modulator,
 };
 use sdroxide_hfdl::HfdlController;
 use sdroxide_ism::{IsmAction, IsmController};
@@ -43,8 +44,8 @@ use sdroxide_types::{
     AgcMode, Band, BandStackEntry, Command, DeviceCaps, DigiConfig, Direction, ImageKind,
     MemoryChannel, MemoryFolder, Meters, Mode, NrEngine, NrLevel, PlaybackCommand, RadioEvent,
     RadioState, RecordingFile, RecordingFormat, RecordingListing, RepeaterState, RigctldConfig,
-    RxId, RxState, ScanKind, ScanResume, SpectrumConfig, SpectrumFrame, TciServerConfig, TxEqState,
-    TxMeters, Vfo,
+    RxId, RxState, ScanKind, ScanResume, ScanVoice, SpectrumConfig, SpectrumFrame, TciServerConfig,
+    TxEqState, TxMeters, Vfo,
 };
 use sdroxide_vdl2::{Vdl2Action, Vdl2Controller};
 
@@ -843,6 +844,15 @@ struct RxChain {
     nr2: Nr2,
     /// Neural (RNNoise) noise reduction.
     nnr: NeuralNr,
+    /// Speech detection for the scanner's voice gate, on the demodulator's own
+    /// audio — ahead of the AGC, the notch, the noise reduction and the
+    /// squelch, because a voice is a property of what arrived and not of what
+    /// the operator has done to it since. Off unless a scan asks for it: it
+    /// costs a transform and an autocorrelation every twenty milliseconds.
+    voice: SpeechDetector,
+    /// Whether the last block was scored, so the reading can be reported as a
+    /// number for a silent channel rather than as "nothing to say".
+    voice_armed: bool,
     /// DeepFilterNet3. Built on first use: it unpacks an 8 MB model, which is
     /// not worth spending on a receiver that may never select it. Stays `None`
     /// once a load has failed, so a broken model is not retried every block.
@@ -894,6 +904,8 @@ impl RxChain {
             sbnr: SpecBleachNr::new(),
             nr2: Nr2::new(),
             nnr: NeuralNr::new(),
+            voice: SpeechDetector::new(48_000.0),
+            voice_armed: false,
             dfnr: None,
             dfnr_failed: false,
             nr_level: NrLevel::Off,
@@ -977,6 +989,13 @@ impl RxChain {
     }
 
     fn set_offset_hz(&mut self, hz: f64) {
+        // A different channel is a different question for the speech detector,
+        // and the rhythm of the last one must not be carried across: same
+        // reasoning as the RDS and DRM decoders' own dial watch, and the same
+        // dead band, so a value that jitters by a hertz does not restart it.
+        if (hz - self.offset_hz).abs() >= 1.0 {
+            self.voice.reset();
+        }
         self.offset_hz = hz;
         self.ddc.set_offset_hz(hz);
     }
@@ -990,7 +1009,13 @@ impl RxChain {
     /// to be filled as well. It is off whenever nothing is recording, which is
     /// most of the time — the tap is a second copy of every block, and there is
     /// no reason to make it for a file nobody opened.
-    fn run(&mut self, iq: &[Complex32], rx: &RxState, want_rec: bool) -> (&[f32], Option<&[f32]>) {
+    fn run(
+        &mut self,
+        iq: &[Complex32],
+        rx: &RxState,
+        want_rec: bool,
+        want_voice: bool,
+    ) -> (&[f32], Option<&[f32]>) {
         self.out_buf.clear();
         self.out_buf_r.clear();
         self.rec_buf.clear();
@@ -1011,6 +1036,24 @@ impl RxChain {
         demod.process(&self.channel_buf, &mut self.audio_buf);
         demod.set_stereo_enabled(stereo_allowed(rx));
         let stereo = demod.take_side(&mut self.side_buf);
+        // The scanner's voice gate, on the audio exactly as the demodulator
+        // produced it — before the AGC, the notch, the noise reduction and the
+        // squelch. Every one of those is something the operator did to the audio
+        // after the fact, and a scan must not stop or pass on the strength of
+        // the settings it is being listened through: with the noise reduction
+        // engaged, speech is cleaner and the detector should say so, and with
+        // the AF volume down it must still hear the channel.
+        if want_voice {
+            self.voice_armed = true;
+            self.voice.set_rate(audio_rate);
+            self.voice.process(&self.audio_buf);
+        } else if self.voice_armed {
+            // Left armed from an earlier block and now not wanted: forget what
+            // was heard rather than holding a stale verdict for whenever it is
+            // asked again.
+            self.voice_armed = false;
+            self.voice.reset();
+        }
         // The decoder's tap, taken *before* the AGC.
         //
         // A modem wants the signal the antenna delivered, levelled if at all by
@@ -1277,6 +1320,26 @@ impl RxChain {
         self.demod.as_ref().map(|d| d.power_dbfs())
     }
 
+    /// How much like speech the channel sounded, 0–100, when the voice gate is
+    /// armed. `None` when nothing has been scored.
+    ///
+    /// A silent channel reports `Some(0.0)` rather than `None`: "this is not a
+    /// voice" and "nothing was measured" are different answers, and the window
+    /// draws them differently.
+    fn voice_score(&self) -> Option<f32> {
+        self.voice_armed.then(|| self.voice.score())
+    }
+
+    /// Whether the channel currently carries a voice, with the detector's own
+    /// hangover for the pauses inside a sentence.
+    fn voice_speaking(&self) -> bool {
+        self.voice.speaking()
+    }
+
+    fn reset_voice(&mut self) {
+        self.voice.reset();
+    }
+
     fn stereo_locked(&self) -> bool {
         self.demod.as_ref().is_some_and(|d| d.stereo_locked())
     }
@@ -1387,6 +1450,20 @@ enum ScanPhase {
     /// Stopped on something. `last_busy` is the last moment the signal was
     /// actually there, which is what a carrier-resume waits on.
     Holding { since: Instant, last_busy: Instant },
+}
+
+/// What the scanner's voice gate is doing about the channel under the dial.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VoiceGate {
+    /// Not asked for — or asked for when no scan is running. The level is the
+    /// only question, exactly as the scanner has always behaved.
+    Off,
+    /// Asked for, and this candidate cannot answer it: a mode that carries no
+    /// speech. A voice hunt passes such a channel by rather than stopping on it,
+    /// because the operator asked for voices.
+    NothingToHear,
+    /// Asked for and running: the level and the voice both have to say yes.
+    Running,
 }
 
 /// What a refill did, so the caller knows whether there is anything to visit
@@ -2544,12 +2621,13 @@ fn run_chain_block(
     rx: &RxState,
     iq: &[Complex32],
     want_rec: bool,
+    want_voice: bool,
     out: (&mut Vec<f32>, &mut Vec<f32>, &mut Vec<f32>, &mut Vec<f32>),
 ) {
     let (play, play_r, rec, rec_r) = out;
     play.clear();
     play_r.clear();
-    let (audio, right) = chain.run(iq, rx, want_rec);
+    let (audio, right) = chain.run(iq, rx, want_rec, want_voice);
     play.extend_from_slice(audio);
     if let Some(r) = right {
         play_r.extend_from_slice(r);
@@ -3439,6 +3517,14 @@ struct Engine {
     /// `RxChain` and so no `power_dbfs`. Tracked with the same time constant as
     /// the real one so a scan behaves the same way on either.
     audio_level: f32,
+    /// Speech detection for the scanner's voice gate on a demod-audio front end
+    /// — a transceiver on a sound card, or a radio that hands over its own
+    /// audio. Those never pass through an `RxChain`, so the chain's detector
+    /// cannot see them and this one is fed by `play_rx_audio` instead.
+    ext_voice: SpeechDetector,
+    /// Whether `play_rx_audio` scored the last block, for the same reason the
+    /// chain keeps its own flag: a silent channel has a reading, and it is 0.
+    ext_voice_armed: bool,
     /// Built-in Hamlib rigctld server: the control-only surface every
     /// "NET rigctl" client speaks (WSJT-X, fldigi, N1MM, Log4OM, GPredict).
     /// Present while enabled and successfully bound.
@@ -4990,6 +5076,8 @@ fn engine_thread(
         scan: None,
         scan_db: Vec::new(),
         audio_level: 0.0,
+        ext_voice: SpeechDetector::new(48_000.0),
+        ext_voice_armed: false,
         wsjtx: None,
         n1mm: None,
         wsjtx_cfg: sdroxide_types::WsjtxConfig::default(),
@@ -6093,6 +6181,7 @@ impl Engine {
             self.caps.rx_audio_external,
         );
         let rx0 = self.state.rx[0];
+        let want_voice = self.wants_chain_voice();
         self.refresh_channel_rate();
         // **Only the chain needs a main.** `finish_audio` is where a
         // transceiver's own audio is taken and handed to the decoders, and a
@@ -6107,6 +6196,7 @@ impl Engine {
                 &rx0,
                 iq,
                 want_rec_main,
+                want_voice,
                 (
                     &mut self.main_play,
                     &mut self.main_play_r,
@@ -6176,6 +6266,7 @@ impl Engine {
             self.caps.rx_audio_external,
         );
         let rx0 = self.state.rx[0];
+        let want_voice = self.wants_chain_voice();
         // Named apart so the compiler can see that the three lanes below borrow
         // disjoint fields of the engine.
         let analyzer = &mut self.analyzer;
@@ -6199,6 +6290,7 @@ impl Engine {
                     &rx0,
                     iq,
                     want_rec_main,
+                    want_voice,
                     (play, play_r, play_rec, play_r_rec),
                 );
             }
@@ -6399,7 +6491,7 @@ impl Engine {
                 (Some(sub), true) => {
                     // A silent sub (SPEC) degrades to mono rather than stalling.
                     let has_audio = sub.demod.is_some();
-                    sub.run(iq, &self.state.rx[1], want_rec);
+                    sub.run(iq, &self.state.rx[1], want_rec, false);
                     let sub: &RxChain = sub;
                     (has_audio.then(|| sub.out_audio()), has_audio.then(|| sub.take_rec_audio().0))
                 }
@@ -6789,6 +6881,19 @@ impl Engine {
             let p: f32 =
                 self.audio_re.iter().map(|s| s * s).sum::<f32>() / self.audio_re.len() as f32;
             self.audio_level += 0.3 * (p - self.audio_level);
+        }
+        // The scanner's voice gate, on the same audio and for the same reason:
+        // this is the only place a demod-audio rig's signal exists at all, so
+        // it is the only place a voice on it can be judged. Before the notch,
+        // the noise reduction and the AF knob, exactly as the chain's detector
+        // sits ahead of them.
+        if self.wants_ext_voice() {
+            self.ext_voice_armed = true;
+            self.ext_voice.set_rate(in_rate);
+            self.ext_voice.process(&self.audio_re);
+        } else if self.ext_voice_armed {
+            self.ext_voice_armed = false;
+            self.ext_voice.reset();
         }
 
         // FT8/FT4 run directly on the radio audio (before NR, so the decoder
@@ -15652,8 +15757,77 @@ impl Engine {
         }
     }
 
+    /// Whether this radio hands over audio the voice gate can score.
+    ///
+    /// Either a receive chain of our own — every SDR front end — or a rig
+    /// delivering its own demodulated audio, which `play_rx_audio` feeds to the
+    /// other detector. A headless engine with no sound device has neither, and
+    /// there the gate is refused when the scan starts rather than quietly
+    /// ignored: it would otherwise be a control that does nothing.
+    fn has_voice_audio(&self) -> bool {
+        self.main.is_some() || self.audio_mode || self.caps.rx_audio_external
+    }
+
+    /// What the voice gate is doing about the channel under the dial.
+    fn voice_gate(&self) -> VoiceGate {
+        if !self.scan_cfg.voice_only || !self.state.scan.running || !self.has_voice_audio() {
+            return VoiceGate::Off;
+        }
+        if !self.state.rx[0].mode.carries_speech() {
+            // A digital mode cannot hold a voice, and an operator who asked for
+            // voices did not ask to be stopped on a fax.
+            return VoiceGate::NothingToHear;
+        }
+        VoiceGate::Running
+    }
+
+    /// Whether the receive chain should score this block. False when the audio
+    /// arrives from the rig instead: that is `play_rx_audio`'s to score.
+    fn wants_chain_voice(&self) -> bool {
+        self.voice_gate() == VoiceGate::Running && !self.audio_mode && !self.caps.rx_audio_external
+    }
+
+    /// Whether `play_rx_audio` should score the rig's own audio.
+    fn wants_ext_voice(&self) -> bool {
+        self.voice_gate() == VoiceGate::Running && (self.audio_mode || self.caps.rx_audio_external)
+    }
+
+    /// The detector reading for the channel under the dial: whether it sounds
+    /// like somebody talking, and how much.
+    fn voice_reading(&self) -> Option<(bool, f32)> {
+        if self.audio_mode || self.caps.rx_audio_external {
+            self.ext_voice_armed.then(|| (self.ext_voice.speaking(), self.ext_voice.score()))
+        } else {
+            let chain = self.main.as_ref()?;
+            chain.voice_score().map(|score| (chain.voice_speaking(), score))
+        }
+    }
+
+    /// Note what the speech detector made of this candidate, for the window that
+    /// explains why the scan did or did not stop.
+    fn record_voice(&mut self) {
+        self.state.scan.voice = match self.voice_gate() {
+            VoiceGate::Running => self.voice_reading().map(|(_, score)| ScanVoice {
+                freq_hz: self.state.active_freq_hz().round().max(0.0) as u64,
+                score: score.clamp(0.0, 100.0).round() as u8,
+            }),
+            VoiceGate::Off | VoiceGate::NothingToHear => None,
+        };
+    }
+
     fn scan_is_busy(&mut self) -> bool {
-        self.scan_level_dbfs().is_some_and(|level| level >= self.scan_threshold_db())
+        let level = self.scan_level_dbfs().is_some_and(|l| l >= self.scan_threshold_db());
+        match self.voice_gate() {
+            VoiceGate::Off => level,
+            // Passed over, not stopped on: with the gate on, a channel whose
+            // mode cannot carry a voice is not a channel the operator asked to
+            // hear.
+            VoiceGate::NothingToHear => false,
+            // The level answers "is anything here"; the voice answers "is it
+            // worth stopping for". Both, in that order, because the level is a
+            // number and the detector is half a second of judgement.
+            VoiceGate::Running => level && self.voice_reading().is_some_and(|(talking, _)| talking),
+        }
     }
 
     /// The stored channels a memory scan would visit, in the order the store
@@ -15682,7 +15856,14 @@ impl Engine {
     /// takes about a tenth of a second to be worth reading, and a hardware
     /// retune has to finish before that even starts.
     fn scan_settle(&self) -> Duration {
-        Duration::from_millis(self.scan_cfg.dwell_ms.max(40) as u64)
+        // A voice verdict is a syllable rhythm, so a scan with the gate on has
+        // to listen long enough to hear one: the operator's dwell is a floor,
+        // not the whole story, and the window says so beside the control.
+        let mut ms = self.scan_cfg.dwell_ms;
+        if self.voice_gate() == VoiceGate::Running {
+            ms = ms.max(sdroxide_types::MIN_LISTEN_MS);
+        }
+        Duration::from_millis(ms.max(40) as u64)
     }
 
     /// Start or stop scanning, saying why if it cannot start.
@@ -15720,6 +15901,30 @@ impl Engine {
         if !usable {
             return;
         }
+        // The voice gate is a promise about what will stop the scan, so it is
+        // checked before the scan starts rather than left to fail quietly
+        // somewhere in the middle of a band: either there is audio to score, or
+        // the control is switched off with this line saying why.
+        if self.scan_cfg.voice_only {
+            if !self.has_voice_audio() {
+                self.notice(
+                    "voice-only scanning needs audio: this radio provides none to listen to, so    \
+                     there is nothing to judge",
+                );
+                return;
+            }
+            let any_speech = match self.scan_cfg.kind {
+                ScanKind::Range => self.scan_cfg.mode.carries_speech(),
+                ScanKind::Memories => self.scannable_memories().any(|m| m.mode.carries_speech()),
+            };
+            if !any_speech {
+                self.notice(
+                    "voice-only scanning would stop nowhere: nothing in this scan is in a mode \
+                     that carries speech",
+                );
+                return;
+            }
+        }
         let now = Instant::now();
         self.scan = Some(Scan {
             phase: ScanPhase::Probing(now),
@@ -15731,7 +15936,7 @@ impl Engine {
             mem_slices: Vec::new(),
             mem_slice: usize::MAX, // as `slice` above
         });
-        self.state.scan = sdroxide_types::ScanState { running: true, holding: false };
+        self.state.scan = sdroxide_types::ScanState { running: true, holding: false, voice: None };
         // Pick the first target now rather than waiting a poll for it, so
         // nothing has to distinguish "just started" from "just finished a
         // dwell" later on.
@@ -15877,7 +16082,9 @@ impl Engine {
 
     /// The dwell on a candidate is up: stop here, or carry on.
     fn scan_decide(&mut self, now: Instant) {
-        if self.scan_is_busy() {
+        let busy = self.scan_is_busy();
+        self.record_voice();
+        if busy {
             if let Some(sc) = self.scan.as_mut() {
                 sc.phase = ScanPhase::Holding { since: now, last_busy: now };
             }
@@ -16207,7 +16414,22 @@ impl Engine {
         if let Some(sc) = self.scan.as_mut() {
             sc.phase = ScanPhase::Probing(now + settle);
         }
+        // A new channel is a new question for the speech detector: whatever was
+        // heard belonged to the channel just left, and a syllable rhythm
+        // carried across the retune would be a rhythm from somewhere else. The
+        // chain resets itself when the offset moves, but a memory scan inside
+        // one span may not move it at all.
+        self.reset_voice();
+        self.ext_voice.reset();
         self.emit_state();
+    }
+
+    /// Forget what the speech detector heard, on whichever path is running.
+    fn reset_voice(&mut self) {
+        if let Some(c) = self.main.as_mut() {
+            c.reset_voice();
+        }
+        self.ext_voice.reset();
     }
 
     /// Leave the channel the scan is holding on, optionally never to stop there
@@ -20776,7 +20998,7 @@ mod stereo_tests {
         let (mut left, mut right) = (Vec::new(), Vec::new());
         let (mut rec_left, mut rec_right) = (Vec::new(), Vec::new());
         for block in iq.chunks(16_384) {
-            let (l, r) = chain.run(block, &rx, true);
+            let (l, r) = chain.run(block, &rx, true, false);
             // Once stereo is up the chain must deliver both ears every block.
             // A block can be stereo and still carry no samples, the resampler
             // not having filled a chunk yet; `run` reports that as `Some(&[])`
@@ -20824,7 +21046,7 @@ mod stereo_tests {
         let mut chain = RxChain::new(dev_rate, &rx, 48_000.0, 98_000_000.0);
         let iq = wfm_stereo_iq(dev_rate, 3.0);
         for block in iq.chunks(16_384) {
-            let _ = chain.run(block, &rx, false);
+            let _ = chain.run(block, &rx, false, false);
         }
         assert!(chain.stereo_locked());
 
@@ -20833,7 +21055,7 @@ mod stereo_tests {
         rx.noise_reduction = NrLevel::Medium;
         let mut last_stereo = true;
         for block in iq.chunks(16_384) {
-            let (_, r) = chain.run(block, &rx, false);
+            let (_, r) = chain.run(block, &rx, false, false);
             last_stereo = r.is_some();
         }
         assert!(!last_stereo, "still decoding stereo after NR had been on for 3 s");
@@ -20865,7 +21087,7 @@ mod stereo_tests {
         for level in NrLevel::ALL {
             rx.noise_reduction = level;
             for block in iq.chunks(16_384) {
-                let (out, _) = chain.run(block, &rx, false);
+                let (out, _) = chain.run(block, &rx, false, false);
                 assert!(out.iter().all(|s| s.is_finite()), "{level:?} produced non-finite audio");
             }
         }
