@@ -959,6 +959,10 @@ declines it and the frame is read as before. **The timing was the obvious suspec
 chosen by the least-squares residual over the known sync (`sync_fit`) — a proper
 error signal, because the sync has a transition on almost every symbol — and it
 picks the *same* instant the data-tightness criterion did (0.60 on this channel).
+It is not a wasted criterion, though: on **his** file it takes the lock from
+folded sync **0.781 → 0.960**, the frame ACF **0.599 → 0.706** and the frames read
+**335 → 441**. The data constellation is unmoved at 0.234, which is the point — the
+eye was already right and the smear is elsewhere.
 So the eye is where the receiver thinks it is and the equaliser's output still never
 beats the plain path, whatever group delay it is given (three are searched).
 
