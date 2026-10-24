@@ -977,6 +977,15 @@ chain cannot close a 6 dB gap. **So no amount of DSP finishes this tape.** It ne
 a stronger capture: the tape again on a quieter day, a better antenna for this
 channel, or a dab of RF gain — whichever the bench offers first.
 
+**And the request for a wider filter is withdrawn** (Mark's own measurement, 2026-10-24
+12:47 on #165): with SDR++ opened to 4 kHz he reads the transmitted signal as
+**~2.6 kHz wide at the noise floor, centred on 1.8 — about 500 to 3100 Hz**, which
+is the tape and not his audio chain. Measured on our copy, the low end is a
+*rolloff* from about 200 Hz (−23 dB) to 1 kHz (−14 dB) and not a wall at 800 — so
+the earlier reading was of the point where it crosses −14 dB in 200 Hz bands. The
+truncation test above says 800–3000 is enough for the chain anyway. **What the tape
+needs is strength, not width.**
+
 **What the session did fix, and it is not nothing.** The carrier offset was being
 read off three reference blocks, and on any path with an echo those three points
 bend into a ramp the search mistakes for a carrier error — measured on the

@@ -107,6 +107,14 @@ equaliser closes a 6 dB gap. **So STANAG is parked pending a stronger capture**,
 and that is the one thing needed: the same tape on a quieter path, a better antenna
 for 13 MHz, or more RF gain.
 
+**The wider-filter request is withdrawn.** Mark measured the transmission himself
+(#165, 12:47): at 4 kHz of SDR++ bandwidth he reads it as ~2.6 kHz wide at the
+noise floor, about 500–3100 Hz — the tape, not his chain — and our own copy shows a
+rolloff from 200 Hz rather than a wall at 800. The truncation test already says
+800–3000 is enough. So the ask to him is strength, not width: a minute when the
+signal is up (it is dropping in and out), more RF gain, or baseband I/Q if SDR++
+can record it, which would leave no audio chain at all.
+
 **Not done / blocked.** The payload is still unread, parked on the bench. Material
 already on the disk, so no bench. A *second* capture of the same tape on a quiet,
 steady path still needs the bench, and the watcher is the tool for it: a spread-out
