@@ -21,6 +21,43 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 (next item) — the four wide PSK banks: measured, and the fix is a refactor
+
+**Summary.** The next item on the queue was the four wide multi-carrier PSK modes,
+the last of the coded PSK family that does not read its own recording. They still
+do not, and the reason is now narrower than it was: every bank wider than about
+two kilohertz fails (0 of 3 known words) while every narrower one reads its whole
+text, and making the per-carrier filter four times sharper changed **nothing** —
+so it is not filter sharpness. What is left is the reference's own chain order
+(decimate first, then filter), which is a rebuild of the receiver's front end
+rather than a parameter change.
+
+**Done.**
+- Baseline, `cargo test --release -p sdroxide-dsp --lib the_corpus_pskc --
+  --ignored --nocapture` (69 s): **PSK500C4 0/3, PSK1000C2 0/3, PSK125C12 0/3,
+  PSK500RC4 0/3**; PSK500RC3 1/3 and PSK250RC5 1/3; everything narrower 3/3.
+- The failing set is exactly the widest banks: 2.1 kHz (PSK125C12) and 2.8 kHz
+  (the other three). PSK500C2 — same baud, same 700 Hz spacing, only two
+  carriers — reads 3/3, so the spacing alone is not the fault.
+- Tried a filter sharpened with bandwidth (tap count from `4·rate/half`, 129 →
+  512 at 125 baud): **identical results**, reverted. It is not the filter's
+  transition width.
+- `psk.rs` restored to its committed state (`git status` clean before the next
+  step).
+
+**Not done / blocked.** The fix needs the front end rebuilt in the reference's
+order — decimate each carrier to a few samples per symbol, *then* filter there —
+instead of filtering at the 8 kHz input rate. That is a structural change in
+`PskRx`/`PskCarrierBank` with the timing loop and the differential detector on
+top, not a session-sized edit, and it should not be attempted as a tail-end
+change to a long session.
+
+**Next.** Rebuild the multi-carrier front end in that order, with the existing
+`the_corpus_pskc_samples_are_measured` as the gate: the target is those four
+banks moving off 0/3 without the 3/3 ones regressing.
+
+---
+
 ## 2026-10-24 (last) — 8PSK is in the program, and the ALE watch is stopped
 
 **Summary.** All three modes the operator named are now in the program. ALE and
