@@ -3799,7 +3799,9 @@ mod tests {
                 ..Default::default()
             };
             let mut cmds: Vec<Command> = Vec::new();
-            let full = ctx.run_ui(input, |ui| app.console_band_area(ui, &mut cmds));
+            let full = crate::test_support::run_frame(&ctx, input, |ui| {
+                app.console_band_area(ui, &mut cmds)
+            });
             let mut rects = Vec::new();
             for cs in &full.shapes {
                 walk(&cs.shape, &mut rects);
@@ -4114,7 +4116,7 @@ mod tests {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, 1080.0))),
             ..Default::default()
         };
-        let full = ctx.run_ui(input, |ui| {
+        let full = crate::test_support::run_frame(&ctx, input, |ui| {
             app.ui(ui, &mut eframe::Frame::_new_kittest());
         });
         let rows: Vec<(egui::Rect, bool)> = full
@@ -4507,7 +4509,7 @@ mod tests {
                 time: Some(10.0 + i as f64 / 30.0),
                 ..Default::default()
             };
-            last = Some(ctx.run_ui(input, |ui| {
+            last = Some(crate::test_support::run_frame(&ctx, input, |ui| {
                 app.ui(ui, &mut eframe::Frame::_new_kittest());
             }));
         }
@@ -4696,7 +4698,9 @@ mod tests {
                 )),
                 ..Default::default()
             };
-            let full = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+            let full = crate::test_support::run_frame(&ctx, input, |ui| {
+                app.ui(ui, &mut eframe::Frame::_new_kittest())
+            });
             // The picture's left edge: the **widest** big rectangle that is not the
             // window's own background (which starts at zero, spans the window, and
             // would answer the same in both arrangements). Printed on failure so a
@@ -4811,7 +4815,12 @@ mod tests {
                 )),
                 ..Default::default()
             };
-            texts(&ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest())).shapes)
+            texts(
+                &crate::test_support::run_frame(&ctx, input, |ui| {
+                    app.ui(ui, &mut eframe::Frame::_new_kittest())
+                })
+                .shapes,
+            )
         };
         for _ in 0..8 {
             tall(&mut app);
@@ -4953,7 +4962,7 @@ mod tests {
             let mut cmds: Vec<Command> = Vec::new();
             let mut worst: Option<(f32, egui::Rect)> = None;
             for _ in 0..3 {
-                let full = ctx.run_ui(input.clone(), |ui| {
+                let full = crate::test_support::run_frame(&ctx, input.clone(), |ui| {
                     egui::Panel::left(egui::Id::new(("classic-fit", w as i32)))
                         .resizable(false)
                         .exact_size(w)
@@ -5421,7 +5430,7 @@ mod tests {
 
         let run = |app: &mut SdroxideApp, open: bool| -> bool {
             let mut out = false;
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let _ = crate::test_support::run_frame(&ctx, egui::RawInput::default(), |ui| {
                 out = app.tool_window(ui.ctx(), "t", "T", [300.0, 200.0], open, |_, _| {});
             });
             out
@@ -5459,7 +5468,9 @@ mod tests {
             )),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+        let _ = crate::test_support::run_frame(&ctx, input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest())
+        });
         assert!(app.show_scanner, "a docked tool stays open");
         app.tool_windows.insert("scanner", ToolWindowState { undocked: true, window: None });
         let input = egui::RawInput {
@@ -5469,7 +5480,9 @@ mod tests {
             )),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+        let _ = crate::test_support::run_frame(&ctx, input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest())
+        });
         assert!(app.show_scanner, "an undocked tool stays open");
         assert!(app.tool_windows.get("scanner").is_some_and(|s| s.undocked));
     }
@@ -5511,7 +5524,12 @@ mod tests {
                 )),
                 ..Default::default()
             };
-            texts(&ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest())).shapes)
+            texts(
+                &crate::test_support::run_frame(&ctx, input, |ui| {
+                    app.ui(ui, &mut eframe::Frame::_new_kittest())
+                })
+                .shapes,
+            )
         };
         app.warn_other_instance("an sdroxide server is already running — PID 2488".into());
         assert!(frame(&mut app).contains("PID 2488"), "the warning is drawn");
