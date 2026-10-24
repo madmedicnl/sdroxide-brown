@@ -13,6 +13,9 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+### Added
+- **Decoded text over UDP** — one JSON line per decode for a script of your own: the FT8 family, WSPR and every keyboard mode (RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell), with the dial it was heard on.
+
 ## [2.1.0.2_brown] - 2026-10-23
 
 ### Added

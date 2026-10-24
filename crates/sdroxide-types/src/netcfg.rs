@@ -416,6 +416,23 @@ pub struct NetworkConfig {
     /// Appended last, as the wire requires.
     #[serde(default)]
     pub wavelog: crate::WavelogConfig,
+
+    // ── Decoded text over UDP ──
+    /// Where this station's decoded text may be sent: `host:port`, one JSON line
+    /// per decode, over UDP. Empty — the default — is off.
+    ///
+    /// The WSJT-X broadcast ([`WsjtxConfig`](crate::WsjtxConfig)) is the other
+    /// direction and a logger's protocol: the FT8 family, status and logged
+    /// contacts, so GridTracker and friends understand it. This is the **plain
+    /// feed a script can read** — the slotted modes, WSPR and every keyboard
+    /// mode's decoded lines, each with the dial it was heard on — which no
+    /// logger speaks and which is the only way to get RTTY, PSK, Olivia, THOR,
+    /// MFSK, DominoEX or Hell out of the program into something else.
+    ///
+    /// Appended last, as the wire requires — `NetworkConfig` rides
+    /// `SetNetworkConfig` whole.
+    #[serde(default)]
+    pub decode_udp: String,
 }
 
 impl Default for NetworkConfig {
@@ -455,7 +472,35 @@ impl Default for NetworkConfig {
             eqsl_qth_nickname: String::new(),
             rbn2: RbnConfig::second(),
             wavelog: crate::WavelogConfig::default(),
+            decode_udp: String::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod decode_udp_tests {
+    use super::*;
+
+    /// The feed's address is a field on `NetworkConfig`, which rides
+    /// `SetNetworkConfig` **whole** — so it is on the wire, and postcard reads
+    /// the struct positionally. A value set here has to come back, and an
+    /// older `net.json` without the field has to load as off.
+    #[test]
+    fn the_decode_feed_address_survives_the_wire() {
+        let mut cfg = NetworkConfig::default();
+        cfg.decode_udp = "192.0.2.5:9999".into();
+        let bytes = postcard::to_stdvec(&cfg).expect("encode");
+        let back: NetworkConfig = postcard::from_bytes(&bytes).expect("decode");
+        assert_eq!(back.decode_udp, "192.0.2.5:9999");
+        assert_eq!(back, cfg);
+
+        // The default is off, and a config written before the field existed
+        // loads with it off rather than refusing the file.
+        assert!(NetworkConfig::default().decode_udp.is_empty());
+        let mut v = serde_json::to_value(NetworkConfig::default()).unwrap();
+        v.as_object_mut().unwrap().remove("decode_udp");
+        let old: NetworkConfig = serde_json::from_value(v).unwrap();
+        assert!(old.decode_udp.is_empty());
     }
 }
 

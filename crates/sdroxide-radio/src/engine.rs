@@ -7,6 +7,7 @@
 //! viewport-aware spectrum frames. TX arrives in M5.
 
 use std::collections::VecDeque;
+use std::net::ToSocketAddrs;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -1476,6 +1477,175 @@ impl UdpAudio {
         // A failed send is not news: nobody listening is the normal state.
         let _ = self.sock.send_to(&self.buf, self.to);
     }
+}
+
+/// The decoded-text UDP feed: one JSON line per decode.
+///
+/// A different thing from the WSJT-X broadcast beside it, and deliberately its
+/// own socket and its own setting: WSJT-X's protocol carries the FT8 family for
+/// a *logger*, and has no message at all for a line of RTTY, PSK, Olivia, THOR,
+/// MFSK, DominoEX, Hell or WSPR. This is the plain feed a script reads — one
+/// datagram per decode, newline-terminated so `socat`/`nc` can hand it over a
+/// pipe as lines:
+///
+/// ```json
+/// {"time":"2026-10-24T09:15:00Z","unix":1761297300,"kind":"decode","mode":"FT8",
+///  "dial_hz":14074000,"freq_hz":14075194,"audio_hz":1194.0,"snr_db":-12.0,
+///  "dt":0.2,"text":"CQ DL1ABC JO31"}
+/// ```
+///
+/// Off unless an address is set, one-way, and nothing ever comes back — the
+/// same trust model as the audio sink, and the reason a bad address costs a
+/// failed syscall per decode rather than an error on screen.
+struct DecodeFeed {
+    sock: std::net::UdpSocket,
+    to: std::net::SocketAddr,
+}
+
+impl DecodeFeed {
+    /// `addr` is `host:port`. Unparseable is no feed, exactly as empty is.
+    ///
+    /// A name is resolved here rather than refused: this runs when the setting
+    /// changes, not on the audio thread, so one lookup is affordable — and
+    /// `shack-pi.local:9999` is what the person writing the script will type.
+    fn new(addr: &str) -> Option<DecodeFeed> {
+        let addr = addr.trim();
+        if addr.is_empty() {
+            return None;
+        }
+        let to = match addr.to_socket_addrs() {
+            Ok(mut it) => match it.next() {
+                Some(a) => a,
+                None => {
+                    warn!("decode_udp: {addr:?} resolved to no address; no feed");
+                    return None;
+                }
+            },
+            Err(e) => {
+                warn!("decode_udp: {addr:?} is not host:port: {e}; no feed");
+                return None;
+            }
+        };
+        let bind = if to.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" };
+        match std::net::UdpSocket::bind(bind) {
+            Ok(sock) => Some(DecodeFeed { sock, to }),
+            Err(e) => {
+                warn!("decode_udp: cannot open a socket: {e}");
+                None
+            }
+        }
+    }
+
+    fn send(&self, line: &str) {
+        // Nobody listening is the normal state; one failed send is not news.
+        if let Err(e) = self.sock.send_to(line.as_bytes(), self.to) {
+            debug!("decode_udp: send: {e}");
+        }
+    }
+}
+
+/// One line of the decode feed, before it is JSON.
+struct FeedLine<'a> {
+    unix: i64,
+    /// `decode` (a slotted mode's message), `text` (a keyboard mode's line) or
+    /// `wspr`.
+    kind: &'a str,
+    mode: &'a str,
+    dial_hz: f64,
+    freq_hz: f64,
+    audio_hz: Option<f32>,
+    snr_db: Option<f64>,
+    dt: Option<f32>,
+    text: &'a str,
+}
+
+impl FeedLine<'_> {
+    fn json(&self) -> String {
+        let (y, mo, d, h, mi, s) = sdroxide_types::utc_ymd_hms(self.unix);
+        let mut out = format!(
+            "{{\"time\":\"{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}Z\",\"unix\":{},\
+             \"kind\":\"{}\",\"mode\":\"{}\",\"dial_hz\":{:.0},\"freq_hz\":{:.0}",
+            self.unix,
+            json_escape(self.kind),
+            json_escape(self.mode),
+            self.dial_hz,
+            self.freq_hz,
+        );
+        if let Some(a) = self.audio_hz {
+            out.push_str(&format!(",\"audio_hz\":{a:.1}"));
+        }
+        if let Some(snr) = self.snr_db {
+            out.push_str(&format!(",\"snr_db\":{snr:.1}"));
+        }
+        if let Some(dt) = self.dt {
+            out.push_str(&format!(",\"dt\":{dt:.3}"));
+        }
+        out.push_str(&format!(",\"text\":\"{}\"}}\n", json_escape(self.text)));
+        out
+    }
+}
+
+/// The complete lines that are new in `text`, given the last buffer seen — and
+/// what to remember as seen.
+///
+/// `text_rx` is a window, not an append-only log: it grows at the end and is
+/// trimmed at the front, so "what is new" is the overlap between the end of what
+/// we last saw and the start of what we see now. Taking the whole buffer each
+/// time would republish the same text on every status; taking a length would
+/// lose a line every time the buffer was trimmed. Only complete lines are
+/// returned — a half-decoded word is not a message, and a consumer cannot tell
+/// one from a short one.
+fn new_lines_since(seen: &str, text: &str) -> (Vec<String>, String) {
+    let fresh = if text.starts_with(seen) {
+        &text[seen.len()..]
+    } else {
+        // Trimmed, or cleared and restarted: the longest tail of what we saw
+        // that is also a head of what we see is the overlap.
+        let max = seen.len().min(text.len());
+        let mut keep = 0;
+        for n in (1..=max).rev() {
+            if seen.is_char_boundary(seen.len() - n)
+                && text.is_char_boundary(n)
+                && seen.ends_with(&text[..n])
+            {
+                keep = n;
+                break;
+            }
+        }
+        &text[keep..]
+    };
+    let lines = fresh
+        .split_inclusive('\n')
+        .filter(|l| l.ends_with('\n'))
+        .map(|l| l.trim_end_matches(['\r', '\n']).to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    // Only **complete** lines are remembered as seen. A half-decoded word must
+    // be read again from its start next time, or the line would be published as
+    // the fragment that arrived after the previous status — which is how a
+    // decoder that publishes "part" then "ial" looks right to itself and wrong
+    // to everyone reading it.
+    let complete = text.rfind('\n').map_or(0, |i| i + 1);
+    (lines, text[..complete].to_string())
+}
+
+/// JSON string escaping for the feed. Written out because a decode's text is
+/// arbitrary — it can carry a quote, a backslash or a control character — and a
+/// consumer's parser must not be the thing that discovers that.
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 struct StereoMixer {
@@ -3301,6 +3471,15 @@ struct Engine {
     /// When the last WSJT-X heartbeat went out (clients time a station out
     /// without one).
     wsjtx_beat: Instant,
+    /// The decoded-text feed, while an address is set — see [`DecodeFeed`].
+    decode_feed: Option<DecodeFeed>,
+    /// The address the feed is open for, so a settings change is noticed (and so
+    /// an empty one is not re-resolved on every frame).
+    decode_udp: String,
+    /// The last receive buffer the feed saw from the keyboard modes. Their text
+    /// is a rolling window, so a line is what is new since this — see
+    /// [`Engine::new_text_lines`].
+    text_feed_seen: String,
     /// The band the last tick saw, so a crossing into another one can be told
     /// from the tuning about inside a band that goes on all session. See
     /// [`Engine::poll_band_change`].
@@ -4815,6 +4994,9 @@ fn engine_thread(
         n1mm: None,
         wsjtx_cfg: sdroxide_types::WsjtxConfig::default(),
         wsjtx_beat: Instant::now(),
+        decode_feed: None,
+        decode_udp: String::new(),
+        text_feed_seen: String::new(),
         rigctld: None,
         rigctld_cfg: RigctldConfig::default(),
         rigctld_err: None,
@@ -4979,6 +5161,8 @@ fn engine_thread(
     }
     engine.spots.set_operator(&engine.effective_call(), &engine.report_grid());
     engine.net_cfg = sdroxide_config::load_network_config();
+    let decode_udp = engine.net_cfg.decode_udp.clone();
+    engine.set_decode_feed(&decode_udp);
     // Hand the persisted account to the mailbox. Without this the manager keeps
     // the defaults it was built with and every session refuses with "set a
     // callsign and password first", which reads exactly like the settings
@@ -7464,6 +7648,124 @@ impl Engine {
         self.spots.feed_openings(paths, unix_now_f64() as i64);
     }
 
+    /// Open, close or move the decoded-text feed. See [`DecodeFeed`].
+    fn set_decode_feed(&mut self, addr: &str) {
+        let addr = addr.trim().to_string();
+        if self.decode_udp == addr {
+            return;
+        }
+        self.decode_feed = DecodeFeed::new(&addr);
+        match &self.decode_feed {
+            Some(f) => {
+                info!("decode feed: one JSON line per decode to {} (UDP, output only)", f.to)
+            }
+            None if !addr.is_empty() => {
+                warn!("decode feed: \"{addr}\" is set but unusable; nothing is being sent")
+            }
+            None => info!("decode feed: off"),
+        }
+        self.decode_udp = addr;
+        // Clocks and buffers belong to the old socket: a new consumer must not
+        // inherit half a line from the one before it.
+        self.text_feed_seen.clear();
+    }
+
+    fn send_feed(&self, line: FeedLine<'_>) {
+        if let Some(f) = &self.decode_feed {
+            f.send(&line.json());
+        }
+    }
+
+    /// One line per FT8-family decode, with the audio offset the message was
+    /// heard at and the dial that carries it. The absolute frequency is the sum,
+    /// which is the number a script wants to plot or filter.
+    fn feed_decodes(&self, decodes: &[sdroxide_types::Decode], dial: f64) {
+        if self.decode_feed.is_none() {
+            return;
+        }
+        let mode = self.digi.as_ref().map(|d| d.mode().label().to_string()).unwrap_or_default();
+        for d in decodes {
+            self.send_feed(FeedLine {
+                unix: d.slot_utc,
+                kind: "decode",
+                mode: &mode,
+                dial_hz: dial,
+                freq_hz: dial + f64::from(d.audio_hz),
+                audio_hz: Some(d.audio_hz),
+                snr_db: Some(f64::from(d.snr_db)),
+                dt: Some(d.dt),
+                text: &d.message,
+            });
+        }
+    }
+
+    /// One line per WSPR reception. The spot carries its own absolute frequency,
+    /// so the dial is reported beside it rather than folded into it.
+    fn feed_wspr(&self, spots: &[sdroxide_types::WsprSpot]) {
+        if self.decode_feed.is_none() {
+            return;
+        }
+        let dial = self.state.rx_freq_hz();
+        for s in spots {
+            let text = match &s.grid {
+                Some(g) => format!("{} {} {} dBm", s.call, g, s.power_dbm),
+                None => format!("{} {} dBm", s.call, s.power_dbm),
+            };
+            // A beacon can be heard on a dial a band away when the operator is
+            // tuning elsewhere; an offset that is not in the passband is not an
+            // audio offset, so it is left out rather than reported as one.
+            let offset = s.freq_hz - dial;
+            self.send_feed(FeedLine {
+                unix: s.slot_utc,
+                kind: "wspr",
+                mode: "WSPR",
+                dial_hz: dial,
+                freq_hz: s.freq_hz,
+                audio_hz: (offset.abs() <= 3_000.0).then_some(offset as f32),
+                snr_db: Some(f64::from(s.snr_db)),
+                dt: Some(s.dt),
+                text: &text,
+            });
+        }
+    }
+
+    /// New complete lines from a keyboard mode's rolling receive buffer.
+    ///
+    /// `text_rx` is a window, not an append-only log: it grows at the end and is
+    /// trimmed at the front, so "what is new" is the overlap between the end of
+    /// what we last saw and the start of what we see now. Taking the whole
+    /// buffer each time would republish the same text on every status, and
+    /// taking only a length would lose a line every time the buffer was trimmed.
+    /// A line is sent when it is **complete**: a half-decoded word is never
+    /// published, because a consumer cannot tell it from a short message.
+    fn new_text_lines(&mut self, text: &str) -> Vec<String> {
+        let (lines, seen) = new_lines_since(&self.text_feed_seen, text);
+        self.text_feed_seen = seen;
+        lines
+    }
+
+    /// The keyboard modes' decoded text, line by line. Their buffer is the only
+    /// place a line of RTTY, PSK, Olivia, THOR, MFSK, DominoEX or Hell exists.
+    fn feed_text(&mut self, s: &sdroxide_types::DigiStatus, dial: f64) {
+        if self.decode_feed.is_none() {
+            return;
+        }
+        let mode = s.mode.label().to_string();
+        for line in self.new_text_lines(&s.text_rx) {
+            self.send_feed(FeedLine {
+                unix: unix_now(),
+                kind: "text",
+                mode: &mode,
+                dial_hz: dial,
+                freq_hz: dial,
+                audio_hz: None,
+                snr_db: None,
+                dt: None,
+                text: &line,
+            });
+        }
+    }
+
     /// Broadcast the station's state as WSJT-X reports it.
     fn wsjtx_status(&self, s: &sdroxide_types::DigiStatus) {
         let Some(w) = &self.wsjtx else { return };
@@ -7558,6 +7860,7 @@ impl Engine {
                     self.psk_report_decodes(&d, dial);
                     self.wsjtcb_report_decodes(&d, dial);
                     self.wsjtx_decodes(&d);
+                    self.feed_decodes(&d, dial);
                     self.feed_cb_decodes(&d);
                     let _ = self.event_tx.send(RadioEvent::Ft8Decodes(d));
                 }
@@ -7568,6 +7871,7 @@ impl Engine {
                     // override (`digi_config_for_radio`), so it has to be
                     // swapped back on the way out.
                     self.wsjtx_status(&s);
+                    self.feed_text(&s, dial);
                     s.config.my_call = self.digi_config.my_call.clone();
                     s.config.my_grid = self.digi_config.my_grid.clone();
                     let _ = self.event_tx.send(RadioEvent::Ft8Status(s));
@@ -7594,6 +7898,7 @@ impl Engine {
                     let _ = self.event_tx.send(RadioEvent::Ft8QsoLogged(r));
                 }
                 DigiAction::WsprSpots(spots) => {
+                    self.feed_wspr(&spots);
                     self.spots.wspr_report(&spots, dial, self.digi_config.wspr_tx_percent);
                     let _ = self.event_tx.send(RadioEvent::WsprSpots(spots));
                 }
@@ -10481,6 +10786,8 @@ impl Engine {
                     warn!("saving network config: {e}");
                 }
                 self.net_cfg = cfg.clone();
+                let decode_udp = cfg.decode_udp.clone();
+                self.set_decode_feed(&decode_udp);
                 // The mailbox root does not depend on the settings, but the
                 // manager may never have opened — a first run with no config
                 // directory yet, say — so retry here rather than only at boot.
@@ -22506,5 +22813,100 @@ mod frame_watch_tests {
         m.tx_muted = true;
         feed(&mut m, &mut speaker);
         assert!(m.take_frame_edges().is_empty(), "the gag did not silence the gate");
+    }
+}
+
+#[cfg(test)]
+mod decode_feed_tests {
+    use super::*;
+
+    fn line() -> FeedLine<'static> {
+        FeedLine {
+            unix: 1_792_833_300, // 2026-10-24T09:15:00Z
+            kind: "decode",
+            mode: "FT8",
+            dial_hz: 14_074_000.0,
+            freq_hz: 14_075_194.4,
+            audio_hz: Some(1194.4),
+            snr_db: Some(-12.0),
+            dt: Some(0.2),
+            text: "CQ DL1ABC JO31",
+        }
+    }
+
+    /// The shape a consumer parses, pinned exactly — a field renamed or a
+    /// separator lost is a silent break for every script on the other end.
+    #[test]
+    fn a_feed_line_is_one_json_line() {
+        assert_eq!(
+            line().json(),
+            "{\"time\":\"2026-10-24T09:15:00Z\",\"unix\":1792833300,\"kind\":\"decode\",\
+             \"mode\":\"FT8\",\"dial_hz\":14074000,\"freq_hz\":14075194,\"audio_hz\":1194.4,\
+             \"snr_db\":-12.0,\"dt\":0.200,\"text\":\"CQ DL1ABC JO31\"}\n"
+        );
+    }
+
+    /// A decode's text is arbitrary: a quote, a backslash and a control
+    /// character must not be able to end the line early or invalidate it.
+    #[test]
+    fn a_quote_in_a_decode_does_not_break_the_line() {
+        let mut l = line();
+        l.text = "PA0X says \"hi\" \\ 73\u{7}";
+        let j = l.json();
+        assert_eq!(j.matches('\n').count(), 1, "a stray newline: {j}");
+        assert!(j.ends_with("\"}\n"), "{j}");
+        assert!(j.contains(r#"\"hi\""#), "{j}");
+        assert!(j.contains(r"\\"), "{j}");
+        assert!(j.contains(r"\u0007"), "{j}");
+        assert!(!j.contains('\u{7}'), "a control character reached the wire");
+    }
+
+    /// The keyboard modes hand out a rolling window: only whole, new lines may
+    /// leave it, and a half-decoded word waits for its newline.
+    #[test]
+    fn only_whole_new_lines_leave_the_buffer() {
+        let (lines, seen) = new_lines_since("", "RYRY\r\nSGSG\r\npart");
+        assert_eq!(lines, vec!["RYRY".to_string(), "SGSG".to_string()]);
+        // The half-decoded word is *not* remembered as seen, so it is read
+        // again from its start when it completes.
+        assert_eq!(seen, "RYRY\r\nSGSG\r\n");
+        let (lines, _) = new_lines_since(&seen, "RYRY\r\nSGSG\r\npartial\n");
+        assert_eq!(lines, vec!["partial".to_string()]);
+    }
+
+    /// A trimmed buffer must not republish what was already sent, and must not
+    /// lose the line that crossed the cut.
+    #[test]
+    fn a_trimmed_buffer_does_not_republish_what_was_already_sent() {
+        let (lines, seen) = new_lines_since("AAAA\nBBBB\n", "BBBB\nCCCC\n");
+        assert_eq!(lines, vec!["CCCC".to_string()], "the overlap was resent or the new line lost");
+        assert_eq!(seen, "BBBB\nCCCC\n");
+        // Cleared and restarted: everything in it is new.
+        let (lines, _) = new_lines_since("BBBB\nCCCC\n", "NEWS\n");
+        assert_eq!(lines, vec!["NEWS".to_string()]);
+    }
+
+    /// The socket path itself: one datagram, exactly the line, at the address
+    /// the operator typed. Skipped rather than failed if loopback binds are
+    /// unavailable.
+    #[test]
+    fn the_feed_sends_its_line_to_the_address_it_was_given() {
+        let listener = match std::net::UdpSocket::bind("127.0.0.1:0") {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("skip: cannot bind loopback ({e})");
+                return;
+            }
+        };
+        listener.set_read_timeout(Some(Duration::from_secs(2))).ok();
+        let addr = listener.local_addr().expect("a local address").to_string();
+        let feed = DecodeFeed::new(&addr).expect("a feed for a loopback address");
+        let want = line().json();
+        feed.send(&want);
+        let mut buf = [0u8; 1024];
+        let (n, _) = listener.recv_from(&mut buf).expect("a datagram");
+        assert_eq!(&buf[..n], want.as_bytes());
+        // An empty address is no feed at all, which is the default.
+        assert!(DecodeFeed::new("   ").is_none());
     }
 }

@@ -7661,7 +7661,7 @@ than cutting labels off.
 | **FreeDV** | FreeDV Reporter (qso.freedv.org). [6.6](#66-freedv-freedv-reporter) |
 | **Uploads** | Callsign lookup, QSL upload, confirmation download. [6.7](#67-uploads-callsign-lookup-and-qsl-services) |
 | **Winlink** | The radio-email account, and whether it forwards over the internet or on the air. [6.8](#68-winlink-radio-email-account) |
-| **Servers** | Hamlib rigctld, the built-in TCI server, and the WSJT-X UDP broadcast. [6.9](#69-servers-letting-other-programs-drive-the-radio) |
+| **Servers** | Hamlib rigctld, the built-in TCI server, the WSJT-X UDP broadcast and the plain decoded-text feed. [6.9](#69-servers-letting-other-programs-drive-the-radio) |
 | **T/R switch** | The relay that grounds the SDR's antenna while the station transmits, and the sequencer around it. [6.11](#611-tr-switch-protecting-the-receiver-on-transmit) |
 | **TLE** | Satellites to track beyond the amateur set, and their frequencies. [6.10](#610-tle-satellites-and-their-frequencies) |
 | **Profiles** | Named snapshots of how the station is set up, put back on in one click. [6.12](#612-profiles-saved-station-setups) |
@@ -13662,6 +13662,49 @@ particular contest's rules say it means, and a number invented here would be a
 claim about a contest that was not being worked; the logger receiving the
 contact is the thing that knows the rules.
 
+For the modes no logger speaks — RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell,
+CW and WSPR — there is a plainer feed beside these two: see
+[§6.8.4](#684-decoded-text-over-udp).
+
+#### 6.8.4 Decoded text over UDP
+
+The WSJT-X broadcast above speaks a logger's protocol, and it has a message only
+for the FT8 family. There is no message in it for a line of RTTY, PSK, Olivia,
+THOR, MFSK, DominoEX or Hell, and none for a WSPR reception — so for those there
+is a second, plainer socket, on the same page and off by default.
+
+Set **Decoded text over UDP → Send to** to `host:port` and press APPLY. Every
+decode then leaves as **one JSON object per datagram**, newline-terminated so a
+pipe-based consumer can read it as lines:
+
+    {"time":"2026-10-24T09:15:00Z","unix":1792833300,"kind":"decode",
+     "mode":"FT8","dial_hz":14074000,"freq_hz":14075194,"audio_hz":1194.4,
+     "snr_db":-12.0,"dt":0.200,"text":"CQ DL1ABC JO31"}
+
+- **time** and **unix** — UTC, and the same instant in seconds. For a slotted
+  mode this is the start of the slot the message was decoded from.
+- **kind** — `decode` (a slotted mode's message), `text` (a keyboard mode's
+  line) or `wspr`.
+- **mode** — the mode in force, as the program names it.
+- **dial_hz** — the receive frequency the decode was heard on; **freq_hz** —
+  the signal itself, which is the dial plus **audio_hz** where an audio offset
+  is known. A keyboard mode's line carries the dial, because a continuous mode
+  has no per-message offset to report.
+- **snr_db** and **dt** — present where the decoder measures them (the FT8
+  family and WSPR).
+- **text** — the message, or the decoded line with its trailing newline
+  removed. Only **complete** lines are sent: a half-decoded word waits.
+
+A quick check from a shell on the same machine:
+
+    nc -ul 9999            # or: socat -u udp-recv:9999 -
+
+Everything is **output only** — nothing is read from this socket, so no program
+on it can tune or key the radio — and an address that cannot be resolved is said
+so in the log and leaves the feed off rather than failing silently. The wideband
+decoders (ACARS, VDL2, HFDL, DSC, NAVTEX, AIS, APRS) keep their own windows and
+are not part of this feed yet.
+
 ### 6.10 TLE: satellites and their frequencies
 
 The **TLE** tab decides which satellites the tracker in the 3D view
@@ -16667,7 +16710,7 @@ and not the station's.
 | `digi_presets.json` | JSON | The frequencies you have added to the digital modes' own lists yourself, as `mode` / `dial_hz` / `note` — written by the **＋ Save** button in the **⇵** picker ([§3.1](#31-general-considerations)) and readable and editable by hand, which is where a `note` comes from. Belongs to the station, so every radio and every remote client offers the same list. Absent until you save one. |
 | `session.json` | JSON | Where you left the radio: both VFO dials and which of the two was selected, the mode, the RX/TX antenna ports, the AF volume, RX gain, AGC mode, squelch and noise reduction, the TX drive/tune drive/mic gain, and the front end's own gain stages (the sliders on the Radio tab's device panel), restored the next time you start. Written by the engine as you tune, so `--freq`, `--mode`, `--antenna` and `--tx-antenna` override it for a run without changing it. Gain stages are remembered by name: one your current front end does not have is kept, not thrown away, so switching back to the radio it belongs to brings it back, and a figure past what this device offers is clamped to its range. |
 | `qso_log.json` | JSON | The logbook (digital and manual QSOs, with contest/QSL fields). |
-| `net.json` | JSON | Network cockpit: DX cluster / POTA / SOTA / PSK / FreeDV Reporter / WSPRnet feed settings, and callsign-lookup / eQSL / QRZ / HamQTH / Club Log / LoTW credentials (stored in plaintext). |
+| `net.json` | JSON | Network cockpit: DX cluster / POTA / SOTA / PSK / FreeDV Reporter / WSPRnet feed settings, callsign-lookup / eQSL / QRZ / HamQTH / Club Log / LoTW credentials (stored in plaintext), and the decoded-text UDP address. |
 | `winlink/` | directory | The Winlink mailbox: `inbox/`, `outbox/`, `sent/` and `archive/`, one `.b2f` file per message holding it exactly as it rides the wire ([§11](#11-winlink-radio-email)). The account settings live in `net.json`, password included, in plaintext. |
 | `tciserver.json` | JSON | Built-in TCI server: enabled, bind address, port, advertised device name, whether clients may transmit, and the client limit. |
 | `rigctld.json` | JSON | Built-in Hamlib rigctld server: enabled, bind address, port, reported rig name, whether clients may transmit, and the client limit. |

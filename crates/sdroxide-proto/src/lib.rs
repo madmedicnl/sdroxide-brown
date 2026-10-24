@@ -2016,8 +2016,15 @@ use sdroxide_types::{
 /// `#[serde(default)]`, so a stored config loads unchanged.
 /// `PROTO_VERSION` 238 → 239, `VERSION_BYTE` 0x3A → 0x3B. A downstream (fork)
 /// change.
-pub const PROTO_VERSION: u16 = 239;
-const VERSION_BYTE: u8 = 0x3B;
+/// v240: [`sdroxide_types::NetworkConfig`] gains `decode_udp` (String) on its
+/// tail — where the station's decoded text may be sent, `host:port`, one JSON
+/// line per decode over UDP, empty meaning off. `NetworkConfig` rides
+/// `SetNetworkConfig` whole, so the appended field moves its layout;
+/// `#[serde(default)]`, so a stored `net.json` loads unchanged.
+/// `PROTO_VERSION` 239 → 240, `VERSION_BYTE` 0x3B → 0x3C. A downstream (fork)
+/// change.
+pub const PROTO_VERSION: u16 = 240;
+const VERSION_BYTE: u8 = 0x3C;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {

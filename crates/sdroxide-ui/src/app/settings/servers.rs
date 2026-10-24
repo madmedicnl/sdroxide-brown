@@ -26,6 +26,8 @@ pub(in crate::app) struct TciServerStatus {
 pub(in crate::app) fn settings_wsjtx_tab(
     ui: &mut egui::Ui,
     cfg: &mut sdroxide_types::WsjtxConfig,
+    decode_udp: &mut String,
+    net_seeded: bool,
     seeded: bool,
     apply: &mut bool,
 ) {
@@ -140,6 +142,52 @@ pub(in crate::app) fn settings_wsjtx_tab(
                 ui.end_row();
             });
     });
+
+    // ── Decoded text over UDP, our own plain feed ──
+    ui.add_space(10.0);
+    ui.separator();
+    ui.end_row();
+    ui.add_space(6.0);
+    ui.label(
+        RichText::new("Decoded text over UDP").size(13.0).strong().color(crate::theme::CYAN()),
+    );
+    ui.add_space(4.0);
+    super::note(
+        ui,
+        "One JSON line per decode, for a script of your own: the FT8 family, WSPR and every \
+             keyboard mode's decoded lines (RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell), each \
+             with the dial it was heard on. The WSJT-X broadcast above is a logger's protocol and \
+             has no message for those modes, which is why this exists separately.",
+    );
+    ui.add_space(6.0);
+    if super::net_seeded_note(ui, net_seeded) {
+        egui::Grid::new("decode-udp-grid")
+            .num_columns(2)
+            .spacing([12.0, 6.0])
+            .min_row_height(ui.spacing().interact_size.y)
+            .show(ui, |ui| {
+                ui.label("Send to");
+                crate::chrome::field(
+                    ui,
+                    egui::TextEdit::singleline(decode_udp)
+                        .desired_width(160.0)
+                        .hint_text("127.0.0.1:9999"),
+                )
+                .on_hover_text(
+                    "host:port, over UDP. Empty is off — the default. Output only: nothing on \
+                     this socket can touch the radio. A name is resolved when you press APPLY.",
+                );
+                ui.end_row();
+            });
+    }
+    if !decode_udp.trim().is_empty() {
+        super::note(
+            ui,
+            "Each line is one datagram, newline-terminated: \
+                 {\"time\":…,\"unix\":…,\"kind\":\"text\",\"mode\":\"RTTY\",\
+                 \"dial_hz\":…,\"freq_hz\":…,\"text\":\"…\"}",
+        );
+    }
 
     ui.add_space(8.0);
     if crate::chrome::chip_accent(

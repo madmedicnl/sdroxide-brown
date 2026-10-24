@@ -4501,7 +4501,14 @@ impl SdroxideApp {
                 ui.separator();
                 ui.end_row();
                 ui.add_space(8.0);
-                settings_wsjtx_tab(ui, io.wsjtx_edit, self.wsjtx_seeded, io.wsjtx_apply);
+                settings_wsjtx_tab(
+                    ui,
+                    io.wsjtx_edit,
+                    &mut io.net_edit.decode_udp,
+                    io.net_seeded,
+                    self.wsjtx_seeded,
+                    io.wsjtx_apply,
+                );
                 ui.add_space(12.0);
                 ui.separator();
                 ui.end_row();
