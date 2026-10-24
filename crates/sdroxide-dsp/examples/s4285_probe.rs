@@ -86,6 +86,10 @@ fn main() {
         Ok("dfe") => rx.set_eq_mode(sdroxide_dsp::stanag4285::EqMode::Dfe),
         _ => {}
     }
+    // The stream the Annex E chains actually saw, erasure-filled frames included
+    // — the one `coded_stream()` reports and the only one a deinterleaver can be
+    // judged on, because a hole in it shifts everything after it by a frame.
+    rx.trace_coded_stream(true);
     let mut frames = Vec::new();
     let mut text = String::new();
     let mut messages = 0usize;
@@ -155,6 +159,56 @@ fn main() {
         println!();
     }
 
+    // **Can this recording carry a message at all?** See
+    // `S4285Receiver::coded_quality`: a message needs a *continuous* run of usable
+    // frames at least as long as the interleaver, and a recording with good frames
+    // scattered through a fade cannot decode whatever the decoder does.
+    {
+        let quality = rx.coded_quality();
+        // Usable is a mean reference concentration above 0.9 — about 26° of phase
+        // scatter, a channel-bit error rate near 1e-3 — which is the line the
+        // sixteen identical reference symbols can draw on every frame.
+        const USABLE_REFS: f32 = 0.9;
+        if !quality.is_empty() {
+            let (mut best, mut run) = (0usize, 0usize);
+            for q in quality {
+                run = if *q > USABLE_REFS { run + 1 } else { 0 };
+                best = best.max(run);
+            }
+            let good = quality.iter().filter(|q| **q > USABLE_REFS).count();
+            // The long interleave's deepest row is 31·j 32-symbol segments, and a
+            // frame carries four of them.
+            let need_long = (31 * 12) / 4;
+            let need_short = (31 * 3) / 4;
+            println!(
+                "coded readiness: {} frames, {} usable (refs > {USABLE_REFS}), longest run {} \
+                 — a message needs {} with the long interleave, {} with the short",
+                quality.len(),
+                good,
+                best,
+                need_long,
+                need_short
+            );
+            if best < need_short {
+                println!(
+                    "  -> no coded message can come out of this recording: not enough \
+                     continuous signal for even the short interleave"
+                );
+            } else if best < need_long {
+                println!(
+                    "  -> the long interleave is out of reach; a short-interleaved \
+                     transmission could still read"
+                );
+            }
+        }
+    }
+    if let Ok(path) = std::env::var("S4285_CODED_OUT") {
+        use std::io::Write;
+        let mut fh = std::fs::File::create(&path).expect("create the coded dump");
+        for v in rx.coded_stream() {
+            writeln!(fh, "{v:.6}").expect("write");
+        }
+    }
     let r = rx.report();
     println!(
         "locked {} | sync {:.3} (null {:.3}) | frame ACF {:.3} | frames {} | rate {}",

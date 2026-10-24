@@ -582,6 +582,9 @@ pub struct S4285Receiver {
     /// Every soft decision the Annex E chains were actually fed, erasures
     /// included, when tracing is on — see [`S4285Receiver::coded_stream`].
     coded_trace: Option<Vec<f32>>,
+    /// The same, one entry per frame: the frame's mean reference concentration, or
+    /// zero where it was fed as erasures. See [`S4285Receiver::coded_quality`].
+    coded_quality: Vec<f32>,
     /// The last frame reached the coded-chain floor, whether or not it was good
     /// enough to report. A frame that is merely poor must not cost the lock: the
     /// lock is about the frame *position*, which such a frame still proves.
@@ -615,10 +618,25 @@ impl S4285Receiver {
         if on {
             if self.coded_trace.is_none() {
                 self.coded_trace = Some(Vec::new());
+                self.coded_quality.clear();
             }
         } else {
             self.coded_trace = None;
         }
+    }
+
+    /// The per-frame quality behind [`S4285Receiver::coded_stream`]: each frame's
+    /// mean reference concentration, in order, with zero for a frame fed as
+    /// erasures.
+    ///
+    /// **A coded message needs a continuous run of these, not a good average.** A
+    /// convolutional interleaver spreads one message over ten seconds, so a
+    /// recording whose good frames are scattered through a fade cannot carry a
+    /// message whatever the decoder does — and that is a fact about the recording,
+    /// measurable before any decode, which is the difference between "the receiver
+    /// is broken" and "this tape is too short".
+    pub fn coded_quality(&self) -> &[f32] {
+        &self.coded_quality
     }
 
     /// The values [`S4285Receiver::trace_coded_stream`] collected, in order.
@@ -654,6 +672,7 @@ impl S4285Receiver {
             pending: Vec::new(),
             eq_mode: EqMode::Auto,
             coded_trace: None,
+            coded_quality: Vec::new(),
             last_frame_usable: false,
             bit_run: Vec::new(),
             events_text: String::new(),
@@ -1539,6 +1558,10 @@ impl S4285Receiver {
         // **The trace is the two-bit stream**, because that is what the QPSK chain
         // is fed; a judge reading one bit per symbol would be judging a stream that
         // chain never saw. The BPSK branches take every second value of it.
+        if self.coded_trace.is_some() {
+            let r = ramp_concentrations(&z, 0.0);
+            self.coded_quality.push((r[0] + r[1] + r[2]) / 3.0);
+        }
         if let Some(t) = self.coded_trace.as_mut() {
             t.extend_from_slice(&soft2);
         }
@@ -1575,6 +1598,9 @@ impl S4285Receiver {
     fn feed_erasures(&mut self, out: &mut Vec<S4285Message>) {
         if self.coded.is_empty() {
             return;
+        }
+        if self.coded_trace.is_some() {
+            self.coded_quality.push(0.0);
         }
         if let Some(t) = self.coded_trace.as_mut() {
             // Two values per symbol in the trace; a frame's worth.

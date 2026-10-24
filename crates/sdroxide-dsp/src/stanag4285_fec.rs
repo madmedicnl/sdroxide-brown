@@ -308,15 +308,20 @@ impl ConvInterleaver {
         self.block.push(v);
         if self.block.len() == BLOCK {
             let swapped = matches!(self.style, Interleave::Swapped | Interleave::SwappedFlipped);
+            // **Every row is written before any row is read.** The shortest row
+            // holds nothing at all — row 31 on the receive side, row 0 on the
+            // transmit side — so a write/read pair interleaved row by row reads that
+            // position *before* this segment's value has been written into it, and
+            // emits a zero. Measured against an independent implementation on the
+            // same soft decisions, one symbol in every 32 was a zero where a real
+            // value belonged, in exactly the position whose row is empty.
             for i in 0..BLOCK {
-                let (write, read) = if self.transmit || swapped {
-                    (IN_ORDER[i], self.out_row(i))
-                } else {
-                    (i, IN_ORDER[i])
-                };
+                let write = if self.transmit || swapped { IN_ORDER[i] } else { i };
                 self.rows[write].push_back(self.block[i]);
-                let y = self.rows[read].pop_front().unwrap_or(0.0);
-                self.pending.push_back(y);
+            }
+            for i in 0..BLOCK {
+                let read = if self.transmit || swapped { self.out_row(i) } else { IN_ORDER[i] };
+                self.pending.push_back(self.rows[read].pop_front().unwrap_or(0.0));
             }
             self.block.clear();
         }
@@ -686,6 +691,61 @@ mod tests {
                 assert_eq!(*v, if coded[i] == 1 { -1.0 } else { 1.0 }, "bit {i} at {times}x");
             }
         }
+    }
+
+    /// **The deinterleaver, against a model written out longhand.**
+    ///
+    /// Row `r` holds `(31-r)·j` segments; input element `i` of a segment goes into
+    /// row `i` and output element `i` comes out of row `(9i) mod 32`. The model here
+    /// is a plain FIFO per row with **every row written before any is read**, which
+    /// is the standard's machine and not the same code.
+    ///
+    /// This exists because a loopback could not see the fault it pins: the shortest
+    /// row holds *nothing at all*, so a write/read pair interleaved row by row reads
+    /// that row before this segment's value has been written into it, and **one
+    /// soft decision in every 32 came out as a zero**. Encoder and decoder carried
+    /// the same quirk, so the pair still round-tripped and every test passed.
+    /// Measured against an independent implementation on 130 689 real values: one
+    /// mismatched position in 32 before the fix, none after.
+    #[test]
+    fn the_deinterleaver_matches_the_standard_machine_at_every_position() {
+        let j = 2usize;
+        let segments = 200usize;
+        let input: Vec<f32> = (0..segments * ROWS).map(|t| t as f32).collect();
+        let mut de = ConvInterleaver::deinterleaver(j);
+        let got: Vec<f32> = input.iter().map(|v| de.push(*v)).collect();
+
+        // The model: row r is a FIFO of (31-r)·j zeros, and a segment is written
+        // to every row before anything is taken out.
+        let mut rows: Vec<VecDeque<f32>> =
+            (0..ROWS).map(|r| VecDeque::from(vec![0.0f32; (ROWS - 1 - r) * j])).collect();
+        let mut want: Vec<f32> = Vec::new();
+        for seg in input.chunks(ROWS) {
+            for (i, v) in seg.iter().enumerate() {
+                rows[i].push_back(*v);
+            }
+            for i in 0..ROWS {
+                want.push(rows[(9 * i) & 31].pop_front().unwrap_or(0.0));
+            }
+        }
+        // The machine's own latency: nothing comes out until the first segment has
+        // been filled, so the model is one segment behind. The offset is **found**
+        // rather than assumed, and then it has to be exact — a lag that had to be
+        // fudged would mean the mapping itself was wrong.
+        let mut best = (usize::MAX, 0usize);
+        for lag in 0..2 * ROWS {
+            let mism = (lag..got.len()).filter(|t| (want[t - lag] - got[*t]).abs() > 0.5).count();
+            if mism < best.0 {
+                best = (mism, lag);
+            }
+        }
+        assert_eq!(best.0, 0, "{} positions disagree with the standard machine", best.0);
+        assert_eq!(best.1, ROWS - 1, "unexpected latency {} for the segment buffer", best.1);
+        // And the empty row is not empty *in the output*: its value belongs there.
+        assert!(
+            (1..segments).any(|n| got[n * ROWS + 7] != 0.0),
+            "the shortest row's output position is still a hole"
+        );
     }
 
     /// Encoder → interleaver → channel → deinterleaver → Viterbi returns the bits.
