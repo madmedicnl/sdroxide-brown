@@ -171,6 +171,34 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag, sixth pass) — the tape is not weak, it is smeared
+
+**Summary.** The one question worth answering next was whether Mark's recording is
+simply too weak for the chain. It is not: a generated signal with added noise still
+decodes at 2 dB, where its constellation reads 0.921, while the tape reads 0.396.
+Noise fills the eye in; this recording's eye is being closed by the channel. That
+is a different fault, and it is the first time the search has had a measured
+direction rather than a list of suspects.
+
+**Done.** Calibration of the chain against deliberately added noise at six levels,
+using `s4285_test_signal` and `s4285_probe`; the table is in the handover. Nothing
+in the tree changed for it — the experiments (wider phase window, frame-score
+trace, WAV dump from the loopback test) were all reverted, and the tree is clean.
+
+**Numbers.** Constellation 2-fold: clean 0.995, 10 dB 0.981, 6 dB 0.959, 3 dB
+0.934, **2 dB 0.921 and the message still decodes** (SOM 32/32). The tape: 0.396,
+references 0.55. Bench trap recorded: the generator's default sub-carrier is
+1500 Hz, the probe's default 1800 Hz, and probing at the wrong one reads 0 frames
+with a 0.999 lock — which looks like a broken modulator.
+
+**Next.** An equaliser, not another convention: the eye is closed by ISI and timing
+wander. The concrete first step is per-block channel estimates with a short
+fractionally-spaced equaliser trained on the 48 known reference symbols, judged by
+the same metric-vs-shuffled-null test — and, because the tape's references read
+0.55 rather than 0.99, by the constellation first.
+
+---
+
 ## 2026-10-24 (stanag, fifth pass) — the judge was reading the wrong stream
 
 **Summary.** The check that decides whether the code is in the recording was

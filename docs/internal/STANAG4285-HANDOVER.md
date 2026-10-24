@@ -890,6 +890,35 @@ form. And the file's two channels are **identical** (dual mono): decoding L and 
 separately gives exactly the same lock (0.899), constellation (0.396) and frame
 count (242), so the mono mix costs nothing and gains nothing.
 
+**The tape's deficit is channel structure, not signal-to-noise — measured**
+(same day). Our own chain was calibrated against noise, the one thing about a
+recording that can be added deliberately: a generated 600 bps coded signal
+(`s4285_test_signal`) with white noise mixed in, constellation against noise in
+3 kHz —
+
+| noise | 2-fold concentration | message |
+|---|---|---|
+| clean | 0.995 | decodes |
+| 10 dB | 0.981 | decodes |
+| 6 dB | 0.959 | decodes |
+| 3 dB | 0.934 | decodes |
+| 2 dB | 0.921 | **still decodes** |
+
+Mark's tape reads **0.396**. If that were noise the signal would be far below
+2 dB — but 2 dB is 0.921 and decodes, so **SNR is not the tape's problem**. A
+constellation at 0.40 with references at 0.55 is ISI and timing wander: the eye is
+being closed by the channel, not filled by noise. That is what the equaliser is
+for, and it is the reason the interleaver, the depths, the phase tracker and the
+channel-path choice all came back at their nulls — none of them is a channel
+equaliser.
+
+**A bench trap worth writing down.** `s4285_test_signal` puts its sub-carrier at
+**1500 Hz** unless `S4285_TX_CARRIER` says otherwise, while `s4285_probe`'s
+default is **1800 Hz**. Probing the generated file at the probe's default gives
+0 frames, reference blocks 0.000 and a lock of 0.999 — which looks exactly like a
+broken modulator and cost a cycle here. It decodes at 1500 with 0.995 and one
+message. Read the generator's carrier before calling the receiver wrong.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run
