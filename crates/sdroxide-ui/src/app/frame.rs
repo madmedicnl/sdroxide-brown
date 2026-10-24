@@ -1569,6 +1569,7 @@ impl eframe::App for SdroxideApp {
         self.show_sat = (self.ui_settings.tool_windows_open & TW_SAT) != 0;
         self.show_memories = (self.ui_settings.tool_windows_open & TW_MEMORIES) != 0;
         self.show_extras = (self.ui_settings.tool_windows_open & TW_EXTRAS) != 0;
+        self.show_aircraft = (self.ui_settings.tool_windows_open & TW_AIRCRAFT) != 0;
         self.show_rds = (self.ui_settings.tool_windows_open & TW_RDS) != 0;
         self.show_drm = (self.ui_settings.tool_windows_open & TW_DRM) != 0;
         self.show_hd = (self.ui_settings.tool_windows_open & TW_HD_RADIO) != 0;
@@ -1636,6 +1637,7 @@ impl eframe::App for SdroxideApp {
         if self.show_sat { self.ui_settings.tool_windows_open |= TW_SAT; } else { self.ui_settings.tool_windows_open &= !TW_SAT; }
         if self.show_memories { self.ui_settings.tool_windows_open |= TW_MEMORIES; } else { self.ui_settings.tool_windows_open &= !TW_MEMORIES; }
         if self.show_extras { self.ui_settings.tool_windows_open |= TW_EXTRAS; } else { self.ui_settings.tool_windows_open &= !TW_EXTRAS; }
+        if self.show_aircraft { self.ui_settings.tool_windows_open |= TW_AIRCRAFT; } else { self.ui_settings.tool_windows_open &= !TW_AIRCRAFT; }
         if self.show_rds { self.ui_settings.tool_windows_open |= TW_RDS; } else { self.ui_settings.tool_windows_open &= !TW_RDS; }
         if self.show_drm { self.ui_settings.tool_windows_open |= TW_DRM; } else { self.ui_settings.tool_windows_open &= !TW_DRM; }
         if self.show_hd { self.ui_settings.tool_windows_open |= TW_HD_RADIO; } else { self.ui_settings.tool_windows_open &= !TW_HD_RADIO; }
@@ -1666,6 +1668,7 @@ impl eframe::App for SdroxideApp {
         self.poll_playback_list(&mut cmds);
         self.playback_window(&ctx, &mut cmds);
         self.extras_window(&ctx, &mut cmds);
+        self.aircraft_window(&ctx, &mut cmds);
         self.help.ui(&ctx);
         // Last, so it lands on top of everything else that opened this frame.
         self.oob_tx_window(&ctx);
@@ -5113,3 +5116,4 @@ pub const TW_SETTINGS: u64 = 1 << 45;
 pub const TW_SCHEDULE: u64 = 1 << 46;
 pub const TW_PLAYBACK: u64 = 1 << 47;
 pub const TW_PUBLICSDR: u64 = 1 << 48;
+pub const TW_AIRCRAFT: u64 = 1 << 49;

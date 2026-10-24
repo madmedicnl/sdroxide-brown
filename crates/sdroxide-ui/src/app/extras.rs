@@ -31,8 +31,26 @@ pub(in crate::app) fn extras_place(
     avail: egui::Rect,
     screen: egui::Rect,
 ) -> (egui::Pos2, egui::Vec2) {
-    let size = saved.map_or(egui::vec2(EXTRAS_W, EXTRAS_H), |g| egui::vec2(g.size[0], g.size[1]));
-    let size = size.max(egui::vec2(EXTRAS_W, EXTRAS_H)).min(screen.size() * 0.95);
+    tool_place_at(
+        saved,
+        avail,
+        screen,
+        egui::vec2(EXTRAS_W, EXTRAS_H),
+        egui::vec2(EXTRAS_W, EXTRAS_H),
+    )
+}
+
+/// [`extras_place`] for any tool window that remembers its place: `own` is the
+/// size it opens at and `floor` the smallest it may be left at.
+pub(in crate::app) fn tool_place_at(
+    saved: Option<sdroxide_types::DetachedWindow>,
+    avail: egui::Rect,
+    screen: egui::Rect,
+    own: egui::Vec2,
+    floor: egui::Vec2,
+) -> (egui::Pos2, egui::Vec2) {
+    let size = saved.map_or(own, |g| egui::vec2(g.size[0], g.size[1]));
+    let size = size.max(floor).min(screen.size() * 0.95);
     let pos = match saved.and_then(|g| g.pos) {
         Some([x, y]) => egui::pos2(x, y),
         None => egui::pos2(avail.right() - size.x - 6.0, avail.top() + 6.0),
@@ -84,25 +102,47 @@ impl super::SdroxideApp {
         self.tool_place = None;
         cmds.extend(out);
         self.show_extras = show;
-        self.remember_extras_geometry(ctx, pos, size);
+        self.remember_tool_geometry(ctx, "extras", pos, size);
+    }
+
+    /// The remembered docked and detached places of a tool window that keeps
+    /// them, by its window id.
+    fn tool_geometry_slots(
+        &mut self,
+        id: &str,
+    ) -> (&mut Option<sdroxide_types::DetachedWindow>, &mut Option<sdroxide_types::DetachedWindow>)
+    {
+        match id {
+            "aircraft" => {
+                (&mut self.ui_settings.aircraft_window, &mut self.ui_settings.aircraft_os_window)
+            }
+            _ => (&mut self.ui_settings.extras_window, &mut self.ui_settings.extras_os_window),
+        }
     }
 
     /// Keep where the window was left — once the pointer is up, so a drag is
     /// one save — for the docked window and for the detached one.
-    fn remember_extras_geometry(&mut self, ctx: &egui::Context, pos: egui::Pos2, size: egui::Vec2) {
+    pub(in crate::app) fn remember_tool_geometry(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        pos: egui::Pos2,
+        size: egui::Vec2,
+    ) {
         if ctx.input(|i| i.pointer.any_down()) {
             return;
         }
         let mut changed = false;
         #[cfg(not(target_arch = "wasm32"))]
-        let undocked = self.tool_windows.get("extras").is_some_and(|s| s.undocked);
+        let undocked = self.tool_windows.get(id).is_some_and(|s| s.undocked);
         #[cfg(target_arch = "wasm32")]
         let undocked = false;
         if undocked {
             #[cfg(not(target_arch = "wasm32"))]
-            if let Some(g) = self.tool_windows.get("extras").and_then(|s| s.window) {
-                if self.ui_settings.extras_os_window != Some(g) {
-                    self.ui_settings.extras_os_window = Some(g);
+            if let Some(g) = self.tool_windows.get(id).and_then(|s| s.window) {
+                let (_, os) = self.tool_geometry_slots(id);
+                if *os != Some(g) {
+                    *os = Some(g);
                     changed = true;
                 }
             }
@@ -112,7 +152,9 @@ impl super::SdroxideApp {
                 pos: Some([r.min.x, r.min.y]),
             };
             let moved = (r.min - pos).abs().max_elem() > 1.0 || (r.size().x - size.x).abs() > 1.0;
-            let differs = self.ui_settings.extras_window.is_none_or(|s| {
+            let (docked, _) = self.tool_geometry_slots(id);
+            let had = docked.is_some();
+            let differs = docked.is_none_or(|s| {
                 (s.size[0] - g.size[0]).abs() > 1.0
                     || (s.size[1] - g.size[1]).abs() > 1.0
                     || s.pos
@@ -121,8 +163,8 @@ impl super::SdroxideApp {
             });
             // Opening at the default is not a choice: only a window the
             // operator has moved or resized is remembered.
-            if differs && (moved || self.ui_settings.extras_window.is_some()) {
-                self.ui_settings.extras_window = Some(g);
+            if differs && (moved || had) {
+                *self.tool_geometry_slots(id).0 = Some(g);
                 changed = true;
             }
         }
@@ -145,9 +187,22 @@ impl super::SdroxideApp {
             if dab.clicked() {
                 cmds.push(Command::SetMode { rx: RxId::Main, mode: Mode::Dab });
             }
-            // The other four slots are kept: the panel is sized for them, so a
+            let air = crate::chrome::chip_sized(
+                ui,
+                self.show_aircraft,
+                "AIRCRAFT",
+                egui::vec2(SLOT_W, SLOT_H),
+            )
+            .on_hover_text(
+                "AIRCRAFT — the map of what the radio hears: aircraft and radiosondes, \
+                 in a window you can detach",
+            );
+            if air.clicked() {
+                self.show_aircraft = !self.show_aircraft;
+            }
+            // The other slots are kept: the panel is sized for them, so a
             // receiver added here does not widen the window.
-            for _ in 1..EXTRAS_SLOTS {
+            for _ in 2..EXTRAS_SLOTS {
                 let (rect, _) =
                     ui.allocate_exact_size(egui::vec2(SLOT_W, SLOT_H), egui::Sense::hover());
                 ui.painter().rect_stroke(

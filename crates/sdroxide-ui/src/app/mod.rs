@@ -34,6 +34,7 @@ pub(in crate::app) mod dial_hold;
 pub(in crate::app) mod drm;
 pub(in crate::app) mod duo_power;
 pub(in crate::app) mod enigma;
+pub(in crate::app) mod aircraft;
 pub(in crate::app) mod extras;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
@@ -533,6 +534,12 @@ pub struct SdroxideApp {
     /// Where the top bar ends — the top of the spectrum frame below it.
     top_bar_bottom: f32,
     extras_was_open: bool,
+    /// The AIRCRAFT window — see [`aircraft`] — and which opening of it this is.
+    show_aircraft: bool,
+    aircraft_epoch: u32,
+    aircraft_was_open: bool,
+    /// The mode whose map the AIRCRAFT window shows when the radio is on another.
+    aircraft_view: sdroxide_types::Mode,
     /// The RDS window. Opened from the RDS chip in the receive menu, which only
     /// appears on WFM.
     show_rds: bool,
@@ -1989,6 +1996,10 @@ impl SdroxideApp {
             extras_epoch: 0,
             top_bar_bottom: 0.0,
             extras_was_open: false,
+            show_aircraft: false,
+            aircraft_epoch: 0,
+            aircraft_was_open: false,
+            aircraft_view: sdroxide_types::Mode::Adsb,
             show_rds: false,
             show_drm: false,
             drm: None,
@@ -4426,6 +4437,102 @@ mod tests {
         img.save(&out).expect("write the preview");
         println!("wrote {out}");
     }
+    /// The AIRCRAFT window opens under the top bar, and where it was left once
+    /// it has been moved, like EXTRAS — and is open next session when it was
+    /// open this one.
+    #[test]
+    fn the_aircraft_window_returns_where_it_was_left() {
+        use crate::multi::frame_test_lock;
+        let _guard = frame_test_lock();
+        let dir =
+            std::env::temp_dir().join(format!("sdroxide-aircraft-place-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let (w, h) = (1920.0_f32, 900.0_f32);
+        let open_rect = |saved: Option<sdroxide_types::DetachedWindow>| {
+            let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+            let ctx = egui::Context::default();
+            let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+            app.ui_settings.aircraft_window = saved;
+            // Open the way the program remembers it: the persisted bit, which
+            // the frame reads back into the flag.
+            app.ui_settings.tool_windows_open |= crate::app::frame::TW_AIRCRAFT;
+            let mut tex = crate::test_raster::Textures::default();
+            for i in 0..4 {
+                let input = egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(w, h),
+                    )),
+                    time: Some(10.0 + i as f64 / 30.0),
+                    ..Default::default()
+                };
+                let mut full = ctx.run_ui(input, |ui| {
+                    app.ui(ui, &mut eframe::Frame::_new_kittest());
+                });
+                tex.apply(&full.textures_delta);
+                full.textures_delta.clear();
+            }
+            (app.tool_rect.expect("the window was drawn"), app.top_bar_bottom)
+        };
+        let (r, bar) = open_rect(None);
+        assert!(r.top() >= bar && r.top() < bar + 12.0, "under the top bar: {r:?} vs {bar}");
+        let saved =
+            sdroxide_types::DetachedWindow { size: [900.0, 500.0], pos: Some([150.0, 250.0]) };
+        let (r, _) = open_rect(Some(saved));
+        assert!((r.min.x - 150.0).abs() < 2.0 && (r.min.y - 250.0).abs() < 2.0, "place: {r:?}");
+        assert!((r.width() - 900.0).abs() < 2.0, "size: {r:?}");
+    }
+
+    /// Render the AIRCRAFT window to a PNG to look at; `AIRCRAFT_W`/`AIRCRAFT_H`
+    /// set the window size and `AIRCRAFT_PREVIEW` the output path.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    #[ignore = "writes a picture to look at; not an assertion"]
+    fn aircraft_preview() {
+        use crate::multi::frame_test_lock;
+        let _guard = frame_test_lock();
+        let dir =
+            std::env::temp_dir().join(format!("sdroxide-aircraft-preview-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let w: f32 = std::env::var("AIRCRAFT_W").ok().and_then(|v| v.parse().ok()).unwrap_or(1600.0);
+        let h: f32 = std::env::var("AIRCRAFT_H").ok().and_then(|v| v.parse().ok()).unwrap_or(900.0);
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.ui_settings.tool_windows_open |= crate::app::frame::TW_AIRCRAFT;
+        let mut tex = crate::test_raster::Textures::default();
+        let mut last = None;
+        for i in 0..4 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
+                time: Some(10.0 + i as f64 / 30.0),
+                ..Default::default()
+            };
+            let mut full = ctx.run_ui(input, |ui| {
+                app.ui(ui, &mut eframe::Frame::_new_kittest());
+            });
+            tex.apply(&full.textures_delta);
+            full.textures_delta.clear();
+            last = Some(full);
+        }
+        let img = crate::test_raster::rasterize(
+            &ctx,
+            last.unwrap(),
+            &tex,
+            egui::vec2(w, h),
+            crate::theme::BG_DEEP(),
+        );
+        let out = std::env::var("AIRCRAFT_PREVIEW").unwrap_or_else(|_| {
+            format!("{}/../../target/aircraft_preview.png", env!("CARGO_MANIFEST_DIR"))
+        });
+        img.save(&out).expect("write the preview");
+        println!("wrote {out}");
+    }
+
     /// The DAB meter shows the programme, like a hi-fi's: turned down to 5 %
     /// it moves exactly as at full volume (a report: at low volume it hardly
     /// moved at all).

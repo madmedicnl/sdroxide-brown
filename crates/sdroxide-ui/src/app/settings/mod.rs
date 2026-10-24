@@ -3801,6 +3801,7 @@ impl SdroxideApp {
                     ("SAT", crate::app::frame::TW_SAT),
                     ("MEMORIES", crate::app::frame::TW_MEMORIES),
                     ("EXTRAS", crate::app::frame::TW_EXTRAS),
+                    ("AIRCRAFT", crate::app::frame::TW_AIRCRAFT),
                     ("RDS", crate::app::frame::TW_RDS),
                     ("DRM", crate::app::frame::TW_DRM),
                     ("HD RADIO", crate::app::frame::TW_HD_RADIO),

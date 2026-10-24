@@ -260,7 +260,7 @@ impl SdroxideApp {
     }
 
     /// The aircraft map, fed by the app's plot table.
-    fn hfdl_map_pane(&mut self, ui: &mut egui::Ui, now: i64, avail_h: f32) {
+    pub(in crate::app) fn hfdl_map_pane(&mut self, ui: &mut egui::Ui, now: i64, avail_h: f32) {
         ui.horizontal(|ui| self.night_chip(ui));
         let home = self.hfdl_home();
         let night = self.night_texture(ui.ctx());
