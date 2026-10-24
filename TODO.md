@@ -175,6 +175,9 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **Map detail** — roads and first-order internal boundaries from Natural Earth
+  1:10m, drawn from 8° and 40° of span (asset +2.7 MB). **PR #184**; asked for on
+  Reddit as "the map is too imprecise".
 - **The debug UI suite runs again** — `cargo test -p sdroxide-ui --lib` aborted
   on a `debug_assert!` inside `epaint`'s `TexturesDelta::drop`, which a dozen UI
   tests tripped by dropping a frame unread; the abort took the other 949 tests

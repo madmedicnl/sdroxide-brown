@@ -21,6 +21,40 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 (map) — roads and internal boundaries, for the "too imprecise" report
+
+**Summary.** A user on Reddit says our map is too imprecise and asks for
+OpenStreetMap. The data was never the problem — it is already Natural Earth's
+finest — so instead of an online map, the two layers that make a map read as a
+place are now shipped: **roads** and **first-order internal boundaries**. They are
+drawn only when you are zoomed in far enough to want them, so a continent view
+looks exactly as it did. It is **PR #184** because it touches the map widget that
+APRS also draws on.
+
+**Done.**
+- `make_earth_maps.py`: two more layers from the same source (`ne_10m_roads`,
+  `ne_10m_admin_1_states_provinces_lines`), roads filtered to their major
+  classes (`scalerank <= 7`), both on the finest level only. Railroads left out on
+  purpose (1.7 MB, indistinguishable from roads at this map's zooms).
+- `lines.bin` **1.6 MB → 4.2 MB**; `basemap::Lines` gains `roads` and `states`;
+  an older two-layer file still loads.
+- `worldmap`: both draw paths (stipple and painted) add them, gated at **40°** for
+  boundaries and **8°** for roads.
+- `survey_ground_probe` now draws a **close view**; looked at: present at 6° in
+  all three styles, absent at 60°.
+- Guard: `the_detail_layers_are_in_the_asset` (33k road parts, 43k boundary
+  parts, roads on the finest level only).
+- Gate: workspace check silent; basemap 9 and worldmap 12 green; rustfmt clean.
+
+**Not done / blocked.** Higher land resolution (16384×8192): 88 MB of CPU
+pyramid, 4× the startup decode and a texture size browsers and many GPUs refuse —
+it would have to become tiles. Online OSM tiles stay out: Mercator against an
+equirectangular pipeline, and the no-network / no-key rules.
+
+**Next.** PR #184 waits; then transmit for the receive-only set, RS_ID/CALL_ID.
+
+---
+
 ## 2026-10-24 (pause) — the debug suite, and the queue emptied into `main`
 
 **Summary.** Three things are now on `main` that were not this morning. The UI
