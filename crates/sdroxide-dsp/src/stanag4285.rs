@@ -1496,14 +1496,10 @@ impl S4285Receiver {
             let cut = self.bit_run.len() - 8192;
             self.bit_run.drain(..cut);
         }
-        let symbols: Vec<C> = {
-            let mut t = [C::default(); SCRAMBLED];
-            for k in 0..SCRAMBLED {
-                let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
-                t[k] = z[k].mul(sc.conj());
-            }
-            t.to_vec()
-        };
+        // `z` is **already descrambled** by `coded_symbols`; applying the scrambler
+        // again here is what made this dump look like noise on every capture and
+        // sent a session's worth of phase histograms down the wrong road.
+        let symbols: Vec<C> = z.to_vec();
         Some(S4285Frame {
             symbols,
             reference,
