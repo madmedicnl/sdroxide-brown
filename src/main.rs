@@ -103,7 +103,7 @@ struct Cli {
     /// FT4, FT2, JS8, WSPR, PI4, MSK144, JT65, JT9, FST4, Q65, FSK441, PSK, RTTY,
     /// RTTY-FM, PACKET, PACKET-HF, APRS, SSTV, SSTV-FM, RIFP, WEFAX, NAVTEX, DSC,
     /// UVPACKET, ACARS, OLIVIA, CONTESTIA, MT63, ARDOP, THOR, DOMINOEX, DTMF,
-    /// MFSK, FSQ, ATCHAT, HELL, RFPAINT, RADE, HFDL
+    /// MFSK, FSQ, ATCHAT, HELL, RFPAINT, RADE, HFDL, ALE, STANAG 4285, CIS-11
     ///
     /// "HD RADIO" is the one name with a space in it, so it needs the quotes.
     ///
@@ -412,10 +412,12 @@ fn main() -> anyhow::Result<()> {
     if let Some(path) = screenshot_path {
         // Load actions file if provided.
         let actions = if let Some(actions_path) = &cli.screenshot_actions {
-            let content = std::fs::read_to_string(actions_path)
-                .map_err(|e| anyhow::anyhow!("reading actions file {}: {e}", actions_path.display()))?;
-            sdroxide_ui::screenshot::parse_actions(&content)
-                .map_err(|e| anyhow::anyhow!("parsing actions file {}: {e}", actions_path.display()))?
+            let content = std::fs::read_to_string(actions_path).map_err(|e| {
+                anyhow::anyhow!("reading actions file {}: {e}", actions_path.display())
+            })?;
+            sdroxide_ui::screenshot::parse_actions(&content).map_err(|e| {
+                anyhow::anyhow!("parsing actions file {}: {e}", actions_path.display())
+            })?
         } else {
             Vec::new()
         };
@@ -1270,13 +1272,12 @@ fn open_source(cli: &Cli, settings: &Settings) -> anyhow::Result<(Box<dyn IqSour
             // so the three paths that open a radio cannot disagree about when
             // to fall back, which is what left the button doing nothing on
             // 2.0.12 while the startup path appeared to work (#72).
-            let fallback =
-                sdroxide_types::reopen::fallback_open_hz(
-                    asked,
-                    Some(asked),
-                    last,
-                    &sdroxide_config::load_memories().iter().map(|m| m.freq_hz).collect::<Vec<_>>(),
-                );
+            let fallback = sdroxide_types::reopen::fallback_open_hz(
+                asked,
+                Some(asked),
+                last,
+                &sdroxide_config::load_memories().iter().map(|m| m.freq_hz).collect::<Vec<_>>(),
+            );
             if let Some(last) = fallback {
                 let mut c = cli.clone();
                 c.freq = Some(last);
@@ -3288,4 +3289,3 @@ mod tests {
         assert_eq!(Cli::parse_from(["sdroxide", "--freq", "50150000"]).center_hz(), 50_150_000.0);
     }
 }
-

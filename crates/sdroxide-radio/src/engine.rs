@@ -18,12 +18,12 @@ use sdroxide_adsb::{AdsbAction, AdsbController};
 use sdroxide_ais::{AisAction, AisController};
 use sdroxide_config::BandStacks;
 use sdroxide_digi::{
-    AcarsController, AleController, AprsController, AtChatController, CwController, DigiAction,
-    DigiController, DigiEngine, DscController, Fsk441Controller, FsqController, Fst4Controller,
-    HellController, Js8Controller, JtController, JttyController, NavtexController,
-    PacketController, Pi4Controller, Q65Controller, RadeController, RfPaintController,
-    RifpController, SstvController, TextModemController, UvPacketController, WefaxController,
-    WsprController,
+    AcarsController, AleController, AprsController, AtChatController, Cis11Controller,
+    CwController, DigiAction, DigiController, DigiEngine, DscController, Fsk441Controller,
+    FsqController, Fst4Controller, HellController, Js8Controller, JtController, JttyController,
+    NavtexController, PacketController, Pi4Controller, Q65Controller, RadeController,
+    RfPaintController, RifpController, SstvController, TextModemController, UvPacketController,
+    WefaxController, WsprController,
 };
 use sdroxide_drm::DrmDemod;
 use sdroxide_dsp::{
@@ -8116,7 +8116,11 @@ impl Engine {
             // mode and none of its behaviour — no callsign, no transmitter, and
             // a framing of its own — and nothing further down would notice it
             // had been handed a maritime safety broadcast.
-            Box::new(NavtexController::new_with_config_dir(self.digi_config.clone(), tap_rate, self.store.dir().ok()))
+            Box::new(NavtexController::new_with_config_dir(
+                self.digi_config.clone(),
+                tap_rate,
+                self.store.dir().ok(),
+            ))
         } else if mode == Mode::Acars {
             // The same shape of thing as NAVTEX: the framing is its own and
             // nothing further down would notice it had been handed an airline
@@ -8214,6 +8218,10 @@ impl Engine {
         } else if mode == Mode::Ale {
             // ALE is asynchronous and receive only: a rolling window, not a slot.
             Box::new(AleController::new(self.digi_config.clone(), tap_rate))
+        } else if mode == Mode::Cis11 {
+            // CIS-11 likewise: a continuous broadcast, so the controller runs as
+            // the audio arrives and finds its own tones.
+            Box::new(Cis11Controller::new(self.digi_config.clone(), tap_rate))
         } else if mode == Mode::Fsk441 {
             // FSK441 is its own meteor-scatter protocol and its own decoder —
             // mfsk-core has none — and its slot is a period setting, so the
@@ -20210,6 +20218,7 @@ fn rig_mode_class(m: Mode) -> u8 {
         | Mode::Mt63
         | Mode::Ardop
         | Mode::Stanag4285
+        | Mode::Cis11
         | Mode::Fsq
         | Mode::Hell
         | Mode::RfPaint

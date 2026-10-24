@@ -459,7 +459,9 @@ pub fn run_screenshot(
             fn SetProcessDpiAwarenessContext(value: isize) -> i32;
         }
         // DPI_AWARENESS_CONTEXT_UNAWARE = -4
-        unsafe { SetProcessDpiAwarenessContext(-4); }
+        unsafe {
+            SetProcessDpiAwarenessContext(-4);
+        }
     }
 
     let result: sdroxide_ui::ScreenshotResult = Arc::new(Mutex::new(None));

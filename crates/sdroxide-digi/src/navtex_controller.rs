@@ -65,7 +65,11 @@ impl NavtexController {
         Self::new_with_config_dir(cfg, tap_rate, None)
     }
 
-    pub fn new_with_config_dir(cfg: DigiConfig, tap_rate: f64, config_dir: Option<std::path::PathBuf>) -> Self {
+    pub fn new_with_config_dir(
+        cfg: DigiConfig,
+        tap_rate: f64,
+        config_dir: Option<std::path::PathBuf>,
+    ) -> Self {
         let mut rx = NavtexRx::new(tap_rate);
         rx.set_reverse(cfg.navtex_reverse);
         let mut ctrl = NavtexController {
@@ -85,7 +89,9 @@ impl NavtexController {
 
     /// Load persisted messages from disk, if any.
     fn load_messages(&mut self) {
-        let Some(dir) = &self.config_dir else { return; };
+        let Some(dir) = &self.config_dir else {
+            return;
+        };
         let path = dir.join("navtex_messages.json");
         if let Ok(data) = std::fs::read_to_string(&path) {
             if let Ok(msgs) = serde_json::from_str::<Vec<NavtexMessage>>(&data) {
@@ -97,7 +103,9 @@ impl NavtexController {
 
     /// Persist the current messages to disk.
     fn save_messages(&self) {
-        let Some(dir) = &self.config_dir else { return; };
+        let Some(dir) = &self.config_dir else {
+            return;
+        };
         let path = dir.join("navtex_messages.json");
         if let Ok(data) = serde_json::to_string_pretty(&self.messages) {
             let _ = std::fs::write(&path, data);

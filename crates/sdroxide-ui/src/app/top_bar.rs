@@ -8231,6 +8231,14 @@ const STANAG_UNPROVEN: &str = "STANAG 4285 — receive only. Identification is p
      at all means the station is uncoded or carrying encrypted traffic, which is the usual \
      case.";
 
+/// The CIS-11 chip's hover.
+const CIS11_UNPROVEN: &str = "CIS-11 (TORG-11) — receive only. The Russian meteorological \
+teleprinter: 2-FSK at 100 baud, about 500 Hz of shift, and an 11-bit character carrying an \
+odd-parity bit. What is proven is measured on real recordings: the receiver finds its own \
+tones and reads an idle transmission with 121 of 123 characters parity-valid. What is not \
+settled is how the ten data bits divide into characters, so the panel shows the bits as well \
+as its ITA-2 reading — and the traffic itself is encrypted, which is the usual case.";
+
 /// The THOR chip's hover.
 ///
 /// THOR has never read a real transmission: its decoder was built against its own
@@ -8277,6 +8285,7 @@ fn mode_band_chip(
         Mode::Olivia => resp.on_hover_text(OLIVIA_UNCONFIRMED),
         Mode::Dab => resp.on_hover_text(DAB_BANDWIDTH),
         Mode::Stanag4285 => resp.on_hover_text(STANAG_UNPROVEN),
+        Mode::Cis11 => resp.on_hover_text(CIS11_UNPROVEN),
         Mode::Thor => resp.on_hover_text(THOR_UNPROVEN),
         _ => resp,
     };

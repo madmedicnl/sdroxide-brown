@@ -493,6 +493,7 @@ impl TextModemController {
             Mode::Dtmf => RxModem::Dtmf(DtmfRx::new(MODEM_RATE)),
             Mode::Ardop => RxModem::Ardop(ArdopRx::new(tap_rate)),
             Mode::Stanag4285 => RxModem::Stanag(StanagRx::new(MODEM_RATE)),
+            Mode::Cis11 => RxModem::Stanag(StanagRx::new(MODEM_RATE)),
             _ => {
                 // A coded variant is a different waveform, not a setting on
                 // PSK31's modem: it gets its own receiver, built from the
@@ -756,6 +757,9 @@ fn tx_refusal_text(mode: Mode, cfg: &DigiConfig) -> Option<String> {
             Mode::Stanag4285 => "STANAG 4285 is receive only in this build — there is no \
                                  modulator, and the coded rates need Annex E, which is not \
                                  transcribed"
+                .to_string(),
+            Mode::Cis11 => "CIS-11 is receive only in this build — it is a broadcast \
+                            service and there is no modulator"
                 .to_string(),
             other => format!("{} is receive only in this build", other.label()),
         });

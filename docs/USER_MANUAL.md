@@ -32,6 +32,7 @@ or connects to a remote sdroxide server.
     - [3.27 FSK441](#327-fsk441)
     - [3.28 JTTY](#328-jtty)
     - [3.29 ALE (2G)](#329-ale-2g-mil-std-188-141a)
+    - [3.30 CIS-11](#330-cis-11)
 4. [Skimmers (CW, PSK, RTTY)](#4-skimmers)
 5. [ISM band decoder (315 / 345 / 433 / 868 / 915 MHz devices)](#5-ism-band-decoder)
 6. [Settings](#6-settings)
@@ -7111,6 +7112,35 @@ primary data/sounding ones first:
 Military and government networks use ALE too, on channels such as **11175, 8992
 and 15016 kHz**, but their traffic is not on a published schedule. A known-good
 recording turns "wired" into "working", and it is the only thing missing.
+
+### 3.30 CIS-11
+
+> **Experimental, and only half measured.** The receiver finds its own tones and
+> reads a real idle transmission with **121 of 123 characters parity-valid**, so
+> what it hears is CIS-11 and not noise. What is *not* settled is how the ten data
+> bits of a character divide into letters, so the panel shows the bits as well as
+> its ITA-2 reading — and the traffic itself is encrypted, which is the usual case
+> on these frequencies.
+
+Choose **CIS-11** from the DIGITAL row. CIS-11 (also called **TORG-11**) is the
+**Russian meteorological teleprinter**: 2-FSK at **100 baud**, the two tones about
+**500 Hz** apart (a 400 Hz variant exists), sending an **11-bit character** — ten
+data bits and one odd-parity bit, continuously, with no start or stop bits. It is
+a broadcast service, so this is receive-only.
+
+You do not tune it by ear. Leave the dial on the channel and the receiver finds the
+two tones itself, then prints what it locked to in the panel:
+
+    · CIS-11: tones 742/1242 Hz, shift 500 Hz, 121 of 123 characters parity-valid
+
+That line is the honest readout of this mode: **the parity count is the
+measurement**, and a stream that is CIS-11 but carrying encrypted traffic shows a
+high parity count and letters that mean nothing. If the count stays near half the
+characters, either the dial is off the channel or the signal is not CIS-11.
+
+There is nothing to transmit and no transcript: the message layer is not known
+yet, so the ten data bits are exposed in the log (`RUST_LOG` at debug) and the
+panel's ITA-2 reading is a best guess rather than a specification.
 
 ## 4. Skimmers
 
@@ -16633,7 +16663,7 @@ sends them.
 | `--freq <HZ>` | Center frequency in Hz (default: where the last session was left, or 14,200,000 on a first run). |
 | `--rate <HZ>` | Sample rate in Hz (default: from config). |
 | `--gain <DB>` | Overall RX gain in dB (default: hardware AGC or a moderate value). |
-| `--mode <MODE>` | Initial mode, matched without regard to case: LSB, USB, CW, AM, SAM, NFM, WFM, DRM, HD RADIO, ADS-B, VDL2, AIS, DIGU, DIGL, DSB, ISB, SPEC, FT8, FT4, FT2, JS8, WSPR, PSK, RTTY, RTTY-FM, PACKET, PACKET-HF, APRS, SSTV, SSTV-FM, RIFP, WEFAX, NAVTEX, ACARS, OLIVIA, THOR, FSQ, ATCHAT, HELL, RFPAINT, RADE, HFDL. `HD RADIO` is the one name with a space in it, so it needs quoting on the command line: `--mode "HD RADIO"`. Default: the mode the last session was left in. |
+| `--mode <MODE>` | Initial mode, matched without regard to case: LSB, USB, CW, AM, SAM, NFM, WFM, DRM, HD RADIO, ADS-B, VDL2, AIS, DIGU, DIGL, DSB, ISB, SPEC, FT8, FT4, FT2, JS8, WSPR, PSK, RTTY, RTTY-FM, PACKET, PACKET-HF, APRS, SSTV, SSTV-FM, RIFP, WEFAX, NAVTEX, ACARS, OLIVIA, THOR, FSQ, ATCHAT, HELL, RFPAINT, RADE, HFDL, ALE, STANAG 4285, CIS-11. `HD RADIO` is the one name with a space in it, so it needs quoting on the command line: `--mode "HD RADIO"`. Default: the mode the last session was left in. |
 | `--antenna <NAME>` | RX antenna port, as the device names it (LNAH, TX/RX — `--probe` lists them). Default: the port the last session was left on, and failing that whatever the driver selects. |
 | `--tx-antenna <NAME>` | TX antenna port, likewise (BAND1, BAND2). |
 | `--server` | Run as a server (web client + WebSocket streaming backend). |
@@ -18336,6 +18366,7 @@ using. Bind them under **Speech** on the Controls tab:
 | OLIVIA | Robust MFSK keyboard mode (selectable tones/bandwidth). |
 | STANAG 4285 | The NATO single-tone HF modem the naval stations use: 2400 baud PSK on an 1800 Hz sub-carrier in a 3000 Hz footprint, a 256-symbol frame every 106.67 ms. **Receive only.** The mode identifies a 4285 off the air and shows what the receiver measures — the folded sync against its own null, the frame autocorrelation, the three reference blocks collapsing, the carrier offset and the rate (1200 BPSK, 2400 QPSK or 3600 8PSK). **Its text is not yet proven off the air**: the Annex E code, interleaver and message framing decode a generated signal bit-exactly, but no coded station has been copied, and the traffic on these frequencies is usually encrypted anyway — an identification and a rate are what a listener usually wants from it. |
 | ALE (2G) | MIL-STD-188-141A automatic link establishment: eight FSK tones, 125 baud, Golay-coded 24-bit words, the three-character addresses and the TO/FROM/TIS word types. Receive only, **experimental — its decode is not yet proven off the air**, and a recording of a real burst is what would finish it. See [3.29](#329-ale-2g-mil-std-188-141a). |
+| CIS-11 | The Russian meteorological teleprinter (TORG-11): 2-FSK at 100 baud, ~500 Hz shift, an 11-bit character with an odd-parity bit. **Receive only and experimental** — the receiver reads real transmissions, but how the ten data bits divide into characters is not settled. See [3.30](#330-cis-11). |
 | THOR | DominoEX-family IFK keyboard mode with FEC (THOR4…THOR32). |
 | DOMINOEX | The same family without the code (DOMINOEX 4…88, MICRO). Receive only. |
 | DTMF | Touch tones decoded to digits (0–9, `*`, `#`, A–D). Receive only. |

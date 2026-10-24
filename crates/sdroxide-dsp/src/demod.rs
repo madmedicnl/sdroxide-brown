@@ -212,6 +212,7 @@ pub fn make_demod(mode: Mode, channel_rate: f64) -> Option<Box<dyn Demodulator>>
         | Mode::Mt63
         | Mode::Ardop
         | Mode::Stanag4285
+        | Mode::Cis11
         | Mode::Fsq
         | Mode::Hell
         | Mode::RfPaint

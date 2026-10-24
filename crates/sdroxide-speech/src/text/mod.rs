@@ -152,6 +152,7 @@ impl<'a> Speaker<'a> {
             // alone, and a synthesiser handed digits reads them out one at a time
             // in whatever language it likes.
             Mode::Stanag4285 => "stanag four two eight five",
+            Mode::Cis11 => "C I S eleven",
             Mode::Fsq => "F S Q",
             Mode::RfPaint => "R F paint",
             Mode::Rade => "rade",

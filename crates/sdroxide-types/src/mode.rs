@@ -522,6 +522,20 @@ pub enum Mode {
     /// Receive only: there is no keypad yet. Appended for the same reason as
     /// [`Mode::Hell`].
     Dtmf,
+    /// CIS-11 (TORG-11) — the Russian meteorological teleprinter: 2-FSK at
+    /// **100 baud**, tones about **500 Hz** apart (a 400 Hz variant exists),
+    /// carrying an **11-bit character** — ten data bits and one odd-parity bit.
+    ///
+    /// Receive only: it is a broadcast service and its content is somebody
+    /// else's traffic. The framing here was **measured**, not taken from the
+    /// catalogues, which say "5 data + parity" and describe a repeated
+    /// character: see `docs/internal/MODE-ROADMAP.md`, "CIS-11, scoped", and
+    /// [`sdroxide_dsp::cis11`]. How the ten bits divide into characters is not
+    /// settled, so the raw bits are exposed and the ITA-2 reading is offered as
+    /// the first five.
+    ///
+    /// Appended for the same reason as [`Mode::Hell`].
+    Cis11,
 }
 
 /// The bands on which a mode that keeps phone practice rides the lower
@@ -551,7 +565,7 @@ const SSTV_LSB_BELOW_HZ: f64 = 10_000_000.0;
 impl Mode {
     /// Every mode, in the order they cycle and appear in the picker — which is
     /// deliberately *not* the enum's declaration order (see [`Mode::Hell`]).
-    pub const ALL: [Mode; 61] = [
+    pub const ALL: [Mode; 62] = [
         Mode::Lsb,
         Mode::Usb,
         Mode::Cw,
@@ -596,6 +610,7 @@ impl Mode {
         Mode::Mt63,
         Mode::Ardop,
         Mode::Stanag4285,
+        Mode::Cis11,
         Mode::Fsq,
         Mode::AtChat,
         Mode::Hell,
@@ -644,7 +659,7 @@ impl Mode {
     /// packet, RF Paint). All are USB underneath except RIFP, VHF packet and
     /// VHF SSTV, which frequency-modulate the carrier, and ACARS, which is
     /// received in AM.
-    pub const DIGITAL: [Mode; 42] = [
+    pub const DIGITAL: [Mode; 43] = [
         Mode::Ft8,
         Mode::Ft4,
         Mode::Ft2,
@@ -667,6 +682,7 @@ impl Mode {
         Mode::Mt63,
         Mode::Ardop,
         Mode::Stanag4285,
+        Mode::Cis11,
         Mode::Fsq,
         Mode::AtChat,
         Mode::Hell,
@@ -715,6 +731,7 @@ impl Mode {
                 | Mode::Mt63
                 | Mode::Ardop
                 | Mode::Stanag4285
+                | Mode::Cis11
                 | Mode::Fsq
                 | Mode::AtChat
                 | Mode::Hell
@@ -904,6 +921,7 @@ impl Mode {
                 | Mode::Mt63
                 | Mode::Ardop
                 | Mode::Stanag4285
+                | Mode::Cis11
                 | Mode::Fsq
         )
     }
@@ -1133,6 +1151,7 @@ impl Mode {
                 // STANAG 4285 has no modulator either, and its coded rates are
                 // not built at all: receive only in both senses.
                 | Mode::Stanag4285
+                | Mode::Cis11
                 // DominoEX has a receiver that reads its corpus and no modulator:
                 // the panel greys the sending half rather than handing text to a
                 // modem that has none.
@@ -1223,6 +1242,7 @@ impl Mode {
             Mode::Mt63 => "MT63",
             Mode::Ardop => "ARDOP",
             Mode::Stanag4285 => "STANAG 4285",
+            Mode::Cis11 => "CIS-11",
             Mode::Fsq => "FSQ",
             Mode::Hell => "HELL",
             Mode::RfPaint => "RFPAINT",
@@ -1299,6 +1319,7 @@ impl Mode {
                 | Mode::Mt63
                 | Mode::Ardop
                 | Mode::Stanag4285
+                | Mode::Cis11
                 | Mode::Fsq
                 | Mode::Hell
                 | Mode::RfPaint
@@ -1419,6 +1440,7 @@ impl Mode {
             | Mode::Mt63
             | Mode::Ardop
             | Mode::Stanag4285
+            | Mode::Cis11
             | Mode::Fsq
             | Mode::Hell
             | Mode::RfPaint => (100.0, 3300.0),
@@ -1615,6 +1637,7 @@ impl Mode {
                 | Mode::Mt63
                 | Mode::Ardop
                 | Mode::Stanag4285
+                | Mode::Cis11
                 | Mode::Fsq
         )
     }
@@ -1723,6 +1746,7 @@ impl Mode {
             | Mode::Mt63
             | Mode::Ardop
             | Mode::Stanag4285
+            | Mode::Cis11
             | Mode::Fsq
             | Mode::Hell
             | Mode::RfPaint
@@ -1998,6 +2022,7 @@ impl Mode {
             | Mode::Mt63
             | Mode::Ardop
             | Mode::Stanag4285
+            | Mode::Cis11
             | Mode::Fsq
             | Mode::Hell
             | Mode::RfPaint
@@ -2675,6 +2700,9 @@ mod tests {
             (Mode::Mt63, 57),
             (Mode::Ardop, 58),
             (Mode::Stanag4285, 59),
+            (Mode::DominoEx, 60),
+            (Mode::Dtmf, 61),
+            (Mode::Cis11, 62),
         ];
         for (mode, index) in pinned {
             assert_eq!(mode as u8, index, "{} moved", mode.label());
@@ -2752,7 +2780,7 @@ mod tests {
         // rather than a dial mode. Listing it here would put a chip in the mode
         // cycle that needs a 1.5 MHz front end to do anything.
         let absent = [Mode::Dab];
-        let last = Mode::Dtmf as u8;
+        let last = Mode::Cis11 as u8;
         for i in 0..=last {
             let present = Mode::ALL.iter().filter(|m| **m as u8 == i).count();
             let want = if absent.iter().any(|m| *m as u8 == i) { 0 } else { 1 };

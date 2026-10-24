@@ -2023,8 +2023,14 @@ use sdroxide_types::{
 /// `#[serde(default)]`, so a stored `net.json` loads unchanged.
 /// `PROTO_VERSION` 239 → 240, `VERSION_BYTE` 0x3B → 0x3C. A downstream (fork)
 /// change.
-pub const PROTO_VERSION: u16 = 240;
-const VERSION_BYTE: u8 = 0x3C;
+/// v241: [`sdroxide_types::Mode`] gains `Cis11` (discriminant 60) on its tail —
+/// CIS-11, the Russian meteorological teleprinter, receive only. A mode
+/// discriminant is on the wire in [`sdroxide_types::Command::SetMode`] and in
+/// every mode field of a status, so appending one moves them.
+/// `PROTO_VERSION` 240 → 241, `VERSION_BYTE` 0x3C → 0x3D. A downstream (fork)
+/// change.
+pub const PROTO_VERSION: u16 = 241;
+const VERSION_BYTE: u8 = 0x3D;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {

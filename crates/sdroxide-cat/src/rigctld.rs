@@ -109,6 +109,7 @@ fn mode_name(m: Mode) -> &'static str {
         | Mode::Mt63
         | Mode::Ardop
         | Mode::Stanag4285
+        | Mode::Cis11
         | Mode::Fsq
         | Mode::Hell
         | Mode::PacketHf
