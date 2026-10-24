@@ -945,10 +945,24 @@ reason is worth writing down rather than rediscovering:
 * what is left is the *method*: a loop started from a delay line has to discover a
   four-times gain and a fractional delay at once, and on 80 symbols it does not.
 
-**So the way in is closed-form, not adaptive**: estimate the channel by least
-squares from the 80 known sync symbols (three to five T-spaced complex taps), then
-either invert it explicitly or seed a DFE with it. That is a bounded piece of work
-with a test already waiting for it.
+**So the way in is closed-form, not adaptive**, and that part is now built: the
+channel is estimated from the 80 known sync symbols by least squares
+(`ls_channel`, five T-spaced complex taps) and inverted by solving
+`(R + σ²I)·w = p` (`zf_equaliser`). Measured at the symbol level, through this
+two-path channel, it recovers **176 of 176 symbols** with a worst error of 0.09 —
+`the_least_squares_equaliser_undoes_a_symbol_level_echo`.
+
+**What it does not do yet** is help on *pulse-shaped audio*: on the synthetic
+two-path transmission the equaliser's output makes the reference blocks collapse
+*worse* (2.81 → 2.02 on the frame's own score), so the gate in `coded_symbols`
+declines it and the frame is read as before. The suspect is now narrow and it is
+not the equaliser: **the sampling instant is chosen from the data**, and on a
+channel whose data is smeared that is a circular criterion — the channel estimate
+and the data constellation both want the eye that the smear is closing. The sync
+has transitions on every symbol, so the **LS residual over the sync is a proper
+timing error signal** where the data-tightness statistic is not, and that is the
+next thing to try: pick the sampling phase by it, then let the equaliser work from
+the eye it finds.
 
 What still needs the bench: another capture of the same tape on a quiet, steady path
 — a spread-out channel is a bad witness for a modem, and the watcher is the tool for

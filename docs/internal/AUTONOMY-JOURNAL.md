@@ -66,7 +66,17 @@ yet, and nothing is claimed to be.
 - `cargo test -p sdroxide-dsp --release --lib stanag` — **13 passed, 1 ignored**
   (the off-air gate); `rustfmt --edition 2024 --config-path rustfmt.toml` clean.
 
-**Tried and recorded: the adaptive equaliser does not converge.** An NLMS
+**Built: the closed-form equaliser, and where it stops.** The channel is now
+estimated from the 80 known sync symbols by least squares and inverted by solving
+`(R + σ²I)·w = p`; at the symbol level it recovers **176 of 176** symbols through a
+1.5-symbol echo (worst error 0.09). On pulse-shaped audio it does not help yet —
+its output makes the reference blocks collapse *worse* (2.81 → 2.02), so the gate
+declines it and the frame reads as before. The remaining suspect is the **timing**:
+the sampling instant is chosen from the data, which on a smeared channel is
+circular, and the sync's own LS residual is the proper error signal. That is the
+next step, and it is one criterion, not a redesign.
+
+**Recorded: the adaptive equaliser does not converge.** An NLMS
 fractionally-spaced FFE+DFE trained on the frame's 80 known sync symbols stalls at
 the delay line's gain — training residual **0.88** against a unit target, whatever
 the step size or tap count — and *lowers* the reference concentration (2.81 →
@@ -80,8 +90,9 @@ in is **closed-form**: a least-squares channel from the known sync, then an
 explicit inverse or a DFE seeded with it. The adaptive attempt was reverted rather
 than left in, so nothing dead ships.
 
-**Not done / blocked.** The payload is still unread, and the next step is the
-least-squares channel estimate and its inverse, against the ignored test. Material
+**Not done / blocked.** The payload is still unread. The next step is the
+**timing criterion** — pick the sampling phase by the LS residual over the known
+sync rather than by data tightness — against the ignored two-path test. Material
 already on the disk, so no bench. A *second* capture of the same tape on a quiet,
 steady path still needs the bench, and the watcher is the tool for it: a spread-out
 channel is a bad witness for a modem.

@@ -855,6 +855,92 @@ impl S4285Receiver {
     }
 
     /// Demodulate the frame whose head is at absolute sample `start`.
+    /// The frame's 176 scrambled symbols, equalised across the path.
+    ///
+    /// The one real coded tape we have cannot put its data symbols on a lattice
+    /// while its sync and reference blocks are healthy, and its data *blocks* are
+    /// no better than the frame — so the damage is inside 32 symbols, which is
+    /// delay spread and not a phase drift. **The channel is estimated from the 80
+    /// known sync symbols by least squares and inverted in closed form**; an
+    /// adaptive loop trained on the same symbols does not converge (measured, see
+    /// the handover). It is used only on a frame where it makes the known
+    /// reference symbols collapse harder than they already do, so a channel that
+    /// needs no equalising is read exactly as before.
+    fn coded_symbols(&self, start: u64, phase: f32, reversed: bool, offset: f32) -> [C; SCRAMBLED] {
+        let frame = self.frame_symbols(start, phase);
+        // The carrier comes off first: the estimate is taken against real ±1 sync
+        // symbols, and a ramp left in looks like a channel that turns a whole
+        // circle every 27 symbols.
+        let deramp = |f: &[C; FRAME]| -> [C; FRAME] {
+            let mut o = [C::default(); FRAME];
+            for (k, v) in f.iter().enumerate() {
+                let t = k as f32 / BAUD as f32;
+                o[k] = v.mul(C::from_phase(-offset * TAU * t));
+            }
+            o
+        };
+        let d = deramp(&frame);
+        let mut plain = [C::default(); SCRAMBLED];
+        for k in 0..SCRAMBLED {
+            let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
+            plain[k] = d[SYNC + k].mul(sc.conj());
+        }
+
+        // **The frame's own phase reference.** The reference blocks are known to be
+        // symbol 0, so their mean phase is the global rotation the path has put on
+        // the frame, and the sync symbols the estimate is taken against are real.
+        let mut ref_phase = C::default();
+        for &(lo, hi) in &REF_BLOCKS {
+            for k in lo..hi {
+                ref_phase = ref_phase.add(plain[k]);
+            }
+        }
+        let rot = C::from_phase(-ref_phase.arg());
+        let mut r = d;
+        for v in r.iter_mut() {
+            *v = v.mul(rot);
+        }
+
+        let sync = sync_symbols();
+        let mut corr = C::default();
+        for k in 0..SYNC {
+            corr = corr.add(r[k].scale(sync[k]));
+        }
+        let sg = if corr.re < 0.0 { -1.0 } else { 1.0 };
+        let known: Vec<C> = sync.iter().map(|v| C::new(sg * v, 0.0)).collect();
+        let channel = ls_channel(&r[..SYNC], &known, LS_TAPS);
+        let energy: f32 =
+            channel.as_ref().map(|h| h.iter().map(|v| v.norm() * v.norm()).sum()).unwrap_or(0.0);
+        let equaliser = channel.as_ref().and_then(|h| zf_equaliser(h, energy * 5e-3));
+
+        let mut equalised = [C::default(); SCRAMBLED];
+        if let Some(w) = &equaliser {
+            let centre = (LS_EQ - 1) / 2;
+            for k in 0..SCRAMBLED {
+                let m = SYNC + k;
+                let mut y = C::default();
+                for (i, wi) in w.iter().enumerate() {
+                    if let Some(v) = (m + centre).checked_sub(i).and_then(|j| r.get(j)) {
+                        y = y.add(v.mul(*wi));
+                    }
+                }
+                let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
+                equalised[k] = y.mul(sc.conj());
+            }
+        }
+
+        // **It has to earn its place, frame by frame.** On a channel that needed
+        // nothing it can only add a little of its own noise — measured, it cost a
+        // ramped clean signal its exact bits. The sixteen known reference symbols
+        // in each block decide it: whichever path makes them collapse harder is
+        // the path the frame is read through.
+        let score = |z: &[C; SCRAMBLED]| {
+            let c = ramp_concentrations(z, 0.0);
+            c[0] + c[1] + c[2]
+        };
+        if equaliser.is_some() && score(&equalised) > score(&plain) { equalised } else { plain }
+    }
+
     fn take_frame(&mut self, start: u64) -> Option<S4285Frame> {
         // The sampling phase is searched over **most of a symbol**, not over a
         // fifth of one. Acquisition answers it to a tenth of a symbol, and a
@@ -995,13 +1081,7 @@ impl S4285Receiver {
         // the score: the channel phase is read from the reference blocks, and a
         // ramp left in place turns a whole circle between two of them, so the
         // interpolation across the frame would be nonsense.
-        let frame = self.frame_symbols(start, phase);
-        let mut z = [C::default(); SCRAMBLED];
-        for k in 0..SCRAMBLED {
-            let s = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
-            let t = k as f32 / BAUD as f32;
-            z[k] = frame[SYNC + k].mul(s.conj()).mul(C::from_phase(-offset * TAU * t));
-        }
+        let z = self.coded_symbols(start, phase, reversed, offset);
         let reference = ramp_concentrations(&z, 0.0);
         // **Track the symbol clock, not only the phase.** The frame stride is a
         // number of samples, and two clocks that differ by even a few hundred ppm
@@ -1131,13 +1211,7 @@ impl S4285Receiver {
         offset: f32,
         out: &mut Vec<S4285Message>,
     ) -> Vec<f32> {
-        let frame = self.frame_symbols(start, phase);
-        let mut z = [C::default(); SCRAMBLED];
-        for k in 0..SCRAMBLED {
-            let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
-            let t = k as f32 / BAUD as f32;
-            z[k] = frame[SYNC + k].mul(sc.conj()).mul(C::from_phase(-offset * TAU * t));
-        }
+        let z = self.coded_symbols(start, phase, reversed, offset);
         // **The same channel line the frame itself is read through.** Without it
         // the soft decisions keep the frame's residual phase, which is a different
         // number every frame on anything that is not exactly on frequency — and a
@@ -1280,6 +1354,128 @@ const MIN_FRAME_ACF: f32 = 0.12;
 struct ChannelFit {
     slope: C,
     intercept: C,
+}
+
+/// Taps in the least-squares channel estimate. Three covers an echo up to two
+/// symbols late once the fractional delay is split across two taps, and it is
+/// short enough to estimate from one frame's 80 known sync symbols.
+const LS_TAPS: usize = 5;
+/// Taps in the equaliser computed from that estimate. Longer than the channel,
+/// because the inverse of a short FIR is not short.
+const LS_EQ: usize = 9;
+
+/// Divide by a complex number, which `C` has no operator for.
+fn cdiv(a: C, b: C) -> C {
+    let d = b.norm() * b.norm();
+    if d <= 1e-12 {
+        return C::default();
+    }
+    a.mul(b.conj()).scale(1.0 / d)
+}
+
+/// Solve `a·x = b` for a small dense complex system, by Gauss-Jordan with
+/// partial pivoting. `n` is at most [`LS_EQ`], so the cost is nothing.
+fn solve(mut a: Vec<Vec<C>>, mut b: Vec<C>) -> Option<Vec<C>> {
+    let n = b.len();
+    for col in 0..n {
+        let (piv, _) = (col..n)
+            .map(|r| (r, a[r][col].norm()))
+            .max_by(|x, y| x.1.partial_cmp(&y.1).unwrap_or(std::cmp::Ordering::Equal))?;
+        if a[piv][col].norm() < 1e-9 {
+            return None;
+        }
+        a.swap(col, piv);
+        b.swap(col, piv);
+        let d = a[col][col];
+        for j in col..n {
+            a[col][j] = cdiv(a[col][j], d);
+        }
+        b[col] = cdiv(b[col], d);
+        for r in 0..n {
+            if r == col {
+                continue;
+            }
+            let f = a[r][col];
+            if f.norm() <= 1e-12 {
+                continue;
+            }
+            for j in col..n {
+                a[r][j] = a[r][j].sub(f.mul(a[col][j]));
+            }
+            b[r] = b[r].sub(f.mul(b[col]));
+        }
+    }
+    Some(b)
+}
+
+/// Estimate the channel from **known** symbols, by least squares.
+///
+/// `rx[k]` is the received symbol at instant `k`, `known[k]` what was sent, and
+/// the model is `rx[k] = Σ h[i]·known[k-i]` — an FIR, which is what a path with
+/// a few milliseconds of delay spread looks like at 2400 baud. The normal
+/// equations are small and real-symmetric in structure, so they are solved
+/// directly rather than iterated towards: an adaptive loop on 80 symbols does
+/// not converge here, measured, and this does not have to.
+fn ls_channel(rx: &[C], known: &[C], taps: usize) -> Option<Vec<C>> {
+    if rx.len() <= taps || known.len() != rx.len() {
+        return None;
+    }
+    // Rows are the equations, columns the tap index: A[i][j] = conj(k[n-i])·k[n-j].
+    let mut ata = vec![vec![C::default(); taps]; taps];
+    let mut atb = vec![C::default(); taps];
+    for n in taps - 1..rx.len() {
+        for i in 0..taps {
+            let xi = known[n - i].conj();
+            for j in 0..taps {
+                ata[i][j] = ata[i][j].add(xi.mul(known[n - j]));
+            }
+            atb[i] = atb[i].add(xi.mul(rx[n]));
+        }
+    }
+    solve(ata, atb)
+}
+
+/// The equaliser for `h`: the `LS_EQ`-tap filter whose convolution with the
+/// channel is as close to a unit pulse as it can be.
+///
+/// This is the normal-equation form of it, which is the one that behaves: `R` is
+/// the channel's **autocorrelation** matrix, `p` the matched filter, and
+/// `(R + σ²I)·w = p` is solved for `w`. The loading is not optional — a three-tap
+/// channel cannot be inverted exactly by a longer FIR, so `R` is singular by
+/// construction and the extra diagonal is what picks the minimum-energy answer out
+/// of the null space.
+fn zf_equaliser(h: &[C], load: f32) -> Option<Vec<C>> {
+    let n = LS_EQ;
+    let centre = (n - 1) / 2;
+    // r[m] = Σ conj(h[k])·h[k+m], and r[-m] = conj(r[m]).
+    let mut r = vec![C::default(); n];
+    for (m, slot) in r.iter_mut().enumerate() {
+        let mut acc = C::default();
+        for k in 0..h.len() {
+            if let Some(v) = h.get(k + m) {
+                acc = acc.add(h[k].conj().mul(*v));
+            }
+        }
+        *slot = acc;
+    }
+    let mut ata = vec![vec![C::default(); n]; n];
+    for i in 0..n {
+        for j in 0..n {
+            ata[i][j] = if j >= i { r[j - i] } else { r[i - j].conj() };
+        }
+        ata[i][i] = ata[i][i].add(C::new(load, 0.0));
+    }
+    let mut atb = vec![C::default(); n];
+    for (i, slot) in atb.iter_mut().enumerate() {
+        let tapped = i as isize - centre as isize;
+        let want = -tapped;
+        if want >= 0
+            && let Some(v) = h.get(want as usize)
+        {
+            *slot = v.conj();
+        }
+    }
+    solve(ata, atb)
 }
 
 /// The centres of the three reference blocks, in symbols from the frame head.
@@ -1750,6 +1946,69 @@ mod tests {
         }
     }
 
+    /// The closed-form equaliser, at the symbol level and with nothing else going
+    /// on: estimate the channel from known symbols, invert it, recover the rest.
+    ///
+    /// This is the piece the adaptive attempt failed at. Two paths, the second a
+    /// symbol and a half late at 0.67 — the same channel the audio test builds.
+    #[test]
+    fn the_least_squares_equaliser_undoes_a_symbol_level_echo() {
+        let sync = sync_symbols();
+        // The transmitted frame: the sync, then eight-phase symbols on the π/4
+        // lattice that a 4285 actually sends.
+        let mut sent = [C::default(); FRAME];
+        for k in 0..FRAME {
+            let p = if k < SYNC {
+                if sync[k] > 0.0 { 0.0 } else { std::f32::consts::PI }
+            } else {
+                ((k * 5) % 8) as f32 * std::f32::consts::FRAC_PI_4
+            };
+            sent[k] = C::from_phase(p);
+        }
+        // Two paths: one symbol and a half of delay, split across two taps the
+        // way a fractional delay lands on a symbol grid.
+        let rx: Vec<C> = (0..FRAME)
+            .map(|k| {
+                let a = if k >= 1 { sent[k - 1].scale(0.67 * 0.5) } else { C::default() };
+                let b = if k >= 2 { sent[k - 2].scale(0.67 * 0.5) } else { C::default() };
+                sent[k].add(a).add(b)
+            })
+            .collect();
+
+        let h = ls_channel(&rx[..SYNC], &sent[..SYNC], LS_TAPS).expect("a channel estimate");
+        assert!(h[0].norm() > 0.7, "the direct path is not in the estimate: {:?}", h[0]);
+        assert!(h[1].norm() + h[2].norm() > 0.3, "the echo is not in the estimate: {:?}", h);
+
+        let energy: f32 = h.iter().map(|v| v.norm() * v.norm()).sum();
+        let w = zf_equaliser(&h, energy * 1e-3).expect("an equaliser");
+        let mut worst = 0.0f32;
+        let mut clean = 0;
+        for k in SYNC..FRAME {
+            let mut y = C::default();
+            for (i, wi) in w.iter().enumerate() {
+                if let Some(v) = k.checked_sub(i).and_then(|j| rx.get(j)) {
+                    y = y.add(v.mul(*wi));
+                }
+            }
+            // The equaliser delays by its centre tap, so compare against the
+            // symbol that lands there.
+            let centre = (LS_EQ - 1) / 2;
+            if let Some(want) = k.checked_sub(centre).map(|j| sent[j]) {
+                let e = y.sub(want).norm();
+                worst = worst.max(e);
+                if e < 0.35 {
+                    clean += 1;
+                }
+            }
+        }
+        println!("LS equaliser: {clean} of {} symbols, worst error {worst:.2}", FRAME - SYNC);
+        assert!(
+            clean > (FRAME - SYNC) * 9 / 10,
+            "only {clean} of {} symbols recovered",
+            FRAME - SYNC
+        );
+    }
+
     /// **The impairment the one real coded tape has: two paths a symbol apart.**
     ///
     /// This is the definition of done for the next piece of work, and it is
@@ -1761,7 +2020,22 @@ mod tests {
     /// a synthetic whose bits are known: the same coded transmission plus a copy
     /// of itself 1.5 symbols late at two thirds the amplitude.
     ///
-    /// **What the first attempt at fixing it established.** An adaptive
+    /// **What is built.** The channel is estimated from the 80 known sync
+    /// symbols by least squares and inverted in closed form
+    /// (`the_least_squares_equaliser_undoes_a_symbol_level_echo` recovers 176 of
+    /// 176 symbols through this channel at the symbol level), and the receiver uses
+    /// it on any frame where it makes the known reference symbols collapse harder
+    /// than they already do, so it cannot make a clean frame worse.
+    ///
+    /// **What is missing.** On pulse-shaped audio it does not help yet, and the
+    /// suspects are now narrow: the sampling instant is chosen from the *data*,
+    /// which on a spread channel is a circular criterion — the estimate and the
+    /// data both want the eye that the smear is closing. The next thing to try is
+    /// the **LS residual over the known sync as the timing criterion**, which is a
+    /// proper error signal because the sync has transitions on every symbol; then
+    /// the equaliser has an eye to work from.
+    ///
+    /// **What the first attempt established.** An adaptive
     /// (NLMS) fractionally-spaced FFE+DFE trained on the 80 known sync symbols does
     /// **not** converge here: the taps stall at the delay line's gain and the
     /// training residual sits at 0.88 against a unit target, which measurably
@@ -1772,7 +2046,7 @@ mod tests {
     /// known symbols, then a computed inverse or a DFE seeded with it, rather than
     /// a loop left to find it.
     #[test]
-    #[ignore = "needs an equaliser: see the note on this test for what the first attempt established"]
+    #[ignore = "the equaliser works at the symbol level but not yet on pulse-shaped audio: see the note"]
     fn a_coded_message_survives_a_two_path_channel() {
         // -3.5 dB of echo 1.5 symbols late: a symbol is 0.417 ms, so this is
         // 0.63 ms of delay spread, the low end of what a 13 MHz path does.
