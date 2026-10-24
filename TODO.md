@@ -41,20 +41,19 @@ maintainer's queue there, not a promise.
    exhausted**. [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md) is the
    journal and the measurements; the five-column mode table at the end of the
    brief is the deliverable.
-   - **STANAG 4285 is un-parked, and the bench request is withdrawn.** The tape was
-     called "about 4 dB in band" and that was wrong: it was the equaliser's
-     T-spaced model fighting the pulse. A half-symbol-spaced least-squares
-     equaliser takes the same recording from a **0.046** to a **0.790**
-     constellation (blocks 0.71/0.73/0.91/0.86), decodes a two-path synthetic
-     **6 dB** weaker than the plain path can, and costs a clean signal nothing.
-     The cleanest capture we have (`FUF …125317Z`) now reads data blocks at
-     **0.92–0.96**, and the panel no longer calls it "unknown" (the rate verdict
-     was backwards on clean BPSK and suppressed the text path). **Both tapes
-     carry the Annex E code** — measured, not assumed: their descrambled bits are
-     not ITA2 at any alignment or polarity, and carry no rate-1/16 period. So the
-     one remaining fault is the **coded chain**, on two good recordings and with
-     MultiPSK's text known: next is the symbol-for-symbol comparison against the
-     independent `luwangg/signal-analysis` decoder.
+   - **STANAG 4285 — the demodulator is finished; the recordings are too short.**
+     The equaliser is measured and kept (mean constellation 0.344 → 0.451, usable
+     frames +45 %), and a real bug came out of comparing against the independent
+     implementation: the **deinterleaver dropped one soft decision in 32** (its
+     shortest row was read before it was written) — invisible to a loopback, now
+     pinned position by position. Every convention a loopback cannot falsify has
+     been swept and nothing frames a message, and **no recording has the ten
+     continuous seconds a message needs**: the longest run of usable frames is
+     **69 / 32 / 82** against **93** needed, while our own synthetic runs 207 and
+     decodes. So the fault is the material, and it is now a number: a capture with
+     **93 consecutive frames above 0.9 reference concentration**. The watcher is
+     running again; `s4285_probe` prints a `coded readiness` line for every file it
+     writes.
      See [`STANAG4285-HANDOVER.md`](docs/internal/STANAG4285-HANDOVER.md).
    - What is left is mostly **measurement**, not code: THOR25/THOR44 and a
      second MFSK8 recording, a known-good FSQ recording, a BPSK1000 capture for
@@ -218,17 +217,28 @@ reception log · #642 S-meter calibration.
   Wire-neutral. **Not yet checked against the real services** (the formats were
   written from their documentation; this sandbox cannot reach them). PR B wires
   the web, Chrome and remote clients to it.
-- **STANAG 4285's equaliser, and the tape is not weak after all** — a
-  half-symbol-spaced least-squares equaliser replaces the T-spaced estimate-plus-
-  inverse, which could not describe a pulse and so never beat the plain symbols on
-  any real audio. The tape goes **0.046 → 0.790** constellation (blocks
-  0.71/0.73/0.91/0.86), a two-path synthetic decodes **6 dB** weaker than the plain
-  path can, the standard's own "two equal paths 2 ms apart" now decodes at 15 dB
-  where the plain path reads nothing at 18, and a clean signal costs nothing. The
-  rate verdict is a cascade now: the cleanest BPSK capture we have (0.933 / 0.760 /
-  0.357) was being reported **`unknown`**, which also suppressed its text path.
-  **The bench request for a stronger capture is withdrawn** — both tapes carry the
-  code, and the coded chain is the only suspect left.
+- **STANAG 4285's equaliser** — a half-symbol-spaced least-squares equaliser
+  replaces the T-spaced estimate-plus-inverse, which could not describe a pulse and
+  so never beat the plain symbols on any real audio. Measured over frames, not on
+  the last one: mean constellation **0.344 → 0.451**, usable frames **+45 %**, and
+  a two-path synthetic decodes **6 dB** weaker than the plain path can. The rate
+  verdict is a cascade now, so the cleanest BPSK capture we have is no longer
+  reported `unknown` (which had also suppressed its text path).
+- **STANAG 4285's deinterleaver lost one soft decision in 32** — its shortest row
+  holds nothing at all and was read before it was written, so every 32nd decision
+  went into the trellis as a zero. The encoder carried the mirror of the same
+  quirk, so the loopback passed and every test was green; it was found by diffing
+  our deinterleaved stream against the independent GPL implementation's on the same
+  input. Pinned by a test that fails on the old code with **199 positions
+  disagree**.
+- **STANAG 4285: why nothing decodes, as a number.** Every convention a loopback
+  cannot falsify has been swept (24 block orders, four interleaver wirings,
+  j = 3/6/12/24, every repeat factor, pair order, differential encoding) against
+  the SOM, and nothing frames. The reason is the recordings: a message needs ten
+  continuous seconds of usable signal (**93 frames**), and the longest run in each
+  is **69 / 32 / 82**, while our own synthetic runs **207** and decodes.
+  `coded_quality()` and a `coded readiness` line in the probe make that measurable
+  per file, and the watcher is running again for a capture that has it.
 - **Map detail** — roads and first-order internal boundaries from Natural Earth
   1:10m, drawn from 8° and 40° of span (asset +2.7 MB). **PR #184**; asked for on
   Reddit as "the map is too imprecise".

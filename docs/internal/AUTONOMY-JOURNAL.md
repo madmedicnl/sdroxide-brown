@@ -21,7 +21,93 @@ Each entry, in this order:
 
 ---
 
-## 2026-10-24 (STANAG 4285) — the equaliser reads the tape, and the tape was never weak
+## 2026-10-25 (STANAG 4285) — a real bug in the deinterleaver, and the tape is too short
+
+**Summary.** I found and fixed a genuine fault in the part of the STANAG decoder that
+undoes the station's error-correction interleaving: one decoded value in every 32 was
+being thrown away, and because the encoder had the same flaw in mirror image, every
+test passed and only a real transmission would have shown it. That is now pinned by a
+test that fails on the old code. The bigger news for you is the honest one: I can now
+say, from any recording, whether it is even possible to decode a message out of it —
+and none of ours is. A message needs ten continuous seconds of solid signal and the
+best any of our files has is seven and a half. The watcher is running again over eight
+frequencies, and every file it writes now prints a one-line verdict saying whether it
+is worth keeping, so the next good tape will not be missed and a marginal one will not
+be mistaken for a decoder fault.
+
+**Done.**
+- **The deinterleaver dropped one soft decision in 32** (`2462fea6`). Its shortest row
+  holds nothing at all — row 31 on the receive side, row 0 on the transmit side — and
+  `push` interleaved the write and the read row by row, so that position read its own
+  row before this segment's value had been written into it and emitted a zero. Every
+  row is now written before any is read, both sides.
+  - **How it was found:** built the independent implementation
+    (`luwangg/signal-analysis`, GPL — read for comparison, nothing ported) as a
+    deinterleaver + Viterbi over the *same* soft decisions and diffed the streams.
+    Before: mismatched at exactly one position in every 32 (output position 7, whose
+    row is empty). After: **1 mismatch in 130 689 values**, a rounding edge.
+  - **Test:** `the_deinterleaver_matches_the_standard_machine_at_every_position`
+    compares every position against a longhand model of the standard's machine.
+    Verified failing on the old code: **"199 positions disagree"**, one per segment.
+- **Our Viterbi is the independent one's equal**, measured the same way: on our own
+  clean 600 bps signal the two agree to 1 % and ours is the one that frames the SOM
+  and the EOM.
+- **`coded_quality()`** — one value per frame, its mean reference concentration, zero
+  where the frame was fed as erasures — and a `coded readiness` line in the probe that
+  turns "can this recording carry a message" into a number.
+  - A message needs the interleaver's span: **31·j segments / 4 per frame = 93 frames**
+    for the long interleave (23 for the short).
+  - Measured, usable = refs > 0.9: **FUF 24 Oct — 73 usable of 557, longest run 69**;
+    **FUF 23 Oct — 204 of 561, run 32**; **our 6348 — 150 of 335, run 82**; **our own
+    synthetic — 207 of 207, run 207, and it decodes**. Not one recording has 93.
+- **The record corrected.** The previous entry's "the tape was never weak" was read
+  off the probe's **last** frame. The tape's mean constellation over 217 frames is
+  **0.344 plain / 0.451 equalised / 0.469 with the DFE**, with 49 / 71 / 57 frames
+  above 0.7 — so the equaliser is worth +0.11 and 45 % more usable frames, and not a
+  decode. The probe now prints the mean as well as the last frame.
+- **Every convention a loopback cannot falsify was swept** with the SOM as the judge,
+  via the new `s4285_search` example: 24 orderings of the frame's four data blocks ×
+  block reversal × all four interleaver wirings × j = 3/6/12/24 × repeat factor
+  1/2/4/8 × pair order × differential encoding. **Nothing frames a message** on either
+  tape's good stretch. The frame layout itself was re-measured on the good frames: the
+  reference blocks sit at exactly 32, 80 and 128 with concentrations
+  **0.98 / 1.05 / 1.19** against 0.34–0.46 for the data windows.
+- **Checks:** `cargo check --workspace --all-targets` silent; `cargo test --release
+  -p sdroxide-dsp` **492 + 26 + 14 + 1 + 8 + 14 + 8 + 5 passed, 0 failed**; wasm check
+  of `sdroxide-ui` clean; `rustfmt --check` clean on everything touched.
+- New tools, committed: `s4285_deint_dump` and `s4285_bits_dump` (the side-by-side
+  against the independent implementation) and `s4285_search` (the convention sweep);
+  the probe gains `S4285_CODED_OUT`, `S4285_FRAME_LOG` and the readiness line.
+
+**Not done / blocked.**
+- **No coded message has been decoded, and none can be from the material on disk.**
+  Not blocked on equipment — blocked on one thing: a recording with ten continuous
+  seconds of it. The watcher is running again (`s4285watch` over 6348, 5215.6, 8467.8,
+  8478.5, 4232, 12857, 13411.9 and 12873.9 kHz, gain 45, 6 s dwells); its first hours
+  produced no trigger.
+- **Written, measured and reverted:** an LLR weighting of the soft decisions by each
+  frame's own `1/σ²`, from the reference concentration. On the tape it changed nothing
+  (SOM 30/32 either way) and on a burst-fade synthetic it changed nothing, so it is not
+  in the tree rather than sitting there unproven.
+- **The short interleave is the one open question that a capture can settle:** all
+  three recordings have more than the 23 frames the short interleave needs, and none of
+  them framed a message, so either they are all long-interleaved (likely — the
+  standard's own note is that real traffic uses the long one) or something in our chain
+  is still wrong.
+
+**Next.** Watch `~/s4285-captures/night2/` for a file whose readiness line says the
+long interleave is in reach, and open its text. If a file with a 93-frame run still
+frames nothing, the next thing to suspect is the interleave length itself, and the
+short interleave is then the first hypothesis to run.
+
+---
+
+## 2026-10-24 (STANAG 4285) — the equaliser reads the tape ~~, and the tape was never weak~~
+
+> **Corrected 2026-10-25.** Everything in this entry about the equaliser stands. "The
+> tape was never weak" does **not**: it was read off the probe's last frame, and the
+> tape's mean constellation over 217 frames is 0.344 plain / 0.451 equalised. The last
+> frame of a fading recording is not the recording. See the entry above.
 
 **Summary.** The one STANAG 4285 recording that was said to be too weak to finish
 now demodulates cleanly, and the reason was our own filter, not the radio: a
