@@ -294,3 +294,46 @@ fn a_tap_on_mem_leaves_the_memories_open_across_frames() {
         "the open state was not kept for the next start"
     );
 }
+
+/// EXTRAS then AIRCRAFT, by real taps: the window opens, is still there a second
+/// later, and the open state is written for the next start. Same fault as MEM:
+/// the mask sync put the flag back in the frame the chip flipped it. No bit is
+/// set by hand.
+#[test]
+fn a_tap_on_aircraft_in_extras_leaves_the_window_open() {
+    let _guard = crate::multi::frame_test_lock();
+    let dir = std::env::temp_dir().join(format!("sdroxide-aircraft-stays-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+    let size = egui::vec2(1600.0, 900.0);
+    let sent = Rc::new(RefCell::new(Vec::new()));
+    let ctx = egui::Context::default();
+    let app = SdroxideApp::new_tab(&ctx, None, None, Box::new(Sent(sent.clone())), 0, true);
+    let mut rig = Rig { ctx: ctx.clone(), app, sent, t: 0.0, size };
+    for _ in 0..3 {
+        rig.frame(Vec::new(), 0.05).drop_without_applying_deltas();
+    }
+    let out = rig.frame(Vec::new(), 0.05);
+    let extras = find_text(&out.shapes, "EXTRAS").expect("an EXTRAS chip");
+    out.drop_without_applying_deltas();
+    rig.tap(extras);
+    for _ in 0..3 {
+        rig.frame(Vec::new(), 0.05).drop_without_applying_deltas();
+    }
+    assert!(rig.app.show_extras, "EXTRAS did not open");
+    let out = rig.frame(Vec::new(), 0.05);
+    let air = find_text(&out.shapes, "AIRCRAFT").expect("an AIRCRAFT chip in EXTRAS");
+    out.drop_without_applying_deltas();
+
+    rig.tap(air);
+    for _ in 0..20 {
+        rig.frame(Vec::new(), 0.05).drop_without_applying_deltas();
+    }
+    assert!(rig.app.show_aircraft, "the AIRCRAFT window closed after the tap");
+    assert!(
+        rig.app.ui_settings.tool_windows_open & super::frame::TW_AIRCRAFT != 0,
+        "the open state was not kept for the next start"
+    );
+}

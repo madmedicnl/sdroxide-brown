@@ -8330,7 +8330,7 @@ fn mode_listen_chip(
 /// — each has a lane of its own — but the same kind of thing to an operator
 /// choosing what to listen to, so they share one dropdown rather than a second
 /// control.
-const WIDEBAND_MODES: [Mode; 5] = [Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab];
+pub(in crate::app) const WIDEBAND_MODES: [Mode; 5] = [Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab];
 
 /// The wideband lane chips — the five lane modes plus the ISM decoder window —
 /// laid out the same way, but with room for a sixth chip on a wide row. ISM is

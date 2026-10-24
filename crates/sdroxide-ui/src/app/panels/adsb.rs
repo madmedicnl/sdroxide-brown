@@ -391,7 +391,7 @@ impl SdroxideApp {
     }
 
     /// The map pane's own row: NIGHT, and the ground it is drawn on.
-    fn adsb_map_pane(
+    pub(in crate::app) fn adsb_map_pane(
         &mut self,
         ui: &mut egui::Ui,
         cmds: &mut Vec<Command>,
