@@ -21,7 +21,93 @@ Each entry, in this order:
 
 ---
 
-## 2026-10-24 (decision) — the wide banks are parked, and named where you meet them
+## 2026-10-24 — voice hunting: the scanner stops on people, not on carriers
+
+**Summary.** The scanner can now hunt voices. A **VOICE** switch in the SCAN
+window makes it stop only on channels that sound like somebody talking, and go
+past the unmodulated carriers, birdies, pagers and data bursts it used to stop
+on. While it runs, the line under the status tells you what it made of the last
+channel it looked at — *passed 27.5550 MHz · voice 18*, or *voice 82 · somebody
+is talking* — so a strong signal going past is a number rather than a mystery.
+The cost is time: a voice is a rhythm of syllables, so each channel is listened
+to for at least half a second, and the window raises the dwell and says why.
+Nothing is proven off the air yet — the detector is proven on synthetic speech
+and on the engine's own bench, and a real band is the next thing it needs.
+
+**Done.**
+- **`sdroxide-dsp/src/vad.rs`** (new): `SpeechDetector`, a pure function of the
+  audio handed to it — a 20 ms frame, then four measurements. **Structure**
+  (spectral flatness and the share of the band's power in its strongest bin,
+  which between them separate speech from noise and both from a tone),
+  **voicing** (normalised autocorrelation over 60–400 Hz), **spread** (three
+  sub-bands of 250–3500 Hz), and **syllables** (hysteresis rises of the frame
+  loudness, 2–9 a second). Score 0–100; the verdict is **4 accepted frames in
+  the last half second**, not one, and `ACCEPT` is 70 — above what structure,
+  voicing and spread can add up to (65) — so a frame has to show a *rhythm*
+  before it counts.
+- **The two measurements that shaped it, both failures first.** A bare AM
+  carrier scored **exactly 65.0 on one frame** — that is the DDC settling after
+  a retune, and it made the scan stop on every hop. And a single frame at the
+  threshold was enough for a verdict. Hence `ACCEPT = 70` and the 4-of-25
+  window, and both have their own unit tests (`one_settling_thump_is_not_a_voice`,
+  `a_steady_buzz_is_not_a_voice`).
+- **Engine** (`crates/sdroxide-radio/src/engine.rs`): the chain scores its own
+  demodulator audio *before* the AGC, notch, noise reduction and squelch — a
+  voice is what arrived, not what the operator's settings did to it — and a
+  demod-audio rig (CB on a sound card) is scored in `play_rx_audio` through a
+  second detector. `scan_is_busy()` is now level **and** voice; the settle is
+  `dwell.max(MIN_LISTEN_MS)` when the gate runs; the detectors reset when the
+  offset moves or a candidate is retuned to; and `voice_gate()` has three
+  answers — off, running, and *nothing to hear* (a mode that carries no speech
+  is passed over, because the operator asked for voices).
+- **Refusals, not silent fallbacks**: starting a voice hunt with no audio, or
+  with nothing in the scan in a mode that carries speech, is refused with a
+  notice, and the SCAN window greys the button and says the same thing before
+  START is pressed.
+- **Wire** (`crates/sdroxide-proto/src/lib.rs`): `ScannerConfig.voice_only` and
+  `ScanState.voice` (`Option<ScanVoice>` — a whole-hertz frequency with the
+  score, so the reading always names its channel), both appended,
+  `#[serde(default)]`. **243 / 0x3F**, having found 242 already claimed by
+  PR #174 (`fork/psk8`) — the later branch moves, as the register says.
+- **Tests, with the numbers.**
+  - `cargo test -p sdroxide-dsp --lib vad` — **15 passed**.
+  - `cargo test -p sdroxide-radio --test scanner` — **15 passed**, three new:
+    a bare carrier that stops the scan with the gate off and is passed over with
+    it on (and its reading is on the wire, < 45); a voice-modulated carrier that
+    stops it (score ≥ 60); and a voice hunt over `Mode::Ft8` refused with a
+    notice.
+  - Both new engine tests were run against the unfixed code and fail there:
+    gate disabled → "an unmodulated carrier was taken for a voice"; refusal
+    removed → "a voice hunt over a mode with no voice should not start".
+  - `cargo check --workspace --all-targets` silent; `cargo check --release
+    --target wasm32-unknown-unknown -p sdroxide-ui` clean (its 277 dead-code
+    warnings are the pre-existing wasm-only ones).
+  - `rustfmt --edition 2024 --config-path rustfmt.toml --check` clean on every
+    file touched; `sdroxide-types/src/lib.rs` was already dirty in its module
+    order and was left alone.
+- **Not borrowed.** The idea came from VUURWERK (Quansheng UV-K5 firmware), but
+  nothing was taken from it: its licence puts a commercial licence on its
+  originals — the voice-probability scoring among them — and this fork takes no
+  paid anything. This is textbook DSP written here, and a reviewer who compares
+  the two will find no shared code.
+
+**Not done / blocked.**
+- **Nothing has been heard off the air yet.** The detector is proven on
+  synthetic speech, a synthetic buzz, noise, AFSK and the engine's AM bench; a
+  real band — 11 m at night, or a broadcast band full of carriers — is the test
+  that would settle the thresholds, and it needs the bench, not a session.
+- The **`audio_mode`/external-audio path is untested end to end** (the CB rig
+  through its USB card). Its detector is fed and its guard is in place, but no
+  test drives a demod-audio source through a voice hunt; that needs the SS9900v.
+- Music with a vocal scores as voice, by design; documented in the manual rather
+  than "fixed".
+
+**Next.** The mode queue: STANAG 4285's coded payload is still the programme's
+head, and the rest of the half-done list behind it. This item needs the operator
+(or F4NRM) to merge the PR first, since it is the wire.
+
+---
+
 
 **Summary.** The four wide multi-carrier PSK modes are not going to be fixed for
 now, and the reason is written down where it matters. They are still in the

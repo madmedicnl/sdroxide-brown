@@ -64,6 +64,15 @@ impl ScanResume {
 /// broadcast and PMR, 6.25 kHz the narrowest in common use.
 pub const SCAN_STEPS_HZ: [f64; 6] = [5_000.0, 6_250.0, 8_333.0, 10_000.0, 12_500.0, 25_000.0];
 
+/// How much audio the scanner's voice check needs before its verdict means
+/// anything, in milliseconds.
+///
+/// A voice is a rhythm of syllables rather than a level, so a scan with the
+/// voice gate on listens for at least this long on every candidate however
+/// short its dwell is set: two syllables of ordinary speech, and about the
+/// shortest stretch in which a rhythm can be heard at all.
+pub const MIN_LISTEN_MS: u32 = 400;
+
 /// Persisted scanner settings (`scanner.json`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -140,6 +149,30 @@ pub struct ScannerConfig {
     /// else empties the list rather than carrying stale channels into a range
     /// they were never chosen in. See [`Self::forget_stale_skips`].
     pub skip_freq_for: (f64, f64, f64),
+    /// Stop only on channels carrying a human voice, not merely on power.
+    ///
+    /// A scan that stops on a level stops on everything: a data burst, an
+    /// unmodulated carrier, a pager, a birdie, the tail of a CTCSS burst. With
+    /// this set, the candidate has to pass a speech detector (the
+    /// `SpeechDetector` in `sdroxide-dsp`) as well as the level — which is what
+    /// an operator hunting a band for a conversation actually wants, and the
+    /// reason to reach for it on the 11 m band or across a broadcast band full
+    /// of carriers.
+    ///
+    /// It **needs audio**, so it needs a front end that demodulates in this
+    /// program. A radio handing over its own demodulated audio (a transceiver on
+    /// a sound card) can still be voice-hunted — that audio is scored the same
+    /// way — but a front end with no audio at all, or a mode that carries no
+    /// speech, leaves the setting inert, and the window says so rather than
+    /// letting it look as though it were working.
+    ///
+    /// It also needs time: a voice verdict is a syllable rhythm, so a scan with
+    /// this on listens for a minimum of [`MIN_LISTEN_MS`] on each candidate
+    /// however short [`Self::dwell_ms`] is set. Off by default — a scan that
+    /// quietly declined to stop on things would be worse than the one that stops
+    /// on everything, for anybody who did not ask for it.
+    #[serde(default)]
+    pub voice_only: bool,
 }
 
 impl Default for ScannerConfig {
@@ -162,6 +195,7 @@ impl Default for ScannerConfig {
             mem_fast: false,
             skip_freq_hz: Vec::new(),
             skip_freq_for: (0.0, 0.0, 0.0),
+            voice_only: false,
         }
     }
 }
@@ -329,12 +363,37 @@ mod tests {
     }
 }
 
+/// The last speech reading the scan took, with the channel it was taken on.
+///
+/// The frequency rides with the number because the scan moves: a bare score
+/// shown after the dial has moved on is a number about a channel the operator
+/// is no longer listening to. Whole hertz rather than the `f64` every frequency
+/// elsewhere is, so this stays `Eq` and a state comparison stays a structural
+/// one — a reading is a label, not a measurement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScanVoice {
+    pub freq_hz: u64,
+    /// Speech-likeness, 0–100.
+    pub score: u8,
+}
+
 /// What the scanner is doing, small enough to ride in every [`crate::RadioState`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ScanState {
     pub running: bool,
     /// Stopped on a busy channel rather than moving.
     pub holding: bool,
+    /// How much like speech the last candidate sounded, when
+    /// [`ScannerConfig::voice_only`] is on and the front end can answer.
+    ///
+    /// Reported at the moment of a decision rather than continuously — this is
+    /// the reading that explains *why* the scan went past a strong signal, and
+    /// a live meter would be a wire frame per block for a number nobody reads
+    /// while the scan is moving. `None` means the voice gate is not in use, or
+    /// has nothing to measure on this radio, which is the difference the window
+    /// draws between "not a voice" and "not asking".
+    #[serde(default)]
+    pub voice: Option<ScanVoice>,
 }
 
 #[cfg(test)]

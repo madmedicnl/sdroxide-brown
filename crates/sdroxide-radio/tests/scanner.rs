@@ -46,6 +46,14 @@ struct Bench {
     signal_hz: Arc<Mutex<Option<f64>>>,
     visited: Arc<Mutex<Vec<f64>>>,
     phase: f64,
+    /// One second of modulating audio, or `None` for a bare carrier.
+    ///
+    /// A voice hunt is judged on the audio a channel carries, so proving it
+    /// needs a station that carries some — and the difference between "a
+    /// carrier" and "somebody talking" is exactly the thing under test.
+    audio: Option<Vec<f32>>,
+    /// Sample index since the source opened, for walking `audio`.
+    n: usize,
 }
 
 impl Bench {
@@ -55,8 +63,45 @@ impl Bench {
             signal_hz: Arc::new(Mutex::new(signal_hz)),
             visited: Arc::new(Mutex::new(vec![CENTER])),
             phase: 0.0,
+            audio: None,
+            n: 0,
         }
     }
+
+    /// The same carrier, amplitude-modulated with a voice.
+    fn speaking(signal_hz: Option<f64>) -> Self {
+        Bench { audio: Some(voice_audio()), ..Bench::new(signal_hz) }
+    }
+}
+
+/// One second of something a speech detector should recognise: a 120 Hz glottal
+/// pulse train with two formants, gated into syllables at 4 Hz, looped forever
+/// by the source so a scan can find it whatever the phase.
+///
+/// Generated at 48 kHz and held for thirty-two samples by the source, because
+/// the point of the test is the detector and not the sample rate.
+fn voice_audio() -> Vec<f32> {
+    const AUDIO_RATE: f64 = 48_000.0;
+    const SECS: f64 = 1.0;
+    let n = (AUDIO_RATE * SECS) as usize;
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let t = i as f64 / AUDIO_RATE;
+        // Syllables at 4 Hz, with the slight lift a talker gives the middle of
+        // a phrase.
+        let syll = 0.55 - 0.45 * (std::f64::consts::TAU * 4.0 * t).cos();
+        let mut s = 0.0f64;
+        for k in 1..=28 {
+            let f = 120.0 * k as f64;
+            let formant = 1.0
+                + 2.5 * (-((f - 700.0) / 130.0f64).powi(2) / 2.0).exp()
+                + 1.8 * (-((f - 1900.0) / 200.0f64).powi(2) / 2.0).exp();
+            s += formant / k as f64 * (std::f64::consts::TAU * f * t).sin();
+        }
+        out.push((s * syll) as f32);
+    }
+    let peak = out.iter().fold(0.0f32, |m, s| m.max(s.abs())).max(1e-9);
+    out.iter().map(|s| s * 0.7 / peak).collect()
 }
 
 impl IqSource for Bench {
@@ -79,13 +124,25 @@ impl IqSource for Bench {
         match signal {
             Some(f) => {
                 let step = std::f64::consts::TAU * (f - self.center_hz) / RATE;
+                let audio = self.audio.as_deref();
                 for s in buf[..n].iter_mut() {
                     self.phase += step;
                     let (si, co) = self.phase.sin_cos();
-                    *s = Complex32::new(co as f32 * 0.5, si as f32 * 0.5);
+                    // Amplitude modulation: an envelope above the carrier is
+                    // what an AM demodulator turns back into audio.
+                    let env = match audio {
+                        Some(a) if !a.is_empty() => 1.0 + a[(self.n / 32) % a.len()],
+                        _ => 1.0,
+                    };
+                    self.n += 1;
+                    let amp = 0.5 * env;
+                    *s = Complex32::new(co as f32 * amp, si as f32 * amp);
                 }
             }
-            None => buf[..n].fill(Complex32::new(0.0, 0.0)),
+            None => {
+                self.n += n;
+                buf[..n].fill(Complex32::new(0.0, 0.0));
+            }
         }
         Ok(n)
     }
@@ -150,6 +207,8 @@ struct Watch {
     /// Every dial the engine has announced since the last `forget_seen`. What a
     /// scan *did not* tune to is only checkable against the whole trail.
     dials: Vec<f64>,
+    /// The speech reading the engine last reported with its state.
+    voice: Option<sdroxide_types::ScanVoice>,
 }
 
 struct Rig {
@@ -167,8 +226,16 @@ struct Rig {
 
 impl Rig {
     fn new(signal_hz: Option<f64>) -> Self {
+        Rig::with(Bench::new(signal_hz))
+    }
+
+    /// A rig whose signal is somebody talking.
+    fn speaking(signal_hz: Option<f64>) -> Self {
+        Rig::with(Bench::speaking(signal_hz))
+    }
+
+    fn with(source: Bench) -> Self {
         isolate_config();
-        let source = Bench::new(signal_hz);
         let (visited, signal) = (Arc::clone(&source.visited), Arc::clone(&source.signal_hz));
         let (producer, audio) = rtrb::RingBuffer::new(48_000);
         let cfg = EngineConfig {
@@ -197,6 +264,9 @@ impl Rig {
                     self.w.dial = s.active_freq_hz();
                     self.w.running = s.scan.running;
                     self.w.holding = s.scan.holding;
+                    if s.scan.voice.is_some() {
+                        self.w.voice = s.scan.voice;
+                    }
                     if s.scan.holding && self.w.held_at.is_none() {
                         self.w.held_at = Some(s.active_freq_hz());
                         // Captured with the frequency rather than read off the
@@ -239,6 +309,7 @@ impl Rig {
         self.w.held_repeater = None;
         self.w.notices.clear();
         self.w.dials.clear();
+        self.w.voice = None;
     }
 
     /// The stored channels, once the engine has at least `want` of them.
@@ -742,6 +813,98 @@ fn an_impossible_scan_is_refused_with_a_reason() {
     assert!(!w.running, "a memory scan with no memories should not start");
     assert!(
         w.notices.iter().any(|n| n.contains("memory")),
+        "the operator should be told why, got {:?}",
+        w.notices
+    );
+}
+
+/// The whole point of the voice gate: a carrier strong enough to stop the scan
+/// is not a person, and a voice hunt goes past it.
+///
+/// The first half is what makes the second half mean anything — the same
+/// carrier, with the gate off, stops the scan exactly as it always has. Without
+/// it this test would pass on a scan that had simply gone deaf.
+#[test]
+fn a_voice_hunt_goes_past_a_bare_carrier() {
+    const SIGNAL: f64 = 145_312_500.0;
+    let mut rig = Rig::new(Some(SIGNAL));
+
+    // The level alone stops it.
+    rig.send(Command::SetScannerConfig(ScannerConfig { mode: Mode::Am, ..range_cfg() }));
+    rig.send(Command::SetScanning(true));
+    assert!(
+        rig.pump(6.0, true).held_at.is_some(),
+        "the bench carrier did not stop the scan at all, so the rest of this proves nothing"
+    );
+
+    // Now the same carrier, judged as speech.
+    rig.send(Command::SetScanning(false));
+    // Let the stop land before forgetting it: the engine announces the end of a
+    // scan like anything else, and a state still in flight would be counted as
+    // the next half's first stop.
+    rig.pump(0.4, false);
+    rig.forget_seen();
+    rig.send(Command::SetScannerConfig(ScannerConfig {
+        mode: Mode::Am,
+        voice_only: true,
+        ..range_cfg()
+    }));
+    rig.send(Command::SetScanning(true));
+    let w = rig.pump(4.0, true);
+    assert_eq!(w.held_at, None, "an unmodulated carrier was taken for a voice");
+    assert!(w.running, "the scan should still be hunting, not stopped");
+
+    // And the reason is on the wire, which is the difference between a control
+    // that did nothing and one that declined: the reading named the channel and
+    // said it was not a voice.
+    let v = w.voice.expect("the scan reported no speech reading at all");
+    assert!(
+        (v.freq_hz as f64 - SIGNAL).abs() <= 12_500.0,
+        "the reading was about {} rather than the carrier at {SIGNAL}",
+        v.freq_hz
+    );
+    assert!(v.score < 45, "a bare carrier scored {}", v.score);
+}
+
+/// And the other half: a channel carrying speech stops it.
+#[test]
+fn a_voice_hunt_stops_on_a_voice() {
+    const SIGNAL: f64 = 145_312_500.0;
+    let mut rig = Rig::speaking(Some(SIGNAL));
+    rig.send(Command::SetScannerConfig(ScannerConfig {
+        mode: Mode::Am,
+        voice_only: true,
+        // Long enough to hear a syllable, and a grace that rides out the gaps
+        // between words rather than leaving in the middle of a sentence.
+        dwell_ms: 800,
+        resume_ms: 1_500,
+        ..range_cfg()
+    }));
+    rig.send(Command::SetScanning(true));
+    let w = rig.pump(10.0, true);
+    let held = w.held_at.expect("the scan never stopped on a channel with a voice on it");
+    assert!((held - SIGNAL).abs() <= 12_500.0, "stopped on {held} rather than near {SIGNAL}");
+    let v = w.voice.expect("a voice stop with no reading to show for it");
+    assert!(v.score >= 60, "the channel it stopped on scored {} for speech", v.score);
+}
+
+/// The gate is a promise, so a scan that cannot keep it refuses with a reason
+/// rather than falling back to the level behind the operator's back.
+#[test]
+fn a_voice_hunt_that_cannot_be_had_says_so() {
+    let mut rig = Rig::new(None);
+    // A mode that carries no speech, in a range that is otherwise perfectly
+    // scanable: the scan would run and stop nowhere.
+    rig.send(Command::SetScannerConfig(ScannerConfig {
+        mode: Mode::Ft8,
+        voice_only: true,
+        ..range_cfg()
+    }));
+    rig.send(Command::SetScanning(true));
+    let w = rig.pump(1.0, false);
+    assert!(!w.running, "a voice hunt over a mode with no voice should not start");
+    assert!(
+        w.notices.iter().any(|n| n.contains("speech")),
         "the operator should be told why, got {:?}",
         w.notices
     );

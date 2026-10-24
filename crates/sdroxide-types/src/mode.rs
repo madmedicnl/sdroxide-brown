@@ -1757,6 +1757,33 @@ impl Mode {
         }
     }
 
+    /// Whether a channel in this mode can carry a human voice at all.
+    ///
+    /// What the scanner's voice gate asks before it bothers: there is no point
+    /// running a speech detector over FT8, a fax or packet, and a scan set to
+    /// one of those which also had "voice only" on would stop nowhere and
+    /// explain nothing.
+    ///
+    /// The telephone modes and the broadcast ones. `Digu`/`Digl` are
+    /// deliberately not here despite being sidebands: they exist to be *fed* a
+    /// digital signal, and an operator who picks one has said what is on the
+    /// channel. DRM and HD Radio are not either: their audio is a codec's
+    /// output rather than a demodulated passband, and neither has a voice to
+    /// hunt — they are station-shaped signals you tune to by name.
+    pub fn carries_speech(self) -> bool {
+        matches!(
+            self,
+            Mode::Lsb
+                | Mode::Usb
+                | Mode::Am
+                | Mode::Sam
+                | Mode::Dsb
+                | Mode::Nfm
+                | Mode::Wfm
+                | Mode::Isb
+        )
+    }
+
     /// Whether the audio-chain AGC runs in this mode. An FM discriminator's
     /// output level is set by deviation, not signal strength, so there is
     /// nothing for an AGC to level — it can only pump on the noise between

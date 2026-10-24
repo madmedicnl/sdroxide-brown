@@ -7,7 +7,8 @@ rules are [`../../AGENTS.md`](../../AGENTS.md).
 Scripted via `gh project item-create` + `item-edit` once the `project` scope is
 granted (`gh auth refresh -h github.com -s project`).
 
-Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 239).
+Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 241 on
+`main`; 242 claimed by PR #174 and 243 by the voice-hunting PR).
 
 ## Achieved (Done)
 
@@ -51,6 +52,8 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 239).
   Aoki schedules, local solar time.
 - CB: 11 m used in full (voice and all the digital modes), WSJT-CB
   interoperability, the channel plans, SSTV on 27.700, CB-first band handling.
+- **Voice hunting in the scanner** — a VOICE switch that stops a scan only where
+  somebody is talking, with the reading shown as it runs (in the PR, 243).
 
 **Health**
 - The gate is silent; the mode/band tables, `PROTO_VERSION` register, `Action`

@@ -3,10 +3,11 @@
 What this fork is working on, kept here so it survives a session and is visible
 on the repo. Last updated **2026-10-24** by madmedicnl's agent.
 
-State: `main` at crate **2.1.0**, `PROTO_VERSION` **239**, latest release
-**v2.1.0.2_brown** (with **v2.1.0.2.1_brown** as the current pre-release), five
-open issues, no open pull requests. The rules are in
-[`AGENTS.md`](AGENTS.md); the history is in
+State: `main` at crate **2.1.0**, `PROTO_VERSION` **241**. Two wire numbers are
+claimed in open PRs and are not on `main` yet: **242** by PR #174 (8PSK) and
+**243** by the voice-hunting PR. Latest release **v2.1.0.2_brown** (with
+**v2.1.0.2.1_brown** as the current pre-release), five open issues. The rules are
+in [`AGENTS.md`](AGENTS.md); the history is in
 [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
 
 Items marked `#NNN` are **upstream** requests this fork may pick up; they are the
@@ -115,8 +116,9 @@ maintainer's queue there, not a promise.
 On `main`, after **v2.1.0.2.1**: the Brick2 HPSDR work (paced transmit, the
 Hermes-emulation PA fix, one I/Q switch per radio), the **detachable APRS decoder
 panel** with the Detachable settings page, the **decoded-text UDP feed**, the
-**JTTY** rebuild, and the **CIS-11** mode (open as PR #173, which claims
-`PROTO_VERSION` 241).
+**JTTY** rebuild, and the **CIS-11** mode (merged as PR #173, `PROTO_VERSION`
+241). Open: **PR #174** (8PSK, 242 / 0x3E) and the **voice-hunting** PR
+(243 / 0x3F).
 
 ## Parked, with the reason
 
@@ -170,6 +172,14 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **Voice hunting in the scanner** — a **VOICE** switch in the SCAN window stops
+  the scan only on channels that sound like somebody talking, passing over
+  carriers, birdies, pagers and data bursts instead of stopping on them. The
+  reading is shown as it runs (*passed 27.5550 · voice 18*), so a strong signal
+  going by is explained rather than looking like a deaf scan. Independent
+  implementation from standard DSP — no code from VUERWERK, whose licence puts a
+  commercial licence on its originals. **A PR because it is the wire change**
+  (243 / 0x3F, renumbered from 242 which PR #174 claimed first).
 - **8PSK in the program** — a third modulation choice beside BPSK and QPSK
   (receive only, three bits per symbol), proven on a synthetic because the
   corpus's 8PSK recordings carry no clean constellation. **PR #174** (242 / 0x3E).
