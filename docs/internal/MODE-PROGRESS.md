@@ -1279,6 +1279,25 @@ Guard: `the_channel_fit_recovers_level_and_phase_across_the_frame`, verified
 failing with the correction reduced to phase only (`symbol 0: level 1.284, not
 corrected`).
 
+## 2026-10-24 — JTTY taken from upstream, and the platform it belongs on
+
+Upstream's #597 was **our** port, and they then fixed the mode properly in six
+commits on top of it: the signal at the reference's **1500 Hz** centre, four-letter
+words packed as text with the spaces between TEXT5 chunks kept, the reference
+waveform sent one symbol earlier and one phase per message, the frequency search
+around 1200–1800 Hz and the operator's own tuning, one line per message, the
+non-ASCII transmit panic, the burst tail, the SENDING state and the stop button,
+and a named reason when a key-up is refused.
+
+Rather than reimplement any of it, the two files that changed — `dsp/jtty.rs` and
+`digi/jtty_controller.rs` — are theirs, taken whole. Our copy differed only by the
+`tx_refused` field they had dropped at the merge and have since restored properly,
+so the transplant loses nothing. Their tests come with it: **18 modem** and **6
+controller** tests, including `a_transmitted_message_decodes_back`,
+`two_stations_at_once_are_two_lines` and `the_operator_frequency_is_searched_and_sent_on`,
+all green. Wire-neutral — no field, no command, and the panel and types files are
+unchanged.
+
 ## The table — every mode we carry, as it stands (2026-10-23)
 
 The brief's deliverable, now covering **everything the program ships** rather than
@@ -1329,7 +1348,7 @@ program copied us** — the only one that proves interop).
 | ARDOP (1) | recording | no | — | three `ardopcf` recordings decode byte-exactly |
 | STANAG 4285 (**3** uncoded rates, 1) | recording | no | — | the instrument reads real idle captures; the Annex E payload is proven on a loopback only |
 | AtChat (1) | air | air | — | the NET mode, in use on the bench |
-| JTTY (1) | recording | loopback | — | its own golden-vector gate |
+| JTTY (1) | recording | loopback | — | **upstream's own implementation, taken whole** (2026-10-24): 18 modem tests and 6 controller tests, one of which decodes a transmitted message back; never copied off the air |
 | ALE (1) | **not proven** | no | — | the FEC, framing and Gray tone map round-trip a word exactly; **no off-air burst has ever decoded here**. A recording is the one thing missing, and the ask is in the manual (§3.29) and the release notes — see [`ALE-HANDOVER.md`](ALE-HANDOVER.md) |
 | 8PSK125/250/500/1000 (**4** ported, **none ships**) | **no** | no | — | 0/4: the slicer is proven on a synthetic; the recordings measure 20–46 Hz wide where the mode is 125 Hz |
 
