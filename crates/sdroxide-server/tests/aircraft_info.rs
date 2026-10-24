@@ -1,0 +1,159 @@
+//! `/aircraft-info/{icao}` on a real station: that it is wired where the
+//! clients look for it, behind the same door as the sockets, and shut until the
+//! operator opens it.
+//!
+//! What it answers when open — the airframe, the route, the credit — is the
+//! relay's, tested beside it against a stand-in for the two services. Nothing
+//! here reaches the internet: a question that would is never asked, because
+//! these stations are either shut or refuse the question first.
+
+use std::time::Duration;
+
+use sdroxide_server::{AccessFn, RadioParams, ServerParams, serve};
+use sdroxide_types::{RemoteAccess, SpectrumFrame};
+
+const USER: &str = "f6kim";
+const PASS: &str = "correct horse battery staple";
+
+/// One port per test: they run side by side.
+const PORT_SHUT: u16 = 39481;
+const PORT_PASSWORD: u16 = 39482;
+const PORT_OPEN: u16 = 39483;
+
+async fn spawn_station(port: u16, password: bool, open: bool) {
+    // No engine: this endpoint never touches the radio, so the station's one
+    // radio is a set of channels nobody is on the other end of.
+    let frame = SpectrumFrame {
+        seq: 0,
+        center_hz: 14_200_000.0,
+        span_hz: 1_536_000.0,
+        db_floor: -120.0,
+        db_ceil: 0.0,
+        bins: Vec::new(),
+        rows: Vec::new(),
+        rows_clocked: false,
+    };
+    let (_spec_in, spectrum_out) = triple_buffer::triple_buffer(&frame);
+    let (_wide_in, wide_spectrum_out) = triple_buffer::triple_buffer(&frame);
+    let (cmd_tx, _cmd_rx) = crossbeam_channel::unbounded();
+    let (_event_tx, event_rx) = crossbeam_channel::unbounded();
+    let (_audio_tx, audio_rx) = rtrb::RingBuffer::<f32>::new(96_000);
+    let (mic_tx, _mic_rx) = rtrb::RingBuffer::<f32>::new(48_000);
+    // Kept alive for the life of the test: a dropped end would stop the pump.
+    std::mem::forget((_spec_in, _wide_in, _cmd_rx, _event_tx, _audio_tx, _mic_rx));
+    let access: Option<AccessFn> = password.then(|| -> AccessFn {
+        Box::new(|| RemoteAccess { username: USER.into(), password: PASS.into() })
+    });
+    tokio::spawn(serve(ServerParams {
+        radios: vec![RadioParams {
+            id: 0,
+            name: String::new(),
+            cmd_tx,
+            event_rx,
+            spectrum_out,
+            wide_spectrum_out,
+            audio_rx,
+            mic_tx,
+        }],
+        bind: "127.0.0.1".into(),
+        port,
+        web_root: None,
+        access,
+        probe: None,
+        add_radio: None,
+        remove_radio: None,
+        rename_radio: None,
+        radio_power: None,
+        aircraft_online: open,
+    }));
+    tokio::time::sleep(Duration::from_millis(400)).await;
+}
+
+/// A bare HTTP GET, optionally carrying a cookie, handing back the whole answer.
+async fn get(port: u16, path: &str, cookie: Option<&str>) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut sock = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.expect("connect");
+    let cookie = cookie.map(|c| format!("Cookie: {c}\r\n")).unwrap_or_default();
+    let req =
+        format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n{cookie}Connection: close\r\n\r\n");
+    sock.write_all(req.as_bytes()).await.expect("write");
+    let mut body = String::new();
+    tokio::time::timeout(Duration::from_secs(5), sock.read_to_string(&mut body))
+        .await
+        .expect("timeout reading the answer")
+        .expect("read");
+    body
+}
+
+fn sign_in(port: u16) -> String {
+    let body = serde_json::json!({ "username": USER, "password": PASS, "remember": false });
+    let resp = ureq::post(&format!("http://127.0.0.1:{port}/signin"))
+        .header("content-type", "application/json")
+        .send(body.to_string())
+        .expect("sign in");
+    resp.headers()
+        .get("set-cookie")
+        .and_then(|v| v.to_str().ok())
+        .map(|c| c.split(';').next().unwrap_or("").to_string())
+        .expect("a cookie")
+}
+
+/// A station whose operator has not switched it on says so, with a 503 and a
+/// JSON body a client can read — and says it through a proxy's prefix too.
+#[tokio::test]
+async fn a_station_that_has_not_switched_it_on_says_disabled() {
+    spawn_station(PORT_SHUT, false, false).await;
+    for path in [
+        "/aircraft-info/484006",
+        "/sdroxide/aircraft-info/484006",
+        "/shack/sdr/aircraft-info/4ca1fa?callsign=RYR123",
+    ] {
+        let answer = get(PORT_SHUT, path, None).await;
+        assert!(answer.starts_with("HTTP/1.1 503"), "{path}: {answer}");
+        assert!(answer.contains("\"status\":\"disabled\""), "{path}: {answer}");
+        assert!(answer.to_ascii_lowercase().contains("application/json"), "{path}: {answer}");
+        assert!(
+            answer.to_ascii_lowercase().contains("cache-control: no-store"),
+            "{path}: {answer}"
+        );
+    }
+}
+
+/// With a password on the station, the endpoint asks for it like the sockets
+/// do — and the cookie the sign-in handed out is what answers.
+#[tokio::test]
+async fn behind_a_password_it_wants_the_cookie() {
+    spawn_station(PORT_PASSWORD, true, false).await;
+
+    let without = get(PORT_PASSWORD, "/aircraft-info/484006", None).await;
+    assert!(without.starts_with("HTTP/1.1 401"), "{without}");
+    assert!(without.contains("\"status\":\"unauthorized\""), "{without}");
+
+    let forged =
+        get(PORT_PASSWORD, "/aircraft-info/484006", Some("sdroxide_session=forged.token")).await;
+    assert!(forged.starts_with("HTTP/1.1 401"), "{forged}");
+
+    // ureq blocks and the station is on this very runtime, so it is asked from a thread of its own.
+    let cookie = tokio::task::spawn_blocking(|| sign_in(PORT_PASSWORD)).await.unwrap();
+    let signed = get(PORT_PASSWORD, "/aircraft-info/484006", Some(&cookie)).await;
+    // Through the door, and then shut: the switch, not the password, answers.
+    assert!(signed.starts_with("HTTP/1.1 503"), "{signed}");
+    assert!(signed.contains("\"status\":\"disabled\""), "{signed}");
+}
+
+/// An open station refuses a question that is not one before it asks anybody.
+#[tokio::test]
+async fn an_open_station_refuses_a_bad_question_with_400() {
+    spawn_station(PORT_OPEN, false, true).await;
+    for path in [
+        "/aircraft-info/zz",
+        "/aircraft-info/48400",
+        "/aircraft-info/484006?callsign=KLM%20123",
+        "/aircraft-info/484006?reg=PH%2FBXA",
+        "/sdroxide/aircraft-info/not-an-address",
+    ] {
+        let answer = get(PORT_OPEN, path, None).await;
+        assert!(answer.starts_with("HTTP/1.1 400"), "{path}: {answer}");
+        assert!(answer.contains("\"status\":\"invalid\""), "{path}: {answer}");
+    }
+}

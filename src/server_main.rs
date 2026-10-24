@@ -215,6 +215,11 @@ pub fn run(
             }
             Ok(sdroxide_config::load_radios().is_enabled(id))
         })),
+        // The station reaches the internet for its clients' aircraft cards only
+        // when its operator has said so, here and nowhere a client can.
+        aircraft_online: sdroxide_server::aircraft_online_enabled_by(
+            std::env::var(sdroxide_server::AIRCRAFT_ONLINE_ENV).ok().as_deref(),
+        ),
     })?;
     Ok(())
 }

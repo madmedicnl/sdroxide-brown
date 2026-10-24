@@ -15,6 +15,7 @@
 //! triple-buffered spectrum, rtrb audio) into those async lanes and caches
 //! the latest state/caps/memories so a new session can be greeted instantly.
 
+mod aircraft;
 mod auth;
 mod probe;
 mod session;
@@ -62,6 +63,7 @@ pub enum ServerError {
 /// empty, leaves the server open to anyone who can reach the port.
 pub type AccessFn = Box<dyn Fn() -> sdroxide_types::RemoteAccess + Send + Sync>;
 
+pub use aircraft::{ENV_SWITCH as AIRCRAFT_ONLINE_ENV, enabled_by as aircraft_online_enabled_by};
 pub use probe::ProbeFn;
 
 /// How this station puts another radio in its roster: create the radio's
@@ -163,6 +165,12 @@ pub struct ServerParams {
     /// every client's, which for a headless station means nobody has one at
     /// all. See [`RadioPowerFn`].
     pub radio_power: Option<RadioPowerFn>,
+    /// Whether this station answers `/aircraft-info` — the AIRCRAFT window's
+    /// online type, operator, route and photo credit, got from adsbdb and
+    /// Planespotters on the clients' behalf. Off unless the operator says so
+    /// (see [`aircraft_online_enabled_by`]): it makes this machine reach the
+    /// internet for whoever is connected.
+    pub aircraft_online: bool,
 }
 
 pub(crate) struct SessionTx {
@@ -293,6 +301,8 @@ pub(crate) struct Station {
     radios: std::sync::RwLock<Vec<Arc<Shared>>>,
     pub solar: Arc<solar::SolarHub>,
     pub auth: Arc<auth::AuthGate>,
+    /// The relay behind `/aircraft-info`, switched on or off for the life of the process.
+    pub aircraft: Arc<aircraft::AircraftHub>,
     /// The one probe worker, kept here so a radio added later shares it rather
     /// than starting a second thread that would scan the same bus.
     probes: Arc<probe::ProbeHub>,
@@ -635,6 +645,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         radios: std::sync::RwLock::new(Vec::new()),
         solar: Arc::new(solar::SolarHub::default()),
         auth: Arc::new(auth::AuthGate::new(params.access)),
+        aircraft: Arc::new(aircraft::AircraftHub::start(params.aircraft_online)),
         probes: Arc::new(probe::ProbeHub::start(params.probe)),
         add: params.add_radio,
         remove: params.remove_radio,
@@ -681,6 +692,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         .route("/ws/{id}", get(session::ws_route_for))
         .route("/radios", get(radios_route))
         .route("/solar-ws", get(solar::ws_route))
+        .route("/aircraft-info/{icao}", get(aircraft::info_route))
         // Where a browser trades its password for a signed cookie, and gives
         // it back. Both are plain HTTP because a cookie is a response header
         // and the socket handshake's headers are spent before the sign-in
@@ -713,6 +725,14 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
 fn is_root_route(path: &str) -> bool {
     match path {
         "/ws" | "/solar-ws" | "/radios" => true,
+        // Whatever follows is the question, and a bad one is the endpoint's to
+        // refuse with a 400, not the static handler's to answer with a page.
+        _ if path
+            .strip_prefix("/aircraft-info/")
+            .is_some_and(|q| !q.is_empty() && !q.contains('/')) =>
+        {
+            true
+        }
         _ => path
             .strip_prefix("/ws/")
             .is_some_and(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())),
@@ -1476,7 +1496,16 @@ mod proxy_prefix_tests {
     /// asked for already means what it says.
     #[test]
     fn nothing_in_front_means_nothing_to_strip() {
-        for path in ["/", "/ws", "/ws/0", "/ws/12", "/radios", "/solar-ws", "/index.html"] {
+        for path in [
+            "/",
+            "/ws",
+            "/ws/0",
+            "/ws/12",
+            "/radios",
+            "/solar-ws",
+            "/index.html",
+            "/aircraft-info/484006",
+        ] {
             assert_eq!(strip_proxy_prefix(path), None, "{path}");
         }
     }
@@ -1494,6 +1523,8 @@ mod proxy_prefix_tests {
         assert_eq!(strip("/sdroxide/ws/2"), "/ws/2");
         assert_eq!(strip("/sdroxide/solar-ws"), "/solar-ws");
         assert_eq!(strip("/sdroxide/radios"), "/radios");
+        assert_eq!(strip("/sdroxide/aircraft-info/484006"), "/aircraft-info/484006");
+        assert_eq!(strip("/shack/sdr/aircraft-info/4ca1fa"), "/aircraft-info/4ca1fa");
         // More than one level deep is the same answer: the client's dist is
         // flat, so anything above the file is somebody's routing.
         assert_eq!(strip("/shack/sdr/ws/1"), "/ws/1");
@@ -1508,6 +1539,20 @@ mod proxy_prefix_tests {
         assert_eq!(strip_proxy_prefix("/sdroxide/ws/latest"), Some("/latest".to_string()));
         // …and the real one still resolves through a prefix that is itself /ws.
         assert_eq!(strip_proxy_prefix("/ws/ws/3"), Some("/ws/3".to_string()));
+    }
+
+    /// `/aircraft-info/` names a question and only one: nothing under it, and
+    /// nothing at all is not a question.
+    #[test]
+    fn the_aircraft_question_is_one_segment_after_its_name() {
+        assert_eq!(strip_proxy_prefix("/aircraft-info/484006"), None);
+        assert_eq!(
+            strip_proxy_prefix("/aircraft-info/zz-not-hex"),
+            None,
+            "refused by the endpoint, not the router"
+        );
+        assert_ne!(strip_proxy_prefix("/aircraft-info/"), None, "no question, no endpoint");
+        assert_ne!(strip_proxy_prefix("/aircraft-info/484006/x"), None);
     }
 }
 

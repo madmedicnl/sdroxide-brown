@@ -28,6 +28,12 @@ maintainer's queue there, not a promise.
    straight to `main`. **RSP1 is not on the list** (the operator struck it off on
    2026-10-24: it is the bench's receiver and his only wideband one).
 
+0b. **Aircraft online info, PR B** — the clients (native, web, Chrome, remote) read
+   the relay of PR A: green "radio" and blue "online" badges, "—" with the reason
+   for an absent field, the thumbnail loaded in memory by the client. Needs a live
+   test of adsbdb and Planespotters first, and the screens are F4NRM's to look at.
+   Asked for by the operator.
+
 1. **The mode work — the live queue, and it has its own brief.**
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
    finish the missing modes and get TX working for everything fldigi can
@@ -205,6 +211,13 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **Aircraft online relay (PR A)** — an optional server-side relay for an aircraft
+  card's online fields (type, operator, route from adsbdb; a photo's URL, credit
+  and link from Planespotters). Off unless `SDROXIDE_AIRCRAFT_ONLINE=1`; no key,
+  no account; JSON cached 24 h; the photo itself is never proxied or stored.
+  Wire-neutral. **Not yet checked against the real services** (the formats were
+  written from their documentation; this sandbox cannot reach them). PR B wires
+  the web, Chrome and remote clients to it.
 - **STANAG 4285's equaliser, and the tape is not weak after all** — a
   half-symbol-spaced least-squares equaliser replaces the T-spaced estimate-plus-
   inverse, which could not describe a pulse and so never beat the plain symbols on

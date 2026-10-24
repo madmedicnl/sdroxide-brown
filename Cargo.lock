@@ -5115,6 +5115,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdroxide-aircraft-online"
+version = "2.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
 name = "sdroxide-airspy"
 version = "2.1.0"
 dependencies = [
@@ -5747,6 +5756,7 @@ dependencies = [
  "opusic-sys",
  "rtrb",
  "rust-embed",
+ "sdroxide-aircraft-online",
  "sdroxide-config",
  "sdroxide-proto",
  "sdroxide-radio",

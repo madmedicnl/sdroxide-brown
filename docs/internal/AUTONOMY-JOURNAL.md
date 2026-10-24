@@ -95,6 +95,35 @@ metric-versus-shuffled-null statistic is invalid and must not be used.
 
 ---
 
+## 2026-10-24 (aircraft) — an optional server relay for the aircraft card's online fields
+
+**Summary.** The aircraft card can now be given its internet fields (type,
+operator, route, and a photo's credit and link) by the station itself, so a
+browser, a phone or a remote client never has to call those services. It is off
+until the operator sets `SDROXIDE_AIRCRAFT_ONLINE=1` on the server, needs no key
+or account, and the radio side of the card is untouched either way. Nothing in
+the clients uses it yet: that is the second PR. What is not proven is the real
+answers of adsbdb and Planespotters, because this sandbox cannot reach them.
+
+**Done.** New crate `sdroxide-aircraft-online` (parsing, cache, relay, and an
+HTTP part behind the `fetch` feature) and `GET /aircraft-info/{icao}` in the
+server, behind the station's login cookie and shut when the switch is off. JSON
+cache 24 h, failures remembered 5 min, 2000 entries per kind, one outbound
+request per key, 30 questions a minute overall, fixed hosts only, ICAO exactly
+six hex digits. The Planespotters photo is never fetched, stored or re-hosted:
+only the thumbnail URL (unchanged), the credit and the page link are returned.
+No `PROTO_VERSION` bump. Tests: 50 in the crate (45 without `fetch`), 30
+server lib, 3 integration (`aircraft_info`); 23 of 23 hand mutations caught.
+
+**Not done / blocked.** The two services' formats were written from their
+documentation and **need one live run** from a machine with internet. The wasm
+check of the crate is clean. `cargo check --workspace --all-targets` and the
+radio-linked tests depend on `sdroxide-rade`, which fetches at build time.
+
+**Next.** PR B: the clients, with the badges.
+
+---
+
 ## 2026-10-24 (MT63) — the transmit fold, and the lock's acceptance is still the wall
 
 **Summary.** MT63's transmit half was broken for two of its six variants and is now
