@@ -756,7 +756,7 @@ mod device_entry_tests {
             events: keys.to_vec(),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| {
+        let _ = crate::test_support::run_frame(ctx, input, |ui| {
             device_field(ui, "t", &names, selected, "the test device");
         });
     }
@@ -764,7 +764,8 @@ mod device_entry_tests {
     /// One frame that only draws and claims the keyboard, so the next frame's
     /// keys go to the entry field rather than to nothing.
     fn focus(ctx: &egui::Context, selected: &mut Option<String>) {
-        let _ = ctx.run_ui(
+        let _ = crate::test_support::run_frame(
+            ctx,
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,

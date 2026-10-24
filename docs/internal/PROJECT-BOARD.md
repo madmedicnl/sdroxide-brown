@@ -7,7 +7,8 @@ rules are [`../../AGENTS.md`](../../AGENTS.md).
 Scripted via `gh project item-create` + `item-edit` once the `project` scope is
 granted (`gh auth refresh -h github.com -s project`).
 
-Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 239).
+Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 241 on
+`main`; 242 claimed by PR #174 and 243 by the voice-hunting PR).
 
 ## Achieved (Done)
 
@@ -51,6 +52,8 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 239).
   Aoki schedules, local solar time.
 - CB: 11 m used in full (voice and all the digital modes), WSJT-CB
   interoperability, the channel plans, SSTV on 27.700, CB-first band handling.
+- **Voice hunting in the scanner** — a VOICE switch that stops a scan only where
+  somebody is talking, with the reading shown as it runs (in the PR, 243).
 
 **Health**
 - The gate is silent; the mode/band tables, `PROTO_VERSION` register, `Action`
@@ -61,6 +64,14 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 239).
 
 ## Open (In Progress)
 
+- **Issue #146, reopened** — LISTEN in the band/mode menu hid nothing from the
+  BAND chip's popup: the answer lived in a flag that only one of the three places
+  drawing the selector set. **PR #183** derives it from the tab instead, adds a
+  hint where the switch is, and documents it in the manual §2.4. It needs the
+  reporter to confirm before the issue closes.
+- **The debug UI suite does not run** — `cargo test -p sdroxide-ui --lib` aborts
+  on `epaint`'s `TexturesDelta` `debug_assert!`; `--release` is green (961). One
+  `out.textures_delta.clear()` per drawing test, across UI test files.
 - **The mode work is the queue.** [`MODE-PHASE-4-PROMPT.md`](MODE-PHASE-4-PROMPT.md)
   — finish the modes, TX for everything fldigi can transmit, vendor when the port
   and the bench are exhausted. Journal and measurements:

@@ -384,6 +384,17 @@ band chip brings it back; while docked, that chip toggles the column. Docking is
 offered on the desktop layouts alone: a window narrow enough to be a phone
 undocks and keeps the popup.
 
+**LISTEN can also carry the listening screen** (issue #146). Turn on *hide TX on
+the LISTEN tab* in Settings → UI and the transmit controls disappear while that
+tab is picked, which is the SWL screen without going into Settings and back;
+**OPERATE** puts back exactly what this radio's own setting says. It cannot grant
+a transmitter: a radio configured receive-only stays receive-only whichever tab
+is chosen, and the band lockout and the out-of-band warning are untouched. The
+tab is remembered, so a station left listening comes back listening. It is off by
+default because it changes what the tab means, it asks once, and the LISTEN tab
+says where the switch is until it is on — a tab that quietly hid the transmitter
+for somebody who never asked would be worse than one that does not hide it.
+
 In the **OPERATE** tab a pair that cannot work is not offered: **a mode that
 does not apply on the current band is greyed**, with the reason on hover. FM
 broadcast is WFM alone, both airbands are AM, and 11 m is AM, NFM, SSB, CW and
@@ -1951,9 +1962,41 @@ SSB stops at NFM's squelch, which is open until you set one there, and a memory
 scan judges each channel by the squelch of the mode it was stored in. Set it
 once while the scan is running in that mode and it is remembered for next time.
 
-**Listens for** is how long it stays on a candidate before judging it. Below
-about a tenth of a second the level meter has not settled and weak signals get
-missed; the default 150 ms is a reasonable balance.
+**VOICE stops only where somebody is talking.** A scan that stops on a level
+stops on everything — a data burst, an unmodulated carrier, a pager, a birdie,
+the tail of a CTCSS burst. Press **VOICE** and a candidate has to *sound like
+speech* as well as be loud enough: the audio from the channel is measured for
+the four things a voice does that nothing else does. It is periodic (vowels are
+voiced), it fills the speech band rather than sitting in one corner of it, it is
+neither flat noise nor one steady tone, and its loudness rises and falls a few
+times a second — a syllable. A carrier is periodic and steady; noise is
+broadband and has no rhythm; a data burst's rhythm is far faster than a
+syllable. Every candidate is listened to before it is judged, exactly as
+without **VOICE**, so what it does is pass over the things that were never
+worth stopping for rather than stopping on them and leaving you to work it out.
+
+Two things follow from that, and both are shown rather than left to be
+discovered. A voice is a rhythm, so the check needs about half a second of
+audio: the **Listens for** field moves up to 400 ms when **VOICE** is on and
+will not go below it. And the reading is reported while the scan runs — the
+line under it says *passed 27.5550 MHz · voice 18* for a channel it declined,
+and *voice 82 · somebody is talking* for one it is sitting on — so a strong
+signal going by is explained by a number instead of looking like a scan that
+cannot hear it.
+
+**VOICE** is offered only where it can keep that promise. A mode that carries
+no speech — anything digital, a fax, a data subcarrier — would leave a voice
+hunt stopping nowhere, so the button is greyed in such a mode (or, in a memory
+scan, when no channel in the folders you picked is in one that carries); the
+line beside it says so. It works on any radio that gives this program audio,
+which includes a transceiver on a sound card: what is judged is the audio you
+would hear.
+
+Music with a voice in it is speech by these four measurements, and a singing
+station will stop the scan. That is deliberate — the question it answers is
+"is this programme or is this a carrier", which is the one worth asking when
+hunting a band.
+
 
 **Resumes** decides what ends a stop:
 
@@ -4538,6 +4581,17 @@ panel is a live **messaging area** instead of a QSO sequencer.
   monitoring for an hour. Every mode that copies text has this button, and it is
   never the same one as the **CLEAR** below the transmit box (that one stops
   what you are *sending*).
+
+**The coded families, and four banks that do not decode yet.** Beside BPSK/QPSK
+there is a row of **coded** PSK waveforms — `BPSK63F`, the single-carrier `R` set,
+and the multi-carrier `C`/`RC` banks — plus **8PSK** as a modulation choice. All
+of them are receive only. Twenty of the multi-carrier banks read their own
+recordings whole; **the four widest — PSK125C12, PSK500C4, PSK500RC4 and
+PSK1000C2 — do not decode at all**, and that is a fault in this end, not in the
+signal: their carriers sit close enough together that the receiver cannot separate
+them, and the fix is a rebuild of the multi-carrier front end (see the working
+notes). Their chips say so on the hover. Everything narrower works, so reach for
+PSK250C6 or PSK500C2 on a wide signal rather than one of those four.
 
 **Transmitting (type-ahead):**
 
@@ -16794,7 +16848,7 @@ and not the station's.
 | `tciserver.json` | JSON | Built-in TCI server: enabled, bind address, port, advertised device name, whether clients may transmit, and the client limit. |
 | `rigctld.json` | JSON | Built-in Hamlib rigctld server: enabled, bind address, port, reported rig name, whether clients may transmit, and the client limit. |
 | `wsjtx.json` | JSON | WSJT-X UDP broadcast: enabled, destination host and port, and the name clients see. |
-| `scanner.json` | JSON | The scanner: memories or a range, the range and channel step, the level that counts as busy, the dwell, how it resumes, and which memories to skip. |
+| `scanner.json` | JSON | The scanner: memories or a range, the range and channel step, the level that counts as busy, whether to stop only on voices, the dwell, how it resumes, and which memories to skip. |
 | `renderer-fallback.txt` | text | Written only when a panic came from the graphics driver: the next start renders through OpenGL and says so. Delete it to go back to the default renderer ([14](#14-troubleshooting)). |
 | `skimmer.json` | JSON | Skimmers: which of CW / PSK / RTTY run, and each one's spot squelch in dB. Restored at startup; a narrowband (audio-mode) radio still forces them off without disturbing what you picked. |
 | `adsb.json` | JSON | ADS-B decoder ([§3.13](#313-ads-b-aircraft-on-1090-mhz)): the two timeouts, how many history dots to keep, how far ahead the speed vectors reach, and the ceiling on the aircraft table. Restored at startup, and — like `ism.json` — a receiver that cannot feed the decoder forces it off without disturbing what you picked. |

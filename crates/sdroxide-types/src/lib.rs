@@ -317,7 +317,9 @@ pub use satcfg::{
 pub use satlock::{
     C_KM_S, SatLockConfig, SatPass, SatTrackStatus, SatUplink, doppler_rx_hz, doppler_tx_hz,
 };
-pub use scanner::{SCAN_STEPS_HZ, ScanKind, ScanResume, ScanState, ScannerConfig};
+pub use scanner::{
+    MIN_LISTEN_MS, SCAN_STEPS_HZ, ScanKind, ScanResume, ScanState, ScannerConfig, ScanVoice,
+};
 pub use signal_id::{
     PROFILES, SIGIDWIKI_BASE, SignalFamily, SignalProfile, identify, search_profiles,
 };

@@ -21,6 +21,270 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 — issue #146: the LISTEN tab hid nothing from the popup
+
+**Summary.** The reporter on v2.1.0.2 was right and the feature was broken. Picking
+LISTEN in the band/mode menu is supposed to hide the transmit controls, and it
+did that only for someone who had already opened the selector as a docked column
+or a window — from the ordinary BAND chip popup, which is how everyone opens it,
+nothing happened. The answer is now read from the tab itself rather than from a
+flag that one of the three places drawing the menu remembered to set, so every
+way in works, and the LISTEN tab says where the switch is while it is off. It is
+**PR #178**, because the band/mode window is F4NRM's.
+
+**Done.**
+- `mod.rs`: `listen_tab_hides()` and the tab half of `swl_mode()` derived from
+  `ui_settings.listen_tab_hides_tx && band_menu_tab == Listen`; the stored
+  `listen_tab_swl` field is gone, so there is no flag left to forget. The
+  remembering keeps one seam, `remember_band_tab()`, called once a frame, and it
+  writes only when the answer has moved.
+- `top_bar.rs`: the `before`/persist block deleted from `band_menu_body` — it was
+  the only one of the three call sites that had it. `band_mode_menu` gains
+  `listen_hides_tx` so the tab can say where the switch is.
+- The LISTEN tab now carries one weak line while the setting is off: *"This tab
+  can hide the transmit controls too: turn on "hide TX on the LISTEN tab" in
+  Settings → UI"*. A hint and not a chip, because the switch asks once in
+  Settings and a chip here would be a way round that confirmation.
+- Manual §2.4 documents the setting, including the half that matters: it hides,
+  it never grants, and a receive-only radio stays receive-only.
+- **The test was the other half of the fault** and now moves the tab rather than
+  setting a flag: `app.band_menu_tab = Listen` then `assert!(app.swl_mode())`.
+  Verified to fail on the old behaviour ("picking LISTEN must hide them — nothing
+  else called").
+
+**Numbers.**
+- `cargo test --release -p sdroxide-ui --lib` — **961 passed, 0 failed, 6
+  ignored** (the whole crate, the release gate).
+- `cargo test -p sdroxide-ui --lib the_listen_tab` — passes in debug and release.
+
+**Found on the way, and not fixed: the debug UI suite does not run.** With egui
+0.36, `epaint`'s `TexturesDelta::drop` is a `debug_assert!`; a dozen UI tests drop
+an `egui::FullOutput` without applying or clearing its deltas, and the first of
+them — the DAB logo tile — **aborts the whole test binary**, so 949 tests never
+report. `cargo test --release` is green, which is why nobody has seen it: the
+release gate is the release one. The fix is one `out.textures_delta.clear()` per
+test that draws a frame. It is a sweep across F4NRM's UI test files, so it is in
+`TODO.md` under *Now* waiting for a go-ahead rather than done here — and it is
+why this entry's numbers are release numbers.
+
+**Not done / blocked.** No click-through of the popup itself: the test drives the
+tab the popup writes, not egui's pointer, and that seam is where the bug was.
+
+**Next.** PR #178 for F4NRM to read, then back to the mode queue.
+
+---
+
+## 2026-10-24 (rules) — F4NRM's list is a workflow, and the RSP1 is ours
+
+**Summary.** The list of things that belong to F4NRM has been read off the
+discussion itself rather than from memory, and it was wrong in two ways. The
+**RSP1 is not on it** — the operator struck it off in as many words, because it
+is his own receiver and the only wideband one on the bench — so RSP1 work is ours
+and needs nobody's permission. And the rest of the list is no longer a wall: a
+change that has to touch one of those decoders or radios, or one of his panels,
+goes up **as a PR** for him to read before it lands, which is what he asked for
+in that same discussion. Nothing changes about the part that matters: no
+unrequested refactor of a mode his radio group has confirmed.
+
+**Done.**
+- `AGENTS.md`: the section is renamed *"F4NRM's list — his to change, and a PR to
+  touch"*, quotes the operator's own correction, drops RSP1, and states the PR
+  rule with his sentence as the evidence: *"put any wire change or item that
+  touches these to put up as a PR and not implement them directly without you
+  having the chance to do look at them."*
+- `AGENTS.md`'s stop-list for an unattended session: F4NRM's list, his panels and
+  the wire now share one line — branch, tests, PR, carry on, never `main`.
+- `AGENTS.md`'s focus section and `TODO.md`'s item 0 carry the same reading, so
+  the queue cannot contradict the rules.
+- Read from the discussion itself (GraphQL, `discussion(number:155)`), not from
+  the paraphrase that was here.
+
+**Not done / blocked.** Nothing. The list itself is still F4NRM's to change, and
+this entry does not add to or remove from it beyond the operator's own correction.
+
+**Next.** Back to issue #146 (the LISTEN tab), which is what the session was on.
+
+---
+
+## 2026-10-24 — voice hunting: the scanner stops on people, not on carriers
+
+**Summary.** The scanner can now hunt voices. A **VOICE** switch in the SCAN
+window makes it stop only on channels that sound like somebody talking, and go
+past the unmodulated carriers, birdies, pagers and data bursts it used to stop
+on. While it runs, the line under the status tells you what it made of the last
+channel it looked at — *passed 27.5550 MHz · voice 18*, or *voice 82 · somebody
+is talking* — so a strong signal going past is a number rather than a mystery.
+The cost is time: a voice is a rhythm of syllables, so each channel is listened
+to for at least half a second, and the window raises the dwell and says why.
+Nothing is proven off the air yet — the detector is proven on synthetic speech
+and on the engine's own bench, and a real band is the next thing it needs.
+
+**Done.**
+- **`sdroxide-dsp/src/vad.rs`** (new): `SpeechDetector`, a pure function of the
+  audio handed to it — a 20 ms frame, then four measurements. **Structure**
+  (spectral flatness and the share of the band's power in its strongest bin,
+  which between them separate speech from noise and both from a tone),
+  **voicing** (normalised autocorrelation over 60–400 Hz), **spread** (three
+  sub-bands of 250–3500 Hz), and **syllables** (hysteresis rises of the frame
+  loudness, 2–9 a second). Score 0–100; the verdict is **4 accepted frames in
+  the last half second**, not one, and `ACCEPT` is 70 — above what structure,
+  voicing and spread can add up to (65) — so a frame has to show a *rhythm*
+  before it counts.
+- **The two measurements that shaped it, both failures first.** A bare AM
+  carrier scored **exactly 65.0 on one frame** — that is the DDC settling after
+  a retune, and it made the scan stop on every hop. And a single frame at the
+  threshold was enough for a verdict. Hence `ACCEPT = 70` and the 4-of-25
+  window, and both have their own unit tests (`one_settling_thump_is_not_a_voice`,
+  `a_steady_buzz_is_not_a_voice`).
+- **Engine** (`crates/sdroxide-radio/src/engine.rs`): the chain scores its own
+  demodulator audio *before* the AGC, notch, noise reduction and squelch — a
+  voice is what arrived, not what the operator's settings did to it — and a
+  demod-audio rig (CB on a sound card) is scored in `play_rx_audio` through a
+  second detector. `scan_is_busy()` is now level **and** voice; the settle is
+  `dwell.max(MIN_LISTEN_MS)` when the gate runs; the detectors reset when the
+  offset moves or a candidate is retuned to; and `voice_gate()` has three
+  answers — off, running, and *nothing to hear* (a mode that carries no speech
+  is passed over, because the operator asked for voices).
+- **Refusals, not silent fallbacks**: starting a voice hunt with no audio, or
+  with nothing in the scan in a mode that carries speech, is refused with a
+  notice, and the SCAN window greys the button and says the same thing before
+  START is pressed.
+- **Wire** (`crates/sdroxide-proto/src/lib.rs`): `ScannerConfig.voice_only` and
+  `ScanState.voice` (`Option<ScanVoice>` — a whole-hertz frequency with the
+  score, so the reading always names its channel), both appended,
+  `#[serde(default)]`. **243 / 0x3F**, having found 242 already claimed by
+  PR #174 (`fork/psk8`) — the later branch moves, as the register says.
+- **Tests, with the numbers.**
+  - `cargo test -p sdroxide-dsp --lib vad` — **15 passed**.
+  - `cargo test -p sdroxide-radio --test scanner` — **15 passed**, three new:
+    a bare carrier that stops the scan with the gate off and is passed over with
+    it on (and its reading is on the wire, < 45); a voice-modulated carrier that
+    stops it (score ≥ 60); and a voice hunt over `Mode::Ft8` refused with a
+    notice.
+  - Both new engine tests were run against the unfixed code and fail there:
+    gate disabled → "an unmodulated carrier was taken for a voice"; refusal
+    removed → "a voice hunt over a mode with no voice should not start".
+  - `cargo check --workspace --all-targets` silent; `cargo check --release
+    --target wasm32-unknown-unknown -p sdroxide-ui` clean (its 277 dead-code
+    warnings are the pre-existing wasm-only ones).
+  - `rustfmt --edition 2024 --config-path rustfmt.toml --check` clean on every
+    file touched; `sdroxide-types/src/lib.rs` was already dirty in its module
+    order and was left alone.
+- **Not borrowed.** The idea came from VUURWERK (Quansheng UV-K5 firmware), but
+  nothing was taken from it: its licence puts a commercial licence on its
+  originals — the voice-probability scoring among them — and this fork takes no
+  paid anything. This is textbook DSP written here, and a reviewer who compares
+  the two will find no shared code.
+
+**Not done / blocked.**
+- **Nothing has been heard off the air yet.** The detector is proven on
+  synthetic speech, a synthetic buzz, noise, AFSK and the engine's AM bench; a
+  real band — 11 m at night, or a broadcast band full of carriers — is the test
+  that would settle the thresholds, and it needs the bench, not a session.
+- The **`audio_mode`/external-audio path is untested end to end** (the CB rig
+  through its USB card). Its detector is fed and its guard is in place, but no
+  test drives a demod-audio source through a voice hunt; that needs the SS9900v.
+- Music with a vocal scores as voice, by design; documented in the manual rather
+  than "fixed".
+
+**Next.** The mode queue: STANAG 4285's coded payload is still the programme's
+head, and the rest of the half-done list behind it. This item needs the operator
+(or F4NRM) to merge the PR first, since it is the wire.
+
+---
+
+
+**Summary.** The four wide multi-carrier PSK modes are not going to be fixed for
+now, and the reason is written down where it matters. They are still in the
+picker, but their chips now say on the hover that they do not decode yet and why,
+and the manual's PSK section names all four and tells you to reach for a narrower
+bank instead. So nobody picks one, hears nothing, and blames the band.
+
+**Done.**
+- `panels/text_modem.rs`: the four wide chips carry the note — "this wide bank
+  does not decode yet … the narrower banks do read their own recordings".
+- Manual §3.3: a paragraph naming PSK125C12, PSK500C4, PSK500RC4, PSK1000C2 and
+  pointing at PSK250C6 / PSK500C2 for a wide signal.
+- `TODO.md` → **Parked, with the reason**, carrying the measurement, the ruled-out
+  theory, the gate to use, and the condition for un-parking (somebody hears one
+  on the air).
+- Non-wire: no `PROTO_VERSION`, no mode change, nothing to merge.
+
+**Not done / blocked.** The front-end rebuild itself, parked by the operator's
+decision on the advice given: four rare wide banks are not worth risking the
+twenty that work.
+
+**Next.** The remaining mode work is transmit for the receive-only set and
+RS_ID/CALL_ID; the rest of the unfinished list waits on recordings.
+
+---
+
+## 2026-10-24 (next item) — the four wide PSK banks: measured, and the fix is a refactor
+
+**Summary.** The next item on the queue was the four wide multi-carrier PSK modes,
+the last of the coded PSK family that does not read its own recording. They still
+do not, and the reason is now narrower than it was: every bank wider than about
+two kilohertz fails (0 of 3 known words) while every narrower one reads its whole
+text, and making the per-carrier filter four times sharper changed **nothing** —
+so it is not filter sharpness. What is left is the reference's own chain order
+(decimate first, then filter), which is a rebuild of the receiver's front end
+rather than a parameter change.
+
+**Done.**
+- Baseline, `cargo test --release -p sdroxide-dsp --lib the_corpus_pskc --
+  --ignored --nocapture` (69 s): **PSK500C4 0/3, PSK1000C2 0/3, PSK125C12 0/3,
+  PSK500RC4 0/3**; PSK500RC3 1/3 and PSK250RC5 1/3; everything narrower 3/3.
+- The failing set is exactly the widest banks: 2.1 kHz (PSK125C12) and 2.8 kHz
+  (the other three). PSK500C2 — same baud, same 700 Hz spacing, only two
+  carriers — reads 3/3, so the spacing alone is not the fault.
+- Tried a filter sharpened with bandwidth (tap count from `4·rate/half`, 129 →
+  512 at 125 baud): **identical results**, reverted. It is not the filter's
+  transition width.
+- `psk.rs` restored to its committed state (`git status` clean before the next
+  step).
+
+**Not done / blocked.** The fix needs the front end rebuilt in the reference's
+order — decimate each carrier to a few samples per symbol, *then* filter there —
+instead of filtering at the 8 kHz input rate. That is a structural change in
+`PskRx`/`PskCarrierBank` with the timing loop and the differential detector on
+top, not a session-sized edit, and it should not be attempted as a tail-end
+change to a long session.
+
+**Next.** Rebuild the multi-carrier front end in that order, with the existing
+`the_corpus_pskc_samples_are_measured` as the gate: the target is those four
+banks moving off 0/3 without the 3/3 ones regressing.
+
+---
+
+## 2026-10-24 (last) — 8PSK is in the program, and the ALE watch is stopped
+
+**Summary.** All three modes the operator named are now in the program. ALE and
+CIS-11 were already wired; **8PSK** is now a third choice beside BPSK and QPSK on
+the keyboard modes' modulation row — receive only, three bits per symbol. Its
+proof is a synthetic, because the test recordings for it turned out not to hold a
+clean 8PSK signal at all. The unattended ALE channel sweep was stopped as asked;
+it had finished four rounds over eleven channels with nothing heard.
+
+**Done.**
+- `PskModulation::Psk8` appended, wired into the plain PSK receiver, refused on
+  transmit with a reason, chip and hover text come from `ALL` so no layout
+  changed. Commit `41c83c87`, branch `fork/psk8`, **PR #174** (wire change:
+  **`PROTO_VERSION` 241 → 242, `VERSION_BYTE` 0x3D → 0x3E**).
+- Manual mode-table row and changelog line say "receive only, proven on a
+  synthetic".
+- Gate: workspace check silent; types 792, digi 542, ui 961; rustfmt clean.
+- ALE sweep: `pgrep -af "watch.py|rspcap"` → nothing. Its log's last four lines
+  are `quiet` on every channel, four rounds, ~33 minutes.
+
+**Not done / blocked.** 8PSK has no recording and no 8PSK modulator; the manual
+says both. A reference recording would turn "proven on a synthetic" into proven.
+
+**Next.** PR #173 (CIS-11) and #174 (8PSK) both wait on the operator's merge; the
+next unwired item is the four wide `C` PSK banks, whose recordings are good
+(0.83–0.85 of the bits) and whose fault is the demodulator's carrier separation.
+
+---
+
 ## 2026-10-24 (later) — 8PSK: the instrument is sound, so the files are the fault
 
 **Summary.** The question from the entry below is answered. Built a synthetic

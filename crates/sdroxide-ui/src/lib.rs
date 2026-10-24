@@ -40,6 +40,11 @@ mod multi;
 mod prop_map;
 #[cfg(feature = "remote")]
 mod remote;
+/// Test-only helpers shared across the crate — see [`test_support::run_frame`]
+/// for the one that matters: a frame's texture deltas have to be taken, or
+/// `epaint` asserts in `Drop` and takes the whole test binary with it.
+#[cfg(test)]
+mod test_support;
 /// Asking egui for the next frame at the rate actually asked for.
 pub mod repaint;
 mod rf_paint;

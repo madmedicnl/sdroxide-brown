@@ -66,6 +66,7 @@ mod sstv_slant;
 pub mod stanag4285;
 pub mod stanag4285_fec;
 mod tonegen;
+pub mod vad;
 mod wbddc;
 mod wbspectrum;
 pub mod wefax;
@@ -141,6 +142,7 @@ pub use spectrum_paint::{
 };
 pub use sstv::{SstvEvent, SstvRx, SstvTx};
 pub use tonegen::{BURST_LEVEL, SUB_TONE_LEVEL, SubToneGen, ToneBurst};
+pub use vad::SpeechDetector;
 pub use wbddc::{WbDdc, clamp_center_hz, reachable_range_hz};
 pub use wbspectrum::WideSpectrum;
 pub use wefax::{Ioc as WefaxIoc, Lpm as WefaxLpm, WefaxEvent, WefaxRx};

@@ -784,6 +784,12 @@ jobs:
           # target/release.
           BIN_DIR="target/$CARGO_BUILD_TARGET/release"
           cp "$BIN_DIR/sdroxide.exe" stage/sdroxide/
+          # Ship the MinGW runtime DLLs beside the executable so a plain
+          # Windows box (without MSYS2/PothosSDR) can start sdroxide.exe.
+          # They come from the same MINGW64 toolchain that built the binary.
+          cp /mingw64/bin/libgcc_s_seh-1.dll stage/sdroxide/
+          cp /mingw64/bin/libstdc++-6.dll stage/sdroxide/
+          cp /mingw64/bin/libwinpthread-1.dll stage/sdroxide/
           cp LICENSE stage/sdroxide/LICENSE.txt
           # MIT notice for the FX3 firmware image embedded in the binary.
           cp crates/sdroxide-rx888/firmware/LICENSE.txt stage/sdroxide/LICENSE-rx888-firmware.txt
@@ -892,6 +898,23 @@ jobs:
             cp "out/$PKG.msi" out/sdroxide-windows-x86_64.msi
             cp "out/$PKG.zip" out/sdroxide-windows-x86_64.zip
           fi
+
+          # Verify the MinGW runtime DLLs shipped in the package.
+          echo "DLLs in stage/sdroxide/:"
+          ls -l stage/sdroxide/*.dll
+          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            if [[ ! -f "stage/sdroxide/$dll" ]]; then
+              echo "::error::$dll missing from package"
+              exit 1
+            fi
+            size=$(stat -c%s "stage/sdroxide/$dll")
+            arch=$(objdump -f "stage/sdroxide/$dll" | grep -i "file format" | head -n1)
+            echo "$dll: $size bytes, $arch"
+            if ! objdump -f "stage/sdroxide/$dll" | grep -qi "pei-x86-64"; then
+              echo "::error::$dll is not a 64-bit PE"
+              exit 1
+            fi
+          done
 
       - name: Package (macOS)
         if: runner.os == 'macOS'

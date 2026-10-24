@@ -128,7 +128,7 @@ mod tests {
         if press {
             raw.events.push(Event::Copy);
         }
-        let out = ctx.run_ui(raw, |ui| {
+        let out = crate::test_support::run_frame(ctx, raw, |ui| {
             let ctx = ui.ctx().clone();
             ui.label("not a tooltip");
             if !lines.is_empty() {

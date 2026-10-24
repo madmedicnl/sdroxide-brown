@@ -37,7 +37,7 @@ and why upstream is never merged) and
 forum is run: **IDEA** / **FEED** / **REQ** in the subject, bugs go to Issues
 with the version from the frequency window).
 
-## ⛔ Do not touch these — they are F4NRM's
+## ⛔ F4NRM's list — his to change, and a PR to touch
 
 The operator's list, verbatim (discussion
 [#155](https://github.com/madmedicnl/sdroxide-brown/discussions/155)):
@@ -45,13 +45,28 @@ The operator's list, verbatim (discussion
 > Décoder: SSTV, DAB, NAVTEX, APRS, WFM, DCS, OLIVIA, RTTY, WEEFAX, FT8, RDS
 > Radios: RSP1, HACK RF, PLUTO
 
-That reads as the decoders **SSTV, DAB, NAVTEX, APRS, WFM, DSC, Olivia, RTTY,
-WEFAX, FT8, RDS**, and the **RSP1, HackRF and PlutoSDR** backends. He is working
-in them; a change nobody asked for is how a mode a whole radio group has
-confirmed stops working. **Leave them alone** — no refactor, no "improvement",
-no re-opening their journal entries as work items. If a report comes back against
-one, it is a *new report about a specific fault*: start from the report and
-reproduce it, not from a tidy-up.
+**RSP1 is not on it any more**, and the operator struck it off himself in the same
+discussion (2026-10-24): *"RSP1 is not possible my friend, I have an RSP1 and if I
+have issues I'm going to have to do something about it.. it's the only wideband
+receiver I have."* It is the bench's receiver and his only wideband one, so RSP1
+work is ours and is not something to ask permission for. The list as it stands is
+therefore the decoders **SSTV, DAB, NAVTEX, APRS, WFM, DSC, Olivia, RTTY, WEFAX,
+FT8, RDS** and the **HackRF and PlutoSDR** backends.
+
+**What "his" means is a workflow, not a wall.** He is working in them, and a
+change nobody asked for is how a mode a whole radio group has confirmed stops
+working — so no refactor, no "improvement", and no re-opening their journal
+entries as work items. But a *report* against one is a new report about a
+specific fault: start from the report and reproduce it, not from a tidy-up.
+
+And anything that does have to touch one — a fault that has to be fixed, a wire
+change that reaches it, a panel of his that a shared change drags in — goes up
+**as a PR, never straight to `main`**, which is the operator's own instruction in
+that discussion: *"put any wire change or item that touches these to put up as a
+PR and not implement them directly without you having the chance to do look at
+them."* Branch, tests, PR, and he reads it before it lands. The same shape as the
+wire rule below, for the same reason: the number, the mode or the panel is one
+counter between two people, and a diff is how one of them sees the other's claim.
 
 Two of these are also confirmed on the air by his radio group and must stay
 exactly as they are: **WEFAX, DAB, SSTV and DSC**.
@@ -205,8 +220,8 @@ established, ask that one question and then work — do not ask for the rest.
 - the **end goal**, with a definition of done that can be checked: a passing
   test, a real capture decoding, the gate run, a screenshot that shows the ink.
   "Improve X" is not a definition of done.
-- the **boundaries**: the crates and files, and which rules above apply — the
-  forbidden list, the wire, no UI, no release.
+- the **boundaries**: the crates and files, and which rules above apply — F4NRM's
+  list, the wire, no UI, no release.
 - **how you will know it failed**, not only how you will know it passed.
 - **what needs the bench**: anything off the air or on a radio is a stop. It is
   not a reason to guess, and it is not a reason to stop the session either.
@@ -218,9 +233,9 @@ does not need approval — say in one line what you are doing and do it.
 **These stop the item; nothing else does.** Write down why, and move to the next
 item — a blocked item is not a blocked session.
 
-- anything on the forbidden list, or a panel that belongs to F4NRM.
-- a change that touches the wire: branch, bump, register line, test, **PR**, then
-  carry on with something else. Never hold a whole session for a PR.
+- a change that touches **F4NRM's list**, one of **his panels**, or **the wire**:
+  branch, tests, **PR**, then carry on with something else. Never hold a whole
+  session for a PR, and never push any of the three straight to `main`.
 - a release or a tag. Never; the operator and F4NRM cut those.
 - deleting branches, history, or work you did not create.
 - a measurement that needs a radio, an off-air recording, or another person.
@@ -267,8 +282,9 @@ a word instead of a conversation.
 
 `PROTO_VERSION` and `VERSION_BYTE` live in `crates/sdroxide-proto/src/lib.rs`,
 which is the **only** register that is kept current — one entry per bump, each
-naming both numbers (`239 → 240`, `VERSION_BYTE 0x3B → 0x3C`). Current:
-**239 / `0x3B`**.
+naming both numbers (`239 → 240`, `VERSION_BYTE 0x3B → 0x3C`). Current on
+`main`: **241 / `0x3D`**; two numbers are claimed in open PRs — 242 by #174
+(8PSK) and 243 by the voice-hunting PR.
 
 - **Append last, always.** A variant inserted mid-enum shifts every discriminant
   below it; a field inserted mid-struct shifts every field below it on a struct
@@ -413,9 +429,12 @@ F4NRM's sessions, and a PR is how a number is claimed without colliding.
   filter, the four wide `C`/`RC` PSK banks, the speeds that lose a word, and the
   MT63/Contestia/DominoEX variants. `MODE-PHASE-4-PROMPT.md`'s five-column table
   is the deliverable the operator asked for.
-- **The forbidden list still holds**, including the variants: Olivia, RTTY, FT8,
-  NAVTEX, WEFAX, SSTV, DAB, APRS, WFM, DSC, RDS are F4NRM's and are not part of
-  this programme, however half-done a journal line makes one look.
+- **F4NRM's list still holds**, including the variants: Olivia, RTTY, FT8,
+  NAVTEX, WEFAX, SSTV, DAB, APRS, WFM, DSC, RDS are his and are not part of this
+  programme, however half-done a journal line makes one look. A fault there is
+  still his to be told about and ours to fix **as a PR** — never as an
+  unrequested tidy-up, and never straight to `main`. The **RSP1** is not on that
+  list: it is the bench's receiver.
 
 ## Where the work stands
 

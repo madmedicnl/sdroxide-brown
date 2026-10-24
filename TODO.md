@@ -3,10 +3,11 @@
 What this fork is working on, kept here so it survives a session and is visible
 on the repo. Last updated **2026-10-24** by madmedicnl's agent.
 
-State: `main` at crate **2.1.0**, `PROTO_VERSION` **239**, latest release
-**v2.1.0.2_brown** (with **v2.1.0.2.1_brown** as the current pre-release), five
-open issues, no open pull requests. The rules are in
-[`AGENTS.md`](AGENTS.md); the history is in
+State: `main` at crate **2.1.0**, `PROTO_VERSION` **241**. Two wire numbers are
+claimed in open PRs and are not on `main` yet: **242** by PR #174 (8PSK) and
+**243** by the voice-hunting PR. Latest release **v2.1.0.2_brown** (with
+**v2.1.0.2.1_brown** as the current pre-release), five open issues. The rules are
+in [`AGENTS.md`](AGENTS.md); the history is in
 [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
 
 Items marked `#NNN` are **upstream** requests this fork may pick up; they are the
@@ -16,15 +17,29 @@ maintainer's queue there, not a promise.
 
 ## Now
 
-0. **Focus, set by the operator 2026-10-24: no UI work, and the modes are the
+0. **The UI test suite does not run in debug** — `cargo test -p sdroxide-ui --lib`
+   aborts, and has since egui 0.36. `epaint`'s `TexturesDelta::drop` is a
+   `debug_assert!`, and a dozen UI tests drop an `egui::FullOutput` without
+   applying or clearing its texture deltas; the first of them (the DAB logo
+   tile) aborts the whole binary, so 949 tests never report. **`cargo test
+   --release` passes, 961 green** — which is why it went unseen, the release gate
+   being the release one. The fix is one `out.textures_delta.clear()` per test
+   that draws a frame, or a shared frame helper; found while checking #146
+   (2026-10-24). Needs a go-ahead because it is a sweep across F4NRM's UI test
+   files.
+
+1. **Focus, set by the operator 2026-10-24: no UI work, and the modes are the
    programme.** F4NRM is working through the detachable windows and the layout,
    so the screens are his; the only UI we touch is a new mode's own panel, or
    something **very off**. Our work is **STANAG 4285 first** — the coded payload
    has never been read off the air — then the modes that did not finish in
-   2.1.0. The forbidden list still holds (Olivia, RTTY, FT8, NAVTEX, WEFAX, SSTV,
-   DAB, APRS, WFM, DSC, RDS), variants included.
+   2.1.0. **F4NRM's list still holds** (Olivia, RTTY, FT8, NAVTEX, WEFAX, SSTV,
+   DAB, APRS, WFM, DSC, RDS), variants included — and a change that has to touch
+   one of those, or one of his panels, goes up **as a PR** for him to read, never
+   straight to `main`. **RSP1 is not on the list** (the operator struck it off on
+   2026-10-24: it is the bench's receiver and his only wideband one).
 
-1. **The mode work — the live queue, and it has its own brief.**
+2. **The mode work — the live queue, and it has its own brief.**
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
    finish the missing modes and get TX working for everything fldigi can
    transmit, and **vendor a mode when the port and the bench have both been
@@ -58,7 +73,7 @@ maintainer's queue there, not a promise.
      as text, the reference waveform timing, a non-ASCII TX panic, burst tail
      loss and the stop button. A mode we ship, so it is this programme's work.
 
-2. **A decoded-text feed over UDP** — asked on Reddit (2026-10-24) and worth
+3. **A decoded-text feed over UDP** — asked on Reddit (2026-10-24) and worth
    having. What exists today is the **WSJT-X broadcast** (Settings → Servers):
    the FT8 family's decodes, status and logged QSOs, in WSJT-X's dialect. What
    does **not** exist is a generic feed for the text modes (RTTY, PSK, Olivia,
@@ -67,7 +82,7 @@ maintainer's queue there, not a promise.
    audio offset, text), off by default, next to the UDP audio sink that already
    exists in the engine. A `RadioConfig` field means a `PROTO_VERSION` bump.
 
-3. **Brick2** — the code half is merged (#170); the radio half is a report away.
+4. **Brick2** — the code half is merged (#170); the radio half is a report away.
    [`docs/internal/BRICK2-HANDOVER.md`](docs/internal/BRICK2-HANDOVER.md).
    - **#132 wrong frequency display** (Thetis 7.183 vs ours 7.223, 40 kHz, with
      the spectrum going unstable under a MIDI knob). **One answer needed** —
@@ -78,17 +93,17 @@ maintainer's queue there, not a promise.
      Invert spectrum, and one-switch-per-radio is now enforced (#170), so the
      generic Swap I/Q can no longer cancel it.
 
-4. **#162 NAVTEX frequency** — the reporter had to tune 516.6 kHz instead of
+5. **#162 NAVTEX frequency** — the reporter had to tune 516.6 kHz instead of
    518. The presets already tune the dial **1.710 kHz below the channel**
    (516.290 and 488.290), and that rule is pinned by a test, so this is his
    receiver's calibration (`ppm`) or the station's own offset. **Answer it, do
    not change the rule.**
 
-5. **#153 Pluto socket stalls** — APRS reception stops for a second or two and a
+6. **#153 Pluto socket stalls** — APRS reception stops for a second or two and a
    socket is being replaced mid-stream. Waiting on the **diagnostic report**
    (Settings → Radio → Copy Diagnostic Report) and the precise setup.
 
-6. **Detachable panels are F4NRM's** (discussion #166). Our part: any panel we
+7. **Detachable panels are F4NRM's** (discussion #166). Our part: any panel we
    touch gets made detachable and added to the Detachable page in Settings —
    APRS was the last one (#167).
 
@@ -115,11 +130,21 @@ maintainer's queue there, not a promise.
 On `main`, after **v2.1.0.2.1**: the Brick2 HPSDR work (paced transmit, the
 Hermes-emulation PA fix, one I/Q switch per radio), the **detachable APRS decoder
 panel** with the Detachable settings page, the **decoded-text UDP feed**, the
-**JTTY** rebuild, and the **CIS-11** mode (open as PR #173, which claims
-`PROTO_VERSION` 241).
+**JTTY** rebuild, the **CIS-11** mode (PR #173, `PROTO_VERSION` 241) and
+**voice hunting** (PR #177, 243 / 0x3F). Open: **PR #174** (8PSK, 242 / 0x3E) and
+**PR #183** (#146's LISTEN tab, no wire change).
 
 ## Parked, with the reason
 
+- **The four wide PSK banks** — PSK125C12, PSK500C4, PSK500RC4 and PSK1000C2 read
+  0 of 3 words where every narrower bank reads 3 of 3. **Measured 2026-10-24**:
+  sharpening the per-carrier filter changes nothing, so it is not transition
+  width; the reference decimates first and filters at the low rate, which is a
+  rebuild of the multi-carrier front end shared by all 24 banks (20 of them
+  working). Parked until somebody hears one of these on the air, and **named on
+  the chips and in the manual** so nobody picks one and thinks the band is dead.
+  Gate when it is done: `the_corpus_pskc_samples_are_measured`, those four off
+  0/3 with no regression.
 - **Antenna modelling tool** — branch `fork/antenna-tool`, a validated MoM solver
   (dipole, monopole over perfect ground, delta loop, Yagi). Next would be the
   source-between-terminals junction, real Fresnel ground and lumped loads. See
@@ -161,6 +186,17 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **Voice hunting in the scanner** — a **VOICE** switch in the SCAN window stops
+  the scan only on channels that sound like somebody talking, passing over
+  carriers, birdies, pagers and data bursts instead of stopping on them. The
+  reading is shown as it runs (*passed 27.5550 · voice 18*), so a strong signal
+  going by is explained rather than looking like a deaf scan. Independent
+  implementation from standard DSP — no code from VUERWERK, whose licence puts a
+  commercial licence on its originals. **A PR because it is the wire change**
+  (243 / 0x3F, renumbered from 242 which PR #174 claimed first).
+- **8PSK in the program** — a third modulation choice beside BPSK and QPSK
+  (receive only, three bits per symbol), proven on a synthetic because the
+  corpus's 8PSK recordings carry no clean constellation. **PR #174** (242 / 0x3E).
 - **CIS-11 built** — the Russian meteorological teleprinter, receive only. Framing
   measured from the recordings (ten data bits + one odd parity, not the
   catalogues' "5 + parity"), 121 of 123 characters parity-valid on the off-air

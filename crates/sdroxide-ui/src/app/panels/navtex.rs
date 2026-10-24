@@ -40,8 +40,6 @@ pub(super) fn navtex_list_header(
     status: Option<&sdroxide_types::DigiStatus>,
     cmds: &mut Vec<Command>,
     rev: bool,
-    ui_settings: &sdroxide_types::UiSettings,
-    detach: &mut bool,
 ) -> bool {
     let mut flip = false;
     ui.horizontal_wrapped(|ui| {
@@ -84,25 +82,6 @@ pub(super) fn navtex_list_header(
         crate::chrome::row_tail(ui, |ui| {
             super::clear_rx_chip_at(ui, cmds, !st.messages.is_empty() || st.live.is_some());
             super::save_rx_chip_for(ui, status);
-            // Detach chip: pull the panel into its own window.
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let detached =
-                    ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex);
-                let (icon, hover) = if detached {
-                    ("⇱", "DOCK — return this panel into the main window")
-                } else {
-                    ("⇱", "WINDOW — move this panel into its own OS window")
-                };
-                if crate::chrome::chip(ui, detached, RichText::new(icon).size(10.5))
-                    .on_hover_text(hover)
-                    .clicked()
-                {
-                    // Asked for, not done here: this is a free function so the
-                    // phone-width layout test can draw it without an app.
-                    *detach = true;
-                }
-            }
             if crate::chrome::chip(ui, rev, RichText::new("REV").size(10.5))
                 .on_hover_text(
                     "Swap the mark and space tones, for a signal received on the other \
@@ -205,26 +184,13 @@ impl SdroxideApp {
         st: &NavtexStatus,
         panel_h: f32,
     ) {
-        let mut detach = false;
         let rev_pressed = navtex_list_header(
             ui,
             st,
             self.digi_status.as_ref(),
             cmds,
             self.digi_cfg_edit.navtex_reverse,
-            &self.ui_settings,
-            &mut detach,
         );
-        // Windows are a native arrangement: the browser has no second OS
-        // window to move the panel into, so the chip is not drawn there and
-        // neither is this.
-        #[cfg(not(target_arch = "wasm32"))]
-        if detach {
-            let on = !self.ui_settings.is_detached(sdroxide_types::DetachableModule::Navtex);
-            self.set_module_detached(sdroxide_types::DetachableModule::Navtex, on);
-        }
-        #[cfg(target_arch = "wasm32")]
-        let _ = detach;
         if rev_pressed {
             self.digi_cfg_edit.navtex_reverse = !self.digi_cfg_edit.navtex_reverse;
             if self.digi_cfg_seeded {

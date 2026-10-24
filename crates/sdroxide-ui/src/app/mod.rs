@@ -406,12 +406,6 @@ pub struct SdroxideApp {
     /// the per-radio switch in Settings → Radio clears it, so the operator's
     /// explicit per-radio choice is what governs once they have made one.
     swl_start: bool,
-    /// The LISTEN tab is in force and the operator's setting asks the menu to
-    /// hide the transmit controls. Remembered across a restart through
-    /// [`sdroxide_types::UiSettings::band_menu_listen`], which is what the
-    /// operator asked for — the *radio's* own setting still decides what the
-    /// OPERATE tab means, so a receive-only station stays that way.
-    listen_tab_swl: bool,
     /// The theme and chrome styles last written into the egui context, so the
     /// top-of-frame check in `frame.rs` can re-apply the visuals the moment
     /// the settings dialog changes any of them — no restart.
@@ -601,6 +595,31 @@ pub struct SdroxideApp {
     /// payload details.
     hfdl_filter: String,
     show_settings: bool,
+    /// Tool windows for the mode panels that can be pulled out of the main window.
+    show_dsc: bool,
+    show_navtex: bool,
+    show_aprs: bool,
+    show_wefax: bool,
+    show_sstv: bool,
+    show_dab: bool,
+    show_js8: bool,
+    show_acars: bool,
+    show_hfdl: bool,
+    show_vdl2: bool,
+    show_ais: bool,
+    show_adsb: bool,
+    show_fsq: bool,
+    show_hell: bool,
+    show_packet: bool,
+    show_wspr: bool,
+    show_pi4: bool,
+    show_text: bool,
+    show_uvpacket: bool,
+    show_jtty: bool,
+    show_ale: bool,
+    show_rf_paint: bool,
+    show_image: bool,
+    last_mode_for_tools: Option<sdroxide_types::Mode>,
     /// Scroll the Settings window back to its tab bar on the frame it opens.
     /// The window's scroll offset is egui memory, which outlives both the
     /// dialog and the process — without this, a restart shows wherever the
@@ -1916,7 +1935,6 @@ impl SdroxideApp {
             // move to per-radio SWL mode. The Radio tab's switch is the one
             // that persists now.
             swl_start: ui_settings.start_swl || ui_settings.swl || sdroxide_types::force_swl(),
-            listen_tab_swl: ui_settings.listen_tab_hides_tx && ui_settings.band_menu_listen,
             applied_look: (ui_settings.theme, ui_settings.button_style, ui_settings.window_style),
             classic_collapsed: false,
             applied_ui_font: ui_settings.menu_font_size,
@@ -2069,6 +2087,30 @@ impl SdroxideApp {
             swl_report_pick: std::sync::Arc::new(std::sync::Mutex::new(None)),
             show_swl: false,
             show_listen: false,
+            show_dsc: false,
+            show_navtex: false,
+            show_aprs: false,
+            show_wefax: false,
+            show_sstv: false,
+            show_dab: false,
+            show_js8: false,
+            show_acars: false,
+            show_hfdl: false,
+            show_vdl2: false,
+            show_ais: false,
+            show_adsb: false,
+            show_fsq: false,
+            show_hell: false,
+            show_packet: false,
+            show_wspr: false,
+            show_pi4: false,
+            show_text: false,
+            show_uvpacket: false,
+            show_jtty: false,
+            show_ale: false,
+            show_rf_paint: false,
+            show_image: false,
+            last_mode_for_tools: None,
             listen_history: false,
             listen_sel: None,
             listen_comment: String::new(),
@@ -2888,15 +2930,54 @@ impl SdroxideApp {
 
     /// Whether transmit controls are hidden for the radio on screen.
     ///
-    /// Three sources, in the order they override: `--swl` for the run, the
-    /// session's start-in-SWL seed, and this radio's own SWL switch. The
-    /// per-radio switch is the persisted one (Settings → Radio); the other two
-    /// only ever turn it *on*. See `SdroxideApp::swl_start`.
+    /// Four sources, in the order they override: `--swl` for the run, the
+    /// session's start-in-SWL seed, the band/mode tab, and this radio's own SWL
+    /// switch. The per-radio switch is the persisted one (Settings → Radio); the
+    /// other three only ever turn it *on*. See `SdroxideApp::swl_start`.
+    ///
+    /// **The tab half is derived, not stored** (issue #146). It used to be a
+    /// flag that one of the three places drawing the band/mode selector set and
+    /// the other two — the BAND chip's popup, which is the ordinary way in, and
+    /// the phone menu — did not, so the feature shipped and did nothing for
+    /// anyone who had not opened the selector as a window. Reading the tab
+    /// itself means every caller gets it, including one added tomorrow.
     pub(in crate::app) fn swl_mode(&self) -> bool {
         sdroxide_types::force_swl()
             || self.swl_start
-            || self.listen_tab_swl
+            || self.listen_tab_hides()
             || self.radio_cfg.as_ref().is_some_and(|c| c.hide_tx)
+    }
+
+    /// The band/mode tab is on LISTEN *and* the operator's setting says that tab
+    /// carries the listening screen.
+    ///
+    /// The setting is what makes the tab mean anything: with it off — the
+    /// default, because it changes what the tab is for — LISTEN only narrows the
+    /// band list.
+    pub(in crate::app) fn listen_tab_hides(&self) -> bool {
+        self.ui_settings.listen_tab_hides_tx && self.band_menu_tab == top_bar::BandMenuTab::Listen
+    }
+
+    /// Remember which band/mode tab the operator left the selector on.
+    ///
+    /// Called once a frame, from wherever the tab was last drawn: the three
+    /// places that draw the selector all mutate the same tab, so the remembering
+    /// has the same one-seam rule as [`Self::listen_tab_hides`] — and it writes
+    /// only when the answer has actually moved, so a frame that changed nothing
+    /// costs two comparisons.
+    ///
+    /// Only while the setting is on. Without it the tab is a band filter, and a
+    /// band filter nobody asked to survive a restart should not rewrite the
+    /// settings file every time it is clicked.
+    pub(in crate::app) fn remember_band_tab(&mut self) {
+        if !self.ui_settings.listen_tab_hides_tx {
+            return;
+        }
+        let listen = self.band_menu_tab == top_bar::BandMenuTab::Listen;
+        if self.ui_settings.band_menu_listen != listen {
+            self.ui_settings.band_menu_listen = listen;
+            persist::persist_ui_settings(&self.ui_settings);
+        }
     }
 
     /// The station's own location, from the digi grid locator — what a beam
@@ -3718,7 +3799,9 @@ mod tests {
                 ..Default::default()
             };
             let mut cmds: Vec<Command> = Vec::new();
-            let full = ctx.run_ui(input, |ui| app.console_band_area(ui, &mut cmds));
+            let full = crate::test_support::run_frame(&ctx, input, |ui| {
+                app.console_band_area(ui, &mut cmds)
+            });
             let mut rects = Vec::new();
             for cs in &full.shapes {
                 walk(&cs.shape, &mut rects);
@@ -3738,9 +3821,16 @@ mod tests {
     /// Issue #146 asks for the band/mode tabs to carry the listener's screen, and
     /// the reason it sat unbuilt for a while is the other half of that sentence:
     /// an "OPERATE = TRANSMIT" reading would let a tab grant a transmitter. This
-    /// is the half that cannot: the tab only sets a session flag that `swl_mode`
-    /// already ORs in, so a station whose own setting says receive-only is
-    /// unaffected whatever the tab does.
+    /// is the half that cannot: the tab only hides, so a station whose own
+    /// setting says receive-only is unaffected whatever the tab does.
+    ///
+    /// **Written against the tab, not against a flag.** The first version of this
+    /// feature stored the answer in a field that one of the three places drawing
+    /// the band/mode selector set and the other two did not — so it passed a test
+    /// that set the field by hand while doing nothing at all for anyone who
+    /// clicked LISTEN in the ordinary BAND popup (#146, reopened). Nothing here
+    /// touches a flag: moving the tab is the whole of the action, which is what
+    /// the operator does.
     #[test]
     fn the_listen_tab_hides_transmit_and_never_grants_it() {
         use crate::multi::frame_test_lock;
@@ -3755,42 +3845,51 @@ mod tests {
         crate::layout::set_tier(&ctx, crate::layout::Tier::Desktop);
         let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
         app.ui_settings.listen_tab_hides_tx = true;
+        app.ui_settings.band_menu_listen = false;
 
         // A transceiver: the tab hides, and going back to OPERATE restores the
         // radio's own setting rather than granting anything new.
         app.radio_cfg = Some(sdroxide_types::RadioConfig { hide_tx: false, ..Default::default() });
-        app.listen_tab_swl = false;
+        app.band_menu_tab = top_bar::BandMenuTab::Operate;
         assert!(!app.swl_mode(), "a transceiver starts with its transmit controls");
-        app.listen_tab_swl = true;
-        assert!(app.swl_mode(), "the LISTEN tab must hide them");
-        app.listen_tab_swl = false;
+        app.band_menu_tab = top_bar::BandMenuTab::Listen;
+        assert!(app.swl_mode(), "picking LISTEN must hide them — nothing else called");
+        app.band_menu_tab = top_bar::BandMenuTab::Operate;
         assert!(!app.swl_mode(), "OPERATE restores the radio's own setting");
+
+        // With the operator's setting off — the default — the tab is a band
+        // filter and nothing more, on LISTEN as much as on OPERATE.
+        app.ui_settings.listen_tab_hides_tx = false;
+        app.band_menu_tab = top_bar::BandMenuTab::Listen;
+        assert!(!app.swl_mode(), "the tab must not hide anything unless it was asked to");
+        app.ui_settings.listen_tab_hides_tx = true;
 
         // A station configured receive-only stays receive-only whichever tab is
         // picked: the tab is a view switch and not a licence.
         app.radio_cfg = Some(sdroxide_types::RadioConfig { hide_tx: true, ..Default::default() });
         assert!(app.swl_mode(), "a receive-only radio has no transmit controls to show");
-        app.listen_tab_swl = false;
+        app.band_menu_tab = top_bar::BandMenuTab::Operate;
         assert!(
             app.swl_mode(),
             "picking OPERATE must not grant a transmitter to a receive-only station"
         );
 
-        // **Remembered across a restart** — the operator asked for that. The
-        // saved tab is what puts the next session back on LISTEN, and the
-        // setting is what says the tab should hide anything at all.
-        app.ui_settings.listen_tab_hides_tx = true;
-        app.ui_settings.band_menu_listen = true;
+        // **Remembered across a restart** — the operator asked for that. The tab
+        // is what puts the next session back on LISTEN, and the setting is what
+        // says the tab should hide anything at all.
+        app.radio_cfg = Some(sdroxide_types::RadioConfig { hide_tx: false, ..Default::default() });
+        app.band_menu_tab = top_bar::BandMenuTab::Listen;
+        app.remember_band_tab();
+        assert!(app.ui_settings.band_menu_listen, "the tab was not remembered");
         sdroxide_config::save_ui_settings(&app.ui_settings).expect("save the settings");
         // A fresh start, the way the program really comes up: `new_tab` loads the
-        // settings itself, so this is the saved tab doing the work and not a hand
-        // seeded flag.
+        // settings itself, so this is the saved tab doing the work.
         let rebound: Box<dyn RadioController> = Box::new(RecordingController::default());
         let mut again = SdroxideApp::new_tab(&ctx, None, None, rebound, 0, true);
         again.radio_cfg =
             Some(sdroxide_types::RadioConfig { hide_tx: false, ..Default::default() });
         assert!(again.swl_mode(), "a station left on the LISTEN tab must come back listening");
-        again.listen_tab_swl = false;
+        again.band_menu_tab = top_bar::BandMenuTab::Operate;
         assert!(!again.swl_mode(), "and OPERATE must bring the transmit controls back");
     }
 
@@ -4017,7 +4116,7 @@ mod tests {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, 1080.0))),
             ..Default::default()
         };
-        let full = ctx.run_ui(input, |ui| {
+        let full = crate::test_support::run_frame(&ctx, input, |ui| {
             app.ui(ui, &mut eframe::Frame::_new_kittest());
         });
         let rows: Vec<(egui::Rect, bool)> = full
@@ -4410,7 +4509,7 @@ mod tests {
                 time: Some(10.0 + i as f64 / 30.0),
                 ..Default::default()
             };
-            last = Some(ctx.run_ui(input, |ui| {
+            last = Some(crate::test_support::run_frame(&ctx, input, |ui| {
                 app.ui(ui, &mut eframe::Frame::_new_kittest());
             }));
         }
@@ -4599,7 +4698,9 @@ mod tests {
                 )),
                 ..Default::default()
             };
-            let full = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+            let full = crate::test_support::run_frame(&ctx, input, |ui| {
+                app.ui(ui, &mut eframe::Frame::_new_kittest())
+            });
             // The picture's left edge: the **widest** big rectangle that is not the
             // window's own background (which starts at zero, spans the window, and
             // would answer the same in both arrangements). Printed on failure so a
@@ -4714,7 +4815,12 @@ mod tests {
                 )),
                 ..Default::default()
             };
-            texts(&ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest())).shapes)
+            texts(
+                &crate::test_support::run_frame(&ctx, input, |ui| {
+                    app.ui(ui, &mut eframe::Frame::_new_kittest())
+                })
+                .shapes,
+            )
         };
         for _ in 0..8 {
             tall(&mut app);
@@ -4856,7 +4962,7 @@ mod tests {
             let mut cmds: Vec<Command> = Vec::new();
             let mut worst: Option<(f32, egui::Rect)> = None;
             for _ in 0..3 {
-                let full = ctx.run_ui(input.clone(), |ui| {
+                let full = crate::test_support::run_frame(&ctx, input.clone(), |ui| {
                     egui::Panel::left(egui::Id::new(("classic-fit", w as i32)))
                         .resizable(false)
                         .exact_size(w)
@@ -5324,7 +5430,7 @@ mod tests {
 
         let run = |app: &mut SdroxideApp, open: bool| -> bool {
             let mut out = false;
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let _ = crate::test_support::run_frame(&ctx, egui::RawInput::default(), |ui| {
                 out = app.tool_window(ui.ctx(), "t", "T", [300.0, 200.0], open, |_, _| {});
             });
             out
@@ -5362,7 +5468,9 @@ mod tests {
             )),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+        let _ = crate::test_support::run_frame(&ctx, input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest())
+        });
         assert!(app.show_scanner, "a docked tool stays open");
         app.tool_windows.insert("scanner", ToolWindowState { undocked: true, window: None });
         let input = egui::RawInput {
@@ -5372,7 +5480,9 @@ mod tests {
             )),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+        let _ = crate::test_support::run_frame(&ctx, input, |ui| {
+            app.ui(ui, &mut eframe::Frame::_new_kittest())
+        });
         assert!(app.show_scanner, "an undocked tool stays open");
         assert!(app.tool_windows.get("scanner").is_some_and(|s| s.undocked));
     }
@@ -5414,7 +5524,12 @@ mod tests {
                 )),
                 ..Default::default()
             };
-            texts(&ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest())).shapes)
+            texts(
+                &crate::test_support::run_frame(&ctx, input, |ui| {
+                    app.ui(ui, &mut eframe::Frame::_new_kittest())
+                })
+                .shapes,
+            )
         };
         app.warn_other_instance("an sdroxide server is already running — PID 2488".into());
         assert!(frame(&mut app).contains("PID 2488"), "the warning is drawn");

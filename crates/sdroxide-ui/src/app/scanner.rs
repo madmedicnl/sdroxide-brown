@@ -342,6 +342,60 @@ impl SdroxideApp {
         }
     }
 
+    /// The VOICE switch: stop only where somebody is talking, rather than on
+    /// every carrier, data burst and birdie that reaches the threshold.
+    ///
+    /// Greyed — with the reason named — where it could not keep that promise: a
+    /// scan whose modes carry no speech would run and stop nowhere. That is the
+    /// same test the engine makes when the scan starts, so the operator sees the
+    /// answer here rather than as a notice after pressing START.
+    fn scanner_voice(&self, ui: &mut egui::Ui, cfg: &mut ScannerConfig) {
+        ui.horizontal_wrapped(|ui| {
+            // A range scan has one mode for the whole range; a memory scan has
+            // one per channel, so the question is whether *any* of the channels
+            // it would visit could hold a voice.
+            let any_speech = match cfg.kind {
+                ScanKind::Range => cfg.mode.carries_speech(),
+                ScanKind::Memories => self
+                    .memories
+                    .iter()
+                    .filter(|m| cfg.scans_folder(self.filed_under(m)))
+                    .any(|m| m.mode.carries_speech()),
+            };
+            let hint = if any_speech {
+                "Stop only on channels that sound like somebody talking: a voice is periodic, \
+                 fills the speech band and rises and falls a few times a second, which a \
+                 carrier, a birdie and a data burst do not. Each candidate is listened to for \
+                 at least half a second, because that is what it takes to hear a syllable."
+            } else {
+                "Nothing in this scan is in a mode that carries speech — a voice hunt here \
+                 would run and stop nowhere, so this is not offered until one is. FM, AM and \
+                 the sidebands carry voices; the digital modes do not."
+            };
+            let resp = ui.add_enabled_ui(any_speech, |ui| {
+                crate::chrome::chip(ui, cfg.voice_only && any_speech, "VOICE")
+            });
+            if resp.inner.on_hover_text(hint).clicked() && any_speech {
+                cfg.voice_only = !cfg.voice_only;
+                // Turned on with a dwell too short to judge a voice by: raise it
+                // to the floor now, visibly, rather than letting the field say
+                // one thing and the engine do another.
+                if cfg.voice_only {
+                    cfg.dwell_ms = cfg.dwell_ms.max(sdroxide_types::MIN_LISTEN_MS);
+                }
+            }
+            ui.label(
+                RichText::new(if any_speech {
+                    "stop only where somebody is talking"
+                } else {
+                    "no voice to look for in these modes"
+                })
+                .size(10.0)
+                .weak(),
+            );
+        });
+    }
+
     fn scanner_thresholds(&self, ui: &mut egui::Ui, cfg: &mut ScannerConfig) {
         egui::Grid::new("scan-levels").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
             ui.label("Stops at");
@@ -378,14 +432,24 @@ impl SdroxideApp {
             });
             ui.end_row();
 
+            ui.label("Voice");
+            self.scanner_voice(ui, cfg);
+            ui.end_row();
             ui.label("Listens for");
             ui.add(
-                egui::DragValue::new(&mut cfg.dwell_ms).speed(5.0).range(40..=2000).suffix(" ms"),
+                egui::DragValue::new(&mut cfg.dwell_ms)
+                    .speed(5.0)
+                    .range(if cfg.voice_only { sdroxide_types::MIN_LISTEN_MS } else { 40 }..=2000)
+                    .suffix(" ms"),
             )
-            .on_hover_text(
+            .on_hover_text(if cfg.voice_only {
+                "How long to stay on a candidate before judging it. The voice check needs at \
+                 least this much: a voice is a rhythm of syllables, and half a second is two of \
+                 them"
+            } else {
                 "How long to stay on a candidate before judging it. Below about a tenth of a \
-                 second the level meter has not settled and weak signals get missed",
-            );
+                 second the level meter has not settled and weak signals get missed"
+            });
             ui.end_row();
 
             ui.label("Resumes");
@@ -460,6 +524,42 @@ impl SdroxideApp {
                 }
             });
         });
+        if scan.running && self.scanner.voice_only {
+            self.scanner_voice_status(ui, scan);
+        }
+    }
+
+    /// What the speech detector made of the channel, when the voice gate is on.
+    ///
+    /// The point of the line is the channel it *passed*: a scan that declines to
+    /// stop somewhere is otherwise indistinguishable from one that cannot hear
+    /// it, and the operator watching a strong signal go by deserves the number
+    /// that explains it.
+    fn scanner_voice_status(&self, ui: &mut egui::Ui, scan: sdroxide_types::ScanState) {
+        if !self.state.rx[0].mode.carries_speech() {
+            ui.label(
+                RichText::new(format!(
+                    "{} carries no speech — passing these channels by",
+                    self.state.rx[0].mode.label()
+                ))
+                .size(10.5)
+                .weak(),
+            );
+            return;
+        }
+        let Some(v) = scan.voice else {
+            ui.label(RichText::new("listening for a voice…").size(10.5).weak());
+            return;
+        };
+        let (text, colour) = if scan.holding {
+            (format!("voice {} · somebody is talking", v.score), crate::theme::GREEN())
+        } else {
+            (
+                format!("passed {:.4} MHz · voice {}", v.freq_hz as f64 / 1e6, v.score),
+                crate::theme::TEXT(),
+            )
+        };
+        ui.label(RichText::new(text).size(10.5).color(colour));
     }
 }
 

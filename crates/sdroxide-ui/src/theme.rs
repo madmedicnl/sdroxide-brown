@@ -2547,7 +2547,7 @@ mod tests {
                     ..Default::default()
                 };
                 let want = if selected { palette().ink_on_cyan } else { palette().text };
-                let full = ctx.run_ui(input, |ui| {
+                let full = crate::test_support::run_frame(&ctx, input, |ui| {
                     let mut text = egui::RichText::new("UI").color(want);
                     if strong {
                         text = text.strong();
