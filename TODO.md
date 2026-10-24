@@ -215,6 +215,14 @@ reception log · #642 S-meter calibration.
 
 ## Recently done
 
+### 2026-10-25
+- **STANAG 4285's uncoded text reads** — the character layer cut each frame's bits
+  into groups of five, but a teleprinter character is **seven** bits (start, five
+  data, stop), so an uncoded 1200 bps transmission could never be read however clean
+  it was. A streaming 5N1.5 framer now runs across the whole transmission, and a
+  synthetic of the text a French Navy tape sends reads back letter for letter where
+  the old path produced gibberish. Both tests verified failing on the old code.
+
 ### 2026-10-24
 - **Aircraft hover card** — the map's tooltip over an aircraft is now a compact
   card: ICAO, flight, registration, position, altitude, speed, track, range and
