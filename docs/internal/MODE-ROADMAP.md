@@ -828,6 +828,29 @@ ALE), then **MIL-STD-188-110 16-tone/39-tone** (which shares the serial-tone DSP
 already built for STANAG 4285), then **ARQ-E/E3** for the utilities, and
 **ALE-3G** only after 2G decodes a real station.
 
+### CIS-11, scoped (2026-10-24)
+
+The first one to build, and what the two references do and do not settle:
+
+| | Shoc | Sigidwiki |
+|---|---|---|
+| modulation | 2-FSK | 2-FSK |
+| shift | **500 Hz** | **400 Hz**, 650 Hz occupied |
+| baud | 100 | 100 |
+| error correction | parity | — |
+| alphabet | ITA-2 | **Russian M2** (3-shift Cyrillic), ITA-2 adaptation |
+| framing | "synchronous" | — |
+
+So **the shift and the alphabet are settings, not blockers** (400 or 500 Hz, ITA-2
+or M2 — the same shape RTTY's shift already has), and the mode is otherwise
+RTTY's front end at a fixed 100 baud. What neither source gives is the
+**synchronous character arrangement** — how the five data bits and the parity bit
+are grouped, and what the idle/phasing pattern is — and that is exactly the kind
+of detail a round-trip test cannot settle, because our own encoder would agree
+with our own decoder under any arrangement. **A recording is needed before the
+code is written**, the same lesson ALE cost us: the parameters scope it, the air
+defines it.
+
 ## A suggested order for a few days
 
 The point of this order is that each step makes the next cheaper, and the first
