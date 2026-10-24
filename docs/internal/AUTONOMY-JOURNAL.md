@@ -21,6 +21,47 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 (aircraft) — the clients read the relay: badges, photo credit, no storage
+
+**Summary.** The aircraft card in the browser, the phone and the remote client now
+shows what the station's relay knows — type, operator, route, a photo — under the
+radio's own lines, each marked with a green "radio" or a blue "online" badge, and a
+badge at the top that says "radio" or "radio + online". Nothing changes unless the
+operator has switched the relay on at the station; if it is off the card says
+"online indisponible" once and does not ask again. It is not proven against a real
+station or the real services, and whether a browser may load the Planespotters
+thumbnail depends on a header only their server can set — if not, the credit and
+link show without the picture. Next: a live run.
+
+**Done.** Branch `claude/aircraft-online-clients` (from `2520f406`). New
+`aircraft_online.rs` (pure: which question, when, what a reply means, the rows and
+badges, the photo view) and `aircraft_online_io.rs` (the sending: a thread with
+`ureq` natively, `fetch` in the browser; thumbnail decoded in memory). The native
+remote client signs in once with the password the socket already had and keeps the
+cookie in memory. The native local engine has no station: `NoStation`, no request.
+No client names adsbdb or Planespotters' API; only the thumbnail address the relay
+returned, and only on `t.plnspttrs.net`. No `PROTO_VERSION` change; `Cargo.lock`
+gains the edges for `serde_json`, `ureq` and the relay crate's pure half.
+Numbers: 36 new tests; `cargo test -p sdroxide-ui` 1035 passed in the lib plus the
+integration tests; `cargo check --release --target wasm32-unknown-unknown -p
+sdroxide-ui` and `-p sdroxide-web` clean; rustfmt clean on the new files. Red
+first: 26 of 29 logic tests failed on `todo!()` stubs; the three source scans
+passed on stubs and were shown to fail by injecting `localStorage` and an adsbdb
+address; the "nothing is saved" test was shown to fail by writing the online state
+into `save`. The sixth transport test (no station, nothing asked) **cannot catch a
+regression of its own guard** — the result is the same by another path — and says
+so in a comment.
+
+**Not done / blocked.** Not run: the full `cargo check --workspace --all-targets`
+(`sdroxide-rade` fetches at build time), any request against a live station, the
+native sign-in and cookie path, the browser `fetch`, and a look at the drawn
+thumbnail (the preview shows the credit-only variant). The sandbox disk filled
+twice; regenerable `target/` output was deleted.
+
+**Next.** A live run with the relay on; then F4NRM looks at the card.
+
+---
+
 ## 2026-10-24 (STANAG 4285) — the equaliser reads the tape, and the tape was never weak
 
 **Summary.** The one STANAG 4285 recording that was said to be too weak to finish
