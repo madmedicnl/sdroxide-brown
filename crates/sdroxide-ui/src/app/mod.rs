@@ -2818,12 +2818,14 @@ impl SdroxideApp {
 
     pub fn open_radio_settings(&mut self) {
         self.show_settings = true;
+        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS;
         self.settings_tab = SettingsTab::Radio;
     }
 
     /// Open the settings dialog on a specific tab (by key name).
     pub fn open_settings_tab(&mut self, tab_key: &str) {
         self.show_settings = true;
+        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS;
         if let Some(tab) = SettingsTab::from_key(tab_key) {
             self.settings_tab = tab;
         }
@@ -4346,6 +4348,7 @@ mod tests {
             let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
             app.ui_settings.extras_window = saved;
             app.show_extras = true;
+        app.ui_settings.tool_windows_open |= crate::app::frame::TW_EXTRAS;
             let mut tex = crate::test_raster::Textures::default();
             for i in 0..4 {
                 let input = egui::RawInput {
@@ -5463,6 +5466,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
         app.show_scanner = true;
+        app.ui_settings.tool_windows_open |= crate::app::frame::TW_SCANNER;
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
@@ -5621,6 +5625,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
         app.show_settings = true;
+        app.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS;
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
@@ -5749,6 +5754,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = SdroxideApp::new_tab(&ctx, None, None, Box::new(WithConfig), 0, true);
         app.show_settings = true;
+        app.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS;
         app.settings_tab = SettingsTab::Radio;
         let input = || egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(

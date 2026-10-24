@@ -394,6 +394,7 @@ impl super::SdroxideApp {
             .clicked()
         {
             self.show_settings = true;
+        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS;
         }
         let _ = cmds;
     }

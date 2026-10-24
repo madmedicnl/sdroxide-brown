@@ -760,6 +760,7 @@ impl SdroxideApp {
         // entry, print a report and carry the QSL loop.
         self.swl_edit = Some(form);
         self.show_swl = true;
+        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SWL_LOG;
         self.listen_comment.clear();
         let _ = cmds;
     }

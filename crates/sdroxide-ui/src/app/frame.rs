@@ -4527,6 +4527,7 @@ impl SdroxideApp {
             // Open the main Settings dialog on the UI page, which is where the
             // saved window arrangements live.
             self.show_settings = true;
+        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS;
             self.settings_tab = crate::app::SettingsTab::Ui;
         }
         if flip_broadcast_labels {

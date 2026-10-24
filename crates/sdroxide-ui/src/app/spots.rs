@@ -562,6 +562,7 @@ impl SdroxideApp {
         }
         self.log_edit = Some(form);
         self.show_logbook = true;
+        self.ui_settings.tool_windows_open |= crate::app::frame::TW_LOGBOOK;
         self.queue_lookup(spot.call.clone());
     }
 
@@ -604,6 +605,7 @@ impl SdroxideApp {
         if open_setup {
             // Open the main Settings dialog on the Spots tab.
             self.show_settings = true;
+        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS;
             self.settings_tab = SettingsTab::Spots;
         }
         if let Some(s) = clicked {
