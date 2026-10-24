@@ -21,6 +21,46 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 — 8PSK: the recordings do not say what we thought
+
+**Summary.** No change in the program. The mode that has been stuck — the
+8-phase PSK family, which fldigi transmits and we cannot read — turned out to be
+stuck for a reason we had wrong: the notes said those test recordings are only
+30 Hz wide, which would mean they cannot carry the mode at all. They are not.
+Measured properly they are exactly the width the mode should be, at a normal
+level and the right speed, so the fault is not a band-limited recording. What is
+still true is that their phase never settles for us, and our own decoder reads
+nothing from them either. Before another receiver gets written, the next step is
+to build the signal ourselves the way fldigi does and compare the two by the same
+measurement — or to get one real recording of the mode.
+
+**Done.**
+- Re-measured the corpus 8PSK files (`samples/fldigi/8PSK*.wav`):
+  **8PSK125 is 124.5 Hz wide at −3 dB** (BPSK125: 125.0 Hz), carrier 1806.6 Hz,
+  in-band SNR ≈ 28 dB — the same level and SNR as the BPSK and QPSK files beside
+  it. **Baud line 125.0 Hz**, harmonics at 250 and 374 Hz (spectrum of the phase
+  derivative). The old "20–46 Hz wide" note was a faulty width measurement
+  (thresholds read above the peak instead of beside it).
+- Differential-phase concentration at the right rate: BPSK125 **0.87** (2-fold),
+  QPSK125 **0.74** (4-fold), every 8PSK file **0.44–0.58** at any symbol phase.
+- Our own BPSK decoder reads **nothing** from `8PSK125.wav` (PskRx at 125 baud over
+  1650–1950 Hz), so the 0°/180° histogram is a **closed eye**, not a BPSK file.
+- `docs/internal/MODE-PROGRESS.md` carries the corrected table and the two
+  candidate explanations; commit `4e7abd93`.
+
+**Not done / blocked.** What the 8PSK files actually are. Two answers would
+settle it and neither is a guess this bench can make: a **synthetic 8PSK built the
+way fldigi builds one**, compared against the file by the same statistic, or a
+**reference recording** of the mode. Nothing is wired to the panel.
+
+**Next.** Build the synthetic comparison (it is a Rust test next to the existing
+`a_synthetic_8psk_transmission_reads_back`, which already proves the slicer on our
+own waveform — the missing half is doing it under fldigi's shaping; if the
+synthetic settles and the file does not, the file is the fault and the item waits
+for a recording).
+
+---
+
 ## 2026-10-24 — CIS-11: a new mode, measured from the recordings before it was built
 
 **Summary.** There is a new mode in the DIGITAL row, **CIS-11** — the Russian

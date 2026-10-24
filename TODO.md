@@ -42,9 +42,14 @@ maintainer's queue there, not a promise.
      the lock-time question, an ARDOP recording off air, and a THOR/DominoEX
      tone-step comparison against a real fldigi. The list with reasons is the
      "Needs me" section at the end of the journal.
-   - **Eight spread modes still read nothing** and are the next build: 8PSK's
-     vestigial filter is the open question, and the four wide `C` PSK banks need
-     the demodulator's carrier separation (the recording is not the fault).
+   - **8PSK**: re-measured 2026-10-24 and the old "30 Hz wide" note was wrong —
+     the files are 124.5 Hz wide at −3 dB with a 125 Hz baud line, right level,
+     right SNR. Their constellation still does not settle (0.44–0.58 against
+     0.87 for BPSK125 and 0.74 for QPSK125), and our BPSK decoder reads nothing
+     from them either. **Blocked on one of two answers**: a synthetic built the
+     way fldigi builds one (next step, a Rust test) or a reference recording.
+   - **The four wide `C` PSK banks** need the demodulator's carrier separation
+     (the recording is not the fault).
    - **JTTY: take upstream's rewrite by hand.** Upstream's #597 was our port;
      they then fixed it properly in six commits (`0d24a5a9`, `25350c0f`,
      `6771f6fa`, `33f6a8fa`, `53085277` and the 1500 Hz centre before them) —
