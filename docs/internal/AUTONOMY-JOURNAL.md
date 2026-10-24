@@ -124,6 +124,39 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag) — the Mac recording measured, and a mistake to record
+
+**Summary.** Mark sent a better recording of the French Navy tape — made with our
+own program on his Mac, at the full 3.7 kHz — plus a raw baseband capture. Our
+receiver locks it far better than the old file and the equaliser now gets the data
+symbols to 0.40 where the old recording gave 0.23–0.34, but the error-correcting
+code is still invisible to us, while MultiPSK reads the same file from midway. So
+the fault is in our demodulator and not in anything he sends. The next step is
+named and measurable: track the phase symbol by symbol after the frame's
+correction, and judge it by whether the code's own metric lifts off its null.
+
+**Done.**
+- Both files kept in `~/s4285-captures/keepers/` (off-air, not in the tree).
+- Measured: lock **0.899**, frame ACF **0.706**, 242 frames, data constellation
+  **0.396**, references 0.55/0.61/0.51, FEC metric **0.96×** its shuffled null at
+  1850 and 1900 Hz. SOM correlator **31/32** — the closest to a message yet.
+- `STANAG4285-HANDOVER.md`: the table, the two findings and the next measurement.
+
+**A mistake, recorded rather than hidden.** My commit `a558d624` swept up **25
+lines of the other session's MT63 work** (`crates/sdroxide-dsp/src/mt63.rs`) under
+a STANAG message, because I used `git add -A` in a tree another session is
+editing. Their change is intact and unaltered in content — nothing was lost — but
+it is in the wrong commit with the wrong message, and it is pushed. **In a shared
+tree, `git add` takes paths and never `-A`.** They should be told.
+
+**Not done / blocked.** The decision-directed tracker, and the baseband IQ not yet
+opened (423 MB; the audio file was enough to answer today's question).
+
+**Next.** The phase tracker on `FUF-13031.200kHz-20261024-125317Z.wav`, judged by
+the trellis ratio.
+
+---
+
 ## 2026-10-24 (map) — roads and internal boundaries, for the "too imprecise" report
 
 **Summary.** A user on Reddit says our map is too imprecise and asks for

@@ -766,6 +766,42 @@ On the air capture the same change takes the data from 0.25 to **0.384** — bet
 still not the ~0.9 a clean frame gives, so the smear is real and the path is doing
 it.
 
+## 2026-10-24 — Mark's Mac recording: 3.7 kHz, our own recorder, and the code is still hidden
+
+`markjfine` sent two more files, both kept in `~/s4285-captures/keepers/` and out of
+the tree: **`FUF-13031.200kHz-20261024-125317Z.wav`** — one minute, 48 kHz stereo,
+recorded **by our own recorder on his Mac** at 3.7 kHz of bandwidth, USB on
+13031.2 kHz, and copied by MultiPSK from about midway through — and
+**`…-134238Z.cf32.wav`**, a CF32 baseband IQ of the same channel (423 MB), the
+first time this mode has had the whole passband rather than what an audio chain
+passed.
+
+Measured on the audio file, our receiver, carrier swept:
+
+| carrier | lock | ACF | frames | data constellation | references | FEC (metric / null) |
+|---|---|---|---|---|---|---|
+| 1850 Hz | 0.899 | 0.706 | 242 | **0.396** | 0.55 / 0.61 / 0.51 | **0.96×** |
+| 1900 Hz | 0.896 | 0.706 | 242 | 0.395 | 0.55 / 0.61 / 0.50 | 0.96× |
+
+Two things worth keeping:
+
+* **The equaliser is working and still not enough.** The data constellation is
+  **0.396** where the previous recording gave 0.23–0.34, so the frame- and
+  block-level correction is doing its job on a cleaner waveform — and the trellis
+  metric is still **0.96–0.98× its own shuffled null** on every branch. The code
+  is not visible in the soft decisions while MultiPSK reads the same file, so the
+  gap is now firmly in our demodulator, not in the recording.
+* **`best SOM 31/32`** — the Annex E start-of-message correlator matching 31 of its
+  32 bits is the closest anything has come to a message: the framing is right and
+  the soft values are what is wrong.
+
+**Next measurement, named:** the residual after the reference-block fit is a
+per-symbol phase wander that a frame-wide linear fit cannot follow, and the fix is
+a **decision-directed phase tracker on the data symbols** (BPSK decisions are ±90°
+apart, so it is unambiguous once the frame's sign is known) feeding corrected soft
+values into the Annex E chains. Judged by the same statistic: the trellis ratio on
+this file, which has to stand above 1 before any text is expected.
+
 ### Still open
 
 * **No real coded transmission has been decoded**, and the metric test says the
