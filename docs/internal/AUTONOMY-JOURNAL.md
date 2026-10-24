@@ -171,6 +171,47 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag, fifth pass) — the judge was reading the wrong stream
+
+**Summary.** The check that decides whether the code is in the recording was
+reading a stream with holes in it. The decoder is fed every locked frame, including
+the poor ones (as erasures, so the interleaver stays aligned), while the check was
+reading only the frames good enough to report — and one hole shifts every soft
+decision after it by a whole frame, which is exactly enough to hide real code.
+That is now fixed, and the answer on the correct stream is still no: the trellis
+sits at its null over 555 frames of real decisions. Reading the right stream also
+showed how much of this recording is actually poor: 56 % of the locked frames fall
+below the gate that decides whether a frame is worth reporting.
+
+**Done.**
+- `S4285Receiver::trace_coded_stream(on)` and `coded_stream()`, with the reason
+  documented on the method, and an assertion in the round-trip tests that the
+  traced stream is whole frames (128 per frame, erasures included).
+- `s4285_fec_check` judges the traced stream and its SOM against the same
+  statistic on shuffled values, through the receiver's own chunking.
+
+**Numbers.** Mark's file, 1850 Hz: 242 reported frames, **71 168** traced
+decisions → 556 frames fed, **314 of them erasures**. Best ratio 1.00× its null.
+With `MIN_CODED_REFERENCE` lowered to 0.0: 555 frames, 71 040 values, ratio
+**1.00×** — erasures are not the cause. SOM on the traced stream: real **31/32**
+against **27/32** shuffled; no branch reaches 32 and no message closes, so it stays
+a near-miss. Root-raised-cosine receive filter (α 0.2/0.35/0.5) breaks acquisition
+(lock 0.900 → 0.465) and was reverted. The file is dual mono — L and R decode
+identically.
+
+**Commands.** `cargo test --release -p sdroxide-dsp --lib stanag` → 16 passed, 1
+ignored; `cargo check --workspace --all-targets` → 0 warnings; `rustfmt --check`
+clean on everything touched.
+
+**Next.** The symbols themselves are what is wrong, not the alignment: 555 frames
+of real decisions carry no trellis. The useful measurement now is *how bad the
+channel is per frame* — the reference concentration distribution over all 556
+frames, not just the reported ones — because if the tape is 3–4 dB poorer than the
+chain's threshold, the honest answer is a better front end (or a stronger
+recording), not another convention sweep.
+
+---
+
 ## 2026-10-24 (stanag, fourth pass) — the channel path cleared, and a false statistic retired
 
 **Summary.** The choice between the plain symbols and the equaliser is not what is

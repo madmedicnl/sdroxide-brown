@@ -539,6 +539,9 @@ pub struct S4285Receiver {
     pending: Vec<S4285Message>,
     /// How the coded path picks its channel — see [`EqMode`].
     eq_mode: EqMode,
+    /// Every soft decision the Annex E chains were actually fed, erasures
+    /// included, when tracing is on — see [`S4285Receiver::coded_stream`].
+    coded_trace: Option<Vec<f32>>,
     /// The last frame reached the coded-chain floor, whether or not it was good
     /// enough to report. A frame that is merely poor must not cost the lock: the
     /// lock is about the frame *position*, which such a frame still proves.
@@ -557,6 +560,30 @@ impl S4285Receiver {
     /// Annex E chains are affected; the displayed frame keeps [`EqMode::Auto`].
     pub fn set_eq_mode(&mut self, mode: EqMode) {
         self.eq_mode = mode;
+    }
+
+    /// Start or stop recording the stream the Annex E chains are fed.
+    ///
+    /// **This is not the same stream as the frames' own soft decisions**, and the
+    /// difference matters to anything judging whether the code is there. A frame
+    /// too poor to report is still fed — as 128 zeros — so the interleaver stays
+    /// aligned with the frame index through a fade; those values never reach a
+    /// frame event. A judge that reads the frame events alone is therefore reading
+    /// a stream with holes that the decoder did not have, and a hole shifts every
+    /// soft decision after it by a whole frame.
+    pub fn trace_coded_stream(&mut self, on: bool) {
+        if on {
+            if self.coded_trace.is_none() {
+                self.coded_trace = Some(Vec::new());
+            }
+        } else {
+            self.coded_trace = None;
+        }
+    }
+
+    /// The values [`S4285Receiver::trace_coded_stream`] collected, in order.
+    pub fn coded_stream(&self) -> &[f32] {
+        self.coded_trace.as_deref().unwrap_or(&[])
     }
 
     /// `rate_hz` is the audio tap rate; `carrier_hz` is the audio frequency of the
@@ -586,6 +613,7 @@ impl S4285Receiver {
             coded_messages: 0,
             pending: Vec::new(),
             eq_mode: EqMode::Auto,
+            coded_trace: None,
             last_frame_usable: false,
             bit_run: Vec::new(),
             events_text: String::new(),
@@ -1367,6 +1395,9 @@ impl S4285Receiver {
             }
         }
         let soft: Vec<f32> = data.iter().map(|c| c.re * scale).collect();
+        if let Some(t) = self.coded_trace.as_mut() {
+            t.extend_from_slice(&soft);
+        }
         for chain in self.coded.iter_mut() {
             for v in &soft {
                 chain.push(*v, out);
@@ -1388,6 +1419,9 @@ impl S4285Receiver {
     fn feed_erasures(&mut self, out: &mut Vec<S4285Message>) {
         if self.coded.is_empty() {
             return;
+        }
+        if let Some(t) = self.coded_trace.as_mut() {
+            t.extend(std::iter::repeat_n(0.0f32, 128));
         }
         for chain in self.coded.iter_mut() {
             for _ in 0..128 {
@@ -2031,6 +2065,7 @@ mod tests {
         };
         let mut rx = S4285Receiver::new(12000.0, 1800.0);
         rx.set_eq_mode(mode);
+        rx.trace_coded_stream(true);
         let mut got: Vec<S4285Message> = Vec::new();
         for chunk in audio.chunks(1024) {
             for ev in rx.process(chunk) {
@@ -2045,6 +2080,13 @@ mod tests {
                 rx.report()
             );
         }
+        // **The chains are fed whole frames and nothing else**, erasures included:
+        // 128 soft decisions per frame, in order. A stream with a hole in it
+        // desynchronises the interleaver for good, so this is the shape the
+        // recorded stream has to have before anything judges it.
+        let traced = rx.coded_stream().len();
+        assert!(traced > 0, "nothing traced into the coded stream");
+        assert_eq!(traced % 128, 0, "the coded stream is not whole frames: {traced}");
         (payload, got)
     }
 

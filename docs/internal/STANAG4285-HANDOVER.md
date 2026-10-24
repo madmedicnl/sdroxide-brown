@@ -857,6 +857,39 @@ gate), so the receiver's own null has not been established; until it is, the
 number must not be quoted. The trellis metric, which does have a null, says no
 code on this file.
 
+**The judge was reading the wrong stream, and now does not** (same day). The
+Annex E chains are fed *before* the reference gate: a frame too poor to report is
+still fed as 128 zeros, so the interleaver stays aligned through a fade. Those
+values never reach a frame event, so `s4285_fec_check` was judging a stream with
+holes the decoder never had — and one hole shifts everything after it by a whole
+frame. `S4285Receiver::trace_coded_stream(true)` / `coded_stream()` now expose the
+stream the chains actually saw, and the check reads that.
+
+What the correct stream says: **71 168 soft decisions, not 30 976.** 242 frames are
+reported; **314 more of the 556 locked frames fall below `MIN_CODED_REFERENCE`**
+(0.30) and were being fed as erasures — 56 % of the pass. Judged on that stream the
+best branch is **1.00×** its own shuffled null, so the holes were not hiding a
+trellis either.
+
+**Erasures ruled out as the cause** (same day): with `MIN_CODED_REFERENCE` set to
+0.0, every locked frame contributes its real soft decisions — 555 frames,
+71 040 values — and the best branch is still **1.00×**. So the code is not hidden
+by the frames we decline to report.
+
+The SOM statistic, measured on the correct stream: **real 31/32 against 27/32
+shuffled** on the 300 bps branch, which reproduces the receiver's number. It is
+still not evidence: no branch ever reaches 32, no message ever closes, and the
+metric — the one statistic here with a proper null — sits at 1.00×. It is a
+1-in-200 near-miss on a long stream, not a decode.
+
+**Two front-end ideas measured and rejected the same day.** A **root raised cosine**
+matched filter before the decision (α = 0.2, 0.35, 0.5, four symbols either side,
+delay compensated) breaks acquisition outright — lock **0.900 → 0.465** and the
+constellation to ≤ 0.20 at every roll-off — so it is not the missing piece in this
+form. And the file's two channels are **identical** (dual mono): decoding L and R
+separately gives exactly the same lock (0.899), constellation (0.396) and frame
+count (242), so the mono mix costs nothing and gains nothing.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run

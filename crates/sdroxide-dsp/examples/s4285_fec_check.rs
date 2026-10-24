@@ -158,16 +158,22 @@ fn main() {
     for mode in [EqMode::Auto, EqMode::Off, EqMode::On] {
         let mut rx = S4285Receiver::new(rate, carrier);
         rx.set_eq_mode(mode);
-        let mut soft: Vec<f32> = Vec::new();
+        rx.trace_coded_stream(true);
         let mut frames = 0;
         for chunk in audio.chunks(4096) {
             for ev in rx.process(chunk) {
-                if let S4285Event::Frame(f) = ev {
-                    soft.extend_from_slice(&f.soft);
+                if let S4285Event::Frame(_) = ev {
                     frames += 1;
                 }
             }
         }
+        // **The stream the chains were fed**, not the frames' own. A frame too
+        // poor to report is still fed as 128 zeros so the interleaver stays
+        // aligned through a fade; those values never reach a frame event, so a
+        // judge reading the events alone sees holes the decoder did not have — and
+        // one hole shifts every soft decision after it by a whole frame, which is
+        // exactly enough to turn real code into a null.
+        let soft: Vec<f32> = rx.coded_stream().to_vec();
         println!(
             "{}: {frames} frames, {} soft decisions at {carrier}, equaliser {mode:?}",
             a[0],
@@ -194,14 +200,11 @@ fn main() {
     if let Some((_, v)) = best.as_ref() {
         let _ = v;
         let mut rx = S4285Receiver::new(rate, carrier);
-        let mut soft: Vec<f32> = Vec::new();
+        rx.trace_coded_stream(true);
         for chunk in audio.chunks(4096) {
-            for ev in rx.process(chunk) {
-                if let S4285Event::Frame(f) = ev {
-                    soft.extend_from_slice(&f.soft);
-                }
-            }
+            rx.process(chunk);
         }
+        let soft: Vec<f32> = rx.coded_stream().to_vec();
         let null: Vec<f32> = shuffled(&soft, 0x0BAD_F00D);
         let mut rows = Vec::new();
         let mut best = (0u8, 0u8, String::new());
