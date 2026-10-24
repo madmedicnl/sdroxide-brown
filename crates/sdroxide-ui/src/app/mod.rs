@@ -36,6 +36,8 @@ pub(in crate::app) mod duo_power;
 pub(in crate::app) mod enigma;
 pub(in crate::app) mod aircraft;
 pub(in crate::app) mod aircraft_card;
+pub(in crate::app) mod aircraft_online;
+pub(in crate::app) mod aircraft_online_io;
 pub(in crate::app) mod aircraft_registry;
 pub(in crate::app) mod extras;
 pub(in crate::app) mod frame;
@@ -546,6 +548,9 @@ pub struct SdroxideApp {
     /// which card is open there.
     aircraft_cards: bool,
     aircraft_card_sel: Option<aircraft_card::CardKey>,
+    /// What the station's relay says about the cards looked at this session —
+    /// see [`aircraft_online`]. Memory only: never saved, never in the browser.
+    aircraft_online: aircraft_online_io::OnlineClient,
     /// The RDS window. Opened from the RDS chip in the receive menu, which only
     /// appears on WFM.
     show_rds: bool,
@@ -2011,6 +2016,7 @@ impl SdroxideApp {
             aircraft_view: sdroxide_types::Mode::Adsb,
             aircraft_cards: false,
             aircraft_card_sel: None,
+            aircraft_online: aircraft_online_io::OnlineClient::default(),
             show_rds: false,
             show_drm: false,
             drm: None,
@@ -4540,6 +4546,150 @@ mod tests {
         );
         let out = std::env::var("AIRCRAFT_PREVIEW").unwrap_or_else(|_| {
             format!("{}/../../target/aircraft_preview.png", env!("CARGO_MANIFEST_DIR"))
+        });
+        img.save(&out).expect("write the preview");
+        println!("wrote {out}");
+    }
+
+    /// What the app saves — every key `save` writes — holds nothing of what the
+    /// relay said: not the airframe, not the operator, not the photo's credit.
+    /// Online state is session memory; the durable cache is the station's.
+    #[test]
+    fn nothing_the_relay_said_is_saved_with_the_app() {
+        use sdroxide_aircraft_online::{AircraftInfo, Info, Photo, Status};
+        #[derive(Default)]
+        struct Mem(std::collections::BTreeMap<String, String>);
+        impl eframe::Storage for Mem {
+            fn get_string(&self, key: &str) -> Option<String> {
+                self.0.get(key).cloned()
+            }
+            fn set_string(&mut self, key: &str, value: String) {
+                self.0.insert(key.to_string(), value);
+            }
+            fn remove_string(&mut self, key: &str) {
+                self.0.remove(key);
+            }
+            fn flush(&mut self) {}
+        }
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir()
+            .join(format!("sdroxide-aircraft-online-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        let mut info = Info::bare(Status::Ok);
+        info.aircraft = Some(AircraftInfo {
+            type_name: Some("ZZTYPE-737".into()),
+            manufacturer: Some("ZZMAKER".into()),
+            operator: Some("ZZOPERATOR".into()),
+            registration: Some("ZZ-REG".into()),
+        });
+        info.photo = Some(Photo {
+            thumb_url: "https://t.plnspttrs.net/zzthumb_t.jpg".into(),
+            page_url: "https://www.planespotters.net/photo/zzpage".into(),
+            photographer: "ZZPHOTOGRAPHER".into(),
+        });
+        let want = aircraft_online::Want { icao: 0x484006, callsign: None, registration: None };
+        assert!(app.aircraft_online.store.next_request(Some(&want), true, 1).is_some());
+        app.aircraft_online.store.deliver(
+            0x484006,
+            aircraft_online::Answer::Info(Box::new(info)),
+            1,
+        );
+        let mut mem = Mem::default();
+        eframe::App::save(&mut app, &mut mem);
+        assert!(mem.0.contains_key("ui_settings"), "the save wrote the settings, so this looks");
+        for (key, value) in &mem.0 {
+            for marker in ["ZZ", "plnspttrs", "planespotters"] {
+                assert!(!value.contains(marker), "{key} holds {marker}");
+            }
+        }
+    }
+
+    /// The AIRCRAFT window on its Cards view with a card the radio heard and the
+    /// relay's answer beside it, for looking at the badges and the photo block.
+    /// `AIRCRAFT_ONLINE_PREVIEW` sets the output path. The picture address is
+    /// not one Planespotters hands out, so nothing is requested: this is the
+    /// card as it reads when the picture could not be shown.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    #[ignore = "writes a picture to look at; not an assertion"]
+    fn aircraft_online_preview() {
+        use crate::multi::frame_test_lock;
+        use sdroxide_aircraft_online::{AircraftInfo, Airport, Info, Photo, Route, Status};
+        let _guard = frame_test_lock();
+        let dir = std::env::temp_dir()
+            .join(format!("sdroxide-aircraft-online-preview-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let (w, h) = (1000.0_f32, 620.0_f32);
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.ui_settings.tool_windows_open |= crate::app::frame::TW_AIRCRAFT;
+        app.aircraft_cards = true;
+        let now = crate::time::now_unix();
+        let mut a = sdroxide_types::AdsbAircraft::new(0x484006, now - 12);
+        a.callsign = "KLM1234".into();
+        a.lat = Some(52.37);
+        a.lon = Some(4.9);
+        a.altitude_ft = Some(35_000);
+        a.ground_speed_kt = Some(430.0);
+        a.track_deg = Some(90.0);
+        a.last_at = now - 12;
+        a.last_pos_at = now - 12;
+        app.aircraft_registry.ingest_adsb(&a);
+        let mut info = Info::bare(Status::Ok);
+        info.aircraft = Some(AircraftInfo {
+            type_name: Some("737-800".into()),
+            manufacturer: Some("Boeing".into()),
+            operator: Some("KLM".into()),
+            registration: Some("PH-BXA".into()),
+        });
+        info.route = Some(Route {
+            origin: Some(Airport { code: "EHAM".into(), name: "Amsterdam Schiphol".into() }),
+            destination: Some(Airport { code: "EGLL".into(), name: "London Heathrow".into() }),
+        });
+        info.photo = Some(Photo {
+            thumb_url: "https://example.invalid/not-planespotters.jpg".into(),
+            page_url: "https://www.planespotters.net/photo/1/x".into(),
+            photographer: "A. Spotter".into(),
+        });
+        let want = aircraft_online::Want { icao: 0x484006, callsign: None, registration: None };
+        assert!(app.aircraft_online.store.next_request(Some(&want), true, now).is_some());
+        app.aircraft_online.store.deliver(
+            0x484006,
+            aircraft_online::Answer::Info(Box::new(info)),
+            now,
+        );
+        let mut tex = crate::test_raster::Textures::default();
+        let mut last = None;
+        for i in 0..4 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
+                time: Some(10.0 + i as f64 / 30.0),
+                ..Default::default()
+            };
+            let mut full = ctx.run_ui(input, |ui| {
+                app.ui(ui, &mut eframe::Frame::_new_kittest());
+            });
+            tex.apply(&full.textures_delta);
+            full.textures_delta.clear();
+            last = Some(full);
+        }
+        let img = crate::test_raster::rasterize(
+            &ctx,
+            last.unwrap(),
+            &tex,
+            egui::vec2(w, h),
+            crate::theme::BG_DEEP(),
+        );
+        let out = std::env::var("AIRCRAFT_ONLINE_PREVIEW").unwrap_or_else(|_| {
+            format!("{}/../../target/aircraft_online_preview.png", env!("CARGO_MANIFEST_DIR"))
         });
         img.save(&out).expect("write the preview");
         println!("wrote {out}");

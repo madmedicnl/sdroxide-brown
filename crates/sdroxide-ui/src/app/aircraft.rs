@@ -22,6 +22,7 @@ use eframe::egui::{self, RichText};
 use sdroxide_types::{Command, Mode, RxId};
 
 use super::aircraft_card;
+use super::aircraft_online::{self, Badge, Provenance, ThumbStatus};
 
 /// The opening size of the window and its floor.
 const AIRCRAFT_SIZE: [f32; 2] = [920.0, 560.0];
@@ -61,6 +62,40 @@ const MODES: &[AirMode] = &[
 const COLUMN_W: f32 = 104.0;
 const BUTTON_H: f32 = 30.0;
 const LIST_W: f32 = 230.0;
+
+const RADIO_GREEN: egui::Color32 = egui::Color32::from_rgb(110, 210, 140);
+const ONLINE_BLUE: egui::Color32 = egui::Color32::from_rgb(110, 165, 255);
+
+fn chip(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
+    ui.label(
+        RichText::new(text)
+            .size(10.0)
+            .strong()
+            .color(color)
+            .background_color(color.gamma_multiply(0.18)),
+    );
+}
+
+/// The badge in front of a line: green for the radio, blue for the relay, and
+/// nothing for a gap, whose "—" says it.
+fn badge_chip(ui: &mut egui::Ui, badge: Badge) {
+    match badge {
+        Badge::Radio => chip(ui, "radio", RADIO_GREEN),
+        Badge::Online => chip(ui, "online", ONLINE_BLUE),
+        Badge::Missing => {
+            ui.label("");
+        }
+    }
+}
+
+/// The badge at the top of the card: where its data comes from as a whole.
+fn provenance_chip(ui: &mut egui::Ui, p: Provenance) {
+    match p {
+        Provenance::Radio => chip(ui, p.label(), RADIO_GREEN),
+        Provenance::RadioOnline | Provenance::Online => chip(ui, p.label(), ONLINE_BLUE),
+        Provenance::Nothing => {}
+    }
+}
 
 /// A mode button is lit only while the map is the thing on show.
 fn mode_chip_lit(chip: Mode, shown: Mode, cards_view: bool) -> bool {
@@ -202,6 +237,26 @@ impl super::SdroxideApp {
             }
         }
         let sel = self.aircraft_card_sel.clone().unwrap_or_else(|| rows[0].key.clone());
+        // The relay's half: poll what arrived, ask what is due, and start the
+        // thumbnail. All of it from the card that is open, and nothing else.
+        let ctx = ui.ctx().clone();
+        let peer = self.ctrl.peer_url();
+        let want = aircraft_card::lookup(&self.aircraft_registry, &sel)
+            .and_then(|c| aircraft_online::want_for(&sel, c));
+        self.aircraft_online.poll(&ctx, now);
+        self.aircraft_online.ask(&ctx, peer.as_deref(), want.as_ref(), now);
+        let state = match &want {
+            Some(w) => self.aircraft_online.store.state_for(w.icao, peer.is_some()).clone(),
+            None => aircraft_online::OnlineState::Idle,
+        };
+        let mut photo = aircraft_online::photo_view(&state, ThumbStatus::NotTried);
+        if let Some(p) = photo.as_ref().filter(|p| p.show_image) {
+            self.aircraft_online.want_thumb(&ctx, &p.thumb_url);
+            // Now that it has been asked for, what became of it decides whether
+            // the picture is drawn or only its credit and link.
+            let status = self.aircraft_online.thumb_status(&p.thumb_url);
+            photo = aircraft_online::photo_view(&state, status);
+        }
         let mut picked = None;
         ui.horizontal_top(|ui| {
             ui.allocate_ui_with_layout(
@@ -227,7 +282,12 @@ impl super::SdroxideApp {
             ui.separator();
             ui.vertical(|ui| {
                 if let Some(card) = aircraft_card::lookup(&self.aircraft_registry, &sel) {
-                    ui.label(RichText::new(aircraft_card::title(&sel, card)).strong().size(15.0));
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(aircraft_card::title(&sel, card)).strong().size(15.0),
+                        );
+                        provenance_chip(ui, aircraft_online::provenance(card, &state));
+                    });
                     ui.label(
                         RichText::new(aircraft_card::detail(&sel, card))
                             .size(11.0)
@@ -235,24 +295,57 @@ impl super::SdroxideApp {
                     );
                     ui.add_space(6.0);
                     egui::Grid::new("aircraft_card_fields")
-                        .num_columns(3)
+                        .num_columns(4)
                         .spacing([12.0, 4.0])
                         .show(ui, |ui| {
-                            for l in aircraft_card::lines(card, now) {
-                                ui.label(RichText::new(l.label).color(crate::theme::gray(160)));
-                                ui.label(l.value);
+                            for r in aircraft_online::rows(card, &state, now) {
+                                ui.label(RichText::new(r.label).color(crate::theme::gray(160)));
+                                badge_chip(ui, r.badge);
+                                match r.badge {
+                                    Badge::Missing => ui.label(RichText::new(r.value).weak()),
+                                    _ => ui.label(r.value),
+                                };
                                 ui.label(
-                                    RichText::new(l.note).size(10.5).color(crate::theme::gray(130)),
+                                    RichText::new(r.note).size(10.5).color(crate::theme::gray(130)),
                                 );
                                 ui.end_row();
                             }
                         });
+                    if let Some(p) = &photo {
+                        ui.add_space(8.0);
+                        self.photo_block(ui, p);
+                    }
                 }
             });
         });
         if picked.is_some() {
             self.aircraft_card_sel = picked;
         }
+    }
+
+    /// The photo, its credit and the link to its page. The credit and the link
+    /// are there whether or not the picture could be loaded.
+    fn photo_block(&self, ui: &mut egui::Ui, p: &aircraft_online::PhotoView) {
+        if p.show_image {
+            match self.aircraft_online.thumb_texture(&p.thumb_url) {
+                Some(tex) => {
+                    ui.add(egui::Image::new(tex).max_height(140.0).corner_radius(3.0));
+                }
+                None => {
+                    ui.label(RichText::new("loading photo…").size(10.5).weak());
+                }
+            }
+        }
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(&p.credit).size(10.5).color(crate::theme::gray(150)));
+            if let Some(url) = &p.page_url {
+                if ui.link(RichText::new("Planespotters").size(10.5)).on_hover_text(url).clicked()
+                    && !crate::download::open_external(url)
+                {
+                    tracing::warn!(%url, "no handler for this link");
+                }
+            }
+        });
     }
 
     /// The right-hand side: a line saying what the radio is doing, then the map.
