@@ -51,6 +51,13 @@ receiver sitting under a thunderstorm.
   from the four NAVTEX warnings that are not ours; wasm check clean; `rustfmt
   --check` clean.
 
+  **Finished after the operator went to bed, and worth writing down because the
+  commit that landed last (`17578f9b`) honestly says "not claimed":** the full run
+  that was still in flight came back **495 + 26 + 14 + 1 + 8 + 14 + 8 + 5 passed, 0
+  failed**, `rustfmt --check` clean, and the workspace gate silent apart from the
+  same four NAVTEX warnings. So the tree is green — the caveat was about *when* the
+  check finished, not about its result.
+
 **Not done / blocked.**
 - **The local sweep is stopped, deliberately.** The operator reports a bad storm:
   the RSP1 is on an outdoor antenna, the band is static, and a capture is not worth
