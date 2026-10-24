@@ -1500,3 +1500,107 @@ Anything that differs — the data-symbol order, the bit order, the interleaver'
 segment-versus-bit question — is then a fact rather than a hypothesis. The metric
 judge must not be used for it: it is invalid (see the section above), and a framed
 message on a known text is the only judge that has ever been validated here.
+
+## 2026-10-24/25, sixth session — a real bug in the deinterleaver, and the tape really is too short
+
+The previous session ("the equaliser is the missing piece, and the tape was never
+weak") is **half wrong, and the half that is wrong is the important half**. The
+equaliser is right and is kept. "The tape was never weak" was read off the
+**probe's last frame**, and a fading recording's last frame is not its average.
+
+### The corrected numbers, on the tape
+
+| | plain | equaliser (`Auto`) | equaliser (`Dfe`) |
+|---|---|---|---|
+| mean constellation over 217 reported frames | 0.344 | **0.451** | **0.469** |
+| frames above 0.7 | 49 | **71** | 57 |
+| mean reference blocks | 0.689 | 0.721 | 0.793 |
+
+So the equaliser is worth **+0.11 of constellation and 45 % more usable frames** —
+real, and not the difference between a decode and no decode. The tape's *median*
+frame is 0.397. The probe printed 0.933 because it prints the last frame it took,
+and the last frames happen to be the good ones. **The probe now prints the mean
+over frames too**, because a single frame's figure on a fading tape is a number
+that lies.
+
+### ⛔ The deinterleaver was dropping one soft decision in 32
+
+Found by running the independent implementation's deinterleaver and ours over the
+**same soft decisions** and diffing:
+
+| | mismatched positions |
+|---|---|
+| before | one in every 32, at output position 7 of each segment |
+| after | 1 of 130 689 values (a rounding edge) |
+
+The cause: the shortest row holds **nothing at all** (row 31 on the receive side,
+row 0 on the transmit side), and `push` interleaved the write and the read row by
+row, so that position read its own row before this segment's value had been
+written into it and emitted a **zero**. The encoder had the mirror of the same
+quirk, so the pair round-tripped perfectly and every test passed — the loopback
+cannot see it, by construction. Every row is now written before any is read, on
+both sides.
+
+`the_deinterleaver_matches_the_standard_machine_at_every_position` pins the
+mapping against a longhand model of the standard's machine at every position and
+fails on the old code with **199 positions disagree** — one per segment.
+
+### What has been ruled out, and how
+
+With the deinterleaver now proven identical to the independent one and our Viterbi
+shown to be its equal (1 % apart on the synthetic, all in one chunk boundary, and
+ours is the one that frames the SOM and the EOM), the chain's conventions are not
+where the fault is. Everything else was swept with the SOM as the judge — the only
+test here that has ever been validated:
+
+* **24 orderings of the frame's four data blocks**, with and without reversing the
+  symbols inside each block. A permutation leaves the constellation intact (it is
+  rotation- and order-invariant) and destroys the code, which is exactly the shape
+  the tape has.
+* **all four interleaver wirings**, `j` = 3, 6, 12, 24, and the repeat factor of
+  every BPSK rate (1, 2, 4, 8).
+* **the pair order** (T1 first or T2 first — the one convention a loopback can
+  never falsify, because our encoder and decoder share it).
+* **differential encoding**, which is compatible with every measurement we have
+  (the references still collapse, the eye still sits on the lattice) and would
+  make our bits the running integral of the real ones.
+* **the frame layout itself**, measured on the good frames: sliding a 16-symbol
+  coherence window over all 176 symbols puts the reference blocks at **exactly
+  32, 80 and 128** with concentrations **0.98 / 1.05 / 1.19** while the data
+  windows sit at 0.34–0.46. The layout is not in doubt.
+
+Nothing produced a SOM, at any of them, on the good stretch of either tape.
+
+### And the tape cannot carry a message — measured, not guessed
+
+A convolutional interleaver spreads one message over ten seconds, so a message
+needs a **continuous** run of usable frames at least as long as the interleaver,
+not a good average. `S4285Receiver::coded_quality()` now reports one value per
+frame (its mean reference concentration, zero where it was fed as erasures) and
+the probe prints the verdict:
+
+| recording | usable frames (refs > 0.9) | longest continuous run | needed |
+|---|---|---|---|
+| `FUF 13031.2 kHz, 24 Oct 125317Z` | 73 of 557 | **69** | 93 |
+| `FUF 13031.2 kHz, 23 Oct 150300Z` | 204 of 561 | **32** | 93 |
+| our `6348.0 kHz, 22 Oct 045545Z` | 150 of 335 | **82** | 93 |
+| our own synthetic 600 bps | 207 of 207 | 207 | 93 — **decodes** |
+
+**Not one recording has 93.** That is why no coded message has been read: the
+material is short of ten continuous seconds, not the decoder. The **short**
+interleave needs 23 frames and all three recordings have that, so a
+short-interleaved transmission would have read — which is now the one thing that
+would tell us we are looking at the wrong interleave.
+
+### What the next capture has to be
+
+The criterion is now a number the watcher's own files can be checked against:
+**a run of 93 consecutive frames with reference concentration above 0.9**, which
+is about 10.2 seconds of solid signal. `tools/s4285-watch` is running again over
+eight frequencies; every file it writes is scored with
+`cargo run --release -p sdroxide-dsp --example s4285_probe -- <wav> 1800`, and the
+`coded readiness` line says immediately whether another one is worth keeping.
+
+Measured and **reverted, not shipped**: an LLR weighting of the soft decisions by
+each frame's own `1/σ²` (σ² from the reference concentration). It changed nothing
+on the tape and nothing on a burst-fade synthetic, so it is not in the tree.

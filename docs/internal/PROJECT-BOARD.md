@@ -29,11 +29,12 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
   NAVTEX, DSC (MF/HF), WEFAX, SSTV/RIFP, ACARS, VDL2, HFDL, ADS-B, AIS, APRS,
   DAB/DAB+, DRM, HD Radio, RADE, packet.
 - **STANAG 4285's demodulator** — a half-symbol-spaced least-squares equaliser
-  that models the pulse as well as the path: the real FUF tape goes 0.046 → 0.790
-  constellation, the standard's two-equal-paths 2 ms case decodes at 15 dB, and a
-  clean signal costs nothing. The rate verdict is a cascade now, so the cleanest
-  BPSK capture we have is no longer reported "unknown". The coded payload is the
-  open item.
+  that models the pulse as well as the path (mean constellation over frames
+  0.344 → 0.451, usable frames +45 %, the standard's two-equal-paths 2 ms case
+  decodes at 15 dB, a clean signal costs nothing), a rate verdict that no longer
+  calls the cleanest BPSK capture "unknown", and a deinterleaver that no longer
+  drops one soft decision in 32. The coded payload is the open item, and it is
+  waiting on material.
 
 **Radio and station**
 - HPSDR (Protocol 1 and 2), the Hermes-Lite 2 family and the **Brick2** — the
@@ -85,14 +86,15 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
   [`MODE-PROGRESS.md`](MODE-PROGRESS.md). Open: the 8PSK vestigial filter, the
   four wide `C` banks' carrier separation, and the bench recordings the journal's
   "Needs me" list names.
-- **STANAG 4285 — the coded chain.** The demodulator is finished and measured: a
-  half-symbol-spaced least-squares equaliser takes the real tape from a 0.046 to a
-  0.790 constellation, decodes the standard's own two-equal-paths case at 15 dB
-  where the plain path reads nothing at 18, and costs a clean signal nothing. Both
-  tapes are measured to carry the Annex E code and neither frames a message, so
-  the fault is in the deinterleaver/decoder/framer. Next: the symbol-for-symbol
-  comparison against the independent `luwangg/signal-analysis` decoder.
-  [`STANAG4285-HANDOVER.md`](STANAG4285-HANDOVER.md).
+- **STANAG 4285 — waiting on ten continuous seconds.** The demodulator is
+  finished and measured (mean constellation 0.344 → 0.451, usable frames +45 %,
+  and a deinterleaver bug that dropped one soft decision in 32 found by diffing
+  against the independent implementation). Every convention a loopback cannot
+  falsify has been swept and nothing frames a message, and the reason is measured:
+  a message needs **93 continuous frames** of usable signal and the longest run in
+  any of our recordings is **69 / 32 / 82**, while a synthetic runs 207 and
+  decodes. The watcher is running again; the probe's `coded readiness` line scores
+  every file it writes. [`STANAG4285-HANDOVER.md`](STANAG4285-HANDOVER.md).
 - **CIS-11** — built and measured; **PR #173** open because it is the wire
   change (`PROTO_VERSION` 241). What it still needs is a clear transmission to
   settle how the ten data bits divide into letters.

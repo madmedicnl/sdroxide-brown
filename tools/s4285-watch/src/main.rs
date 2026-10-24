@@ -183,11 +183,22 @@ fn main() {
         let (acf, null) = score_window(&window, rate);
         let ratio = acf / null.max(1e-6);
         let pass = acf > ACF_MIN && ratio > threshold;
+        // **Say *why* when it does not pass.** A null of 0.002 and a signal of
+        // 0.011 is 5.6x against a 3.0x threshold and still not a frame: the ratio
+        // is meaningless when both numbers are noise, which is why the absolute
+        // floor exists. A log that prints only the ratio has the operator reading
+        // five-to-one and wondering why nothing was written.
+        let verdict = if pass {
+            "MATCH"
+        } else if acf <= ACF_MIN {
+            "no frame (acf under the floor)"
+        } else {
+            "no match (ratio under threshold)"
+        };
         println!(
-            "{} {:9.3} kHz  acf {acf:5.3}  null {null:5.3}  {ratio:5.1}x  {}",
+            "{} {:9.3} kHz  acf {acf:5.3}  null {null:5.3}  {ratio:5.1}x  {verdict}",
             utc_stamp(),
             freqs[fi] / 1e3,
-            if pass { "MATCH" } else { "" }
         );
 
         if pass {
@@ -281,7 +292,13 @@ fn write_wav(path: &std::path::Path, iq: &[Complex32], rate: f64) -> std::io::Re
 }
 
 /// A 127-tap windowed-sinc low-pass with its corner just under the new Nyquist.
-fn lowpass(iq: &[Complex32], out_rate: f64) -> Vec<Complex32> {
+///
+/// The corner is expressed as a fraction of the *output* Nyquist, so the rate is
+/// not needed here — it was when this ran a box filter, which is exactly the
+/// filter that aliased and made four of the first night's captures look like a
+/// flat mess. Kept in the signature so a caller cannot forget which rate the
+/// corner belongs to.
+fn lowpass(iq: &[Complex32], _out_rate: f64) -> Vec<Complex32> {
     let taps = 127usize;
     let half = (taps / 2) as isize;
     let fc = 0.45; // fraction of the output Nyquist
