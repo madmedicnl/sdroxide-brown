@@ -913,20 +913,39 @@ impl S4285Receiver {
             channel.as_ref().map(|h| h.iter().map(|v| v.norm() * v.norm()).sum()).unwrap_or(0.0);
         let equaliser = channel.as_ref().and_then(|h| zf_equaliser(h, energy * 5e-3));
 
+        // **The filter's group delay is searched, not assumed.** The inverse is the
+        // minimum-energy one, so where its unit pulse lands is a property of the
+        // solution and not a constant of the code: a symbol out and the reference
+        // blocks sample the data either side of them, which is exactly the "worse
+        // than plain" the first version measured. Three delays, the middle one
+        // first, and the references pick.
+        let score = |z: &[C; SCRAMBLED]| {
+            let c = ramp_concentrations(z, 0.0);
+            c[0] + c[1] + c[2]
+        };
         let mut equalised = [C::default(); SCRAMBLED];
         if let Some(w) = &equaliser {
-            let centre = (LS_EQ - 1) / 2;
-            for k in 0..SCRAMBLED {
-                let m = SYNC + k;
-                let mut y = C::default();
-                for (i, wi) in w.iter().enumerate() {
-                    if let Some(v) = (m + centre).checked_sub(i).and_then(|j| r.get(j)) {
-                        y = y.add(v.mul(*wi));
+            let mid = (LS_EQ - 1) / 2;
+            let mut best = (score(&plain), equalised);
+            for shift in [mid, mid - 1, mid + 1] {
+                let mut cand = [C::default(); SCRAMBLED];
+                for k in 0..SCRAMBLED {
+                    let m = SYNC + k;
+                    let mut y = C::default();
+                    for (i, wi) in w.iter().enumerate() {
+                        if let Some(v) = (m + shift).checked_sub(i).and_then(|j| r.get(j)) {
+                            y = y.add(v.mul(*wi));
+                        }
                     }
+                    let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
+                    cand[k] = y.mul(sc.conj());
                 }
-                let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
-                equalised[k] = y.mul(sc.conj());
+                let s = score(&cand);
+                if s > best.0 {
+                    best = (s, cand);
+                }
             }
+            equalised = best.1;
         }
 
         // **It has to earn its place, frame by frame.** On a channel that needed
@@ -1040,7 +1059,21 @@ impl S4285Receiver {
                 // the instant; scoring both keeps the reported figure honest at
                 // the instant the data wants.
                 let refs = ramp_concentrations(&z, 0.0);
-                let v = data_conc + (refs[0] + refs[1] + refs[2]) / 3.0;
+                // **And the sync's own fit, which is the only honest timing
+                // signal here.** `data_conc` is circular on a smeared channel: it
+                // asks the data where the eye is, and the smear is what is closing
+                // it. The 80 known sync symbols have a transition on almost every
+                // symbol, so their least-squares residual says whether the sampling
+                // instant is right without asking the data anything. Weighted to
+                // dominate, because when the two disagree the sequence is right.
+                let mut deramped = [C::default(); FRAME];
+                for (k, v) in deramped.iter_mut().enumerate() {
+                    let t = k as f32 / BAUD as f32;
+                    *v = frame[k].mul(C::from_phase(-offset * TAU * t));
+                }
+                let (residual, _) = sync_fit(&deramped, &sync_symbols());
+                let timing = 1.0 - residual.min(1.0);
+                let v = data_conc + (refs[0] + refs[1] + refs[2]) / 3.0 + 2.0 * timing;
                 if v > tight.0 {
                     tight = (v, p);
                 }
@@ -1433,6 +1466,56 @@ fn ls_channel(rx: &[C], known: &[C], taps: usize) -> Option<Vec<C>> {
         }
     }
     solve(ata, atb)
+}
+
+/// The least-squares residual of the **known** sync against a frame, and the
+/// frame's own phase rotation.
+///
+/// This is the timing error signal the data cannot give: the sync has a transition
+/// on almost every symbol, so a misfit means the sampling instant is wrong, while
+/// the data-tightness statistic is circular on a smeared channel — the channel
+/// estimate and the constellation both want the eye that the smear is closing.
+/// The residual is normalised by the sync's own received amplitude, so it is a
+/// fraction rather than a level and one threshold works at any AGC setting.
+fn sync_fit(r: &[C; FRAME], sync: &[f32; SYNC]) -> (f32, C) {
+    let mut ref_phase = C::default();
+    for &(lo, hi) in &REF_BLOCKS {
+        for k in lo..hi {
+            ref_phase = ref_phase.add(r[SYNC + k]);
+        }
+    }
+    let rot = C::from_phase(-ref_phase.arg());
+    let mut r2 = *r;
+    for v in r2.iter_mut() {
+        *v = v.mul(rot);
+    }
+    let mut corr = C::default();
+    let mut amp = 0.0f32;
+    for k in 0..SYNC {
+        corr = corr.add(r2[k].scale(sync[k]));
+        amp += r2[k].norm();
+    }
+    amp /= SYNC as f32;
+    if amp <= 1e-9 {
+        return (1.0, rot);
+    }
+    let sg = if corr.re < 0.0 { -1.0 } else { 1.0 };
+    let known: Vec<C> = sync.iter().map(|v| C::new(sg * v, 0.0)).collect();
+    let Some(h) = ls_channel(&r2[..SYNC], &known, LS_TAPS) else { return (1.0, rot) };
+    let mut err = 0.0f32;
+    let mut n = 0.0f32;
+    for k in LS_TAPS - 1..SYNC {
+        let mut y = C::default();
+        for (i, hi) in h.iter().enumerate() {
+            if let Some(v) = k.checked_sub(i).map(|j| known[j]) {
+                y = y.add(v.mul(*hi));
+            }
+        }
+        let e = r2[k].sub(y).norm();
+        err += e * e;
+        n += 1.0;
+    }
+    ((err / n.max(1.0)).sqrt() / amp, rot)
 }
 
 /// The equaliser for `h`: the `LS_EQ`-tap filter whose convolution with the
@@ -2020,20 +2103,26 @@ mod tests {
     /// a synthetic whose bits are known: the same coded transmission plus a copy
     /// of itself 1.5 symbols late at two thirds the amplitude.
     ///
-    /// **What is built.** The channel is estimated from the 80 known sync
+    /// **Where it stands.** The channel is estimated from the 80 known sync
     /// symbols by least squares and inverted in closed form
     /// (`the_least_squares_equaliser_undoes_a_symbol_level_echo` recovers 176 of
     /// 176 symbols through this channel at the symbol level), and the receiver uses
     /// it on any frame where it makes the known reference symbols collapse harder
     /// than they already do, so it cannot make a clean frame worse.
     ///
-    /// **What is missing.** On pulse-shaped audio it does not help yet, and the
-    /// suspects are now narrow: the sampling instant is chosen from the *data*,
-    /// which on a spread channel is a circular criterion — the estimate and the
-    /// data both want the eye that the smear is closing. The next thing to try is
-    /// the **LS residual over the known sync as the timing criterion**, which is a
-    /// proper error signal because the sync has transitions on every symbol; then
-    /// the equaliser has an eye to work from.
+    /// **What is missing, and one thing now ruled out.** On pulse-shaped audio the
+    /// equaliser's output never beats the plain path, whatever the filter's group
+    /// delay (which is searched over three) — so the gate declines it and the frame
+    /// reads as before. The timing criterion was the obvious suspect and is now
+    /// **in and ruled out**: the sampling phase is chosen by the least-squares
+    /// residual over the known sync (`sync_fit`), which has a transition on almost
+    /// every symbol and so cannot be circular the way data tightness is, and it
+    /// picks the *same* instant the old criterion did (0.60) on this channel. So
+    /// the model is what is short, not the eye: a T-spaced FIR fitted to the sync
+    /// does not describe a raised-cosine signal sampled off a two-path channel well
+    /// enough to invert, and the next attempt should estimate the channel
+    /// **including the pulse** — a longer, fractionally-spaced estimate — rather
+    /// than a five-tap T-spaced one.
     ///
     /// **What the first attempt established.** An adaptive
     /// (NLMS) fractionally-spaced FFE+DFE trained on the 80 known sync symbols does
@@ -2046,7 +2135,7 @@ mod tests {
     /// known symbols, then a computed inverse or a DFE seeded with it, rather than
     /// a loop left to find it.
     #[test]
-    #[ignore = "the equaliser works at the symbol level but not yet on pulse-shaped audio: see the note"]
+    #[ignore = "the equaliser works at the symbol level; on pulse-shaped audio the model is too short — see the note"]
     fn a_coded_message_survives_a_two_path_channel() {
         // -3.5 dB of echo 1.5 symbols late: a symbol is 0.417 ms, so this is
         // 0.63 ms of delay spread, the low end of what a 13 MHz path does.

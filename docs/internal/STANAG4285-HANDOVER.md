@@ -955,14 +955,20 @@ two-path channel, it recovers **176 of 176 symbols** with a worst error of 0.09 
 **What it does not do yet** is help on *pulse-shaped audio*: on the synthetic
 two-path transmission the equaliser's output makes the reference blocks collapse
 *worse* (2.81 → 2.02 on the frame's own score), so the gate in `coded_symbols`
-declines it and the frame is read as before. The suspect is now narrow and it is
-not the equaliser: **the sampling instant is chosen from the data**, and on a
-channel whose data is smeared that is a circular criterion — the channel estimate
-and the data constellation both want the eye that the smear is closing. The sync
-has transitions on every symbol, so the **LS residual over the sync is a proper
-timing error signal** where the data-tightness statistic is not, and that is the
-next thing to try: pick the sampling phase by it, then let the equaliser work from
-the eye it finds.
+declines it and the frame is read as before. **The timing was the obvious suspect and is now ruled out.** The sampling phase is
+chosen by the least-squares residual over the known sync (`sync_fit`) — a proper
+error signal, because the sync has a transition on almost every symbol — and it
+picks the *same* instant the data-tightness criterion did (0.60 on this channel).
+So the eye is where the receiver thinks it is and the equaliser's output still never
+beats the plain path, whatever group delay it is given (three are searched).
+
+**What is short is the model, not the eye.** A five-tap T-spaced FIR fitted to the
+sync does not describe a raised-cosine signal sampled off a two-path channel well
+enough to invert — the pulse's own memory is in the received samples and the fit
+leaves it in the residual. The next attempt should estimate the channel
+**including the pulse**: a longer, fractionally-spaced estimate (or a T/2 fit
+against the known sync), then the same closed-form inverse. That is a change to
+one function, `ls_channel`, and its test.
 
 What still needs the bench: another capture of the same tape on a quiet, steady path
 — a spread-out channel is a bad witness for a modem, and the watcher is the tool for

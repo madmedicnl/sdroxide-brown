@@ -69,12 +69,15 @@ yet, and nothing is claimed to be.
 **Built: the closed-form equaliser, and where it stops.** The channel is now
 estimated from the 80 known sync symbols by least squares and inverted by solving
 `(R + σ²I)·w = p`; at the symbol level it recovers **176 of 176** symbols through a
-1.5-symbol echo (worst error 0.09). On pulse-shaped audio it does not help yet —
-its output makes the reference blocks collapse *worse* (2.81 → 2.02), so the gate
-declines it and the frame reads as before. The remaining suspect is the **timing**:
-the sampling instant is chosen from the data, which on a smeared channel is
-circular, and the sync's own LS residual is the proper error signal. That is the
-next step, and it is one criterion, not a redesign.
+1.5-symbol echo (worst error 0.09). On pulse-shaped audio it does not help yet
+— its output makes the reference blocks collapse *worse* (2.81 → 2.02), so the gate
+declines it and the frame reads as before. **The timing is ruled out**: the
+sampling phase is now chosen by the least-squares residual over the known sync
+(a proper error signal, a transition on almost every symbol) and it picks the same
+instant the old criterion did, 0.60. What is short is the **model**: a five-tap
+T-spaced fit does not describe a raised-cosine signal off a two-path channel well
+enough to invert, so the next attempt estimates the channel including the pulse —
+longer and fractionally spaced — which is a change to one function.
 
 **Recorded: the adaptive equaliser does not converge.** An NLMS
 fractionally-spaced FFE+DFE trained on the frame's 80 known sync symbols stalls at
@@ -90,9 +93,9 @@ in is **closed-form**: a least-squares channel from the known sync, then an
 explicit inverse or a DFE seeded with it. The adaptive attempt was reverted rather
 than left in, so nothing dead ships.
 
-**Not done / blocked.** The payload is still unread. The next step is the
-**timing criterion** — pick the sampling phase by the LS residual over the known
-sync rather than by data tightness — against the ignored two-path test. Material
+**Not done / blocked.** The payload is still unread. The next step is a
+**fractionally-spaced channel estimate** (the model, not the eye) against the
+ignored two-path test. Material
 already on the disk, so no bench. A *second* capture of the same tape on a quiet,
 steady path still needs the bench, and the watcher is the tool for it: a spread-out
 channel is a bad witness for a modem.
