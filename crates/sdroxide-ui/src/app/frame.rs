@@ -1546,6 +1546,10 @@ impl eframe::App for SdroxideApp {
             if mode.is_fsq() { self.show_fsq = true; }
             if mode.is_hell() { self.show_hell = true; }
             if mode.is_packet() { self.show_packet = true; }
+            if mode.is_wspr() { self.show_wspr = true; }
+            if mode.is_pi4() { self.show_pi4 = true; }
+            if mode.is_text_modem() { self.show_text = true; }
+            if mode == sdroxide_types::Mode::UvPacket { self.show_uvpacket = true; }
             self.last_mode_for_tools = Some(mode);
         }
         if mode.is_sstv() && self.show_sstv { self.sstv_window(&ctx, &mut cmds); }
@@ -1559,6 +1563,10 @@ impl eframe::App for SdroxideApp {
         if mode.is_fsq() && self.show_fsq { self.fsq_window(&ctx, &mut cmds); }
         if mode.is_hell() && self.show_hell { self.hell_window(&ctx, &mut cmds); }
         if mode.is_packet() && self.show_packet { self.packet_window(&ctx, &mut cmds); }
+        if mode.is_wspr() && self.show_wspr { self.wspr_window(&ctx, &mut cmds); }
+        if mode.is_pi4() && self.show_pi4 { self.pi4_window(&ctx, &mut cmds); }
+        if mode.is_text_modem() && self.show_text { self.text_window(&ctx, &mut cmds); }
+        if mode == sdroxide_types::Mode::UvPacket && self.show_uvpacket { self.uvpacket_window(&ctx, &mut cmds); }
         self.recordings_window(&ctx, &mut cmds);
         self.poll_recording_jobs(&mut cmds);
         self.mail_window(&ctx, &mut cmds);
@@ -4004,7 +4012,7 @@ impl SdroxideApp {
             self.acars_panel(ui, cmds, panel_h);
         } else if mode == Mode::Dsc {
             self.dsc_panel(ui, cmds, panel_h);
-        } else if mode == Mode::UvPacket {
+        } else if mode == Mode::UvPacket && !self.show_uvpacket {
             self.uvpacket_panel(ui, cmds, panel_h);
         } else if mode == Mode::Jtty {
             self.jtty_panel(ui, cmds, panel_h);
@@ -4032,13 +4040,13 @@ impl SdroxideApp {
             self.fsq_panel(ui, cmds, panel_h);
         } else if mode.is_hell() && !self.show_hell {
             self.hell_panel(ui, cmds, panel_h);
-        } else if is_text {
+        } else if is_text && !self.show_text {
             self.text_modem_panel(ui, cmds, panel_h);
         } else if mode.is_js8() && !self.show_js8 {
             self.js8_panel(ui, cmds, panel_h);
-        } else if mode.is_wspr() {
+        } else if mode.is_wspr() && !self.show_wspr {
             self.wspr_panel(ui, cmds, panel_h);
-        } else if mode.is_pi4() {
+        } else if mode.is_pi4() && !self.show_pi4 {
             self.pi4_panel(ui, cmds, panel_h);
         } else if matches!(
             mode,
@@ -4869,5 +4877,28 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "packet", "PACKET", [720.0, 560.0], self.show_packet,
             |me, ui| { let h = ui.available_height(); me.packet_panel(ui, cmds, h); });
         self.show_packet = open;
+    }
+}
+
+impl SdroxideApp {
+    pub(in crate::app) fn wspr_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "wspr", "WSPR", [640.0, 480.0], self.show_wspr,
+            |me, ui| { let h = ui.available_height(); me.wspr_panel(ui, cmds, h); });
+        self.show_wspr = open;
+    }
+    pub(in crate::app) fn pi4_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "pi4", "PI4", [640.0, 480.0], self.show_pi4,
+            |me, ui| { let h = ui.available_height(); me.pi4_panel(ui, cmds, h); });
+        self.show_pi4 = open;
+    }
+    pub(in crate::app) fn text_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "text", "TEXT", [640.0, 480.0], self.show_text,
+            |me, ui| { let h = ui.available_height(); me.text_modem_panel(ui, cmds, h); });
+        self.show_text = open;
+    }
+    pub(in crate::app) fn uvpacket_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "uvpacket", "UVPACKET", [640.0, 480.0], self.show_uvpacket,
+            |me, ui| { let h = ui.available_height(); me.uvpacket_panel(ui, cmds, h); });
+        self.show_uvpacket = open;
     }
 }
