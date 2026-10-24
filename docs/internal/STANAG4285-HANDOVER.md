@@ -1121,6 +1121,12 @@ capture, with the interleaver now correct. The synthetic proves the chain end to
 so what is left is the demodulation of real signals (or a rate outside the BPSK set)
 rather than the coding.
 
+**The whole corpus scanned.** All 25 recordings in `~/s4285-captures/keepers` run
+through the receiver with the segment interleaver in place, at 1850 Hz: **not one
+frames a message**. The strongest (references 0.92–0.94) is the 6348 kHz capture of
+22 Oct. So this is not one bad tape — nothing this station has recorded decodes, and
+the fault is systematic in how real signals are demodulated, not in any one file.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run
