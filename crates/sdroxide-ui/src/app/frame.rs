@@ -1550,6 +1550,10 @@ impl eframe::App for SdroxideApp {
             if mode.is_pi4() { self.show_pi4 = true; }
             if mode.is_text_modem() { self.show_text = true; }
             if mode == sdroxide_types::Mode::UvPacket { self.show_uvpacket = true; }
+            if mode == sdroxide_types::Mode::Jtty { self.show_jtty = true; }
+            if mode == sdroxide_types::Mode::Ale { self.show_ale = true; }
+            if mode.is_rf_paint() { self.show_rf_paint = true; }
+            if mode.is_image() { self.show_image = true; }
             self.last_mode_for_tools = Some(mode);
         }
         if mode.is_sstv() && self.show_sstv { self.sstv_window(&ctx, &mut cmds); }
@@ -1567,6 +1571,10 @@ impl eframe::App for SdroxideApp {
         if mode.is_pi4() && self.show_pi4 { self.pi4_window(&ctx, &mut cmds); }
         if mode.is_text_modem() && self.show_text { self.text_window(&ctx, &mut cmds); }
         if mode == sdroxide_types::Mode::UvPacket && self.show_uvpacket { self.uvpacket_window(&ctx, &mut cmds); }
+        if mode == sdroxide_types::Mode::Jtty && self.show_jtty { self.jtty_window(&ctx, &mut cmds); }
+        if mode == sdroxide_types::Mode::Ale && self.show_ale { self.ale_window(&ctx, &mut cmds); }
+        if mode.is_rf_paint() && self.show_rf_paint { self.rf_paint_window(&ctx, &mut cmds); }
+        if mode.is_image() && self.show_image { self.image_window(&ctx, &mut cmds, mode); }
         self.recordings_window(&ctx, &mut cmds);
         self.poll_recording_jobs(&mut cmds);
         self.mail_window(&ctx, &mut cmds);
@@ -4014,13 +4022,13 @@ impl SdroxideApp {
             self.dsc_panel(ui, cmds, panel_h);
         } else if mode == Mode::UvPacket && !self.show_uvpacket {
             self.uvpacket_panel(ui, cmds, panel_h);
-        } else if mode == Mode::Jtty {
+        } else if mode == Mode::Jtty && !self.show_jtty {
             self.jtty_panel(ui, cmds, panel_h);
-        } else if mode == Mode::Ale {
+        } else if mode == Mode::Ale && !self.show_ale {
             self.ale_panel(ui, cmds, panel_h);
-        } else if mode.is_image() && !(mode.is_sstv() && self.show_sstv) {
+        } else if mode.is_image() && !(mode.is_sstv() && self.show_sstv) && !self.show_image {
             self.image_panel(ui, cmds, mode);
-        } else if mode.is_rf_paint() {
+        } else if mode.is_rf_paint() && !self.show_rf_paint {
             self.rf_paint_panel(ui, cmds, panel_h);
         } else if mode.is_adsb() && !self.show_adsb {
             self.adsb_panel(ui, cmds, panel_h);
@@ -4900,5 +4908,28 @@ impl SdroxideApp {
         let open = self.tool_window(ctx, "uvpacket", "UVPACKET", [640.0, 480.0], self.show_uvpacket,
             |me, ui| { let h = ui.available_height(); me.uvpacket_panel(ui, cmds, h); });
         self.show_uvpacket = open;
+    }
+}
+
+impl SdroxideApp {
+    pub(in crate::app) fn jtty_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "jtty", "JTTY", [640.0, 480.0], self.show_jtty,
+            |me, ui| { let h = ui.available_height(); me.jtty_panel(ui, cmds, h); });
+        self.show_jtty = open;
+    }
+    pub(in crate::app) fn ale_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "ale", "ALE", [640.0, 480.0], self.show_ale,
+            |me, ui| { let h = ui.available_height(); me.ale_panel(ui, cmds, h); });
+        self.show_ale = open;
+    }
+    pub(in crate::app) fn rf_paint_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
+        let open = self.tool_window(ctx, "rfpaint", "RF PAINT", [640.0, 480.0], self.show_rf_paint,
+            |me, ui| { let h = ui.available_height(); me.rf_paint_panel(ui, cmds, h); });
+        self.show_rf_paint = open;
+    }
+    pub(in crate::app) fn image_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>, mode: sdroxide_types::Mode) {
+        let open = self.tool_window(ctx, "image", "IMAGE", [760.0, 600.0], self.show_image,
+            |me, ui| { me.image_panel(ui, cmds, mode); });
+        self.show_image = open;
     }
 }
