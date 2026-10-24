@@ -1387,6 +1387,7 @@ impl SdroxideApp {
     fn mem_chip(&mut self, btn: egui::Response) {
         if btn.on_hover_text("Memory channels — recall a stored frequency").clicked() {
             self.show_memories = !self.show_memories;
+            if self.show_memories { self.ui_settings.tool_windows_open |= crate::app::frame::TW_MEMORIES; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_MEMORIES; }
         }
     }
 
@@ -1648,6 +1649,7 @@ impl SdroxideApp {
                         .clicked()
                     {
                         self.show_memories = !self.show_memories;
+            if self.show_memories { self.ui_settings.tool_windows_open |= crate::app::frame::TW_MEMORIES; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_MEMORIES; }
                         opened = true;
                     }
                     if crate::chrome::chip(ui, self.show_grid, "GRID")
@@ -1655,6 +1657,7 @@ impl SdroxideApp {
                         .clicked()
                     {
                         self.show_grid = !self.show_grid;
+            if self.show_grid { self.ui_settings.tool_windows_open |= crate::app::frame::TW_GRID; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_GRID; }
                         opened = true;
                     }
                     // **Icon only.** The operator's call, and right: the gear is a
@@ -1671,6 +1674,7 @@ impl SdroxideApp {
                         .clicked()
                     {
                         self.show_settings = !self.show_settings;
+            if self.show_settings { self.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_SETTINGS; }
                         opened = true;
                     }
                     if crate::chrome::chip(ui, self.help.open, "?")
@@ -3778,6 +3782,7 @@ impl SdroxideApp {
                 };
                 if crate::chrome::chip(ui, rds, "RDS").on_hover_text(hover).clicked() {
                     self.show_rds = !self.show_rds;
+            if self.show_rds { self.ui_settings.tool_windows_open |= crate::app::frame::TW_RDS; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_RDS; }
                 }
             }
             RxChip::Drm => {
@@ -3808,6 +3813,7 @@ impl SdroxideApp {
                 };
                 if crate::chrome::chip(ui, decoding, "DRM").on_hover_text(hover).clicked() {
                     self.show_drm = !self.show_drm;
+            if self.show_drm { self.ui_settings.tool_windows_open |= crate::app::frame::TW_DRM; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_DRM; }
                 }
             }
             RxChip::Hd => {
@@ -3830,6 +3836,7 @@ impl SdroxideApp {
                 };
                 if crate::chrome::chip(ui, decoding, "HD").on_hover_text(hover).clicked() {
                     self.show_hd = !self.show_hd;
+            if self.show_hd { self.ui_settings.tool_windows_open |= crate::app::frame::TW_HD_RADIO; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_HD_RADIO; }
                 }
             }
             RxChip::Defaults => self.mode_defaults_chip(ui, cmds),
@@ -6492,8 +6499,10 @@ impl SdroxideApp {
         if chip_stretched(ui, log_open, log_label, extra).on_hover_text(log_hover).clicked() {
             if log_opens_swl {
                 self.show_swl = !self.show_swl;
+            if self.show_swl { self.ui_settings.tool_windows_open |= crate::app::frame::TW_SWL_LOG; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_SWL_LOG; }
             } else {
                 self.show_logbook = !self.show_logbook;
+            if self.show_logbook { self.ui_settings.tool_windows_open |= crate::app::frame::TW_LOGBOOK; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_LOGBOOK; }
             }
         }
         if swl
@@ -6502,6 +6511,7 @@ impl SdroxideApp {
                 .clicked()
         {
             self.schedule.show = !self.schedule.show;
+            if self.schedule.show { self.ui_settings.tool_windows_open |= crate::app::frame::TW_SCHEDULE; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_SCHEDULE; }
         }
         // **LISTEN**, beside SCHEDULE — the same schedule as a map, with the
         // station picked on it and a note typed straight into the reception log.
@@ -6516,6 +6526,7 @@ impl SdroxideApp {
                 .clicked()
         {
             self.show_listen = !self.show_listen;
+            if self.show_listen { self.ui_settings.tool_windows_open |= crate::app::frame::TW_LISTEN; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_LISTEN; }
         }
         if chip_stretched(ui, self.show_spots, spots, extra)
             .on_hover_text(
@@ -6524,6 +6535,7 @@ impl SdroxideApp {
             .clicked()
         {
             self.show_spots = !self.show_spots;
+            if self.show_spots { self.ui_settings.tool_windows_open |= crate::app::frame::TW_SPOTS; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_SPOTS; }
         }
         if !swl
             && !simple
@@ -6532,6 +6544,7 @@ impl SdroxideApp {
                 .clicked()
         {
             self.show_awards = !self.show_awards;
+            if self.show_awards { self.ui_settings.tool_windows_open |= crate::app::frame::TW_AWARDS; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_AWARDS; }
         }
         if chip_stretched(ui, self.show_bands, bands, extra)
             .on_hover_text(
@@ -6541,6 +6554,7 @@ impl SdroxideApp {
             .clicked()
         {
             self.show_bands = !self.show_bands;
+            if self.show_bands { self.ui_settings.tool_windows_open |= crate::app::frame::TW_BANDS; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_BANDS; }
         }
         // Accented while a satellite lock *or* the QO-100 beacon hunt is
         // running, like the scanner: both spend the receiver whether or not the
@@ -6576,6 +6590,7 @@ impl SdroxideApp {
                 .clicked()
             {
                 self.show_sat = !self.show_sat;
+            if self.show_sat { self.ui_settings.tool_windows_open |= crate::app::frame::TW_SAT; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_SAT; }
             }
         }
         // The padlock: moved out of the ISM slot. It stays on every tier and
@@ -6624,6 +6639,7 @@ impl SdroxideApp {
             .clicked()
         {
             self.show_memories = !self.show_memories;
+            if self.show_memories { self.ui_settings.tool_windows_open |= crate::app::frame::TW_MEMORIES; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_MEMORIES; }
         }
         // Accented while a scan is actually running, so its state is visible
         // with the window closed — which is how it will usually be.
@@ -6651,6 +6667,7 @@ impl SdroxideApp {
             .clicked()
         {
             self.show_scanner = !self.show_scanner;
+            if self.show_scanner { self.ui_settings.tool_windows_open |= crate::app::frame::TW_SCANNER; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_SCANNER; }
         }
         // EXTRAS: a launcher window for the receivers that are not a band's
         // ordinary modes (DAB for now). A plain window chip — it only opens the
@@ -6661,6 +6678,7 @@ impl SdroxideApp {
             .clicked()
         {
             self.show_extras = !self.show_extras;
+            if self.show_extras { self.ui_settings.tool_windows_open |= crate::app::frame::TW_EXTRAS; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_EXTRAS; }
         }
         // Grid tracker: worked Maidenhead squares on a map.
         //
@@ -6683,6 +6701,7 @@ impl SdroxideApp {
                 .clicked()
         {
             self.show_grid = !self.show_grid;
+            if self.show_grid { self.ui_settings.tool_windows_open |= crate::app::frame::TW_GRID; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_GRID; }
         }
         // **PUBLIC SDR lives on this row now**, moved down from the top one.
         //
@@ -6712,12 +6731,14 @@ impl SdroxideApp {
             .clicked()
         {
             self.show_public_sdrs = !self.show_public_sdrs;
+            if self.show_public_sdrs { self.ui_settings.tool_windows_open |= crate::app::frame::TW_PUBLICSDR; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_PUBLICSDR; }
         }
         if chip_stretched(ui, self.show_settings, settings, extra)
             .on_hover_text("Settings — device gains, antennas, audio devices")
             .clicked()
         {
             self.show_settings = !self.show_settings;
+            if self.show_settings { self.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS; } else { self.ui_settings.tool_windows_open &= !crate::app::frame::TW_SETTINGS; }
         }
         if chip_stretched(ui, self.help.open, help, extra)
             .on_hover_text("User manual (F1)")

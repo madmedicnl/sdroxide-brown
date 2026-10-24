@@ -5617,6 +5617,7 @@ mod settings_probe {
         // The same edge the operator's chip takes; `open_radio_settings` is the
         // variant that also picks the Radio page.
         app.show_settings = true;
+        app.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS;
         // A few frames: the first opens the window, the second lays it out, and
         // the device lists are asked for on the open.
         // Textures accumulate across every frame, not the last one: the font
@@ -5669,6 +5670,7 @@ mod settings_probe {
         app.radio_cfg = Some(cfg);
         app.settings_tab = SettingsTab::Radio;
         app.show_settings = true;
+        app.ui_settings.tool_windows_open |= crate::app::frame::TW_SETTINGS;
         let mut textures = crate::test_raster::Textures::default();
         let mut full = None;
         for _ in 0..4 {

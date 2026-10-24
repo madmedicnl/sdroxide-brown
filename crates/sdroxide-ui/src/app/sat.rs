@@ -1391,6 +1391,7 @@ impl SdroxideApp {
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(in crate::app) fn sat_lock_request(&mut self, norad_id: u64, cmds: &mut Vec<Command>) {
         self.show_sat = true;
+        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SAT;
         self.sat_win.selected = Some(norad_id);
         self.sat_win.link_idx = 0;
         let freqs = match self.sat_cfg.freqs_for(norad_id) {
@@ -1457,6 +1458,7 @@ impl SdroxideApp {
             return;
         }
         self.show_sat = true;
+        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SAT;
         self.sat_win.selected = Some(norad_id);
         self.sat_win.link_idx = link_idx;
         cmds.push(Command::SetMode { rx: sdroxide_types::RxId::Main, mode: mode_for_link(link) });

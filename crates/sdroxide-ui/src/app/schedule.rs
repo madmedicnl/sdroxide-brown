@@ -174,6 +174,7 @@ impl SdroxideApp {
                 antenna,
             ));
             self.show_swl = true;
+        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SWL_LOG;
         }
     }
 
