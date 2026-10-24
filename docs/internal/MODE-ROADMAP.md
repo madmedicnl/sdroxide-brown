@@ -864,13 +864,23 @@ kept locally as every recording here is, and not in the tree), 2026-10-24:
 | traffic | **no constant bit** in any position mod 11 (ones-fraction 0.27–0.43) | so no framing bit is visible in the traffic, and the halves of each 11-bit group agree only 5 % of the time |
 
 So the character is **11 bits at 100 Bd = 9.09 characters/s**, which neither
-source states, and the "5 data + parity" description does not fit: 11 bits is
-5 + 5 + 1, i.e. **a character sent twice with a parity bit**, which the idle
-pattern shows clearly and the encrypted traffic cannot confirm. That is the one
-thing left to settle before the code, and it needs a **clear** transmission —
-Russian meteorological traffic is sometimes sent in clear M2 Cyrillic — or a
-reference decoder to compare against. Everything else is measured: 100 Bd,
-503 Hz shift, the 11-bit character and the idle word.
+source states — and neither source's *arrangement* is right either. Scoring every
+grouping from 4 to 16 bits, and every rotation of each, by how consistently the
+last bit makes the group's parity odd:
+
+- **11 bits wins at 85 %** on a crude demodulator, with every other length below;
+- the "5 + 5 repeated + parity" reading scores **13 %**, and the traffic rules it
+  out on its own — its halves agree 5 % of the time, which is what encrypted data
+  looks like and not what a repeated character does.
+
+**The character is ten data bits and one odd-parity bit.** The receiver in
+`crates/sdroxide-dsp/src/cis11.rs` implements that and reads the off-air idle
+recording with **121 of 123 characters parity-valid**. What is *not* settled is
+how the ten bits divide into characters — two five-bit ITA-2 groups is the
+obvious guess, and the idle decodes as `JI`/`GN` under the two bit orders, which
+is neither an obvious idle word nor proof of anything. So the raw bits are the
+output, and a **clear** transmission (Russian meteo is sometimes sent in clear M2
+Cyrillic) or a reference decoder is what would settle the character layer.
 
 One trap for whoever builds it: a round-trip test against our own encoder would
 pass under *any* of these arrangements, which is the mistake ALE is still paying
