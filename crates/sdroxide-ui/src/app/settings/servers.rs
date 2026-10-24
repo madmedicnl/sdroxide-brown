@@ -155,8 +155,8 @@ pub(in crate::app) fn settings_wsjtx_tab(
     super::note(
         ui,
         "One JSON line per decode, for a script of your own: the FT8 family, WSPR and every \
-             keyboard mode's decoded lines (RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell), each \
-             with the dial it was heard on. The WSJT-X broadcast above is a logger's protocol and \
+             keyboard mode's decoded lines (CW, RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell), \
+             each with the dial it was heard on. The WSJT-X broadcast above is a logger's protocol and \
              has no message for those modes, which is why this exists separately.",
     );
     ui.add_space(6.0);
