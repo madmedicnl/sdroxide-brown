@@ -184,6 +184,44 @@ pub fn average_pairs(soft: &[f32], times: usize) -> Vec<f32> {
 ///
 /// The rows are pre-filled with zeros, which is both their "initialised to all
 /// zeros" state and, for the deinterleaver, the erasures Appendix 1 asks for.
+/// **Which way round the deinterleaver's two commutators are wired.**
+///
+/// Annex E describes a convolutional interleaver as a pair, and the annex's own
+/// words ("entered … in the normal commutator sequence and are taken out using
+/// the … non-sequential commutator sequence") do not say which side of the pair
+/// is which in a receiver. Both directions round-trip perfectly through our own
+/// encoder, so a loopback cannot choose between them — a real signal is the only
+/// judge, which is what [`Interleave::ALL`] exists for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Interleave {
+    /// As transcribed: write in `IN_ORDER`, read sequentially.
+    Announce,
+    /// The two commutators exchanged.
+    Swapped,
+    /// The row lengths the other way round, `r·j` on the write side.
+    RowsFlipped,
+    /// Both of the above.
+    SwappedFlipped,
+}
+
+impl Interleave {
+    pub const ALL: [Interleave; 4] = [
+        Interleave::Announce,
+        Interleave::Swapped,
+        Interleave::RowsFlipped,
+        Interleave::SwappedFlipped,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Interleave::Announce => "announce",
+            Interleave::Swapped => "swapped",
+            Interleave::RowsFlipped => "rows-flipped",
+            Interleave::SwappedFlipped => "swapped+flipped",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ConvInterleaver {
     rows: Vec<VecDeque<f32>>,
@@ -191,6 +229,8 @@ pub struct ConvInterleaver {
     j: usize,
     transmit: bool,
     out_order: Option<[usize; 24]>,
+    /// Only the receiver's side is ever varied — see [`Interleave`].
+    style: Interleave,
 }
 
 impl ConvInterleaver {
@@ -202,17 +242,30 @@ impl ConvInterleaver {
             j,
             transmit: true,
             out_order: None,
+            style: Interleave::Announce,
         }
     }
 
     /// The receiver's deinterleaver: row `r` holds `(I-1-r)·j`.
     pub fn deinterleaver(j: usize) -> Self {
+        Self::deinterleaver_with(j, Interleave::Announce)
+    }
+
+    /// The same, with the commutators wired a chosen way — see [`Interleave`].
+    pub fn deinterleaver_with(j: usize, style: Interleave) -> Self {
+        let flipped = matches!(style, Interleave::RowsFlipped | Interleave::SwappedFlipped);
         ConvInterleaver {
-            rows: (0..ROWS).map(|r| VecDeque::from(vec![0.0; (ROWS - 1 - r) * j])).collect(),
+            rows: (0..ROWS)
+                .map(|r| {
+                    let len = if flipped { r * j } else { (ROWS - 1 - r) * j };
+                    VecDeque::from(vec![0.0; len])
+                })
+                .collect(),
             n: 0,
             j,
             transmit: false,
             out_order: None,
+            style,
         }
     }
 
@@ -241,7 +294,8 @@ impl ConvInterleaver {
     /// One soft value in, one out.
     pub fn push(&mut self, v: f32) -> f32 {
         let step = self.n % ROWS;
-        let (write, read) = if self.transmit {
+        let swapped = matches!(self.style, Interleave::Swapped | Interleave::SwappedFlipped);
+        let (write, read) = if self.transmit || swapped {
             (IN_ORDER[step], self.out_row(step))
         } else {
             (self.out_row(step), IN_ORDER[step])

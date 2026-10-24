@@ -80,27 +80,46 @@ fn main() {
     // The stream has to be deinterleaved before the decode means anything, so
     // every rate's `j` is tried — and both signs, since the frame phase is only
     // known up to pi.
-    println!("  {:>26}  {:>8}  {:>8}  {:>6}", "branch", "metric", "null", "ratio");
+    println!(
+        "  {:>26}  {:>14}  {:>8}  {:>8}  {:>6}",
+        "branch", "interleave", "metric", "null", "ratio"
+    );
     for rate in fec::CodedRate::BPSK {
         for sign in [1.0f32, -1.0] {
-            let mut di = fec::ConvInterleaver::deinterleaver(rate.j());
-            let stream: Vec<f32> = soft.iter().map(|v| di.push(v * sign)).collect();
-            let pairs = fec::average_pairs(&stream, rate.repeat());
-            let (_, metric) = fec::viterbi_decode_with_metric(&pairs);
-            // The null: the same values, shuffled. Two shuffles, and the larger
-            // is reported, because the null is what the answer has to beat.
-            let null = [shuffled(&pairs, 0x1234_5678), shuffled(&pairs, 0x9E37_79B9)]
-                .iter()
-                .map(|s| fec::viterbi_decode_with_metric(s).1)
-                .fold(f32::NEG_INFINITY, f32::max);
-            let ratio = if null > 0.0 { metric / null } else { 0.0 };
-            println!(
-                "  {:>26}  {:>8.0}  {:>8.0}  {:>5.2}x",
-                format!("{} sign {sign:+.0}", rate.label()),
-                metric,
-                null,
-                ratio
-            );
+            for style in fec::Interleave::ALL {
+                // **The depth is the other half of the convention, and the annex has a
+                // short and a long column.** fldigi and MultiPSK both offer "long
+                // interleaving", and our transpose uses the long column's figures —
+                // 24 at 1200 and 12 below it. A wrong `j` looks exactly like a wrong
+                // commutator: every branch at its null. So the few depths a
+                // 600 bps transmission could plausibly use are swept too.
+                let depths: &[usize] = match rate {
+                    fec::CodedRate::Bps600 => &[3, 6, 12, 24, 48],
+                    _ => &[],
+                };
+                for &j in depths.iter() {
+                    let mut di = fec::ConvInterleaver::deinterleaver_with(j, style);
+                    let stream: Vec<f32> = soft.iter().map(|v| di.push(v * sign)).collect();
+                    let pairs = fec::average_pairs(&stream, rate.repeat());
+                    let (_, metric) = fec::viterbi_decode_with_metric(&pairs);
+                    // The null: the same values, shuffled. Two shuffles, and the larger
+                    // is reported, because the null is what the answer has to beat.
+                    let null = [shuffled(&pairs, 0x1234_5678), shuffled(&pairs, 0x9E37_79B9)]
+                        .iter()
+                        .map(|s| fec::viterbi_decode_with_metric(s).1)
+                        .fold(f32::NEG_INFINITY, f32::max);
+                    let ratio = if null > 0.0 { metric / null } else { 0.0 };
+                    println!(
+                        "  {:>26}  {:>14}  {:>8.0}  {:>8.0}  {:>5.2}x{}",
+                        format!("{} j{j} sign {sign:+.0}", rate.label()),
+                        style.label(),
+                        metric,
+                        null,
+                        ratio,
+                        if ratio > 1.3 { "   <-- stands up" } else { "" }
+                    );
+                }
+            }
         }
     }
     println!(
