@@ -1289,6 +1289,41 @@ transmitter that is the touch-tone specification rather than one of ours),
 `noise_does_not_produce_digits`, `a_held_key_is_one_digit`, and
 `a_dtmf_key_press_reads_through_the_controller`.
 
+## Phase 4 (2026-10-24, later) — STANAG 4285: the audio band was not the fault
+
+The last note on this mode asked a reporter for a wider audio filter, on the
+evidence that his tape's spectrum runs 800–3000 Hz where an STANAG 4285 occupies
+300–3300. **Measured here, that hypothesis is wrong.**
+
+- **The chain decodes through a truncated band.** A new test
+  (`the_coded_chain_survives_a_truncated_audio_band`) puts the whole coded chain
+  through a 401-tap band-pass and gets the bits back exactly at **800–3000 Hz**,
+  and still at a **1000 Hz** high-pass and a **2600 Hz** low-pass. Two corners are
+  pinned; the request for a wider filter was the wrong errand.
+- **Three more candidates ruled out on his file**, each by measurement: the two
+  channels are identical (so the mono mix is not destroying it), no carrier from
+  1400 to 2200 Hz does better than 1800 (so it is not mis-tuned), and the sideband
+  cannot matter for BPSK.
+- **What the numbers leave.** SNR ~70 dB in 3 kHz, frame period 106.73 ms, folded
+  sync 0.781, references 0.63/0.70/0.58 — and the *descrambled data* constellation
+  at **0.234 / 0.070 / 0.080**, where BPSK on the π/4 lattice should read about 1
+  at all three. A 0.08 at the 8-fold means the data phases are spread
+  continuously: a **per-symbol rotation**, not a band, a carrier or a weak signal.
+- **Where in the frame:** the same concentration **per data block** is
+  0.309 / 0.284 / 0.274 / 0.187 — all about the frame's own 0.23, so the smear is
+  **inside a 32-symbol block** (13 ms) and not a phase drift across the frame. A
+  phase tracker or per-block anchoring therefore cannot reach it; what can is
+  **delay spread of a symbol or more** (0.42 ms at 2400 baud), the impairment the
+  standard's own tables allow for and that a real receiver answers with an
+  equaliser (Annex C/D).
+- **Next:** a fractionally-spaced decision-feedback equaliser, test-first on
+  synthetic two- and three-path channels a symbol or two apart, then on his file.
+  Material on the disk, no bench needed.
+
+The measurement and the ruled-out list are in
+[`STANAG4285-HANDOVER.md`](STANAG4285-HANDOVER.md), "the audio band is not the
+fault".
+
 ## Phase 4 (2026-10-24) — STANAG 4285: the equaliser, and a stereo capture
 
 The operator's focus for this stretch is STANAG and the modes that did not ship in
@@ -1382,7 +1417,7 @@ program copied us** — the only one that proves interop).
 | DTMF (**16** keys) | loopback | no | — | all 16 keys once each from the touch-tone specification; noise silent |
 | FSQ (**5** speeds, 1 measured) | no | loopback | — | the alphabet is fldigi's; the one corpus sample has never read back |
 | ARDOP (1) | recording | no | — | three `ardopcf` recordings decode byte-exactly |
-| STANAG 4285 (**3** uncoded rates, 1) | recording | no | — | the instrument reads real idle captures; the Annex E payload is proven on a loopback only |
+| STANAG 4285 (**3** uncoded rates, 1) | recording | no | — | the instrument reads real idle captures; the Annex E payload is proven on a loopback **and through a 800–3000 Hz audio band**; the one real coded tape locks with its data phases spread, which is a receiver fault being chased |
 | AtChat (1) | air | air | — | the NET mode, in use on the bench |
 | JTTY (1) | recording | loopback | — | **upstream's own implementation, taken whole** (2026-10-24): 18 modem tests and 6 controller tests, one of which decodes a transmitted message back; never copied off the air |
 | ALE (1) | **not proven** | no | — | the FEC, framing and Gray tone map round-trip a word exactly; **no off-air burst has ever decoded here**. A recording is the one thing missing, and the ask is in the manual (§3.29) and the release notes — see [`ALE-HANDOVER.md`](ALE-HANDOVER.md) |

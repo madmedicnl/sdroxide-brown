@@ -21,6 +21,62 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 (STANAG) — the audio band was not the fault, and the data path is
+
+**Summary.** The one coded tape we have — a French Navy FUF test transmission —
+still does not decode here, but the reason we had written down was wrong, and that
+is now measured rather than assumed. Everything up to the payload reads perfectly
+through an audio chain as narrow as the tape's own, so the request for a wider
+filter on the reporter's side would have been a wasted errand. His file is loud,
+clean, correctly tuned and correctly framed; what it will not do is put its data
+symbols on a constellation, and that points at the receiver's phase tracking
+inside the frame rather than at the recording. Nothing has been read off the air
+yet, and nothing is claimed to be.
+
+**Done.**
+- `stanag4285.rs`: `band_limit` (a 401-tap Hann band-pass) and
+  `coded_round_trip_band`, so the whole coded chain can be run through an audio
+  chain of any width, plus the test
+  **`the_coded_chain_survives_a_truncated_audio_band`**.
+- **The finding, and the numbers.** The bits come back exactly at
+  **800–3000 Hz** (his tape's own band), and still at a **1000 Hz** high-pass and
+  a **2600 Hz** low-pass; the standard's own band (300–3300) is the first
+  assertion. The two corners are pinned so a front end that needs more fails in
+  the test rather than on the air.
+- **His file, re-measured** (60.9 s, 48 kHz): the two channels are identical, so
+  the mono mix is not the fault; no carrier from 1400 to 2200 Hz beats 1800; SNR
+  ≈ **70 dB** in 300–3400 Hz against 3.6–11 kHz; occupied ≈ 400–3000 Hz; frame
+  period **106.73 ms**; locked with folded sync **0.781** (null 0.103), ACF
+  **0.599**, 335 frames, references **0.626 / 0.697 / 0.575**, carrier +92 Hz.
+- **The number that names the fault.** The descrambled data constellation is
+  **0.234 / 0.070 / 0.080** where BPSK on the π/4 lattice should read about 1 at
+  all three — so the data phases are spread continuously.
+- **Where in the frame, and it decides the fix.** The same concentration per data
+  block is **0.309 / 0.284 / 0.274 / 0.187** — all about the frame's own — so the
+  smear is **inside a 32-symbol block (13 ms)**, not a drift across the frame. That
+  rules out both cheap repairs (a line through the reference points is already
+  there; per-block anchoring would not help). What smears a symbol in 13 ms while
+  leaving sixteen identical reference symbols coherent is **delay spread of a
+  symbol or more**, the impairment the standard's own tables allow for and the one
+  a real receiver meets with an equaliser (Annex C/D).
+- `STANAG4285-HANDOVER.md`: a new section with the table, the ruled-out list and
+  the two things recorded but unexplained (an envelope line at 3607 Hz; the
+  signal starting at 400 Hz). `MODE-PROGRESS.md` carries the same, and the mode
+  table's row is corrected.
+- `cargo test -p sdroxide-dsp --release --lib stanag` — **13 passed, 1 ignored**
+  (the off-air gate); `rustfmt --edition 2024 --config-path rustfmt.toml` clean.
+
+**Not done / blocked.** The payload is still unread. The next step is a
+**fractionally-spaced decision-feedback equaliser**, test-first on synthetic two-
+and three-path channels a symbol or two apart, then on his file — material already
+on the disk, so no bench needed. A *second* capture of the same tape on a quiet,
+steady path still needs the bench, and the watcher is the tool for it: a spread-out
+channel is a bad witness for a modem.
+
+**Next.** The phase tracker; then the rest of the mode queue.
+
+---
+
 ## 2026-10-24 (map) — roads and internal boundaries, for the "too imprecise" report
 
 **Summary.** A user on Reddit says our map is too imprecise and asks for

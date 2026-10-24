@@ -171,6 +171,14 @@ fn main() {
         std::fs::write(path, s).expect("write bits");
     }
     if let Some(f) = frames.last() {
+        // The whole-frame constellation against each data block's own: a phase
+        // that walks *between* blocks leaves these high and the frame low, and
+        // one that moves *inside* a block of 32 symbols flattens both.
+        let b = f.block;
+        println!(
+            "data blocks (best of 2/4/8-fold per block): {:.3} {:.3} {:.3} {:.3}",
+            b[0], b[1], b[2], b[3]
+        );
         let head: String =
             f.bits.iter().take(64).map(|b| if *b == 1 { '1' } else { '0' }).collect();
         println!("first 64 bits of the last frame: {head}");

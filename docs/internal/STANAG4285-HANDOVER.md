@@ -831,3 +831,104 @@ runs about **800–3000 Hz**, where a 4285 is 300–3300, so the bottom third of
 waveform is gone before it reaches us. That is the request already made on the
 thread — a wider filter and another minute of the same tape — not something to
 chase in the receiver.
+
+## 2026-10-24, fourth session — the audio band is not the fault, and that is the finding
+
+The previous section ended with a hypothesis and a request: *"the remaining suspect
+is his audio chain: the file's spectrum runs about 800–3000 Hz … a wider filter and
+another minute of the same tape."* **The hypothesis is wrong, and it was measurable
+here rather than on his bench.**
+
+### The measurement
+
+A new test, `the_coded_chain_survives_a_truncated_audio_band`, puts the whole coded
+chain — SOM, 600-bit payload, EOM, code, pair repetition, interleaver, BPSK — through
+a **Hann-windowed 401-tap band-pass** and asks only whether the bits come back. They
+do, exactly, through every one of these:
+
+| high-pass | low-pass | |
+|---|---|---|
+| 300, 500, 650, 800, 900, **1000 Hz** | 3300 | decodes |
+| 300 | 3300, 3100, 3000, 2800, **2600** | decodes |
+| **800** | **3000** — his tape's own band | **decodes** |
+
+A chain whose audio stops at 800 Hz and 3000 Hz is therefore **not** what stops a
+coded tape being read, and the request for a wider filter was the wrong errand. The
+two corners (1000 Hz high, 2600 Hz low) are pinned in the test so a front end that
+needs more fails loudly here rather than on the air.
+
+### His file, measured again, and three more candidates ruled out
+
+`FUF-13031.200kHz-20261023-150300Z.wav`, 60.9 s, 48 kHz:
+
+| question | measurement | verdict |
+|---|---|---|
+| is the mono mix destroying it? | the two channels are **identical** (`ffmpeg channelsplit`, L and R give byte-identical reports) | no |
+| is the carrier somewhere else? | swept **1400 … 2200 Hz** in 100 Hz steps; 1800 is the best (constellation 0.234) and every other offset is worse | no |
+| is the sideband inverted? | a real audio signal's mirror is itself: conjugating the analytic signal and taking the real part returns the same samples, and for BPSK data (the rate the constellation suggests) a conjugate changes no differential symbol | not applicable |
+| how strong is it? | **SNR ≈ 70 dB** in 300–3400 Hz against 3.6–11 kHz, rms flat at 0.0377 across the minute | very |
+| how wide? | occupied **≈ 400–3000 Hz** (200 Hz bands: −14.5 at 600–800, −9.6 at 2600–2800, −28 at 3000–3200, −70 above 3200) | the standard's, less the bottom edge |
+| the frame? | **106.73 ms** (2400 baud × 256 = 106.67) | right |
+
+And the receiver on it: locked, folded sync **0.781** against a 0.103 null, frame ACF
+**0.599**, 335 frames, references **0.626 / 0.697 / 0.575**, carrier +92 Hz, and the
+data constellation **0.234 / 0.070 / 0.080**.
+
+### What the last three numbers say, and it is the useful part
+
+`constellation` is `|mean e^(jnφ)|` over the *descrambled* data symbols. For BPSK on
+the π/4 lattice **all three read about 1** (0 and π are both lattice points); QPSK
+gives ~0, ~1, ~1; 8PSK ~0, ~0, ~1. Noise lowers all three.
+
+Reading **0.08 at the 8-fold** therefore means the descrambled data phases are **not
+on the lattice at all** — they are spread continuously. That is not what a narrow
+band, a wrong carrier, a mirrored sideband or a weak signal produces; it is what a
+**per-symbol rotation** produces. The geometry is sound (the fold, the frame period
+and the three reference blocks all agree), so the fault is in the data path's phase
+tracking and not in the material, and the earlier reading of the reference blocks
+(0.63–0.70 "so the file is the fault") was pointing at the same thing from the other
+side.
+
+Two observations that are recorded rather than explained:
+
+* the squared envelope's strongest line is at **3607 Hz**, not at the baud rate
+  (2400) — about 1.5× it. Nothing in the receiver depends on that line, but it is
+  unexplained and may be a second signal in the passband.
+* the signal occupies **400–3000 Hz**, slightly lower than a 2400-baud RRC signal
+  about a 1800 Hz carrier (240–3360). Consistent with a receiver passband that starts
+  at 400, which the truncation test now says costs nothing.
+
+### Where in the frame it goes wrong, and it is not a phase drift
+
+`S4285Frame` now reports the same concentration **per data block** as well as across
+the frame, because one number cannot tell two faults apart. Measured on his file:
+
+| | 2/4/8-fold |
+|---|---|
+| whole frame | 0.234 / 0.070 / 0.080 |
+| blocks 1–4, best of the three | **0.309 / 0.284 / 0.274 / 0.187** |
+
+They are all about the same, so the smear is **inside a 32-symbol block** (13 ms),
+not a phase that drifts across the frame. That rules out the two cheap fixes — a
+line through the three reference points cannot follow it (it was already there), and
+anchoring each block to its own reference would not help either, because the block
+itself is the damaged unit.
+
+What damages a symbol in 13 ms while leaving sixteen *identical* reference symbols
+coherent is **intersection with its neighbours**: delay spread of one symbol or more
+(0.42 ms at 2400 baud), i.e. a frequency-selective path. That is the impairment the
+standard's own performance tables allow for — "two equal Rayleigh paths 2 ms apart
+cost roughly 5 dB" — and it is what a real 4285 receiver answers with an
+**equaliser**, which is Annex C/D's subject and not something a phase tracker can
+reach.
+
+So the remaining work is a receiver change of a known kind, and it is test-first on
+material already on the disk: build a synthetic channel with two paths a symbol or
+two apart (and a second with three), see what a simple fractionally-spaced
+decision-feedback equaliser recovers there, and then run it on his file. If the
+effective symbol SNR comes up from about 0 dB, the SOM should appear and the rate
+will name itself.
+
+What still needs the bench: another capture of the same tape on a quiet, steady path
+— a spread-out channel is a bad witness for a modem, and the watcher is the tool for
+finding a better minute of it.

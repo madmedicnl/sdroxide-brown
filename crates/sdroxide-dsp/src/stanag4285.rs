@@ -177,6 +177,16 @@ pub struct S4285Frame {
     /// gives ~1, ~1, ~1; QPSK ~0, ~1, ~1; 8PSK ~0, ~0, ~1. Noise lowers all three,
     /// so the verdict compares them against each other rather than an absolute.
     pub constellation: [f32; 3],
+    /// The same concentration, taken **per data block** rather than across the
+    /// frame: the best of each block's 2-, 4- and 8-fold figures.
+    ///
+    /// This is the diagnostic that separates two faults a whole-frame number
+    /// cannot. A phase that walks *between* blocks — one that a line through the
+    /// three reference points cannot follow — leaves each block coherent and the
+    /// frame spread, and shows up here as four figures well above
+    /// [`S4285Frame::constellation`]. A phase that moves *inside* a block of 32
+    /// symbols leaves even these flat, and only a tracker can follow that.
+    pub block: [f32; 4],
     /// Payload bits of this frame, oldest first.
     pub bits: Vec<u8>,
     /// The frame's 128 soft decisions, positive for a zero — the values the
@@ -1042,6 +1052,20 @@ impl S4285Receiver {
         let n = data.len().max(1) as f32;
         let constellation = [c2.norm() / n, c4.norm() / n, c8.norm() / n];
 
+        // Per block, with the same channel: see `S4285Frame::block`.
+        let mut block = [0.0f32; 4];
+        for (b, &(lo, hi)) in DATA_BLOCKS.iter().enumerate() {
+            let (mut b2, mut b4, mut b8) = (C::default(), C::default(), C::default());
+            for k in lo..hi {
+                let a = fit.apply(k, z[k]).arg();
+                b2 = b2.add(C::from_phase(2.0 * a));
+                b4 = b4.add(C::from_phase(4.0 * a));
+                b8 = b8.add(C::from_phase(8.0 * a));
+            }
+            let nb = (hi - lo).max(1) as f32;
+            block[b] = (b2.norm() / nb).max(b4.norm() / nb).max(b8.norm() / nb);
+        }
+
         // A 2PSK frame leaves the even symbol numbers only; a dibit frame the
         // multiples of two; a tribit frame all eight. Noise smears each of those,
         // so the classes are told apart by which concentration stands up, not by
@@ -1087,6 +1111,7 @@ impl S4285Receiver {
             rate,
             phases_used,
             constellation,
+            block,
             bits,
             soft,
         })
@@ -1538,8 +1563,16 @@ mod tests {
     /// interleaver's row structure against the standard (a loopback shares whatever
     /// convention both halves use); what proves that is a start-of-message pattern
     /// on real traffic, which is what the off-air captures are for.
-    #[allow(clippy::too_many_lines)]
     fn coded_round_trip(ramp_hz_s: f64) -> (Vec<u8>, Vec<S4285Message>) {
+        coded_round_trip_band(ramp_hz_s, None)
+    }
+
+    /// The same, through an audio chain that only passes `band`.
+    #[allow(clippy::too_many_lines)]
+    fn coded_round_trip_band(
+        ramp_hz_s: f64,
+        band: Option<(f64, f64)>,
+    ) -> (Vec<u8>, Vec<S4285Message>) {
         use super::fec::{self, CodedRate};
         let rate = CodedRate::Bps600;
         // A payload whose bits are not all the same, so a decoder that drops
@@ -1594,6 +1627,13 @@ mod tests {
             }
         }
 
+        // The chain in front of the receiver: a rig's filter, a sound card, a
+        // WebSDR's audio. Applied after the noise so a truncated band is the only
+        // thing being measured.
+        let audio = match band {
+            Some((lo, hi)) => band_limit(&audio, 12000.0, lo, hi),
+            None => audio,
+        };
         let mut rx = S4285Receiver::new(12000.0, 1800.0);
         let mut got: Vec<S4285Message> = Vec::new();
         for chunk in audio.chunks(1024) {
@@ -1604,9 +1644,44 @@ mod tests {
             }
         }
         if got.is_empty() {
-            panic!("no coded message at {ramp_hz_s} Hz/s: {:?}", rx.report());
+            eprintln!("no coded message at {ramp_hz_s} Hz/s, band {band:?}: {:?}", rx.report());
         }
         (payload, got)
+    }
+
+    /// A steep band-pass, to model the audio chain in front of a real capture.
+    ///
+    /// A rig's SSB filter, a sound card's anti-alias filter and a WebSDR's audio
+    /// stream all truncate the 300–3300 Hz an STANAG 4285 occupies, and the
+    /// question this measures is how much of that band the coded chain actually
+    /// needs. Hann-windowed, 401 taps at 12 kHz: a transition of about 60 Hz, so
+    /// a corner is where it says it is rather than a slope.
+    fn band_limit(audio: &[f32], rate: f64, lo: f64, hi: f64) -> Vec<f32> {
+        const TAPS: usize = 401;
+        let mid = (TAPS - 1) as f64 / 2.0;
+        let mut h = vec![0.0f32; TAPS];
+        for (i, v) in h.iter_mut().enumerate() {
+            let n = i as f64 - mid;
+            let hann = 0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / (TAPS - 1) as f64).cos();
+            // An ideal low-pass of cutoff f is 2f/fs·sinc(2fn/fs); a band-pass is
+            // the difference of two, and both have unity gain in their flat region.
+            let lp = |f: f64| {
+                let x = std::f64::consts::PI * 2.0 * f * n / rate;
+                let s = if x.abs() < 1e-9 { 1.0 } else { x.sin() / x };
+                2.0 * f / rate * s
+            };
+            *v = ((lp(hi) - lp(lo)) * hann) as f32;
+        }
+        let mut out = vec![0.0f32; audio.len()];
+        for (k, o) in out.iter_mut().enumerate() {
+            let start = k.saturating_sub(TAPS - 1);
+            let mut acc = 0.0f32;
+            for j in start..=k {
+                acc += audio[j] * h[k - j];
+            }
+            *o = acc;
+        }
+        out
     }
 
     /// The whole chain, over a channel that is exactly on frequency.
@@ -1635,6 +1710,50 @@ mod tests {
             let (payload, got) = coded_round_trip(ramp);
             assert_eq!(got[0].bits, payload, "the wrong bits at {ramp} Hz/s");
         }
+    }
+
+    /// **How much of the 300–3300 Hz band does the coded chain need?**
+    ///
+    /// The question the one real coded capture we were sent turned on. Mark's FUF
+    /// tape (13031.2 kHz, 23 Oct) arrives with its audio running about 800–3000 Hz
+    /// where an STANAG 4285 occupies 300–3300, and every Annex E branch sits at
+    /// its shuffled null on it — so either the missing third of the waveform is
+    /// what kills the code, or the band is a coincidence and the fault is
+    /// elsewhere.
+    ///
+    /// **It is not the band.** Measured on a synthetic whose bits are known, the
+    /// chain decodes the message exactly through every one of these:
+    ///
+    /// | high-pass | low-pass | |
+    /// |---|---|---|
+    /// | 300, 500, 650, 800, 900, 1000 Hz | 3300 | decodes |
+    /// | 300 | 3300, 3100, 3000, 2800, 2600 | decodes |
+    /// | 800 | 3000 — his tape's own band | decodes |
+    ///
+    /// So a receiver whose audio chain is narrower than the standard's own
+    /// 3000 Hz is not what stops a coded tape being read, and asking a reporter
+    /// for a wider filter on that evidence would have been a wrong errand. The
+    /// two corners are pinned here; the rest of the table is what the run that
+    /// found this printed.
+    #[test]
+    fn the_coded_chain_survives_a_truncated_audio_band() {
+        let bits_of = |band: (f64, f64)| {
+            let (payload, got) = coded_round_trip_band(0.0, Some(band));
+            got.first().is_some_and(|m| m.bits == payload)
+        };
+        assert!(bits_of((300.0, 3300.0)), "the chain lost a message inside its own band");
+        assert!(
+            bits_of((800.0, 3000.0)),
+            "a chain band-limited the way a real capture's audio is no longer decodes — \
+             which is the measurement this test exists for"
+        );
+        // The corners, so a front end that needs more than this fails loudly
+        // rather than being discovered on the air.
+        assert!(
+            bits_of((1000.0, 3300.0)),
+            "the low corner moved: 1000 Hz high-pass used to decode"
+        );
+        assert!(bits_of((300.0, 2600.0)), "the high corner moved: 2600 Hz low-pass used to decode");
     }
 
     /// The equaliser corrects **level** as well as phase, over the whole frame.
