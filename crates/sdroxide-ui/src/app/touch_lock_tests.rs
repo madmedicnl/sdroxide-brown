@@ -168,6 +168,10 @@ fn mem_sits_before_the_padlock_and_opens_the_memories() {
         (egui::vec2(1280.0, 720.0), true),
         (egui::vec2(412.0, 915.0), false),
     ] {
+        // Each strip starts as a first run: an open window is remembered for the
+        // next start, and the strip before this one left the memories open.
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
         let sent = Rc::new(RefCell::new(Vec::new()));
         let ctx = egui::Context::default();
         let app = SdroxideApp::new_tab(&ctx, None, None, Box::new(Sent(sent.clone())), 0, true);
@@ -247,4 +251,46 @@ fn an_unlock_is_not_undone_by_the_finger_that_made_it() {
     }
     rig.tap(lock);
     assert!(crate::touch_lock::is_locked(&ctx), "a tap after the pause did not lock");
+}
+
+/// A tap on MEM opens the memory channels and they stay open. The window's
+/// open state lives in two places — the `show_memories` flag a chip flips and
+/// the persisted `tool_windows_open` bit the Settings → Detachable menu flips —
+/// and a frame that copied the bit over the flag undid the tap in the same frame
+/// it was made. Nothing here sets a bit by hand: only the chip and the frames.
+#[test]
+fn a_tap_on_mem_leaves_the_memories_open_across_frames() {
+    let _guard = crate::multi::frame_test_lock();
+    let dir = std::env::temp_dir().join(format!("sdroxide-mem-stays-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+    let size = egui::vec2(1000.0, 900.0);
+    let sent = Rc::new(RefCell::new(Vec::new()));
+    let ctx = egui::Context::default();
+    let app = SdroxideApp::new_tab(&ctx, None, None, Box::new(Sent(sent.clone())), 0, true);
+    let mut rig = Rig { ctx: ctx.clone(), app, sent, t: 0.0, size };
+    for _ in 0..3 {
+        rig.frame(Vec::new(), 0.05).drop_without_applying_deltas();
+    }
+    let out = rig.frame(Vec::new(), 0.05);
+    let mem = find_text(&out.shapes, "MEM").expect("a MEM chip");
+    out.drop_without_applying_deltas();
+    assert!(find_text(&rig.frame(Vec::new(), 0.05).shapes, "Memories").is_none());
+
+    rig.tap(mem);
+    // Left alone for a second, the window is still there, drawn.
+    let mut drawn = false;
+    for _ in 0..20 {
+        let out = rig.frame(Vec::new(), 0.05);
+        drawn = find_text(&out.shapes, "Memories").is_some();
+        out.drop_without_applying_deltas();
+    }
+    assert!(rig.app.show_memories, "the memories closed after a tap on MEM");
+    assert!(drawn, "the Memories window is not on screen after a tap on MEM");
+    assert!(
+        rig.app.ui_settings.tool_windows_open & super::frame::TW_MEMORIES != 0,
+        "the open state was not kept for the next start"
+    );
 }
