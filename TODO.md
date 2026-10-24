@@ -108,8 +108,10 @@ maintainer's queue there, not a promise.
 ## Not in a release yet
 
 On `main`, after **v2.1.0.2.1**: the Brick2 HPSDR work (paced transmit, the
-Hermes-emulation PA fix, one I/Q switch per radio) and the **detachable APRS
-decoder panel** with the Detachable settings page.
+Hermes-emulation PA fix, one I/Q switch per radio), the **detachable APRS decoder
+panel** with the Detachable settings page, the **decoded-text UDP feed**, the
+**JTTY** rebuild, and the **CIS-11** mode (open as PR #173, which claims
+`PROTO_VERSION` 241).
 
 ## Parked, with the reason
 
@@ -154,6 +156,13 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **CIS-11 built** — the Russian meteorological teleprinter, receive only. Framing
+  measured from the recordings (ten data bits + one odd parity, not the
+  catalogues' "5 + parity"), 121 of 123 characters parity-valid on the off-air
+  idle file, and the model wired as `Mode::Cis11` behind the existing text panel.
+  **PR #173** because it is the wire change (241 / 0x3D).
+- **A decoded-text feed over UDP** — one JSON line per decode for the FT8 family,
+  WSPR and every keyboard mode, on Settings → Servers (240 / 0x3C).
 - **HD Radio is confirmed on the air by users** (reported on r/ShortwavePlus) —
   it moves off the "no station heard here" list and out of the feedback asks.
 - **ALE takes its place on that list**: the manual now documents the mode with

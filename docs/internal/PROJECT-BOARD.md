@@ -67,6 +67,9 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 239).
   [`MODE-PROGRESS.md`](MODE-PROGRESS.md). Open: the 8PSK vestigial filter, the
   four wide `C` banks' carrier separation, and the bench recordings the journal's
   "Needs me" list names.
+- **CIS-11** — built and measured; **PR #173** open because it is the wire
+  change (`PROTO_VERSION` 241). What it still needs is a clear transmission to
+  settle how the ten data bits divide into letters.
 - **Brick2** — [`BRICK2-HANDOVER.md`](BRICK2-HANDOVER.md): the code half is
   merged; **#132** (`40 kHz` display) waits on one answer, **#133** (LSB as USB)
   is the HPSDR Invert-spectrum switch.
