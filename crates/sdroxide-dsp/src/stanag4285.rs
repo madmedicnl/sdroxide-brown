@@ -485,6 +485,27 @@ struct Lock {
 /// The receiver. Feed it audio at `rate_hz`; it acquires on a fold of the
 /// synchronisation, emits a frame per frame once locked, and text as the
 /// character layer decodes.
+/// Which of the two channel paths a coded frame is read through.
+///
+/// The frame's own reading (`take_frame`) already chooses between the plain
+/// symbols and the least-squares equaliser by asking which one collapses the
+/// known reference blocks harder, and that is the right question for a *displayed*
+/// constellation. It is not obviously the right question for the **code**: an
+/// equaliser that sharpens nine reference symbols per block can still leave the
+/// data's eye worse, and on a real recording the trellis has never been seen.
+/// So the choice is a parameter, swept against the metric in `s4285_fec_check`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EqMode {
+    /// Whichever path the reference blocks prefer, frame by frame. The default,
+    /// and what a station watching the constellation wants.
+    #[default]
+    Auto,
+    /// The plain symbols, with no equaliser at all.
+    Off,
+    /// The equaliser's output, whether or not the references prefer it.
+    On,
+}
+
 pub struct S4285Receiver {
     rate: f64,
     carrier: f64,
@@ -516,6 +537,8 @@ pub struct S4285Receiver {
     coded_messages: u64,
     /// Messages ready to be handed out by the next `process` call.
     pending: Vec<S4285Message>,
+    /// How the coded path picks its channel — see [`EqMode`].
+    eq_mode: EqMode,
     /// The last frame reached the coded-chain floor, whether or not it was good
     /// enough to report. A frame that is merely poor must not cost the lock: the
     /// lock is about the frame *position*, which such a frame still proves.
@@ -530,6 +553,12 @@ pub struct S4285Receiver {
 const ACQ_SPAN: u64 = (ACQ_FRAMES as u64 + 1) * FRAME as u64 * SPS as u64;
 
 impl S4285Receiver {
+    /// Choose how the coded path picks its channel. Only the frames that feed the
+    /// Annex E chains are affected; the displayed frame keeps [`EqMode::Auto`].
+    pub fn set_eq_mode(&mut self, mode: EqMode) {
+        self.eq_mode = mode;
+    }
+
     /// `rate_hz` is the audio tap rate; `carrier_hz` is the audio frequency of the
     /// suppressed carrier — 1800 Hz when the dial is on it, but a fixed-frequency
     /// log entry can be a kilohertz out, so it is a parameter.
@@ -556,6 +585,7 @@ impl S4285Receiver {
             coded_rate: None,
             coded_messages: 0,
             pending: Vec::new(),
+            eq_mode: EqMode::Auto,
             last_frame_usable: false,
             bit_run: Vec::new(),
             events_text: String::new(),
@@ -926,7 +956,15 @@ impl S4285Receiver {
         let mut equalised = [C::default(); SCRAMBLED];
         if let Some(w) = &equaliser {
             let mid = (LS_EQ - 1) / 2;
-            let mut best = (score(&plain), equalised);
+            // **The fallback is the best shift, not a buffer of zeros.** Starting
+            // the comparison with `plain`'s score and a zero-filled candidate means
+            // the equaliser's output is left as zeros whenever no shift beats the
+            // plain symbols — invisible while the choice is only "is it better",
+            // and a frame of silence the moment something asks for the equalised
+            // symbols regardless (`EqMode::On`). Measured: a clean generated signal
+            // reported its reference blocks at 0.000 with the equaliser forced on,
+            // because it was reading zeros.
+            let mut best = (f32::NEG_INFINITY, plain);
             for shift in [mid, mid - 1, mid + 1] {
                 let mut cand = [C::default(); SCRAMBLED];
                 for k in 0..SCRAMBLED {
@@ -957,7 +995,24 @@ impl S4285Receiver {
             let c = ramp_concentrations(z, 0.0);
             c[0] + c[1] + c[2]
         };
-        if equaliser.is_some() && score(&equalised) > score(&plain) { equalised } else { plain }
+        match self.eq_mode {
+            // The displayed frame's own rule, which is also the default here.
+            EqMode::Auto => {
+                if equaliser.is_some() && score(&equalised) > score(&plain) {
+                    equalised
+                } else {
+                    plain
+                }
+            }
+            EqMode::Off => plain,
+            EqMode::On => {
+                if equaliser.is_some() {
+                    equalised
+                } else {
+                    plain
+                }
+            }
+        }
     }
 
     /// Refine the carrier offset against the **known sync**, and not only against
@@ -1889,11 +1944,21 @@ mod tests {
     }
 
     /// The same, through a multipath channel as well.
-    #[allow(clippy::too_many_lines)]
     fn coded_round_trip_path(
         ramp_hz_s: f64,
         band: Option<(f64, f64)>,
         taps: Option<&[(f64, f32)]>,
+    ) -> (Vec<u8>, Vec<S4285Message>) {
+        coded_round_trip_path_mode(ramp_hz_s, band, taps, EqMode::Auto)
+    }
+
+    /// The same, with the coded path's channel chosen rather than scored.
+    #[allow(clippy::too_many_lines)]
+    fn coded_round_trip_path_mode(
+        ramp_hz_s: f64,
+        band: Option<(f64, f64)>,
+        taps: Option<&[(f64, f32)]>,
+        mode: EqMode,
     ) -> (Vec<u8>, Vec<S4285Message>) {
         use super::fec::{self, CodedRate};
         let rate = CodedRate::Bps600;
@@ -1965,6 +2030,7 @@ mod tests {
             None => audio,
         };
         let mut rx = S4285Receiver::new(12000.0, 1800.0);
+        rx.set_eq_mode(mode);
         let mut got: Vec<S4285Message> = Vec::new();
         for chunk in audio.chunks(1024) {
             for ev in rx.process(chunk) {
@@ -1974,7 +2040,10 @@ mod tests {
             }
         }
         if got.is_empty() {
-            eprintln!("no coded message at {ramp_hz_s} Hz/s, band {band:?}: {:?}", rx.report());
+            eprintln!(
+                "no coded message at {ramp_hz_s} Hz/s, band {band:?}, {mode:?}: {:?}",
+                rx.report()
+            );
         }
         (payload, got)
     }
@@ -2044,6 +2113,23 @@ mod tests {
         assert_eq!(m.rate, CodedRate::Bps600, "the wrong rate named the message");
         assert!(m.closed, "the EOM did not close the message");
         assert_eq!(m.bits, payload, "the message bits are not the ones that were sent");
+    }
+
+    /// **The coded chain reads the same message down all three channel paths.**
+    ///
+    /// The frame's own rule picks between the plain symbols and the equaliser by
+    /// asking which one collapses the nine known reference symbols per block
+    /// harder, and a real recording made it worth asking whether that is also the
+    /// right question for the *data* — so [`EqMode`] exists and had to be proved
+    /// not to break a signal known to be good. On the generated 600 bps
+    /// transmission, all three positions decode the message's own bits.
+    #[test]
+    fn a_coded_message_survives_every_channel_path() {
+        for mode in [EqMode::Auto, EqMode::Off, EqMode::On] {
+            let (payload, got) = coded_round_trip_path_mode(0.0, None, None, mode);
+            assert!(!got.is_empty(), "no message with {mode:?}");
+            assert_eq!(got[0].bits, payload, "the wrong bits with {mode:?}");
+        }
     }
 
     /// The same chain on a channel that is **not** exactly on frequency.

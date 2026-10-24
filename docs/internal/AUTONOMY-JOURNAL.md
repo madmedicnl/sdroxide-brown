@@ -171,6 +171,44 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag, fourth pass) — the channel path cleared, and a false statistic retired
+
+**Summary.** The choice between the plain symbols and the equaliser is not what is
+stopping the tape from decoding — all three settings sit at their own null on the
+best recording. Two real things came out of asking: the equaliser could hand back
+a frame of silence and nothing noticed, which is now fixed and tested; and the
+"closest SOM 31/32" that the handover quoted as near-success is a number that
+fires on noise too, so it has been withdrawn. The trellis metric — the one
+statistic here with a proper null — still says there is no code visible.
+
+**Done.**
+- `EqMode::{Auto,Off,On}` on `S4285Receiver` (`set_eq_mode`), honoured by the coded
+  path only; the displayed frame is untouched.
+- Fixed the equaliser's fallback in `coded_symbols`: it started its group-delay
+  comparison with a zero-filled buffer, so a frame could be read as 128 zeros.
+- New test `a_coded_message_survives_every_channel_path`: a clean generated 600 bps
+  message decodes its own bits with `Auto`, `Off` **and** `On`. Verified failing
+  before the fallback fix (`no message with On`, reference blocks 0.000).
+- `s4285_fec_check` now reports, for every branch, the closest SOM to the known
+  pattern against the same statistic on shuffled values, using the receiver's own
+  chunking (256 pairs, 64-pair overlap).
+
+**Numbers.** Mark's file, 1850 Hz: 242 frames, 30 976 soft decisions in all three
+modes; best ratio Auto **0.99×**, Off **0.99×**, On **1.00×**. SOM: real 24–28/32,
+shuffled 24–28/32 on every branch — no discrimination.
+
+**Commands.** `cargo test --release -p sdroxide-dsp --lib stanag` → 16 passed, 1
+ignored. `cargo check --workspace --all-targets` → 0 warnings. `rustfmt --check`
+on both files clean.
+
+**Still open.** The receiver's own SOM (31/32) is measured on a stream that
+includes erasure-filled frames, so its null is a different question and remains
+unestablished. Next: null-test it inside the chain (or report it as a z-score
+against the expected maximum for that many bits) before it is trusted — if it
+survives, some frames are decoding and that is where to dig.
+
+---
+
 ## 2026-10-24 (stanag, third pass) — three hypotheses eliminated with numbers
 
 **Summary.** The French Navy tape still does not decode here, but the search is

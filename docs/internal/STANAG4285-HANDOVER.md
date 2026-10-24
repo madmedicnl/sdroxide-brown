@@ -829,6 +829,34 @@ after the audio file, so it is not necessarily the same transmission — and an 
 reference**; the IQ needs a per-capture carrier estimate before anything else is
 measured from it.
 
+**The channel path is ruled out, and the equaliser had a latent fault** (same day,
+after `EqMode` was added). The coded path now takes `EqMode::{Auto, Off, On}` —
+`Auto` is the frame's own rule (whichever path collapses the nine known reference
+symbols per block harder), `Off` is the plain symbols, `On` forces the
+least-squares/ZF equaliser. Measured on Mark's file at 1850 Hz, 242 frames,
+30 976 soft decisions in each: **Auto 0.99×, Off 0.99×, On 1.00×** their own
+shuffled nulls. So the choice between them is not what is hiding the code.
+
+While making `On` mean anything, a fault fell out of `coded_symbols`: the
+comparison that picks the equaliser's group delay started from `(score(&plain),
+zero-filled buffer)`, so when no shift beat the plain symbols the "equalised"
+frame was **128 symbols of silence** — invisible while the choice is only "is it
+better", and fatal the moment anything asks for those symbols regardless. On a
+clean generated signal, forced `On` read its reference blocks at **0.000** and
+decoded nothing. Fixed to fall back to the best shift, and a test
+(`a_coded_message_survives_every_channel_path`) now decodes the message's own bits
+down all three paths.
+
+**`best SOM 31/32` is withdrawn as evidence.** It has been quoted here as "the
+framer almost found the pattern". Null-tested properly — the same chunked
+decoder, same interleaver, on the same values shuffled — every branch of the real
+stream reads **24–28/32**, and the noise reads **24–28/32**. A 27/32 is not
+evidence when its null is 26/32. The receiver's 31/32 comes from a stream that
+also carries erasure-filled frames (its chains are fed *before* the reference
+gate), so the receiver's own null has not been established; until it is, the
+number must not be quoted. The trellis metric, which does have a null, says no
+code on this file.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run

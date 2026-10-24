@@ -14,7 +14,7 @@
 //! does not scores the same. Both are printed, beside each other, because a
 //! statistic without its own null is how this mode's earlier work lost a day.
 
-use sdroxide_dsp::stanag4285::{S4285Event, S4285Receiver};
+use sdroxide_dsp::stanag4285::{EqMode, S4285Event, S4285Receiver};
 use sdroxide_dsp::stanag4285_fec as fec;
 
 fn read_wav(path: &str) -> (Vec<f32>, f64) {
@@ -53,37 +53,18 @@ fn shuffled(input: &[f32], seed: u32) -> Vec<f32> {
     out
 }
 
-fn main() {
-    let a: Vec<String> = std::env::args().skip(1).collect();
-    if a.is_empty() {
-        eprintln!("usage: s4285_fec_check <wav> [carrier_hz]");
-        std::process::exit(2);
-    }
-    let (audio, rate) = read_wav(&a[0]);
-    let carrier: f64 = a.get(1).and_then(|v| v.parse().ok()).unwrap_or(1800.0);
-    let mut rx = S4285Receiver::new(rate, carrier);
-    let mut soft: Vec<f32> = Vec::new();
-    let mut frames = 0;
-    for chunk in audio.chunks(4096) {
-        for ev in rx.process(chunk) {
-            if let S4285Event::Frame(f) = ev {
-                soft.extend_from_slice(&f.soft);
-                frames += 1;
-            }
-        }
-    }
-    println!("{}: {} frames, {} soft decisions at {}", a[0], frames, soft.len(), carrier);
-    if soft.len() < 5_000 {
-        println!("  too little to judge");
-        return;
-    }
+/// Every branch's metric against its own shuffled null, as
+/// `(rate label, style, depth, metric, null, ratio)`, plus the best of them.
+struct Verdict {
+    best: Option<(f32, String)>,
+    rows: Vec<String>,
+}
+
+fn judge(soft: &[f32]) -> Verdict {
     // The stream has to be deinterleaved before the decode means anything, so
     // every rate's `j` is tried — and both signs, since the frame phase is only
     // known up to pi.
-    println!(
-        "  {:>26}  {:>14}  {:>8}  {:>8}  {:>6}",
-        "branch", "interleave", "metric", "null", "ratio"
-    );
+    let mut v = Verdict { best: None, rows: Vec::new() };
     for rate in fec::CodedRate::BPSK {
         for sign in [1.0f32, -1.0] {
             for style in fec::Interleave::ALL {
@@ -91,13 +72,13 @@ fn main() {
                 // short and a long column.** fldigi and MultiPSK both offer "long
                 // interleaving", and our transpose uses the long column's figures —
                 // 24 at 1200 and 12 below it. A wrong `j` looks exactly like a wrong
-                // commutator: every branch at its null. So the few depths a
-                // 600 bps transmission could plausibly use are swept too.
-                let depths: &[usize] = match rate {
-                    fec::CodedRate::Bps600 => &[3, 6, 12, 24, 48],
-                    _ => &[],
+                // commutator: every branch at its null. So the few depths a 600 bps
+                // transmission could plausibly use are swept too.
+                let depths: Vec<usize> = match rate {
+                    fec::CodedRate::Bps600 => vec![3, 6, 12, 24, 48],
+                    _ => vec![rate.j()],
                 };
-                for &j in depths.iter() {
+                for &j in &depths {
                     let mut di = fec::ConvInterleaver::deinterleaver_with(j, style);
                     let stream: Vec<f32> = soft.iter().map(|v| di.push(v * sign)).collect();
                     let pairs = fec::average_pairs(&stream, rate.repeat());
@@ -109,20 +90,151 @@ fn main() {
                         .map(|s| fec::viterbi_decode_with_metric(s).1)
                         .fold(f32::NEG_INFINITY, f32::max);
                     let ratio = if null > 0.0 { metric / null } else { 0.0 };
-                    println!(
-                        "  {:>26}  {:>14}  {:>8.0}  {:>8.0}  {:>5.2}x{}",
-                        format!("{} j{j} sign {sign:+.0}", rate.label()),
-                        style.label(),
-                        metric,
-                        null,
-                        ratio,
+                    let label = format!("{} j{j} sign {sign:+.0} {}", rate.label(), style.label());
+                    if v.best.as_ref().is_none_or(|(b, _)| ratio > *b) {
+                        v.best = Some((ratio, label.clone()));
+                    }
+                    v.rows.push(format!(
+                        "  {label:>44}  {metric:>8.0}  {null:>8.0}  {ratio:>5.2}x{}",
                         if ratio > 1.3 { "   <-- stands up" } else { "" }
-                    );
+                    ));
                 }
             }
         }
     }
-    println!(
-        "  (a ratio near 1 is no coding; the code is there when a branch stands well above its null)"
-    );
+    v
+}
+
+/// The closest the framer's output comes to the SOM, for a given branch.
+///
+/// `best_som` is quoted in the handover as evidence of a working chain, so it has
+/// to survive the same question as every other number here: **what does it read
+/// on noise?** The same values shuffled are noise, and the answer is printed
+/// beside the real one.
+fn som_for(soft: &[f32], rate: fec::CodedRate, style: fec::Interleave, j: usize, sign: f32) -> u8 {
+    // **The receiver's own chunking, replicated**, because that is where the
+    // quoted 31/32 came from: `CodedChain` decodes 256 pairs at a time from a
+    // 64-pair overlap thrown away in front, so every chunk starts its Viterbi on
+    // state zero. Decoding the whole stream in one pass reads the same bits
+    // differently, and a statistic has to be compared with its null through the
+    // *same* machinery or the difference is the machinery.
+    const CHUNK: usize = 256;
+    const OVERLAP: usize = 64;
+    let times = rate.repeat();
+    let mut di = fec::ConvInterleaver::deinterleaver_with(j, style);
+    let mut stream: Vec<f32> = Vec::with_capacity(soft.len());
+    let mut consumed = 0;
+    let mut fr = fec::MessageFramer::new(rate);
+    let need = (CHUNK + OVERLAP) * 2 * times;
+    for v in soft {
+        stream.push(di.push(v * sign));
+        while stream.len() - consumed >= need {
+            let pairs = fec::average_pairs(&stream[consumed..consumed + need], times);
+            let bits = fec::viterbi_decode(&pairs);
+            for b in bits.iter().skip(OVERLAP).take(CHUNK) {
+                fr.push(*b);
+            }
+            consumed += CHUNK * 2 * times;
+        }
+    }
+    fr.best_som
+}
+
+fn main() {
+    let a: Vec<String> = std::env::args().skip(1).collect();
+    if a.is_empty() {
+        eprintln!("usage: s4285_fec_check <wav> [carrier_hz]");
+        std::process::exit(2);
+    }
+    let (audio, rate) = read_wav(&a[0]);
+    let carrier: f64 = a.get(1).and_then(|v| v.parse().ok()).unwrap_or(1800.0);
+
+    // **The channel path is swept first**, because it decides every number after
+    // it: the equaliser is chosen per frame by whether the reference blocks
+    // collapse harder, and that is a question about nine symbols, not about the
+    // data's eye. On a recording the trellis has never been seen, the right way to
+    // ask is the metric itself, so all three paths are read and judged.
+    let mut best: Option<(EqMode, Verdict)> = None;
+    for mode in [EqMode::Auto, EqMode::Off, EqMode::On] {
+        let mut rx = S4285Receiver::new(rate, carrier);
+        rx.set_eq_mode(mode);
+        let mut soft: Vec<f32> = Vec::new();
+        let mut frames = 0;
+        for chunk in audio.chunks(4096) {
+            for ev in rx.process(chunk) {
+                if let S4285Event::Frame(f) = ev {
+                    soft.extend_from_slice(&f.soft);
+                    frames += 1;
+                }
+            }
+        }
+        println!(
+            "{}: {frames} frames, {} soft decisions at {carrier}, equaliser {mode:?}",
+            a[0],
+            soft.len()
+        );
+        if soft.len() < 5_000 {
+            println!("  too little to judge");
+            continue;
+        }
+        let v = judge(&soft);
+        if let Some((ratio, label)) = &v.best {
+            println!("  best {ratio:.2}x on {label}");
+        }
+        if best.as_ref().is_none_or(|(_, b)| {
+            v.best.as_ref().zip(b.best.as_ref()).is_some_and(|(x, y)| x.0 > y.0)
+        }) {
+            best = Some((mode, v));
+        }
+    }
+
+    // **The SOM statistic checked against its own null**, on the 600 bps branch
+    // that produces it: 31/32 is either the decoder finding real framing or a
+    // statistic that also fires on noise.
+    if let Some((_, v)) = best.as_ref() {
+        let _ = v;
+        let mut rx = S4285Receiver::new(rate, carrier);
+        let mut soft: Vec<f32> = Vec::new();
+        for chunk in audio.chunks(4096) {
+            for ev in rx.process(chunk) {
+                if let S4285Event::Frame(f) = ev {
+                    soft.extend_from_slice(&f.soft);
+                }
+            }
+        }
+        let null: Vec<f32> = shuffled(&soft, 0x0BAD_F00D);
+        let mut rows = Vec::new();
+        let mut best = (0u8, 0u8, String::new());
+        for rate in fec::CodedRate::BPSK {
+            for sign in [1.0f32, -1.0] {
+                for style in fec::Interleave::ALL {
+                    let j = rate.j();
+                    let real = som_for(&soft, rate, style, j, sign);
+                    let noise = som_for(&null, rate, style, j, sign);
+                    let label = format!("{} j{j} sign {sign:+.0} {}", rate.label(), style.label());
+                    if real as i16 - noise as i16 > best.0 as i16 - best.1 as i16 {
+                        best = (real, noise, label.clone());
+                    }
+                    rows.push(format!("  {label:>44}  real {real:>2}/32  shuffled {noise:>2}/32"));
+                }
+            }
+        }
+        println!("  closest SOM to the known pattern, every branch:");
+        for r in &rows {
+            println!("{r}");
+        }
+        println!("  best margin: real {}/32 against shuffled {}/32 on {}", best.0, best.1, best.2);
+    }
+
+    if let Some((mode, v)) = best {
+        println!();
+        println!("  every branch, equaliser {mode:?}:");
+        println!("  {:>44}  {:>8}  {:>8}  {:>6}", "branch", "metric", "null", "ratio");
+        for row in &v.rows {
+            println!("{row}");
+        }
+        println!(
+            "  (a ratio near 1 is no coding; the code is there when a branch stands well above its null)"
+        );
+    }
 }
