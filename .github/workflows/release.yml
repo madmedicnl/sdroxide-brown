@@ -782,8 +782,9 @@ jobs:
           # CARGO_BUILD_TARGET (the MSYS2/MinGW toolchain, set above) makes
           # cargo write to a target-specific directory rather than
           # target/release.
-          BIN_DIR="target/$CARGO_BUILD_TARGET/release"
-          cp "$BIN_DIR/sdroxide.exe" stage/sdroxide/
+          BIN_SRC="target/$CARGO_BUILD_TARGET/release"
+          cp "$BIN_SRC/sdroxide.exe" stage/sdroxide/
+          BIN_DIR="stage/sdroxide"
           # Ship the MinGW runtime DLLs beside the executable so a plain
           # Windows box (without MSYS2/PothosSDR) can start sdroxide.exe.
           # They come from the same MINGW64 toolchain that built the binary.
