@@ -79,6 +79,21 @@ fn main() {
         for ev in rx.process(chunk) {
             match ev {
                 sdroxide_dsp::stanag4285::S4285Event::Frame(f) => {
+                    // The frame's own symbols, for asking *where* an assumed layout
+                    // went wrong: the reference blocks are runs of constant phase
+                    // and their positions are a property of the transmission.
+                    if let Ok(path) = std::env::var("S4285_SYMBOLS_OUT") {
+                        use std::io::Write;
+                        let mut fh = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&path)
+                            .expect("open the symbol dump");
+                        for c in &f.symbols {
+                            write!(fh, "{:.5},{:.5} ", c.re, c.im).expect("write");
+                        }
+                        writeln!(fh).expect("newline");
+                    }
                     if let Ok(path) = std::env::var("S4285_SOFT_OUT") {
                         use std::io::Write;
                         let mut fh = std::fs::OpenOptions::new()

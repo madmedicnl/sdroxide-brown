@@ -171,6 +171,42 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag, eighth pass) — sensitivity measured, and the tape is not noise-limited
+
+**Summary.** The chain's own limit is now a number per rate: it reads a message at
+**-6 dB** in 3 kHz at 150 and 75 bps, with the reference blocks still collapsing at
+**0.90**. Mark's tape collapses its reference blocks at **0.55**, and its symbols
+scatter ±87° — which white noise at the same level does not do. So the tape's
+problem is not weakness but a non-Gaussian impairment (fast phase wander or in-band
+interference). That is the first statement in this work that is a bounded claim
+about the tape rather than a cleared suspect, and it points at phase tracking, not
+at coding, interleaving or the equaliser.
+
+**Done.**
+- `S4285Frame::symbols` (the 176 descrambled, channel-corrected symbols) and
+  `S4285_SYMBOLS_OUT` in the probe, so a capture's frame structure can be measured
+  instead of assumed.
+- Noise ladder per rate (table in the handover).
+- Tape analysed against it: per-position and per-block phase, sliding 16-symbol
+  coherence over 242 frames.
+
+**Numbers.** 600/2 decodes at 2 dB (constellation 0.921); 150/8 and 75/16 decode at
+**-6 dB** (0.612 / 0.578) with references **0.905 / 0.906**. Tape: references
+0.55 / 0.61 / 0.51, symbol scatter 86–91° sd, sliding coherence flat at 0.24–0.35.
+Tests 16 passed 1 ignored, gate silent, rustfmt clean.
+
+**Blocked, and it is the right block.** Which rate MultiPSK reads is a question for
+Mark, and it decides the whole next move: at 75 bps we have 12 dB of coding gain to
+spend and should be decoding this tape; at 600 we are 3 dB short in the
+demodulator. It is in `TODO.md` under *Waiting on other people*.
+
+**Next when the answer or a stronger capture arrives.** Phase tracking with a
+per-symbol, decision-directed loop on the *reference blocks* first (a 16-symbol
+block is short enough to follow wander that a per-frame line cannot), judged by
+whether the reference concentration rises from 0.55.
+
+---
+
 ## 2026-10-24 (stanag, seventh pass) — longer channel estimates are worse
 
 **Summary.** One more equaliser variant measured and rejected in minutes: giving the

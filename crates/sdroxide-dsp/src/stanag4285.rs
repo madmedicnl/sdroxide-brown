@@ -193,6 +193,13 @@ pub struct S4285Frame {
     /// Annex E chains are fed from. Exposed so a probe can ask whether a capture
     /// carries the code at all, which the hard bits cannot answer.
     pub soft: Vec<f32>,
+    /// The 176 descrambled, channel-corrected symbols after the sync, oldest
+    /// first. A frame's structure is otherwise inferred from its four published
+    /// concentrations, which cannot say *where* an assumed layout went wrong:
+    /// with the raw symbols a probe can look for the runs of constant phase the
+    /// reference blocks are made of, and compare their positions with the ones the
+    /// standard says they occupy.
+    pub symbols: Vec<C>,
 }
 
 /// A message the Annex E layer assembled.
@@ -1334,7 +1341,16 @@ impl S4285Receiver {
             let cut = self.bit_run.len() - 8192;
             self.bit_run.drain(..cut);
         }
+        let symbols: Vec<C> = {
+            let mut t = [C::default(); SCRAMBLED];
+            for k in 0..SCRAMBLED {
+                let sc = if reversed { self.scrambling[k].conj() } else { self.scrambling[k] };
+                t[k] = z[k].mul(sc.conj());
+            }
+            t.to_vec()
+        };
         Some(S4285Frame {
+            symbols,
             reference,
             carrier_offset_hz: offset,
             reversed,

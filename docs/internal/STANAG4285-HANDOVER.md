@@ -926,6 +926,32 @@ fell **0.396 → 0.312**, and at **9 / 17** it read **0.348**. Both worse than t
 default, so the delay spread that hurts this file is inside two symbols and a
 longer estimate spends more on its own noise than it recovers. Reverted to 5 / 9.
 
+**The chain's own sensitivity, measured per rate** (same day). Generating each
+coded rate and adding white noise until decoding stops:
+
+| rate | decodes at | constellation there | reference blocks there |
+|---|---|---|---|
+| 600 / 2 | 2 dB | 0.921 | — |
+| 150 / 8 | -6 dB | 0.612 | 0.905 |
+| 75 / 16 | -6 dB | 0.578 | 0.906 |
+
+So the chain is not insensitive: at -6 dB in 3 kHz it still reads a message, with
+the reference blocks at **0.90**. Mark's tape reads reference blocks at **0.55**
+and per-symbol phase scatter of about **87°**, which no amount of white noise
+produces — at that SNR our noise test still collapses the references at 0.90. The
+tape's impairment is therefore **not AWGN**: it is either fast phase wander or
+in-band interference, and it is the first time the tape's own numbers and the
+chain's threshold can be put side by side.
+
+**Frame structure checked against the tape itself.** The frame's 176 descrambled
+symbols are now exposed (`S4285Frame::symbols`, and `S4285_SYMBOLS_OUT` in the
+probe), so the reference blocks can be looked for rather than assumed: sliding a
+16-symbol coherence window over all 242 frames gives a flat profile at the noise
+floor (0.24–0.35 everywhere; a real reference block is 0.9+). Within a usable frame
+the symbol-to-symbol phase scatter is 86–91°, so the blocks are not coherent enough
+to locate — the frame layout is not contradicted, it is simply unreadable at this
+level.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run
