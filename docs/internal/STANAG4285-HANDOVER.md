@@ -795,12 +795,21 @@ Two things worth keeping:
   32 bits is the closest anything has come to a message: the framing is right and
   the soft values are what is wrong.
 
-**Next measurement, named:** the residual after the reference-block fit is a
-per-symbol phase wander that a frame-wide linear fit cannot follow, and the fix is
-a **decision-directed phase tracker on the data symbols** (BPSK decisions are ±90°
-apart, so it is unambiguous once the frame's sign is known) feeding corrected soft
-values into the Annex E chains. Judged by the same statistic: the trellis ratio on
-this file, which has to stand above 1 before any text is expected.
+**The decision-directed tracker was built, measured, and ruled out** (same day).
+It ran on the data symbols after the reference-block fit — sign decision, residual
+angle against the decision axis, gain 0.15 — and the Annex E metric did not move:
+**0.96×** at 1850 Hz and **0.96–0.97×** at 1900 Hz, identical to four decimal
+places on the strongest branch. The code is therefore not being lost to per-symbol
+phase wander, and the change was reverted rather than left in the tree unproven.
+
+**What that leaves.** The chain's own parameters, on the best file we have ever
+had. The old sweep of interleaver conventions (both commutator orders, both row
+arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run
+against the **2.2 kHz** recording, whose data concentration was 0.23–0.34; this one
+is 0.396 with a 0.899 lock, and a metric at exactly the null is what a *wrong
+interleaver* looks like as much as a noisy one. So the next measurement is that
+sweep again, on this file, with the metric-versus-null test as the judge — and the
+`CHUNK_PAIRS`/`VITERBI_OVERLAP` plumbing is the place it has to be parameterised.
 
 ### Still open
 

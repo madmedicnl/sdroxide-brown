@@ -171,6 +171,33 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag, second pass) — the phase tracker is ruled out
+
+**Summary.** The first idea for the French Navy tape — that our demodulator was
+losing the code to a drifting phase — was built and measured, and it is wrong: the
+tracker changes the code's own score by nothing at all. That is a real answer, and
+it points the next attempt at the interleaver instead, on the best recording this
+mode has ever had.
+
+**Done.**
+- A decision-directed phase tracker on the data symbols (sign decision, residual
+  angle, gain 0.15) after the reference-block fit. Metric before and after:
+  **0.96×** its shuffled null at 1850 Hz, **0.96–0.97×** at 1900 Hz — identical to
+  four decimals on the strongest branch.
+- Reverted: an unproven change that buys nothing does not stay in the tree.
+- `STANAG4285-HANDOVER.md` records the negative and names the next measurement.
+
+**Not done / blocked.** The interleaver-convention sweep, re-run against this file.
+The old sweep was against a recording with 0.23–0.34 data concentration; this one
+has 0.396 and a 0.899 lock, and a metric sitting exactly at its null is what a
+*wrong interleaver* looks like as much as a noisy one.
+
+**Next.** Parameterise the interleaver's commutator/row order in `CodedChain` and
+sweep it on `FUF-13031.200kHz-20261024-125317Z.wav`, judged by the metric/nul
+ratio; then the 423 MB baseband IQ, which is still unopened.
+
+---
+
 ## 2026-10-24 (stanag) — the Mac recording measured, and a mistake to record
 
 **Summary.** Mark sent a better recording of the French Navy tape — made with our
