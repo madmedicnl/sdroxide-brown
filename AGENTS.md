@@ -202,6 +202,18 @@ naming both numbers (`239 → 240`, `VERSION_BYTE 0x3B → 0x3C`). Current:
 - **Take the next number yourself and check it against the register**, then add
   the register line. Two branches doing that correctly still collide, and the
   later one moves.
+- ⛔ **A wire change goes to a PR, never straight to `main`.** Two people work
+  this repository — the maintainer's agent here and F4NRM's sessions — and
+  `PROTO_VERSION` (with `VERSION_BYTE` beside it) is one counter between them.
+  Claiming a number by pushing it to `main` is a claim nobody else can see until
+  it is too late; claiming it in a **PR** puts the number in a diff the other
+  side reads before it picks its own. So: branch, bump, register line, tests,
+  open the PR, and let it be merged — the same for anything that adds a
+  `Command`, a `ServerMsg`, a `RadioEvent`, a `Mode` or an `Action` variant, a
+  `DigiConfig`/`RadioConfig`/`NetworkConfig` field, or a `Mode` discriminant.
+  Everything wire-neutral still goes straight to `main` as before.
+- **Where two PRs do collide, the later one moves** and says so in the register,
+  as it did on 2026-10-10 (199 → 200 → 201).
 - **`VERSION_BYTE` rides `PROTO_VERSION` and nothing reminds you.** Bump it, or
   the client passes every test and is refused at the socket.
 - A new wire variant needs a postcard round-trip test.
@@ -275,6 +287,10 @@ rebase required), `cargo check --workspace --all-targets` silent, the touched
 crates' tests passing, `rustfmt --check` clean on everything touched, and **one
 complete thing per PR** — as many commits as you like, tidied before opening. If
 a check cannot be run, do not open it: say what blocked it.
+
+**Anything that touches the wire is a PR by rule, even when it is finished** —
+see "The wire": a `PROTO_VERSION`/`VERSION_BYTE` bump is one counter shared with
+F4NRM's sessions, and a PR is how a number is claimed without colliding.
 
 - **F4NRM's PRs are approved and merged without waiting** when they are sensible
   and merge cleanly (`gh pr merge <n> --merge --admin`): sensible means it does
