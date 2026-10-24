@@ -601,6 +601,11 @@ pub struct SdroxideApp {
     /// payload details.
     hfdl_filter: String,
     show_settings: bool,
+    /// Tool windows for the mode panels that can be pulled out of the main window.
+    show_dsc: bool,
+    show_navtex: bool,
+    show_aprs: bool,
+    show_wefax: bool,
     /// Scroll the Settings window back to its tab bar on the frame it opens.
     /// The window's scroll offset is egui memory, which outlives both the
     /// dialog and the process — without this, a restart shows wherever the
@@ -2069,6 +2074,10 @@ impl SdroxideApp {
             swl_report_pick: std::sync::Arc::new(std::sync::Mutex::new(None)),
             show_swl: false,
             show_listen: false,
+            show_dsc: false,
+            show_navtex: false,
+            show_aprs: false,
+            show_wefax: false,
             listen_history: false,
             listen_sel: None,
             listen_comment: String::new(),
