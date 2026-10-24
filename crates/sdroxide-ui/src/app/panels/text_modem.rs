@@ -1120,7 +1120,19 @@ impl SdroxideApp {
                         for v in PskCoded::in_family(cfg.psk_coded.family()) {
                             let sel = cfg.psk_coded == v;
                             let code = if v.fec() { "coded" } else { "no code" };
-                            let hint = format!(
+                            // **The four widest banks do not decode yet**, and the chip
+                            // says so rather than doing nothing when it is picked. The
+                            // fault is the multi-carrier front end's chain order, not the
+                            // recordings (journal, 2026-10-24); the narrow banks all read
+                            // their own recording.
+                            let wide = matches!(
+                                v,
+                                PskCoded::Psk500C4
+                                    | PskCoded::Psk1000C2
+                                    | PskCoded::Psk125C12
+                                    | PskCoded::Psk500Rc4
+                            );
+                            let mut hint = format!(
                                 "{:.1} baud, {} carrier{}, {code}, {:.0} Hz wide — receive only: \
                                  the coded PSK transmitter is not written",
                                 v.baud(),
@@ -1128,6 +1140,15 @@ impl SdroxideApp {
                                 if v.carriers() == 1 { "" } else { "s" },
                                 v.bandwidth_hz()
                             );
+                            if wide {
+                                hint.push_str(
+                                    "\n\n**This wide bank does not decode yet.** Its carriers \
+                                     are close enough together that the receiver's filter at \
+                                     the input rate cannot separate them; the narrower banks do \
+                                     read their own recordings. Nothing you hear here is lost — \
+                                     it is the front end, not the signal.",
+                                );
+                            }
                             if ui.selectable_label(sel, v.label()).on_hover_text(hint).clicked()
                                 && !sel
                             {

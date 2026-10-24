@@ -21,6 +21,33 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 (decision) — the wide banks are parked, and named where you meet them
+
+**Summary.** The four wide multi-carrier PSK modes are not going to be fixed for
+now, and the reason is written down where it matters. They are still in the
+picker, but their chips now say on the hover that they do not decode yet and why,
+and the manual's PSK section names all four and tells you to reach for a narrower
+bank instead. So nobody picks one, hears nothing, and blames the band.
+
+**Done.**
+- `panels/text_modem.rs`: the four wide chips carry the note — "this wide bank
+  does not decode yet … the narrower banks do read their own recordings".
+- Manual §3.3: a paragraph naming PSK125C12, PSK500C4, PSK500RC4, PSK1000C2 and
+  pointing at PSK250C6 / PSK500C2 for a wide signal.
+- `TODO.md` → **Parked, with the reason**, carrying the measurement, the ruled-out
+  theory, the gate to use, and the condition for un-parking (somebody hears one
+  on the air).
+- Non-wire: no `PROTO_VERSION`, no mode change, nothing to merge.
+
+**Not done / blocked.** The front-end rebuild itself, parked by the operator's
+decision on the advice given: four rare wide banks are not worth risking the
+twenty that work.
+
+**Next.** The remaining mode work is transmit for the receive-only set and
+RS_ID/CALL_ID; the rest of the unfinished list waits on recordings.
+
+---
+
 ## 2026-10-24 (next item) — the four wide PSK banks: measured, and the fix is a refactor
 
 **Summary.** The next item on the queue was the four wide multi-carrier PSK modes,

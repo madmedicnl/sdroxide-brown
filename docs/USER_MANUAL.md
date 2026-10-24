@@ -4539,6 +4539,17 @@ panel is a live **messaging area** instead of a QSO sequencer.
   never the same one as the **CLEAR** below the transmit box (that one stops
   what you are *sending*).
 
+**The coded families, and four banks that do not decode yet.** Beside BPSK/QPSK
+there is a row of **coded** PSK waveforms — `BPSK63F`, the single-carrier `R` set,
+and the multi-carrier `C`/`RC` banks — plus **8PSK** as a modulation choice. All
+of them are receive only. Twenty of the multi-carrier banks read their own
+recordings whole; **the four widest — PSK125C12, PSK500C4, PSK500RC4 and
+PSK1000C2 — do not decode at all**, and that is a fault in this end, not in the
+signal: their carriers sit close enough together that the receiver cannot separate
+them, and the fix is a rebuild of the multi-carrier front end (see the working
+notes). Their chips say so on the hover. Everything narrower works, so reach for
+PSK250C6 or PSK500C2 on a wide signal rather than one of those four.
+
 **Transmitting (type-ahead):**
 
 - Type your reply in the transmit box and press **TX** to key up. Text is sent as

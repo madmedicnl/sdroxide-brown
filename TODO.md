@@ -120,6 +120,15 @@ panel** with the Detachable settings page, the **decoded-text UDP feed**, the
 
 ## Parked, with the reason
 
+- **The four wide PSK banks** — PSK125C12, PSK500C4, PSK500RC4 and PSK1000C2 read
+  0 of 3 words where every narrower bank reads 3 of 3. **Measured 2026-10-24**:
+  sharpening the per-carrier filter changes nothing, so it is not transition
+  width; the reference decimates first and filters at the low rate, which is a
+  rebuild of the multi-carrier front end shared by all 24 banks (20 of them
+  working). Parked until somebody hears one of these on the air, and **named on
+  the chips and in the manual** so nobody picks one and thinks the band is dead.
+  Gate when it is done: `the_corpus_pskc_samples_are_measured`, those four off
+  0/3 with no regression.
 - **Antenna modelling tool** — branch `fork/antenna-tool`, a validated MoM solver
   (dipole, monopole over perfect ground, delta loop, Yagi). Next would be the
   source-between-terminals junction, real Fresnel ground and lumped loads. See
