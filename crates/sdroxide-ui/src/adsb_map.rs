@@ -465,7 +465,36 @@ fn nav_zoom(lon_span: f64) -> NavZoom {
     }
 }
 
+/// What the plain tooltip over a target says. Kept as it was before the map had
+/// a hover card, because the card is optional and this is what the map says
+/// without one.
+fn tooltip_text(a: &AdsbAircraft, home: Option<(f64, f64)>) -> String {
+    let mut tip = a.label();
+    if !a.callsign.is_empty() {
+        tip.push_str(&format!("  {}", a.hex()));
+    }
+    if let Some(cat) = &a.category {
+        tip.push_str(&format!("\n{cat}"));
+    }
+    tip.push_str(&format!("\n{} ft   {} kt", a.altitude_ft.unwrap_or(0), a.fmt_speed()));
+    if let Some(vr) = a.vertical_rate_fpm.filter(|v| v.abs() > 100) {
+        tip.push_str(&format!("\n{vr:+} ft/min"));
+    }
+    if let (Some(h), Some((lat, lon))) = (home, a.lat.zip(a.lon)) {
+        let km = sdroxide_types::distance_km(h, (lat, lon));
+        let bear = sdroxide_types::bearing_deg(h, (lat, lon));
+        tip.push_str(&format!("\n{km:.0} km   {bear:.0}°"));
+    }
+    if let Some(e) = &a.emergency {
+        tip.push_str(&format!("\n{e}"));
+    }
+    tip
+}
+
 /// Draw the map. Returns the aircraft clicked this frame, if any.
+///
+/// `hover_ui` draws the card shown over an aircraft; without it the plain text
+/// of [`tooltip_text`] is shown.
 pub fn show(
     ui: &mut Ui,
     state: &mut AdsbMapState,
@@ -477,6 +506,7 @@ pub fn show(
     style: sdroxide_types::MapStyle,
     max_h: f32,
     active_vfo: Vfo,
+    hover_ui: Option<&dyn Fn(&mut Ui, &AdsbAircraft)>,
 ) -> Option<MapTune> {
     let avail_w = ui.available_width();
     if avail_w < MIN_HEIGHT {
@@ -757,26 +787,15 @@ pub fn show(
     // ── interaction ──
     if let Some(i) = hover {
         let a = live[i];
-        let mut tip = a.label();
-        if !a.callsign.is_empty() {
-            tip.push_str(&format!("  {}", a.hex()));
+        // A card from the app when it has one; the plain text when it has not.
+        match hover_ui {
+            Some(card) => {
+                resp.clone().on_hover_ui(|ui| card(ui, a));
+            }
+            None => {
+                resp.clone().on_hover_text(tooltip_text(a, home));
+            }
         }
-        if let Some(cat) = &a.category {
-            tip.push_str(&format!("\n{cat}"));
-        }
-        tip.push_str(&format!("\n{} ft   {} kt", a.altitude_ft.unwrap_or(0), a.fmt_speed()));
-        if let Some(vr) = a.vertical_rate_fpm.filter(|v| v.abs() > 100) {
-            tip.push_str(&format!("\n{vr:+} ft/min"));
-        }
-        if let (Some(h), Some((lat, lon))) = (home, a.lat.zip(a.lon)) {
-            let km = sdroxide_types::distance_km(h, (lat, lon));
-            let bear = sdroxide_types::bearing_deg(h, (lat, lon));
-            tip.push_str(&format!("\n{km:.0} km   {bear:.0}°"));
-        }
-        if let Some(e) = &a.emergency {
-            tip.push_str(&format!("\n{e}"));
-        }
-        resp.clone().on_hover_text(tip);
         if resp.clicked() {
             state.selected = Some(a.icao);
         }
@@ -804,6 +823,34 @@ pub fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **The plain tooltip is what it always was.** The hover card replaces it
+    /// only where the app hands the map one; everywhere else, and for anything
+    /// the card does not cover, this text is the answer.
+    #[test]
+    fn the_plain_tooltip_says_what_it_always_said() {
+        let mut a = AdsbAircraft::new(0x4840D6, 100);
+        a.callsign = "KLM1234".into();
+        a.category = Some("heavy".into());
+        a.lat = Some(52.3);
+        a.lon = Some(4.8);
+        a.altitude_ft = Some(35_000);
+        a.ground_speed_kt = Some(450.0);
+        a.vertical_rate_fpm = Some(1800);
+        a.emergency = Some("general emergency".into());
+        let home = (52.0, 5.0);
+        let km = sdroxide_types::distance_km(home, (52.3, 4.8));
+        let bear = sdroxide_types::bearing_deg(home, (52.3, 4.8));
+        assert_eq!(
+            tooltip_text(&a, Some(home)),
+            format!(
+                "KLM1234  4840D6\nheavy\n35000 ft   450 kt\n+1800 ft/min\n{km:.0} km   {bear:.0}°\ngeneral emergency"
+            )
+        );
+        let mut b = AdsbAircraft::new(0x123456, 100);
+        b.vertical_rate_fpm = Some(50);
+        assert_eq!(tooltip_text(&b, Some(home)), "123456\n0 ft   --- kt");
+    }
 
     /// **A hover names the thing under the pointer**, in the words a chart
     /// would use: the abbreviation first for an airport, and for a navaid its

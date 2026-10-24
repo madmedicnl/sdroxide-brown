@@ -14,9 +14,9 @@
 //! The decoders re-send whole tables, so every ingest is idempotent: hearing the
 //! same message twice changes nothing.
 //!
-//! Read by the AIRCRAFT window's card list. The hover card (next step) will read
-//! the rest, hence the `dead_code` allowance.
-#![allow(dead_code)]
+//! Read by the AIRCRAFT window's card list and by the map's hover card
+//! ([`super::aircraft_hover`]), which only looks a card up by its address and
+//! never feeds the registry.
 
 use std::collections::HashMap;
 
@@ -277,6 +277,7 @@ impl AircraftRegistry {
     pub fn fallback_len(&self) -> usize {
         self.fallback.len()
     }
+    #[cfg(test)]
     pub fn linked_registrations(&self) -> usize {
         self.by_reg.len()
     }
