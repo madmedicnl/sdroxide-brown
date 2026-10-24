@@ -19,6 +19,24 @@ Anything still live has its own handover in this folder.
 
 ---
 
+## Aircraft online relay (2026-10-24)
+
+The first attempt let each client call adsbdb and Planespotters itself and was
+dropped: a browser cannot (CORS), a remote client would expose the operator's
+address to third parties, and Planespotters' terms forbid a server storing or
+re-hosting its images but allow the JSON to be cached 24 h. So the **station**
+asks, once per key, and clients ask the station. The relay returns the thumbnail
+URL unchanged with the credit and link; the image is loaded by the client.
+A server-side photo is a later step, behind a switch, and only with
+Planespotters' written agreement. The switch is an environment variable, not a
+`NetworkConfig` field, so there is no wire change. The route must be in
+`is_root_route` or a reverse proxy's path prefix is not stripped. Traps met: the
+server test crate cannot build in a sandbox without network (its dev-dependency
+pulls `sdroxide-rade`), and a blocking `ureq` sign-in on the server's own
+runtime hangs the test.
+
+---
+
 > ⚠️ **The paragraph below is wrong, and it is left as written because this is a
 > record.** The operator is **madmedicnl** (19DCG373), the maintainer of this
 > fork; **F4NRM is Kevin**, the collaborator and tester. The note that follows
