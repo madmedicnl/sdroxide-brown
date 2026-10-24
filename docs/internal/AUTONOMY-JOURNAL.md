@@ -21,6 +21,37 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-24 (later) — 8PSK: the instrument is sound, so the files are the fault
+
+**Summary.** The question from the entry below is answered. Built a synthetic
+8PSK of the right shape and measured it with the same instrument that reads the
+test files: the synthetic scores **0.99** where the files score 0.44–0.58. So the
+measurement is not what was wrong and neither is the width — **the four 8PSK test
+recordings do not contain a clean differential-8PSK constellation**, and no
+receiver written against them could have worked. The mode's slicer is proven on
+our own synthetic; what it needs now is one genuine recording, or being shipped as
+"proven synthetically" like the others.
+
+**Done.**
+- Synthetic 8PSK at 125 baud, symbols shaped by a 201-tap low-pass at 0.5 × baud
+  (the α≈0 shape the corpus's own −3 dB width implies), measured by the same
+  chain used on the corpus (mix, 300 Hz LPF, decimate to 8 sps, differential
+  phase): **8-fold concentration 0.99**, 2-fold 0.04.
+- The same chain on `samples/fldigi/8PSK125.wav`: 0.44–0.58 at every symbol
+  phase, collapsing onto 0°/180° — a closed eye, not an 8PSK.
+- Matched filtering (one-symbol box, raised cosine α = 0.35) does not help the
+  file: 0.33 and 0.35 against 0.47 unfiltered. It is not a filter-order fault.
+
+**Not done / blocked.** What the four files are, and whether our receiver reads
+the **shaped** synthetic (the next run: write it to a WAV and feed `PskRx` with
+`set_psk8(true)`; the existing test uses rectangular symbols and passes).
+
+**Next.** Run the shaped synthetic through the real receiver, then wire 8PSK as a
+mode on a branch — the wire change — with "proven synthetically, no working
+recording" in the manual, exactly as ALE and CIS-11 are stated.
+
+---
+
 ## 2026-10-24 — 8PSK: the recordings do not say what we thought
 
 **Summary.** No change in the program. The mode that has been stuck — the
