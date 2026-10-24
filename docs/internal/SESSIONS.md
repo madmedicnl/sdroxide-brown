@@ -219,6 +219,25 @@ Anything still live has its own handover in this folder.
 > the workflow are in "The standing queue and how to check it" below. A tag or a
 > nightly runs the full gate before it is cut — see "Cutting a release".
 
+## AIRCRAFT: the one exception to "works offline, no online" (2026-10-24)
+
+The operator waived the offline-only rule **for the AIRCRAFT window and nothing
+else** ("j'ai les droits et pour ce projet AIRCRAFT je peux contourner cette
+règle pour un résultat parfait"). What that means in practice:
+
+- **The radio comes first.** Every field that the signal carries (ICAO address,
+  callsign, position, altitude, speed, heading, registration and flight in ACARS,
+  the VDL2/HFDL ground-station data) is shown with no network at all.
+- **Anything from the internet is an extra, off until asked**, and its fields stay
+  empty offline. Never a field that only the internet can fill and the screen
+  needs.
+- **No API key, no account.** Keyless sources only; where a source asks for a
+  descriptive `User-Agent`, it carries the project's address.
+- The first planned source is planespotters' public photo endpoint: the
+  photographer's name visible with a link to the photo page, no storing or
+  re-hosting of images, a JSON cache of at most 24 hours.
+- This does not loosen the rule for any other panel.
+
 ## Session 2026-10-23: three UI fixes from the operator's own screenshots
 
 **The mode parameter row drew its chips on top of each other.** Reported from
