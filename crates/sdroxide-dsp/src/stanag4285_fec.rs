@@ -440,9 +440,20 @@ impl MessageFramer {
         if self.filled >= 31 {
             let m = (self.window as u32).count_ones() as u8;
             // The window is the newest 32 bits with the newest at bit 0.
+            // **Both bit orders, because ours was never validated.** The SOM and
+            // EOM patterns are this crate's own addition — the independent s4285
+            // implementation stops at the decoded bit stream and does no framing at
+            // all — so if the annex sends the pattern least-significant bit first,
+            // a correct trellis would never frame a message here and the failure
+            // would look exactly like "no code". Both orders are accepted while
+            // that question is open; whichever one frames a message settles it.
             let score = if self.filled >= 32 {
                 let w = self.window;
-                (0..32).filter(|k| ((w >> (31 - k)) & 1) == ((SOM >> (31 - k)) & 1)).count() as u8
+                let against = |pat: u32| {
+                    (0..32).filter(|k| ((w >> (31 - k)) & 1) == ((pat >> (31 - k)) & 1)).count()
+                        as u8
+                };
+                against(SOM).max(against(SOM.reverse_bits()))
             } else {
                 m.min(0)
             };
@@ -454,7 +465,7 @@ impl MessageFramer {
             self.bits.push(bit);
             self.window = (self.window << 1) | bit as u32;
             self.since += 1;
-            if self.window == EOM {
+            if self.window == EOM || self.window == EOM.reverse_bits() {
                 self.collecting = false;
                 self.closed = true;
                 // The EOM itself is not message data.
@@ -479,7 +490,7 @@ impl MessageFramer {
             self.window = (self.window << 1) | bit as u32;
             self.filled += 1;
             self.since += 1;
-            if self.filled >= 32 && self.window == SOM {
+            if self.filled >= 32 && (self.window == SOM || self.window == SOM.reverse_bits()) {
                 // Drop the SOM itself: a message starts after it.
                 self.collecting = true;
                 self.closed = false;

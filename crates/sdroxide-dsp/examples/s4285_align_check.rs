@@ -38,19 +38,6 @@ fn read_wav(path: &str) -> (Vec<f32>, f64) {
     (audio, spec.sample_rate as f64)
 }
 
-fn shuffled(input: &[f32], seed: u32) -> Vec<f32> {
-    let mut out = input.to_vec();
-    let mut s = seed;
-    for i in (1..out.len()).rev() {
-        s ^= s << 13;
-        s ^= s >> 17;
-        s ^= s << 5;
-        let j = (s as usize) % (i + 1);
-        out.swap(i, j);
-    }
-    out
-}
-
 fn main() {
     let a: Vec<String> = std::env::args().skip(1).collect();
     if a.is_empty() {
@@ -100,26 +87,40 @@ fn main() {
                     }
                     let body = &out[flush..];
                     let pairs = fec::average_pairs(body, rate.repeat());
-                    let (_, metric) = fec::viterbi_decode_with_metric(&pairs);
-                    let null = [shuffled(&pairs, 0x1234_5678), shuffled(&pairs, 0x9E37_79B9)]
-                        .iter()
-                        .map(|s| fec::viterbi_decode_with_metric(s).1)
-                        .fold(f32::NEG_INFINITY, f32::max);
-                    let ratio = if null > 0.0 { metric / null } else { 0.0 };
-                    best.push((
-                        ratio,
-                        format!(
-                            "{} j{j} sign {sign:+.0} {} commutator phase {phase}",
-                            rate.label(),
-                            style.label()
-                        ),
-                    ));
+                    // **The judge is a framed message**, not the metric ratio: that
+                    // ratio reads 1.02x on a signal the receiver decodes, so it
+                    // cannot separate signal from noise. A message either closes or
+                    // it does not.
+                    let bits = fec::viterbi_decode(&pairs);
+                    let mut fr = fec::MessageFramer::new(rate);
+                    let mut found = 0usize;
+                    let mut first_len = 0usize;
+                    for b in bits {
+                        if let Some(m) = fr.push(b) {
+                            found += 1;
+                            first_len = m.bits.len();
+                            if m.closed {
+                                break;
+                            }
+                        }
+                    }
+                    if found > 0 {
+                        best.push((
+                            found as f32,
+                            format!(
+                                "{} j{j} sign {sign:+.0} {} commutator phase {phase} -> {found} message(s), first {} bits, closed",
+                                rate.label(),
+                                style.label(),
+                                first_len
+                            ),
+                        ));
+                    }
                 }
             }
         }
     }
     best.sort_by(|x, y| y.0.partial_cmp(&x.0).unwrap_or(std::cmp::Ordering::Equal));
-    println!("  best twelve of {} branches (a ratio near 1 is no coding):", best.len());
+    println!("  {} branches framed a message:", best.len());
     for (ratio, label) in best.iter().take(12) {
         println!("  {ratio:5.2}x  {label}");
     }

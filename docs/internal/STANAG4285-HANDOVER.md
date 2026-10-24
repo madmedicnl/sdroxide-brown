@@ -1008,6 +1008,33 @@ diagnostics of the statistic, not of the mode.
   wander, which is ~8.5 % raw symbol error. Rate 1/2 corrects that only marginally.
 - **No message is framed at any rate**, either sign, with or without the equaliser.
 
+## The decisive test bed is not the tape: a capture with references at 0.93 frames nothing
+
+`6348.000kHz-20261022-044640Z.wav` demodulates almost perfectly here — reference
+blocks **0.932 / 0.931 / 0.934**, 335 frames — and its **data** constellation is
+**0.728 / 0.387 / 0.189** with all eight phases in use. So the references are read
+out of the same descrambled array, at the same instants, as the data: descrambling
+and timing are demonstrably right, and the data are what is wrong. No message frames
+on it either, at any rate, either sign, all four commutator wirings, all 32
+commutator start phases, or with the DFE.
+
+That moves the work off Mark's marginal recording and onto a strong one, and it says
+plainly that the remaining fault is in the **coded chain**, not in the signal or the
+demodulator: a signal that collapses its references at 0.93 should decode rate 1/2
+without difficulty.
+
+**Framing tries both bit orders now.** The SOM/EOM patterns are this crate's own
+addition — the independent s4285 implementation stops at the decoded bit stream and
+does no framing — so a reversed bit order would look exactly like "no code". Both
+orders are accepted until one frames a message.
+
+**The next measurement is a differential one:** build the independent
+`luwangg/signal-analysis` decoder (GPL, C++/octave) and run it over
+`6348.000kHz-20261022-044640Z.wav`, then compare its decoded bit stream with ours
+symbol for symbol. Anything that differs — the data-symbol ordering, the bit order,
+the interleaver's bit-versus-symbol question — is then a fact rather than a
+hypothesis, and it is the comparison this fork has been missing all along.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run
