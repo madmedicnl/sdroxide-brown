@@ -9237,6 +9237,20 @@ pub(in crate::app) fn band_mode_menu(
     match *tab {
         BandMenuTab::Operate => {
             ui.add_space(6.0);
+            crate::chrome::menu_caption(ui, "Mode");
+            // Rows of five — the operator's ask: a trimmed, left-aligned grid
+            // reads better than a ragged wrap, and five is the count that fits a
+            // two-word label without stretching it across the popup.
+            let operate = proven_modes(&OPERATE_MODES);
+            mode_chip_grid(ui, mode, &operate, band, state, false, cmds);
+            ui.add_space(6.0);
+            crate::chrome::menu_caption(ui, "Digital");
+            let digital = proven_modes(&Mode::DIGITAL);
+            mode_chip_grid(ui, mode, &digital, band, state, false, cmds);
+            ui.add_space(6.0);
+            crate::chrome::menu_caption(ui, "Wideband");
+            wideband_chip_grid(ui, mode, band, state, false, show_ism, cmds);
+            ui.add_space(6.0);
             crate::chrome::menu_caption(ui, "11M/CB");
             // The channel plans, in the same aligned grid as the modes. Which
             // plan the dial reads in: the 11 m citizens' band plans and the
@@ -9272,20 +9286,6 @@ pub(in crate::app) fn band_mode_menu(
                     }
                 });
             }
-            ui.add_space(6.0);
-            crate::chrome::menu_caption(ui, "Mode");
-            // Rows of five — the operator's ask: a trimmed, left-aligned grid
-            // reads better than a ragged wrap, and five is the count that fits a
-            // two-word label without stretching it across the popup.
-            let operate = proven_modes(&OPERATE_MODES);
-            mode_chip_grid(ui, mode, &operate, band, state, false, cmds);
-            ui.add_space(6.0);
-            crate::chrome::menu_caption(ui, "Digital");
-            let digital = proven_modes(&Mode::DIGITAL);
-            mode_chip_grid(ui, mode, &digital, band, state, false, cmds);
-            ui.add_space(6.0);
-            crate::chrome::menu_caption(ui, "Wideband");
-            wideband_chip_grid(ui, mode, band, state, false, show_ism, cmds);
             ui.add_space(6.0);
             // Last, and named for what it is. A tester deserves to know that a
             // failure here is a known state rather than something they broke.
