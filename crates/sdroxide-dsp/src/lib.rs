@@ -7,6 +7,7 @@ mod ale_tables;
 pub mod ardop;
 mod binaural;
 mod cessb;
+pub mod cis11;
 mod ctcss;
 mod cw;
 mod ddc;

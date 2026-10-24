@@ -75,7 +75,7 @@ def main():
             if not os.path.exists(tmp):
                 print(f"{hz:>9} kHz: no capture", flush=True)
                 continue
-            hits = score(tmp)
+            hits = [h for h in score(tmp) if 500.0 <= h[1] <= 3000.0]
             if hits:
                 stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
                 keep = os.path.join(OUT, f"hit-{hz}kHz-{stamp}.f32")

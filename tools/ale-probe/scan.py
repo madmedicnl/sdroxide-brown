@@ -58,10 +58,34 @@ for i in range(frames):
     off = (best[i] + W / 2) * band  # centre of the window, Hz above the dial
     cands.append((i * hop / rate, off, float(peak[i])))
 
+# **A burst, not a broadcast.** The width test alone is satisfied by any strong
+# wide signal that lasts — a shortwave broadcast is 5 kHz of flat energy for the
+# whole capture, and it tripped this detector on the first watch (with the
+# candidate frames covering 99 % of the file). ALE is an FSK burst: it appears,
+# runs a few seconds and goes. So count, per 1 kHz offset bucket, how many frames
+# scored at all, and drop any bucket that is present for more than half the
+# capture.
+bucket_frames = {}
+for i in range(frames):
+    bucket_frames[int((best[i] + W / 2) * band) // 1000] = (
+        bucket_frames.get(int((best[i] + W / 2) * band) // 1000, 0) + 1
+    )
+if frames:
+    busy = {k for k, n in bucket_frames.items() if n > frames * 0.5}
+
 # Group by (time within 15 s, offset within 3 kHz) and keep the strongest.
 cands.sort(key=lambda c: -c[2])
 picked = []
 for t, off, s in cands:
+    # **The channel, not the band.** The capture is centred on a known ALE
+    # channel and the tones sit 750-2500 Hz above the suppressed carrier, so a
+    # candidate anywhere else in the 192 kHz slice is a broadcaster or a carrier
+    # that happens to be wide. Every false positive on the first watch was 18-74
+    # kHz away.
+    if not (500.0 <= off <= 3000.0):
+        continue
+    if int(off) // 1000 in busy:
+        continue  # continuous: a broadcast or a carrier, not a burst
     if any(abs(t - t2) < 15.0 and abs(off - o2) < 3000.0 for t2, o2, _ in picked):
         continue
     picked.append((t, off, s))
@@ -69,6 +93,8 @@ for t, off, s in cands:
         break
 
 print(f"{frames} frames, {frames * hop / rate:.1f} s scanned")
+if busy:
+    print(f"  {len(busy)} offset bucket(s) were continuous (broadcast/carrier) and are ignored")
 for t, off, s in sorted(picked):
     print(f"  t={t:7.1f} s  offset={off:8.0f} Hz  score={s:5.1f} dB")
 if not picked:
