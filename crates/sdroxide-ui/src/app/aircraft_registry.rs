@@ -14,7 +14,8 @@
 //! The decoders re-send whole tables, so every ingest is idempotent: hearing the
 //! same message twice changes nothing.
 //!
-//! Read by the hover card (next step), hence the `dead_code` allowance.
+//! Read by the AIRCRAFT window's card list. The hover card (next step) will read
+//! the rest, hence the `dead_code` allowance.
 #![allow(dead_code)]
 
 use std::collections::HashMap;
@@ -261,6 +262,14 @@ impl AircraftRegistry {
     }
     pub fn fallback_card(&self, key: &FallbackKey) -> Option<&AircraftCard> {
         self.fallback.get(key)
+    }
+    /// Every ICAO card, in no particular order.
+    pub fn entries(&self) -> impl Iterator<Item = (u32, &AircraftCard)> {
+        self.cards.iter().map(|(k, c)| (*k, c))
+    }
+    /// Every HFDL card that never gave an address, in no particular order.
+    pub fn fallback_entries(&self) -> impl Iterator<Item = (&FallbackKey, &AircraftCard)> {
+        self.fallback.iter()
     }
     pub fn len(&self) -> usize {
         self.cards.len()

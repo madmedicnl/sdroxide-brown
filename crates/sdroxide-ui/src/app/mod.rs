@@ -35,6 +35,7 @@ pub(in crate::app) mod drm;
 pub(in crate::app) mod duo_power;
 pub(in crate::app) mod enigma;
 pub(in crate::app) mod aircraft;
+pub(in crate::app) mod aircraft_card;
 pub(in crate::app) mod aircraft_registry;
 pub(in crate::app) mod extras;
 pub(in crate::app) mod frame;
@@ -541,6 +542,10 @@ pub struct SdroxideApp {
     aircraft_was_open: bool,
     /// The mode whose map the AIRCRAFT window shows when the radio is on another.
     aircraft_view: sdroxide_types::Mode,
+    /// The AIRCRAFT window shows the merged aircraft cards instead of a map, and
+    /// which card is open there.
+    aircraft_cards: bool,
+    aircraft_card_sel: Option<aircraft_card::CardKey>,
     /// The RDS window. Opened from the RDS chip in the receive menu, which only
     /// appears on WFM.
     show_rds: bool,
@@ -2004,6 +2009,8 @@ impl SdroxideApp {
             aircraft_epoch: 0,
             aircraft_was_open: false,
             aircraft_view: sdroxide_types::Mode::Adsb,
+            aircraft_cards: false,
+            aircraft_card_sel: None,
             show_rds: false,
             show_drm: false,
             drm: None,
