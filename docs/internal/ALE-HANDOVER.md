@@ -215,9 +215,13 @@ shape, `cut.py` mixes a candidate down to the 8 kHz the decoder reads), so the
 next attempt is a command rather than a rewrite.
 
 **The ask.** The manual has a **§3.29 ALE** and a mode-table row that say plainly
-that the decode is not proven on the air, with the frequencies to try (11175 /
-8992 / 15016 kHz USB, or the amateur channels near 14109.5 kHz) and what to send:
-a minute of WAV, any rate, the dial on the channel, USB selected. The changelog's
+that the decode is not proven on the air, with the channels and what to send: a
+minute of WAV, any rate, the dial on the channel, USB selected. The predictable
+traffic is the amateur HFLINK network's **hourly sounding** on **3596.0,
+7102.0, 10145.5, 14109.0, 18106.0, 21096.0, 24926.0 and 28146.0 kHz** (the
+HFUnderground ALE wiki has the whole table, including the voice/data channels
+and the military ones); that page also confirms the **1625 Hz audio centre**,
+which is what `tools/ale-probe/cut.py` mixes to. The changelog's
 *Needs feedback* section carries the same request. **That is the whole of what
 stands between this mode and done** — the FEC, the framing, the tone map and the
 front end are built and measured.

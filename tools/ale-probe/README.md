@@ -22,8 +22,16 @@ cd ../rsp1-capture && cargo build --release
 - **Gain 25.** At 40 the capture clipped (peak 0.999) on 11 MHz in the morning;
   the burst is not the loudest thing in the slice, so leave it headroom.
 - Close sdroxide first: the SDRplay API is single-client.
-- Channels worth trying, USB: **11175, 8992, 15016 kHz** (military/government
-  networks) and the amateur 2G channels around **14109.5 kHz**.
+- Channels worth trying, USB. The amateur HFLINK channels sound about **once an
+  hour per channel**, which is the predictable traffic there is: **3596.0,
+  7102.0, 10145.5, 14109.0, 18106.0, 21096.0, 24926.0, 28146.0 kHz** (data and
+  sounding), with voice/data channels beside them (3791.0, 7185.5, 14346.0,
+  18117.5, 21432.5, 24932.0, 28312.5). Military/government networks use ALE on
+  channels such as 11175, 8992 and 15016 kHz, without a published schedule.
+- A 192 kHz slice covers two neighbouring channels where they are close: 7102.0
+  and 7185.5, 18106.0 and 18117.5, 24926.0 and 24932.0, 28146.0 and 28312.5.
+- The **audio centre is 1625 Hz** for ALE's text and data, which is exactly the
+  block centre `cut.py` assumes.
 
 ## 2. Scan for the shape
 

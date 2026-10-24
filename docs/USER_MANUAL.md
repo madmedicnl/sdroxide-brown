@@ -7086,13 +7086,31 @@ an unattended watch leaves a record.
 
 **What we need from you, if you can hear one.** A recording of a real ALE burst
 is the one thing that would finish this mode, and it is easy to make: tune
-**USB** to any 2G ALE channel with a station on it and record a minute with the
-program's own recorder (or any WAV). Frequencies worth trying are **11175,
-8992 and 15016 kHz** on the military/government networks, or the amateur 2G
-channels around **14109.5 kHz** where HFLINK activity runs. Any sample rate and
-any level will do — the dial must simply be on the channel with USB selected,
-and the file sent as it is. A known-good recording turns "wired" into
-"working", and it is the only thing missing.
+**USB** to a 2G ALE channel with a station on it and record a minute with the
+program's own recorder (or any WAV). Any sample rate and any level will do — the
+dial must simply be on the channel with USB selected, and the file sent as it is.
+
+The amateur channels are the predictable ones, because they carry scheduled
+**sounding** (the station's automatic identification) about once an hour per
+channel. These are the HFLINK open-network channels, all **USB**, with the
+primary data/sounding ones first:
+
+| kHz | use | | kHz | use |
+|---|---|---|---|---|
+| **3596.0** | data, sounding | | 10145.5 | data, sounding |
+| 3791.0 | voice | | **14109.0** | data, sounding |
+| 3996.0 | voice | | 14346.0 | voice |
+| 5357.0 | voice/text | | **18106.0** | data, sounding |
+| 5371.5 | voice | | 18117.5 | voice/data |
+| **7102.0** | data, sounding | | 21096.0 | data, sounding |
+| 7185.5 | voice | | 21432.5 | voice |
+| 7296.0 | voice | | 24926.0 | data, sounding |
+| | | | 28146.0 | data, sounding |
+| | | | 28312.5 | voice/data |
+
+Military and government networks use ALE too, on channels such as **11175, 8992
+and 15016 kHz**, but their traffic is not on a published schedule. A known-good
+recording turns "wired" into "working", and it is the only thing missing.
 
 ## 4. Skimmers
 

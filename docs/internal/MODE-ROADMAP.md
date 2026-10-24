@@ -789,6 +789,46 @@ an FM broadcast, and our NFM/WSM path would have to carry it) · `NDB` and `QRSS
 **Which of these is cheap is in the tables above**; this page exists so the
 count is honest and nothing gets quietly dropped.
 
+## Reference catalogues worth having open
+
+Two links the operator sent on 2026-10-24, both useful and neither a licence to
+copy code.
+
+**The HFUnderground ALE wiki** — <https://www.hfunderground.com/wiki/index.php/ALE>.
+The amateur HFLINK channel table (3596.0, 7102.0, 10145.5, 14109.0, 18106.0,
+21096.0, 24926.0, 28146.0 kHz for data and sounding, with the voice channels
+beside them), the **hourly sounding** interval that makes those the predictable
+traffic, the 22 s optimum call length, and the **1625 Hz audio centre** that
+`tools/ale-probe/cut.py` already assumes. That is what turned ALE's recording ask
+from a guess into a table.
+
+**Shoc's standard-decoder catalogue** — <https://cartoonman.github.io/Shoc/>.
+~70 HF and VHF/UHF modes, one page each, with the parameters a decoder needs —
+baud, shifts, alphabet, framing. It is the best single index of "modes we do not
+carry" we have found, and it lines up with the list below: `CIS-11/12/14/36/50`,
+`ARQ-E/E3/N`, `FEC-A`, `SITOR-A/B`, `TWINPLEX`, `Piccolo`, `Coquelet`,
+`Clover II/2000`, `PACTOR I–III`, `HNG-FEC`, `RUM-FEC`, `POL-ARQ`, `SWED-ARQ`,
+`MIL-STD-188-110B 16-tone / 39-tone`, `STANAG 4285/4415/4481/4529/4539/5065`,
+`LINK-11 CLEW/SLEW`, `ALE-2G/3G/400`, plus the VHF side (`POCSAG`, `FLEX`,
+`TETRA`, `NXDN`, `MOBITEX`, `MPT1327`).
+
+Two rules for using it:
+
+- **A parameter catalogue is a specification, not source code.** Its "premium"
+  pages describe modes a commercial product decodes; we read the published
+  parameters and write our own implementation, as with STANAG 4285 and the
+  standard it came from. No code, no tables lifted.
+- **Check the patent before building, not after.** `PACTOR` is SCS's, and the
+  DMR/AMBE+2 case is already settled (US 8,359,197, until 2028-05-20 — see
+  `AGENTS.md`). The CIS and ARQ families are the safe end: decades old,
+  published in the utility-listening literature.
+
+What it points at first, for this fork's audience: **CIS-11** (the Russian
+military FSK mode that dominates 4–18 MHz utility listening, and a natural after
+ALE), then **MIL-STD-188-110 16-tone/39-tone** (which shares the serial-tone DSP
+already built for STANAG 4285), then **ARQ-E/E3** for the utilities, and
+**ALE-3G** only after 2G decodes a real station.
+
 ## A suggested order for a few days
 
 The point of this order is that each step makes the next cheaper, and the first
