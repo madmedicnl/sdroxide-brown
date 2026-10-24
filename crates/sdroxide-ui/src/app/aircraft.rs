@@ -78,7 +78,7 @@ fn chip(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
 
 /// The badge in front of a line: green for the radio, blue for the relay, and
 /// nothing for a gap, whose "—" says it.
-fn badge_chip(ui: &mut egui::Ui, badge: Badge) {
+pub(in crate::app) fn badge_chip(ui: &mut egui::Ui, badge: Badge) {
     match badge {
         Badge::Radio => chip(ui, "radio", RADIO_GREEN),
         Badge::Online => chip(ui, "online", ONLINE_BLUE),
@@ -89,7 +89,7 @@ fn badge_chip(ui: &mut egui::Ui, badge: Badge) {
 }
 
 /// The badge at the top of the card: where its data comes from as a whole.
-fn provenance_chip(ui: &mut egui::Ui, p: Provenance) {
+pub(in crate::app) fn provenance_chip(ui: &mut egui::Ui, p: Provenance) {
     match p {
         Provenance::Radio => chip(ui, p.label(), RADIO_GREEN),
         Provenance::RadioOnline | Provenance::Online => chip(ui, p.label(), ONLINE_BLUE),

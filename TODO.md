@@ -5,8 +5,9 @@ on the repo. Last updated **2026-10-24** by madmedicnl's agent.
 
 State: `main` at crate **2.1.0**, `PROTO_VERSION` **243** (`VERSION_BYTE`
 `0x3F`) — 242 was 8PSK and 243 voice hunting, both merged on 2026-10-24, and
-**one PR is open** (aircraft online, PR B). Latest release **v2.1.0.2_brown** (with
-**v2.1.0.2.1_brown** as the current pre-release), five open issues. The rules are
+the aircraft online work (PR A and PR B) is merged and the hover card is next to
+be read. Latest release **v2.1.0.2_brown** (with **v2.1.0.2.1_brown** as the
+current pre-release), five open issues. The rules are
 in [`AGENTS.md`](AGENTS.md); the history is in
 [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
 
@@ -28,10 +29,15 @@ maintainer's queue there, not a promise.
    straight to `main`. **RSP1 is not on the list** (the operator struck it off on
    2026-10-24: it is the bench's receiver and his only wideband one).
 
-0b. **Aircraft online info, PR B — open for review.** The clients read the relay
-   of PR A; see *Recently done*. Left: a live run against a station with the relay
-   on, adsbdb and Planespotters answering, and a look at whether the CDN lets a
-   browser load the thumbnail. The screen is F4NRM's to look at. Asked for by the
+0b. **Aircraft online info — merged (PR A relay, PR B clients).** Left: a live run
+   against a station with the relay on, adsbdb and Planespotters answering, and a
+   look at whether the CDN lets a browser load the thumbnail. The screen is
+   F4NRM's to look at. Asked for by the operator.
+
+0c. **Aircraft hover card — open for review.** Resting the pointer on an aircraft on
+   the map shows a compact card: the radio's lines first (green), then the online
+   ones the open card has already fetched (blue), the badge at the top, the
+   picture only if it is already in memory. It asks for nothing. Asked for by the
    operator.
 
 1. **The mode work — the live queue, and it has its own brief.**
@@ -211,6 +217,16 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **Aircraft hover card** — the map's tooltip over an aircraft is now a compact
+  card: ICAO, flight, registration, position, altitude, speed, track, range and
+  bearing, vertical rate and any emergency, each with its source and age, then
+  type, operator, origin and destination when the AIRCRAFT window's card has
+  already fetched them. Green "radio" and blue "online" badges, the same badge
+  at the top, a grey "—" with its reason for a gap, the Planespotters credit
+  always, the picture only if the card already loaded it. **It asks for nothing**
+  (no request, no download), keeps nothing in the browser, and clips every value.
+  Without the card the old text is shown unchanged. Wire-neutral. **Not looked at
+  on a screen**: the layout is measured, not seen.
 - **Aircraft online clients (PR B)** — the AIRCRAFT window's Cards view now asks
   its own station's `GET /aircraft-info/{icao}` (web, Chrome, native remote; the
   native local engine has no station and says so). Green "radio" and blue

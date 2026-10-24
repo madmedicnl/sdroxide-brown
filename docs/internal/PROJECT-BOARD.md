@@ -74,9 +74,11 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
 
 ## Open (In Progress)
 
-- **Aircraft online info.** PR A (the optional server relay, off by default) is
-  merged; PR B (the clients and their badges) is open for review. Still to do:
-  a live run against a real station and the real services.
+- **Aircraft online info.** PR A (the optional server relay, off by default) and
+  PR B (the clients and their badges) are merged. The hover card over an aircraft
+  on the map is open for review; it reads what the card has already fetched and
+  asks for nothing. Still to do: a live run against a real station and the real
+  services, and a look at the hover card on a screen.
 - **The mode work is the queue.** [`MODE-PHASE-4-PROMPT.md`](MODE-PHASE-4-PROMPT.md)
   — finish the modes, TX for everything fldigi can transmit, vendor when the port
   and the bench are exhausted. Journal and measurements:
