@@ -620,6 +620,7 @@ pub struct SdroxideApp {
     show_rf_paint: bool,
     show_image: bool,
     last_mode_for_tools: Option<sdroxide_types::Mode>,
+    prev_tool_windows_mask: u64,
     /// Scroll the Settings window back to its tab bar on the frame it opens.
     /// The window's scroll offset is egui memory, which outlives both the
     /// dialog and the process — without this, a restart shows wherever the
@@ -2111,6 +2112,7 @@ impl SdroxideApp {
             show_rf_paint: false,
             show_image: false,
             last_mode_for_tools: None,
+            prev_tool_windows_mask: 0,
             listen_history: false,
             listen_sel: None,
             listen_comment: String::new(),
