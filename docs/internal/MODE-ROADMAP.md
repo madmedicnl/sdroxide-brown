@@ -803,14 +803,13 @@ traffic, the 22 s optimum call length, and the **1625 Hz audio centre** that
 from a guess into a table.
 
 **Shoc's standard-decoder catalogue** — <https://cartoonman.github.io/Shoc/>.
-~70 HF and VHF/UHF modes, one page each, with the parameters a decoder needs —
-baud, shifts, alphabet, framing. It is the best single index of "modes we do not
-carry" we have found, and it lines up with the list below: `CIS-11/12/14/36/50`,
-`ARQ-E/E3/N`, `FEC-A`, `SITOR-A/B`, `TWINPLEX`, `Piccolo`, `Coquelet`,
-`Clover II/2000`, `PACTOR I–III`, `HNG-FEC`, `RUM-FEC`, `POL-ARQ`, `SWED-ARQ`,
-`MIL-STD-188-110B 16-tone / 39-tone`, `STANAG 4285/4415/4481/4529/4539/5065`,
-`LINK-11 CLEW/SLEW`, `ALE-2G/3G/400`, plus the VHF side (`POCSAG`, `FLEX`,
-`TETRA`, `NXDN`, `MOBITEX`, `MPT1327`).
+117 HF and VHF/UHF modes, one page each, with the parameters a decoder needs —
+modulation, tone count, shift, baud, error correction and alphabet — and a
+spectrogram of every one. It is the best single index of "modes we do not carry"
+we have found, and **it is indexed for us in
+[`SHOC-MODES.md`](SHOC-MODES.md)**: the whole catalogue as one table, generated
+by `tools/shoc-index/fetch.py`, with a link to each page for the picture and the
+prose. Read that file first; this paragraph is the summary of what it points at.
 
 Two rules for using it:
 

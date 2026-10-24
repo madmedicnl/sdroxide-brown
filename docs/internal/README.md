@@ -16,6 +16,7 @@ queue is [`../../TODO.md`](../../TODO.md).
 | `MODE-PHASE-4-PROMPT.md` | The live brief for the mode work: finish the modes, give them a voice. |
 | `MODE-PROGRESS.md` | The mode journal, one line per mode, with the measurements. |
 | `MODE-ROADMAP.md` | The mode queue and the reasoning behind its order. |
+| `SHOC-MODES.md` | The Shoc catalogue as a parameter index: 117 modes we do not carry, with their numbers and a link. |
 | `UPSTREAM-PICKS.md` | Which upstream work was taken by hand this phase, and why. |
 | `BRICK2-HANDOVER.md` | The two Brick2 reports, what upstream had, and what is left. |
 | `ROADMAP.md` | The listener side's long list. |
