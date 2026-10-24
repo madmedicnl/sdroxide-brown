@@ -35,18 +35,16 @@ maintainer's queue there, not a promise.
    exhausted**. [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md) is the
    journal and the measurements; the five-column mode table at the end of the
    brief is the deliverable.
-   - **STANAG 4285**: the tape is in hand (FUF 13031.2 kHz, 23 Oct, known text)
-     and the receiver locks it, but the payload stays unread. **Measured
-     2026-10-24**: the audio band is not the fault (the coded chain decodes
-     through 800–3000 Hz and narrower — a test now pins it), and neither is the
-     tuning, the mono mix or the sideband. The data block concentration
-     (0.31/0.28/0.27/0.19) says the smear is **inside a 32-symbol block**, i.e.
-     delay spread of a symbol or more — so the next step is a
-     **fractionally-spaced decision-feedback equaliser**, test-first on synthetic
-     two-path channels. See
-     [`STANAG4285-HANDOVER.md`](docs/internal/STANAG4285-HANDOVER.md), "the audio
-     band is not the fault". A second capture on a quiet path still wants the
-     bench.
+   - **STANAG 4285 is parked on the bench**: the tape is in hand (FUF 13031.2 kHz,
+     23 Oct) and everything up to the payload reads, but the tape is **about 4 dB
+     in band** — measured three ways that agree (the least-squares residual over
+     the known sync, the data constellation 0.35, the reference blocks 0.65). A
+     4285 needs 10 dB and no equaliser closes 6 dB. **What it needs is a stronger
+     capture**: the tape on a quieter path, a better antenna for 13 MHz, or more
+     RF gain. What the session added and keeps: the offset refined against the
+     known sync (+92 → +1.5 Hz on the tape, folded sync 0.78 → 0.96), timing taken
+     from the sync, and an equaliser that decodes a two-path channel end to end.
+     See [`STANAG4285-HANDOVER.md`](docs/internal/STANAG4285-HANDOVER.md).
    - What is left is mostly **measurement**, not code: THOR25/THOR44 and a
      second MFSK8 recording, a known-good FSQ recording, a BPSK1000 capture for
      the lock-time question, an ARDOP recording off air, and a THOR/DominoEX
