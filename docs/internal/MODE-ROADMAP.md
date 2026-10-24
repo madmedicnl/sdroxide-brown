@@ -851,6 +851,31 @@ with our own decoder under any arrangement. **A recording is needed before the
 code is written**, the same lesson ALE cost us: the parameters scope it, the air
 defines it.
 
+**Measured from Sigidwiki's two recordings** (`CIS-11IDLE.mp3`, `CIS-11TFC.mp3`,
+kept locally as every recording here is, and not in the tree), 2026-10-24:
+
+| measurement | value | how |
+|---|---|---|
+| tones | **773 and 1276 Hz** | spectrum of the whole traffic file |
+| shift | **≈ 503 Hz** | difference of the two peaks — **Shoc's 500 wins**; Sigidwiki's 400 is another variant |
+| bit rate | **exactly 100 Bd** | 2190 bits in 21.9 s |
+| character period | **11 bits** | bit-stream self-similarity 0.949 at 11, harmonics at 22 and 33; the discriminator's spectrum is all harmonics of 9.1 Hz = 100/11 |
+| idle pattern | a fixed **11-bit word, `11010011000`**, repeated | one rotation splits as `00110 00110 1` — a 5-bit character, its repeat, and a parity bit |
+| traffic | **no constant bit** in any position mod 11 (ones-fraction 0.27–0.43) | so no framing bit is visible in the traffic, and the halves of each 11-bit group agree only 5 % of the time |
+
+So the character is **11 bits at 100 Bd = 9.09 characters/s**, which neither
+source states, and the "5 data + parity" description does not fit: 11 bits is
+5 + 5 + 1, i.e. **a character sent twice with a parity bit**, which the idle
+pattern shows clearly and the encrypted traffic cannot confirm. That is the one
+thing left to settle before the code, and it needs a **clear** transmission —
+Russian meteorological traffic is sometimes sent in clear M2 Cyrillic — or a
+reference decoder to compare against. Everything else is measured: 100 Bd,
+503 Hz shift, the 11-bit character and the idle word.
+
+One trap for whoever builds it: a round-trip test against our own encoder would
+pass under *any* of these arrangements, which is the mistake ALE is still paying
+for. The idle recording is the oracle; the traffic is not.
+
 ## A suggested order for a few days
 
 The point of this order is that each step makes the next cheaper, and the first
