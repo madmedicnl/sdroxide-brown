@@ -37,21 +37,35 @@ this fork has had.
 
 Both are wire-neutral: no `PROTO_VERSION` bump, no new field, no `Command`.
 
+Plus the one-switch-per-radio fix below, which is the generic `swap_iq` folded
+into the same rule: `Backend::inverts_iq_itself`, `RadioConfig::swaps_iq`, the
+engine reading it, and the Radio settings page drawing the checkbox only where
+it is the switch that does something. Also wire-neutral.
+
 ## The two issues, and where each stands
 
-**#133 "Must set USB to receive LSB on 40 meters" — a switch, not code.**
+**#133 "Must set USB to receive LSB on 40 meters" — a switch, plus one fault on the way.**
 The Brick2's I/Q is the other way round from the Hermes-Lite default, so LSB is
 heard as USB and the spectrum is mirrored about the dial. Settings → Radio →
 HPSDR → **Invert spectrum** ("Swap I/Q") is the cure and has been there since
-the Hermes-Lite work; the newer **Swap I/Q** on Settings → Radio does the same
-thing one level up, on the engine's input. Nothing was changed for this report.
+the Hermes-Lite work.
 
-**Worth knowing, and not fixed:** on an HPSDR radio both switches are drawn and
-they cancel — the HPSDR thread conjugates, then the engine conjugates again. An
-operator following "tick Swap I/Q" from #133 can therefore see nothing happen.
-The clean fix is one switch per radio: hide the generic row on a backend that
-already has its own (CAT, HPSDR, SmartSDR all do), which is F4NRM's swap_iq
-work and was left alone deliberately.
+The fault: the generic **Swap I/Q** added in fork PR #160 sits one level up, on
+the engine's input, and on an HPSDR radio it ran *on top of* the board's own
+inversion — two conjugations cancel exactly, so an operator following "tick Swap
+I/Q" from #133 saw nothing happen. The same was true of a CAT rig on a sound card
+(`CatConfig::invert_spectrum`) and of SmartSDR (`SmartSdrConfig::swap_iq`).
+
+Fixed by making it one switch per radio: `Backend::inverts_iq_itself` names the
+three that conjugate in their own layer, `RadioConfig::swaps_iq` is the one
+place that resolves the stored flag against it, and both the engine and the
+Radio settings page read that. The checkbox is drawn only where it is the switch
+that does something; where it is not, the row says where the other one is, so
+nothing silently disappears. The stored flag is left alone, so a `radio.json`
+that named a SoapySDR before and an HPSDR after keeps its answer for the next one.
+
+Guard: `a_radio_that_inverts_its_own_iq_is_not_inverted_twice`, verified failing
+with the resolver reduced to `self.swap_iq`.
 
 **#132 "Wrong frequency display" — one datum still missing, already asked.**
 Thetis 7.183 vs this program 7.223 is 40 kHz, with the spectrum going unstable

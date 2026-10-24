@@ -2677,8 +2677,9 @@ struct Engine {
     caps: DeviceCaps,
     state: RadioState,
     /// Invert this receiver's I/Q before demodulation. A per-radio flag
-    /// (from `RadioConfig::swap_iq`) for receivers whose I and Q are the
-    /// other way round.
+    /// (from `RadioConfig::swap_iq`, resolved by `RadioConfig::swaps_iq` so an
+    /// interface that inverts in its own layer is not inverted twice) for
+    /// receivers whose I and Q are the other way round.
     swap_iq: bool,
     cfg: SpectrumConfig,
     /// Where the centre has been, newest last, for a front end whose samples
@@ -4663,7 +4664,7 @@ fn engine_thread(
         drive_trim: radio_cfg.tx_drive_trim.clone(),
         tx_drive_max: radio_cfg.tx_drive_ceiling(),
         rx_af_gain_db: radio_cfg.rx_audio_gain_db,
-        swap_iq: radio_cfg.swap_iq,
+        swap_iq: radio_cfg.swaps_iq(),
         tx_center_hz: 0.0,
         tx_ham_only: engine_cfg.tx_ham_only,
         cb_tx_allowed: engine_cfg.cb_tx_allowed,
@@ -11099,7 +11100,7 @@ impl Engine {
                 // at the next reopen, because an operator setting it is
                 // listening to the radio while they drag the control.
                 self.rx_af_gain_db = cfg.rx_audio_gain_db;
-                self.swap_iq = cfg.swap_iq;
+                self.swap_iq = cfg.swaps_iq();
                 self.refresh_af_trim();
                 // The UDP audio sink is rebuilt rather than poked: the address
                 // is where it goes, so a change is a new socket, and the old
