@@ -437,7 +437,7 @@ footer a { color: var(--dim); text-decoration: underline; }
       <tr><td>STANAG 4285 <b>(3 uncoded rates)</b></td><td class="mid">recording</td><td class="no">no</td><td>—</td><td>idle captures fold at 0.85 against a 0.14 null; the payload is loopback-proven</td></tr>
       <tr><td>AtChat <b>(1)</b></td><td class="yes">air</td><td class="yes">air</td><td>—</td><td>the NET mode, in use on the bench</td></tr>
       <tr><td>JTTY <b>(1)</b></td><td class="mid">recording</td><td class="mid">loopback</td><td>—</td><td>its own golden-vector gate</td></tr>
-      <tr><td>ALE <b>(1)</b></td><td class="no">in flight</td><td class="no">in flight</td><td>—</td><td>mid-flight; not claimed</td></tr>
+      <tr><td>ALE <b>(1)</b></td><td class="no">not proven</td><td class="no">no</td><td>—</td><td>the FEC, framing and tone map round-trip a word exactly; no real burst has decoded yet, and a recording would finish it</td></tr>
 
       <tr><td>FT8, FT4, FT2, JS8 <b>(1 each)</b></td><td class="yes">air</td><td class="yes">air</td><td>mfsk-core 0.11</td><td>contacts made on the air</td></tr>
       <tr><td>WSPR <b>(1)</b></td><td class="yes">air</td><td class="yes">air</td><td>mfsk-core 0.11</td><td>spots uploaded from the bench</td></tr>
@@ -478,7 +478,9 @@ footer a { color: var(--dim); text-decoration: underline; }
   <p style="margin-top:14px;color:#9198a1;font-size:13.5px">
     Two honest gaps, rather than blank rows: <b>8PSK</b> is ported and tested against a
     synthetic signal but reads none of its four recordings, so it does not ship; and
-    <b>ALE</b> is mid-flight. Everything else above either works or says what stopped it.
+    <b>ALE</b> is proven in every layer except the air — a synthesized word round-trips
+    exactly, and no recording of a real burst has decoded yet. Everything else above either
+    works or says what stopped it.
   </p>
 </section>
 
