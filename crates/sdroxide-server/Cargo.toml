@@ -15,6 +15,9 @@ opusic-sys = { version = "0.7.5", optional = true }
 rtrb.workspace = true
 rust-embed = { version = "8.12.0", features = ["interpolate-folder-path"], optional = true }
 sdroxide-proto = { path = "../sdroxide-proto" }
+# The relay behind /aircraft-info (src/aircraft.rs): the questions to adsbdb
+# and Planespotters, and their 24 h cache, asked once for every client.
+sdroxide-aircraft-online = { path = "../sdroxide-aircraft-online", features = ["fetch"] }
 # The space-weather feed behind /solar-ws (src/solar.rs), including its
 # native-only network and cache half — which the server always is.
 sdroxide-solar = { path = "../sdroxide-solar" }

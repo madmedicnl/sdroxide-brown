@@ -1,0 +1,16 @@
+[package]
+name = "sdroxide-aircraft-online"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The optional online half of an aircraft card (adsbdb, Planespotters): requests, replies, a 24 h cache and the relay that serves them once for every client"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+# Only the part that really talks to the network. Without it the crate is pure
+# and builds for wasm32 alongside the client, which reads the same types.
+ureq = { version = "3.4", optional = true }
+
+[features]
+fetch = ["dep:ureq"]

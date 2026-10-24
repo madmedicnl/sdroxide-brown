@@ -198,6 +198,13 @@ style preferences.
   as dirty.
 - **Commit messages**: a short imperative subject, then the why; say plainly what
   was *not* tested when it could not be.
+- **The aircraft online relay is the station's, never the client's.** adsbdb and
+  Planespotters are asked by the server only, through `GET /aircraft-info/{icao}`,
+  and only when `SDROXIDE_AIRCRAFT_ONLINE` is `1`/`true`/`yes`/`on` (off by
+  default; no key, no account). The JSON is cached 24 h; a Planespotters image is
+  **never fetched, stored or re-hosted** by the server — return its URL unchanged
+  with the credit and the link. A new server route must also be added to
+  `is_root_route`, or a reverse proxy's prefix is not stripped.
 - **Do not touch `vendor/`** except to update a submodule, and **native-only
   crates** (drm, nrsc5, faad2, the USB drivers, hpsdr) must never become
   dependencies of a wasm-targeted crate.
