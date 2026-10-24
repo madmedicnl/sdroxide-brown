@@ -609,6 +609,10 @@ pub struct SdroxideApp {
     show_sstv: bool,
     show_dab: bool,
     show_js8: bool,
+    show_acars: bool,
+    show_hfdl: bool,
+    show_vdl2: bool,
+    show_ais: bool,
     last_mode_for_tools: Option<sdroxide_types::Mode>,
     /// Scroll the Settings window back to its tab bar on the frame it opens.
     /// The window's scroll offset is egui memory, which outlives both the
@@ -2085,6 +2089,10 @@ impl SdroxideApp {
             show_sstv: false,
             show_dab: false,
             show_js8: false,
+            show_acars: false,
+            show_hfdl: false,
+            show_vdl2: false,
+            show_ais: false,
             last_mode_for_tools: None,
             listen_history: false,
             listen_sel: None,
