@@ -2049,8 +2049,8 @@ use sdroxide_types::{
 /// so the gap at 242 is that PR's to fill.
 /// `PROTO_VERSION` 242 → 243, `VERSION_BYTE` 0x3E → 0x3F. A downstream (fork)
 /// change.
-pub const PROTO_VERSION: u16 = 243;
-const VERSION_BYTE: u8 = 0x3F;
+pub const PROTO_VERSION: u16 = 244;
+const VERSION_BYTE: u8 = 0x40;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
