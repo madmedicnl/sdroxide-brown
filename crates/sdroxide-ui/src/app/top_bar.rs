@@ -6286,6 +6286,8 @@ impl SdroxideApp {
                 .clicked()
         {
             self.view.center_on_vfo = !self.view.center_on_vfo;
+            self.client_save_last = 0.0;
+            self.save_screen_to_profile_silent();
         }
         // In a box these two hang off chips of their own. A menu inlines
         // them below instead: a popup opened from a popup counts as a click
@@ -6433,6 +6435,8 @@ impl SdroxideApp {
                     .clicked()
                 {
                     self.view.fft_size = n;
+                    self.client_save_last = 0.0;
+                    self.save_screen_to_profile_silent();
                 }
             }
         });

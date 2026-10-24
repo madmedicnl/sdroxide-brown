@@ -4208,6 +4208,17 @@ impl SdroxideApp {
                 .to_string(),
         });
     }
+
+    /// Silent variant used by control chips: persists the screen (including the
+    /// FFT size and CTR) without announcing it in the status row.
+    pub(in crate::app) fn save_screen_to_profile_silent(&mut self) {
+        let profile = self.client_settings_from.clone().flatten();
+        let mut screen = sdroxide_types::ClientScreen::from_settings(&self.ui_settings);
+        screen.center_on_vfo = self.view.center_on_vfo;
+        screen.fft_size = self.view.fft_size;
+        self.ctrl.send_client_settings(profile, screen.clone());
+        self.client_settings_stored = Some(screen);
+    }
 }
 
 impl SdroxideApp {

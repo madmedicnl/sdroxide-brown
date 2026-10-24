@@ -1435,6 +1435,16 @@ fn default_true() -> bool {
     true
 }
 
+/// Default for [`ClientScreen::center_on_vfo`] — on, matching `ViewState`.
+fn client_center_on_vfo_default() -> bool {
+    true
+}
+
+/// Default for [`ClientScreen::fft_size`] — 4096, matching `ViewState`.
+fn client_fft_size_default() -> u32 {
+    4096
+}
+
 fn default_memory_waterfall_lanes() -> usize {
     4
 }
@@ -1913,9 +1923,11 @@ pub struct ClientScreen {
     /// is that a profile can hold it at all: reported as settings that "are
     /// never remembered" (fork discussion #9), because the browser's own copy
     /// is cleared when a phone sleeps and nothing carried them to the server.
+    #[serde(default = "client_center_on_vfo_default")]
     pub center_on_vfo: bool,
     /// The panadapter FFT size — `ViewState::fft_size`, carried for the same
     /// reason as [`Self::center_on_vfo`].
+    #[serde(default = "client_fft_size_default")]
     pub fft_size: u32,
     /// Whether the first press of the step row tidies the dial onto the step.
     pub tune_step_round_first: bool,
@@ -2135,6 +2147,26 @@ mod client_screen_tests {
         assert!(other.spectrum_fill, "the fill stayed behind");
         assert_eq!(other.spectrum_fill_color, [40, 220, 60], "the colour stayed behind");
         assert_eq!(other.spectrum_fill_style, SpectrumFillStyle::Mixed, "the style stayed behind");
+    }
+
+    /// The FFT size travels with the profile, including for a profile stored
+    /// before it was carried — which must land on the view's own default rather
+    /// than zero.
+    #[test]
+    fn the_fft_size_travels_with_the_profile() {
+        let d = ClientScreen::default();
+        assert_eq!(d.fft_size, 4096, "the default FFT size is the view's own");
+
+        let old: ClientScreen = serde_json::from_str(r#"{"simple_ui":true}"#).expect("old profile");
+        assert_eq!(old.fft_size, 4096, "a profile from before the field keeps the default");
+
+        let mut mine = UiSettings::default();
+        // Simulate: the client carries 32768 from its ViewState.
+        let mut carried = ClientScreen::from_settings(&mine);
+        carried.fft_size = 32768;
+        let back: ClientScreen =
+            postcard::from_bytes(&postcard::to_allocvec(&carried).unwrap()).unwrap();
+        assert_eq!(back.fft_size, 32768, "the FFT size survived the round trip");
     }
 
     /// Applying a served screen leaves every machine-specific field alone.
