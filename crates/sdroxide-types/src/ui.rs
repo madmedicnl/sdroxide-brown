@@ -1086,6 +1086,10 @@ pub struct UiSettings {
     /// parts of it missing until they ask.
     #[serde(default)]
     pub simple_ui: bool,
+    /// Masque des fenêtres-outils ouvertes, persisté. Bit i = tool window i
+    /// ouvert. Reste `Copy` (u64).
+    #[serde(default)]
+    pub tool_windows_open: u64,
     /// Keep the screen on: ask the browser for a Screen Wake Lock so a phone
     /// or tablet left on the waterfall does not dim and lock itself. A
     /// property of this screen, like the theme, and carried with the profile's
@@ -1642,6 +1646,7 @@ impl Default for UiSettings {
             survey_map_style: MapStyle::default(),
             classic_ui: false,
             classic_sections: String::new(),
+            tool_windows_open: 0,
         }
     }
 }

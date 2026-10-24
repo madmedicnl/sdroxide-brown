@@ -4937,3 +4937,27 @@ impl SdroxideApp {
         self.show_image = open;
     }
 }
+// Tool window bit indices (persisted in UiSettings.tool_windows_open).
+pub const TW_DSC: u64 = 1 << 0;
+pub const TW_NAVTEX: u64 = 1 << 1;
+pub const TW_APRS: u64 = 1 << 2;
+pub const TW_WEFAX: u64 = 1 << 3;
+pub const TW_SSTV: u64 = 1 << 4;
+pub const TW_DAB: u64 = 1 << 5;
+pub const TW_JS8: u64 = 1 << 6;
+pub const TW_ACARS: u64 = 1 << 7;
+pub const TW_HFDL: u64 = 1 << 8;
+pub const TW_VDL2: u64 = 1 << 9;
+pub const TW_AIS: u64 = 1 << 10;
+pub const TW_ADSB: u64 = 1 << 11;
+pub const TW_FSQ: u64 = 1 << 12;
+pub const TW_HELL: u64 = 1 << 13;
+pub const TW_PACKET: u64 = 1 << 14;
+pub const TW_WSPR: u64 = 1 << 15;
+pub const TW_PI4: u64 = 1 << 16;
+pub const TW_TEXT: u64 = 1 << 17;
+pub const TW_UVPACKET: u64 = 1 << 18;
+pub const TW_JTTY: u64 = 1 << 19;
+pub const TW_ALE: u64 = 1 << 20;
+pub const TW_RFPAINT: u64 = 1 << 21;
+pub const TW_IMAGE: u64 = 1 << 22;
