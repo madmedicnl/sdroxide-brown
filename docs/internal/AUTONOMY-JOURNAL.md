@@ -109,6 +109,40 @@ long interleave is in reach, and open its text. If a file with a 93-frame run st
 frames nothing, the next thing to suspect is the interleave length itself, and the
 short interleave is then the first hypothesis to run.
 
+## 2026-10-24 (aircraft) — the map's hover card: radio first, online only if already fetched
+
+**Summary.** Resting the pointer on an aircraft on the map now shows a small card
+instead of a line of text: what the radio heard (address, flight, registration,
+position, altitude, speed, track, range and bearing, climb, any emergency) with its
+source and age, and under it, only if the aircraft's card has already been opened,
+the type, operator and route from the station's relay. Green "radio" and blue
+"online" badges mark each line and a badge at the top says "radio" or "radio +
+online". Hovering never asks for anything and never starts a download, so an
+aircraft nobody opened has no online lines, and that is intended. It has been
+measured, not looked at: please look at it on a screen. Next: the live run of the
+relay.
+
+**Done.** Branch `claude/aircraft-hover-card-online` (from `d1bdfc2b`). New
+`aircraft_hover.rs` (pure card builder, clipping, footer, photo block, and the
+drawing); `adsb_map::show` takes an optional `hover_ui` and keeps the old text
+(`tooltip_text`) when it has none; `adsb_map_pane` hands it a card that only reads
+the registry and the online memory. The registry's `dead_code` allowance is gone
+(its test-only accessor is `cfg(test)`). 22 new tests, red first against stubs
+(17 of 21 failed; the others passed vacuously on an empty card and were checked
+by mutation): putting the "Online" status row back, an ask or a browser-storage
+word in the file, the picture drawn before it is loaded, a missing footer reason
+and a label that is not truncated each fail one. Two are not caught by mutation
+and are said so here: the 14-line cap equals the most lines the builder can
+produce, and "building a card leaves the store as it found it" guards the shape of
+the call (a card takes `&OnlineState`, so it cannot write to the store).
+
+**Not done / blocked.** The Planespotters link in the card is named, not clickable:
+a tooltip follows the pointer and goes when it moves. The link is clickable in the AIRCRAFT window's card.
+Not looked at on a screen (the browser build and the native window); no live run
+against a real station.
+
+**Next.** A live run of the relay with the real services, then the screen check.
+
 ---
 
 ## 2026-10-24 (aircraft) — the clients read the relay: badges, photo credit, no storage
