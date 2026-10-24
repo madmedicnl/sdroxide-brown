@@ -433,6 +433,7 @@ impl TextModemController {
         let (o_tones, o_bw) = (cfg.olivia_tones as usize, cfg.olivia_bw_hz as f64);
         let p_baud = cfg.psk_speed.baud();
         let p_qpsk = cfg.psk_modulation == sdroxide_types::PskModulation::Qpsk;
+        let p_psk8 = cfg.psk_modulation == sdroxide_types::PskModulation::Psk8;
         let rx = match mode {
             Mode::Rtty | Mode::RttyFm => {
                 let mut r = RttyRx::new(MODEM_RATE, audio_hz as f64, baud, shift);
@@ -520,6 +521,7 @@ impl TextModemController {
                 } else {
                     let mut r = PskRx::new_baud(MODEM_RATE, audio_hz as f64, p_baud);
                     r.set_qpsk(p_qpsk);
+                    r.set_psk8(p_psk8);
                     RxModem::Psk(PskAny::Plain(r))
                 }
             }
@@ -592,12 +594,14 @@ impl TextModemController {
         let (o_tones, o_bw) = (self.cfg.olivia_tones as usize, self.cfg.olivia_bw_hz as f64);
         let p_baud = self.cfg.psk_speed.baud();
         let p_qpsk = self.cfg.psk_modulation == sdroxide_types::PskModulation::Qpsk;
+        let p_psk8 = self.cfg.psk_modulation == sdroxide_types::PskModulation::Psk8;
         match &mut self.rx {
             RxModem::Psk(r) => {
                 r.set_carrier(hz);
                 if let PskAny::Plain(p) = r {
                     p.set_baud(p_baud);
                     p.set_qpsk(p_qpsk);
+                    p.set_psk8(p_psk8);
                 }
             }
             RxModem::Rtty(r) => {
@@ -769,6 +773,13 @@ fn tx_refusal_text(mode: Mode, cfg: &DigiConfig) -> Option<String> {
             "{} is receive only in this build — the coded PSK transmitter is not written",
             cfg.psk_coded.label()
         ));
+    }
+    if mode == Mode::Psk && cfg.psk_modulation == sdroxide_types::PskModulation::Psk8 {
+        return Some(
+            "8PSK is receive only in this build — there is no eight-phase modulator, and \
+             sending BPSK instead would be a different signal"
+                .to_string(),
+        );
     }
     None
 }

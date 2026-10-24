@@ -2029,8 +2029,14 @@ use sdroxide_types::{
 /// every mode field of a status, so appending one moves them.
 /// `PROTO_VERSION` 240 → 241, `VERSION_BYTE` 0x3C → 0x3D. A downstream (fork)
 /// change.
-pub const PROTO_VERSION: u16 = 241;
-const VERSION_BYTE: u8 = 0x3D;
+/// v242: [`sdroxide_types::PskModulation`] gains `Psk8` (appended) — eight-phase
+/// differential PSK on the same baud rates and front end as the rest of the
+/// plain PSK family, receive only. It rides `DigiConfig`, which crosses the wire
+/// whole in `SetDigiConfig`/`DigiStatus`, so appending a variant moves it.
+/// `PROTO_VERSION` 241 -> 242, `VERSION_BYTE` 0x3D -> 0x3E. A downstream (fork)
+/// change.
+pub const PROTO_VERSION: u16 = 242;
+const VERSION_BYTE: u8 = 0x3E;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {

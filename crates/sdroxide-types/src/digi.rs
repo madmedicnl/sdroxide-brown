@@ -1341,15 +1341,26 @@ pub enum PskModulation {
     #[default]
     Bpsk,
     Qpsk,
+    /// Eight-phase differential PSK: three bits per symbol to the same MFSK
+    /// varicode, on the same baud rates and the same front end.
+    ///
+    /// **Proven against a synthetic, not against a recording.** The four 8PSK
+    /// files in the corpus do not carry a clean 8PSK constellation — measured:
+    /// 0.44-0.58 differential concentration where a shaped synthetic reads 0.99,
+    /// and matched filtering does not help them (`docs/internal/AUTONOMY-JOURNAL.md`,
+    /// 2026-10-24). Receive only: there is no 8PSK modulator.
+    Psk8,
 }
 
 impl PskModulation {
-    pub const ALL: [PskModulation; 2] = [PskModulation::Bpsk, PskModulation::Qpsk];
+    pub const ALL: [PskModulation; 3] =
+        [PskModulation::Bpsk, PskModulation::Qpsk, PskModulation::Psk8];
 
     pub fn label(self) -> &'static str {
         match self {
             PskModulation::Bpsk => "BPSK",
             PskModulation::Qpsk => "QPSK",
+            PskModulation::Psk8 => "8PSK",
         }
     }
 }
