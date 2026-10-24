@@ -1,6 +1,7 @@
 # ALE (issue #262) — handover
 
-State as of 2026-09-29. Read this top-to-bottom before touching ALE; it says
+State as of 2026-10-24 (the capture chain and the ask below are current; the
+earlier date in the body is the session it was written in). Read this top-to-bottom before touching ALE; it says
 what is proven, what is not, and the exact commands.
 
 ## What ALE is / the signal
@@ -192,3 +193,31 @@ fork-only — label the release experimental regardless.
   `vX.Y.Z_brown`. Upstream PRs push from `origin` too (it is the fork of
   `dividebysandwich/sdroxide`). Homebrew is `opencode-go/deepseek-v4.1-flash`.
 - Rebuild/install: `cargo build --release && cp target/release/sdroxide ~/.cargo/bin/`.
+
+
+## 2026-10-24 — a watched channel, and the ask made public
+
+The receiver is unchanged since the Gray-code fix (`b814031e`) and its tests are
+green. What changed is that the missing thing now has a name and a place to ask
+for it.
+
+**One watch, and it found nothing.** With sdroxide closed (the SDRplay API is
+single-client), `tools/rsp1-capture` recorded **600 s at 11175 kHz,
+192 kHz, gain 25**. 192 kHz is accepted by an RSP1 and is enough for the channel
+and any dial error; gain 40 clipped the 11 MHz slice (peak 0.999). A probe over
+the whole ±96 kHz slice scored every 2 kHz-wide block against each frame's own
+median and found **no burst at all** — the band was flat noise with one narrow
+carrier at the dial. ALE is sporadic; a witness period on one frequency is not a
+verdict on the decoder.
+
+The two scripts are committed now as `tools/ale-probe/` (`scan.py` finds the
+shape, `cut.py` mixes a candidate down to the 8 kHz the decoder reads), so the
+next attempt is a command rather than a rewrite.
+
+**The ask.** The manual has a **§3.29 ALE** and a mode-table row that say plainly
+that the decode is not proven on the air, with the frequencies to try (11175 /
+8992 / 15016 kHz USB, or the amateur channels near 14109.5 kHz) and what to send:
+a minute of WAV, any rate, the dial on the channel, USB selected. The changelog's
+*Needs feedback* section carries the same request. **That is the whole of what
+stands between this mode and done** — the FEC, the framing, the tone map and the
+front end are built and measured.

@@ -347,10 +347,13 @@ State at 2026-10-24, and the thing to re-measure rather than trust:
   diagnostic report), #162 NAVTEX needing to tune 516.6 kHz instead of 518
   (the dial-is-channel−1.7 kHz rule), #105 AppImage (planned for a stable
   release). **No open PRs.**
-- **Live handovers**: ALE (mid-flight), STANAG 4285 (needs a coded off-air
-  capture), Olivia (receive proven; our transmit unproven by another station),
-  CW keyer (built and benched), SWL schedule sources (scoped, not built), FST4W
-  (do not ship as wired), FST4W/Olivia/UNDOCKED as above.
+- **Live handovers**: ALE (built, **never decoded a real burst** — the manual
+  §3.29 asks for a recording, and that is the only thing missing), STANAG 4285
+  (needs a coded off-air capture), Olivia (receive proven; our transmit unproven
+  by another station), CW keyer (built and benched), SWL schedule sources
+  (scoped, not built), FST4W (do not ship as wired).
+- **Confirmed on the air by users**, so not to be re-opened as unproven: WEFAX,
+  DAB, SSTV, DSC, and **HD Radio** (reported on r/ShortwavePlus, 2026-10-24).
 - ⛔ **The SDRuno look is parked, and is not to be raised.** The operator's own
   pet project, on branch `fork/sdruno-clone` (off `fork/sdruno-look`), **not to be
   merged into `main` and not to appear in a proposal, a reply, a release note or

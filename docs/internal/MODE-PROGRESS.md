@@ -1303,7 +1303,7 @@ program copied us** — the only one that proves interop).
 | ISB (1) | air | no | — | receive-only by capability — two modulators into one amplifier is not a radio we drive |
 | SPEC (1) | air | no | — | a display mode; no modulation of its own |
 | DRM (1) | air | no | `vendor/dream` | a real broadcast decodes |
-| HD Radio (1) | recording | no | `nrsc5` + faad2 | the sample decodes; **no HD station has been heard here** |
+| HD Radio (1) | **air** | no | `nrsc5` + faad2 | **confirmed on the air by users** (reported on r/ShortwavePlus, 2026-10-24); the reference sample decodes here |
 
 ### Keyboard and text modes
 
@@ -1330,7 +1330,7 @@ program copied us** — the only one that proves interop).
 | STANAG 4285 (**3** uncoded rates, 1) | recording | no | — | the instrument reads real idle captures; the Annex E payload is proven on a loopback only |
 | AtChat (1) | air | air | — | the NET mode, in use on the bench |
 | JTTY (1) | recording | loopback | — | its own golden-vector gate |
-| ALE (1) | in flight | in flight | — | see [`ALE-HANDOVER.md`](ALE-HANDOVER.md) — mid-flight, not claimed |
+| ALE (1) | **not proven** | no | — | the FEC, framing and Gray tone map round-trip a word exactly; **no off-air burst has ever decoded here**. A recording is the one thing missing, and the ask is in the manual (§3.29) and the release notes — see [`ALE-HANDOVER.md`](ALE-HANDOVER.md) |
 | 8PSK125/250/500/1000 (**4** ported, **none ships**) | **no** | no | — | 0/4: the slicer is proven on a synthetic; the recordings measure 20–46 Hz wide where the mode is 125 Hz |
 
 ### Slotted and weak-signal

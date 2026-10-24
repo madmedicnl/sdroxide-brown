@@ -89,6 +89,11 @@ maintainer's queue there, not a promise.
 
 ## Waiting on other people
 
+- **ALE — a recording of one real burst.** The receiver, the FEC and the tone map
+  are built and round-trip a synthesized word exactly; no off-air burst has ever
+  decoded. The ask is now in the manual (§3.29) and in the changelog's *Needs
+  feedback* section, with the frequencies (11175 / 8992 / 15016 kHz USB, or the
+  amateur channels near 14109.5 kHz). One minute of WAV finishes the mode.
 - **SYNOP off air** — built and tested against four published messages, BETA
   marked, and **nobody has decoded one from a station**. One report takes the
   BETA marks off or finds the fault.
@@ -149,6 +154,10 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-24
+- **HD Radio is confirmed on the air by users** (reported on r/ShortwavePlus) —
+  it moves off the "no station heard here" list and out of the feedback asks.
+- **ALE takes its place on that list**: the manual now documents the mode with
+  an honest *not yet proven off the air* and asks for one recording of a burst.
 - **Brick2** (#170): Protocol 2 transmit is paced at the stream's own rate
   (choppy SSB on a Brick2), an HL2 on Hermes-emulation gateware is recognised so
   its PA is enabled, and **one I/Q switch per radio** — the generic Swap I/Q no

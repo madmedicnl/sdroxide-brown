@@ -31,6 +31,7 @@ or connects to a remote sdroxide server.
     - [3.26 UVPacket](#326-uvpacket)
     - [3.27 FSK441](#327-fsk441)
     - [3.28 JTTY](#328-jtty)
+    - [3.29 ALE (2G)](#329-ale-2g-mil-std-188-141a)
 4. [Skimmers (CW, PSK, RTTY)](#4-skimmers)
 5. [ISM band decoder (315 / 345 / 433 / 868 / 915 MHz devices)](#5-ism-band-decoder)
 6. [Settings](#6-settings)
@@ -7062,6 +7063,36 @@ normal SSB passband. So in **USB** with the cursor near 1500 Hz it is where you
 would expect; it will not appear at the bottom of the passband, and a receiver
 or filter set to cut below about 1400 Hz will pass the audio but lose the
 signal. This build sends and receives at that centre.
+
+### 3.29 ALE (2G, MIL-STD-188-141A)
+
+> **Experimental, and its decode is not yet proven on the air.** Everything up
+> to the payload is built and tested — the Golay code, the interleaving, the
+> 49-bit word, the three copies per word, the 8-FSK tones and the tone map from
+> the standard — and a synthesized word round-trips exactly. **No real station
+> has been copied here yet**, so a decode is worth a second look and a first
+> contact is a test.
+
+Choose **ALE** from the DIGITAL row (or the LISTEN tab). ALE is the **automatic
+link establishment** system that military, government and utility HF stations
+use to call each other: eight FSK tones 250 Hz apart between 750 and 2500 Hz,
+125 baud, carrying 24-bit words — three characters and a type (TO, FROM, TIS,
+CMD, REP…) — protected by a Golay code and sent three times. A call is a run of
+those words. Receive only here.
+
+The **WORDS** panel lists each word as it is heard, with its type and address,
+and every word is also appended to `ale.log` in the configuration directory, so
+an unattended watch leaves a record.
+
+**What we need from you, if you can hear one.** A recording of a real ALE burst
+is the one thing that would finish this mode, and it is easy to make: tune
+**USB** to any 2G ALE channel with a station on it and record a minute with the
+program's own recorder (or any WAV). Frequencies worth trying are **11175,
+8992 and 15016 kHz** on the military/government networks, or the amateur 2G
+channels around **14109.5 kHz** where HFLINK activity runs. Any sample rate and
+any level will do — the dial must simply be on the channel with USB selected,
+and the file sent as it is. A known-good recording turns "wired" into
+"working", and it is the only thing missing.
 
 ## 4. Skimmers
 
@@ -18286,6 +18317,7 @@ using. Bind them under **Speech** on the Controls tab:
 | FSK441 | The original meteor-scatter mode on 6 m and 2 m: 4-FSK at 441 baud carrying free text and the `R26`/`R27`/`RRR`/`73` single-tone shorthand, in a 15/30-second period. The decoder hunts the period for meteor-trail pings; transmit repeats the message for the length of the over. See [3.27](#327-fsk441). |
 | OLIVIA | Robust MFSK keyboard mode (selectable tones/bandwidth). |
 | STANAG 4285 | The NATO single-tone HF modem the naval stations use: 2400 baud PSK on an 1800 Hz sub-carrier in a 3000 Hz footprint, a 256-symbol frame every 106.67 ms. **Receive only.** The mode identifies a 4285 off the air and shows what the receiver measures — the folded sync against its own null, the frame autocorrelation, the three reference blocks collapsing, the carrier offset and the rate (1200 BPSK, 2400 QPSK or 3600 8PSK). **Its text is not yet proven off the air**: the Annex E code, interleaver and message framing decode a generated signal bit-exactly, but no coded station has been copied, and the traffic on these frequencies is usually encrypted anyway — an identification and a rate are what a listener usually wants from it. |
+| ALE (2G) | MIL-STD-188-141A automatic link establishment: eight FSK tones, 125 baud, Golay-coded 24-bit words, the three-character addresses and the TO/FROM/TIS word types. Receive only, **experimental — its decode is not yet proven off the air**, and a recording of a real burst is what would finish it. See [3.29](#329-ale-2g-mil-std-188-141a). |
 | THOR | DominoEX-family IFK keyboard mode with FEC (THOR4…THOR32). |
 | DOMINOEX | The same family without the code (DOMINOEX 4…88, MICRO). Receive only. |
 | DTMF | Touch tones decoded to digits (0–9, `*`, `#`, A–D). Receive only. |

@@ -13,6 +13,9 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+### Needs feedback
+- **ALE (2G)** decodes a synthesized word exactly and has never copied a real burst. If you can hear one, a minute of WAV on 11175 / 8992 / 15016 kHz USB (or the amateur channels near 14109.5 kHz) would finish the mode — see the manual, §3.29.
+
 ### Added
 - **Decoded text over UDP** — one JSON line per decode for a script of your own: the FT8 family, WSPR and every keyboard mode (RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell), with the dial it was heard on.
 
