@@ -1107,6 +1107,13 @@ impl SdroxideApp {
                                      symbol: the same text rate as BPSK at the same speed, with \
                                      half the errors"
                                 }
+                                PskModulation::Psk8 => {
+                                    "Three bits per symbol, no code: the fastest of the three at \
+                                     any given speed and the least robust. Receive only — there \
+                                     is no eight-phase transmitter. Proven on a synthetic: the \
+                                     8PSK recordings in the test corpus are not a clean \
+                                     constellation"
+                                }
                             };
                             if ui.selectable_label(sel, m.label()).on_hover_text(hint).clicked()
                                 && !sel

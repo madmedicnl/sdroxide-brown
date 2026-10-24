@@ -2029,6 +2029,12 @@ use sdroxide_types::{
 /// every mode field of a status, so appending one moves them.
 /// `PROTO_VERSION` 240 → 241, `VERSION_BYTE` 0x3C → 0x3D. A downstream (fork)
 /// change.
+/// v242: [`sdroxide_types::PskModulation`] gains `Psk8` (appended) — eight-phase
+/// differential PSK on the same baud rates and front end as the rest of the
+/// plain PSK family, receive only. It rides `DigiConfig`, which crosses the wire
+/// whole in `SetDigiConfig`/`DigiStatus`, so appending a variant moves it.
+/// `PROTO_VERSION` 241 -> 242, `VERSION_BYTE` 0x3D -> 0x3E. A downstream (fork)
+/// change.
 /// v243: **voice hunting** — the scanner learns to stop only on channels that
 /// sound like somebody talking. [`sdroxide_types::ScannerConfig`] gains
 /// `voice_only` on its tail, and [`sdroxide_types::ScanState`] gains `voice`,

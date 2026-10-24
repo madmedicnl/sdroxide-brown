@@ -18405,7 +18405,7 @@ using. Bind them under **Speech** on the Controls tab:
 | JS8 | JS8 — conversational messaging on FT8's waveform. Four speeds (Normal 15 s / Fast 10 s / Turbo 6 s / Slow 30 s); directed queries, heartbeats and multi-frame free text. |
 | WSPR | Weak Signal Propagation Reporter — a two-minute beacon carrying a callsign, grid and power. Not a QSO mode: it measures paths, uploads them to WSPRnet, and feeds the propagation heat map. See [3.11](#311-wspr-weak-signal-propagation-reporter). |
 | PI4 | "Next Generation Beacon" — a one-minute four-tone FSK beacon carrying a callsign. Receive only. Not a QSO mode: it measures paths, and carries no grid to feed the propagation heat map with. See [3.20](#320-pi4-next-generation-beacon). |
-| PSK | PSK31 keyboard mode (BPSK31 / varicode). |
+| PSK | PSK31 keyboard mode (BPSK31 / varicode), with **QPSK** and **8PSK** as modulation choices — 8PSK is receive only and proven on a synthetic, because the 8PSK recordings in our test corpus carry no clean constellation. |
 | RTTY | RTTY keyboard mode (Baudot; selectable shift and baud), on a sideband. |
 | RTTY-FM | The same modem on an FM carrier, the way a club bulletin is still sent on VHF. |
 | NAVTEX | The maritime safety broadcast on 518, 490 and 4209.5 kHz: navigational and meteorological warnings, search-and-rescue bulletins and ice reports, framed into messages. Receive only. |
