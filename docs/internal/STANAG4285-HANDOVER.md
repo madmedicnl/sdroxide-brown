@@ -802,6 +802,20 @@ angle against the decision axis, gain 0.15 — and the Annex E metric did not mo
 places on the strongest branch. The code is therefore not being lost to per-symbol
 phase wander, and the change was reverted rather than left in the tree unproven.
 
+**The interleaver's conventions and depths are ruled out too** (same day, after
+`Interleave` was made selectable). On Mark's file at 1900 Hz, every combination of
+commutator wiring (`announce`, `swapped`, `rows-flipped`, `swapped+flipped`) and
+every depth a 600 bps transmission could plausibly use (`j` = 3, 6, 12, 24, 48)
+sits at **0.94–0.99×** its own shuffled null. No convention stands up, so neither
+the wiring nor the depth is what is hiding the code, and the annex's own figures
+stay the default. The sweep is committed in `s4285_fec_check`.
+
+**And a one-symbol matched filter made it worse.** Worth recording because it was
+the obvious next idea: a boxcar over one symbol before the decision took the lock
+from 0.900 to 0.465 and the constellation from 0.396 to 0.211. Reverted. Whatever
+is smearing the data symbols, a symbol-long average at the *current* timing
+instants is not it.
+
 **What that leaves.** The chain's own parameters, on the best file we have ever
 had. The old sweep of interleaver conventions (both commutator orders, both row
 arrangements, all 32 starting phases, both polarities, j = 12 and 24) was run

@@ -171,6 +171,36 @@ channel is a bad witness for a modem.
 
 ---
 
+## 2026-10-24 (stanag, third pass) — three hypotheses eliminated with numbers
+
+**Summary.** The French Navy tape still does not decode here, but the search is
+much narrower: the phase tracker, every plausible interleaver wiring and depth,
+and a one-symbol matched filter have all been measured against the new recording
+and none of them is the answer. What is left is the channel equaliser, and the raw
+baseband capture is the file to do it on.
+
+**Done.**
+- `Interleave` made selectable (`announce` / `swapped` / `rows-flipped` /
+  `swapped+flipped`) and the depth swept (3/6/12/24/48 at 600 bps), in
+  `s4285_fec_check`. On Mark's file at 1900 Hz: **0.94–0.99×** its shuffled null
+  for all 40 combinations. Commit `a9999e57`.
+- A one-symbol boxcar matched filter before the decision: lock **0.900 → 0.465**,
+  constellation **0.396 → 0.211**. Reverted.
+- Handover carries both, with the numbers.
+
+**Not done / blocked.** Nothing blocked. The remaining candidate is a **channel
+equaliser** (Annex C/D) — a linear phase fit across the frame is all we have, and
+the data symbols' 0.40 concentration says there is more channel than that. The
+423 MB CF32 baseband IQ (`…-134238Z.cf32.wav`) is the file for it: the whole
+passband, so the equaliser is not fighting an audio filter as well.
+
+**Next.** Open the IQ, extract the channel at 13031.2 kHz, and see whether the
+constellation improves when the whole passband is available — that separates "the
+audio file is missing something" from "our equaliser is not enough" before any
+equaliser is written.
+
+---
+
 ## 2026-10-24 (stanag, second pass) — the phase tracker is ruled out
 
 **Summary.** The first idea for the French Navy tape — that our demodulator was
