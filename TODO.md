@@ -1,233 +1,180 @@
 # TODO — SDR Oxide Brown
 
 What this fork is working on, kept here so it survives a session and is visible
-on the repo. Last updated **2026-10-15**.
+on the repo. Last updated **2026-10-24** by madmedicnl's agent.
 
-Upstream issues are the *maintainer's* queue; items marked `#NNN` are upstream
-feature requests **this fork** may pick up, not a promise to upstream.
+State: `main` at crate **2.1.0**, `PROTO_VERSION` **239**, latest release
+**v2.1.0.2_brown** (with **v2.1.0.2.1_brown** as the current pre-release), five
+open issues, no open pull requests. The rules are in
+[`AGENTS.md`](AGENTS.md); the history is in
+[`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
+
+Items marked `#NNN` are **upstream** requests this fork may pick up; they are the
+maintainer's queue there, not a promise.
 
 ---
 
 ## Now
 
-1. **The SDRuno look — and it is the STRUCTURE, not the theme.** The operator,
-   2026-10-16, in as many words: *"it is the structure 100%"*. The window set is
-   **built** (every item on `SDRUNO-UI-HANDOVER.md`'s TODO is done); what is left
-   is how it is laid out inside those windows. **Five candidate differences are
-   written up in that handover — read them and get him to point at one, do not
-   build all five.** A theme was built first and it was the wrong direction; it
-   sits on **branch `fork/sdruno-look`** (`4f9f4bc1`, unpushed) and can stay
-   there. The two likeliest: a **captioned button matrix** per control group
-   (SDRuno's RX CONTROL) versus our chips in rows — `mode_chip_grid` already
-   started that — and **every window naming itself and the program** in its title
-   bar. Those are a session each, not one.
+1. **The mode work — the live queue, and it has its own brief.**
+   [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
+   finish the missing modes and get TX working for everything fldigi can
+   transmit, and **vendor a mode when the port and the bench have both been
+   exhausted**. [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md) is the
+   journal and the measurements; the five-column mode table at the end of the
+   brief is the deliverable.
+   - What is left is mostly **measurement**, not code: THOR25/THOR44 and a
+     second MFSK8 recording, a known-good FSQ recording, a BPSK1000 capture for
+     the lock-time question, an ARDOP recording off air, and a THOR/DominoEX
+     tone-step comparison against a real fldigi. The list with reasons is the
+     "Needs me" section at the end of the journal.
+   - **Eight spread modes still read nothing** and are the next build: 8PSK's
+     vestigial filter is the open question, and the four wide `C` PSK banks need
+     the demodulator's carrier separation (the recording is not the fault).
 
-2. **WEFAX detection** — the one real bug from discussion #90. DWD Pinneberg at
-   3855 kHz, four captures of the same transmission minutes apart, and the decoder
-   locking the **wrong line rate or IOC**: the 09:57 picture has a compass rose
-   reading *SEESCHIFFAHRT DWD* and two `52°N` labels — a perfectly good fax — but
-   it is sheared and **904 px wide against 1809**. Full detail in the #90 section
-   below. **First job when the operator is back at the radio (Sunday)**; it needs
-   his captures, and the phasing logic it touches carries a warning (a previous
-   fix regressed #276).
+2. **Brick2** — the code half is merged (#170); the radio half is a report away.
+   [`docs/internal/BRICK2-HANDOVER.md`](docs/internal/BRICK2-HANDOVER.md).
+   - **#132 wrong frequency display** (Thetis 7.183 vs ours 7.223, 40 kHz, with
+     the spectrum going unstable under a MIDI knob). **One answer needed** —
+     already asked on the issue: is the number the dial readout or the spectrum
+     centre? If it is the axis, measure the rate the board actually streams
+     against the rate it was asked for.
+   - **#133 LSB needs USB on 40 m** — the switch is Settings → Radio → HPSDR →
+     Invert spectrum, and one-switch-per-radio is now enforced (#170), so the
+     generic Swap I/Q can no longer cancel it.
 
-3. **`docs/synop-notes.md`** — keep it current rather than written once. The wrong
-   "fixes" it records are what a third reader would otherwise repeat.
+3. **#162 NAVTEX frequency** — the reporter had to tune 516.6 kHz instead of
+   518. The presets already tune the dial **1.710 kHz below the channel**
+   (516.290 and 488.290), and that rule is pinned by a test, so this is his
+   receiver's calibration (`ppm`) or the station's own offset. **Answer it, do
+   not change the rule.**
 
-4. **`docs/USER_MANUAL.md`** — the ⇱/⇲ chip's `Order::Middle` rule, and the two
-   UDP fixes, are worth a line where a reader would look for them. Not urgent;
-   the manual is for the operator, not for us.
+4. **#153 Pluto socket stalls** — APRS reception stops for a second or two and a
+   socket is being replaced mid-stream. Waiting on the **diagnostic report**
+   (Settings → Radio → Copy Diagnostic Report) and the precise setup.
 
-## Sound device leaving the audio server (#89) — FIXED, awaiting his confirmation
+5. **Detachable panels are F4NRM's** (discussion #166). Our part: any panel we
+   touch gets made detachable and added to the Detachable page in Settings —
+   APRS was the last one (#167).
 
-Reported against `2.0.13`: opening the program took the sound device out of the
-audio server, and closing it did not give it back.
+## Waiting on other people
 
-**The cause was ours, and it was not how the card is opened.** Two theories died
-by measurement — that cpal's hardware-name open takes the card (`hw:`,
-`sysdefault:`, `pulse:` and `default` each tested; none did) and that our
-`wpctl set-default` did it (tested; it did not). WirePlumber's own journal named
-it instead:
-
-    s-monitors: Failed to create ALSA node …: Object activation aborted:
-      PipeWire proxy destroyed
-
-**The client that vanished was ours.** The Settings → Audio page asked the
-patchbay what it held **on every frame it drew**, spawning a `pactl` process each
-time — tens a second, every one a PipeWire client connecting and being destroyed,
-and one landing inside WirePlumber's activation window aborted it. Fixed in
-`0d1dd7a1`: a pure shape check answers the common case with no process at all,
-and the list is cached for when it is genuinely needed.
-
-**Two things still stand from the report:**
-
-- **The intended behaviour, settled by the operator:** taking the machine's
-  default is right for a **sound-server node** (a Bluetooth headset — the only
-  route that exists, because PipeWire has no per-application capture source) and
-  **too drastic for an ordinary sound card**, which must keep working for
-  everything else. That distinction is in the settings warning already.
-- **A clean exit does not return the card either** — PipeWire does not reclaim a
-  dropped node by itself. That is why "release it properly on exit" was never the
-  fix, and why the cause had to be found instead.
-
-**Awaiting the operator's word that the card now stays put.**
-
-## From discussion #90 (Kevin, 2026-10-16)
-
-**WEFAX detection** — see *Now* above for the evidence; it is the one real bug
-here and it is first for Sunday.
-
-**The rest, checked and answered on the thread:**
-- *Settings rows overlapping* — **not reproducible**, here or on his machine with
-  the trace. Every row at its own y. Left open in case it returns.
-- *Sound 3 s behind the waterfall* — every queue is bounded (server lane 8 blocks,
-  worklet 250 ms, desktop ring ~0.5 s) and the hidden-tab case is fixed by
-  `fresh_tail`. **Asked which client and which output device** — 3 s smells like a
-  Bluetooth/USB buffer, not a queue.
-- *FT8 scroll bar out of sync* — the list never had stick-to-bottom, so nothing was
-  removed. **Hypothesis: streaming decodes grow the list under a scroll position
-  set for a finished slot.** Asked him to confirm the drift.
-- *"Many parameters not persistent"* — his own tests pass, the config parses, no
-  quarantine. **Asked which settings** — chaseable without a radio.
-- *s-meter calibration deleted* — not a bug; removed on his word (wrong-build
-  reading). Upstream has its own at #642.
-
-## Waiting on other people, and nothing to do about it
-
-- **SYNOP feedback (#88)** — BETA. Built, tested against four real published
-  messages, **nobody has decoded one off the air**. When Kevin reports, either
-  the BETA marks come off or the decoder gets fixed.
-- **The S-meter jumps with the mouse** (#69) — one question is on the thread and
-  unanswered: does the *number* beside the meter jump too, or only the needle?
-  Number → a real engine fault. Needle only → the animation. **Do not fix from
-  the symptom.**
-- **The grey-line gradient** — built, verified only on a path *entirely* in
-  night. Needs one run over a **partly daylit** path, which is the case the
-  feature exists for. `dark_share` is unit-tested as a number; the drawing
-  cannot be, so the window is the oracle.
+- **SYNOP off air** — built and tested against four published messages, BETA
+  marked, and **nobody has decoded one from a station**. One report takes the
+  BETA marks off or finds the fault.
+- **The grey-line gradient** — verified only on a path entirely in night. It
+  needs one run over a **partly daylit** path, which is the case it exists for.
+- **The S-meter jumping with the mouse** — one question is on the thread: does
+  the *number* jump too, or only the needle? Number → an engine fault; needle
+  only → the animation. Do not fix from the symptom.
+- **#105 AppImage** — answered: planned for a stable release, not the
+  pre-releases.
 
 ## Not in a release yet
 
-Everything below is on `main` and **in no release**. `2.0.12` predates all of it;
-the next release is the first that carries it.
-
-- the Bluetooth microphone, and the PipeWire device list
-- the window title showing the version (#664)
-- PSTRotator (#638)
-- the SYNOP/SHIP decoder, BETA
-- the ⇱ chip fix, and the two-window harness
-- the #537 false-OPEN fix
-- the audio stream (#594), now heard on the bench
+On `main`, after **v2.1.0.2.1**: the Brick2 HPSDR work (paced transmit, the
+Hermes-emulation PA fix, one I/Q switch per radio) and the **detachable APRS
+decoder panel** with the Detachable settings page.
 
 ## Parked, with the reason
 
 - **Antenna modelling tool** — branch `fork/antenna-tool`, a validated MoM solver
-  (dipole, monopole-over-perfect-ground, delta loop, Yagi). Next would be the
-  source-between-terminals junction, real Fresnel ground, lumped loads. See
-  `docs/antenna-tool-ideas.md`.
-- **#657 OpenStreetMap background** — parked after scoping. The map is already
-  8192×4096 with rivers, cities and a vector overlay; our maps are
-  equirectangular and OSM tiles are Web Mercator, the UI crate has no network
-  path at all, and it has to work in the browser. **A fetch stack is not the
-  right trade for a map that is already this good.** Kevin owns layout and
-  visuals, so it is his to pick up if it is ever wanted.
-- **Satellite telemetry decoders** (FSK/AFSK/GFSK/GMSK/BPSK) — the ISS is
-  **already covered** (AFSK + AX.25 packet, interoperable with DireWolf), and the
-  Fox/QO-100 side is BPSK, which `sdroxide-qo100` does. What is left is
-  per-mission field layouts, each needing a published table and a real capture.
-  See `docs/skyroof-notes.md`.
-- **FT4 console, SSDV across passes, Codec2 playback** — SkyRoof ideas, not
-  scoped.
+  (dipole, monopole over perfect ground, delta loop, Yagi). Next would be the
+  source-between-terminals junction, real Fresnel ground and lumped loads. See
+  `docs/antenna-tool-ideas.md`. **Do not delete this branch on a tidy-up.**
+- **#657 OpenStreetMap background** — parked after scoping: the maps are already
+  baked 8192×4096, our projection is equirectangular where OSM is Web Mercator,
+  and a fetch stack is the wrong trade (and forbidden: no paid or keyed service,
+  and the program works offline).
+- **Satellite telemetry decoders** — the ISS is already covered (AFSK + AX.25,
+  interoperable with DireWolf) and the Fox/QO-100 side is BPSK in
+  `sdroxide-qo100`; what is left is per-mission field layouts, each needing a
+  published table and a real capture. See `docs/skyroof-notes.md`.
+- **FT4 console, SSDV across passes, Codec2 playback** — ideas, not scoped.
 
 ## Backlog — upstream requests this fork may pick up
 
-**Fork-relevant**
+**Fork-relevant** — #458 (KML export done; the bulk tour/QRZ lookup is open) ·
+#322 PC keyboard as a Morse key · #536 RX audio to the rig's own speaker (HPSDR
+P1 EP2) · #653 split screen · #624 FTP upload · #442 external band filters and
+transverters · #521 IC-7610 internal ATU · #261 auto-tune with the rig's tuner ·
+#270 ADS-B remote web view · #480 MCP server · #229 TX interlock across radios
 
-- **#458** — the **KML export is done** (a KML chip in SPOTS). The bulk/automatic
-  QRZ lookup half is open.
-- **#322** PC-keyboard as a Morse key · **#536** RX audio to the rig's own local
-  speaker (HPSDR P1 EP2) · **#653** split screen · **#624** FTP upload ·
-  **#442** external band filters / transverters · **#521** IC-7610 internal ATU ·
-  **#261** auto-tune with the rig's tuner · **#270** ADS-B remote web view ·
-  **#480** MCP server · **#229** TX interlock across radios
+**Smaller, hardware, or large and low** — #250 ELAD FDM-S2 · #344 Dragonfly
+RX-103 · #383 RS-HFIQ · #406 remote tuner for the HL2 IO board · #448 RSPDuo +
+RSP1 as a third tuner · #525 Pluto Sky R2 · #595 Perseus · #639 KV4P HT · #325
+band-decoder output · #327 CI-V GPS · #571 TS-480 CAT · #591 RGO ONE · #227 USB
+relay · #289 link VFO · #413 x-band repeater · #589 RPM packaging · #237 native
+C-driver SDRs · #267 OpenWebRX · #416 multi-RX HL2 / Red Pitaya · #446 Ettus B210
+· #449 M17 · #652 QO-100 full duplex
 
-**Smaller, hardware, or large and low**
-
-- **#250** ELAD FDM-S2 · **#344** Dragonfly RX-103 · **#383** RS-HFIQ ·
-  **#406** remote tuner for HL2 IO · **#448** RSPDuo + RSP1 as a third tuner ·
-  **#525** Pluto Sky R2 · **#595** Perseus · **#639** KV4P HT · **#325**
-  band-decoder output · **#327** CI-V GPS · **#571** TS-480 CAT · **#591** RGO ONE ·
-  **#227** USB relay · **#289** link VFO · **#413** x-band repeater · **#589**
-  RPM packaging · **#237** native C-driver SDRs · **#267** OpenWebRX ·
-  **#416** multi-RX HL-2 / Red Pitaya · **#446** Ettus B210 · **#449** M17 ·
-  **#652** QO-100 full duplex
-
-**Done or covered, kept for reference**
-
-- #212 NAVTEX time-sync · #355 spectrum smoothing · #594 UDP audio · #617 HFDL
-  frequency chips · #623 satellite passes · #638 PSTRotator (**taken from
-  upstream**, not merely answered) · #641 SWL reception log · #642 S-meter
-  calibration (upstream has its own; ours was removed) · #648/#660/#661/#663
-  (all merged upstream).
-- #607 DMR/YSF/D-Star — **decided against**: the AMBE+2 patent, US 8,359,197,
-  until 2028-05-20. See AGENTS.md before answering anyone again.
+**Answered, kept so nobody re-opens them** — #607 DMR/YSF/D-Star: **decided
+against** (the AMBE+2 patent, US 8,359,197, until 2028-05-20) · #212 NAVTEX
+time-sync · #355 spectrum smoothing · #594 UDP audio · #617 HFDL frequency chips
+· #623 satellite passes · #638 PSTRotator (taken from upstream) · #641 SWL
+reception log · #642 S-meter calibration.
 
 ---
 
 ## Recently done
 
-### 2026-10-16
+### 2026-10-24
+- **Brick2** (#170): Protocol 2 transmit is paced at the stream's own rate
+  (choppy SSB on a Brick2), an HL2 on Hermes-emulation gateware is recognised so
+  its PA is enabled, and **one I/Q switch per radio** — the generic Swap I/Q no
+  longer cancels an interface's own inversion.
+- **Detachable APRS decoder panel**, and a Detachable page in Settings (#167).
 
-- **The S-meter calibration is back at Kevin's first revision** (`6f95a06f`) —
-  ±5 S-units, per radio. The widening to ±15 was the mistake, and it was made on
-  a reading from a *different build*; the correction itself was never wrong.
-  **No `PROTO_VERSION` bump**: the field was never taken off the wire, so the
-  layout is byte-identical and this only puts it back to work.
-- **No release can happen by itself** (`d63f9409`). `release.yml` carried a daily
-  cron that built the whole matrix and then skipped creating a release — fourteen
-  builds a day, publishing nothing, and firing on the 14th, 15th and 16th. Gone;
-  **the nightly is the only thing that publishes on its own.**
-- **`SDROXIDE_SETTINGS_TRACE=1`** (`9643af59`) — every settings row labels itself
-  with its y, so an overlap is a number rather than an argument. It exists because
-  four pages were reported with rows on top of each other and no render here
-  reproduces it.
-- **Discussion #90 worked through** (`6065db71`) — one real bug (WEFAX detection,
-  now first for Sunday) and four answered with a question each.
+### 2026-10-23 — the 2.1.0 release
+- **The mode release**: THOR (all fifteen variants, RX and TX), MFSK and MFSK8/16,
+  Contestia, MT63, DominoEX (nine), thirty-two coded PSK waveforms with QPSK
+  selectable, DTMF, and **STANAG 4285** with Annex E.
+- **Wavelog** (your own logbook server), an **Aoki schedule from a file**,
+  **SSTV pictures to an FTP server**, the **FDM-DUO's own power steps**, a
+  **WAV recording** beside the MP3, **receive sensitivity** for SSTV and WEFAX,
+  and **per-memory label colours**.
+- **Three UI fixes from screenshots**: the mode parameter chips no longer draw
+  over each other, a digital mode's readout no longer moves the dial (#156), and
+  the LISTEN tab can hide the transmit controls and never grant them (#146).
+- NAVTEX reads real signals (the discriminator was inverted) and gains clear_rx,
+  persistence, noise reduction and a large detachable panel; DSC decodes MF/HF
+  with the real M.493 code.
 
-### 2026-10-15
+### 2026-10-22
+- **The phase-3 PSK work finishes**: the coded families reach the panel, the
+  wide `C`/`RC` banks and the `R` set are measured against recordings, THOR is
+  found to have been wired to a receiver that read nothing (four faults), and
+  DominoEX reads text. The 8PSK slicer is proven on a synthetic and shown to
+  need its vestigial filter. STANAG 4285 locks real captures and its payload
+  chain is built (a coded off-air capture is still needed to read a message).
 
-- **Audio stream (#594)** — heard on the bench: *"perfect replay"*. Took **two
-  fixes, both invisible to the tests**: the row was unreachable on every SDR,
-  and the tap behind it was never filled unless REC was running.
-- **The two-window render harness**, and the ⇱ chip guard it unlocked.
-- **⇱ chip** — `Order::Middle`, not `Foreground`.
-- **#537 false OPEN alerts** — the warm-up clock no longer survives the dial, and
-  a spot no longer starts one.
-- **SYNOP/SHIP** — BETA, manual §3.3a, quick-start in four languages with PDFs.
-  #88 asks Kevin for the off-air check.
-- **Branches pruned** — 38 deleted, `.git` 417M → 339M.
-- **`sdrbrown.info`** — the site, and the repo homepage pointed at it instead of
-  at upstream's releases.
-- **Issue form** — the version is now a **required** field. We had a template
-  already and it failed three ways: last in the list, optional, and its example
-  said `v1.6.0`, *upstream's* scheme.
-- **S-meter calibration dropdown removed** — built on a reading from the wrong
-  build. Upstream has its own (#642).
+### 2026-10-17/18
+- **Classic UI** — every control in one column down the left, SDR++-style, with
+  sections you can reorder, a rail to fold onto, and a guard that the column
+  never draws past its own width.
+- **ADS-B map**: airports and navaids baked in from public-domain data, three
+  styles, hover labels, and a double-clicked station tunes the dial the mode does
+  not own.
+- **Settings page** rebuilt onto grid rows: no orphaned rows, no caps that walk
+  the cursor backwards, notes elided with the hover, and the `SDROXIDE_SETTINGS_TRACE`
+  tool for the overlap reports that could not be reproduced.
+- **No release publishes by itself** — the nightly cron is gone, and the
+  `nightly` release the workflow had made was removed.
+- **WEFAX**: the rephase rule no longer cuts a page inside its own phasing
+  signal (F4NRM's complementary start-tone fix is in the same builds), plus
+  automatic start on audio tones, CLEAR RX and SAVE.
+- FT8's CB CQ path restored (the streaming merge dropped the decode hook) and
+  confirmed by a loopback and then a real station; the FT8/FT4/FT2 **slot bar
+  follows the frame as it is received**; the web client's sound comes back after
+  a long hidden spell; the playout backlog is bounded on every radio.
 
-### 2026-10-14
-
-- **Search by frequency in SCHEDULE** — `6185`, `6185 kHz` or `6.185`. A search
-  is forgiving where the import must not be: with no unit, `153` is longwave *or*
-  153 MHz, so both readings are tried and the range rule drops the impossible one.
-- **The Bluetooth microphone** — a PipeWire device now appears in Settings →
-  Audio by name, with a warning that it takes over the machine's recording.
-  Verified on the DUALMIKE.
-- **House rules** — "Needs feedback", not "Not proven"; replies are prose.
-
-### 2026-10-13
-
-- **Upstream take, four items, all verified**: the SSTV decoder series (a
-  drop-in), FT8 #667 (a merge), CW #625, RTTY #576. Most of upstream's 69 commits
-  are features we had already built ourselves.
-- **The 2.0.10 changelog entry**, hand-edited from 1,387 lines to 45, and the
-  release workflow now **hard-fails notes over 60 lines**.
+### 2026-10-16/17
+- **S-meter calibration** back at ±5 S-units, per radio, after a widening made on
+  a reading from the wrong build.
+- **The ATS/RadioScript answer**: research only, nothing built — the firmware is
+  unlicensed and the board has no I/Q.
+- **No paid service, no API key, no account** — written down after the map-tile
+  question.
+- The **grey line** on the flat maps, **IBP beacons**, **Kp history**,
+  **local solar time** on the schedule, and the **Brick2 report** that opened
+  the HPSDR work.
