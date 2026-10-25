@@ -1617,7 +1617,12 @@ impl eframe::App for SdroxideApp {
             if mode == sdroxide_types::Mode::Jtty { self.show_jtty = true; self.ui_settings.tool_windows_open |= TW_JTTY; }
             if mode == sdroxide_types::Mode::Ale { self.show_ale = true; self.ui_settings.tool_windows_open |= TW_ALE; }
             if mode.is_rf_paint() { self.show_rf_paint = true; self.ui_settings.tool_windows_open |= TW_RFPAINT; }
-            if mode.is_image() { self.show_image = true; self.ui_settings.tool_windows_open |= TW_IMAGE; }
+            // SSTV has its own window and opens it above; IMAGE is for the image
+            // modes that have none, or the same panel comes up twice (#215).
+            if mode.is_image() && image_window_for(mode) == ImageWindow::Image {
+                self.show_image = true;
+                self.ui_settings.tool_windows_open |= TW_IMAGE;
+            }
             self.last_mode_for_tools = Some(mode);
         }
         if mode.is_sstv() && self.show_sstv { self.sstv_window(&ctx, &mut cmds); }
@@ -1639,7 +1644,9 @@ impl eframe::App for SdroxideApp {
         if mode == sdroxide_types::Mode::Jtty && self.show_jtty { self.jtty_window(&ctx, &mut cmds); }
         if mode == sdroxide_types::Mode::Ale && self.show_ale { self.ale_window(&ctx, &mut cmds); }
         if mode.is_rf_paint() && self.show_rf_paint { self.rf_paint_window(&ctx, &mut cmds); }
-        if mode.is_image() && self.show_image { self.image_window(&ctx, &mut cmds, mode); }
+        if mode.is_image() && image_window_for(mode) == ImageWindow::Image && self.show_image {
+            self.image_window(&ctx, &mut cmds, mode);
+        }
         // Persist existing tool windows' mask (sync show_* -> mask).
         if self.schedule.show { self.ui_settings.tool_windows_open |= TW_SCHEDULE; } else { self.ui_settings.tool_windows_open &= !TW_SCHEDULE; }
         if self.show_listen { self.ui_settings.tool_windows_open |= TW_LISTEN; } else { self.ui_settings.tool_windows_open &= !TW_LISTEN; }
@@ -4131,7 +4138,7 @@ impl SdroxideApp {
             self.jtty_panel(ui, cmds, panel_h);
         } else if mode == Mode::Ale && !self.show_ale {
             self.ale_panel(ui, cmds, panel_h);
-        } else if mode.is_image() && !(mode.is_sstv() && self.show_sstv) && !self.show_image {
+        } else if mode.is_image() && !self.image_window_open(mode) {
             self.image_panel(ui, cmds, mode);
         } else if mode.is_rf_paint() && !self.show_rf_paint {
             self.rf_paint_panel(ui, cmds, panel_h);
@@ -4658,6 +4665,121 @@ mod tests {
         waterfall_bw_text,
     };
 
+    /// **The reported bug (#215): SSTV opened two windows, `SSTV` and `IMAGE`, on
+    /// the same panel.**
+    ///
+    /// SSTV and SSTV-FM have a window of their own; `IMAGE` belongs to the image
+    /// modes that have none. Every image mode therefore uses exactly one of them,
+    /// and this pins both halves so an auto-open that matches `is_image()` again
+    /// cannot bring the duplicate back.
+    #[test]
+    fn an_image_mode_opens_one_window_and_never_both() {
+        use super::{ImageWindow, image_window_for};
+        let image_modes: Vec<Mode> = Mode::ALL.into_iter().filter(|m| m.is_image()).collect();
+        assert!(
+            image_modes.len() >= 3,
+            "the image modes went missing from Mode::ALL: {image_modes:?}"
+        );
+        for m in &image_modes {
+            let want = if m.is_sstv() { ImageWindow::Sstv } else { ImageWindow::Image };
+            assert_eq!(image_window_for(*m), want, "{m:?} would open the wrong window");
+            // And never both: the choice is a single enum, so this is the whole
+            // property — but assert the two modes that share a panel are on
+            // opposite sides of it, which is what the report was about.
+            assert!(
+                image_window_for(*m) != image_window_for(Mode::Rifp) || !m.is_sstv(),
+                "{m:?} shares RIFP's window as well as its own"
+            );
+        }
+        assert_eq!(image_window_for(Mode::Sstv), ImageWindow::Sstv);
+        assert_eq!(image_window_for(Mode::SstvFm), ImageWindow::Sstv);
+        assert_eq!(image_window_for(Mode::Rifp), ImageWindow::Image);
+    }
+
+    /// **#215 at the frame: entering SSTV opens one window, not two.**
+    ///
+    /// The report was `SSTV` and `IMAGE` appearing together on the same panel. The
+    /// auto-open that set `IMAGE` matched every image mode, so the only honest test
+    /// is to *enter* the mode and count what opened — a decision test cannot see an
+    /// auto-open someone adds beside it.
+    #[test]
+    fn entering_an_image_mode_opens_one_window() {
+        use crate::multi::frame_test_lock;
+        use sdroxide_types::RadioController;
+        let _guard = frame_test_lock();
+        #[derive(Default)]
+        struct Silent;
+        impl RadioController for Silent {
+            fn send(&mut self, _cmd: sdroxide_types::Command) {}
+            fn poll_event(&mut self) -> Option<sdroxide_types::RadioEvent> {
+                None
+            }
+        }
+
+        for mode in [Mode::Sstv, Mode::SstvFm, Mode::Rifp] {
+            // **A settings folder per mode.** The strip syncs each window's open
+            // bit out of the saved settings on every frame, so one folder shared
+            // between the cases would hand the next mode the last one's windows —
+            // which is exactly how this test first reported Rifp opening SSTV.
+            let dir = std::env::temp_dir()
+                .join(format!("sdroxide-image-window-{mode:?}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+            let ctx = egui::Context::default();
+            let mut app =
+                super::SdroxideApp::new_tab(&ctx, None, None, Box::new(Silent), 0, true);
+            // Nothing carried in from a previous session: the question is what
+            // *entering the mode* opens.
+            app.show_sstv = false;
+            app.show_image = false;
+            app.state.rx[0].mode = mode;
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1280.0, 800.0),
+                )),
+                ..Default::default()
+            };
+            ctx.run_ui(input, |ui| {
+                eframe::App::ui(&mut app, ui, &mut eframe::Frame::_new_kittest());
+            })
+            .drop_without_applying_deltas();
+            let opened = [("SSTV", app.show_sstv), ("IMAGE", app.show_image)];
+            let n = opened.iter().filter(|(_, open)| *open).count();
+            assert_eq!(n, 1, "{mode:?} opened {opened:?} — one window, not two (#215)");
+            assert_eq!(
+                app.show_sstv,
+                mode.is_sstv(),
+                "{mode:?} opened the wrong window: {opened:?}"
+            );
+        }
+    }
+
+    /// The same, at the source: the auto-open and the draw must ask the decision,    /// The same, at the source: the auto-open and the draw must ask the decision,
+    /// not `is_image()` on its own. This is the line that was wrong — a bare
+    /// `is_image()` opened `IMAGE` for SSTV as well and nobody saw it until a
+    /// station clicked SSTV.
+    #[test]
+    fn nothing_gates_the_image_window_on_is_image_alone() {
+        let src = include_str!("frame.rs");
+        let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
+        assert!(
+            !code.contains("if mode.is_image() && self.show_image {"),
+            "the IMAGE window is drawn on a bare is_image() again (#215)"
+        );
+        assert!(
+            !code.contains("if mode.is_image() { self.show_image = true;"),
+            "the IMAGE window is auto-opened on a bare is_image() again (#215)"
+        );
+        assert_eq!(
+            code.matches("image_window_for(mode)").count(),
+            2,
+            "the auto-open and the draw both have to ask which window the mode uses"
+        );
+    }
+
     /// The reported bug, in one line: a profile's control bindings reached the
     /// server and were written to disk correctly, survived a restart, and were
     /// then **discarded at sign-in with nothing said** — because the opt-in that
@@ -5087,6 +5209,16 @@ impl SdroxideApp {
         if open { self.ui_settings.tool_windows_open |= TW_RFPAINT; } else { self.ui_settings.tool_windows_open &= !TW_RFPAINT; }
         crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
+    /// Is this mode's **own** image window open? The docked panel is drawn only
+    /// when it is not — and only the window that mode actually uses counts, so a
+    /// `IMAGE` left open from RIFP cannot blank SSTV's panel.
+    fn image_window_open(&self, mode: Mode) -> bool {
+        match image_window_for(mode) {
+            ImageWindow::Sstv => self.show_sstv,
+            ImageWindow::Image => self.show_image,
+        }
+    }
+
     pub(in crate::app) fn image_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>, mode: sdroxide_types::Mode) {
         let open = self.tool_window(ctx, "image", "IMAGE", [760.0, 600.0], self.show_image,
             |me, ui| { me.image_panel(ui, cmds, mode); });
@@ -5095,6 +5227,27 @@ impl SdroxideApp {
         crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
 }
+/// **Which of the two image windows a mode uses — never both.**
+///
+/// SSTV and SSTV-FM have had their own `SSTV` window since their panel was made
+/// detachable. `IMAGE` arrived later, for the image modes that had no window of
+/// their own (RIFP), and the auto-open that came with it matched **every** image
+/// mode — so opening SSTV opened the same panel twice, once under each title
+/// (#215, reported against 2.1.0.2.5). One decision, used by the auto-open, by the
+/// draw and by the docked panel, is what keeps it to one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(in crate::app) enum ImageWindow {
+    /// The mode's own `SSTV` window (`TW_SSTV`).
+    Sstv,
+    /// The shared `IMAGE` window (`TW_IMAGE`), for an image mode without one.
+    Image,
+}
+
+/// The window this image mode uses. See [`ImageWindow`]: exactly one, always.
+pub(in crate::app) fn image_window_for(mode: Mode) -> ImageWindow {
+    if mode.is_sstv() { ImageWindow::Sstv } else { ImageWindow::Image }
+}
+
 // Tool window bit indices (persisted in UiSettings.tool_windows_open).
 pub const TW_DSC: u64 = 1 << 0;
 pub const TW_NAVTEX: u64 = 1 << 1;
