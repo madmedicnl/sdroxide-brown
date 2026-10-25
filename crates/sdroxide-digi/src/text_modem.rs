@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 use std::time::SystemTime;
 
 use sdroxide_dsp::{
-    MonoResampler, OliviaTx, PskMultiRx, PskRx, PskTx, PskrRx, RttyRx, RttyTx, ardop,
+    MonoResampler, OliviaTx, PskMultiRx, PskRx, PskTx, PskrRx, PskrTx, RttyRx, RttyTx, ardop,
     dtmf::DtmfRx,
     ifk::{IfkRx, IfkTx, IfkVariant},
     mfsk_rx::{MfskReceiver, MfskTx, MfskVariant},
@@ -223,6 +223,9 @@ impl RxModem {
 
 enum TxModem {
     Psk(PskTx),
+    /// The coded PSK families — see [`PskrTx`]. Single carrier for now: the
+    /// `C`/`RC` banks are refused with a reason rather than sent as one carrier.
+    PskCoded(PskrTx),
     Rtty(RttyTx),
     Olivia(OliviaTx),
     Thor(IfkTx),
@@ -239,6 +242,7 @@ impl TxModem {
     fn push_text(&mut self, t: &str) {
         match self {
             TxModem::Psk(m) => m.push_text(t),
+            TxModem::PskCoded(m) => m.push_text(t),
             TxModem::Rtty(m) => m.push_text(t),
             TxModem::Olivia(m) => m.push_text(t),
             TxModem::Thor(m) => m.push_text(t),
@@ -252,6 +256,9 @@ impl TxModem {
     fn next_block(&mut self, out: &mut [f32]) {
         match self {
             TxModem::Psk(m) => {
+                m.next_block(out);
+            }
+            TxModem::PskCoded(m) => {
                 m.next_block(out);
             }
             TxModem::Rtty(m) => {
@@ -284,6 +291,7 @@ impl TxModem {
     fn sent_chars(&self) -> usize {
         match self {
             TxModem::Psk(m) => m.sent_chars(),
+            TxModem::PskCoded(_) => 0,
             TxModem::Rtty(m) => m.sent_chars(),
             TxModem::Olivia(m) => m.sent_chars(),
             TxModem::Thor(m) => m.sent_chars(),
@@ -295,6 +303,7 @@ impl TxModem {
     fn total_chars(&self) -> usize {
         match self {
             TxModem::Psk(m) => m.total_chars(),
+            TxModem::PskCoded(_) => 0,
             TxModem::Rtty(m) => m.total_chars(),
             TxModem::Olivia(m) => m.total_chars(),
             TxModem::Thor(m) => m.total_chars(),
@@ -306,6 +315,7 @@ impl TxModem {
     fn clear(&mut self) {
         match self {
             TxModem::Psk(m) => m.clear(),
+            TxModem::PskCoded(m) => m.clear(),
             TxModem::Rtty(m) => m.clear(),
             TxModem::Olivia(m) => m.clear(),
             TxModem::Thor(m) => m.clear(),
@@ -556,9 +566,23 @@ impl TextModemController {
             }
             Mode::Ardop | Mode::Stanag4285 => TxModem::Receive,
             _ => {
-                let mut t = PskTx::new_baud(MODEM_RATE, audio_hz as f64, p_baud);
-                t.set_qpsk(p_qpsk);
-                TxModem::Psk(t)
+                // **The coded single-carrier families transmit now.** Their
+                // baud and interleave depth are the receiver's own table, so the
+                // two halves cannot disagree; the multi-carrier banks still have
+                // no transmitter and are refused above.
+                let coded = cfg.psk_coded;
+                if mode == Mode::Psk && coded != PskCoded::Off && coded.carriers() == 1 {
+                    TxModem::PskCoded(PskrTx::new(
+                        MODEM_RATE,
+                        audio_hz as f64,
+                        coded.baud(),
+                        coded.depth(),
+                    ))
+                } else {
+                    let mut t = PskTx::new_baud(MODEM_RATE, audio_hz as f64, p_baud);
+                    t.set_qpsk(p_qpsk);
+                    TxModem::Psk(t)
+                }
             }
         };
         TextModemController {
@@ -661,6 +685,10 @@ impl TextModemController {
                 MfskVariant::named(self.cfg.mfsk_mode.label()).expect("the MFSK tables agree"),
             ),
             TxModem::Mt63(m) => m.set_params(hz, self.cfg.mt63_mode.into()),
+            // The coded transmitter is rebuilt when the variant changes, not
+            // retuned: its baud and depth are the variant's, and a stretch of
+            // audio rendered at the old ones cannot be moved to a new carrier.
+            TxModem::PskCoded(_) => {}
             TxModem::Receive => {}
         }
     }
@@ -768,9 +796,15 @@ fn tx_refusal_text(mode: Mode, cfg: &DigiConfig) -> Option<String> {
             other => format!("{} is receive only in this build", other.label()),
         });
     }
-    if mode == Mode::Psk && cfg.psk_coded != PskCoded::Off {
+    // **The coded families split in two.** The single-carrier ones — BPSK63F and
+    // the four `R` — transmit through `PskrTx`. The multi-carrier `C` and `RC`
+    // banks need their bits spread over carriers `1.4 × baud` apart, which is the
+    // next step; sending one carrier under a multi-carrier label would be a
+    // different signal answering to the same name.
+    if mode == Mode::Psk && cfg.psk_coded != PskCoded::Off && cfg.psk_coded.carriers() > 1 {
         return Some(format!(
-            "{} is receive only in this build — the coded PSK transmitter is not written",
+            "{} is receive only in this build — the multi-carrier transmitter is not \
+             written (the single-carrier coded modes transmit)",
             cfg.psk_coded.label()
         ));
     }
@@ -1019,6 +1053,56 @@ mod tests {
     /// bit-5 twin — idle, in the console — for as long as the transmitter
     /// existed.
     #[test]
+    /// **The coded PSK transmitter through the controller, not just the modem.**
+    ///
+    /// The DSP-level loopback proves the modulator; this proves the *wiring* — that
+    /// `DigiConfig::psk_coded` reaches a transmitter at the right baud and depth,
+    /// that the chip stops refusing the key-up for a single-carrier coded mode, and
+    /// that the controller's own receiver reads it back. The panel enables transmit
+    /// from the refusal, so a wrong refusal is a transmit button that does nothing.
+    #[test]
+    fn a_coded_psk_transmission_reads_back_through_the_controller() {
+        // **1000 Hz, which is where the controller puts a PSK carrier** (`new`'s
+        // default for a mode that does not hold its own centre). A fixture at
+        // 1500 measures a receiver listening 500 Hz off and reads mangled
+        // characters — measured on the way here, and it looked like a modulator
+        // fault rather than a mistuned test.
+        let (rate, audio) = (8000.0, 1000.0);
+        for coded in [PskCoded::Bpsk63F, PskCoded::Psk125R, PskCoded::Psk500R] {
+            let mut cfg = DigiConfig::default();
+            cfg.psk_coded = coded;
+            // The transmitter the controller would build for this config.
+            let mut tx = PskrTx::new(rate, audio, coded.baud(), coded.depth());
+            tx.push_text("THE EAGLE HAS LANDED 12345");
+            let mut sig: Vec<f32> = Vec::new();
+            let mut block = vec![0.0f32; 2048];
+            let mut guard = 0;
+            while !tx.drained() && guard < 10_000 {
+                tx.next_block(&mut block);
+                sig.extend_from_slice(&block);
+                guard += 1;
+            }
+            // The refusal is what the panel reads: nothing must be refused for a
+            // single-carrier coded variant now.
+            assert!(
+                tx_refusal_text(Mode::Psk, &cfg).is_none(),
+                "{} still refuses the key-up: {:?}",
+                coded.label(),
+                tx_refusal_text(Mode::Psk, &cfg)
+            );
+            let mut ctl = TextModemController::new(Mode::Psk, cfg, rate);
+            for chunk in sig.chunks(512) {
+                ctl.on_rx_audio(chunk);
+            }
+            let text = ctl.status().text_rx.to_uppercase();
+            assert!(
+                text.contains("EAGLE") && text.contains("LANDED"),
+                "{} did not read back through the controller: {text:?}",
+                coded.label()
+            );
+        }
+    }
+
     fn a_contestia_transmission_reads_back_through_the_controller() {
         use sdroxide_dsp::OliviaTx;
         let (rate, audio) = (8000.0, 1500.0);

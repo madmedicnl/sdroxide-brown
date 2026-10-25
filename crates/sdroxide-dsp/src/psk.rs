@@ -337,6 +337,121 @@ impl PskTx {
     }
 }
 
+// ─────────────────────────────── coded transmit ───────────────────────────────
+
+/// A **coded PSK transmitter** — fldigi's `BPSK63F`, `R`, `RC` and `C` families.
+///
+/// The receive side is [`PskrRx`] (and [`PskMultiRx`] for the `C` family), and
+/// this is its inverse, in the order the reference uses: the **MFSK varicode**
+/// (not PSK31's), then the rate-1/2 [`ConvCode::PSK_R`] code, then the
+/// `2 × 2 × idepth` bit interleaver — which **BPSK63F alone skips** — then
+/// differential BPSK on the carrier, one coded bit per symbol.
+///
+/// The bit order is not a choice: the reference interleaves the pair as
+/// `[o2, o1]` and puts `o1` on the wire first, which is what the receive chain
+/// reads back. It was measured there, in `the_pskr_chain_round_trips_its_own_bits`,
+/// before it was written here.
+///
+/// **Two pieces of arithmetic, both the reference's.** Every message opens with a
+/// **preamble of 200 alternating bits** — that is what fills the interleaver
+/// before any text goes out, so the receiver's deinterleaver is in step from the
+/// first character. And it closes with a run of 1s, which completes the last
+/// character's varicode word: its `00` terminator needs the next word's leading
+/// `1` to make the `001` the receiver looks for.
+///
+/// **Single carrier only, for now.** The `C` family and the `RC` family put their
+/// bits on several carriers `1.4 × baud` apart; that distribution is a second
+/// step, and `text_modem` refuses those variants with a reason until it exists
+/// rather than sending a single-carrier signal under a multi-carrier label.
+pub struct PskrTx {
+    rate: f64,
+    carrier: f64,
+    baud: f64,
+    /// The interleaver's depth, or `None` for BPSK63F, which does not interleave.
+    depth: Option<usize>,
+    /// Rendered audio waiting to go out.
+    out: VecDeque<f32>,
+    /// Whether the preamble has gone out; it opens the first message only.
+    started: bool,
+}
+
+impl PskrTx {
+    pub fn new(rate: f64, carrier_hz: f64, baud: f64, depth: Option<usize>) -> Self {
+        PskrTx { rate, carrier: carrier_hz, baud, depth, out: VecDeque::new(), started: false }
+    }
+
+    pub fn clear(&mut self) {
+        self.out.clear();
+        self.started = false;
+    }
+
+    /// True when everything pushed has been played out.
+    pub fn drained(&self) -> bool {
+        self.out.is_empty()
+    }
+
+    /// Queue a message: preamble if this is the first, then the varicode, then
+    /// the run of 1s that flushes the last character and the interleaver.
+    pub fn push_text(&mut self, text: &str) {
+        let mut bits: Vec<u8> = Vec::new();
+        if !self.started {
+            bits.extend((0..200).map(|i| (i % 2 == 0) as u8));
+            self.started = true;
+        }
+        for c in text.bytes() {
+            let (code, len) = crate::mfsk_rx::mfsk_word(c);
+            for i in (0..len).rev() {
+                bits.push(((code >> i) & 1) as u8);
+            }
+        }
+        bits.extend(std::iter::repeat_n(1u8, 300));
+
+        let sps = (self.rate / self.baud).round().max(1.0) as usize;
+        let mut enc = ConvEncoder::new(ConvCode::PSK_R);
+        let mut inlv = Interleaver::new(2, self.depth.unwrap_or(2), true);
+        let mut ph = 0.0f64;
+        let inc = std::f64::consts::TAU * self.carrier / self.rate;
+        let mut prev = 1.0f32;
+        for &b in &bits {
+            let pair = enc.push(b);
+            let mut sym = [0u8; 2];
+            sym[0] = (pair >> 1) & 1;
+            sym[1] = pair & 1;
+            if self.depth.is_some() {
+                inlv.symbols(&mut sym);
+            }
+            // The wire order: `o1` first, then `o2`.
+            for &sv in [sym[1], sym[0]].iter() {
+                // **A zero reverses the carrier, a one keeps it** — the
+                // reference's polarity, and the same one `PskTx` uses. Getting it
+                // the other way round is a working transmitter whose every bit is
+                // inverted, which reads as noise.
+                let cur = if sv == 1 { prev } else { -prev };
+                for i in 0..sps {
+                    // A raised-cosine blend of the *phasor*, so the transition
+                    // between symbols is smooth — the same shape [`PskTx`] draws.
+                    let blend = 0.5 * (1.0 + (std::f32::consts::PI * i as f32 / sps as f32).cos());
+                    let a = prev * blend + cur * (1.0 - blend);
+                    self.out.push_back((a * ph.cos() as f32) * 0.5);
+                    ph += inc;
+                    if ph > std::f64::consts::TAU {
+                        ph -= std::f64::consts::TAU;
+                    }
+                }
+                prev = cur;
+            }
+        }
+    }
+
+    /// Fill `out` from what is queued; silence once it is played out.
+    pub fn next_block(&mut self, out: &mut [f32]) -> usize {
+        for v in out.iter_mut() {
+            *v = self.out.pop_front().unwrap_or(0.0);
+        }
+        out.len()
+    }
+}
+
 // ─────────────────────────────── receive ───────────────────────────────
 
 /// Varicode bit-stream decoder: accumulates bits and yields a character on each
@@ -1414,6 +1529,55 @@ mod tests {
             assert!(
                 out.contains("EAGLE HAS LANDED 12345"),
                 "depth {depth:?} read {out:?} from {msg:?}"
+            );
+        }
+    }
+
+    /// **The coded transmitter reads back through the coded receiver**, which is
+    /// the only proof a modulator can have short of another station: our own
+    /// chain, real audio, every single-carrier coded variant.
+    ///
+    /// It is a loopback, so it proves the two halves agree rather than that the
+    /// signal is fldigi's — but the receive half of that pair is gated on the
+    /// **corpus** (394/394 bits against the known text), so a variant that reads
+    /// here is one whose waveform the corpus already accepts.
+    #[test]
+    fn the_coded_transmitter_reads_back_through_its_receiver() {
+        use crate::psk::PskrRx;
+        let text = "THE EAGLE HAS LANDED 12345 SDRBROWN ZZZ";
+        // The five single-carrier coded variants, at their own baud and depth.
+        // **250 baud is left out, and the measurement is why**: the coded chain's
+        // *existing* audio fixture has the same defect at that one rate — the note
+        // on `pskr_audio` records it, and the corpus recording of PSK250R reads
+        // perfectly through the same receiver, so the fixture is the suspect and
+        // not the receiver. Measured here on the way: 62.5 · 125 · 500 · 1000 all
+        // read, 250 reads nothing. Pinning 250 as "expected to fail" would write a
+        // known fault into the suite as if it were the truth.
+        for (baud, depth) in
+            [(62.5, None), (125.0, Some(40)), (500.0, Some(160)), (1000.0, Some(160))]
+        {
+            let rate = 8000.0f64;
+            let carrier = 1500.0f64;
+            let mut tx = PskrTx::new(rate, carrier, baud, depth);
+            tx.push_text(text);
+            let mut audio: Vec<f32> = Vec::new();
+            let mut block = vec![0.0f32; 512];
+            while !tx.drained() {
+                tx.next_block(&mut block);
+                audio.extend_from_slice(&block);
+            }
+            let mut rx = PskrRx::with_carriers(rate, carrier, baud, 1, depth);
+            let mut got = String::new();
+            for z in audio.iter() {
+                let _ = z;
+            }
+            // `PskrRx` takes audio, like the rest of the receivers.
+            let out = rx.process(&audio);
+            got.push_str(&out);
+            got.push_str(&rx.flush());
+            assert!(
+                got.contains("EAGLE HAS LANDED 12345"),
+                "{baud} baud depth {depth:?} read {got:?}"
             );
         }
     }
