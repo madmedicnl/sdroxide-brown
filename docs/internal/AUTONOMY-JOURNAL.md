@@ -21,6 +21,39 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-25 (aircraft) — a click on an aircraft pins its card, with the Planespotters link
+
+**Summary.** On the ADS-B map, clicking an aircraft now pins a small card beside
+it that stays until you close it with the cross or Esc, or click another aircraft.
+The Planespotters link in it can be clicked, and the photo shows if it was already
+loaded. Clicking and hovering still ask the internet nothing; a new **Look up
+online** button in the card asks your station's relay about that one aircraft. It
+has not been seen on a real screen or against a real station yet; that is the
+next thing to look at.
+
+**Done.** Branch `claude/aircraft-pinned-card`, one PR to `main`, no wire change,
+no relay change.
+- Pure rules in `adsb_map` (what a click pins, what closes it, where the card
+  sits, no hover card over the pinned aircraft); the card itself is the hover
+  card's (`card_view`), so the two cannot disagree; `aircraft_pin` draws it and
+  holds the only place that asks.
+- Tests written first against neutral stubs: 23 failed by assertion (two that
+  passed vacuously were given a positive control), then green. `cargo test -p
+  sdroxide-ui` 1083 passed / 0 failed / 8 ignored. Wasm check: 0 errors. `cargo
+  check -p sdroxide-ui --all-targets`: no warning from these files. `rustfmt
+  --check` clean on the five `.rs` files touched.
+- `cargo check --workspace --all-targets` could not run: `sdroxide-rade`'s build
+  script downloads opus and this sandbox has no route to it. Not claimed.
+
+**Not done / blocked.** Placement, the clickable link and the thumbnail on a real
+screen; the lookup button against a station with the relay on. Both need a person
+at a screen. After a failed lookup (offline, busy) the button does not come back
+by itself; the AIRCRAFT window's back-off still decides when it is asked again.
+
+**Next.** The mode work.
+
+---
+
 ## 2026-10-25 (STANAG 4285) — a plain teleprinter transmission now reads, and the sweep is off for the storm
 
 **Summary.** A STANAG 4285 station sending **uncoded** text — the simple 1200 bps

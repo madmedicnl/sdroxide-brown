@@ -23,7 +23,6 @@ use sdroxide_types::{AdsbAircraft, AdsbStatus, Command};
 
 use crate::app::SdroxideApp;
 use crate::app::aircraft_hover;
-use crate::app::aircraft_online::{OnlineState, ThumbStatus};
 use crate::app::util::fmt_age;
 use crate::theme;
 use crate::theme::ThemedScroll;
@@ -440,19 +439,8 @@ impl SdroxideApp {
         let registry = &self.aircraft_registry;
         let online = &self.aircraft_online;
         let hover = |ui: &mut egui::Ui, a: &AdsbAircraft| {
-            let icao = a.icao & 0xff_ffff;
-            let answer = online.store.state_for(icao, has_station);
-            let thumb_url = match answer {
-                OnlineState::Ready(info) => info.photo.as_ref().map(|p| p.thumb_url.as_str()),
-                _ => None,
-            };
-            let thumb = thumb_url.map_or(ThumbStatus::NotTried, |u| online.thumb_status(u));
-            let card = aircraft_hover::hover_card(a, registry.card(icao), answer, thumb, home, now);
-            let tex = card
-                .photo
-                .as_ref()
-                .and_then(|p| p.thumb_url.as_deref())
-                .and_then(|u| online.thumb_texture(u));
+            let (card, tex) =
+                aircraft_hover::card_view(a, registry, online, has_station, home, now);
             aircraft_hover::draw(ui, &card, tex);
         };
         let state = &mut self.adsb_map;
@@ -484,6 +472,9 @@ impl SdroxideApp {
                 mode: sdroxide_types::Mode::Am,
             });
         }
+        // A click on an aircraft pins its card beside it. The click asks for
+        // nothing; the card's own button does.
+        self.adsb_pinned_card(ui, &st.aircraft, home, now);
     }
 
     /// The operator's own position, from the grid in the digital-mode setup.

@@ -32,7 +32,7 @@
 //! is the one place with no room for a hedge.
 
 use eframe::egui::{
-    Align2, Color32, FontId, Painter, Pos2, Rect, Sense, Shape, Stroke, Ui, pos2, vec2,
+    Align2, Color32, FontId, Painter, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2, pos2, vec2,
 };
 use sdroxide_types::{AdsbAircraft, AdsbSettings, Vfo};
 
@@ -75,6 +75,20 @@ pub struct AdsbMapState {
     pub layers: MapLayers,
     /// The aircraft whose card is open, by ICAO address.
     pub selected: Option<u32>,
+    /// The aircraft whose small card is pinned beside it, by ICAO address. Set
+    /// by a click on an aircraft, cleared only by the card's close button, Esc,
+    /// another aircraft's click (which moves it) or the aircraft leaving the
+    /// map. A click on empty map leaves it alone.
+    pub pinned: Option<u32>,
+    /// Where the pinned aircraft is on screen this frame, written by [`show`].
+    pub pin_anchor: Option<Pos2>,
+    /// The map's rectangle this frame, written by [`show`]; the card stays in it.
+    pub pin_bounds: Option<Rect>,
+    /// How big the pinned card was last frame, so it can be placed to fit.
+    pub pin_size: Option<Vec2>,
+    /// The aircraft the operator pressed "Look up online" for: its thumbnail is
+    /// loaded once the answer is in. `None` until that button is pressed.
+    pub lookup: Option<u32>,
     /// The map under the picture: land, rivers and borders as an image rather
     /// than the dot stipple the propagation maps use. Rebuilt only when the
     /// view moves by more than a texel.
@@ -508,6 +522,11 @@ pub fn show(
     active_vfo: Vfo,
     hover_ui: Option<&dyn Fn(&mut Ui, &AdsbAircraft)>,
 ) -> Option<MapTune> {
+    // The pinned card goes with its aircraft, and is only placed once this frame
+    // has drawn the aircraft where it is.
+    state.pinned = pin_keep(state.pinned, aircraft, now, cfg.drop_map_s);
+    state.pin_anchor = None;
+    state.pin_bounds = None;
     let avail_w = ui.available_width();
     if avail_w < MIN_HEIGHT {
         return None;
@@ -788,12 +807,15 @@ pub fn show(
     if let Some(i) = hover {
         let a = live[i];
         // A card from the app when it has one; the plain text when it has not.
-        match hover_ui {
-            Some(card) => {
-                resp.clone().on_hover_ui(|ui| card(ui, a));
-            }
-            None => {
-                resp.clone().on_hover_text(tooltip_text(a, home));
+        // Not over the aircraft whose card is pinned: it would say it twice.
+        if hover_wanted(state.pinned, a.icao) {
+            match hover_ui {
+                Some(card) => {
+                    resp.clone().on_hover_ui(|ui| card(ui, a));
+                }
+                None => {
+                    resp.clone().on_hover_text(tooltip_text(a, home));
+                }
             }
         }
         if resp.clicked() {
@@ -802,6 +824,16 @@ pub fn show(
     } else if resp.clicked() {
         state.selected = None;
     }
+    // The pin follows the click on an aircraft only; the click on empty map that
+    // clears `selected` leaves it where it is.
+    state.pinned = pin_after_click(state.pinned, hover.map(|i| live[i].icao), resp.clicked());
+    state.pin_bounds = Some(rect);
+    state.pin_anchor = state
+        .pinned
+        .and_then(|p| live.iter().find(|a| a.icao == p))
+        .and_then(|a| a.lat.zip(a.lon))
+        .map(|(lat, lon)| project(lat, lon))
+        .filter(|c| rect.contains(*c));
 
     // Only where it is true: over a station the double-click tunes instead, and a
     // hint that promises the wrong gesture is worse than none.
@@ -820,9 +852,181 @@ pub fn show(
     tune
 }
 
+// ── the pinned card ───────────────────────────────────────────────────────
+
+/// Gap between an aircraft's symbol and the card pinned beside it, points.
+pub const PIN_GAP: f32 = 14.0;
+
+/// The pin after a click this frame: an aircraft under the pointer takes it, a
+/// click on empty map leaves it where it was.
+pub fn pin_after_click(pinned: Option<u32>, hit: Option<u32>, clicked: bool) -> Option<u32> {
+    match (clicked, hit) {
+        (true, Some(icao)) => Some(icao),
+        _ => pinned,
+    }
+}
+
+/// The pin after its close button.
+pub fn pin_after_close(_pinned: Option<u32>) -> Option<u32> {
+    None
+}
+
+/// The pin after a key press: Esc closes it unless a text field has the keyboard.
+pub fn pin_after_key(pinned: Option<u32>, esc: bool, typing: bool) -> Option<u32> {
+    if esc && !typing { None } else { pinned }
+}
+
+/// The pin once the aircraft list is known: it closes with its aircraft, which
+/// is gone from the list or no longer has a fresh enough position to be drawn.
+pub fn pin_keep(
+    pinned: Option<u32>,
+    aircraft: &[AdsbAircraft],
+    now: i64,
+    drop_map_s: u16,
+) -> Option<u32> {
+    let icao = pinned?;
+    aircraft
+        .iter()
+        .find(|a| a.icao == icao)
+        .filter(|a| !a.pos_stale(now, drop_map_s))
+        .map(|a| a.icao)
+}
+
+/// Whether the hover card is drawn over this aircraft: not over the one whose
+/// card is already pinned, which would only say the same thing twice.
+pub fn hover_wanted(pinned: Option<u32>, icao: u32) -> bool {
+    pinned != Some(icao)
+}
+
+/// Top-left of a card of `size` pinned to an aircraft at `anchor`: below and to
+/// the right of it, flipped to the other side where that would leave the map,
+/// and kept inside `bounds` whatever is left.
+pub fn pin_placement(anchor: Pos2, size: Vec2, bounds: Rect) -> Pos2 {
+    let mut x = anchor.x + PIN_GAP;
+    if x + size.x > bounds.right() {
+        x = anchor.x - PIN_GAP - size.x;
+    }
+    let mut y = anchor.y + PIN_GAP;
+    if y + size.y > bounds.bottom() {
+        y = anchor.y - PIN_GAP - size.y;
+    }
+    // Last, and the minimum last of all: a card bigger than the map is pinned to
+    // its top-left corner rather than asked to fit where it cannot.
+    pos2(
+        x.min(bounds.right() - size.x).max(bounds.left()),
+        y.min(bounds.bottom() - size.y).max(bounds.top()),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── the pinned card ───────────────────────────────────────────────────
+
+    fn on_map(icao: u32, pos_age: i64) -> AdsbAircraft {
+        let mut a = AdsbAircraft::new(icao, 1_000);
+        a.lat = Some(52.0);
+        a.lon = Some(5.0);
+        a.last_pos_at = 1_000 - pos_age;
+        a
+    }
+
+    #[test]
+    fn a_click_on_an_aircraft_pins_it() {
+        assert_eq!(pin_after_click(None, Some(0x4840D6), true), Some(0x4840D6));
+        assert_eq!(pin_after_click(None, Some(0x4840D6), false), None, "no click, no pin");
+    }
+
+    #[test]
+    fn a_click_on_empty_map_keeps_the_pin() {
+        assert_eq!(pin_after_click(Some(0x4840D6), None, true), Some(0x4840D6));
+        assert_eq!(pin_after_click(None, None, true), None);
+    }
+
+    #[test]
+    fn a_click_on_another_aircraft_moves_the_pin() {
+        assert_eq!(pin_after_click(Some(0x4840D6), Some(0x484006), true), Some(0x484006));
+    }
+
+    #[test]
+    fn only_the_close_button_unpins() {
+        assert_eq!(pin_after_close(Some(0x4840D6)), None);
+        // Nothing the map does by itself closes it: not a click on empty map,
+        // not a click with no aircraft under the pointer.
+        assert_eq!(pin_after_click(Some(0x4840D6), None, true), Some(0x4840D6));
+        assert_eq!(pin_after_click(Some(0x4840D6), None, false), Some(0x4840D6));
+    }
+
+    #[test]
+    fn escape_closes_the_pin_unless_a_text_field_has_the_keyboard() {
+        assert_eq!(pin_after_key(Some(7), true, false), None);
+        assert_eq!(pin_after_key(Some(7), true, true), Some(7), "typing keeps its Esc");
+        assert_eq!(pin_after_key(Some(7), false, false), Some(7));
+        assert_eq!(pin_after_key(None, true, false), None);
+    }
+
+    #[test]
+    fn a_pin_whose_aircraft_is_gone_closes() {
+        let list = [on_map(1, 0), on_map(2, 0)];
+        assert_eq!(pin_keep(Some(1), &list, 1_000, 60), Some(1));
+        assert_eq!(pin_keep(Some(9), &list, 1_000, 60), None, "9 left the list");
+        assert_eq!(pin_keep(None, &list, 1_000, 60), None);
+    }
+
+    #[test]
+    fn a_pin_whose_position_expired_closes() {
+        let list = [on_map(1, 61), on_map(2, 59)];
+        assert_eq!(pin_keep(Some(1), &list, 1_000, 60), None, "off the map, so off the card");
+        assert_eq!(pin_keep(Some(2), &list, 1_000, 60), Some(2));
+    }
+
+    #[test]
+    fn hovering_the_pinned_aircraft_adds_no_second_card() {
+        assert!(!hover_wanted(Some(5), 5));
+        assert!(hover_wanted(Some(5), 6));
+        assert!(hover_wanted(None, 5));
+    }
+
+    fn bounds() -> Rect {
+        Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0))
+    }
+
+    #[test]
+    fn the_pinned_card_sits_beside_the_aircraft_and_stays_in_the_map() {
+        let size = vec2(200.0, 100.0);
+        let anchor = pos2(100.0, 100.0);
+        let at = pin_placement(anchor, size, bounds());
+        let r = Rect::from_min_size(at, size);
+        assert!(!r.contains(anchor), "the card covers its own aircraft");
+        assert!(r.min.x > anchor.x && r.min.y > anchor.y, "below and to the right: {r:?}");
+        assert!(r.min.x - anchor.x <= 2.0 * PIN_GAP, "and close to it: {r:?}");
+
+        // Near the right edge it goes to the left of the aircraft.
+        let anchor = pos2(780.0, 100.0);
+        let r = Rect::from_min_size(pin_placement(anchor, size, bounds()), size);
+        assert!(r.max.x <= anchor.x, "{r:?}");
+        assert!(bounds().contains_rect(r), "{r:?}");
+
+        // Near the bottom it goes above.
+        let anchor = pos2(100.0, 590.0);
+        let r = Rect::from_min_size(pin_placement(anchor, size, bounds()), size);
+        assert!(r.max.y <= anchor.y, "{r:?}");
+        assert!(bounds().contains_rect(r), "{r:?}");
+
+        // In the corner, both.
+        let anchor = pos2(795.0, 595.0);
+        let r = Rect::from_min_size(pin_placement(anchor, size, bounds()), size);
+        assert!(r.max.x <= anchor.x && r.max.y <= anchor.y, "{r:?}");
+        assert!(!r.contains(anchor));
+    }
+
+    #[test]
+    fn a_card_bigger_than_the_map_is_pinned_to_its_corner_without_panicking() {
+        let tiny = Rect::from_min_size(pos2(10.0, 20.0), vec2(120.0, 80.0));
+        let at = pin_placement(pos2(60.0, 50.0), vec2(440.0, 300.0), tiny);
+        assert_eq!(at, tiny.min);
+    }
 
     /// **The plain tooltip is what it always was.** The hover card replaces it
     /// only where the app hands the map one; everywhere else, and for anything
