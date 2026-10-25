@@ -41,6 +41,7 @@ pub(in crate::app) mod aircraft_online;
 pub(in crate::app) mod aircraft_online_io;
 pub(in crate::app) mod aircraft_pin;
 pub(in crate::app) mod aircraft_registry;
+pub(in crate::app) mod aircraft_search;
 pub(in crate::app) mod extras;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
@@ -1028,8 +1029,9 @@ pub struct SdroxideApp {
     adsb_status: Option<Box<sdroxide_types::AdsbStatus>>,
     /// ADS-B: the radar picture's pan/zoom and which target is selected.
     adsb_map: crate::adsb_map::AdsbMapState,
-    /// ADS-B: filter for the aircraft list; matches a callsign or an address.
-    adsb_filter: String,
+    /// The one search box of the ADS-B table, the Cards list and the map. Memory
+    /// only: it is not saved, and nothing it does reaches the network.
+    aircraft_query: String,
     /// ADS-B: the decoder's own settings window is open.
     show_adsb_setup: bool,
     adsb_sort: panels::adsb::AdsbSort,
@@ -2179,7 +2181,7 @@ impl SdroxideApp {
             aprs_map: crate::aprs_map::AprsMapState::default(),
             adsb_status: None,
             adsb_map: crate::adsb_map::AdsbMapState::default(),
-            adsb_filter: String::new(),
+            aircraft_query: String::new(),
             show_adsb_setup: false,
             adsb_sort: panels::adsb::AdsbSort::default(),
             adsb_sort_desc: true,

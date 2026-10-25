@@ -6102,6 +6102,26 @@ about, and asks that station's relay for that aircraft alone, one lookup at a
 time. If the station's operator has not switched the relay on, or you are not
 signed in, the card says so instead of offering the button.
 
+**Searching.** The **search** box above the table, in the AIRCRAFT window's
+**Cards** list and above the map is one and the same box: type there and the
+table, the list and the map all narrow to the aircraft that match. It finds an
+aircraft by its address (ICAO), callsign, registration, type (maker and model),
+operator or category such as *heavy*. Several words must all match; begin a word
+with `icao:`, `call:`, `reg:`, `type:` or `op:` to look in that field only —
+`reg:PH op:KLM`. The count beside the box (*12 of 47*) says how many are left,
+and **✕** clears it. On the map an aircraft that does not match is not drawn, cannot
+be hovered or clicked, and no longer widens the view; the aircraft whose card is
+pinned or open always stays, so a card never loses its aircraft. In the Cards
+list, if the card you had open is left out it shows the first match instead, and
+comes back when the box lets it.
+
+The search reads only what the program already holds and **asks for nothing**.
+The type and operator come from the station's online lookup, so they are found
+only for aircraft whose card has been looked up; when a word begins `type:` or
+`op:` the box says how many aircraft that leaves out (*3 of 20 aircraft without
+online data — open their card*). The search is not saved: closing the program
+clears it.
+
 #### Setup
 
 **SETUP** in the panel header opens the decoder's own settings.

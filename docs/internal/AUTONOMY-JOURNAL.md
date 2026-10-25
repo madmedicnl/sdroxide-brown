@@ -21,6 +21,45 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-25 (aircraft search) — one search box over the table, the Cards list and the map
+
+**Summary.** There is now a search box over the ADS-B table, the AIRCRAFT window's
+Cards list and the map, and it is the same box in all three. Type an address, a
+callsign, a registration, a type or an operator and the three narrow together; on the
+map the aircraft that do not match disappear, and the view no longer stretches to fit
+them. The aircraft whose card is open stays on the map whatever you type. The search
+asks the internet nothing, so a type or an operator is found only for aircraft you
+have already looked up, and the box says how many it could not look at. It has not
+been seen on a real screen yet.
+
+**Done.** Branch `claude/aircraft-search-filters`, no wire change, no relay change,
+nothing stored in the browser.
+- A pure module `aircraft_search` (words that must all match, `icao:` `call:` `reg:`
+  `type:` `op:` prefixes, the note about missing online data, which card to show when
+  the filter leaves the chosen one out) and one box drawn in three places. The old
+  callsign and address filter of the table is replaced by it. The map has a
+  `visible` set that its draw, hover, click and framing all read, with the pinned and
+  selected aircraft always kept.
+- A card shown only because the filter left it first is not asked about and its photo
+  is not fetched: typing in the box must not cause a request.
+- Tests written first against neutral stubs: 25 failed by assertion; one that passed
+  vacuously (the VDL2 flight fallback) was given a negative assertion; two guards
+  (`searching_asks_for_nothing`, the source scan) cannot fail before the code and
+  say so. Then green: `cargo test -p sdroxide-ui` 1113 passed / 0 failed / 8 ignored
+  (1083 before, 30 new). Wasm check: 0 errors (one `QsoInfo` warning in
+  `solar3d`, not ours). `rustfmt --check` clean on the four `.rs` files touched.
+- `cargo check --workspace --all-targets` could not run: `sdroxide-rade`'s build
+  script downloads opus and this sandbox has no route to it. Not claimed.
+
+**Not done / blocked.** Layout of the box in the narrow table column and above the
+map, on a real screen. The note about missing online data is shown only for words
+that begin `type:` or `op:`, as decided; a plain word such as `boeing` that finds
+nothing says nothing about it.
+
+**Next.** The mode work.
+
+---
+
 ## 2026-10-25 (aircraft) — a click on an aircraft pins its card, with the Planespotters link
 
 **Summary.** On the ADS-B map, clicking an aircraft now pins a small card beside

@@ -80,11 +80,10 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
   on the map is open for review; it reads what the card has already fetched and
   asks for nothing. Still to do: a live run against a real station and the real
   services, and a look at the hover card on a screen.
-- **Aircraft pinned card.** A click on an aircraft pins a card beside it (✕ or Esc
-  closes it), with a clickable Planespotters link; a click or a hover asks for
-  nothing, and a "Look up online" button asks the relay for that aircraft only.
-  Branch `claude/aircraft-pinned-card`, open for review; not yet seen on a screen
-  or against a live station.
+- **Aircraft search and filters.** One search box over the ADS-B table, the Cards
+  list and the map (ICAO, callsign, registration, type, operator); the map hides
+  what does not match, the pinned aircraft stays, and it asks for nothing. Branch
+  `claude/aircraft-search-filters`, open for review; not yet seen on a screen.
 - **The mode work is the queue.** [`MODE-PHASE-4-PROMPT.md`](MODE-PHASE-4-PROMPT.md)
   — finish the modes, TX for everything fldigi can transmit, vendor when the port
   and the bench are exhausted. Journal and measurements:

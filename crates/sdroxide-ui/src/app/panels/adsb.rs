@@ -23,6 +23,7 @@ use sdroxide_types::{AdsbAircraft, AdsbStatus, Command};
 
 use crate::app::SdroxideApp;
 use crate::app::aircraft_hover;
+use crate::app::aircraft_search;
 use crate::app::util::fmt_age;
 use crate::theme;
 use crate::theme::ThemedScroll;
@@ -211,25 +212,32 @@ impl SdroxideApp {
     /// jump every time another aeroplane came into range.
     fn adsb_list(&mut self, ui: &mut egui::Ui, st: &AdsbStatus, now: i64, avail_h: f32) {
         let home = self.adsb_home();
+        let has_station = self.ctrl.peer_url().is_some();
+        let query = aircraft_search::Query::parse(&self.aircraft_query);
+        let found = aircraft_search::search_adsb(
+            &query,
+            &st.aircraft,
+            &self.aircraft_registry,
+            &self.aircraft_online.store,
+            has_station,
+        );
         ui.horizontal_wrapped(|ui| {
             ui.set_min_height(20.0);
             ui.label(RichText::new("AIRCRAFT").strong().size(10.5).color(theme::CYAN()));
-            ui.add(
-                egui::TextEdit::singleline(&mut self.adsb_filter)
-                    .hint_text("filter")
-                    .desired_width(70.0),
+            let counts = found.visible.as_ref().map(|v| (v.len(), found.total));
+            aircraft_search::search_box(
+                ui,
+                &mut self.aircraft_query,
+                90.0,
+                counts,
+                found.hint.as_deref(),
             );
         });
 
-        let filter = self.adsb_filter.trim().to_ascii_uppercase();
         let mut rows: Vec<&AdsbAircraft> = st
             .aircraft
             .iter()
-            .filter(|a| {
-                filter.is_empty()
-                    || a.callsign.to_ascii_uppercase().contains(&filter)
-                    || a.hex().contains(&filter)
-            })
+            .filter(|a| found.visible.as_ref().is_none_or(|v| v.contains(&a.icao)))
             .collect();
         sort_rows(&mut rows, self.adsb_sort, self.adsb_sort_desc, home);
 
@@ -432,6 +440,28 @@ impl SdroxideApp {
         let home = self.adsb_home();
         let cfg = self.state.adsb;
         let night = self.night_texture(ui.ctx());
+        // The search box: what it lets through is told to the map, which draws,
+        // hovers and frames only that. It reads what is in memory and asks for
+        // nothing — see [`aircraft_search`].
+        let query = aircraft_search::Query::parse(&self.aircraft_query);
+        let found = aircraft_search::search_adsb(
+            &query,
+            &st.aircraft,
+            &self.aircraft_registry,
+            &self.aircraft_online.store,
+            self.ctrl.peer_url().is_some(),
+        );
+        let counts = found.visible.as_ref().map(|v| (v.len(), found.total));
+        aircraft_search::search_box(
+            ui,
+            &mut self.aircraft_query,
+            180.0,
+            counts,
+            found.hint.as_deref(),
+        );
+        self.adsb_map.visible = found.visible;
+        // The box takes a row of its own, and its note another.
+        let h = (h - 26.0 - if found.hint.is_some() { 16.0 } else { 0.0 }).max(100.0);
         // The hover card reads what the AIRCRAFT window's card already holds and
         // asks for nothing: no request, no download, from a pointer passing over
         // the map. See [`aircraft_hover`].

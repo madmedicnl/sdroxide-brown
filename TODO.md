@@ -40,13 +40,21 @@ maintainer's queue there, not a promise.
    picture only if it is already in memory. It asks for nothing. Asked for by the
    operator.
 
-0d. **Aircraft pinned card — open for review (branch `claude/aircraft-pinned-card`).** A
+0d. **Aircraft pinned card — merged (#206).** A
    click on an aircraft on the map pins a small card beside it, with a clickable
    Planespotters link and the thumbnail if it is already in memory. It stays until
    the ✕ or Esc, or until another aircraft is clicked; a click on empty map does not
    close it. A click or a hover asks for nothing; a "Look up online" button in the
-   card asks the station's relay for that one aircraft. Left: a look at it on a real
-   screen and a lookup against a station with the relay on. Asked for by the operator.
+   card asks the station's relay for that one aircraft. Seen on a real screen with a
+   real station. Asked for by the operator.
+
+0e. **Aircraft search and filters — open for review (branch `claude/aircraft-search-filters`).**
+   One search box over the ADS-B table, the Cards list and the map: ICAO, callsign,
+   registration, type, operator (`reg:` `type:` `op:` limit a word to a field). The
+   map hides what does not match and the pinned or selected aircraft stays. It reads
+   memory only and asks for nothing, so type and operator are found only once an
+   aircraft has been looked up. Left: a look at it on a real screen. Asked for by the
+   operator.
 
 1. **The mode work — the live queue, and it has its own brief.**
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
