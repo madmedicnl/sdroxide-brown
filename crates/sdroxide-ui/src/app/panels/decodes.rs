@@ -1233,6 +1233,15 @@ impl SdroxideApp {
                 .max_rect(zone(2.0))
                 .layout(egui::Layout::right_to_left(egui::Align::Center)),
             |ui| {
+                if crate::chrome::chip(ui, self.show_session_qsos, "LIVE LOG").clicked() {
+                    self.show_session_qsos = !self.show_session_qsos;
+                    if self.show_session_qsos {
+                        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SESSION_QSOS;
+                    } else {
+                        self.ui_settings.tool_windows_open &= !crate::app::frame::TW_SESSION_QSOS;
+                    }
+                    crate::app::persist::persist_ui_settings(&self.ui_settings);
+                }
                 if crate::chrome::chip(ui, self.show_digi_settings, "⚙ SETUP").clicked() {
                     self.show_digi_settings = !self.show_digi_settings;
                 }
