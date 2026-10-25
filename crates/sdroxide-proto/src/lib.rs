@@ -2007,6 +2007,7 @@ use sdroxide_types::{
 /// Appended by hand under the register's own rule (the number was taken twice
 /// on two branches; the later one moves). `PROTO_VERSION` 237 → 238,
 /// `VERSION_BYTE` 0x39 → 0x3A.
+/// Reverted in v245.
 /// v237: [`sdroxide_types::DigiConfig`] gains `wefax_rx_sensitivity` (i8) and
 /// `wefax_rx_auto` (bool) on its tail — a receive sensitivity control for the
 /// WEFAX decoder, -5 to +5, with Auto meaning the reference thresholds. Unlike
@@ -2049,8 +2050,16 @@ use sdroxide_types::{
 /// so the gap at 242 is that PR's to fill.
 /// `PROTO_VERSION` 242 → 243, `VERSION_BYTE` 0x3E → 0x3F. A downstream (fork)
 /// change.
-pub const PROTO_VERSION: u16 = 244;
-const VERSION_BYTE: u8 = 0x40;
+/// v245: **revert of PR #163** (SSTV receive sensitivity control). The
+/// `sstv_rx_sensitivity` (i8) and `sstv_rx_auto` (bool) fields are removed
+/// from [`sdroxide_types::DigiConfig`], the audio gain in `SstvController` is
+/// dropped, and the Sensitivity slider/Auto chip is removed from the SSTV
+/// panel. The WEFAX receive sensitivity fields added afterwards are untouched.
+/// `DigiConfig` rides `SetDigiConfig`/`DigiStatus` whole, so removing the
+/// appended fields moves the layout; `#[serde(default)]` keeps a stored config
+/// loading. `PROTO_VERSION` 244 → 245, `VERSION_BYTE` 0x40 → 0x41.
+pub const PROTO_VERSION: u16 = 245;
+const VERSION_BYTE: u8 = 0x41;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
