@@ -1239,7 +1239,7 @@ impl SdroxideApp {
                 // hover still names it in words, and this is the same chip in
                 // every digimode panel.
                 if super::window_chip(ui) {
-                    self.detach_operating_panel();
+                    self.float_operating_panel(self.state.rx[0].mode);
                 }
                 if crate::chrome::chip(ui, self.show_digi_settings, "⚙")
                     .on_hover_text("SETUP — the station identity and the templates these QSO modes share")

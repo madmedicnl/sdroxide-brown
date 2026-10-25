@@ -163,24 +163,16 @@ pub(in crate::app) fn prop_source_for(mode: Mode) -> Option<sdroxide_types::Prop
 /// answer belongs there too. Returns whether it was clicked; the caller calls
 /// [`crate::app::SdroxideApp::detach_operating_panel`].
 ///
-/// **Not drawn in a browser**: there is no second window to send a pane to, so
-/// the function is a quiet `false` there rather than a control that does nothing —
-/// and it stays a function so a panel does not have to carry a `cfg` per call.
+/// **It floats the panel inside this window**, not into a new OS window: a
+/// floating panel is the thing the operator asked for here. It is the same
+/// picture a window's own title bar carries, pointing outward.
 pub(in crate::app) fn window_chip(ui: &mut egui::Ui) -> bool {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
-            .on_hover_text(
-                "WINDOW — move this panel into a window of its own and give the waterfall \
-                 the room back",
-            )
-            .clicked()
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = ui;
-        false
-    }
+    crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
+        .on_hover_text(
+            "FLOAT — lift this panel out into a floating panel and give the waterfall the \
+             room back; the dock chip on it puts it back",
+        )
+        .clicked()
 }
 
 /// A **SAVE** chip for a log a panel holds outside [`sdroxide_types::DigiStatus`]

@@ -402,7 +402,10 @@ fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
         // window of its own, left and back into the main one — so the direction
         // reads without the hover, and the hover still names it in words.
         let (icon, hover) = if undocked {
-            (crate::chrome::WindowIcon::In, "DOCK — return this window into the main window")
+            // A **floating panel** docks back into the pane; an OS window docks
+            // back into the main window. Two different pictures, because they are
+            // two different places to go back to.
+            (crate::chrome::WindowIcon::Dock, "DOCK — return this panel to the pane below the waterfall")
         } else {
             (
                 crate::chrome::WindowIcon::Out,
@@ -2548,8 +2551,50 @@ impl SdroxideApp {
             });
     }
 
-    /// **Send the operating pane into a window of its own**, and let the waterfall
+    /// **Float the operating pane inside the main window**, and let the waterfall
     /// take the room back.
+    ///
+    /// **A floating panel, not a new OS window.** The operator's note on the first
+    /// version: *"you open a new window whereas it should be a floating panel in
+    /// the first place."* A mode's panel already has an in-window floating form —
+    /// its tool window, the one that used to pop up on mode entry (#217) — so this
+    /// opens exactly that, and the dock chip in its header puts it back. The OS
+    /// window is still there, deliberately, on the Detachable page in Settings: it
+    /// is a different thing (it can go on another monitor) and not what the pane's
+    /// own icon should do.
+    pub(in crate::app) fn float_operating_panel(&mut self, mode: Mode) {
+        match mode {
+            m if m.is_sstv() => self.show_sstv = true,
+            m if m.is_image() => self.show_image = true,
+            Mode::Dab => self.show_dab = true,
+            m if m.is_js8() => self.show_js8 = true,
+            Mode::Acars => self.show_acars = true,
+            m if m.is_aprs() => self.show_aprs = true,
+            m if m.is_hfdl() => self.show_hfdl = true,
+            m if m.is_vdl2() => self.show_vdl2 = true,
+            m if m.is_ais() => self.show_ais = true,
+            m if m.is_adsb() => self.show_adsb = true,
+            m if m.is_fsq() => self.show_fsq = true,
+            m if m.is_hell() => self.show_hell = true,
+            m if m.is_packet() => self.show_packet = true,
+            m if m.is_wspr() => self.show_wspr = true,
+            m if m.is_pi4() => self.show_pi4 = true,
+            m if m.is_text_modem() => self.show_text = true,
+            Mode::UvPacket => self.show_uvpacket = true,
+            Mode::Jtty => self.show_jtty = true,
+            Mode::Ale => self.show_ale = true,
+            m if m.is_rf_paint() => self.show_rf_paint = true,
+            // NAVTEX, DSC and WEFAX draw their window from their own flag beside
+            // the pane, so they float from their own headers and not from here.
+            _ => {}
+        }
+        // The window draws it from here, and the window's own function is what
+        // writes its open bit and persists — one place, not two.
+    }
+
+    /// **Send the operating pane into an OS window of its own** — the detachable
+    /// module, kept for the Settings page and for a panel that wants another
+    /// monitor.
     ///
     /// Called by the window icon at the right-hand end of a panel's own header row
     /// (see [`crate::app::panels::window_chip`]). The control lives in the header
@@ -4696,10 +4741,17 @@ mod tests {
         assert_eq!(image_window_for(Mode::Rifp), ImageWindow::Image);
     }
 
-    /// **The pane has its own way out, in the header that is crowded.**
+    /// **The pane has its own way out, in the header that is crowded — and it
+    /// floats, it does not open an OS window.**
     ///
-    /// The operator asked for the detach control at the top right of the panel
-    /// rather than in Settings — *"it gets crowded in some modes in the top of that
+    /// The operator's correction on the first version: *"you open a new window
+    /// whereas it should be a floating panel in the first place."* So the icon
+    /// calls `float_operating_panel`, which opens the mode's in-window tool window;
+    /// `detach_operating_panel` stays for Settings → Detachable, which is for a
+    /// panel that wants another monitor.
+    ///
+    /// He asked for the control at the top right of the panel rather than in
+    /// Settings — *"it gets crowded in some modes in the top of that
     /// pane"* — and the two other shapes were tried and rejected: a row above the
     /// panel took a chip off WEFAX's header at 600 pt, and a 21 pt gutter did the
     /// same by wrapping it, both caught by
@@ -4711,8 +4763,12 @@ mod tests {
         let src = include_str!("frame.rs");
         let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
         assert!(
+            code.contains("fn float_operating_panel"),
+            "there is no way to float the operating pane"
+        );
+        assert!(
             code.contains("fn detach_operating_panel"),
-            "there is no way to send the operating pane into a window"
+            "the OS-window path (Settings → Detachable) went missing"
         );
         assert!(
             code.contains("set_detached(sdroxide_types::DetachableModule::Panel, true)"),
