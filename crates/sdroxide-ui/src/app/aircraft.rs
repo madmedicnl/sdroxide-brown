@@ -27,6 +27,7 @@ use super::aircraft_online::{self, Badge, Provenance, ThumbStatus};
 use super::aircraft_search;
 use super::aircraft_share;
 use super::aircraft_stats::{self, SortBy, Stats};
+use super::aircraft_watch::{self, WatchState};
 
 /// The opening size of the window and its floor.
 const AIRCRAFT_SIZE: [f32; 2] = [920.0, 560.0];
@@ -70,6 +71,8 @@ const LIST_W: f32 = 230.0;
 const RADIO_GREEN: egui::Color32 = egui::Color32::from_rgb(110, 210, 140);
 const ONLINE_BLUE: egui::Color32 = egui::Color32::from_rgb(110, 165, 255);
 const HISTORY_VIOLET: egui::Color32 = egui::Color32::from_rgb(190, 150, 255);
+/// A watched aircraft is on the air, or the list could not be read.
+const WATCH_AMBER: egui::Color32 = egui::Color32::from_rgb(235, 170, 60);
 
 fn chip(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
     ui.label(
@@ -263,6 +266,24 @@ impl super::SdroxideApp {
         let shown =
             if MODES.iter().any(|m| m.mode == active) { active } else { self.aircraft_view };
         self.aircraft_view = shown;
+        // A watched aircraft came on the air and nobody has looked yet.
+        if !self.aircraft_watch_view {
+            if let Some(a) = self.aircraft_tracker.alerts().find(|a| !a.seen) {
+                let text = aircraft_watch::alert_text(a);
+                let more = self.aircraft_tracker.unseen().saturating_sub(1);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("\u{25cf}").color(WATCH_AMBER));
+                    ui.label(RichText::new(text).strong());
+                    if more > 0 {
+                        ui.label(format!("and {more} more"));
+                    }
+                    if ui.small_button("Show").clicked() {
+                        self.aircraft_watch_view = true;
+                        self.aircraft_cards = false;
+                    }
+                });
+            }
+        }
         let h = ui.available_height().max(120.0);
         ui.horizontal_top(|ui| {
             ui.allocate_ui_with_layout(
@@ -276,7 +297,9 @@ impl super::SdroxideApp {
                             mode_chip_lit(
                                 m.mode,
                                 shown,
-                                self.aircraft_cards || self.aircraft_stats_view,
+                                self.aircraft_cards
+                                    || self.aircraft_watch_view
+                                    || self.aircraft_stats_view,
                             ),
                             m.label,
                             egui::vec2(COLUMN_W - 8.0, BUTTON_H),
@@ -285,6 +308,7 @@ impl super::SdroxideApp {
                         if b.clicked() {
                             self.aircraft_view = m.mode;
                             self.aircraft_cards = false;
+                            self.aircraft_watch_view = false;
                             self.aircraft_stats_view = false;
                             cmds.push(Command::SetMode { rx: RxId::Main, mode: m.mode });
                         }
@@ -303,7 +327,25 @@ impl super::SdroxideApp {
                     );
                     if b.clicked() {
                         self.aircraft_cards = !self.aircraft_cards;
+                        self.aircraft_watch_view = false;
                         self.aircraft_stats_view = false;
+                    }
+                    let unseen = self.aircraft_tracker.unseen();
+                    let n = self.aircraft_online.watch.list().len();
+                    let b = crate::chrome::chip_sized(
+                        ui,
+                        self.aircraft_watch_view,
+                        format!("Watch {n}{}", aircraft_watch::chip_suffix(unseen)),
+                        egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                    )
+                    .on_hover_text(
+                        "Aircraft you asked to be told about, by callsign or registration — \
+                         the list is kept by the station, and an alert is shown when one comes \
+                         on the air",
+                    );
+                    if b.clicked() {
+                        self.aircraft_watch_view = !self.aircraft_watch_view;
+                        self.aircraft_cards = false;
                     }
                     let b = crate::chrome::chip_sized(
                         ui,
@@ -324,7 +366,9 @@ impl super::SdroxideApp {
             );
             ui.vertical(|ui| {
                 ui.set_min_width(ui.available_width());
-                if self.aircraft_stats_view {
+                if self.aircraft_watch_view {
+                    self.aircraft_watch_pane(ui, h);
+                } else if self.aircraft_stats_view {
                     self.aircraft_stats_pane(ui, h);
                 } else if self.aircraft_cards {
                     self.aircraft_cards_pane(ui, h);
@@ -333,6 +377,149 @@ impl super::SdroxideApp {
                 }
             });
         });
+    }
+
+    /// Once a frame, whether the window is open or not: read the watch list from
+    /// the station, send what the person asked to change, and look at the cards
+    /// for a watched aircraft that has just come on the air.
+    pub(in crate::app) fn aircraft_watch_tick(&mut self, ctx: &egui::Context) {
+        let now = crate::time::now_unix();
+        let peer = self.ctrl.peer_url();
+        self.aircraft_online.poll(ctx, now);
+        self.aircraft_online.ask_watch(ctx, peer.as_deref(), now);
+        // Until the station has said what the list is there is nothing to watch.
+        if !matches!(self.aircraft_online.watch.state(), WatchState::Ready) {
+            return;
+        }
+        let list = self.aircraft_online.watch.list();
+        if !self.aircraft_tracker.due(now) {
+            return;
+        }
+        let here = if list.is_empty() {
+            Vec::new()
+        } else {
+            aircraft_watch::presences(self.aircraft_registry.entries())
+        };
+        self.aircraft_tracker.observe(now, list, &here);
+    }
+
+    /// The watch list: a box to add to it, the entries with a way to take each
+    /// off and a mark for the ones on the air now, and the alerts so far.
+    fn aircraft_watch_pane(&mut self, ui: &mut egui::Ui, h: f32) {
+        let now = crate::time::now_unix();
+        let has_station = self.ctrl.peer_url().is_some();
+        ui.label(
+            RichText::new(
+                "Callsigns and registrations you want to be told about. The list is kept by \
+                 the station, so it is the same from every screen; an alert comes when one \
+                 appears, or comes back after ten minutes off the air.",
+            )
+            .size(11.0)
+            .color(crate::theme::gray(160)),
+        );
+        if !has_station {
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new(
+                    "The watch list is kept by the station you are connected to. Connect to \
+                     one to use it.",
+                )
+                .size(11.5)
+                .color(crate::theme::gray(160)),
+            );
+            return;
+        }
+        match self.aircraft_online.watch.state() {
+            WatchState::Idle | WatchState::Loading => {
+                ui.label(RichText::new("Reading the list\u{2026}").size(11.0).weak());
+            }
+            WatchState::Unavailable(r) => {
+                ui.label(
+                    RichText::new(format!("Cannot read the list: {}.", r.note()))
+                        .size(11.0)
+                        .color(WATCH_AMBER),
+                );
+            }
+            WatchState::Ready => {}
+        }
+        ui.add_space(4.0);
+        let mut edit = None;
+        ui.horizontal(|ui| {
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut self.aircraft_watch_input)
+                    .desired_width(160.0)
+                    .hint_text("KLM1234 or PH-BXA"),
+            );
+            let go = ui.button("Add").clicked()
+                || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
+            if go {
+                if let Some(e) = aircraft_watch::add_edit(&self.aircraft_watch_input) {
+                    edit = Some(e);
+                    self.aircraft_watch_input.clear();
+                }
+            }
+        });
+        if self.aircraft_online.watch.queued() > 0 {
+            ui.label(RichText::new("Sending\u{2026}").size(11.0).weak());
+        }
+        if let Some(note) =
+            self.aircraft_online.watch.last_outcome().and_then(aircraft_watch::outcome_note)
+        {
+            ui.label(RichText::new(note).size(11.0).color(WATCH_AMBER));
+        }
+        let entries: Vec<String> = self.aircraft_online.watch.list().entries().to_vec();
+        egui::ScrollArea::vertical().max_height((h - 60.0).max(80.0)).show(ui, |ui| {
+            if entries.is_empty() {
+                ui.label(
+                    RichText::new("Nothing on the list yet.")
+                        .size(11.5)
+                        .color(crate::theme::gray(160)),
+                );
+            }
+            egui::Grid::new("aircraft_watch_entries").num_columns(3).spacing([12.0, 4.0]).show(
+                ui,
+                |ui| {
+                    for e in &entries {
+                        ui.label(RichText::new(e).monospace());
+                        if self.aircraft_tracker.is_on_air(e) {
+                            ui.label(RichText::new("on the air now").size(10.5).color(RADIO_GREEN));
+                        } else {
+                            ui.label("");
+                        }
+                        if ui.small_button("Remove").clicked() {
+                            edit = Some(aircraft_watch::remove_edit(e));
+                        }
+                        ui.end_row();
+                    }
+                },
+            );
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Alerts").strong());
+                if ui.small_button("Clear").clicked() {
+                    self.aircraft_tracker.clear();
+                }
+            });
+            if self.aircraft_tracker.alerts().next().is_none() {
+                ui.label(RichText::new("None yet.").size(11.5).color(crate::theme::gray(160)));
+            }
+            for a in self.aircraft_tracker.alerts() {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(super::util::fmt_age(now - a.at))
+                            .size(10.5)
+                            .color(crate::theme::gray(130)),
+                    );
+                    let t = RichText::new(aircraft_watch::alert_text(a));
+                    ui.label(if a.seen { t } else { t.strong() });
+                });
+            }
+        });
+        if let Some(e) = edit {
+            self.aircraft_online.watch.request_edit(e);
+        }
+        // Looking at them is what makes them seen.
+        self.aircraft_tracker.mark_seen();
     }
 
     /// The statistics: the live registry and the relay's cards, with the

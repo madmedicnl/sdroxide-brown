@@ -55,6 +55,12 @@ maintainer's queue there, not a promise.
    memory only and asks for nothing, so type and operator are found only once an
    aircraft has been looked up. Asked for by the operator.
 
+0j. **Aircraft alerts — open for review (branch `claude/aircraft-alerts`).** A **Watch**
+   view in the AIRCRAFT window: a list of callsigns and registrations kept by the
+   station (`aircraft-watch.json`, `/aircraft-watch`), and an alert, a line and a count
+   on the AIRCRAFT chip, when one appears or comes back. No sound, no mail. Left: a look
+   at it on a real screen with a real station, and the same list from the browser.
+   Asked for by the operator.
 0i. **Aircraft statistics — open for review (branch `claude/aircraft-stats`).** A
    **Stats** view in the AIRCRAFT window: top categories and airlines from the radio,
    top models, operators and routes from the relay's cards, most first or A–Z. The

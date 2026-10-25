@@ -6122,6 +6122,22 @@ only for aircraft whose card has been looked up; when a word begins `type:` or
 online data — open their card*). The search is not saved: closing the program
 clears it.
 
+**Watch.** The **Watch** button under *Cards* is a short list of callsigns and
+registrations you want to be told about (`KLM1234`, `PH-BXA`; three to ten letters or
+digits, up to a hundred of them). Type one and press **Add**; **Remove** takes it off.
+The list is kept by the station you are connected to, in `aircraft-watch.json` in its
+config folder, so it is the same from the program on the desk and the browser on the
+phone, and it is not available when you run a radio of your own with no station. When a
+watched aircraft *appears* — a new contact, or one back after its card expired, ten
+minutes without a message — a line shows at the top of the AIRCRAFT window, the AIRCRAFT
+chip in EXTRAS wears a dot and a count (*AIRCRAFT ●2*), and the alert is listed under
+*Alerts* with its age. Opening the Watch view is what marks them seen. An aircraft that
+was already on the air when you added it, or when the program started, is not news and
+raises nothing; for the first thirty seconds after the list is read nothing is
+announced, so the aircraft already in the sky do not all ring at once. It matches the
+whole callsign or the whole registration, not a prefix. The alerts are kept in memory
+only. If a password protects the station, reading and changing the list want the same
+sign-in as everything else.
 **Stats.** The **Stats** button under *Cards* swaps the map for five small tables:
 the most common *category* and *airline* among the aircraft (counted from the radio:
 the category the decoder reported, and the three letters at the start of a callsign

@@ -22,6 +22,37 @@ Each entry, in this order:
 ---
 
 
+## 2026-10-25 (aircraft alerts)
+
+**In plain words.** You can now tell the AIRCRAFT window which callsigns or
+registrations you care about. When one of them comes on the air — or comes back after
+ten quiet minutes — the window shows a line, the AIRCRAFT chip gets a dot and a count,
+and the Watch view lists the alerts with their age. The list lives on the station, so
+the program and the browser share it. There is no sound and no mail. It has not been
+looked at on a real screen. Next: the fleet export.
+
+**Done.** Branch `claude/aircraft-alerts`. A `watch` module in the history crate (the
+list, spelling, matching, the edit and the reply); a `watchlist` module in the server
+(`GET`/`POST /aircraft-watch`, the file `aircraft-watch.json` written atomically, the
+sign-in, and the route added to `is_root_route`); client: a pure `aircraft_watch`
+module (the tracker, the store and the fetch gate), the POST path in the I/O code for
+native and browser, the Watch view, the banner and the chip count. Tests: history crate
+41 passed (16 new); server lib 67 passed (10 new, one of them the proxy-prefix test) and the
+integration test `aircraft_watch` 3 passed; `sdroxide-ui` 1181 passed (34 new,
+including two whole-app frame tests). 20 mutations over the three layers, each killed
+by a test. wasm check clean, rustfmt clean on the touched files.
+
+**How the server half was run.** `sdroxide-rade` cannot build here (opus 403), so for
+the session I used a throwaway `build.rs` for it with hand-written bindings, plus
+`-C link-arg=-Wl,--unresolved-symbols=ignore-all` on the server's own test binaries
+(they never call RADE). It was restored with `git checkout` before every commit and is
+in no commit. The whole-workspace check is still CI's.
+
+**Not done / blocked.** Not seen on a real screen; the chip label *AIRCRAFT ●2* may be
+tight in its 112 px slot. Alerts are memory only. The browser's POST (`fetch`) compiles
+for wasm but was not run in a browser.
+
+**Next.** The fleet export.
 ## 2026-10-25 (aircraft stats)
 
 **In plain words.** The AIRCRAFT window has a new *Stats* button: five small tables

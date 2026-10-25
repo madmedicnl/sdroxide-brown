@@ -12,6 +12,7 @@
 
 #[cfg(feature = "gzip")]
 pub mod gz;
+pub mod watch;
 
 use std::collections::HashMap;
 
