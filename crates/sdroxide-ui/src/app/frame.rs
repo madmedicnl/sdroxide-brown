@@ -2972,7 +2972,7 @@ impl SdroxideApp {
     /// The pane is not in the column this frame: either it is an OS window
     /// (`DetachableModule::Panel`) or it has been lifted out as a **floating
     /// panel** in this window. Either way the waterfall takes the room back.
-    fn panel_in_a_window(&self, mode: Mode) -> bool {
+    pub(in crate::app) fn panel_in_a_window(&self, mode: Mode) -> bool {
         self.panel_detached(mode)
             || (self.panel_floating && (mode.has_bottom_panel() || mode == Mode::Cw))
     }
@@ -4767,6 +4767,36 @@ mod tests {
         assert_eq!(image_window_for(Mode::Sstv), ImageWindow::Sstv);
         assert_eq!(image_window_for(Mode::SstvFm), ImageWindow::Sstv);
         assert_eq!(image_window_for(Mode::Rifp), ImageWindow::Image);
+    }
+
+    /// **A narrow panel's header lays out as one wrapped row, not three zones.**
+    ///
+    /// The operator's photograph of a floating panel: *"look at the top right.. that
+    /// looks messy"* — the FT8 header's three fixed thirds, with the centre group
+    /// wider than a third of a 540 pt panel and spilling under the chips pinned to
+    /// the right-hand third. Two things were wrong, and the icon was one of them: it
+    /// was drawn inside the floating panel as well, so two arrows sat side by side
+    /// saying the same thing.
+    #[test]
+    fn a_narrow_panel_header_wraps_instead_of_overlapping_its_zones() {
+        let src = include_str!("panels/decodes.rs");
+        assert!(
+            src.contains("let roomy = row.width() >= Self::HEADER_ZONE_MIN_W;"),
+            "the header is back to three fixed thirds at every width, so a narrow \
+             panel overlaps itself again"
+        );
+        assert!(
+            src.contains("ui.horizontal_wrapped(|ui| {"),
+            "the narrow header has no wrapped row"
+        );
+        assert!(
+            src.contains("if !me.panel_in_a_window(me.state.rx[0].mode) && super::window_chip(ui)"),
+            "the way-out icon is drawn in a panel that has already been lifted out"
+        );
+        assert!(
+            src.contains("const HEADER_ZONE_MIN_W: f32 = 520.0;"),
+            "the zone threshold changed; re-measure it against the header's content"
+        );
     }
 
     /// **The pane has its own way out, in the header that is crowded — and it

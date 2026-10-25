@@ -1152,6 +1152,14 @@ impl SdroxideApp {
         }
     }
 
+    /// Below this width the QSO header's three fixed thirds overlap each other —
+    /// the centre group is wider than a third of a narrow row and spills under the
+    /// chips pinned to the right-hand third, which is the mess the operator
+    /// photographed in a floating panel. Measured from the content: "Session: 0 QSO"
+    /// with the two export buttons is about 230 pt, the QSO caption and the
+    /// frequency chip about 150, the two icons about 80, and the spacing between.
+    const HEADER_ZONE_MIN_W: f32 = 520.0;
+
     /// The QSO operating area to the right of the decode list: header row,
     /// world map, station card, transcript, and action buttons.
     pub(in crate::app) fn qso_area(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
@@ -1186,70 +1194,102 @@ impl SdroxideApp {
                 egui::vec2(third, row_h),
             )
         };
-        ui.scope_builder(
-            egui::UiBuilder::new()
-                .max_rect(zone(0.0))
-                .layout(egui::Layout::left_to_right(egui::Align::Center)),
-            |ui| {
-                ui.label(RichText::new("QSO").size(9.5).strong().color(crate::theme::CYAN_DIM()));
-                self.digi_freq_chip(ui, cmds);
-            },
-        );
-        if !phone {
+        // **Three zones when there is room for three, one wrapped row when there
+        // is not.** In a floating panel this row is a fraction of the width it has
+        // when docked, and the zones are fixed thirds: the centre group spills out
+        // of its third and the right-hand chips are pinned over it, which is the
+        // "top right looks messy" the operator photographed. A wrapped row cannot
+        // overlap itself.
+        let roomy = row.width() >= Self::HEADER_ZONE_MIN_W;
+        let mut left = |me: &mut Self, ui: &mut egui::Ui| {
+            ui.label(RichText::new("QSO").size(9.5).strong().color(crate::theme::CYAN_DIM()));
+            me.digi_freq_chip(ui, cmds);
+        };
+        let centre = |me: &mut Self, ui: &mut egui::Ui| {
+            ui.label(
+                RichText::new(format!("Session: {session} QSO"))
+                    .size(11.0)
+                    .color(crate::theme::gray(150)),
+            )
+            .on_hover_text("QSOs worked since sdroxide was started");
+            if ui
+                .add_enabled(logged > 0, egui::Button::new("ADIF"))
+                .on_hover_text(format!("Save the whole logbook ({logged} QSO) as ADIF"))
+                .clicked()
+            {
+                let adif = sdroxide_types::qso_log_to_adif(&me.qso_log);
+                crate::download::save("sdroxide-log.adi", adif.as_bytes());
+            }
+            if ui
+                .add_enabled(logged > 0, egui::Button::new("TXT"))
+                .on_hover_text(format!("Save the whole logbook ({logged} QSO) as text"))
+                .clicked()
+            {
+                let txt = sdroxide_types::qso_log_to_text(&me.qso_log);
+                crate::download::save("sdroxide-log.txt", txt.as_bytes());
+            }
+        };
+        let right = |me: &mut Self, ui: &mut egui::Ui| {
+            // **The way out only where there is a way back in**: in a floating
+            // panel the arrow would say what has already happened, and next to the
+            // dock chip it did — two icons for one state, which is half the mess.
+            if !me.panel_in_a_window(me.state.rx[0].mode) && super::window_chip(ui) {
+                me.float_operating_panel();
+            }
+            // **A gear, not the word.** The top of the operating pane is crowded
+            // in some modes, and a word on a chip that is already a symbol is the
+            // first thing to give up. The hover still names it.
+            if crate::chrome::chip(ui, me.show_digi_settings, "⚙")
+                .on_hover_text("SETUP — the station identity and the templates these QSO modes share")
+                .clicked()
+            {
+                me.show_digi_settings = !me.show_digi_settings;
+            }
+        };
+        if roomy {
             ui.scope_builder(
                 egui::UiBuilder::new()
-                    .max_rect(zone(1.0))
-                    .layout(egui::Layout::top_down(egui::Align::Center)),
+                    .max_rect(zone(0.0))
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                |ui| left(self, ui),
+            );
+            if !phone {
+                ui.scope_builder(
+                    egui::UiBuilder::new()
+                        .max_rect(zone(1.0))
+                        .layout(egui::Layout::top_down(egui::Align::Center)),
+                    |ui| {
+                        ui.horizontal(|ui| centre(self, ui));
+                    },
+                );
+            }
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(zone(2.0))
+                    .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                |ui| right(self, ui),
+            );
+        } else {
+            // One row, in reading order, wrapped. The icons come last rather than
+            // pinned right, which is the price of not overlapping.
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(egui::Rect::from_min_size(
+                        egui::pos2(row.left(), row.top() - ui.spacing().item_spacing.y),
+                        egui::vec2(row.width(), row_h * 2.0),
+                    ))
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
                 |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            RichText::new(format!("Session: {session} QSO"))
-                                .size(11.0)
-                                .color(crate::theme::gray(150)),
-                        )
-                        .on_hover_text("QSOs worked since sdroxide was started");
-                        if ui
-                            .add_enabled(logged > 0, egui::Button::new("ADIF"))
-                            .on_hover_text(format!("Save the whole logbook ({logged} QSO) as ADIF"))
-                            .clicked()
-                        {
-                            let adif = sdroxide_types::qso_log_to_adif(&self.qso_log);
-                            crate::download::save("sdroxide-log.adi", adif.as_bytes());
+                    ui.horizontal_wrapped(|ui| {
+                        left(self, ui);
+                        if !phone {
+                            centre(self, ui);
                         }
-                        if ui
-                            .add_enabled(logged > 0, egui::Button::new("TXT"))
-                            .on_hover_text(format!("Save the whole logbook ({logged} QSO) as text"))
-                            .clicked()
-                        {
-                            let txt = sdroxide_types::qso_log_to_text(&self.qso_log);
-                            crate::download::save("sdroxide-log.txt", txt.as_bytes());
-                        }
+                        right(self, ui);
                     });
                 },
             );
         }
-        ui.scope_builder(
-            egui::UiBuilder::new()
-                .max_rect(zone(2.0))
-                .layout(egui::Layout::right_to_left(egui::Align::Center)),
-            |ui| {
-                // **A gear, not the word.** The operator's note: the top of the
-                // operating pane is crowded in some modes, and a word on a chip
-                // that is already a symbol is the first thing to give up. The
-                // hover still names it in words, and this is the same chip in
-                // every digimode panel.
-                if super::window_chip(ui) {
-                    self.float_operating_panel();
-                }
-                if crate::chrome::chip(ui, self.show_digi_settings, "⚙")
-                    .on_hover_text("SETUP — the station identity and the templates these QSO modes share")
-                    .clicked()
-                {
-                    self.show_digi_settings = !self.show_digi_settings;
-                }
-            },
-        );
-
         ui.add_space(5.0);
         // World map — its height is a user-draggable fraction of the QSO area,
         // clamped so the station card + a usable transcript + the action buttons
