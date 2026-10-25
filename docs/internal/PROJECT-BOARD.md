@@ -84,6 +84,14 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
   station (`/aircraft-watch`) and raises a line and a count on the AIRCRAFT chip when a
   watched aircraft appears or returns. Branch `claude/aircraft-alerts`, open for review;
   not yet seen on a screen with a real station.
+- **Aircraft statistics.** A Stats view counts top categories and airlines (radio)
+  and models, operators and routes (relay cards, online); the station's history list
+  adds the last day. Branch `claude/aircraft-stats`, open for review; not yet seen on
+  a screen with a real station.
+- **Aircraft history compression.** The history file is written gzipped, under the
+  same name, once it passes 5 MB, and read either way; off by default, atomic.
+  Branch `claude/aircraft-history-compression`, open for review; the server half
+  is for CI to compile and test.
 - **Copy summary on the aircraft card.** A button copies the card as plain text,
   each line marked radio / online / station history, with the photo credit and link;
   never the position, the last message or the picture's address. Branch

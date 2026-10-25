@@ -18,12 +18,9 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ### Added
 - **Aircraft alerts** — a **Watch** view in the AIRCRAFT window keeps a list of callsigns and registrations; when one appears, or comes back after ten minutes off the air, the window shows a line and the AIRCRAFT chip wears a count. The list is kept by the station (`aircraft-watch.json`, served on `/aircraft-watch`), so it is the same from every screen. No sound, no mail, nothing asked of anybody to find an aircraft.
+- **Aircraft statistics** — a **Stats** view in the AIRCRAFT window counts the most common categories and airlines (from the radio, green) and models, operators and routes (from the relay's cards, blue), most first or A–Z. It uses what is already known: the live cards, the relay's answers, and the station's history list when it keeps one. No new source, nothing asked unless the view is open.
 - **Copy summary** on an aircraft's card — the card as plain text on the clipboard, each line marked *radio*, *online* or *station history*, with the photo credit and link; never the position, the last message or the picture's address.
-
-### Changed
-- **JTTY, brought up to the reference's own standard** — upstream's six follow-up commits, taken whole: the 1500 Hz centre, four-letter words packed as text, the reference waveform timing, the frequency search around the operator's tuning, one line per message, a non-ASCII transmit panic, the burst tail and the stop button.
-
-### Added
+- **Aircraft history stays small** — once `aircraft-history.json` passes 5 MB the station writes it gzipped, under the same name, and reads either form; a file from before is read as it was. Still off unless `SDROXIDE_AIRCRAFT_HISTORY=1`, and still written atomically.
 - **Aircraft history on the station** — the station keeps a day of what its radios heard of each aircraft (positions, callsigns, registrations, the relay's card) in `aircraft-history.json`, **off by default** and switched on by the station's operator with `SDROXIDE_AIRCRAFT_HISTORY=1`. **Show history** in the pinned card or the Cards list draws the trail on the map and adds the record to the card. It asks nobody for anything, and no client is recorded.
 - **Search the aircraft** — one box over the ADS-B table, the Cards list and the map finds an aircraft by ICAO, callsign, registration, type or operator (`reg:PH op:KLM` limits a word to a field). The map hides what does not match; the pinned aircraft stays. It asks for nothing, so type and operator are found only for aircraft already looked up, and the box says how many that leaves out.
 - **Pinned aircraft card** — click an aircraft on the ADS-B map to pin its card beside it, with a clickable Planespotters link; ✕ or Esc closes it. A click or a hover asks for nothing; **Look up online** in the card asks the station's relay for that aircraft only.
@@ -32,6 +29,8 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 - **CIS-11 (TORG-11)**, the Russian meteorological teleprinter, receive only — the receiver finds its own tones and reads real transmissions with 121 of 123 characters parity-valid; the character layer is still unproven.
 - **Decoded text over UDP** — one JSON line per decode for a script of your own: the FT8 family, WSPR and every keyboard mode (RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell), with the dial it was heard on.
 
+### Changed
+- **JTTY, brought up to the reference's own standard** — upstream's six follow-up commits, taken whole: the 1500 Hz centre, four-letter words packed as text, the reference waveform timing, the frequency search around the operator's tuning, one line per message, a non-ASCII transmit panic, the burst tail and the stop button.
 ## [2.1.0.2_brown] - 2026-10-23
 
 ### Added

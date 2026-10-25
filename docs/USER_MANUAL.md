@@ -6138,6 +6138,17 @@ announced, so the aircraft already in the sky do not all ring at once. It matche
 whole callsign or the whole registration, not a prefix. The alerts are kept in memory
 only. If a password protects the station, reading and changing the list want the same
 sign-in as everything else.
+**Stats.** The **Stats** button under *Cards* swaps the map for five small tables:
+the most common *category* and *airline* among the aircraft (counted from the radio:
+the category the decoder reported, and the three letters at the start of a callsign
+such as KLM1234; a tail number has no airline), then *model*, *operator* and *route*
+(from the relay's cards, so only for the aircraft it has answered about, which you
+trigger by opening a card). Each table wears its badge, **radio** green or **online**
+blue, and says how many aircraft it knows and how many different kinds there were.
+*Most first* or *A–Z* orders them, ten rows each. A station that keeps its history
+adds the last 24 hours to what is heard now; one that does not is counted for what is
+heard now, and the line under the title says which. Nothing is asked while the view
+is closed, and it asks the station you are connected to and nobody else.
 
 **Copy summary.** The button under an aircraft's name in the Cards list puts the
 card on the clipboard as plain text: the name, the detail line, every line
@@ -6153,7 +6164,8 @@ registrations it used, and the card the station's relay gave for it — page and
 credit of the photo, never the picture. It is kept in `aircraft-history.json` in
 the station's config folder, at most 300 points per aircraft and 50 000 in all,
 and the aircraft heard least recently go first; a test that fills it to those
-ceilings measures about 4.6 MB of JSON. Nothing is kept about who was looking.
+ceilings measures about 4.6 MB of JSON. Should the file ever pass 5 MB it is
+written gzipped, under the same name, and read back either way. Nothing is kept about who was looking.
 **It is off by default**: the station's operator switches it on with
 `SDROXIDE_AIRCRAFT_HISTORY=1` (also `true`, `yes` or `on`), and until then nothing
 is read, kept, written or served. It asks nobody for anything: it only writes down

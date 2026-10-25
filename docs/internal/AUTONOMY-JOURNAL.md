@@ -53,6 +53,53 @@ tight in its 112 px slot. Alerts are memory only. The browser's POST (`fetch`) c
 for wasm but was not run in a browser.
 
 **Next.** The fleet export.
+## 2026-10-25 (aircraft stats)
+
+**In plain words.** The AIRCRAFT window has a new *Stats* button: five small tables
+of what the sky is made of, with the radio's own counts first (the category an
+aircraft reported, and its airline from the start of its callsign) and the relay's
+models, operators and routes as a complement, each with its green or blue badge. It
+counts what is already known and asks nothing unless the view is open. It has not
+been looked at on a real screen. Next: alerts for chosen aircraft.
+
+**Done.** Branch `claude/aircraft-stats`. History list: each line now also carries
+category, type, operator and the route's two airport codes (optional, so an older list
+still reads). UI: a pure `aircraft_stats` module (counting, sorting, merging live and
+history facts, the airline code, the fetch gate) and a Stats view. `cargo test -p
+sdroxide-ui`: 1177 passed (30 new); history crate 31 passed. Ten mutations; two
+survived the first round (history winning the merge, a non-OK answer), tests added,
+both then failed. The render test caught a long operator name widening the table; the
+label is now cut with the whole of it in the hover. 4000 aircraft are counted in well
+under 250 ms. wasm check clean, `rustfmt --check` clean.
+
+**Not done / blocked.** The server was not compiled here (opus 403), but its list
+route is unchanged: it serves the history crate's `Summary`, which grew optional
+fields. Not seen on a screen; routes only count aircraft the relay has answered.
+
+**Next.** Alerts for chosen aircraft.
+## 2026-10-25 (aircraft history compression)
+
+**In plain words.** The station's aircraft history file no longer grows without
+limit on disk: past 5 MB it is saved compressed, under the same name, and read back
+either way, so a file from before still opens. It stays off unless the operator turns
+it on, and a crash while saving still leaves the old file. The compression itself is
+tested here; the few lines that plug it into the server could not be compiled in this
+sandbox, so CI has to confirm them. Next: aircraft statistics.
+
+**Done.** Branch `claude/aircraft-history-compression`. A `gz` module in the history
+crate (feature `gzip`, on only for the server): `encode(text, above)` gives gzip over
+the threshold and plain text at or under it, `decode` tells them apart by the gzip
+magic. Server: reads through `decode`, writes through `encode` on the flush thread
+with `write_atomic_bytes`; the old `write_atomic` is kept for the existing tests.
+`cargo test -p sdroxide-aircraft-history`: 33 passed (8 new). Five mutations (`<=`→`<`,
+never compress, ignore the magic, no compression, swallow a bad stream) each failed
+their test. wasm check clean, `rustfmt --check` clean on the touched files.
+
+**Not done / blocked.** `cargo check -p sdroxide-server` and its tests need the opus
+download (403 here): five new server tests (disk round trip, plain file from before,
+damaged file, failed write, one threshold) are written but unrun. CI to cover.
+
+**Next.** Aircraft statistics.
 
 ## 2026-10-25 (aircraft share)
 
