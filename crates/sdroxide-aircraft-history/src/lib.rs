@@ -10,6 +10,9 @@
 //! registrations an address used, and the card the relay gave. Never audio, raw
 //! frames, a picture, or anything about who was looking.
 
+#[cfg(feature = "gzip")]
+pub mod gz;
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};

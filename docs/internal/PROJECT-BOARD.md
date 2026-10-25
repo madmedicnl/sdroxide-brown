@@ -80,10 +80,14 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
   on the map is open for review; it reads what the card has already fetched and
   asks for nothing. Still to do: a live run against a real station and the real
   services, and a look at the hover card on a screen.
+- **Aircraft history compression.** The history file is written gzipped, under the
+  same name, once it passes 5 MB, and read either way; off by default, atomic.
+  Branch `claude/aircraft-history-compression`, open for review; the server half
+  is for CI to compile and test.
 - **Copy summary on the aircraft card.** A button copies the card as plain text,
   each line marked radio / online / station history, with the photo credit and link;
   never the position, the last message or the picture's address. Branch
-  `claude/aircraft-share`, open for review; not yet seen on a screen.
+  `claude/aircraft-share`, merged (#210); not yet seen on a screen.
 - **Aircraft history on the station.** The station keeps a day of each aircraft's
   positions, callsigns, registrations and relay card (off by default,
   `SDROXIDE_AIRCRAFT_HISTORY=1` turns it on); **Show history** draws the trail on
