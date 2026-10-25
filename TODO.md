@@ -18,261 +18,51 @@ maintainer's queue there, not a promise.
 
 ## Now
 
-0. **TCI receive audio: a server that offers baseband audio only gets silence
-   (#group, Rick Abshier KQ4Y, 2026-10-25)** — reported against upstream 1.6.10,
+0. **TCI receive audio: a server that carries baseband audio only gets silence**
+   (#group, Rick Abshier KQ4Y, 2026-10-25) — reported against upstream 1.6.10, an
    Icom 7300 MK2 through Remote Ham Radio's TCI platform with LocalMate: TCI CAT
    works, receive audio does not, and CW keys the transmitter but sends nothing.
-   RHR's own answer is the right one: their TCI stream carries **baseband audio**,
-   and this tree's TCI receive asks for **IQ** only.
+   RHR's answer is right: their stream carries **baseband audio**, and our TCI
+   receive asks for **IQ** only.
 
-   Checked in the code rather than taken on report:
-   `crates/sdroxide-tci/src/protocol.rs` parses `DataType::RxAudio`
-   (type 1, stereo L/R f32), and `net.rs`'s binary dispatch handles **only**
-   `DataType::Iq` and `DataType::TxChrono` — an `RxAudio` packet is dropped on the
-   floor. `Ctrl::Attach` sends `iq_start`; `audio_start` is sent only for the
-   transmit path. `tci_caps` in `src/main.rs` sets `audio_mode: false`
-   unconditionally.
+   Checked in the code: `crates/sdroxide-tci/src/protocol.rs` parses
+   `DataType::RxAudio`, and `net.rs`'s binary dispatch handles **only**
+   `DataType::Iq` and `DataType::TxChrono` — an `RxAudio` packet is dropped.
+   `Ctrl::Attach` sends `iq_start`; `audio_start` is sent only for transmit, and
+   `tci_caps` sets `audio_mode: false` unconditionally. (Transmit is already raw
+   audio here, so "keys but sends nothing" is 1.6.10's limit, not the design.)
 
-   **The fix, wire-neutral:** detect the server's transport during the handshake
-   (TCI servers announce `audio_samplerate`; a server that never starts an IQ
-   stream has none), and when there is no IQ, publish `caps.audio_mode = true`
-   with the audio rate, send `audio_start`, and route `RxAudio` frames into the
-   receiver's ring as real samples. No config field, no protocol bump — `audio_mode`
-   and the audio-source path already exist for CAT rigs on a sound card.
+   **The fix, wire-neutral:** detect the transport at the handshake, and when
+   there is no IQ stream publish `caps.audio_mode = true` at the audio rate, send
+   `audio_start`, and route `RxAudio` frames into the receiver's ring as real
+   samples. `audio_mode` and the audio-source path already exist for CAT rigs.
 
-0. **Airspy HF+ Discovery: the waterfall shows the filter skirt (#group, Graeme
-   Davidson, 2026-10-25)** — reported on 2.1.0.2.5_brown. The spectrum and
-   waterfall draw `RadioState::sample_rate` as the span, so at 768 kSPS the
-   picture includes the decimation filter's roll-off at both edges (Airspy's own
-   figure is ~660 kHz usable, 86 % of the rate), and the view can be panned into
-   it; the auto-fit averages the bins in view, so at full span it averages the
-   skirts too. **Built and tested** on `fork/hfplus-usable-span`:
-   `IqSource::usable_frac` (default 1.0, the HF+ 0.86), `RadioState::usable_hz`
-   (`PROTO_VERSION` 246 → 247, `VERSION_BYTE` 0x42 → 0x43), and the UI's
-   `dev_span` for the window, the zoom clamp, the pan bound and the fit key —
-   the analyzer keeps the raw rate, so decoders and the skimmer still see
-   everything. Wire change, so it is a PR: **not pushed**, waiting on the
-   operator's word. Not looked at on an HF+ (the span arithmetic is measured; the
-   picture is not).
+0. **Airspy HF+ Discovery: the skirt on the waterfall, and the fit on a dead
+   band** (#group, Graeme Davidson, 2026-10-25) — reported on 2.1.0.2.5_brown.
+   Two faults, one report, both built: the display was drawn on the radio's sample
+   rate, so 14 % of a 768 kSPS picture was filter skirt and the view could be
+   panned into it; and when a band measures only a few dB from top to bottom the
+   auto-fit **centred** its window on the noise, putting an empty band half way up
+   the colour map (his own experiment settled that second one — at 22 kHz, skirts
+   off screen, FIT still landed warm).
 
-0. **Mode panels docked by default, and no window on mode entry (#215, #217)** —
-   **PR #219**, awaiting review. On the first frame of every mode the program opened
-   that mode's panel as a window *and* saved the choice into `tool_windows_open`, so
-   (a) the pane below the waterfall was always suppressed and (b) SSTV opened twice,
-   because `is_image()` covers Sstv/SstvFm/Rifp and SSTV already had a window. The
-   block is gone; a panel docks and a window is the operator's (Detachable page, or
-   the dock chip in a window). The bits 2.1.0.x wrote are cleared **once**
-   (`UiSettings::tool_windows_repaired`), leaving non-panel windows alone. Two frame
-   tests: entering twenty-odd modes opens nothing, and the repair clears the mode
-   bits once and only once. **SSTV and the screens are F4NRM's**, so it is a PR.
+   **PR #234** — `IqSource::usable_frac` (the HF+ 0.86, measured at 768 kSPS),
+   `RadioState::usable_hz`, `PROTO_VERSION` 247 → 248, the UI's `dev_span` for the
+   window, zoom clamp, pan bound and fit key, and the fit anchored at the floor
+   instead of the middle. Two commits, six files. **Waiting for F4NRM to review
+   and merge.** Not looked at on an HF+.
 
-0. **SSTV opened two windows (#215) — fixed by the same PR as #217.** Reported by
-   `drdatapi` against 2.1.0.2.5 and reproduced by the operator: entering SSTV or
-   SSTV-FM opened both the `SSTV` window and a generic `IMAGE` one on the same
-   panel, because `IMAGE`'s auto-open was written against `is_image()`, which is
-   `Sstv | SstvFm | Rifp`. One decision (`image_window_for`) now picks the window
-   for the auto-open, the draw and the docked panel, and a frame test enters each
-   image mode and counts what opened — it fails on the release with the report's own
-   symptom. Also cured a latent blanking: an `IMAGE` left open from RIFP would have
-   hidden SSTV's panel entirely. **SSTV is F4NRM's**, so it is a PR.
-
-0. **Squelch hold-open from the SQL label — PR #218, awaiting review.** Asked for
-   by the operator 2026-10-25: a click on the word **SQL** holds the squelch open
-   (green letters) and a second click puts back the operator's own number, with no
-   chip and no extra width. It is **UI work, so it is a PR** rather than a commit to
-   `main` — the screens are F4NRM's. Built and tested here (1240 UI tests, the ink
-   and the width measured headlessly); **nobody has looked at it on a screen yet**,
-   which is the one thing left.
-
-0. **⛔ Our own PRs are never merged by us.** They wait for **F4NRM to review or
-   merge them himself** — his instruction through the operator, 2026-10-25. A local
-   merge for testing (`local/*` + a build into `~/.cargo/bin`) is fine; origin is
-   theirs. The rule now lives in [`AGENTS.md`](AGENTS.md) under "Pull requests".
+0. **⛔ Our own PRs are never merged by us** — they wait for F4NRM to review or
+   merge, per the operator's instruction of 2026-10-25. Open: **#234** only.
 
 0. **Focus, set by the operator 2026-10-24: no UI work, and the modes are the
-   programme.** F4NRM is working through the detachable windows and the layout,
-   so the screens are his; the only UI we touch is a new mode's own panel, or
-   something **very off**. Our work is **STANAG 4285 first** — the coded payload
-   has never been read off the air — then the modes that did not finish in
-   2.1.0. **F4NRM's list still holds** (Olivia, RTTY, FT8, NAVTEX, WEFAX, SSTV,
-   DAB, APRS, WFM, DSC, RDS), variants included — and a change that has to touch
-   one of those, or one of his panels, goes up **as a PR** for him to read, never
-   straight to `main`. **RSP1 is not on the list** (the operator struck it off on
-   2026-10-24: it is the bench's receiver and his only wideband one).
-
-0b. **Aircraft online info — merged (PR A relay, PR B clients).** Left: a live run
-   against a station with the relay on, adsbdb and Planespotters answering, and a
-   look at whether the CDN lets a browser load the thumbnail. The screen is
-   F4NRM's to look at. Asked for by the operator.
-
-0c. **Aircraft hover card — merged (#205).** Resting the pointer on an aircraft on
-   the map shows a compact card: the radio's lines first (green), then the online
-   ones the open card has already fetched (blue), the badge at the top, the
-   picture only if it is already in memory. It asks for nothing. Asked for by the
-   operator.
-
-0d. **Aircraft pinned card — merged (#206).** A
-   click on an aircraft on the map pins a small card beside it, with a clickable
-   Planespotters link and the thumbnail if it is already in memory. It stays until
-   the ✕ or Esc, or until another aircraft is clicked; a click on empty map does not
-   close it. A click or a hover asks for nothing; a "Look up online" button in the
-   card asks the station's relay for that one aircraft. Seen on a real screen with a
-   real station. Asked for by the operator.
-
-0e. **Aircraft search and filters — merged (#207).**
-   One search box over the ADS-B table, the Cards list and the map: ICAO, callsign,
-   registration, type, operator (`reg:` `type:` `op:` limit a word to a field). The
-   map hides what does not match and the pinned or selected aircraft stays. It reads
-   memory only and asks for nothing, so type and operator are found only once an
-   aircraft has been looked up. Asked for by the operator.
-
-0k. **Aircraft export — open for review (branch `claude/aircraft-export`).** **CSV** and
-   **JSON** buttons save the tracked fleet: the station's 24 h history table
-   (`/aircraft-export`) when it keeps one, else a table made from the cards held. No
-   positions, no photo or address, no session; spreadsheet formulas made inert. Left: a
-   look at the buttons on a real screen and a file opened in a real spreadsheet.
-   Asked for by the operator.
-0j. **Aircraft alerts — open for review (branch `claude/aircraft-alerts`).** A **Watch**
-   view in the AIRCRAFT window: a list of callsigns and registrations kept by the
-   station (`aircraft-watch.json`, `/aircraft-watch`), and an alert, a line and a count
-   on the AIRCRAFT chip, when one appears or comes back. No sound, no mail. Left: a look
-   at it on a real screen with a real station, and the same list from the browser.
-   Asked for by the operator.
-0i. **Aircraft statistics — open for review (branch `claude/aircraft-stats`).** A
-   **Stats** view in the AIRCRAFT window: top categories and airlines from the radio,
-   top models, operators and routes from the relay's cards, most first or A–Z. The
-   station's history list now carries the card facts so the last 24 h count too. Left:
-   a look at it on a real screen with a real station. Asked for by the operator.
-0h. **Aircraft history compression — open for review (branch
-   `claude/aircraft-history-compression`).** `aircraft-history.json` is written gzipped,
-   same name, once it passes 5 MB; either form is read. Still opt-in, still atomic.
-   Left: the server wiring and its tests need the opus download (CI); a look at a
-   real, big file. Asked for by the operator.
-
-0g. **Copy summary on the aircraft card — merged (#210).** A button in the Cards list copies the card as text, each
-   line marked radio / online / station history, with the photo credit and page link.
-   Position, last message and the thumbnail address are withheld. Left: a look at the
-   button on a real screen and a paste into a real app. Asked for by the operator.
-
-0f. **Aircraft history on the station — merged (#208).** The station keeps a day of what its radios
-   heard of each aircraft — positions, callsigns, registrations and the relay's card —
-   in `aircraft-history.json`, **off by default** (`SDROXIDE_AIRCRAFT_HISTORY=1` turns it
-   on), served on `/aircraft-history`. **Show history** in the pinned card and the
-   Cards list draws the trail on the map and adds the record to the card. Left: a
-   look at it on a real screen with a real station; the server's other integration
-   tests and the workspace check need the opus download. Asked for by the operator.
-
-1. **The mode work — the live queue, and it has its own brief.** The table is
-   **done** (operator, 2026-10-25: "that table is already done a few sessions ago"),
-   so it is not the next task. **What is left, checked against the code on
-   2026-10-25** — every line read out of `Mode::is_rx_only`, the refusal texts in
-   `text_modem.rs`, and `MODE-PROGRESS.md`'s table:
-   - **STANAG 4285's coded payload** — the programme's head. Receiver measured;
-     the code has never been read off the air. Needs a capture with 93 continuous
-     usable frames; none of ours has more than 82.
-   - **TX where fldigi sends and we do not** — the coded PSK families (**34
-     waveforms**, "the coded PSK transmitter is not written" — the largest single
-     gap in the tree), **8PSK** ("no eight-phase modulator"), **DominoEX**,
-     **DTMF**, **ARDOP** (no ARQ), **STANAG 4285** (no modulator), and
-     **JT65 / JT9 / FST4 / Q65 / MSK144** ("transmit is not wired in this build").
-     - **The coded PSK transmitter, in hand (2026-10-25).** The pieces are all
-       there and the shape is settled: `ConvEncoder::new(ConvCode::PSK_R)` gives
-       the two coded bits per data bit, `mfsk_rx::Interleaver::new(2, depth, true)`
-       is already the **transmit** direction (the receiver's mirror is
-       `forward: false`), `mfsk_word` gives the varicode, and `PskCoded` carries
-       baud/carriers/depth/fec per variant. **`psk.rs`'s own test module already
-       renders a correct coded signal** (`pskr_audio`, proven by
-       `the_pskr_chain_round_trips_its_own_bits` at depths None/40/80/160) — so
-       the first step is to promote that into a real `PskrTx`, not to invent a
-       modulator. Then: the single-carrier coded five (BPSK63F + the four `R`)
-       first, the multi-carrier `C`/`RC` next (bits distributed round-robin over
-       carriers `1.4 × baud` apart, each with its own differential state), and a
-       loopback per variant as the test. `text_modem.rs`'s refusal narrows to the
-       families not yet wired, so the honest message stays on the chip.
-   - **RX faults on modes we ship** — PSK 31/63 lose a word, BPSK1000 locks from
-     its second in; PSK500C4/1000C2/500RC4 **0/3** and four RC banks 1–2 of 3;
-     8PSK **0/4**; Hell five of seven at 0.33–0.48; MFSK8/MFSK11; DominoEX 3 of 9
-     short; THOR 4 of 15; Contestia 64/500; MT63 2KL partial and 1KS/1KL/500L not
-     offered; FSQ unproven; PI4 and UVPacket read nothing.
-   - **No decoder at all, recordings already in `samples/fldigi`** — **OFDM (3),
-     THROB (3), SCAMP (6), SITOR-B (1)**.
-   - **Needs the bench, not a session** — ALE (one burst), ARDOP (a station),
-     STANAG (a coded tape), 8PSK and FSQ (a clean recording).
-   - The line below still holds, and F4NRM's list is still his.
-   [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
-   finish the missing modes and get TX working for everything fldigi can
-   transmit, and **vendor a mode when the port and the bench have both been
-   exhausted**. [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md) is the
-   journal and the measurements; the five-column mode table at the end of the
-   brief is the deliverable.
-   - **STANAG 4285 — the demodulator is finished; the recordings are too short.**
-     The equaliser is measured and kept (mean constellation 0.344 → 0.451, usable
-     frames +45 %), and a real bug came out of comparing against the independent
-     implementation: the **deinterleaver dropped one soft decision in 32** (its
-     shortest row was read before it was written) — invisible to a loopback, now
-     pinned position by position. Every convention a loopback cannot falsify has
-     been swept and nothing frames a message, and **no recording has the ten
-     continuous seconds a message needs**: the longest run of usable frames is
-     **69 / 32 / 82** against **93** needed, while our own synthetic runs 207 and
-     decodes. So the fault is the material, and it is now a number: a capture with
-     **93 consecutive frames above 0.9 reference concentration**. The watcher is
-     running again; `s4285_probe` prints a `coded readiness` line for every file it
-     writes.
-     See [`STANAG4285-HANDOVER.md`](docs/internal/STANAG4285-HANDOVER.md).
-   - What is left is mostly **measurement**, not code: THOR25/THOR44 and a
-     second MFSK8 recording, a known-good FSQ recording, a BPSK1000 capture for
-     the lock-time question, an ARDOP recording off air, and a THOR/DominoEX
-     tone-step comparison against a real fldigi. The list with reasons is the
-     "Needs me" section at the end of the journal.
-   - **8PSK**: re-measured 2026-10-24 and the old "30 Hz wide" note was wrong —
-     the files are 124.5 Hz wide at −3 dB with a 125 Hz baud line, right level,
-     right SNR. Their constellation still does not settle (0.44–0.58 against
-     0.87 for BPSK125 and 0.74 for QPSK125), and our BPSK decoder reads nothing
-     from them either. **Blocked on one of two answers**: a synthetic built the
-     way fldigi builds one (next step, a Rust test) or a reference recording.
-   - **The four wide `C` PSK banks** need the demodulator's carrier separation
-     (the recording is not the fault).
-   - **JTTY: take upstream's rewrite by hand.** Upstream's #597 was our port;
-     they then fixed it properly in six commits (`0d24a5a9`, `25350c0f`,
-     `6771f6fa`, `33f6a8fa`, `53085277` and the 1500 Hz centre before them) —
-     772 lines across `jtty_controller.rs` and `dsp/jtty.rs`: TX refusal reason,
-     the TX row kept on screen, slow AGC, the frequency search, four-letter words
-     as text, the reference waveform timing, a non-ASCII TX panic, burst tail
-     loss and the stop button. A mode we ship, so it is this programme's work.
-
-2. **A decoded-text feed over UDP** — asked on Reddit (2026-10-24) and worth
-   having. What exists today is the **WSJT-X broadcast** (Settings → Servers):
-   the FT8 family's decodes, status and logged QSOs, in WSJT-X's dialect. What
-   does **not** exist is a generic feed for the text modes (RTTY, PSK, Olivia,
-   THOR, MFSK, DominoEX, Hell, CW, NAVTEX, STANAG) or the wideband rows. Shape:
-   one stored address per radio, one JSON line per decode (UTC, dial, mode,
-   audio offset, text), off by default, next to the UDP audio sink that already
-   exists in the engine. A `RadioConfig` field means a `PROTO_VERSION` bump.
-
-3. **Brick2** — the code half is merged (#170); the radio half is a report away.
-   [`docs/internal/BRICK2-HANDOVER.md`](docs/internal/BRICK2-HANDOVER.md).
-   - **#132 wrong frequency display** (Thetis 7.183 vs ours 7.223, 40 kHz, with
-     the spectrum going unstable under a MIDI knob). **One answer needed** —
-     already asked on the issue: is the number the dial readout or the spectrum
-     centre? If it is the axis, measure the rate the board actually streams
-     against the rate it was asked for.
-   - **#133 LSB needs USB on 40 m** — the switch is Settings → Radio → HPSDR →
-     Invert spectrum, and one-switch-per-radio is now enforced (#170), so the
-     generic Swap I/Q can no longer cancel it.
-
-4. **#162 NAVTEX frequency** — the reporter had to tune 516.6 kHz instead of
-   518. The presets already tune the dial **1.710 kHz below the channel**
-   (516.290 and 488.290), and that rule is pinned by a test, so this is his
-   receiver's calibration (`ppm`) or the station's own offset. **Answer it, do
-   not change the rule.**
-
-5. **#153 Pluto socket stalls** — APRS reception stops for a second or two and a
-   socket is being replaced mid-stream. Waiting on the **diagnostic report**
-   (Settings → Radio → Copy Diagnostic Report) and the precise setup.
-
-6. **Detachable panels are F4NRM's** (discussion #166). Our part: any panel we
-   touch gets made detachable and added to the Detachable page in Settings —
-   APRS was the last one (#167).
+   programme.** The half-done list is in
+   [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md): STANAG 4285's coded
+   payload (**done** — it decodes through the vendored reference decoder), the
+   **8PSK receive** corpus (0/3 — our front end smears what the reference reads),
+   the four wide `C`/`RC` PSK banks (**done** — they transmit), the speeds that
+   lose a word, and the MT63/Contestia/DominoEX variants. The five-column table
+   the operator asked for is finished and is the deliverable.
 
 ## Waiting on other people
 
