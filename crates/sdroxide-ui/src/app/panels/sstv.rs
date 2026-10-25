@@ -2687,9 +2687,22 @@ impl SdroxideApp {
                             }
                         });
                         ui.add_space(4.0);
+                        // **How many lines the layout holds**, so a document that
+                        // has grown past the visible four is still countable at a
+                        // glance — the list scrolls, and a scrollbar alone does not
+                        // say whether there are five or fifteen.
+                        ui.label(
+                            RichText::new(format!(
+                                "{} line{}",
+                                doc.layers.len(),
+                                if doc.layers.len() == 1 { "" } else { "s" }
+                            ))
+                            .size(9.5)
+                            .color(crate::theme::CYAN_DIM()),
+                        );
                         egui::ScrollArea::vertical()
                             .id_salt("composer-layers")
-                            .max_height(96.0)
+                            .max_height(130.0)
                             .show(ui, |ui| {
                                 for i in 0..doc.layers.len() {
                                     ui.horizontal(|ui| {

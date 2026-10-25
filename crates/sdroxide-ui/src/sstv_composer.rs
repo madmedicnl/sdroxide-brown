@@ -698,6 +698,72 @@ mod tests {
         assert_eq!((w, h), (64, 48));
     }
 
+    /// For the eye, and only when asked: **a four-picture mosaic with a
+    /// retransmission label, the station overlay on and off** — the example
+    /// F4NRM asked to see on #240, produced by the same functions the editor
+    /// calls rather than drawn by hand.
+    #[test]
+    fn a_mosaic_with_a_retransmission_label_can_be_dumped_to_look_at() {
+        if std::env::var("SDROXIDE_MOSAIC_DUMP").is_err() {
+            return;
+        }
+        // Four "received" pictures, each a different colour with a band so the
+        // grid and the letterboxing are both visible.
+        let cell = |rgb: [u8; 3], w: u16, h: u16| {
+            let mut v = vec![0u8; usize::from(w) * usize::from(h) * 3];
+            for y in 0..usize::from(h) {
+                for x in 0..usize::from(w) {
+                    let i = (y * usize::from(w) + x) * 3;
+                    let edge = y < usize::from(h) / 6;
+                    let c = if edge { [255u8, 255, 255] } else { rgb };
+                    v[i..i + 3].copy_from_slice(&c);
+                }
+            }
+            v
+        };
+        let a = cell([40, 90, 160], 320, 240);
+        let b = cell([160, 70, 40], 240, 320);
+        let c = cell([50, 140, 70], 300, 200);
+        let d = cell([120, 60, 140], 200, 200);
+        let cells: Vec<(&[u8], u16, u16)> =
+            vec![(&a, 320, 240), (&b, 240, 320), (&c, 300, 200), (&d, 200, 200)];
+        let (mosaic_rgb, w, h) = mosaic(320, 256, &cells);
+
+        // The station overlay: the callsign on a strip at the top.
+        let mut overlay = Composer::default();
+        overlay.layers.push(TextLayer {
+            text: "19DCG373".into(),
+            face: Face::Mono,
+            x: 0.5,
+            y: 0.07,
+            px: 24,
+            band: Some(Strip { thickness: 34, fill: [150, 20, 20], fill2: Some([40, 0, 0]) }),
+            ..Default::default()
+        });
+        // The retransmission label: this picture's own document.
+        let mut own = Composer::default();
+        own.layers.push(TextLayer {
+            text: "RELAY OF SKEDS 20/10".into(),
+            face: Face::ChakraBold,
+            x: 0.5,
+            y: 0.86,
+            px: 20,
+            ink: [255, 230, 60],
+            outline: Some([0, 0, 0]),
+            ..Default::default()
+        });
+
+        for (name, on) in [("overlay-on", true), ("overlay-off", false)] {
+            let doc = if on { own.over(&overlay) } else { own.clone() };
+            let mut img = mosaic_rgb.clone();
+            draw_onto(&doc, &mut img, w, h);
+            let png = crate::sstv::encode_png(&img, w, h).unwrap();
+            let path = format!("/tmp/opencode/sstv-mosaic-{name}.png");
+            std::fs::write(&path, png).unwrap();
+            eprintln!("wrote {path}");
+        }
+    }
+
     /// For the eye, and only when asked: a sample composition to look at.
     /// A layout is judged by looking, not by counting pixels.
     #[test]
