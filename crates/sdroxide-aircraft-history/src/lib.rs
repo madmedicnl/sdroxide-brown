@@ -10,6 +10,7 @@
 //! registrations an address used, and the card the relay gave. Never audio, raw
 //! frames, a picture, or anything about who was looking.
 
+pub mod export;
 #[cfg(feature = "gzip")]
 pub mod gz;
 pub mod watch;

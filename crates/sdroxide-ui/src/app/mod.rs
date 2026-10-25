@@ -21,6 +21,7 @@
 
 pub(in crate::app) mod aircraft;
 pub(in crate::app) mod aircraft_card;
+pub(in crate::app) mod aircraft_export;
 pub(in crate::app) mod aircraft_history;
 pub(in crate::app) mod aircraft_hover;
 pub(in crate::app) mod aircraft_online;
@@ -3184,6 +3185,8 @@ impl SdroxideApp {
     }
 }
 
+#[cfg(test)]
+mod aircraft_export_frame_tests;
 #[cfg(test)]
 mod aircraft_watch_frame_tests;
 #[cfg(test)]

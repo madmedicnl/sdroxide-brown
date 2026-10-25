@@ -80,6 +80,10 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
   on the map is open for review; it reads what the card has already fetched and
   asks for nothing. Still to do: a live run against a real station and the real
   services, and a look at the hover card on a screen.
+- **Aircraft export.** CSV and JSON buttons save the tracked fleet: the station's 24 h
+  history table when it keeps one, else the cards held; radio / online / both on every
+  row; no positions. Branch `claude/aircraft-export`, open for review; not yet seen on
+  a screen or opened in a spreadsheet.
 - **Aircraft alerts.** A Watch view keeps a list of callsigns and registrations on the
   station (`/aircraft-watch`) and raises a line and a count on the AIRCRAFT chip when a
   watched aircraft appears or returns. Branch `claude/aircraft-alerts`, open for review;

@@ -55,6 +55,12 @@ maintainer's queue there, not a promise.
    memory only and asks for nothing, so type and operator are found only once an
    aircraft has been looked up. Asked for by the operator.
 
+0k. **Aircraft export — open for review (branch `claude/aircraft-export`).** **CSV** and
+   **JSON** buttons save the tracked fleet: the station's 24 h history table
+   (`/aircraft-export`) when it keeps one, else a table made from the cards held. No
+   positions, no photo or address, no session; spreadsheet formulas made inert. Left: a
+   look at the buttons on a real screen and a file opened in a real spreadsheet.
+   Asked for by the operator.
 0j. **Aircraft alerts — open for review (branch `claude/aircraft-alerts`).** A **Watch**
    view in the AIRCRAFT window: a list of callsigns and registrations kept by the
    station (`aircraft-watch.json`, `/aircraft-watch`), and an alert, a line and a count

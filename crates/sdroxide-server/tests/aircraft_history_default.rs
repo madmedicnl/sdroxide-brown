@@ -17,6 +17,7 @@ const PASS: &str = "correct horse battery staple";
 /// One port per test: they run side by side.
 
 const PORT_OFF: u16 = 39494;
+const PORT_OFF_EXPORT: u16 = 39512;
 
 /// The station reads its switch from the environment; this one is left unset,
 /// and the config folder is a folder of its own.
@@ -98,13 +99,6 @@ async fn get(port: u16, path: &str, cookie: Option<&str>) -> String {
     body
 }
 
-/// The JSON of an answer, whatever the framing round it.
-fn body(answer: &str) -> serde_json::Value {
-    let start = answer.find('{').expect("a JSON body");
-    let end = answer.rfind('}').expect("a JSON body");
-    serde_json::from_str(&answer[start..=end]).expect("valid JSON")
-}
-
 fn now() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64
 }
@@ -136,6 +130,26 @@ async fn a_station_that_has_not_switched_it_on_keeps_and_serves_nothing() {
         "/shack/sdr/aircraft-history/4840D6",
     ] {
         let answer = get(PORT_OFF, path, None).await;
+        assert!(answer.starts_with("HTTP/1.1 503"), "{path}: {answer}");
+        assert!(answer.contains("\"status\":\"disabled\""), "{path}: {answer}");
+        assert!(!answer.contains("KLM1234"), "{path}: {answer}");
+    }
+}
+
+/// The export is as shut as the rest: 503 and "disabled" for both formats, and a
+/// bad format is not looked at before the switch.
+#[tokio::test]
+async fn the_export_of_a_station_that_keeps_nothing_says_disabled() {
+    let events = spawn_station(PORT_OFF_EXPORT, false).await;
+    events.send(status_with_a_plane()).unwrap();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    for path in [
+        "/aircraft-export?format=csv",
+        "/aircraft-export?format=json",
+        "/shack/sdr/aircraft-export?format=csv",
+        "/aircraft-export",
+    ] {
+        let answer = get(PORT_OFF_EXPORT, path, None).await;
         assert!(answer.starts_with("HTTP/1.1 503"), "{path}: {answer}");
         assert!(answer.contains("\"status\":\"disabled\""), "{path}: {answer}");
         assert!(!answer.contains("KLM1234"), "{path}: {answer}");

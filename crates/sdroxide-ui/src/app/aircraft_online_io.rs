@@ -22,6 +22,7 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 
 use eframe::egui;
 
+use super::aircraft_export::ExportStore;
 use super::aircraft_history::{self, HistoryStore};
 use super::aircraft_online::{
     Answer, OnlineStore, ThumbStatus, Want, classify, info_url, thumb_fetchable,
@@ -34,6 +35,9 @@ const MAX_INFO_BYTES: u64 = 64 * 1024;
 /// The most bytes read of the station's record of one aircraft: up to 600
 /// positions, a few dozen bytes each.
 const MAX_HISTORY_BYTES: u64 = 256 * 1024;
+/// The most bytes read of the station's table of the fleet: up to 4000 aircraft,
+/// a few hundred bytes each.
+const MAX_EXPORT_BYTES: u64 = 8 * 1024 * 1024;
 /// The most bytes read of the operator's watch list: a hundred short entries.
 const MAX_WATCH_BYTES: u64 = 16 * 1024;
 /// The most bytes read of the station's list of everything it kept: up to 4000
@@ -49,6 +53,7 @@ const KEEP_THUMBS: usize = 8;
 enum Msg {
     Info { icao: u32, status: Option<u16>, body: String },
     History { icao: u32, status: Option<u16>, body: String },
+    Export { status: Option<u16>, body: String },
     Watch { status: Option<u16>, body: String },
     Stats { status: Option<u16>, body: String },
     Thumb { url: String, bytes: Option<Vec<u8>> },
@@ -65,6 +70,8 @@ pub(in crate::app) struct OnlineClient {
     pub store: OnlineStore,
     /// The station's record of the one aircraft whose history is on.
     pub history: HistoryStore,
+    /// Saving the fleet as CSV or JSON: the station's table, or one made here.
+    pub export: ExportStore,
     /// The operator's list of aircraft to be told about, as the station keeps it.
     pub watch: WatchStore,
     /// The station's list of every aircraft it kept, for the statistics view.
@@ -80,6 +87,7 @@ impl Default for OnlineClient {
         Self {
             store: OnlineStore::default(),
             history: HistoryStore::default(),
+            export: ExportStore::default(),
             watch: WatchStore::default(),
             stats: StatsStore::default(),
             tx,
@@ -119,6 +127,9 @@ impl OnlineClient {
                 }
                 Msg::History { icao, status, body } => {
                     self.history.deliver(icao, aircraft_history::classify(status, &body), now);
+                }
+                Msg::Export { status, body } => {
+                    self.export.deliver(status, &body, now);
                 }
                 Msg::Watch { status, body } => {
                     self.watch.deliver(aircraft_watch::classify(status, &body), now);
@@ -227,6 +238,19 @@ impl OnlineClient {
         send_info(url, station, Kind::Stats, None, self.tx.clone(), ctx.clone());
     }
 
+    /// Ask the station for its table if an export was pressed and one is due. With
+    /// no station nothing is sent: the file is made here.
+    pub(in crate::app) fn ask_export(&mut self, ctx: &egui::Context, peer: Option<&str>, now: i64) {
+        let Some(format) = self.export.next_fetch(peer.is_some(), now) else { return };
+        let Some(url) = peer.and_then(|p| super::aircraft_export::export_url(p, format)) else {
+            // A connection that is not an address cannot be asked.
+            self.export.give_up(aircraft_history::Reason::NoStation);
+            return;
+        };
+        let station = peer.map(crate::login::station_key).unwrap_or_default();
+        send_info(url, station, Kind::Export, None, self.tx.clone(), ctx.clone());
+    }
+
     pub(in crate::app) fn thumb_status(&self, url: &str) -> ThumbStatus {
         self.thumbs.iter().find(|t| t.url == url).map_or(ThumbStatus::NotTried, |t| t.status)
     }
@@ -275,6 +299,7 @@ fn agent() -> ureq::Agent {
 enum Kind {
     Info(u32),
     History(u32),
+    Export,
     Watch,
     Stats,
 }
@@ -284,6 +309,7 @@ impl Kind {
         match self {
             Kind::Info(_) => MAX_INFO_BYTES,
             Kind::History(_) => MAX_HISTORY_BYTES,
+            Kind::Export => MAX_EXPORT_BYTES,
             Kind::Watch => MAX_WATCH_BYTES,
             Kind::Stats => MAX_STATS_BYTES,
         }
@@ -293,6 +319,7 @@ impl Kind {
         match self {
             Kind::Info(icao) => Msg::Info { icao, status, body },
             Kind::History(icao) => Msg::History { icao, status, body },
+            Kind::Export => Msg::Export { status, body },
             Kind::Watch => Msg::Watch { status, body },
             Kind::Stats => Msg::Stats { status, body },
         }
@@ -609,6 +636,21 @@ mod tests {
     }
 
     #[test]
+    fn the_stations_table_reaches_the_export_store() {
+        use super::super::aircraft_export::Ready;
+        use sdroxide_aircraft_history::export::Format;
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        c.export.start(Format::Csv);
+        assert_eq!(c.export.next_fetch(true, 0), Some(Format::Csv));
+        let csv = "icao,callsign,registration\n";
+        c.tx.send(Msg::Export { status: Some(200), body: csv.into() }).unwrap();
+        c.poll(&ctx, 1);
+        assert_eq!(c.export.take_ready(), Some(Ready::Station(Format::Csv, csv.into())));
+        assert_eq!(c.store.len(), 0, "the relay's store was not touched");
+    }
+
+    #[test]
     fn the_stations_list_reaches_the_watch_store_and_frees_the_line() {
         let ctx = egui::Context::default();
         let mut c = OnlineClient::default();
@@ -623,6 +665,41 @@ mod tests {
         assert_eq!(*c.watch.state(), aircraft_watch::WatchState::Ready);
         assert!(!c.watch.line_busy(1));
         assert_eq!(c.store.len(), 0, "the relay's store was not touched");
+    }
+
+    #[test]
+    fn an_export_is_not_asked_without_a_station_and_the_file_is_made_here() {
+        use super::super::aircraft_export::Ready;
+        use sdroxide_aircraft_history::export::Format;
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        c.ask_export(&ctx, Some("wss://shack.example/ws"), 0);
+        assert!(c.rx.try_recv().is_err() && !c.export.busy(), "nothing pressed, nothing sent");
+        c.export.start(Format::Json);
+        c.ask_export(&ctx, None, 0);
+        assert_eq!(
+            c.export.take_ready(),
+            Some(Ready::Local(Format::Json, aircraft_history::Reason::NoStation))
+        );
+        // The control: with a station a request goes and the store waits for it.
+        c.export.start(Format::Json);
+        c.ask_export(&ctx, Some("wss://shack.example/ws"), 0);
+        assert!(c.export.busy() && c.export.take_ready().is_none());
+    }
+
+    #[test]
+    fn a_connection_that_is_not_an_address_makes_the_file_here() {
+        use super::super::aircraft_export::Ready;
+        use sdroxide_aircraft_history::export::Format;
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        c.export.start(Format::Csv);
+        c.ask_export(&ctx, Some("not an address"), 0);
+        assert!(c.rx.try_recv().is_err());
+        assert_eq!(
+            c.export.take_ready(),
+            Some(Ready::Local(Format::Csv, aircraft_history::Reason::NoStation))
+        );
     }
 
     #[test]
@@ -654,6 +731,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn a_list_from_the_station_reaches_the_stats_store_and_frees_the_line() {
         let ctx = egui::Context::default();
         let mut c = OnlineClient::default();

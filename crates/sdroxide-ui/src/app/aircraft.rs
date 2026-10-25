@@ -22,10 +22,12 @@ use eframe::egui::{self, RichText};
 use sdroxide_types::{Command, Mode, RxId};
 
 use super::aircraft_card::{self, CardKey};
+use super::aircraft_export;
 use super::aircraft_history::{self, HistoryOffer, HistoryState};
 use super::aircraft_online::{self, Badge, Provenance, ThumbStatus};
 use super::aircraft_search;
 use super::aircraft_share;
+use sdroxide_aircraft_history::export::Format;
 use super::aircraft_stats::{self, SortBy, Stats};
 use super::aircraft_watch::{self, WatchState};
 
@@ -266,6 +268,14 @@ impl super::SdroxideApp {
         let shown =
             if MODES.iter().any(|m| m.mode == active) { active } else { self.aircraft_view };
         self.aircraft_view = shown;
+        // An export asked for, asked of the station, and saved.
+        if let Some(done) = self.aircraft_export_poll(ui.ctx()) {
+            crate::download::save(&done.name, &done.bytes);
+            self.aircraft_online.export.set_notice(done.note, crate::time::now_unix());
+        }
+        if let Some(note) = self.aircraft_online.export.notice(crate::time::now_unix()) {
+            ui.label(RichText::new(note).size(11.0).color(crate::theme::gray(160)));
+        }
         // A watched aircraft came on the air and nobody has looked yet.
         if !self.aircraft_watch_view {
             if let Some(a) = self.aircraft_tracker.alerts().find(|a| !a.seen) {
@@ -362,6 +372,33 @@ impl super::SdroxideApp {
                         self.aircraft_stats_view = !self.aircraft_stats_view;
                         self.aircraft_cards = false;
                     }
+                    ui.add_space(6.0);
+                    crate::chrome::menu_caption(ui, "Export");
+                    for (format, hover) in [
+                        (
+                            Format::Csv,
+                            "Save the aircraft as a CSV table for a spreadsheet: the station\u{2019}s \
+                             last 24 hours if it keeps a history, else what is heard now. No \
+                             positions.",
+                        ),
+                        (
+                            Format::Json,
+                            "Save the aircraft as JSON: the station\u{2019}s last 24 hours if it \
+                             keeps a history, else what is heard now. No positions.",
+                        ),
+                    ] {
+                        let label = format.ext().to_ascii_uppercase();
+                        let b = crate::chrome::chip_sized(
+                            ui,
+                            self.aircraft_online.export.busy(),
+                            label,
+                            egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                        )
+                        .on_hover_text(hover);
+                        if b.clicked() {
+                            self.aircraft_online.export.start(format);
+                        }
+                    }
                 },
             );
             ui.vertical(|ui| {
@@ -377,6 +414,30 @@ impl super::SdroxideApp {
                 }
             });
         });
+    }
+
+    /// Take what has arrived, ask the station for its table if an export was
+    /// pressed, and give back the file to save once it is ready. The saving is the
+    /// caller's, so that this can be run without a file dialog.
+    pub(in crate::app) fn aircraft_export_poll(
+        &mut self,
+        ctx: &egui::Context,
+    ) -> Option<aircraft_export::Done> {
+        let now = crate::time::now_unix();
+        let peer = self.ctrl.peer_url();
+        self.aircraft_online.poll(ctx, now);
+        self.aircraft_online.ask_export(ctx, peer.as_deref(), now);
+        let ready = self.aircraft_online.export.take_ready()?;
+        Some(aircraft_export::finish(
+            ready,
+            || {
+                aircraft_export::local_rows(
+                    self.aircraft_registry.entries(),
+                    self.aircraft_online.store.infos(),
+                )
+            },
+            now,
+        ))
     }
 
     /// Once a frame, whether the window is open or not: read the watch list from
