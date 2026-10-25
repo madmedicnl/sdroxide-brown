@@ -299,6 +299,53 @@ by itself; the AIRCRAFT window's back-off still decides when it is asked again.
 
 ---
 
+## 2026-10-25 (aircraft) — F4NRM's three PRs merged, and two tests that were not running
+
+**Summary.** The three aircraft pull requests that were conflicting are all in: a
+**Stats** view, a **Watch** list that alerts on an aircraft you asked about, and
+**CSV/JSON export** of the tracked fleet. They conflicted because all three add a
+chip and a pane to the same window, so each branch was brought up to date with
+`main` and the two features kept side by side — Watch, then Stats, then the cards.
+Merging them turned up something worth more than the features: **two tests on the
+tree were never running** because their `#[test]` had gone missing, and a route in
+the reverse-proxy list was unreachable. All three are fixed and the installed build
+has them.
+
+**Done.**
+- **#212 Aircraft statistics** — merged as `5f6cb912`'s parent line; conflicts were
+  documentation only. Its own test
+  `a_list_from_the_station_reaches_the_stats_store_and_frees_the_line` had **no
+  `#[test]`** on `main`, so it had never run. Marked, and it passes.
+- **#213 Aircraft alerts** (`5f6cb912`) — conflicts in `aircraft.rs` and
+  `aircraft_online_io.rs` were the Watch and Stats chip/pane/method added to the
+  same places; both kept, three exclusive views now (Watch, Stats, Cards) plus the
+  map. The merge cost the watch test its `#[test]` (the attribute lived in the
+  shared tail that had to be inlined for the other side); caught by the
+  `--all-targets` gate as "function is never used" and put back.
+- **#214 Aircraft export** (`a511c2c6`) — the largest: three structural conflicts
+  where each side had rewritten the same poll/pane region, resolved to keep both
+  features; the `Kind::Export`/`Kind::Stats` requests are reads, so they pass
+  `None` where the watch store posts a body.
+- **A bug the merge surfaced:** `is_root_route` ended up with **two identical match
+  arms**, one listing `/aircraft-export` and the next `/aircraft-watch`, so the
+  second was unreachable and `/aircraft-watch` would not have been recognised at
+  the end of a reverse proxy's prefix. One arm lists both now.
+- **Dead test helper removed:** `aircraft_history_default.rs` carried a JSON
+  `body()` with no caller on either branch.
+- **Checks:** `cargo check --workspace --all-targets` shows only the four NAVTEX
+  dead-code warnings that are F4NRM's and are recorded, not touched;
+  `sdroxide-ui --lib` **1237 passed**, `sdroxide-server --lib` **77**,
+  `sdroxide-aircraft-history` **70**, `sdroxide-aircraft-online` **45**, none failed;
+  `rustfmt --check` clean on every file touched. `main` is level with `origin/main`
+  at `a511c2c6` and the release build is installed at `~/.cargo/bin/sdroxide`.
+
+**Not done / blocked.** Nothing. The installed binary is `main` — the release tag
+`v2.1.0.2.5_brown` plus these three features — so it is a development build, not
+the tag; the tag is untouched.
+
+**Next.** The operator's own queue: the modes, and STANAG 4285's coded payload,
+which still wants a capture with ten continuous seconds of usable signal.
+
 ## 2026-10-25 (STANAG 4285) — a plain teleprinter transmission now reads, and the sweep is off for the storm
 
 **Summary.** A STANAG 4285 station sending **uncoded** text — the simple 1200 bps
