@@ -6122,6 +6122,18 @@ only for aircraft whose card has been looked up; when a word begins `type:` or
 online data — open their card*). The search is not saved: closing the program
 clears it.
 
+**Stats.** The **Stats** button under *Cards* swaps the map for five small tables:
+the most common *category* and *airline* among the aircraft (counted from the radio:
+the category the decoder reported, and the three letters at the start of a callsign
+such as KLM1234; a tail number has no airline), then *model*, *operator* and *route*
+(from the relay's cards, so only for the aircraft it has answered about, which you
+trigger by opening a card). Each table wears its badge, **radio** green or **online**
+blue, and says how many aircraft it knows and how many different kinds there were.
+*Most first* or *A–Z* orders them, ten rows each. A station that keeps its history
+adds the last 24 hours to what is heard now; one that does not is counted for what is
+heard now, and the line under the title says which. Nothing is asked while the view
+is closed, and it asks the station you are connected to and nobody else.
+
 **Copy summary.** The button under an aircraft's name in the Cards list puts the
 card on the clipboard as plain text: the name, the detail line, every line
 somebody has with where it came from (*radio*, *online* or *station history*), and

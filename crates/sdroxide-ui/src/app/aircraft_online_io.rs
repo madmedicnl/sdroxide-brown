@@ -26,12 +26,16 @@ use super::aircraft_history::{self, HistoryStore};
 use super::aircraft_online::{
     Answer, OnlineStore, ThumbStatus, Want, classify, info_url, thumb_fetchable,
 };
+use super::aircraft_stats::{self, StatsStore};
 
 /// The most bytes read of a reply from the relay.
 const MAX_INFO_BYTES: u64 = 64 * 1024;
 /// The most bytes read of the station's record of one aircraft: up to 600
 /// positions, a few dozen bytes each.
 const MAX_HISTORY_BYTES: u64 = 256 * 1024;
+/// The most bytes read of the station's list of everything it kept: up to 4000
+/// aircraft, a few hundred bytes each.
+const MAX_STATS_BYTES: u64 = 4 * 1024 * 1024;
 /// The most bytes read of a thumbnail. They are a few tens of kilobytes.
 const MAX_THUMB_BYTES: u64 = 2 * 1024 * 1024;
 /// Widest or tallest a thumbnail may decode to.
@@ -42,6 +46,7 @@ const KEEP_THUMBS: usize = 8;
 enum Msg {
     Info { icao: u32, status: Option<u16>, body: String },
     History { icao: u32, status: Option<u16>, body: String },
+    Stats { status: Option<u16>, body: String },
     Thumb { url: String, bytes: Option<Vec<u8>> },
 }
 
@@ -56,6 +61,8 @@ pub(in crate::app) struct OnlineClient {
     pub store: OnlineStore,
     /// The station's record of the one aircraft whose history is on.
     pub history: HistoryStore,
+    /// The station's list of every aircraft it kept, for the statistics view.
+    pub stats: StatsStore,
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
     thumbs: Vec<Thumb>,
@@ -67,6 +74,7 @@ impl Default for OnlineClient {
         Self {
             store: OnlineStore::default(),
             history: HistoryStore::default(),
+            stats: StatsStore::default(),
             tx,
             rx,
             thumbs: Vec::new(),
@@ -104,6 +112,9 @@ impl OnlineClient {
                 }
                 Msg::History { icao, status, body } => {
                     self.history.deliver(icao, aircraft_history::classify(status, &body), now);
+                }
+                Msg::Stats { status, body } => {
+                    self.stats.deliver(aircraft_stats::classify(status, &body), now);
                 }
                 Msg::Thumb { url, bytes } => {
                     let image = bytes.as_deref().and_then(decode_thumb);
@@ -171,6 +182,24 @@ impl OnlineClient {
         send_info(url, station, Kind::History(icao), self.tx.clone(), ctx.clone());
     }
 
+    /// Fetch the station's list for the statistics view, if the store says one
+    /// is due. Closed, or without a station, nothing is sent.
+    pub(in crate::app) fn ask_stats(&mut self, ctx: &egui::Context, peer: Option<&str>, now: i64) {
+        if !self.stats.next_request(peer.is_some(), now) {
+            return;
+        }
+        let Some(url) = peer.and_then(aircraft_stats::list_url) else {
+            // A connection that is not an address cannot be asked.
+            self.stats.deliver(
+                aircraft_stats::StatsState::Unavailable(aircraft_history::Reason::NoStation),
+                now,
+            );
+            return;
+        };
+        let station = peer.map(crate::login::station_key).unwrap_or_default();
+        send_info(url, station, Kind::Stats, self.tx.clone(), ctx.clone());
+    }
+
     pub(in crate::app) fn thumb_status(&self, url: &str) -> ThumbStatus {
         self.thumbs.iter().find(|t| t.url == url).map_or(ThumbStatus::NotTried, |t| t.status)
     }
@@ -219,6 +248,7 @@ fn agent() -> ureq::Agent {
 enum Kind {
     Info(u32),
     History(u32),
+    Stats,
 }
 
 impl Kind {
@@ -226,6 +256,7 @@ impl Kind {
         match self {
             Kind::Info(_) => MAX_INFO_BYTES,
             Kind::History(_) => MAX_HISTORY_BYTES,
+            Kind::Stats => MAX_STATS_BYTES,
         }
     }
 
@@ -233,6 +264,7 @@ impl Kind {
         match self {
             Kind::Info(icao) => Msg::Info { icao, status, body },
             Kind::History(icao) => Msg::History { icao, status, body },
+            Kind::Stats => Msg::Stats { status, body },
         }
     }
 }
@@ -508,6 +540,53 @@ mod tests {
         assert_eq!(
             c.history.state(9),
             &aircraft_history::HistoryState::Unavailable(aircraft_history::Reason::NoStation)
+        );
+    }
+
+    #[test]
+    fn a_list_from_the_station_reaches_the_stats_store_and_frees_the_line() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        c.stats.set_on(true);
+        assert!(c.stats.next_request(true, 0));
+        let body = serde_json::to_string(&sdroxide_aircraft_history::ListReply::bare(
+            sdroxide_aircraft_history::Status::Disabled,
+        ))
+        .unwrap();
+        c.tx.send(Msg::Stats { status: Some(503), body }).unwrap();
+        c.poll(&ctx, 1);
+        assert_eq!(
+            c.stats.state(),
+            &aircraft_stats::StatsState::Unavailable(aircraft_history::Reason::Disabled)
+        );
+        assert!(!c.stats.line_busy(1));
+        assert_eq!(c.store.len(), 0, "the relay's store was not touched");
+        assert_eq!(c.history.on(), None, "nor the history's");
+    }
+
+    #[test]
+    fn the_list_is_not_asked_until_the_view_is_open_and_there_is_a_station() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        c.ask_stats(&ctx, Some("wss://shack.example/ws"), 0);
+        assert!(!c.stats.line_busy(0), "closed, nothing sent");
+        c.stats.set_on(true);
+        c.ask_stats(&ctx, None, 0);
+        assert!(!c.stats.line_busy(0), "no station, nothing sent");
+        c.ask_stats(&ctx, Some("wss://shack.example/ws"), 0);
+        assert!(c.stats.line_busy(0), "the control: open, with a station, a request went");
+    }
+
+    #[test]
+    fn a_connection_that_is_not_an_address_is_told_no_station_for_the_list() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        c.stats.set_on(true);
+        c.ask_stats(&ctx, Some("not an address"), 0);
+        assert!(c.rx.try_recv().is_err());
+        assert_eq!(
+            c.stats.state(),
+            &aircraft_stats::StatsState::Unavailable(aircraft_history::Reason::NoStation)
         );
     }
 }
