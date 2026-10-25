@@ -22,7 +22,67 @@ Each entry, in this order:
 ---
 
 
-## 2026-10-25 (the queue closed out: two issues and nine discussions)
+## 2026-10-25 (STANAG 4285: what the capture says, and what is left)
+
+**In plain words.** The coded payload still does not read, but the fog is gone:
+four of the five things it could have been are now measured and excluded, one real
+bug is fixed, and the next step is named. Our own 24 October capture of 13031.2
+kHz carries **283 frames** — far more than the interleaver needs at any rate — so
+"we need more material" is finished as an answer. The chains fill, decode ten to
+fourteen chunks each, and produce random bits. The scrambler, the deinterleaver
+and the rate list are now verified against an independent GPL implementation,
+which leaves the demodulated symbols themselves as the suspect.
+
+**Done.**
+- `IqSource`-style groundwork is not touched; this is all in
+  `crates/sdroxide-dsp/src/stanag4285*.rs`.
+- **A real bug fixed:** the QPSK coded chain was created *inside* a loop over
+  `fec::CodedRate::BPSK` — the four BPSK rates — so `r == Bps1200` was never true
+  and the QPSK branch never existed. A capture whose verdict is QPSK had nothing
+  listening. Now built as an explicit list (`coded_chains`), twelve branches, and
+  pinned by `every_coded_rate_has_a_branch`.
+- **Instrumentation kept:** `S4285Receiver::chain_stats()` reports each branch's
+  pushed soft values, decoded chunks, messages and SOM score, so "the chains
+  never filled" is distinguishable from "they filled and the code failed". Two
+  `#[ignore]`d probes use it on a capture passed in `SDROXIDE_S4285_SAMPLE`:
+  `the_capture_chain_by_chain` (all four equaliser modes) and
+  `the_capture_bit_stream_dump` (bit stream, SOM/EOM match, pair order, value
+  shaping).
+
+**Measured, on the 24 Oct capture (48 kHz stereo, averaged to mono).**
+
+| | |
+|---|---|
+| frames | 283, locked, sync 0.90, references 0.971 / 0.994 / 0.988 |
+| verdict | BPSK coded, i.e. one of 600/300/150/75 |
+| chains | Bps600 fills and decodes 10 chunks (Bps300 4, Bps150 1) |
+| decoded bits | 71 424, ones fraction 0.491, no positional bias at any period up to 32 |
+| best SOM match | 22 of 32 as-is, 26 swapped pairs, 24 hard decisions, 22 tanh |
+
+**Excluded against the GPL reference (`luwangg/signal-analysis`, GPL-3.0):**
+- the scrambler — replayed their `s4285_gen_scramble.m` LFSR by hand, symbol for
+  symbol, against ours: identical for the first 24 groups and the same taps;
+- the deinterleaver — their `(9·i) & 31` output permutation, `increment·(31−i)`
+  row lengths and `31·increment` fill rule are exactly our `IN_ORDER`, row
+  lengths and fill, both in the `.hpp` and the `.m`;
+- the rate list — see the bug above;
+- soft-decision polarity, pair order and value shaping — all variants run, none
+  frames a message.
+
+**Not done / blocked.** The suspect is now the **demodulated symbol stream**:
+ours comes from `frame_symbols`/`coded_symbols` (plain, least-squares or DFE), and
+the reference's comes from its own 5-samples/symbol frame detector and LMS
+equaliser. Deciding between them needs the reference run on the same wav, which
+needs a small standalone C++ driver around its headers (no octave here) — that is
+the next step and it is bounded.
+
+**Next.** Write that driver, get their bit stream for this capture, and diff the
+symbol decisions. If theirs reads and ours does not, port their front end into
+the coded path (the equaliser work is already there for the display). If neither
+reads, the transmission is not the open test tape the manual describes, and the
+material question comes back — but with 283 frames in hand, not 82.
+
+
 
 **In plain words.** Went through every open issue and discussion and closed the
 ones that were finished — either because the answer had already concluded them or

@@ -416,6 +416,46 @@ const CHUNK_PAIRS: usize = 256;
 /// forced start state has left the trace before the decisions are used.
 const VITERBI_OVERLAP: usize = 64;
 
+/// **Every branch the code can be on.** Four BPSK rates, both scrambler signs;
+/// and the QPSK rate, both signs and both orders of its two bits.
+///
+/// The QPSK branches used to be created *inside* a loop over
+/// [`fec::CodedRate::BPSK`], which is the four BPSK rates — so `r == Bps1200`
+/// was never true and the QPSK chain was dead code. A capture whose verdict is
+/// QPSK therefore had nothing listening for it at all. Built as a list rather
+/// than nested conditionals so that cannot happen again: a rate is missing from
+/// here or it is missing everywhere.
+fn coded_chains() -> Vec<CodedChain> {
+    let mut out = Vec::with_capacity(12);
+    for sign in [1.0f32, -1.0] {
+        for r in fec::CodedRate::BPSK {
+            out.push(CodedChain::new(r, sign));
+        }
+        // **A QPSK symbol carries two bits and the annex does not say which of
+        // I and Q enters the code first**, so both orders are run; only the one
+        // that frames a message can be right.
+        out.push(CodedChain::new(fec::CodedRate::Bps1200, sign));
+        out.push(CodedChain::new_ordered(fec::CodedRate::Bps1200, sign, true));
+    }
+    out
+}
+
+/// One coded branch's counters — see [`S4285Receiver::chain_stats`].
+#[derive(Debug, Clone, Copy)]
+pub struct ChainStat {
+    pub rate: fec::CodedRate,
+    pub sign: f32,
+    /// For a QPSK rate, which of the two bits comes first.
+    pub swap: bool,
+    /// Soft decisions this branch has been fed; one per data symbol per stride.
+    pub pushed: usize,
+    /// Viterbi chunks it has decoded, after the interleaver.
+    pub chunks: u64,
+    pub messages: u64,
+    /// Closest approach to the start-of-message pattern, in matching bits of 32.
+    pub som: u8,
+}
+
 struct CodedChain {
     rate: fec::CodedRate,
     times: usize,
@@ -681,6 +721,24 @@ impl S4285Receiver {
             events_text: String::new(),
             report: S4285Report::default(),
         }
+    }
+
+    /// **Per-chain counters, for a test that has to tell "the chains never
+    /// filled" from "they filled and the code still failed".** Not part of the
+    /// report: this is diagnostics for the bench, not something a panel shows.
+    pub fn chain_stats(&self) -> Vec<ChainStat> {
+        self.coded
+            .iter()
+            .map(|c| ChainStat {
+                rate: c.rate,
+                sign: c.sign,
+                swap: c.swap,
+                pushed: c.soft.len() + c.consumed,
+                chunks: (c.consumed / (CHUNK_PAIRS * 2 * c.times)) as u64,
+                messages: c.messages,
+                som: c.framer.best_som,
+            })
+            .collect()
     }
 
     pub fn report(&self) -> &S4285Report {
@@ -1545,18 +1603,7 @@ impl S4285Receiver {
         // symbol is ±1 — Annex E's "linear distance from the decision boundary".
         let scale = data.len() as f32 / sum;
         if self.coded.is_empty() {
-            for r in fec::CodedRate::BPSK {
-                for sign in [1.0f32, -1.0] {
-                    self.coded.push(CodedChain::new(r, sign));
-                    // **A QPSK symbol carries two bits and the annex does not say
-                    // which of I and Q enters the code first.** A chain fed only the
-                    // in-phase part throws half of every symbol away, which is why
-                    // a QPSK capture could not decode at any rate.
-                    if r == fec::CodedRate::Bps1200 {
-                        self.coded.push(CodedChain::new_ordered(r, sign, true));
-                    }
-                }
-            }
+            self.coded = coded_chains();
         }
         let soft: Vec<f32> = data.iter().map(|c| c.re * scale).collect();
         // The same symbols as two bits each.
@@ -2937,5 +2984,222 @@ mod tests {
         for (i, c) in mean.iter().enumerate() {
             assert!(*c > 0.55, "reference block {i} averaged {c:.3} over {n} frames");
         }
+    }
+
+    /// Dump the best chain's decoded bit stream, so its structure can be examined
+    /// rather than argued about: an ITA2 tape has a start bit every seven, and a
+    /// periodic decoder fault shows as a biased bit position.
+    #[test]
+    #[ignore]
+    fn the_capture_bit_stream_dump() {
+        let path = std::env::var("SDROXIDE_S4285_SAMPLE").expect("set SDROXIDE_S4285_SAMPLE");
+        let mut reader = hound::WavReader::open(&path).expect("open the wav");
+        let spec = reader.spec();
+        let raw: Vec<f32> = match spec.sample_format {
+            hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
+            hound::SampleFormat::Int => {
+                let scale = 1.0 / (1i64 << (spec.bits_per_sample - 1)) as f32;
+                reader.samples::<i32>().map(|s| s.unwrap() as f32 * scale).collect()
+            }
+        };
+        let ch = spec.channels.max(1) as usize;
+        let audio: Vec<f32> = if ch == 1 {
+            raw
+        } else {
+            raw.chunks(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect()
+        };
+        let mut rx = S4285Receiver::new(spec.sample_rate as f64, 1800.0);
+        rx.trace_coded_stream(true);
+        for chunk in audio.chunks(1024) {
+            rx.process(chunk);
+        }
+        let soft = rx.coded_stream().to_vec();
+        eprintln!("traced soft values {}", soft.len());
+        // The 600 bps BPSK chain, rebuilt from the trace: deinterleave, then the
+        // same chunked Viterbi the chain runs.
+        let mut de = fec::ConvInterleaver::deinterleaver(fec::CodedRate::Bps600.j());
+        let mut deint: Vec<f32> = Vec::with_capacity(soft.len());
+        for v in &soft {
+            deint.push(de.push(*v));
+        }
+        let need = (CHUNK_PAIRS + VITERBI_OVERLAP) * 2;
+        let mut bits: Vec<u8> = Vec::new();
+        let mut at = 0usize;
+        while at + need <= deint.len() {
+            let pairs = fec::average_pairs(&deint[at..at + need], 1);
+            let d = fec::viterbi_decode(&pairs);
+            bits.extend(d.iter().skip(VITERBI_OVERLAP).take(CHUNK_PAIRS));
+            at += CHUNK_PAIRS * 2;
+        }
+        eprintln!("decoded bits {}", bits.len());
+        // **The pair order**, which a loopback cannot judge: our own encoder
+        // emits the two outputs of one bit in G1-then-G2 order, and if the air
+        // sends them the other way round every decoded bit is wrong while the
+        // metric stays flat. Decode both ways and look for the SOM.
+        let best_match = |bits: &[u8]| -> (String, usize, i32) {
+            let pat = |p: u32| -> Vec<u8> {
+                (0..32).map(|k| ((p >> (31 - k)) & 1) as u8).collect()
+            };
+            let mut out = (String::new(), 0usize, i32::MIN);
+            for (name, p) in [("SOM", fec::SOM), ("EOM", fec::EOM)] {
+                let want = pat(p);
+                for w in 0..bits.len().saturating_sub(32) {
+                    let score: i32 = (0..32)
+                        .map(|k| if bits[w + k] == want[k] { 1 } else { -1 })
+                        .sum();
+                    if score > out.2 {
+                        out = (name.to_string(), w, score);
+                    }
+                }
+            }
+            out
+        };
+        let mut swapped: Vec<u8> = Vec::with_capacity(bits.len());
+        {
+            let mut at2 = 0usize;
+            let mut d2: Vec<f32> = deint.clone();
+            for pair in d2.chunks_exact_mut(2) {
+                pair.swap(0, 1);
+            }
+            let mut out2: Vec<u8> = Vec::new();
+            while at2 + need <= d2.len() {
+                let pairs = fec::average_pairs(&d2[at2..at2 + need], 1);
+                let d = fec::viterbi_decode(&pairs);
+                out2.extend(d.iter().skip(VITERBI_OVERLAP).take(CHUNK_PAIRS));
+                at2 += CHUNK_PAIRS * 2;
+            }
+            swapped = out2;
+        }
+        // **How the soft value is shaped**, which a loopback cannot judge either:
+        // ours is the linear distance from the decision boundary, the reference
+        // implementation's is an LLR quantised to 25..230 — nearly saturated, so
+        // a weak symbol counts for little and a strong one counts for a lot but
+        // not without limit. Try both extremes before blaming the geometry.
+        let shaped = |f: &dyn Fn(f32) -> f32| -> Vec<u8> {
+            let mut d: Vec<f32> = deint.iter().map(|v| f(*v)).collect();
+            let mut out: Vec<u8> = Vec::new();
+            let mut at = 0usize;
+            while at + need <= d.len() {
+                let pairs = fec::average_pairs(&d[at..at + need], 1);
+                let dec = fec::viterbi_decode(&pairs);
+                out.extend(dec.iter().skip(VITERBI_OVERLAP).take(CHUNK_PAIRS));
+                at += CHUNK_PAIRS * 2;
+            }
+            d.clear();
+            out
+        };
+        let hard = shaped(&|v: f32| if v >= 0.0 { 1.0 } else { -1.0 });
+        let sat = shaped(&|v: f32| v.clamp(-1.0, 1.0).tanh() * 2.0 - v.signum() * 0.0);
+        for (name, stream) in [("hard", &hard), ("tanh", &sat)] {
+            let m = best_match(stream);
+            eprintln!("value {name}: best {} {} of 32 at {}", m.0, m.2, m.1);
+        }
+        let a = best_match(&bits);
+        let b2 = best_match(&swapped);
+        eprintln!("pair order as-is: best {} {} of 32 at {}", a.0, a.2, a.1);
+        eprintln!("pair order swapped: best {} {} of 32 at {}", b2.0, b2.2, b2.1);
+        if b2.2 > a.2 {
+            let text: String = swapped.iter().map(|b| if *b == 1 { '1' } else { '0' }).collect();
+            std::fs::write("/tmp/opencode/s4285_bits_swapped.txt", &text).expect("write");
+        }
+        let text: String = bits.iter().map(|b| if *b == 1 { '1' } else { '0' }).collect();
+        std::fs::write("/tmp/opencode/s4285_bits.txt", &text).expect("write");
+        // Where the SOM and EOM patterns land, and how far off they are.
+        let pat = |p: u32| -> Vec<u8> { (0..32).map(|k| ((p >> (31 - k)) & 1) as u8).collect() };
+        for (name, p) in [("SOM", fec::SOM), ("EOM", fec::EOM)] {
+            let mut best = (0usize, 0i32);
+            let want = pat(p);
+            for w in 0..bits.len().saturating_sub(32) {
+                let score: i32 = (0..32)
+                    .map(|k| if bits[w + k] == want[k] { 1 } else { -1 })
+                    .sum();
+                if score > best.1 {
+                    best = (w, score);
+                }
+            }
+            eprintln!("{name}: best match {} of 32 at bit {}", best.1, best.0);
+        }
+    }
+
+    /// **The capture, chain by chain**: does any branch fill its interleaver and
+    /// run the Viterbi, or is the coded stream being reset before it can?
+    ///
+    /// This is the experiment that separates "the material is short" from "the
+    /// soft decisions are wrong". A branch that never reaches a chunk has been
+    /// starved; one that decodes chunks and never frames a message has been fed
+    /// wrong values, or the framing is wrong.
+    #[test]
+    #[ignore]
+    fn the_capture_chain_by_chain() {
+        let path = std::env::var("SDROXIDE_S4285_SAMPLE").expect("set SDROXIDE_S4285_SAMPLE");
+        let mut reader = hound::WavReader::open(&path).expect("open the wav");
+        let spec = reader.spec();
+        let raw: Vec<f32> = match spec.sample_format {
+            hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
+            hound::SampleFormat::Int => {
+                let scale = 1.0 / (1i64 << (spec.bits_per_sample - 1)) as f32;
+                reader.samples::<i32>().map(|s| s.unwrap() as f32 * scale).collect()
+            }
+        };
+        // The capture is stereo; splicing it as mono halves the effective rate.
+        let ch = spec.channels.max(1) as usize;
+        let audio: Vec<f32> = if ch == 1 {
+            raw
+        } else {
+            raw.chunks(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect()
+        };
+        eprintln!("capture: {} Hz, {ch} ch, {} samples", spec.sample_rate, audio.len());
+        for mode in [EqMode::Auto, EqMode::Off, EqMode::On, EqMode::Dfe] {
+            let mut rx = S4285Receiver::new(spec.sample_rate as f64, 1800.0);
+            rx.set_eq_mode(mode);
+            let mut msgs = 0usize;
+            for chunk in audio.chunks(1024) {
+                for ev in rx.process(chunk) {
+                    if let S4285Event::Message(_) = ev {
+                        msgs += 1;
+                    }
+                }
+            }
+            eprintln!(
+                "== {mode:?}: frames {} msgs {msgs} coded {:?} som {}",
+                rx.report().frames,
+                rx.report().coded.map(|c| c.repeat()),
+                rx.report().best_som
+            );
+            for c in rx.chain_stats() {
+                eprintln!(
+                    "   rate {:?} sign {:+.0} swap {} pushed {} chunks {} msgs {} som {}",
+                    c.rate, c.sign, c.swap, c.pushed, c.chunks, c.messages, c.som
+                );
+            }
+        }
+    }
+
+    /// **Every coded rate has a branch, the QPSK one included.**
+    ///
+    /// The QPSK chain was created inside a loop over the four *BPSK* rates, so
+    /// it never was: a QPSK capture — the rate the verdict names when the
+    /// constellation is four-point — had no branch listening at all, and the
+    /// panel showed "coded: none" no matter how long the capture. This pins the
+    /// list rather than the loop.
+    #[test]
+    fn every_coded_rate_has_a_branch() {
+        let chains = coded_chains();
+        for rate in [
+            fec::CodedRate::Bps1200,
+            fec::CodedRate::Bps600,
+            fec::CodedRate::Bps300,
+            fec::CodedRate::Bps150,
+            fec::CodedRate::Bps75,
+        ] {
+            let n = chains.iter().filter(|c| c.rate == rate).count();
+            assert!(n >= 2, "{rate:?} has {n} branches — both signs are the floor");
+        }
+        // QPSK carries two bits, so it needs both orders as well: two signs times
+        // two orders.
+        let qpsk = chains.iter().filter(|c| c.rate == fec::CodedRate::Bps1200).count();
+        assert_eq!(qpsk, 4, "the QPSK rate has {qpsk} branches, not four");
+        // And nothing is duplicated or invented.
+        assert_eq!(chains.len(), 12, "twelve branches: 4 BPSK rates x 2 signs + 4 QPSK");
     }
 }
