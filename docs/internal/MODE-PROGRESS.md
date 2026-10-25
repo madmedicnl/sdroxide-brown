@@ -1604,6 +1604,33 @@ own docs say they have none. The 32 coded-PSK and 9 DominoEX variants are one
   pin both halves together, and `a_dtmf_keypress_reads_back_through_the_controller`
   runs the operator's own path.
 
+**ARDOP's modulator exists (2026-10-25), and nothing keys it yet.**
+
+`ardop::encode_frame(mode, ftype, payload)` is the exact inverse of this file's
+own demodulator: the payload split across the carriers in order, each block
+`[count][data][CRC-16 hi][CRC-16 lo ^ ftype][RS parity]`, then the leader, the
+frame-type header and the body — differential per carrier, one half-sine symbol
+per 120 samples, and for 16QAM the high bit in the *amplitude*, which is what
+`demod_psk` reads back as a low symbol.
+
+**One finding worth keeping:** the carriers are **simultaneous**. `body_len` is
+one carrier's length whatever the count, and `decode_body` demodulates every
+carrier out of the *same* window — the first version laid them end to end and a
+two-carrier frame's second carrier decoded as a copy of the first, which read as
+"the split is wrong" rather than "the geometry is".
+
+Measured: `a_transmitted_frame_reads_back_in_every_data_mode` round-trips **all
+sixteen data modes** — 4PSK, 8PSK and 16QAM at 1, 2, 4 and 8 carriers, and 4FSK
+at 50 and 100 baud — with a short payload (every carrier after the first empty)
+and with a full one (the split across all of them). The receive side's gate
+against the reference is unchanged and still green: the three `ardopcf`
+recordings in `samples/ardop/` decode.
+
+**Still receive-only in the UI, on purpose.** An ARDOP over is an ARQ session —
+connect, acknowledgement, rate negotiation, repeat-until-acknowledged — and a
+station that heard a bare frame would answer an ARQ that is not there. The state
+machine is the remaining work, not the waveform.
+
 **The five slotted weak-signal modes transmit now (2026-10-25): JT65, JT9, Q65,
 FST4 and MSK144.**
 

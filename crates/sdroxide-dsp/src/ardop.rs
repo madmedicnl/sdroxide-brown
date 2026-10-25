@@ -1,4 +1,4 @@
-//! ARDOP — the native OFDM/4FSK HF data protocol, receive side.
+//! ARDOP — the native OFDM/4FSK HF data protocol: the modem, both ways.
 //!
 //! Written from the protocol description at
 //! `patrick.lidstone.net/ardop-native-ofdm-4fsk-hf-arq-data-protocol/`, which is
@@ -8,9 +8,12 @@
 //! carrier grid, GF(2⁸) polynomial) are protocol facts.
 //!
 //! Only the **modem** is here: leader, frame-type header, and the data body in
-//! its PSK/QAM and 4-FSK forms, with the per-carrier Reed–Solomon + keyed CRC.
-//! The ARQ state machine and the TNC host protocol are separate layers and are
-//! not part of this port.
+//! its PSK/QAM and 4-FSK forms, with the per-carrier Reed–Solomon + keyed CRC —
+//! and, since 2026-10-25, [`encode_frame`], the modulator that is the exact
+//! inverse of the demodulator. The ARQ state machine and the TNC host protocol
+//! are separate layers and are **not** part of this port, so nothing keys an
+//! ARDOP frame yet: a station receiving one would answer an ARQ that is not
+//! there.
 //!
 //! A frame is three fixed pieces ([`FRAME`] has the numbers):
 //!
@@ -991,6 +994,159 @@ fn demod_psk(
     Some(bytes)
 }
 
+// -------------------------------------------------------------- the transmitter
+
+/// **The ARDOP modulator**: a data frame, packed and modulated.
+///
+/// The exact inverse of [`decode_body`], and it is written against it rather
+/// than against a description, because every convention here is one the
+/// receiver already fixes:
+///
+/// * **The payload is split across the carriers in order.** Each carrier's block
+///   is `[count][data padded to data_len][CRC-16 hi][CRC-16 lo ^ ftype][RS
+///   parity]`, and `count` says how much of that carrier is real — so a short
+///   message occupies the first carriers whole and the next one partly.
+/// * **The phase is differential per carrier, and the first symbol of a body is
+///   a phase reference, not data.** A 4PSK symbol steps by an even multiple of
+///   `π/4` (`2 × value`), 8PSK by any of the eight, and 16QAM carries its high
+///   bit in the *amplitude* — a low symbol is the bit set — which is what
+///   `demod_psk` reads back.
+/// * **Each symbol is a half-sine** of 120 samples at 100 baud, and 4-FSK is a
+///   plain tone per symbol at its own baud.
+///
+/// **What this is not.** ARDOP's over is an ARQ session: a connect, an
+/// acknowledgement, a rate negotiation and a repeat-until-acknowledged data
+/// phase. This is the modem half of that, proven against the demodulator on the
+/// other side of this file. Nothing in the program keys a frame with it yet,
+/// because a station receiving one would answer an ARQ that is not there.
+pub fn encode_frame(mode: Mode, ftype: u8, payload: &[u8]) -> Option<Vec<f32>> {
+    if mode.capacity() < payload.len() {
+        return None;
+    }
+    let mut out = leader();
+    out.extend(frametype_wave(ftype));
+    if mode.kind == 3 {
+        let mut blocks = Vec::with_capacity(mode.block());
+        let mut left = payload;
+        for _ in 0..mode.carriers {
+            let take = left.len().min(mode.data_len);
+            let (mine, rest) = left.split_at(take);
+            blocks.extend_from_slice(&carrier_block(mode, ftype, mine));
+            left = rest;
+        }
+        out.extend(modulate_4fsk(mode, &blocks));
+    } else {
+        let mut per: Vec<Vec<u8>> = Vec::with_capacity(mode.carriers);
+        let mut left = payload;
+        for _ in 0..mode.carriers {
+            let take = left.len().min(mode.data_len);
+            let (mine, rest) = left.split_at(take);
+            per.push(carrier_block(mode, ftype, mine));
+            left = rest;
+        }
+        modulate_psk(mode, &per, &mut out);
+    }
+    Some(out)
+}
+
+/// One carrier's block: count, the data padded out, the CRC and the parity.
+fn carrier_block(mode: Mode, ftype: u8, data: &[u8]) -> Vec<u8> {
+    let d = mode.data_len;
+    let mut block = Vec::with_capacity(mode.block());
+    block.push(data.len() as u8);
+    block.extend_from_slice(data);
+    block.resize(d + 1, 0);
+    let crc = crc16(&block[..d + 1]);
+    block.push((crc >> 8) as u8);
+    block.push((crc & 0xFF) as u8 ^ (ftype & 0xFF));
+    rs_encode(&block, mode.rs_len)
+}
+
+/// The 4-FSK body: two bits a symbol, most significant first, no phase
+/// reference and no shaping.
+fn modulate_4fsk(mode: Mode, blocks: &[u8]) -> Vec<f32> {
+    let baud = mode.fsk_baud as usize;
+    let sps = SR as usize / baud;
+    let tones = if baud == 50 { &FSK50 } else { &FSK100 };
+    let mut out = Vec::with_capacity(blocks.len() * 4 * sps);
+    for &b in blocks {
+        for k in (0..4).rev() {
+            let tone = ((b >> (2 * k)) & 3) as usize;
+            let step = std::f64::consts::TAU * tones[tone] / SR;
+            for n in 0..sps {
+                out.push((step * n as f64).sin() as f32);
+            }
+        }
+    }
+    out
+}
+
+/// The PSK/QAM bodies, one carrier's symbols after another. The first symbol of
+/// each carrier is the phase reference the demodulator differences against, and
+/// the absolute phase it carries is free — the difference is the data.
+fn modulate_psk(mode: Mode, per: &[Vec<u8>], out: &mut Vec<f32>) {
+    let (bps, symset) = BPS[mode.kind as usize];
+    let idx = match mode.carriers {
+        1 => PSK_CAR[0],
+        2 => PSK_CAR[1],
+        4 => PSK_CAR[2],
+        _ => PSK_CAR[3],
+    };
+    // **The carriers are simultaneous, not one after another.** ARDOP's body is
+    // an OFDM block: `body_len` is one carrier's length whatever the count, and
+    // `decode_body` demodulates every carrier out of the *same* window. Laying
+    // them end to end produces a frame whose second carrier decodes as the
+    // first — which is exactly how this was found.
+    let len = {
+        let block = &per[0];
+        (block.len() * 8 / bps + 1) * PSK_SPS
+    };
+    let mut body = vec![0.0f32; len];
+    for (c, block) in per.iter().enumerate() {
+        let freq = PSK_GRID[idx[c]];
+        let symbols = block.len() * 8 / bps + 1;
+        // The reference symbol: any phase will do, and zero is the one that
+        // needs no explanation.
+        let mut phase = 0.0f64;
+        let mut at = 0usize;
+        emit_psk_symbol(&mut body, at, freq, phase, 1.0);
+        at += PSK_SPS;
+        let mut bits = Vec::with_capacity(block.len() * 8);
+        for &b in block {
+            for k in (0..8).rev() {
+                bits.push((b >> k) & 1);
+            }
+        }
+        for i in 0..symbols - 1 {
+            let mut byt = 0u8;
+            for k in 0..bps {
+                byt = (byt << 1) | bits[i * bps + k];
+            }
+            // 16QAM's high bit is the *low* amplitude, which is what
+            // `demod_psk` reads as `mag < 0.7 × full`.
+            let amp = if mode.kind == 2 && byt & 8 != 0 { 0.4 } else { 1.0 };
+            // The decoder divides the step by `symset`: 4PSK steps two places
+            // at a time (four points on an eight-point grid), the others one.
+            let inc = if mode.kind == 0 { byt * symset as u8 } else { byt & 7 };
+            phase += inc as f64 * std::f64::consts::FRAC_PI_4;
+            emit_psk_symbol(&mut body, at, freq, phase, amp);
+            at += PSK_SPS;
+        }
+    }
+    out.extend_from_slice(&body);
+}
+
+/// One half-sine symbol, added **into** the body at sample `at`: the carriers of
+/// a multi-carrier frame share the same body buffer, so they add rather than
+/// take turns.
+fn emit_psk_symbol(body: &mut [f32], at: usize, freq: f64, phase: f64, amp: f32) {
+    for n in 0..PSK_SPS {
+        let env = (std::f64::consts::PI * n as f64 / (PSK_SPS - 1) as f64).sin();
+        let w = std::f64::consts::TAU * freq * n as f64 / SR;
+        body[at + n] += (amp as f64 * env * (w + phase).sin()) as f32;
+    }
+}
+
 fn slice_at(audio: &[f32], start: isize, len: usize) -> Option<&[f32]> {
     if start < 0 || start as usize + len > audio.len() {
         return None;
@@ -1158,5 +1314,46 @@ mod tests {
         // The control-frame WAV ardopcf writes with TXFRAME is a leader/tune
         // artefact (1.77 s, no header), so control detection has no recording;
         // it shares the type parser with the data frames, which are gated.
+    }
+
+    /// **A frame written by the modulator reads back through the demodulator**,
+    /// in every data mode: 4PSK, 8PSK, 16QAM and the two 4-FSK rates.
+    ///
+    /// This is the loopback the journal warns about — two halves of one program
+    /// agreeing — and it is here for what it does prove: the framing (count, CRC
+    /// with the frame type folded in, RS parity), the payload split across
+    /// carriers, and the differential phase and amplitude conventions are the
+    /// receiver's own. What it cannot prove is that `ardopcf` would read it; the
+    /// receive side's gate for that is the reference's own recordings in
+    /// `samples/ardop/`.
+    #[test]
+    fn a_transmitted_frame_reads_back_in_every_data_mode() {
+        for mode in MODES {
+            // **A short frame and a full one.** A short payload leaves every
+            // carrier after the first empty, which is the case where a
+            // multi-carrier frame's blocks are mostly `count = 0`; a full one
+            // exercises the split across all of them.
+            for len in [mode.capacity().min(37), mode.capacity()] {
+                let payload: Vec<u8> =
+                    (0..len).map(|i| (i as u8).wrapping_mul(7).wrapping_add(3)).collect();
+                let ftype = mode.ftype;
+                let audio = encode_frame(mode, ftype, &payload)
+                    .unwrap_or_else(|| panic!("{} refused {} bytes", mode.name, payload.len()));
+                let frame = decode_frame(&audio)
+                    .unwrap_or_else(|| panic!("{} did not decode its own frame", mode.name));
+                assert_eq!(
+                    frame.ftype, ftype,
+                    "{} decoded as type {:#04X}",
+                    mode.name, frame.ftype
+                );
+                assert_eq!(
+                    frame.data.as_deref(),
+                    Some(&payload[..]),
+                    "{} decoded different bytes at {} bytes",
+                    mode.name,
+                    len
+                );
+            }
+        }
     }
 }

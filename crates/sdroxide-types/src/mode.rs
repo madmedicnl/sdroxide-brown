@@ -1137,8 +1137,11 @@ impl Mode {
                 // JT65, JT9, FST4, Q65 and MSK144 all offer a transmit row.
                 // UVPacket is the one left here: it is receive-only.
                 | Mode::UvPacket
-                // ARDOP is the modem only, and receive only: no modulator and
-                // no ARQ state machine.
+                // ARDOP is the modem only, and still receive only on the air:
+                // the modulator exists now (`ardop::encode_frame`), but an ARDOP
+                // over is an ARQ session — connect, acknowledgement, rate
+                // negotiation — and a station receiving a bare frame would answer
+                // an ARQ that is not there. No state machine, no transmit row.
                 | Mode::Ardop
                 // STANAG 4285 has no modulator either, and its coded rates are
                 // not built at all: receive only in both senses.
