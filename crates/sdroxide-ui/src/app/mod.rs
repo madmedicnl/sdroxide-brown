@@ -2931,6 +2931,15 @@ impl SdroxideApp {
 
     /// Toggle the ALL chip on the SCHEDULE window (favourite all / clear all).
     /// Delegates to `set_broadcast_all`.
+    /// **Clear the notice banners, for a screenshot.** The "this radio is
+    /// receive-only" nudge spans the top of the panadapter: right for an operator
+    /// with a signal generator, noise in a manual's picture of the program.
+    /// Screenshot-only — nothing else calls it.
+    pub fn dismiss_notices(&mut self) {
+        self.rx_only_nudge_dismissed = true;
+        self.radio_notice = None;
+    }
+
     pub fn toggle_all_chip(&mut self) {
         self.set_broadcast_all(!self.broadcast_all);
     }
@@ -4068,6 +4077,85 @@ mod tests {
             let mine: Vec<(String, egui::Rect)> =
                 texts.into_iter().filter(|(t, _)| labels.contains(&t.as_str())).collect();
             assert!(mine.len() >= 12, "the PSK params row is missing at {w:.0} pt: {mine:?}");
+            for i in 0..mine.len() {
+                for j in i + 1..mine.len() {
+                    let (a, ra) = &mine[i];
+                    let (b, rb) = &mine[j];
+                    // Shrunk, so two chips that merely touch are not a collision.
+                    assert!(
+                        !ra.shrink(0.5).intersects(rb.shrink(0.5)),
+                        "{a:?} at x {}..{} y {}..{} is drawn over {b:?} at x {}..{} y {}..{} in a {w:.0} pt window",
+                        ra.min.x,
+                        ra.max.x,
+                        ra.min.y,
+                        ra.max.y,
+                        rb.min.x,
+                        rb.max.x,
+                        rb.min.y,
+                        rb.max.y
+                    );
+                }
+            }
+        }
+    }
+
+    /// **The fax panel's header row must not draw its lines on top of each
+    /// other either.**
+    ///
+    /// It is the longest header row in the tree: the mode's name, START/STOP,
+    /// what the receiver is making of the signal, the squelch and the receive
+    /// sensitivity all ride on one `horizontal_wrapped`. That is the shape the
+    /// PSK test above was written for — a wrapped row nested inside a wrapped
+    /// row lays its lines out against the line it starts on and then paints
+    /// downward, so line two lands on line one — and the sensitivity control is
+    /// the newcomer that made the row break at all at the widths an operator
+    /// uses.
+    ///
+    /// Only the chips are measured, for the reason given above: in a wrapped
+    /// row a `ui.label` reports the rest of its line as its rect, so the
+    /// captions (`LPM`, `IOC`, `PHASE`, `SLANT`, `VIEW`, `HEIGHT`) would fail on
+    /// correct code. `Sensitivity` is a caption and is deliberately not in the
+    /// list; the slider itself is a `chrome::slider`, which draws no value
+    /// readout, so the block's only text is the `Auto` chip.
+    #[test]
+    fn the_fax_header_row_does_not_draw_on_itself() {
+        use crate::multi::frame_test_lock;
+        let _guard = frame_test_lock();
+        // The labels are trimmed on both sides: START and STOP carry their own
+        // surrounding spaces so that the glyph is not flush against the chip's
+        // edge, and the galley keeps them.
+        let labels = [
+            "● START",
+            "■ STOP",
+            "Auto",
+            "AUTO START",
+            "AUTO STOP",
+            "−100",
+            "−10",
+            "+10",
+            "+100",
+            "FIT",
+            "WHOLE",
+            "50%",
+            "1:1",
+            "2×",
+            "RESET",
+            "FOLLOW",
+            "CLEAR RX",
+            "SAVE",
+        ];
+        // Swept, not sampled, and over the band where the panel is narrow
+        // enough to wrap: below ~592 pt the classic column is not drawn at all,
+        // so the row never breaks there and the test would prove less.
+        for w in (420..=1200).step_by(20).map(|w| w as f32) {
+            let texts = panel_text_rects(sdroxide_types::Mode::Wefax, w);
+            let mine: Vec<(String, egui::Rect)> =
+                texts.into_iter().filter(|(t, _)| labels.contains(&t.trim())).collect();
+            assert!(
+                mine.iter().any(|(t, _)| t.trim() == "Auto"),
+                "the sensitivity control is missing at {w:.0} pt: {mine:?}"
+            );
+            assert!(mine.len() >= 10, "the fax header row is missing at {w:.0} pt: {mine:?}");
             for i in 0..mine.len() {
                 for j in i + 1..mine.len() {
                     let (a, ra) = &mine[i];
@@ -5379,6 +5467,10 @@ mod tests {
                 // The 4285 panel draws a measurement row of its own above the
                 // text, so it is a second wrapping row in the same column.
                 sdroxide_types::Mode::Stanag4285,
+                // The fax panel carries the longest header row in the tree —
+                // the status readout, START/STOP, the squelch and the receive
+                // sensitivity all ride on the line with the mode's own name.
+                sdroxide_types::Mode::Wefax,
             ] {
                 // Both with the panadapter in-window and with it detached: the
                 // detached case is the undocked mode's oracle — the panel takes

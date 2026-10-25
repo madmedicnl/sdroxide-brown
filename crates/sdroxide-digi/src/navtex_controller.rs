@@ -27,12 +27,12 @@ use std::time::SystemTime;
 
 use sdroxide_dsp::NavtexRx;
 use sdroxide_types::{
-    DigiConfig, DigiStatus, Mode, NAVTEX_MESSAGE_MAX, NavtexMessage, NavtexStatus, QsoStep,
-    TranscriptLine,
+    DigiConfig, DigiStatus, Mode, NavtexMessage, NavtexStatus, QsoStep, TranscriptLine,
+    NAVTEX_MESSAGE_MAX,
 };
 
-use crate::DigiEngine;
 use crate::controller::DigiAction;
+use crate::DigiEngine;
 
 /// Characters of loose text kept — what was decoded outside any message.
 const TEXT_CAP: usize = 8_000;
@@ -43,6 +43,14 @@ const TEXT_CAP: usize = 8_000;
 /// was. Either way the text so far is worth keeping and the next `ZCZC` must
 /// not append to it.
 const BODY_CAP: usize = 20_000;
+
+fn sensitivity(cfg: &DigiConfig) -> i8 {
+    if cfg.navtex_rx_auto {
+        0
+    } else {
+        cfg.navtex_rx_sensitivity
+    }
+}
 
 pub struct NavtexController {
     cfg: DigiConfig,
@@ -72,6 +80,7 @@ impl NavtexController {
     ) -> Self {
         let mut rx = NavtexRx::new(tap_rate);
         rx.set_reverse(cfg.navtex_reverse);
+        rx.set_sensitivity(sensitivity(&cfg));
         let mut ctrl = NavtexController {
             cfg,
             rx,
@@ -359,6 +368,12 @@ impl DigiEngine for NavtexController {
     fn set_config(&mut self, cfg: DigiConfig) {
         if cfg.navtex_reverse != self.cfg.navtex_reverse {
             self.rx.set_reverse(cfg.navtex_reverse);
+            self.status_dirty = true;
+        }
+        if cfg.navtex_rx_sensitivity != self.cfg.navtex_rx_sensitivity
+            || cfg.navtex_rx_auto != self.cfg.navtex_rx_auto
+        {
+            self.rx.set_sensitivity(sensitivity(&cfg));
             self.status_dirty = true;
         }
         self.cfg = cfg;

@@ -442,6 +442,14 @@ impl MultiApp {
         self.tabs[self.focused].app.toggle_all_chip();
     }
 
+    /// **Clear the notice banners, for a screenshot.** The "this radio is
+    /// receive-only" nudge is a banner across the top of the panadapter: right
+    /// for an operator with a signal generator, wrong in a manual's picture of
+    /// the program. Screenshot-only — nothing in the program calls it.
+    pub fn dismiss_notices(&mut self) {
+        self.tabs[self.focused].app.dismiss_notices();
+    }
+
     /// Toggle the FAVS chip on the SCHEDULE window.
     pub fn toggle_fav_chip(&mut self) {
         self.tabs[self.focused].app.toggle_fav_chip();

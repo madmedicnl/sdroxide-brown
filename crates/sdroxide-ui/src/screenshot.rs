@@ -22,6 +22,8 @@ pub enum ScreenshotAction {
     Hover(String),
     Tab(String),
     Wait(u32),
+    /// Clear the notice banners (screenshot-only; see `MultiApp::dismiss_notices`).
+    Dismiss,
     Capture,
 }
 
@@ -67,12 +69,16 @@ pub fn parse_actions(content: &str) -> Result<Vec<ScreenshotAction>, String> {
                 })?;
                 actions.push(ScreenshotAction::Wait(ms));
             }
+            "dismiss" => {
+                actions.push(ScreenshotAction::Dismiss);
+            }
             "capture" => {
                 actions.push(ScreenshotAction::Capture);
             }
             _ => {
                 return Err(format!(
-                    "line {}: unknown action '{}'. Valid: open, click, hover, tab, wait, capture",
+                    "line {}: unknown action '{}'. Valid: open, click, hover, tab, wait, \
+                     dismiss, capture",
                     lineno + 1,
                     cmd
                 ));
@@ -101,6 +107,11 @@ pub struct ScreenshotApp {
     actions: Vec<ScreenshotAction>,
     action_index: usize,
     wait_frames: u32,
+    /// A `wait` in **wall-clock** time, not frames: an off-screen window stops
+    /// repainting once it settles, so a frame counter stalls and the capture
+    /// never fires. Measured: `wait 500; capture` worked, `wait 4000; capture`
+    /// hung until the run was killed.
+    wait_until: Option<std::time::Instant>,
     actions_done: bool,
 }
 
@@ -131,6 +142,7 @@ impl ScreenshotApp {
             actions,
             action_index: 0,
             wait_frames: 0,
+            wait_until: None,
             actions_done: ae,
         }
     }
@@ -142,6 +154,12 @@ impl ScreenshotApp {
             return Ok(());
         }
 
+        if let Some(until) = self.wait_until {
+            if std::time::Instant::now() < until {
+                return Ok(());
+            }
+            self.wait_until = None;
+        }
         if self.wait_frames > 0 {
             self.wait_frames -= 1;
             return Ok(());
@@ -170,13 +188,21 @@ impl ScreenshotApp {
                 if parts.len() == 2 {
                     if let (Ok(x), Ok(y)) = (parts[0].parse::<f32>(), parts[1].parse::<f32>()) {
                         let pos = egui::pos2(x, y);
+                        // **Press and release.** A button in egui reports
+                        // `clicked()` on the release, so a lone press-event moved
+                        // the pointer and clicked nothing — the action looked
+                        // accepted and did nothing, which is the worst kind of
+                        // tool.
                         ctx.input_mut(|i| {
-                            i.events.push(egui::Event::PointerButton {
-                                pos,
-                                button: egui::PointerButton::Primary,
-                                pressed: true,
-                                modifiers: egui::Modifiers::default(),
-                            });
+                            i.events.push(egui::Event::PointerMoved(pos));
+                            for pressed in [true, false] {
+                                i.events.push(egui::Event::PointerButton {
+                                    pos,
+                                    button: egui::PointerButton::Primary,
+                                    pressed,
+                                    modifiers: egui::Modifiers::default(),
+                                });
+                            }
                         });
                         self.wait_frames = 1;
                         self.action_index += 1;
@@ -239,9 +265,14 @@ impl ScreenshotApp {
                 self.wait_frames = 2;
             }
             ScreenshotAction::Wait(ms) => {
-                let frames = ((ms as f32 / 16.67).ceil() as u32).max(1);
-                self.wait_frames = frames;
+                self.wait_until =
+                    Some(std::time::Instant::now() + std::time::Duration::from_millis(u64::from(ms)));
                 self.action_index += 1;
+            }
+            ScreenshotAction::Dismiss => {
+                self.inner.dismiss_notices();
+                self.action_index += 1;
+                self.wait_frames = 2;
             }
             ScreenshotAction::Capture => {
                 self.action_index += 1;
@@ -269,6 +300,15 @@ impl eframe::App for ScreenshotApp {
         }
 
         eframe::App::ui(&mut self.inner, ui, frame);
+
+        // **Keep frames coming while an action list is running.** `wait` counts
+        // *frames*, and a settled UI stops repainting — so a `wait` after the
+        // first second or two never finished and the whole capture hung until
+        // something else woke the app. Measured: `wait 1500; click; wait 6000;
+        // capture` never saved, and `wait 500; capture` did.
+        if !self.actions_done && !self.done {
+            ui.ctx().request_repaint();
+        }
 
         if !self.actions_done && !self.done {
             match self.execute_next_action(ui.ctx()) {
