@@ -18,6 +18,18 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **A multi-radio browser station exported a logbook of one QSO** (issue #236
+   comment, F4NRM, 2026-10-25) — the export itself is innocent. With more than
+   one radio the logbook is shared, so a logged contact re-reads it first; in a
+   browser there is no file to re-read, the reload answered "empty", and the log
+   was replaced by the one contact just logged. Fixed in
+   `crates/sdroxide-ui/src/app/{frame,persist}.rs` — `reload_qso_log` returns
+   `None` when there is no store and `after_shared_log` keeps the log in hand —
+   with a test that fails on the old behaviour, and pushed as a PR. Still open in
+   the same area: a browser tab that is not the station writer never persists
+   the logbook, which is the argument for putting the log on the wire the way
+   the picture document now is.
+
 0. **TCI receive audio: a server that carries baseband audio only gets silence**
    (#group, Rick Abshier KQ4Y, 2026-10-25) — reported against upstream 1.6.10, an
    Icom 7300 MK2 through Remote Ham Radio's TCI platform with LocalMate: TCI CAT
