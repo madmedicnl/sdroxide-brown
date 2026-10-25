@@ -299,6 +299,46 @@ by itself; the AIRCRAFT window's back-off still decides when it is asked again.
 
 ---
 
+## 2026-10-25 (UI) — the SQL label holds the squelch open (PR #218, not merged)
+
+**Summary.** The operator asked for a way to open the squelch for a moment without
+dragging the rail down and back: a click on the word **SQL**, green when it is
+holding the gate open, and a second click to put back the number that was there.
+It is built and it costs no space — the letters are already drawn — and it is up as
+a pull request rather than committed, because the screens are F4NRM's while he works
+through the detachable windows. The one thing not done is looking at it: the window
+opened behind the operator's own session, so the colour and the width are measured
+from the drawn text headlessly and the gesture is unproven until a person clicks it.
+
+**Done.** Branch `fork/sql-label-holds-open`, **PR #218**, commit `fde96c57`.
+- The strip's `ui.label("SQL")` is now `Label::new(sql_label(held)).sense(Sense::click())`
+  with a pointing hand and a hover that says what the click will do. Held, the ink is
+  `theme::GREEN()`; the text and font are unchanged, so the width is unchanged.
+- **Both rails.** `sql_hold_toggle` is one decision for the software gate
+  (`SQUELCH_OPEN_DB`, already formatted *off*) and the radio's own squelch (`0.0`,
+  already *open*). The scale is stored **with** the value, and a hold met on the
+  other rail is dropped and nothing sent — an interface swapped under the window
+  must not put a rig's 60 % onto a dBFS gate.
+- **The number put back is the operator's own.** Dragging the rail while held takes
+  the gate back instead. Nothing is persisted and nothing is on the wire.
+- **Tests, three:** the toggle on both scales plus the stale rail;
+  `the_sql_label_is_green_while_it_holds_the_gate_open_and_no_wider` draws both
+  states and reads the galley's own section colour, asserting green and equal widths
+  (0.01 px) — the "no additional space" condition measured; and a source guard that
+  the strip's label is the clickable one and both rails route through one decision.
+- **Checks:** `sdroxide-ui --lib` **1240 passed, 0 failed**; workspace gate silent
+  apart from the four NAVTEX warnings that are not ours; wasm check clean;
+  `rustfmt --check` clean. The installed binary is left on `main` — a PR build is
+  not what belongs in `~/.cargo/bin`.
+
+**Not done / blocked.** Looked at it on a screen. A screenshot of the running app
+caught the operator's own window instead of the strip (it opened behind it), and
+taking another would mean taking over their desktop, so the visual check is theirs
+to make — five seconds of clicking the word.
+
+**Next.** F4NRM reads the PR; if he wants the gesture or the colour different, that
+is a line each.
+
 ## 2026-10-25 (aircraft) — F4NRM's three PRs merged, and two tests that were not running
 
 **Summary.** The three aircraft pull requests that were conflicting are all in: a

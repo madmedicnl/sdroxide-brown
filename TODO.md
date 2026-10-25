@@ -18,6 +18,14 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **Squelch hold-open from the SQL label — PR #218, awaiting review.** Asked for
+   by the operator 2026-10-25: a click on the word **SQL** holds the squelch open
+   (green letters) and a second click puts back the operator's own number, with no
+   chip and no extra width. It is **UI work, so it is a PR** rather than a commit to
+   `main` — the screens are F4NRM's. Built and tested here (1240 UI tests, the ink
+   and the width measured headlessly); **nobody has looked at it on a screen yet**,
+   which is the one thing left.
+
 0. **Focus, set by the operator 2026-10-24: no UI work, and the modes are the
    programme.** F4NRM is working through the detachable windows and the layout,
    so the screens are his; the only UI we touch is a new mode's own panel, or
