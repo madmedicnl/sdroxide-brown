@@ -596,6 +596,12 @@ pub enum EqMode {
     Off,
     /// The equaliser's output, whether or not the references prefer it.
     On,
+    /// **The reference implementation's own equaliser**, ported: a 121-tap
+    /// fractionally-spaced LMS filter, four symbol taps, one training pass symbol
+    /// by symbol through the sync and the reference blocks, exactly as
+    /// `luwangg/signal-analysis`'s `channel_estimator` does it. That decoder reads
+    /// this station's capture and ours does not, and this is the difference.
+    Lms,
     /// **An adaptive decision-feedback equaliser, run symbol by symbol.** This is
     /// the one thing every other decoder for this mode has and this receiver did
     /// not: a fractionally-spaced feedforward filter trained on the 80 sync
@@ -1222,6 +1228,80 @@ impl S4285Receiver {
         out
     }
 
+    /// **The reference implementation's equaliser, ported.**
+    ///
+    /// `luwangg/signal-analysis`'s `channel_estimator::process_frame`, which
+    /// decodes this station's capture where this receiver does not. Their numbers:
+    /// 121 feedforward taps spanning ±12 symbols at five samples per symbol, four
+    /// decision-feedback taps, one pass, `mu = 0.05` on **raw** samples, the 80
+    /// sync symbols as known ±1, the three reference blocks as known scrambled
+    /// symbols, and decision-directed elsewhere. The filter starts from **zero**
+    /// taps, not a unit centre: LMS from zero converges to the matched filter
+    /// across the sync, which is what those 80 symbols are for.
+    fn lms_symbols(&self, start: u64, phase: f32, reversed: bool, offset: f32) -> [C; SCRAMBLED] {
+        const FF: usize = 121; // twelve taps at two samples a symbol, plus the centre
+        const FB: usize = 4;
+        const MU: f32 = 0.05;
+        let sync = sync_symbols();
+        let pos0 = start as f64 - self.base as f64 + (phase as f64) * SPS as f64;
+        let ctx_len = FRAME * SPS + FF;
+        // **No per-sample deramp here.** The reference's PLL has already taken the
+        // carrier off its frame buffer; a ramp of our own across the filter's
+        // ±12-symbol reach is a rotation the filter then has to fight, which is
+        // what makes it fail to converge.
+        let _ = offset;
+        let mut ctx: Vec<C> = Vec::with_capacity(ctx_len);
+        for k in 0..ctx_len {
+            let d = k as f64 - (FF / 2) as f64;
+            ctx.push(self.at(pos0 + d));
+        }
+        let mut w = vec![C::default(); FF];
+        let mut b = vec![C::default(); FB];
+        let mut known = vec![C::default(); FB];
+        let mut out = [C::default(); SCRAMBLED];
+        for i in 0..FRAME {
+            let x = &ctx[i * SPS..i * SPS + FF];
+            let mut y = C::default();
+            for (j, c) in x.iter().enumerate() {
+                y = y.add(c.mul(w[j]));
+            }
+            for (l, d) in known.iter().enumerate() {
+                y = y.add(d.mul(b[l]));
+            }
+            let k = i.wrapping_sub(SYNC);
+            let sc = if i < SYNC {
+                C::default()
+            } else {
+                let c = self.scrambling[k];
+                if reversed { c.conj() } else { c }
+            };
+            let target = if i < SYNC {
+                C::new(sync[i], 0.0)
+            } else if REF_BLOCKS.iter().any(|&(lo, hi)| k >= lo && k < hi) {
+                sc
+            } else {
+                let d = y.mul(sc.conj());
+                let decided = C::new(if d.re >= 0.0 { 1.0 } else { -1.0 }, 0.0);
+                sc.mul(decided)
+            };
+            let err = y.sub(target);
+            for (j, c) in x.iter().enumerate() {
+                w[j] = w[j].sub(err.mul(c.conj()).scale(MU));
+            }
+            for l in 0..FB {
+                b[l] = b[l].sub(err.mul(known[l].conj()).scale(MU));
+            }
+            for l in (1..FB).rev() {
+                known[l] = known[l - 1];
+            }
+            known[0] = target;
+            if i >= SYNC {
+                out[k] = y.mul(sc.conj());
+            }
+        }
+        out
+    }
+
     fn coded_symbols(
         &mut self,
         start: u64,
@@ -1229,6 +1309,9 @@ impl S4285Receiver {
         reversed: bool,
         offset: f32,
     ) -> [C; SCRAMBLED] {
+        if self.eq_mode == EqMode::Lms {
+            return self.lms_symbols(start, phase, reversed, offset);
+        }
         if self.eq_mode == EqMode::Dfe {
             return self.dfe_symbols(start, phase, reversed, offset);
         }
@@ -1328,9 +1411,9 @@ impl S4285Receiver {
                     plain
                 }
             }
-            // Unreachable: `coded_symbols` returns the DFE's own symbols before
-            // any of this runs.
-            EqMode::Dfe => plain,
+            // Unreachable: `coded_symbols` returns the DFE's and the LMS filter's
+            // own symbols before any of this runs.
+            EqMode::Dfe | EqMode::Lms => plain,
         }
     }
 
@@ -3234,7 +3317,7 @@ mod tests {
             raw.chunks(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect()
         };
         eprintln!("capture: {} Hz, {ch} ch, {} samples", spec.sample_rate, audio.len());
-        for mode in [EqMode::Auto, EqMode::Off, EqMode::On, EqMode::Dfe] {
+        for mode in [EqMode::Lms, EqMode::Auto, EqMode::Dfe] {
             let mut rx = S4285Receiver::new(spec.sample_rate as f64, 1800.0);
             rx.set_eq_mode(mode);
             let mut msgs = 0usize;
@@ -3601,6 +3684,7 @@ mod tests {
             raw.chunks(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect()
         };
         let mut rx = S4285Receiver::new(spec.sample_rate as f64, 1800.0);
+        rx.set_eq_mode(EqMode::Lms);
         let mut shown = 0;
         for chunk in audio.chunks(1024) {
             for ev in rx.process(chunk) {
