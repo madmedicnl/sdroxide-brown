@@ -457,13 +457,20 @@ F4NRM's sessions, and a PR is how a number is claimed without colliding.
 
 ## Where the work stands
 
-State at 2026-10-24, and the thing to re-measure rather than trust:
+State at 2026-10-25, and the thing to re-measure rather than trust:
 
-- `main` at crate **2.1.0**, `PROTO_VERSION` **239**; latest release
+- `main` at crate **2.1.0**, `PROTO_VERSION` **247** (`VERSION_BYTE` `0x43`) —
+  244 was the NAVTEX sensitivity control and 245–247 its three reverts, all
+  merged 2026-10-25. **PR #234 carries 248** for the Airspy HF+'s display span
+  and is not merged, so no number is claimed here. Latest release
   **v2.1.0.2_brown** (latest) and **v2.1.0.2.1_brown** (pre-release). The
   2.1.0 release was the big mode release: THOR, MFSK, Contestia, MT63, DominoEX,
   the coded PSK banks, DTMF and STANAG 4285, with Wavelog, the Aoki schedule,
-  SSTV FTP upload, the FDM-DUO's power steps and per-memory colours.
+  SSTV FTP upload, the FDM-DUO's power steps and per-memory colours. Since then:
+  the coded PSK banks transmit (all 31 variants), DominoEX and DTMF transmit,
+  8PSK transmits, the five slotted modes transmit (JT65, JT9, Q65, FST4, MSK144),
+  ARDOP's modulator exists, and **STANAG 4285 decodes off the air** through the
+  vendored reference decoder.
 - **The live queue is the mode work**:
   [`MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md) is the brief —
   finish the modes, get TX working for everything fldigi can transmit, and
@@ -478,8 +485,8 @@ State at 2026-10-24, and the thing to re-measure rather than trust:
   #91 WEEFAX pages breaking after a few (F4NRM's, needs a ten-page test), #105
   AppImage (planned for a stable release). #162 (NAVTEX 518 vs 516.6) was closed
   on 2026-10-25 as answered — the preset applies the shift, and the rest was a
-  reference error at the reporter's end. **Open PRs: #226**, ours, UI, waiting
-  for F4NRM.
+  second by #218. **Open PRs: #234**, ours, the Airspy HF+ display span (and its
+  colour fit), waiting for F4NRM. #226 (floating panel) was merged by him.
 - **Live handovers**: ALE (built, **never decoded a real burst** — the manual
   §3.29 asks for a recording, and that is the only thing missing), STANAG 4285
   (**decodes**: the vendored GPL reference decoder in `vendor/s4285-ref`, driven
