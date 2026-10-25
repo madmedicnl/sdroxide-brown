@@ -14,7 +14,7 @@
 //! the wasm browser client — the composed buffer is both the live preview and,
 //! PNG-encoded, the transmit payload.
 
-use ab_glyph::{Font, FontRef, PxScale, ScaleFont, point};
+use ab_glyph::{point, Font, FontRef, PxScale, ScaleFont};
 use eframe::egui;
 
 /// The banner strip drawn across the top of a transmitted picture, with the
@@ -24,7 +24,7 @@ use eframe::egui;
 /// several times for one picture — the live preview on every keystroke, then
 /// the transmit copy — and because it keeps the drawing code free of any
 /// notion of what a `{call}` is.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Banner {
     /// Height of the strip in picture pixels. The text is sized from it.
     pub height: u16,
@@ -49,6 +49,31 @@ pub struct Banner {
     /// Colour the texts are outlined in, when the operator asked for an
     /// outline. `None` prints them plain.
     pub outline: Option<[u8; 3]>,
+    /// The strip sits along the **bottom** of the picture rather than the top.
+    pub bottom: bool,
+    /// The text's size as a percentage of the strip's own (100 = the old size).
+    pub text_pct: u16,
+}
+
+impl Default for Banner {
+    /// **100% text, strip at the top** — what a `Banner` meant before either was
+    /// a setting, and what the drawing tests rely on when they build one with
+    /// `..Default::default()`.
+    fn default() -> Self {
+        Banner {
+            height: 0,
+            left: String::new(),
+            right: String::new(),
+            fill: [0, 0, 0],
+            fill2: None,
+            ink: [0, 0, 0],
+            ink2: None,
+            rainbow: false,
+            outline: None,
+            bottom: false,
+            text_pct: 100,
+        }
+    }
 }
 
 impl Banner {
@@ -72,6 +97,8 @@ impl Banner {
             ink2: cfg.sstv_style.banner_ink_gradient.then_some(cfg.sstv_style.banner_ink2),
             rainbow: cfg.sstv_style.rainbow_text,
             outline: cfg.sstv_style.banner_outline.then_some(cfg.sstv_style.banner_outline_ink),
+            bottom: cfg.sstv_banner_bottom,
+            text_pct: cfg.sstv_banner_text_pct.clamp(25, 300),
         })
     }
 }
@@ -180,11 +207,18 @@ pub fn compose(
     style: &sdroxide_types::SstvStyle,
 ) -> (Vec<u8>, u16, u16) {
     let mut img = crop_scale(src_rgb, sw, sh, w, h);
-    let strip = match banner {
-        Some(b) => draw_banner(&mut img, w as usize, h as usize, b),
-        None => 0,
+    // **`overlay_start` is where the message may begin.** A strip across the top
+    // pushes it down; one across the bottom leaves the whole top of the picture
+    // free, which is the point of moving it there.
+    let (strip, overlay_start) = match banner {
+        Some(b) => {
+            let s = draw_banner(&mut img, w as usize, h as usize, b);
+            (s, if b.bottom { 0 } else { s })
+        }
+        None => (0, 0),
     };
-    draw_message(&mut img, w as usize, h as usize, message, strip, style);
+    let _ = strip;
+    draw_message(&mut img, w as usize, h as usize, message, overlay_start, style);
     (img, w, h)
 }
 
@@ -281,6 +315,10 @@ fn blend(img: &mut [u8], w: usize, h: usize, x: i32, y: i32, r: u8, g: u8, b: u8
 /// worse than one.
 fn draw_banner(img: &mut [u8], w: usize, h: usize, banner: &Banner) -> usize {
     let strip = usize::from(banner.height).min(h);
+    // **Where the strip sits.** Everything below is written in strip-local
+    // coordinates and offset by `top`, so the gradient and the text are the same
+    // picture at either end of the frame.
+    let top = if banner.bottom { h.saturating_sub(strip) } else { 0 };
     if strip == 0 {
         return 0;
     }
@@ -305,7 +343,7 @@ fn draw_banner(img: &mut [u8], w: usize, h: usize, banner: &Banner) -> usize {
             }
         };
         for x in 0..w {
-            put(img, w, h, x as i32, y as i32, r, g, b);
+            put(img, w, h, x as i32, (top + y) as i32, r, g, b);
         }
     }
     let Some(font) = message_font() else {
@@ -318,14 +356,18 @@ fn draw_banner(img: &mut [u8], w: usize, h: usize, banner: &Banner) -> usize {
     } else {
         Ink::Solid(banner.ink)
     };
-    let scale = PxScale::from(strip as f32 * 11.0 / 16.0);
-    let baseline = (strip as f32 * 0.72).round();
+    let pct = f32::from(banner.text_pct.max(25)) / 100.0;
+    let scale = PxScale::from(strip as f32 * 11.0 / 16.0 * pct);
+    // A bigger text hangs lower in the strip unless the baseline follows it, so
+    // it is placed from the text's own height rather than from the strip's.
+    let baseline = (strip as f32 * 0.72 * pct).min(strip as f32 * 1.02).round();
     // The inset scales with the strip too, so a tall banner does not print
     // hard against the edge of the picture.
     let pad = (strip as f32 * 4.0 / 16.0).max(1.0);
     // An outline, in eight directions, ahead of the ink — the message overlay's
     // technique, sized to the strip so a taller banner gets a bolder edge.
     let outline_off = (strip as f32 * 1.0 / 16.0).max(1.0);
+    let base = baseline + top as f32;
     let draw_one = |img: &mut [u8], text: &str, x: f32| {
         if let Some(oc) = banner.outline {
             for (ox, oy) in [
@@ -338,21 +380,10 @@ fn draw_banner(img: &mut [u8], w: usize, h: usize, banner: &Banner) -> usize {
                 (-outline_off, outline_off),
                 (outline_off, outline_off),
             ] {
-                draw_text(
-                    img,
-                    w,
-                    h,
-                    x + ox,
-                    baseline + oy,
-                    text,
-                    &font,
-                    scale,
-                    Ink::Solid(oc),
-                    1.0,
-                );
+                draw_text(img, w, h, x + ox, base + oy, text, &font, scale, Ink::Solid(oc), 1.0);
             }
         }
-        draw_text(img, w, h, x, baseline, text, &font, scale, ink, 1.0);
+        draw_text(img, w, h, x, base, text, &font, scale, ink, 1.0);
     };
     if !banner.left.is_empty() {
         draw_one(img, &banner.left, pad);
@@ -426,7 +457,7 @@ fn draw_message(
     }
 }
 
-fn text_width(text: &str, font: &FontRef<'static>, scale: PxScale) -> f32 {
+pub(crate) fn text_width(text: &str, font: &FontRef<'static>, scale: PxScale) -> f32 {
     let scaled = font.as_scaled(scale);
     let mut width = 0.0;
     let mut prev = None;
@@ -446,7 +477,7 @@ fn text_width(text: &str, font: &FontRef<'static>, scale: PxScale) -> f32 {
 /// the gradient or rainbow runs over (the picture's), so the same call draws
 /// every variant.
 #[derive(Clone, Copy)]
-enum Ink {
+pub(crate) enum Ink {
     Solid([u8; 3]),
     Gradient([u8; 3], [u8; 3]),
     Rainbow,
@@ -454,7 +485,7 @@ enum Ink {
 
 impl Ink {
     /// The colour at pixel column `x`, over a run `span` wide.
-    fn at(self, x: f32, span: f32) -> (u8, u8, u8) {
+    pub(crate) fn at(self, x: f32, span: f32) -> (u8, u8, u8) {
         let span = span.max(1.0);
         match self {
             Ink::Solid(c) => (c[0], c[1], c[2]),
@@ -492,19 +523,84 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (u8, u8, u8) {
     (to(r), to(g), to(b))
 }
 
-fn draw_text(
-    img: &mut [u8],
-    w: usize,
-    h: usize,
+/// **Where a glyph's coverage lands.** The transmit picture is RGB, but a
+/// vertical layer has to be printed flat and then turned, so the same glyph
+/// loop has to be able to write into a layer with an alpha channel. One loop,
+/// two destinations — a second copy of the kerning and the caret arithmetic is
+/// a second thing to get wrong.
+pub(crate) trait TextSink {
+    fn paint(&mut self, x: i32, y: i32, rgb: (u8, u8, u8), alpha: f32);
+}
+
+/// The picture itself.
+pub(crate) struct RgbSink<'a> {
+    pub buf: &'a mut [u8],
+    pub w: usize,
+    pub h: usize,
+}
+
+impl TextSink for RgbSink<'_> {
+    fn paint(&mut self, x: i32, y: i32, rgb: (u8, u8, u8), alpha: f32) {
+        blend(self.buf, self.w, self.h, x, y, rgb.0, rgb.1, rgb.2, alpha);
+    }
+}
+
+/// A layer being built, four bytes to the pixel, ready to be turned and
+/// composited.
+pub(crate) struct RgbaSink {
+    pub buf: Vec<u8>,
+    pub w: usize,
+    pub h: usize,
+}
+
+impl RgbaSink {
+    pub(crate) fn new(w: usize, h: usize) -> RgbaSink {
+        RgbaSink { buf: vec![0; w * h * 4], w, h }
+    }
+}
+
+impl TextSink for RgbaSink {
+    /// Source-over, which is what makes an outline and an ink of the same
+    /// glyph stack without eating one another.
+    fn paint(&mut self, x: i32, y: i32, rgb: (u8, u8, u8), alpha: f32) {
+        if x < 0 || y < 0 || x >= self.w as i32 || y >= self.h as i32 {
+            return;
+        }
+        let a = alpha.clamp(0.0, 1.0);
+        if a <= 0.0 {
+            return;
+        }
+        let i = (y as usize * self.w + x as usize) * 4;
+        let dst_a = f32::from(self.buf[i + 3]) / 255.0;
+        let out_a = a + dst_a * (1.0 - a);
+        if out_a <= 0.0 {
+            return;
+        }
+        let mix = |s: u8, d: u8| {
+            ((f32::from(s) * a + f32::from(d) * dst_a * (1.0 - a)) / out_a)
+                .round()
+                .clamp(0.0, 255.0) as u8
+        };
+        self.buf[i] = mix(rgb.0, self.buf[i]);
+        self.buf[i + 1] = mix(rgb.1, self.buf[i + 1]);
+        self.buf[i + 2] = mix(rgb.2, self.buf[i + 2]);
+        self.buf[i + 3] = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
+    }
+}
+
+/// Print `text` into any sink, `x` being the caret and `baseline` the line the
+/// glyphs stand on. `span` is the run the gradient or rainbow sweeps across.
+pub(crate) fn draw_text_into<S: TextSink>(
+    sink: &mut S,
     x: f32,
     baseline: f32,
     text: &str,
     font: &FontRef<'static>,
     scale: PxScale,
     ink: Ink,
+    span: f32,
     alpha: f32,
 ) {
-    let span = w as f32;
     let scaled = font.as_scaled(scale);
     let mut caret = x;
     let mut prev = None;
@@ -519,13 +615,29 @@ fn draw_text(
             outlined.draw(|gx, gy, cov| {
                 let px = bounds.min.x as i32 + gx as i32;
                 let py = bounds.min.y as i32 + gy as i32;
-                let (r, g, b) = ink.at(px as f32, span);
-                blend(img, w, h, px, py, r, g, b, cov * alpha);
+                let rgb = ink.at(px as f32, span);
+                sink.paint(px, py, rgb, cov * alpha);
             });
         }
         caret += scaled.h_advance(gid);
         prev = Some(gid);
     }
+}
+
+fn draw_text(
+    img: &mut [u8],
+    w: usize,
+    h: usize,
+    x: f32,
+    baseline: f32,
+    text: &str,
+    font: &FontRef<'static>,
+    scale: PxScale,
+    ink: Ink,
+    alpha: f32,
+) {
+    let mut sink = RgbSink { buf: img, w, h };
+    draw_text_into(&mut sink, x, baseline, text, font, scale, ink, w as f32, alpha);
 }
 
 #[cfg(test)]
@@ -771,5 +883,65 @@ mod tests {
             }
         }
         assert!(reds > 0 && greens > 0 && blues > 0, "r{reds} g{greens} b{blues}");
+    }
+
+    /// **The banner can be moved to the bottom edge, and its text can be made
+    /// bigger inside the same strip.**
+    ///
+    /// Issue #237: "the current images are not QSO-compliant" and "banner
+    /// placement within the image should be flexible". The strip used to be a
+    /// top strip of a fixed text size, and neither was a setting.
+    #[test]
+    fn the_banner_sits_at_either_edge_and_the_text_scales_inside_it() {
+        // A plain grey picture, one SSTV frame's width.
+        let (w, h) = (320u16, 256u16);
+        let src = vec![128u8; usize::from(w) * usize::from(h) * 3];
+        let style = sdroxide_types::SstvStyle::default();
+        let banner = |bottom: bool, pct: u16| Banner {
+            height: 32,
+            left: "F4NRM".into(),
+            right: "IO94".into(),
+            fill: [200, 20, 20],
+            // A flat strip, so the edge test reads the strip and not the fade.
+            fill2: Some([200, 20, 20]),
+            ink: [255, 255, 255],
+            ink2: None,
+            rainbow: false,
+            outline: None,
+            bottom,
+            text_pct: pct,
+        };
+        let strip_rows = |rgb: &[u8], rows: std::ops::Range<usize>| -> usize {
+            rows.map(|y| {
+                let at = (y * usize::from(w)) * 3;
+                (rgb[at] > 150 && rgb[at + 1] < 80 && rgb[at + 2] < 80) as usize
+            })
+            .sum()
+        };
+        let ink_pixels =
+            |rgb: &[u8]| rgb.chunks_exact(3).filter(|p| p[0] > 240 && p[1] > 240).count();
+
+        let (top, ..) = compose(w, h, &src, w, h, "", Some(&banner(false, 100)), &style);
+        let (bottom, ..) = compose(w, h, &src, w, h, "", Some(&banner(true, 100)), &style);
+        let hh = usize::from(h);
+        assert!(strip_rows(&top, 0..4) > 0, "the top banner is not at the top");
+        assert_eq!(strip_rows(&top, hh - 4..hh), 0, "the top banner reached the bottom");
+        assert!(strip_rows(&bottom, hh - 4..hh) > 0, "the bottom banner is not at the bottom");
+        assert_eq!(strip_rows(&bottom, 0..4), 0, "the bottom banner reached the top");
+
+        // Bigger text inside the same strip means more ink, and more ink that is
+        // taller — a QSO's call is meant to survive a noisy decode.
+        let small = ink_pixels(&compose(w, h, &src, w, h, "", Some(&banner(true, 100)), &style).0);
+        let large = ink_pixels(&compose(w, h, &src, w, h, "", Some(&banner(true, 200)), &style).0);
+        assert!(large > small, "200% text printed {large} ink pixels against {small} at 100%");
+
+        // For the eye, and only when asked: a file to look at.
+        if std::env::var("SDROXIDE_SSTV_DUMP").is_ok() {
+            let (rgb, ww, hh2) =
+                compose(w, h, &src, w, h, "TEST", Some(&banner(true, 175)), &style);
+            let path = "/tmp/opencode/sstv-banner-bottom.png";
+            let _ = encode_png(&rgb, ww, hh2).map(|png| std::fs::write(path, png));
+            eprintln!("wrote {path}");
+        }
     }
 }

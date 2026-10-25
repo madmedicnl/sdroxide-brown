@@ -179,6 +179,32 @@ pub(in crate::app) struct SstvUi {
     /// A local complaint about a picked file — too big to be worth sending, or
     /// one the engine refused. Cleared when the next picture is picked.
     pub(in crate::app) pick_error: Option<String>,
+    /// **The document being edited**: one slot's layers, claimed from the
+    /// engine's preset store. `None` when nothing is being edited, and then every
+    /// slot draws the document the engine holds.
+    ///
+    /// One slot at a time, for the reason the preset messages are claimed the
+    /// same way: the engine's echo of our own write must not yank a line out of
+    /// the hand that is dragging it, and an edit made on another screen must
+    /// still reach the slots we are not touching.
+    pub(in crate::app) composer_edit: crate::sstv_composer::Edit,
+    /// The document last sent to the engine, so an un-echoed write is not
+    /// repeated on every frame.
+    pub(in crate::app) composer_sent: crate::sstv_composer::Edit,
+    /// When the document last changed, so a pause — the end of typing, a drag
+    /// that ended without a release — settles it to the engine.
+    pub(in crate::app) composer_since: Option<std::time::Instant>,
+    /// Whether the composer window is open.
+    pub(in crate::app) composer_open: bool,
+    /// The layer whose controls are shown, and which a drag moves.
+    pub(in crate::app) composer_sel: Option<usize>,
+    /// The preview texture is stale and has to be recomposed.
+    pub(in crate::app) composer_dirty: bool,
+    /// The composed preview, as a texture.
+    pub(in crate::app) composer_tex: Option<egui::TextureHandle>,
+    /// A drag in progress: which layer, and where in it the pointer grabbed it
+    /// (as a fraction of the frame, so the layer does not jump to the cursor).
+    pub(in crate::app) composer_drag: Option<(usize, f32, f32)>,
 }
 
 impl Default for SstvUi {
@@ -221,6 +247,14 @@ impl Default for SstvUi {
             inbox: Arc::new(Mutex::new(None)),
             pick_target: None,
             pick_error: None,
+            composer_edit: None,
+            composer_sent: None,
+            composer_since: None,
+            composer_open: false,
+            composer_sel: None,
+            composer_dirty: true,
+            composer_tex: None,
+            composer_drag: None,
         }
     }
 }
@@ -343,6 +377,7 @@ impl SstvUi {
         });
         if slot == self.selected_slot {
             self.preview_dirty = true;
+            self.composer_dirty = true;
         }
     }
 
@@ -496,6 +531,25 @@ impl SstvUi {
     /// The composed PNG for the current selection, for transmit.
     pub(in crate::app) fn compose_png(&self, dims: (u16, u16)) -> Option<Vec<u8>> {
         let slot = self.slots.get(self.selected_slot).and_then(|s| s.as_ref())?;
+        // **The composer draws the picture when it has something to say**, and
+        // the banner and the message are then not drawn at all: two sets of text
+        // on one picture is not a composition, it is a collision. A picture that
+        // was flattened into this very slot already has the text in it, so the
+        // document stands down for it.
+        let doc = crate::sstv_composer::shown(
+            &self.composer_edit,
+            &self.presets,
+            self.selected_slot,
+        );
+        if doc.is_active() {
+            let (rgb, w, h) = crate::sstv_composer::render(
+                doc,
+                dims.0,
+                dims.1,
+                Some((&slot.src_rgb, slot.sw, slot.sh)),
+            );
+            return crate::sstv::encode_png(&rgb, w, h);
+        }
         let (rgb, w, h) = crate::sstv::compose(
             dims.0,
             dims.1,
@@ -645,6 +699,48 @@ impl SdroxideApp {
                 self.sstv.set_slot(target, bytes, cmds);
             }
         }
+        // **A file path pasted into the panel, for systems without drag and
+        // drop.** Wayland gives a client no way to receive a dropped file —
+        // winit does not implement it there, so the drop above never arrives,
+        // whatever this code does. A file manager copies a file as a `file://`
+        // URI or a plain path, and Ctrl+V then means the same thing: load that
+        // picture into the selected slot.
+        let pasted: Option<String> = ctx.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::Paste(s) => Some(s.clone()),
+                _ => None,
+            })
+        });
+        if let Some(text) = pasted {
+            let path = text.trim();
+            let path = path.strip_prefix("file://").unwrap_or(path);
+            let looks_like_a_picture = [".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"]
+                .iter()
+                .any(|ext| path.to_ascii_lowercase().ends_with(ext));
+            if looks_like_a_picture
+                && let Ok(bytes) = std::fs::read(path)
+            {
+                let target = self.sstv.selected_slot;
+                self.sstv.set_slot(target, bytes, cmds);
+            }
+        }
+
+        // **A picture dropped on the panel goes into the selected slot**, the
+        // same path a picked file takes — and the engine is what stores it, so
+        // another screen attached to the same radio sees it too. Accepted from a
+        // path or from bytes, whichever the platform gave us.
+        let dropped: Vec<std::path::PathBuf> = ctx.input(|i| {
+            i.raw
+                .dropped_files
+                .iter()
+                .map(|f| f.path().to_path_buf())
+                .collect()
+        });
+        if let Some(bytes) = dropped.iter().find_map(|p| std::fs::read(p).ok()) {
+            let target = self.sstv.selected_slot;
+            self.sstv.set_slot(target, bytes, cmds);
+        }
+
         // Fetch the selected slot's source when what is cached is not what the
         // engine says is stored — a slot loaded here, or changed from another
         // screen. Asked once, not once per frame.
@@ -1318,6 +1414,7 @@ impl SdroxideApp {
                                     ));
                                     self.sstv.selected_slot = i;
                                     self.sstv.preview_dirty = true;
+                                    self.sstv.composer_dirty = true;
                                 }
                             }
                         });
@@ -1349,6 +1446,18 @@ impl SdroxideApp {
                                 .clicked()
                             {
                                 self.sstv.banner_open = !self.sstv.banner_open;
+                            }
+                            // The composer is the fuller answer to the same
+                            // need: text you can put anywhere, not just a strip
+                            // at an edge.
+                            if crate::chrome::chip(ui, self.sstv.composer_open, "Editor…")
+                                .on_hover_text(
+                                    "Compose the picture itself: movable text, any face, a strip \
+                                     across or down the frame",
+                                )
+                                .clicked()
+                            {
+                                self.sstv.composer_open = !self.sstv.composer_open;
                             }
                         });
                         if let Some(err) = &self.sstv.pick_error {
@@ -1512,6 +1621,17 @@ impl SdroxideApp {
         });
 
         self.banner_window(&ctx, cmds);
+        self.composer_window(&ctx, cmds, mode);
+        // **A pause settles the document to the engine.** A drag is a hundred
+        // edits a second and the engine writes what it is given to disk, so the
+        // write waits for the hand to stop; a drag's own release settles it
+        // sooner, and this is the backstop for an edit that ended some other way
+        // (typing, a pointer that left the window).
+        const SETTLE: std::time::Duration = std::time::Duration::from_millis(700);
+        if self.sstv.composer_open && self.sstv.composer_since.is_some_and(|t| t.elapsed() >= SETTLE)
+        {
+            self.composer_flush(cmds);
+        }
         self.qsl_window(&ctx);
 
         // Enlarged view of a clicked received image (overlay window).
@@ -2043,6 +2163,681 @@ impl SdroxideApp {
         Some(crate::app::panels::sstv::qsl_default_path(&name))
     }
 
+    /// **Recompose the composer's preview** when the document moved, the base
+    /// changed or the transmit size changed.
+    ///
+    /// Composed at the transmit size rather than at a convenient size and
+    /// scaled, because what the operator drags is what will go out: an outline
+    /// one pixel thick at 320 pixels is not one pixel thick at 640.
+    fn composer_preview(&mut self, ctx: &egui::Context, dims: (u16, u16)) {
+        if !self.sstv.composer_dirty {
+            return;
+        }
+        self.sstv.composer_dirty = false;
+        let base = self
+            .sstv
+            .slots
+            .get(self.sstv.selected_slot)
+            .and_then(|s| s.as_ref())
+            .map(|s| (s.src_rgb.clone(), s.sw, s.sh));
+        let src = base.as_ref().map(|(rgb, w, h)| (rgb.as_slice(), *w, *h));
+        let doc = crate::sstv_composer::shown(
+            &self.sstv.composer_edit,
+            &self.sstv.presets,
+            self.sstv.selected_slot,
+        );
+        let (rgb, w, h) = crate::sstv_composer::render(doc, dims.0, dims.1, src);
+        let img = crate::sstv::color_image(&rgb, w, h);
+        self.sstv.composer_tex =
+            Some(ctx.load_texture("sstv_composer", img, egui::TextureOptions::NEAREST));
+    }
+
+    /// Claim the selected slot's document for editing, taking the engine's as
+    /// the starting point and seeding a preset nobody has composed from what it
+    /// sends today.
+    fn composer_claim(&mut self, dims: (u16, u16)) {
+        let slot = self.sstv.selected_slot;
+        if !crate::sstv_composer::claim(&mut self.sstv.composer_edit, &self.sstv.presets, slot) {
+            return;
+        }
+        self.sstv.composer_sel = None;
+        self.sstv.composer_dirty = true;
+        self.sstv.preview_dirty = true;
+        let seeded = self.sstv.composer_edit.as_ref().is_some_and(|(_, d)| !d.is_active());
+        if !seeded {
+            return;
+        }
+        // **QSO-sized, not banner-sized.** The strip the station sends today is
+        // 16 pixels tall with 11-pixel letters, which is the complaint that
+        // started this: the editor opens with a line that can be read after a
+        // noisy decode, and the operator can shrink it.
+        let frame_h = dims.1.max(1);
+        let caption = self.sstv.presets.slot(slot).message.clone();
+        let seed = match crate::sstv::Banner::from_config(&self.digi_cfg_edit) {
+            Some(b) => {
+                use sdroxide_types::{Face, Strip};
+                let px = (f32::from(b.height) * 11.0 / 16.0
+                    * (f32::from(b.text_pct.max(25)) / 100.0))
+                .round()
+                .max(f32::from(frame_h) / 10.0)
+                .max(18.0) as u16;
+                let thickness = (u32::from(px) * 4 / 3).max(u32::from(b.height)) as u16;
+                let strip = Strip { thickness, fill: b.fill, fill2: b.fill2 };
+                sdroxide_types::Composer::seeded(
+                    &b.left,
+                    &b.right,
+                    &caption,
+                    Face::ChakraBold,
+                    px,
+                    Some(strip),
+                    frame_h,
+                )
+            }
+            None => sdroxide_types::Composer::seeded(
+                "",
+                "",
+                &caption,
+                sdroxide_types::Face::ChakraBold,
+                (frame_h / 10).max(18),
+                None,
+                frame_h,
+            ),
+        };
+        if let Some((_, doc)) = self.sstv.composer_edit.as_mut() {
+            *doc = seed;
+        }
+        self.sstv.composer_sel = self
+            .sstv
+            .composer_edit
+            .as_ref()
+            .and_then(|(_, d)| (!d.layers.is_empty()).then_some(0));
+        self.sstv.composer_dirty = true;
+    }
+
+    /// Hand an edited document over on the way out of the editor: a slot switch
+    /// or a closed window.
+    ///
+    /// Only an **edited** one is written. Opening the editor seeds a draft from
+    /// what the preset sends today, and merely looking at a preset must not
+    /// change what it sends.
+    fn composer_settle(&mut self, cmds: &mut Vec<Command>) {
+        if self.sstv.composer_since.is_some() {
+            self.composer_flush(cmds);
+        }
+    }
+
+    /// Send the document to the engine when it differs from what the engine
+    /// holds, once — not on every dragged pixel, because the engine writes it to
+    /// disk and every other screen adopts it.
+    fn composer_flush(&mut self, cmds: &mut Vec<Command>) {
+        let cmd = crate::sstv_composer::pending(
+            &self.sstv.composer_edit,
+            &self.sstv.presets,
+            &self.sstv.composer_sent,
+        );
+        self.sstv.composer_since = None;
+        if let Some(cmd) = cmd {
+            self.sstv.composer_sent = self.sstv.composer_edit.clone();
+            cmds.push(cmd);
+        }
+    }
+
+    /// **The picture editor**: the selected preset's picture with its document
+    /// drawn over it, each line draggable, each with its own face, size, colour
+    /// and strip — and the buttons that turn it into a picture.
+    ///
+    /// The document is the preset's own, held by the engine, so a second screen
+    /// attached to the same radio draws the same picture and the layout survives
+    /// a restart. What is edited here is the claimed working copy; the write goes
+    /// out when it settles.
+    fn composer_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>, mode: Mode) {
+        use sdroxide_types::{Strip, TextLayer};
+        if !self.sstv.composer_open {
+            return;
+        }
+        let rifp = mode.is_rifp();
+        let dims = if rifp {
+            self.digi_cfg_edit.rifp_size.dimensions()
+        } else {
+            self.sstv.tx_mode.dimensions()
+        };
+        // A different slot in front means a different document: hand the old one
+        // back first, so its last edit is not lost to the switch.
+        if self.sstv.composer_edit.as_ref().is_some_and(|(i, _)| *i != self.sstv.selected_slot) {
+            self.composer_settle(cmds);
+            self.sstv.composer_edit = None;
+        }
+        self.composer_claim(dims);
+        self.composer_preview(ctx, dims);
+        let (fw, fh) = (f32::from(dims.0.max(1)), f32::from(dims.1.max(1)));
+        let mut doc = self
+            .sstv
+            .composer_edit
+            .as_ref()
+            .map(|(_, d)| d.clone())
+            .unwrap_or_default();
+        let mut open = true;
+        let mut dirty = false;
+        let mut send_now = false;
+        let mut new_slot: Option<usize> = None;
+        let mut note: Option<String> = None;
+        egui::Window::new("Picture editor")
+            .id(crate::layout::salted_id(ctx, "Picture editor"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(true)
+            .default_width(crate::layout::window_w(ctx, 840.0))
+            .frame(crate::chrome::window_frame())
+            .show(ctx, |ui| {
+                crate::chrome::window_body_bg(ui);
+                ui.label(
+                    RichText::new(format!(
+                        "Slot {} — its own text, drawn where you put it. Drag a line on the \
+                         picture to move it; a line's strip moves with it.",
+                        self.sstv.selected_slot + 1
+                    ))
+                    .size(10.5)
+                    .weak(),
+                );
+                ui.add_space(6.0);
+                let canvas_w = (ui.available_width() * 0.46).clamp(260.0, 420.0);
+                ui.horizontal_top(|ui| {
+                    // ── the picture, and the drag ─────────────────────────
+                    ui.vertical(|ui| {
+                        ui.set_width(canvas_w);
+                        let shown = egui::vec2(canvas_w, canvas_w * fh / fw);
+                        let (rect, resp) =
+                            ui.allocate_exact_size(shown, egui::Sense::click_and_drag());
+                        if let Some(tex) = &self.sstv.composer_tex {
+                            ui.painter().image(
+                                tex.id(),
+                                rect,
+                                egui::Rect::from_min_max(
+                                    egui::pos2(0.0, 0.0),
+                                    egui::pos2(1.0, 1.0),
+                                ),
+                                Color32::WHITE,
+                            );
+                        }
+                        if !self.sstv.presets.slot(self.sstv.selected_slot).has_picture() {
+                            ui.painter().text(
+                                rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                "No picture in this slot — load one below",
+                                egui::FontId::proportional(12.0),
+                                crate::theme::gray(150),
+                            );
+                        }
+                        // The selected layer's box, so "the one I am editing"
+                        // is visible on the picture rather than only in a list.
+                        if let Some(i) = self.sstv.composer_sel
+                            && let Some((x0, y0, x1, y1)) =
+                                crate::sstv_composer::layer_box(&doc, i, dims.0, dims.1)
+                        {
+                            let to_screen = |x: i32, y: i32| {
+                                egui::pos2(
+                                    rect.min.x + x as f32 / fw * rect.width(),
+                                    rect.min.y + y as f32 / fh * rect.height(),
+                                )
+                            };
+                            let r = egui::Rect::from_min_max(to_screen(x0, y0), to_screen(x1, y1));
+                            ui.painter().rect_stroke(
+                                r,
+                                2.0,
+                                egui::Stroke::new(1.0, crate::theme::CYAN()),
+                                egui::StrokeKind::Outside,
+                            );
+                        }
+                        // Pointer → fraction of the frame. One conversion, used
+                        // by the hit test and by the move alike.
+                        let frac = |p: egui::Pos2| {
+                            (
+                                ((p.x - rect.min.x) / rect.width()).clamp(0.0, 1.0),
+                                ((p.y - rect.min.y) / rect.height()).clamp(0.0, 1.0),
+                            )
+                        };
+                        if resp.drag_started()
+                            && let Some(p) = ui.ctx().pointer_latest_pos()
+                        {
+                            let (nx, ny) = frac(p);
+                            if let Some(i) =
+                                crate::sstv_composer::layer_at(&doc, nx * fw, ny * fh, dims.0, dims.1)
+                            {
+                                let l = &doc.layers[i];
+                                self.sstv.composer_drag = Some((i, l.x - nx, l.y - ny));
+                                self.sstv.composer_sel = Some(i);
+                            } else {
+                                self.sstv.composer_drag = None;
+                            }
+                        }
+                        if resp.dragged()
+                            && let Some((i, ox, oy)) = self.sstv.composer_drag
+                            && let Some(p) = ui.ctx().pointer_latest_pos()
+                            && let Some(l) = doc.layers.get_mut(i)
+                        {
+                            let (nx, ny) = frac(p);
+                            let (x, y) = ((nx + ox).clamp(0.0, 1.0), (ny + oy).clamp(0.0, 1.0));
+                            if (l.x - x).abs() > 0.0005 || (l.y - y).abs() > 0.0005 {
+                                l.x = x;
+                                l.y = y;
+                                dirty = true;
+                            }
+                        }
+                        if resp.drag_stopped() {
+                            self.sstv.composer_drag = None;
+                            // A drag is over: hand the document to the engine now
+                            // rather than waiting for the pause timer, because
+                            // the operator's next move may be to press SEND.
+                            send_now = true;
+                        }
+                        ui.add_space(6.0);
+
+                        // ── what is under the text ────────────────────────
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(RichText::new("Base").size(10.5).weak())
+                                .on_hover_text("Which slot's picture these layers are drawn over");
+                            for i in 0..IMAGE_SLOTS {
+                                let sel = self.sstv.selected_slot == i;
+                                let has = self.sstv.presets.slot(i).has_picture();
+                                if crate::chrome::chip(ui, sel, &format!("{}", i + 1))
+                                    .on_hover_text(if has {
+                                        "Compose over this slot's picture"
+                                    } else {
+                                        "This slot is empty"
+                                    })
+                                    .clicked()
+                                    && !sel
+                                {
+                                    new_slot = Some(i);
+                                }
+                            }
+                        });
+                        ui.add_space(4.0);
+                        ui.horizontal_wrapped(|ui| {
+                            let sel = self.sstv.selected_slot;
+                            if crate::chrome::chip(ui, false, "Picture…")
+                                .on_hover_text("Load a picture into this slot")
+                                .clicked()
+                            {
+                                self.sstv.pick_target = Some(sel);
+                                pick_image(self.sstv.inbox.clone());
+                            }
+                            // **Reply to the picture that just came in.** The
+                            // QSO flow is: his picture, my call over it, back on
+                            // the air — and that is this button.
+                            let received = self
+                                .sstv
+                                .fresh
+                                .as_ref()
+                                .map(|(_, png)| png.clone())
+                                .or_else(|| self.sstv.full_png.as_ref().map(|(_, png)| png.clone()));
+                            let use_received = ui
+                                .add_enabled_ui(received.is_some(), |ui| {
+                                    crate::chrome::chip(ui, false, "Use received")
+                                })
+                                .inner
+                                .on_hover_text(
+                                    "Put the picture that just arrived under these layers, so a \
+                                     reply carries his picture and your call",
+                                );
+                            if use_received.clicked()
+                                && let Some(png) = received
+                            {
+                                self.sstv.set_slot(sel, png, cmds);
+                                note = Some("the received picture is now the base".into());
+                            }
+                        });
+                    });
+                    ui.add_space(10.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+
+                    // ── the layers ────────────────────────────────────────
+                    ui.vertical(|ui| {
+                        ui.set_min_width(300.0);
+                        ui.horizontal(|ui| {
+                            if crate::chrome::chip(ui, false, "＋ Text").clicked() {
+                                doc.layers.push(TextLayer {
+                                    text: "TEXT".into(),
+                                    px: 28,
+                                    ..Default::default()
+                                });
+                                self.sstv.composer_sel = Some(doc.layers.len() - 1);
+                                dirty = true;
+                            }
+                            if crate::chrome::chip(ui, false, "＋ Strip").clicked() {
+                                // A strip is a line with its own band and no
+                                // text: the plain banner, for a picture that
+                                // wants colour behind something else.
+                                doc.layers.push(TextLayer {
+                                    text: String::new(),
+                                    px: 24,
+                                    band: Some(Strip::default()),
+                                    ..Default::default()
+                                });
+                                self.sstv.composer_sel = Some(doc.layers.len() - 1);
+                                dirty = true;
+                            }
+                        });
+                        ui.add_space(4.0);
+                        egui::ScrollArea::vertical()
+                            .id_salt("composer-layers")
+                            .max_height(96.0)
+                            .show(ui, |ui| {
+                                for i in 0..doc.layers.len() {
+                                    ui.horizontal(|ui| {
+                                        let mut shown = !doc.layers[i].hidden;
+                                        if ui
+                                            .checkbox(&mut shown, "")
+                                            .on_hover_text("Draw this line")
+                                            .changed()
+                                        {
+                                            doc.layers[i].hidden = !shown;
+                                            dirty = true;
+                                        }
+                                        let text = doc.layers[i].text.clone();
+                                        let label = if text.trim().is_empty() {
+                                            "(strip)".to_string()
+                                        } else {
+                                            crate::app::util::shorten(&text, 26).to_string()
+                                        };
+                                        let sel = self.sstv.composer_sel == Some(i);
+                                        if ui.selectable_label(sel, label).clicked() {
+                                            self.sstv.composer_sel = Some(i);
+                                        }
+                                    });
+                                }
+                            });
+                        ui.add_space(4.0);
+
+                        // The selected layer's own controls.
+                        if let Some(i) = self.sstv.composer_sel
+                            && i < doc.layers.len()
+                        {
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add_enabled(i > 0, egui::Button::new("↑"))
+                                    .on_hover_text("Draw this line later than the ones above it")
+                                    .clicked()
+                                {
+                                    doc.layers.swap(i, i - 1);
+                                    self.sstv.composer_sel = Some(i - 1);
+                                    dirty = true;
+                                }
+                                if ui
+                                    .add_enabled(
+                                        i + 1 < doc.layers.len(),
+                                        egui::Button::new("↓"),
+                                    )
+                                    .on_hover_text("Draw this line earlier")
+                                    .clicked()
+                                {
+                                    doc.layers.swap(i, i + 1);
+                                    self.sstv.composer_sel = Some(i + 1);
+                                    dirty = true;
+                                }
+                                if crate::chrome::chip(ui, false, "Copy").clicked() {
+                                    let mut l = doc.layers[i].clone();
+                                    l.y = (l.y + 0.08).min(1.0);
+                                    doc.layers.insert(i + 1, l);
+                                    self.sstv.composer_sel = Some(i + 1);
+                                    dirty = true;
+                                }
+                                if crate::chrome::chip(ui, false, "Delete").clicked() {
+                                    doc.layers.remove(i);
+                                    self.sstv.composer_sel = if doc.layers.is_empty() {
+                                        None
+                                    } else {
+                                        Some(i.min(doc.layers.len() - 1))
+                                    };
+                                    dirty = true;
+                                }
+                            });
+                            ui.add_space(4.0);
+                            let l = &mut doc.layers[i];
+                            egui::Grid::new("composer-layer-grid")
+                                .num_columns(2)
+                                .spacing([10.0, 6.0])
+                                .show(ui, |ui| {
+                                    ui.label("Text");
+                                    if crate::chrome::field(
+                                        ui,
+                                        egui::TextEdit::singleline(&mut l.text)
+                                            .desired_width(250.0)
+                                            .hint_text("what the line says"),
+                                    )
+                                    .changed()
+                                    {
+                                        dirty = true;
+                                    }
+                                    ui.end_row();
+
+                                    ui.label("Face");
+                                    egui::ComboBox::from_id_salt("composer-face")
+                                        .selected_text(l.face.label())
+                                        .width(180.0)
+                                        .show_ui(ui, |ui| {
+                                            for f in sdroxide_types::Face::ALL {
+                                                if ui
+                                                    .selectable_value(&mut l.face, f, f.label())
+                                                    .clicked()
+                                                {
+                                                    dirty = true;
+                                                }
+                                            }
+                                        });
+                                    ui.end_row();
+
+                                    ui.label("Size");
+                                    let resp = crate::chrome::slider(
+                                        ui,
+                                        egui::Slider::new(&mut l.px, 8..=96).suffix(" px"),
+                                    );
+                                    dirty |= resp.changed();
+                                    ui.end_row();
+
+                                    ui.label("Colour");
+                                    ui.horizontal(|ui| {
+                                        dirty |= ui
+                                            .color_edit_button_srgb(&mut l.ink)
+                                            .on_hover_text("The letters")
+                                            .changed();
+                                        let mut outlined = l.outline.is_some();
+                                        if crate::chrome::checkbox(ui, &mut outlined, "outline")
+                                            .changed()
+                                        {
+                                            l.outline = outlined.then_some([0, 0, 0]);
+                                            dirty = true;
+                                        }
+                                        if let Some(oc) = &mut l.outline {
+                                            dirty |= ui
+                                                .color_edit_button_srgb(oc)
+                                                .on_hover_text("The edge around them")
+                                                .changed();
+                                        }
+                                    });
+                                    ui.end_row();
+
+                                    ui.label("Placement");
+                                    if crate::chrome::checkbox(ui, &mut l.vertical, "down the frame")
+                                        .on_hover_text(
+                                            "Turn the line a quarter turn, so it reads downwards — \
+                                             a call down the side of the picture",
+                                        )
+                                        .changed()
+                                    {
+                                        dirty = true;
+                                    }
+                                    ui.end_row();
+
+                                    ui.label("Strip");
+                                    ui.horizontal(|ui| {
+                                        let mut banded = l.band.is_some();
+                                        if crate::chrome::checkbox(ui, &mut banded, "behind")
+                                            .on_hover_text(
+                                                "A strip of colour behind the line, across the \
+                                                 picture or down it, centred on the line",
+                                            )
+                                            .changed()
+                                        {
+                                            l.band = banded.then(|| Strip {
+                                                thickness: 28,
+                                                fill: [160, 16, 16],
+                                                fill2: None,
+                                            });
+                                            dirty = true;
+                                        }
+                                        if let Some(b) = &mut l.band {
+                                            dirty |= ui
+                                                .color_edit_button_srgb(&mut b.fill)
+                                                .on_hover_text("The strip, at its first edge")
+                                                .changed();
+                                            let mut grad = b.fill2.is_some();
+                                            if crate::chrome::checkbox(ui, &mut grad, "fade")
+                                                .changed()
+                                            {
+                                                b.fill2 = grad.then_some([0, 0, 0]);
+                                                dirty = true;
+                                            }
+                                            if let Some(c) = &mut b.fill2 {
+                                                dirty |= ui.color_edit_button_srgb(c).changed();
+                                            }
+                                        }
+                                    });
+                                    ui.end_row();
+                                    if let Some(b) = &mut l.band {
+                                        ui.label("Thickness");
+                                        let resp = crate::chrome::slider(
+                                            ui,
+                                            egui::Slider::new(&mut b.thickness, 4..=120)
+                                                .suffix(" px"),
+                                        );
+                                        dirty |= resp.changed();
+                                        ui.end_row();
+                                    }
+                                });
+                            ui.add_space(8.0);
+                        }
+
+                        // ── what to do with it ────────────────────────────
+                        // The picture the buttons send is the one on screen,
+                        // edits from this very frame included, so the working
+                        // copy is put back before anything is composed from it.
+                        if let Some((_, d)) = self.sstv.composer_edit.as_mut() {
+                            *d = doc.clone();
+                        }
+                        let has_picture =
+                            self.sstv.presets.slot(self.sstv.selected_slot).has_picture();
+                        ui.horizontal(|ui| {
+                            if crate::chrome::chip(ui, false, "Save picture…").clicked() {
+                                if let Some(png) = self.sstv.compose_png(dims) {
+                                    crate::download::save_as(
+                                        "sstv-composed.png",
+                                        &png,
+                                        crate::download::Mime::Png,
+                                    );
+                                    note = Some("saved".into());
+                                }
+                            }
+                            let tx_ok = self.tx_capable();
+                            let send = ui
+                                .add_enabled_ui(tx_ok && has_picture && doc.is_active(), |ui| {
+                                    crate::chrome::chip(ui, false, "Send")
+                                })
+                                .inner
+                                .on_hover_text("Transmit this composition now");
+                            if send.clicked()
+                                && let Some(png) = self.sstv.compose_png(dims)
+                            {
+                                // The engine gets the document first, so a client
+                                // that composes its own copy sends the same
+                                // picture as this one.
+                                send_now = true;
+                                cmds.push(if rifp {
+                                    Command::RifpTx { png }
+                                } else {
+                                    Command::SstvTx { mode: self.sstv.tx_mode, png }
+                                });
+                                note = Some("sending".into());
+                            }
+                            if crate::chrome::chip(ui, false, "Forget")
+                                .on_hover_text(
+                                    "Empty this preset's document — the banner strip and the plain \
+                                     caption are back in charge of its picture",
+                                )
+                                .clicked()
+                            {
+                                doc.layers.clear();
+                                self.sstv.composer_sel = None;
+                                dirty = true;
+                                send_now = true;
+                                note = Some("cleared — the banner and the caption are back".into());
+                            }
+                        });
+                        // **Save the composition into another spot.** The document
+                        // *is* the composition, so this copies the document and
+                        // the picture under it: the other slot then sends the
+                        // same picture, and can still be edited there.
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(RichText::new("Copy to slot").size(10.5).weak())
+                                .on_hover_text(
+                                    "Give another slot this picture and this text, so it can be \
+                                     sent from there",
+                                );
+                            for n in 0..IMAGE_SLOTS {
+                                if n != self.sstv.selected_slot
+                                    && crate::chrome::chip(ui, false, &format!("{}", n + 1))
+                                        .clicked()
+                                {
+                                    cmds.push(Command::ImageSetComposer {
+                                        slot: n as u8,
+                                        composer: doc.clone(),
+                                    });
+                                    if let Some(png) = self.sstv.compose_png(dims) {
+                                        self.sstv.set_slot(n, png, cmds);
+                                    }
+                                    note = Some(format!("copied into slot {}", n + 1));
+                                }
+                            }
+                        });
+                        if let Some(n) = &note {
+                            ui.add_space(4.0);
+                            ui.label(RichText::new(n).size(10.5).color(crate::theme::YELLOW()));
+                        }
+                    });
+                });
+            });
+        // Write the working copy back, then settle it to the engine if this
+        // frame changed anything: instantly for a control, and on a drag's
+        // release rather than on every pixel of it.
+        if let Some((_, d)) = self.sstv.composer_edit.as_mut() {
+            *d = doc;
+        }
+        if dirty {
+            self.sstv.composer_dirty = true;
+            self.sstv.preview_dirty = true;
+            self.sstv.composer_since = Some(std::time::Instant::now());
+        }
+        if send_now {
+            // The document must be in the engine before the picture that used
+            // it, or another screen would compose a different one.
+            self.composer_flush(cmds);
+        }
+        if let Some(i) = new_slot {
+            self.composer_settle(cmds);
+            self.sstv.composer_edit = None;
+            self.sstv.selected_slot = i;
+            self.sstv.preview_dirty = true;
+            self.sstv.composer_dirty = true;
+            self.composer_claim(dims);
+        }
+        if !open {
+            self.composer_settle(cmds);
+            self.sstv.composer_edit = None;
+        }
+        self.sstv.composer_open = open;
+    }
+
     fn banner_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         if !self.sstv.banner_open {
             return;
@@ -2265,6 +3060,45 @@ impl SdroxideApp {
                                 );
                                 changed |=
                                     resp.drag_stopped() || (resp.changed() && !resp.dragged());
+                                ui.end_row();
+                                // **Where the strip sits, and how big the text
+                                // is inside it.** A QSO picture wants the call
+                                // legible on the far end, and a short strip is
+                                // the wrong lever for that: it eats picture. The
+                                // strip also belongs at whichever edge the
+                                // operator's picture has least of.
+                                ui.label("Text size").on_hover_text(
+                                    "The banner text as a percentage of the strip's own size. \
+                                     100% is what it has always been; a QSO needs the call \
+                                     readable after a noisy decode, and this scales the \
+                                     lettering without making the strip taller.",
+                                );
+                                let resp = crate::chrome::slider(
+                                    ui,
+                                    egui::Slider::new(&mut cfg.sstv_banner_text_pct, 50..=250)
+                                        .suffix(" %"),
+                                );
+                                changed |=
+                                    resp.drag_stopped() || (resp.changed() && !resp.dragged());
+                                ui.end_row();
+                                ui.label("Placement").on_hover_text(
+                                    "Which edge the strip is drawn along. The message overlay \
+                                     starts at the opposite end, so a banner at the bottom \
+                                     leaves the top of the picture for text.",
+                                );
+                                ui.horizontal(|ui| {
+                                    let mut bottom = cfg.sstv_banner_bottom;
+                                    if crate::chrome::chip(ui, !bottom, "Top").clicked() {
+                                        bottom = false;
+                                    }
+                                    if crate::chrome::chip(ui, bottom, "Bottom").clicked() {
+                                        bottom = true;
+                                    }
+                                    if bottom != cfg.sstv_banner_bottom {
+                                        cfg.sstv_banner_bottom = bottom;
+                                        changed = true;
+                                    }
+                                });
                                 ui.end_row();
                             });
                     });
