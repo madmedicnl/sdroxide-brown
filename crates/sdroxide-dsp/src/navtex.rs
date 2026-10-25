@@ -254,6 +254,9 @@ pub struct NavtexRx {
     center_hz: f32,
     reverse: bool,
 
+    /// The operator's receive sensitivity, `-5..=+5`. See [`NavtexRx::sens_k`].
+    sensitivity: i8,
+
     // Front end.
     ph: f32,
     ph_inc: f32,
@@ -320,6 +323,8 @@ struct BitPhase {
     disagree: u32,
 
     figures: bool,
+    /// The operator's receive sensitivity, mirrored from [`NavtexRx`].
+    sensitivity: i8,
     /// Quality of the last character slot decoded.
     last_source: CharSource,
     direct: u64,
@@ -337,6 +342,7 @@ impl BitPhase {
             emitted_to: 0,
             disagree: 0,
             figures: false,
+            sensitivity: 0,
             last_source: CharSource::Direct,
             direct: 0,
             repaired: 0,
@@ -348,6 +354,21 @@ impl BitPhase {
         self.next_at.is_some()
     }
 
+    fn sens_k(&self) -> f64 {
+        1.0 + 0.12 * f64::from(self.sensitivity)
+    }
+
+    fn sync_score(&self) -> i32 {
+        ((8i32 as f64 / self.sens_k()).round() as i32).clamp(3, 24)
+    }
+
+    fn loss_limit(&self) -> u32 {
+        ((24u32 as f64 * self.sens_k()).round() as u32).clamp(4, 48)
+    }
+
+    fn disagree_limit(&self) -> u32 {
+        ((6u32 as f64 * self.sens_k()).round() as u32).clamp(2, 12)
+    }
     /// Forget the character phase — the signal it was found in has gone.
     fn drop_sync(&mut self) {
         self.next_at = None;
@@ -362,6 +383,7 @@ impl NavtexRx {
             rate,
             center_hz: NAVTEX_CENTER_HZ,
             reverse: false,
+            sensitivity: 0,
             ph: 0.0,
             ph_inc: 0.0,
             // Wide enough for both tones, the keying sidebands of a 100-baud
@@ -442,6 +464,61 @@ impl NavtexRx {
             self.afc_hz = 0.0;
             self.retune();
         }
+    }
+
+    /// The operator's receive sensitivity, `-5..=+5`; see [`NavtexRx::sens_k`].
+    ///
+    /// NAVTEX is FSK, so signal strength does not change the alphabet — this
+    /// moves the *detection* thresholds instead: how weak a signal still counts
+    /// as present, how readily the phase locks, and how much tuning error the
+    /// AFC will chase. `+` accepts a weaker or noisier signal; `−` waits for
+    /// a cleaner one before declaring anything.
+    pub fn set_sensitivity(&mut self, sensitivity: i8) {
+        self.sensitivity = sensitivity.clamp(-5, 5);
+        for p in &mut self.phases {
+            p.sensitivity = self.sensitivity;
+        }
+    }
+
+    /// Threshold multiplier from the sensitivity setting: `1 + 0.12·s`, so
+    /// `0.4` at `-5` and `1.6` at `+5`. Exactly `1.0` at the reference, so
+    /// `0` reproduces the decoder's own behaviour bit for bit.
+    fn sens_k(&self) -> f64 {
+        1.0 + 0.12 * f64::from(self.sensitivity)
+    }
+
+    /// Signal-gone threshold: a signal is declared gone once its level falls
+    /// below this fraction of its recent peak. Lower at `+` (keep decoding on
+    /// a weaker signal), higher at `−` (drop sooner, rejecting noise).
+    fn signal_gone(&self) -> f32 {
+        (SIGNAL_GONE / self.sens_k() as f32).clamp(0.01, 0.2)
+    }
+
+    /// Characters of the phase search that must be valid before the stream is
+    /// declared in phase.
+    fn sync_score(&self) -> i32 {
+        ((SYNC_SCORE as f64 / self.sens_k()).round() as i32).clamp(3, 24)
+    }
+
+    /// Consecutive character slots with neither copy readable before the
+    /// character phase is given up.
+    fn loss_limit(&self) -> u32 {
+        ((LOSS_LIMIT as f64 * self.sens_k()).round() as u32).clamp(4, 48)
+    }
+
+    /// Consecutive slots whose two copies both parsed and disagreed.
+    fn disagree_limit(&self) -> u32 {
+        ((DISAGREE_LIMIT as f64 * self.sens_k()).round() as u32).clamp(2, 12)
+    }
+
+    /// Floor on branch separation for AFC.
+    fn afc_sep_min(&self) -> f32 {
+        (AFC_SEP_MIN / self.sens_k() as f32).clamp(0.05, 0.5)
+    }
+
+    /// Floor on the two references' proportion.
+    fn atc_min_ratio(&self) -> f32 {
+        (ATC_MIN_RATIO / self.sens_k() as f32).clamp(0.01, 0.2)
     }
 
     /// Current AFC pull in Hz — how far off the cursor the signal actually is.
@@ -569,7 +646,7 @@ impl NavtexRx {
             // idle for a long time must not sit so far below the other that
             // its first sample of signal reads as a hundred times the level it
             // is. The same floor the RTTY receiver keeps, for the same reason.
-            let floor = self.ref_mark.max(self.ref_space) * ATC_MIN_RATIO;
+            let floor = self.ref_mark.max(self.ref_space) * self.atc_min_ratio();
             self.ref_mark = self.ref_mark.max(floor);
             self.ref_space = self.ref_space.max(floor);
 
@@ -589,7 +666,10 @@ impl NavtexRx {
             } else {
                 (m - sp).abs()
             };
-            if self.afc_enabled && afc_sep > AFC_SEP_MIN && self.win_run > AFC_SETTLE * self.spb {
+            if self.afc_enabled
+                && afc_sep > self.afc_sep_min()
+                && self.win_run > AFC_SETTLE * self.spb
+            {
                 let d = win * self.prev_win.conj();
                 if d.norm_sqr() > 1e-24 {
                     let hz_per_rad = self.rate as f32 / std::f32::consts::TAU;
@@ -668,7 +748,7 @@ impl NavtexRx {
         // gap reads the whole of the next message off the wrong grid, and the
         // loss counter alone takes tens of characters to notice. Those
         // characters are the header.
-        if self.mag < self.mag_peak * SIGNAL_GONE {
+        if self.mag < self.mag_peak * self.signal_gone() {
             self.phases[p].drop_sync();
         }
         let bit = (self.acc[p] > 0.0) != self.reverse;
@@ -745,7 +825,8 @@ impl BitPhase {
                     }
                     self.next_at = Some(at + PAIR_BITS as u64);
                     self.emitted_to = at + PAIR_BITS as u64;
-                    if self.lost_run >= LOSS_LIMIT || self.disagree >= DISAGREE_LIMIT {
+                    if self.lost_run >= self.loss_limit() || self.disagree >= self.disagree_limit()
+                    {
                         self.next_at = None;
                         self.lost_run = 0;
                         self.disagree = 0;
@@ -878,7 +959,7 @@ impl BitPhase {
                 at += PAIR_BITS;
             }
             let total = score + pairs;
-            if pairs >= 2 && total >= SYNC_SCORE && best.is_none_or(|(b, _)| total > b) {
+            if pairs >= 2 && total >= self.sync_score() && best.is_none_or(|(b, _)| total > b) {
                 best = Some((total, base + off as u64));
             }
         }

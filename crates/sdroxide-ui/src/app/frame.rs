@@ -543,40 +543,6 @@ fn detached_geometry(
     (size, pos)
 }
 
-#[cfg(test)]
-mod detached_geometry_tests {
-    use super::detached_geometry;
-    use eframe::egui;
-
-    /// **A window saved off the edge of the screen comes back onto it.**
-    ///
-    /// The size was fitted to the monitor and the position was not, so a window
-    /// saved on a display that is no longer attached opened where nothing could be
-    /// reached — reported as "I cannot access the settings at all" (issue #235).
-    #[test]
-    fn a_saved_position_off_the_screen_is_brought_back() {
-        let monitor = Some(egui::vec2(1920.0, 1080.0));
-        let saved = Some(sdroxide_types::DetachedWindow {
-            size: [900.0, 700.0],
-            pos: Some([5000.0, 3000.0]),
-        });
-        let (_, pos) = detached_geometry(monitor, saved, [800.0, 600.0]);
-        let pos = pos.expect("a restored position");
-        assert!(pos.x <= 1920.0 - 80.0, "x {:.0} is off the right edge", pos.x);
-        assert!(pos.y <= 1080.0 - 60.0, "y {:.0} is off the bottom edge", pos.y);
-
-        // A window on a monitor to the left, at a negative x, is left alone: that
-        // is a real place, not a lost one.
-        let left = Some(sdroxide_types::DetachedWindow {
-            size: [900.0, 700.0],
-            pos: Some([-1200.0, 40.0]),
-        });
-        let (_, pos) = detached_geometry(monitor, left, [800.0, 600.0]);
-        let pos = pos.expect("a restored position");
-        assert!(pos.x < 0.0, "a left-hand monitor was pulled to the primary");
-        assert!((pos.y - 40.0).abs() < 0.5);
-    }
-}
 
 /// What a detached window left behind this frame.
 #[cfg(not(target_arch = "wasm32"))]
@@ -5482,16 +5448,25 @@ mod tests {
     }
 
     /// The detached window opens at the operator's last geometry, or a wide
-    /// default, and never grows past the monitor it is about to open on.
+    /// default, and **comes back onto the monitor it is about to open on** —
+    /// size and position both.
+    ///
+    /// The position half was the report behind issue #235: a window saved on a
+    /// display that is no longer there (a laptop undocked from a second screen,
+    /// a resolution or DPI change) opened exactly where nothing could be
+    /// reached, and the operator was left with a settings window they could not
+    /// access at all. Only the right and bottom edges are pulled in, so a
+    /// monitor to the left of the primary — a negative x — still means what it
+    /// says.
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn the_detached_window_opens_fitting_the_monitor() {
         let (size, pos) = super::detached_geometry(None, None, [960.0, 540.0]);
         assert_eq!(size, eframe::egui::vec2(960.0, 540.0), "the wide default");
         assert!(pos.is_none(), "no stored position, none given");
-        // A small monitor shrinks it; a stored position comes back untouched
-        // (a second screen starts where the desktop puts it, not inside
-        // `0..monitor`, so it is not clamped).
+
+        // A position past the right edge of a small monitor comes back inside it,
+        // and the window still fits the screen it opened on.
         let stored =
             sdroxide_types::DetachedWindow { size: [960.0, 540.0], pos: Some([1920.0, 0.0]) };
         let (size, pos) = super::detached_geometry(
@@ -5500,7 +5475,28 @@ mod tests {
             [960.0, 540.0],
         );
         assert!(size.x <= 800.0 && size.y <= 600.0, "grew past the monitor: {size:?}");
-        assert_eq!(pos, Some(eframe::egui::pos2(1920.0, 0.0)));
+        assert_eq!(pos, Some(eframe::egui::pos2(720.0, 0.0)), "still off the right edge");
+
+        // A position that is already on the monitor is left exactly where the
+        // operator put it — this is not a re-layout, it is a rescue.
+        let stored =
+            sdroxide_types::DetachedWindow { size: [640.0, 480.0], pos: Some([120.0, 90.0]) };
+        let (_, pos) = super::detached_geometry(
+            Some(eframe::egui::vec2(1920.0, 1080.0)),
+            Some(stored),
+            [640.0, 480.0],
+        );
+        assert_eq!(pos, Some(eframe::egui::pos2(120.0, 90.0)));
+
+        // A monitor to the left of the primary is a real place, not a lost window.
+        let stored =
+            sdroxide_types::DetachedWindow { size: [640.0, 480.0], pos: Some([-1920.0, 40.0]) };
+        let (_, pos) = super::detached_geometry(
+            Some(eframe::egui::vec2(1920.0, 1080.0)),
+            Some(stored),
+            [640.0, 480.0],
+        );
+        assert!(pos.unwrap().x < 0.0, "a left-hand monitor was pulled to the primary");
     }
 
     /// The line under the clock names the width the ruler spans, in the units
@@ -6071,3 +6067,38 @@ pub const TW_SCHEDULE: u64 = 1 << 46;
 pub const TW_PLAYBACK: u64 = 1 << 47;
 pub const TW_PUBLICSDR: u64 = 1 << 48;
 pub const TW_AIRCRAFT: u64 = 1 << 49;
+
+#[cfg(test)]
+mod detached_geometry_tests {
+    use super::detached_geometry;
+    use eframe::egui;
+
+    /// **A window saved off the edge of the screen comes back onto it.**
+    ///
+    /// The size was fitted to the monitor and the position was not, so a window
+    /// saved on a display that is no longer attached opened where nothing could be
+    /// reached — reported as "I cannot access the settings at all" (issue #235).
+    #[test]
+    fn a_saved_position_off_the_screen_is_brought_back() {
+        let monitor = Some(egui::vec2(1920.0, 1080.0));
+        let saved = Some(sdroxide_types::DetachedWindow {
+            size: [900.0, 700.0],
+            pos: Some([5000.0, 3000.0]),
+        });
+        let (_, pos) = detached_geometry(monitor, saved, [800.0, 600.0]);
+        let pos = pos.expect("a restored position");
+        assert!(pos.x <= 1920.0 - 80.0, "x {:.0} is off the right edge", pos.x);
+        assert!(pos.y <= 1080.0 - 60.0, "y {:.0} is off the bottom edge", pos.y);
+
+        // A window on a monitor to the left, at a negative x, is left alone: that
+        // is a real place, not a lost one.
+        let left = Some(sdroxide_types::DetachedWindow {
+            size: [900.0, 700.0],
+            pos: Some([-1200.0, 40.0]),
+        });
+        let (_, pos) = detached_geometry(monitor, left, [800.0, 600.0]);
+        let pos = pos.expect("a restored position");
+        assert!(pos.x < 0.0, "a left-hand monitor was pulled to the primary");
+        assert!((pos.y - 40.0).abs() < 0.5);
+    }
+}

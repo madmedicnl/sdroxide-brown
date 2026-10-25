@@ -1585,6 +1585,7 @@ mod tests {
             bad_frames: 99_999,
             ..Default::default()
         };
+        let mut cfg = DigiConfig::default();
         let mut status = DigiStatus::idle(DigiConfig::default());
         status.text_rx = "something to save".into();
         let mut off_screen = Vec::new();
@@ -1601,12 +1602,18 @@ mod tests {
                 let r = ui.scope(|ui| acars::acars_header(ui, &acars, s, &mut cmds));
                 rows.push(("ACARS", r.response.rect));
                 let r = ui.scope(|ui| {
-                    // Five arguments: the NAVTEX sensitivity revert (#233)
-                    // took the two the float branch still passed here. #233
-                    // shrank the signature and #226 — merged after it — brought
-                    // the branch's seven-argument call back, so `main` on origin
-                    // does not compile. This is that seam.
-                    navtex::navtex_list_header(ui, &navtex, s, &mut cmds, true)
+                    // Seven arguments again: the header draws the receive
+                    // sensitivity control with the rest of NAVTEX's settings, so
+                    // it takes the config being edited and whether it is seeded.
+                    navtex::navtex_list_header(
+                        ui,
+                        &navtex,
+                        s,
+                        &mut cmds,
+                        true,
+                        &mut cfg,
+                        true,
+                    )
                 });
                 rows.push(("NAVTEX", r.response.rect));
                 let r =

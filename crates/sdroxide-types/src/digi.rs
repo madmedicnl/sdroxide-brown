@@ -2316,6 +2316,16 @@ pub struct DigiConfig {
     /// tuning instruction for the service reads.
     #[serde(default)]
     pub navtex_reverse: bool,
+    /// NAVTEX receive sensitivity, `-5..=+5`. See the WEFAX one for the
+    /// shape of the control: `+` accepts a weaker or noisier signal, `−`
+    /// waits for a cleaner one before declaring sync. Appended last, so this
+    /// is a wire change.
+    #[serde(default)]
+    pub navtex_rx_sensitivity: i8,
+    /// NAVTEX receive is using its reference thresholds. When true,
+    /// `navtex_rx_sensitivity` is ignored and the slider sits at 0.
+    #[serde(default = "yes")]
+    pub navtex_rx_auto: bool,
     /// Let the RTTY decoder track tuning error rather than staying pinned to
     /// the cursor. On by default; the matched-filter detector is much less
     /// forgiving of mistuning than a wideband discriminator would be.
@@ -3149,6 +3159,35 @@ pub struct DigiConfig {
     /// the one an unattended station wants.
     #[serde(default = "auto_cq_then_listen_default")]
     pub auto_cq_then_listen: bool,
+    /// SSTV receive sensitivity, -5..=+5. 0 = the automatic level (Auto).
+    /// Adjusts the signal level fed to the decoder: negative attenuates,
+    /// positive boosts. Does not change the decoder itself.
+    ///
+    /// Appended last, so this is a wire change (`PROTO_VERSION` 237 → 238).
+    #[serde(default)]
+    pub sstv_rx_sensitivity: i8,
+    /// SSTV receive is in automatic level mode. When true,
+    /// `sstv_rx_sensitivity` is ignored and the slider sits at 0. Moving the
+    /// slider off 0 clears this. Appended last for the reason above.
+    #[serde(default = "yes")]
+    pub sstv_rx_auto: bool,
+    /// WEFAX receive sensitivity, -5..=+5. 0 = the thresholds measured from the
+    /// chart's own phasing signal, which is the reference behaviour.
+    ///
+    /// This is not an audio gain, unlike SSTV's: a fax is frequency modulated,
+    /// so signal strength does not change the greys (`1500` Hz black to `2300`
+    /// Hz white). It scales the detector's *thresholds* instead — `+` accepts a
+    /// weaker, fainter or noisier chart, `−` waits for a clean signal before it
+    /// starts or ends a page.
+    ///
+    /// Appended last, so this is a wire change (`PROTO_VERSION` 238 → 239).
+    #[serde(default)]
+    pub wefax_rx_sensitivity: i8,
+    /// WEFAX receive is using its reference thresholds. When true,
+    /// `wefax_rx_sensitivity` is ignored and the slider sits at 0. Moving the
+    /// slider off 0 clears this.
+    #[serde(default = "yes")]
+    pub wefax_rx_auto: bool,
 }
 
 fn cw_default_tx_idle_s() -> f32 {
@@ -3288,6 +3327,8 @@ impl Default for DigiConfig {
             rtty_shift_hz: 170.0,
             rtty_reverse: false,
             navtex_reverse: false,
+            navtex_rx_sensitivity: 0,
+            navtex_rx_auto: true,
             rtty_afc: true,
             olivia_tones: 32,
             olivia_bw_hz: 1000.0,
@@ -3416,6 +3457,10 @@ impl Default for DigiConfig {
             wavelog_station_id: 0,
             auto_cq_repeats: 0,
             auto_cq_then_listen: auto_cq_then_listen_default(),
+            sstv_rx_sensitivity: 0,
+            sstv_rx_auto: true,
+            wefax_rx_sensitivity: 0,
+            wefax_rx_auto: true,
         }
     }
 }

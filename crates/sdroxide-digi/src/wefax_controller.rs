@@ -17,8 +17,8 @@ use sdroxide_types::{
     DigiConfig, DigiStatus, Mode, QsoStep, TranscriptLine, WefaxIoc, WefaxLpm, WefaxStatus,
 };
 
-use crate::DigiEngine;
 use crate::controller::DigiAction;
+use crate::DigiEngine;
 
 /// Rows accumulated before the picture is grown. A chart is 1809 pixels wide,
 /// so each block is a couple of hundred kilobytes; growing by one row at a time
@@ -79,6 +79,20 @@ fn from_lpm(v: Lpm) -> WefaxLpm {
     }
 }
 
+/// The sensitivity the decoder runs at: Auto is the reference thresholds,
+/// whatever the slider last held.
+///
+/// The panel keeps the two in step, but a configuration can arrive with Auto on
+/// and a slider value behind it — from another client, or from a file edited by
+/// hand — and then the chip would say Auto while the decoder was still scaling.
+fn sensitivity(cfg: &DigiConfig) -> i8 {
+    if cfg.wefax_rx_auto {
+        0
+    } else {
+        cfg.wefax_rx_sensitivity
+    }
+}
+
 impl WefaxController {
     pub fn new(cfg: DigiConfig, tap_rate: f64) -> Self {
         let mut rx = WefaxRx::new(tap_rate);
@@ -87,6 +101,7 @@ impl WefaxController {
         rx.set_auto_start(cfg.wefax_auto_start);
         rx.set_auto_stop(cfg.wefax_auto_stop);
         rx.set_slant_ppm(cfg.wefax_slant_ppm);
+        rx.set_sensitivity(sensitivity(&cfg));
         WefaxController {
             cfg,
             rx,
@@ -318,6 +333,7 @@ impl DigiEngine for WefaxController {
         self.rx.set_auto_start(cfg.wefax_auto_start);
         self.rx.set_auto_stop(cfg.wefax_auto_stop);
         self.rx.set_slant_ppm(cfg.wefax_slant_ppm);
+        self.rx.set_sensitivity(sensitivity(&cfg));
         self.cfg = cfg;
         self.status_dirty = true;
     }
@@ -460,7 +476,7 @@ mod tests {
         c.wefax_start();
         let w = c.width as usize;
         c.on_rx_audio(&[]); // no-op, but exercises the empty path
-        // Feed rows straight through the event handler's own logic.
+                            // Feed rows straight through the event handler's own logic.
         for y in 0..3u16 {
             let gray = vec![y as u8; w];
             let mut ev = vec![WefaxEvent::Line { y, gray }];
