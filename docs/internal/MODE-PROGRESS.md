@@ -1604,6 +1604,48 @@ own docs say they have none. The 32 coded-PSK and 9 DominoEX variants are one
   pin both halves together, and `a_dtmf_keypress_reads_back_through_the_controller`
   runs the operator's own path.
 
+**8PSK transmits now, and its receive half is still open.**
+
+The four no-FEC 8PSK speeds (125/250/500/1000) were refused with "there is no
+eight-phase modulator". There is one now, written from fldigi's `tx_bit` and
+`tx_carriers`: three bits are packed **least significant first**, the step is a
+multiple of `π/4` off a `π` rotation, and the I/Q of each symbol is **cross-faded
+from the previous constellation point to the next across the whole symbol** with a
+raised-cosine shape. Measured: `an_8psk_transmission_reads_back` at 125, 250 and
+500 baud, and `an_8psk_transmission_reads_back_through_the_controller` at 500 —
+the console's own path.
+
+**1000 baud is not asserted**, and the reason is written down rather than tuned
+away: it reads `TEST THEocAGLE HAS LANDyK` — two characters of twenty, the rest
+exact. It is the only speed at which a symbol is as short as the timing buffer
+(eight samples at 8 kHz), which points at the clock and not at a convention.
+
+The receive half moved, and not all the way:
+
+* **The cross-fade was the real discovery.** fldigi's transmitter interpolates
+  between points over the whole symbol, so the constellation point is only reached
+  at the symbol *boundary* and a one-symbol matched filter reports the midpoint of
+  two of them. Two points survive that average; eight cannot. A probe that built
+  the same waveform both ways settled it: stepped 8PSK read, cross-faded 8PSK read
+  nothing.
+* **The timing loop had to change with it.** A Gardner term works on the
+  matched-filter output, and a filter one symbol long has no sub-symbol timing left
+  in it. The 8PSK path now runs fldigi's own clock — one symbol of rectified
+  magnitude in a ring buffer, the two halves compared, the counter nudged by their
+  normalised difference — and takes its differential product from the **raw**
+  derotated sample at the boundary. Measured: with the old front end only a symbol
+  phase of exactly zero decoded; now 0, 2, 4, 8 and 12 samples out of 16 all read
+  (`the_receiver_reads_a_cross_faded_8psk_at_any_symbol_phase`).
+* **The corpus recordings still read 0/3**, at every centre from 1400 to 2700 Hz,
+  in every constellation, and at all eight rotations of the differential step
+  (swept, to rule the `π` constant out). So the next step is a *signal* question —
+  the amplitude envelope and the per-symbol `maxamp` normalisation of fldigi's
+  `tx_shape`, which the synthetic does not reproduce yet — not another look at the
+  slicer, which is now pinned by a waveform the transmitter really sends. The old
+  synthetic test, which built a phase-stepped signal our own receiver agreed with,
+  is replaced: that was two halves of one program agreeing with each other, the
+  class of test this journal keeps warning about.
+
 ## Needs me
 
 Nothing blocks the work above — every mode has a measurement. These would move the ones that do not decode, or prove the ones that do further:
