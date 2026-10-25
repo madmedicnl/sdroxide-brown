@@ -13,6 +13,16 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+### Fixed
+- **A receive-only mode can no longer key the transmitter** — tuned to a weather fax on 3855 kHz the strip still offered a PTT, a Drive slider and a Tune chip, and any route (a keyboard binding, an external PTT, a TCI client, a remote command) could key it. The chrome hides them, the engine refuses the key-down, switching into such a mode unkeys, and **WEFAX is back in the shortwave band's accepted modes** — it had been refused on every SW frequency, so the mode was only reachable through the listener screen. Issue #239.
+- **The logbook is no longer wiped to one QSO** — with more than one radio the log is shared and re-read before each contact; a browser has no store to re-read, so the answer "empty" replaced it with the contact just logged. Issue #236.
+- **TUNE in the satellite window follows the VFO you are using** — it always retuned VFO A. Issue #244.
+- **Four tests in `sdroxide-ui` that were red on `main`** — three source scans that had been reading half of `frame.rs`, and a geometry expectation contradicted by the off-screen window rescue.
+
+### Added
+- **The receive sensitivity controls are back** — SSTV's audio level, WEFAX's detector thresholds (with the phasing calibration they carry), and NAVTEX's, each −5…+5 with Auto, `0` the reference. `PROTO_VERSION` 251.
+- **Auto Rx and Auto CQ as two roles** — one answers a station calling CQ and never calls one; the other calls CQ, works whoever answers, and gives a station calling *your* callsign the next contact ahead of another CQ. An Auto CQ run has a call count and then either switches to Auto Rx or stops. `PROTO_VERSION` 253. Issue #236.
+
 ### Needs feedback
 - **ALE (2G)** decodes a synthesized word exactly and has never copied a real burst. If you can hear one, a minute of WAV on 11175 / 8992 / 15016 kHz USB (or the amateur channels near 14109.5 kHz) would finish the mode — see the manual, §3.29.
 
