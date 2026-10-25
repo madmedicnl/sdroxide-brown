@@ -292,6 +292,8 @@ pub(in crate::app) enum Badge {
     Radio,
     /// From the registry or the photo service, through the station: blue.
     Online,
+    /// From the station's own record of the last day: violet.
+    History,
     /// Nobody has it: grey, with the reason.
     Missing,
 }

@@ -80,10 +80,12 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
   on the map is open for review; it reads what the card has already fetched and
   asks for nothing. Still to do: a live run against a real station and the real
   services, and a look at the hover card on a screen.
-- **Aircraft search and filters.** One search box over the ADS-B table, the Cards
-  list and the map (ICAO, callsign, registration, type, operator); the map hides
-  what does not match, the pinned aircraft stays, and it asks for nothing. Branch
-  `claude/aircraft-search-filters`, open for review; not yet seen on a screen.
+- **Aircraft history on the station.** The station keeps a day of each aircraft's
+  positions, callsigns, registrations and relay card (off by default,
+  `SDROXIDE_AIRCRAFT_HISTORY=1` turns it on); **Show history** draws the trail on
+  the map and adds the record to the card. It asks nobody for anything. Branch
+  `claude/aircraft-history-server`, open for review; not yet seen on a screen or
+  with a live station.
 - **The mode work is the queue.** [`MODE-PHASE-4-PROMPT.md`](MODE-PHASE-4-PROMPT.md)
   — finish the modes, TX for everything fldigi can transmit, vendor when the port
   and the bench are exhausted. Journal and measurements:

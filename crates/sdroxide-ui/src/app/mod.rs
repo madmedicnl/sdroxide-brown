@@ -36,6 +36,7 @@ pub(in crate::app) mod duo_power;
 pub(in crate::app) mod enigma;
 pub(in crate::app) mod aircraft;
 pub(in crate::app) mod aircraft_card;
+pub(in crate::app) mod aircraft_history;
 pub(in crate::app) mod aircraft_hover;
 pub(in crate::app) mod aircraft_online;
 pub(in crate::app) mod aircraft_online_io;
@@ -1032,6 +1033,9 @@ pub struct SdroxideApp {
     /// The one search box of the ADS-B table, the Cards list and the map. Memory
     /// only: it is not saved, and nothing it does reaches the network.
     aircraft_query: String,
+    /// The aircraft whose record was turned on from the card pinned to it, so
+    /// that it goes when the pin does. Memory only.
+    pin_history_owner: Option<u32>,
     /// ADS-B: the decoder's own settings window is open.
     show_adsb_setup: bool,
     adsb_sort: panels::adsb::AdsbSort,
@@ -2182,6 +2186,7 @@ impl SdroxideApp {
             adsb_status: None,
             adsb_map: crate::adsb_map::AdsbMapState::default(),
             aircraft_query: String::new(),
+            pin_history_owner: None,
             show_adsb_setup: false,
             adsb_sort: panels::adsb::AdsbSort::default(),
             adsb_sort_desc: true,

@@ -1,0 +1,10 @@
+[package]
+name = "sdroxide-aircraft-history"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "What the station has heard of each aircraft in the last day: its positions, the callsigns and registrations it used, and the cards the relay gave for it — a pure model, kept by the server and read by the client"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
