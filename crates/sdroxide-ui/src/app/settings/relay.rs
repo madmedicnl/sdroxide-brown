@@ -16,6 +16,7 @@
 //! 3. that a transceiver keyed at its own microphone is seen late, and what to
 //!    do about it.
 
+use crate::i18n::tr;
 use eframe::egui::{self, Color32, ComboBox, RichText};
 use sdroxide_types::{
     FailSafe, RelayChannel, RelayConfig, RelayDevice, RelayFamily, RelayLink, RelayRole,
@@ -40,7 +41,10 @@ pub(in crate::app) fn settings_relay_tab(
     test: &mut Option<u8>,
 ) {
     ui.label(
-        RichText::new("Transmit/receive switch").size(14.0).strong().color(crate::theme::CYAN()),
+        RichText::new(tr!("settings-relay-transmit-receive-switch"))
+            .size(14.0)
+            .strong()
+            .color(crate::theme::CYAN()),
     );
     ui.add_space(4.0);
     if !seeded {
@@ -263,10 +267,8 @@ pub(in crate::app) fn settings_relay_tab(
                 // after it is added.
                 match lines.get_mut(usize::from(ch.index).saturating_sub(1)) {
                     Some(line) => {
-                        ui.add(egui::DragValue::new(line).range(0..=255)).on_hover_text(
-                            "The line's offset on this chip — the BCM number on a Raspberry Pi \
-                             header, which is not the physical pin number",
-                        );
+                        ui.add(egui::DragValue::new(line).range(0..=255))
+                            .on_hover_text(tr!("settings-relay-line-s-offset-chip-bcm"));
                     }
                     None => {
                         ui.label("");
@@ -277,7 +279,7 @@ pub(in crate::app) fn settings_relay_tab(
                 ui,
                 egui::TextEdit::singleline(&mut ch.label)
                     .desired_width(120.0)
-                    .hint_text("SDR antenna"),
+                    .hint_text(tr!("settings-relay-sdr-antenna")),
             );
             ComboBox::from_id_salt(("relay-role", i))
                 .width(180.0)
@@ -302,17 +304,11 @@ pub(in crate::app) fn settings_relay_tab(
                     }
                 })
                 .response
-                .on_hover_text(
-                    "Decides the default timings and what the log calls it — and, for a band \
-                     decoder, that the contact follows the band table below",
-                );
+                .on_hover_text(tr!("settings-relay-decides-default-timings-what-log"));
             let mut high = ch.active_high;
             if ui
                 .checkbox(&mut high, "")
-                .on_hover_text(
-                    "On: transmitting energises the coil. Off: transmitting releases it.\n\nThis \
-                     is a wiring decision before it is a setting — see the note below.",
-                )
+                .on_hover_text(tr!("settings-relay-transmitting-energises-coil-off-transmitting"))
                 .changed()
             {
                 ch.active_high = high;
@@ -320,45 +316,38 @@ pub(in crate::app) fn settings_relay_tab(
             let band_decoder = ch.role == RelayRole::BandDecoder;
             ui.add(egui::DragValue::new(&mut ch.lead_ms).range(0..=200).suffix(" ms"))
                 .on_hover_text(if band_decoder {
-                    "How long before RF this contact moves from its band's RX word to its TX \
-                     word. A retune moves it at once; this is for key-down, when a \
-                     transmit-only filter has to be in circuit before the power is."
+                    tr!("settings-relay-how-long-before-rf-contact")
                 } else {
-                    "Closed this long before RF. A small coax relay throws in 5 to 15 ms. \
-                     Transmit waits for the longest of these, so a large value is an audible \
-                     gap in the receive audio; anything over 250 ms is ignored."
+                    tr!("settings-relay-closed-long-before-rf-small")
                 });
             ui.add(egui::DragValue::new(&mut ch.hold_ms).range(0..=2000).suffix(" ms"))
                 .on_hover_text(if band_decoder {
-                    "How long after RF stops this contact goes back from its TX word to its \
-                     RX word."
+                    tr!("settings-relay-how-long-after-rf-stops")
                 } else {
-                    "Opened this long after RF stops. Longer than the lead on purpose: letting \
-                     the antenna back a moment late costs nothing, and letting it back early \
-                     costs a front end. Zero is a real answer, and the right one for an \
-                     amplifier's key line."
+                    tr!("settings-relay-opened-long-after-rf-stops")
                 });
             ui.horizontal(|ui| {
                 if crate::chrome::chip_accent_enabled(
                     ui,
                     !busy,
                     false,
-                    " TEST ",
+                    &tr!("settings-relay-test"),
                     None,
                     crate::theme::CYAN(),
                     crate::theme::INK_ON_CYAN(),
                 )
                 .on_hover_text(if busy {
-                    "Not while the station is on the air"
+                    tr!("settings-relay-not-while-station-air")
                 } else {
-                    "Close this contact for half a second, so you can hear the relay and check \
-                     the wiring with the transmitter cold"
+                    tr!("settings-relay-close-contact-half-second-so")
                 })
                 .clicked()
                 {
                     *test = Some(ch.index);
                 }
-                if count > 1 && ui.small_button("×").on_hover_text("Remove").clicked() {
+                if count > 1
+                    && ui.small_button("×").on_hover_text(tr!("settings-relay-remove")).clicked()
+                {
                     remove = Some(i);
                 }
             });
@@ -369,7 +358,7 @@ pub(in crate::app) fn settings_relay_tab(
         cfg.channels.remove(i);
     }
     ui.add_space(4.0);
-    if ui.small_button("+ add a contact").clicked() {
+    if ui.small_button(tr!("settings-relay-add-contact")).clicked() {
         let next = cfg.channels.iter().map(|c| c.index).max().unwrap_or(0).saturating_add(1);
         let (lead, hold) = RelayRole::Aux.default_timing();
         cfg.channels.push(RelayChannel {
@@ -504,6 +493,7 @@ pub(in crate::app) fn settings_relay_tab(
              safe. Wired the other way, a dead relay plus one transmission is a dead front end. \
              With a real amplifier behind it, take the first.",
     );
+    ui.label(RichText::new(tr!("settings-relay-choose-tx-closes-so-de")).weak());
     ui.add_space(6.0);
     super::note(
         ui,
@@ -517,7 +507,9 @@ pub(in crate::app) fn settings_relay_tab(
     // ── status and apply ────────────────────────────────────────────────────
     ui.add_space(10.0);
     if let Some(why) = cfg.refusal() {
-        ui.label(RichText::new(format!("Not usable yet: {why}")).color(WARN));
+        ui.label(
+            RichText::new(tr!("settings-relay-not-usable", why = why.to_string())).color(WARN),
+        );
     } else if let Some(e) = status.error.as_ref() {
         ui.label(RichText::new(format!("● {e}")).color(BAD));
     } else if status.configured && status.present {
@@ -525,7 +517,11 @@ pub(in crate::app) fn settings_relay_tab(
             RichText::new(format!(
                 "● {} — {}",
                 status.describe,
-                if status.keyed { "contacts in TRANSMIT" } else { "receiving" }
+                if status.keyed {
+                    tr!("settings-relay-contacts-transmit")
+                } else {
+                    tr!("settings-relay-receiving")
+                }
             ))
             .color(GOOD),
         );
@@ -537,10 +533,7 @@ pub(in crate::app) fn settings_relay_tab(
 
     ui.add_space(8.0);
     if busy {
-        ui.label(
-            RichText::new("The station is on the air — APPLY will take effect after this over.")
-                .color(WARN),
-        );
+        ui.label(RichText::new(tr!("settings-relay-station-air-apply-will-take")).color(WARN));
         ui.add_space(4.0);
     }
     apply_button(ui, apply);
@@ -580,6 +573,8 @@ fn relay_band_table(ui: &mut egui::Ui, cfg: &mut RelayConfig) {
              going, and different ones for a receive-only preamp bypass or a transmit-only LPF \
              bank. Bands left at 0 assert nothing. Applies on Apply / reconnect.",
     );
+    ui.add_space(2.0);
+    ui.label(RichText::new(tr!("settings-relay-one-control-word-per-band")).weak());
     ui.add_space(6.0);
 
     let bands: Vec<sdroxide_types::Band> = sdroxide_types::Band::ALL
@@ -603,10 +598,9 @@ fn relay_band_table(ui: &mut egui::Ui, cfg: &mut RelayConfig) {
                     .map(|i| (cfg.band_table[i].rx_mask, cfg.band_table[i].tx_mask))
                     .unwrap_or((0, 0));
                 if band == sdroxide_types::Band::Gen {
-                    ui.label("Other").on_hover_text(
-                        "Everywhere outside the amateur bands — short-wave listening, and \
-                         anything a transverter's dial lands on that no band covers.",
-                    );
+                    ui.label(tr!("settings-relay-other")).on_hover_text(tr!(
+                        "settings-relay-everywhere-outside-amateur-bands-short"
+                    ));
                 } else {
                     ui.label(band.label());
                 }
@@ -663,18 +657,22 @@ fn decoder_channels_asserted(decoders: &[(u8, String)], rx: u32, tx: u32) -> Str
             .collect();
         if names.is_empty() { "—".into() } else { names.join(", ") }
     };
-    if rx == tx { list(rx) } else { format!("{} / TX {}", list(rx), list(tx)) }
+    if rx == tx {
+        list(rx)
+    } else {
+        tr!("settings-relay-rx-tx-words", rx = list(rx), tx = list(tx))
+    }
 }
 
 fn apply_button(ui: &mut egui::Ui, apply: &mut bool) {
     if crate::chrome::chip_accent(
         ui,
         false,
-        RichText::new(" APPLY ").strong(),
+        RichText::new(tr!("settings-relay-apply")).strong(),
         crate::theme::GREEN(),
         crate::theme::INK_ON_CYAN(),
     )
-    .on_hover_text("Persist and (re)open the switch")
+    .on_hover_text(tr!("settings-relay-persist-re-open-switch"))
     .clicked()
     {
         *apply = true;

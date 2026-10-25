@@ -5,6 +5,7 @@
 //! *decode matters*, which is unmissable by design — the whole point is to
 //! reach the operator when they are not looking at sdroxide.
 
+use crate::i18n::tr;
 use eframe::egui::{self, Color32, RichText};
 
 use crate::app::alerts::AlertStatus;
@@ -21,13 +22,19 @@ pub(in crate::app) fn alerts_settings(
     speech_on: bool,
     say: &mut Option<AlertEvent>,
 ) {
-    ui.label(RichText::new("Audible alerts").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(
+        RichText::new(tr!("settings-alerts-audible-alerts"))
+            .size(14.0)
+            .strong()
+            .color(crate::theme::CYAN()),
+    );
     ui.add_space(6.0);
-    crate::chrome::checkbox(ui, &mut cfg.enabled, "Sound an alarm when a decode matters")
-        .on_hover_text(
-            "Plays over its own audio output, so it is heard even when the band is in a \
-             different speaker than this screen.",
-        );
+    crate::chrome::checkbox(
+        ui,
+        &mut cfg.enabled,
+        tr!("settings-alerts-sound-alarm-when-decode-matters"),
+    )
+    .on_hover_text(tr!("settings-alerts-plays-over-own-audio-output"));
 
     ui.add_enabled_ui(cfg.enabled, |ui| {
         egui::Grid::new("alerts-grid")
@@ -52,7 +59,7 @@ pub(in crate::app) fn alerts_settings(
 
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if ui.button("Test").clicked() {
+            if ui.button(tr!("settings-alerts-test")).clicked() {
                 *test = true;
             }
             if let Some(note) = status.note() {
@@ -85,10 +92,10 @@ pub(in crate::app) fn alerts_settings(
                     ui.add_enabled_ui(tone, |ui| {
                         enum_combo(
                             ui,
-                            &format!("alert-{}", event.as_str()),
-                            &mut rule.sound,
-                            &AlertSound::ALL,
-                            AlertSound::label,
+                            &format!("alert-reply-{}", event.as_str()),
+                            &mut rule.reply,
+                            &AlertReply::ALL,
+                            AlertReply::label,
                         );
                     });
                     enum_combo(

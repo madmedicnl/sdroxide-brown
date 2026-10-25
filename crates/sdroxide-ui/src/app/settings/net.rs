@@ -5,6 +5,7 @@
 //! these are credentials and connection details, and half-typed ones would
 //! reconnect the feeds on every keystroke.
 
+use crate::i18n::tr;
 use eframe::egui::{self, Color32, RichText};
 
 /// A dropdown over an enum's `ALL`, using its `label()`.
@@ -281,7 +282,7 @@ pub(in crate::app) fn operator_identity_note(
     digi: &sdroxide_types::DigiConfig,
     seeded: bool,
 ) {
-    net_heading(ui, "Operator");
+    net_heading(ui, &tr!("settings-net-operator"));
     if !seeded {
         super::note(ui, "Callsign and grid are set on the General tab.");
         return;
@@ -289,7 +290,7 @@ pub(in crate::app) fn operator_identity_note(
     let (call, grid) = (digi.my_call.trim(), digi.my_grid.trim());
     if call.is_empty() || grid.is_empty() {
         ui.label(
-            RichText::new("⚠ Set your callsign and grid on the General tab.")
+            RichText::new(tr!("settings-net-set-your-callsign-grid-general"))
                 .color(Color32::from_rgb(230, 170, 60)),
         );
     } else {
@@ -312,12 +313,15 @@ pub(in crate::app) fn settings_freedv_tab(
     status: &Option<String>,
     apply: &mut bool,
 ) {
-    ui.label(RichText::new("FreeDV Reporter").size(14.0).strong().color(crate::theme::CYAN()));
-    ui.add_space(6.0);
-    crate::chrome::checkbox(ui, &mut net.freedv_reporter.enabled, "Enable").on_hover_text(
-        "Connects whenever enabled. Your station is only shown to others while the radio is \
-         in RADE — in any other mode you stay connected but hidden.",
+    ui.label(
+        RichText::new(tr!("settings-net-freedv-reporter"))
+            .size(14.0)
+            .strong()
+            .color(crate::theme::CYAN()),
     );
+    ui.add_space(6.0);
+    crate::chrome::checkbox(ui, &mut net.freedv_reporter.enabled, tr!("settings-net-enable"))
+        .on_hover_text(tr!("settings-net-connects-whenever-enabled-your-station"));
     ui.add_space(6.0);
 
     let enabled = net.freedv_reporter.enabled;
@@ -325,42 +329,41 @@ pub(in crate::app) fn settings_freedv_tab(
     ui.add_enabled_ui(enabled, |ui| {
         let c = &mut net.freedv_reporter;
 
-        net_heading(ui, "Station");
-        net_row(ui, "Message", &mut c.message, 260.0);
-        crate::chrome::checkbox(ui, &mut c.rx_only, "Receive only (I cannot transmit)");
+        net_heading(ui, &tr!("settings-net-station"));
+        net_row(ui, &tr!("settings-net-message"), &mut c.message, 260.0);
+        crate::chrome::checkbox(
+            ui,
+            &mut c.rx_only,
+            tr!("settings-net-receive-only-i-cannot-transmit"),
+        );
 
-        net_heading(ui, "Server");
-        net_row(ui, "Host", &mut c.host, 220.0);
+        net_heading(ui, &tr!("settings-net-server"));
+        net_row(ui, &tr!("settings-net-host"), &mut c.host, 220.0);
         ui.horizontal(|ui| {
-            ui.add_sized([96.0, 22.0], egui::Label::new("Port"));
+            ui.add_sized([96.0, 22.0], egui::Label::new(tr!("settings-net-port")));
             ui.add(egui::DragValue::new(&mut c.port).range(1..=65535));
         });
         ui.add_enabled_ui(false, |ui| {
-            crate::chrome::checkbox(ui, &mut c.tls, "TLS (wss://)")
-                .on_hover_text("Not yet implemented — FreeDV GUI uses plain ws:// too.");
+            crate::chrome::checkbox(ui, &mut c.tls, tr!("settings-net-tls-wss"))
+                .on_hover_text(tr!("settings-net-not-yet-implemented-freedv-gui"));
         });
 
-        net_heading(ui, "Reporting");
-        crate::chrome::checkbox(ui, &mut c.report_rx, "Report stations I decode").on_hover_text(
-            "Sends an rx_report for each callsign recovered from a RADE \
-                            End-of-Over frame.",
-        );
-        crate::chrome::checkbox(ui, &mut c.show_spots, "Show other reporter stations as spots")
-            .on_hover_text(
-                "Adds them to the panadapter overlay, world map and SPOTS window \
-                            under the FREEDV filter.",
-            );
+        net_heading(ui, &tr!("settings-net-reporting"));
+        crate::chrome::checkbox(ui, &mut c.report_rx, tr!("settings-net-report-stations-i-decode"))
+            .on_hover_text(tr!("settings-net-sends-rx-report-each-callsign"));
+        crate::chrome::checkbox(
+            ui,
+            &mut c.show_spots,
+            tr!("settings-net-show-other-reporter-stations-spots"),
+        )
+        .on_hover_text(tr!("settings-net-adds-them-panadapter-overlay-world"));
     });
 
     ui.add_space(8.0);
     if enabled && digi_seeded && (call.is_empty() || grid.is_empty()) {
         ui.label(
-            RichText::new(
-                "⚠ Set your callsign and grid on the General tab. Without both, the \
-                 connection is view-only: you will see other stations but will not appear \
-                 yourself.",
-            )
-            .color(Color32::from_rgb(230, 170, 60)),
+            RichText::new(tr!("settings-net-set-your-callsign-grid-general-2"))
+                .color(Color32::from_rgb(230, 170, 60)),
         );
     } else if enabled && digi_seeded {
         super::note(
@@ -381,11 +384,11 @@ pub(in crate::app) fn settings_freedv_tab(
     if crate::chrome::chip_accent(
         ui,
         false,
-        RichText::new(" APPLY ").strong(),
+        RichText::new(tr!("settings-net-apply")).strong(),
         crate::theme::GREEN(),
         crate::theme::INK_ON_CYAN(),
     )
-    .on_hover_text("Persist and (re)connect")
+    .on_hover_text(tr!("settings-net-persist-re-connect"))
     .clicked()
     {
         *apply = true;
@@ -413,7 +416,9 @@ pub(in crate::app) fn broadcast_stations_settings(
              Source filter shows one of them or all of them.",
     );
     ui.horizontal(|ui| {
-        ui.label(RichText::new("Season").size(11.0).color(crate::theme::gray(150)));
+        ui.label(
+            RichText::new(tr!("settings-net-season")).size(11.0).color(crate::theme::gray(150)),
+        );
         ui.label(
             RichText::new(season.to_uppercase())
                 .monospace()
@@ -421,11 +426,11 @@ pub(in crate::app) fn broadcast_stations_settings(
                 .color(crate::theme::TEXT_STRONG()),
         );
         let (text, colour) = if fetching {
-            ("downloading…".to_string(), crate::theme::YELLOW())
+            (tr!("settings-net-downloading"), crate::theme::YELLOW())
         } else if cached {
             ("downloaded".to_string(), crate::theme::GREEN())
         } else {
-            ("using the built-in copy".to_string(), crate::theme::gray(150))
+            (tr!("settings-net-using-built-copy"), crate::theme::gray(150))
         };
         ui.label(RichText::new(text).size(11.0).color(colour));
     });
@@ -433,7 +438,7 @@ pub(in crate::app) fn broadcast_stations_settings(
         // Worth showing, not worth alarming over: the built-in schedule is still
         // in use, so the only thing lost is freshness.
         ui.label(
-            RichText::new(format!("⚠ Download failed: {e}. Using the built-in schedule."))
+            RichText::new(tr!("settings-net-schedule-download-failed", error = e.to_string()))
                 .color(crate::theme::YELLOW())
                 .size(11.0),
         );
@@ -539,7 +544,10 @@ pub(in crate::app) fn broadcast_stations_settings(
     }
 
     ui.horizontal(|ui| {
-        if ui.button("Reload").on_hover_text("Re-read your station file after editing it").clicked()
+        if ui
+            .button(tr!("settings-net-reload"))
+            .on_hover_text(tr!("settings-net-re-read-your-station-file"))
+            .clicked()
         {
             *reload = true;
         }
@@ -635,13 +643,13 @@ impl crate::app::SdroxideApp {
             let pending = self.login_tests_pending.contains(&target);
             let btn = ui.add_enabled(
                 !pending,
-                egui::Button::new(RichText::new(format!("Test {}", target.label())).size(11.0)),
+                egui::Button::new(
+                    RichText::new(tr!("settings-net-test-service", service = target.label()))
+                        .size(11.0),
+                ),
             );
             if btn
-                .on_hover_text(
-                    "Ask the service whether these credentials work. Applies the settings above \
-                     first, and logs nothing: it only reads.",
-                )
+                .on_hover_text(tr!("settings-net-ask-service-whether-these-credentials"))
                 .clicked()
             {
                 cmds.push(sdroxide_types::Command::SetNetworkConfig(edited.clone()));

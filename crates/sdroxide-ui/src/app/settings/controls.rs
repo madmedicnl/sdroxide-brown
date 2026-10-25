@@ -5,6 +5,7 @@
 //! one they will make again after the next restart. MIDI learn works the same
 //! way: arm a row, move the control, and the row captures whatever arrives.
 
+use crate::i18n::tr;
 use eframe::egui::{self, Color32, ComboBox, RichText};
 use sdroxide_types::MemoryChannel;
 
@@ -73,6 +74,8 @@ pub(in crate::app) fn settings_controls_tab(
         "Click a shortcut to rebind it, then press the key combination (Esc cancels). \
              Bindings are ignored while you are typing in a text field.",
     );
+    ui.add_space(4.0);
+    ui.label(RichText::new(tr!("settings-controls-click-shortcut-rebind-then-press")).weak());
     ui.add_space(6.0);
 
     let mut remove: Option<usize> = None;
@@ -148,21 +151,19 @@ pub(in crate::app) fn settings_controls_tab(
 
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        if crate::chrome::chip(ui, false, "+ Add shortcut").clicked() {
+        if crate::chrome::chip(ui, false, tr!("settings-controls-add-shortcut")).clicked() {
             cfg.keys.push(KeyBinding::default());
             *key_capture = Some(cfg.keys.len() - 1);
         }
-        if crate::chrome::chip(ui, false, "Restore defaults").clicked() {
+        if crate::chrome::chip(ui, false, tr!("settings-controls-restore-defaults")).clicked() {
             cfg.keys = KeyBinding::defaults();
             *key_capture = None;
         }
         // PTT ships unbound on purpose; this is the one-click opt-in.
         let has_ptt = cfg.keys.iter().any(|b| b.action == Action::Ptt);
         if !has_ptt
-            && crate::chrome::chip(ui, false, "Bind hold-to-talk to Space")
-                .on_hover_text(
-                    "Hold Space to transmit; releasing it — or losing window focus — unkeys",
-                )
+            && crate::chrome::chip(ui, false, tr!("settings-controls-bind-hold-talk-space"))
+                .on_hover_text(tr!("settings-controls-hold-space-transmit-releasing-losing"))
                 .clicked()
         {
             cfg.keys.push(KeyBinding {
@@ -176,7 +177,7 @@ pub(in crate::app) fn settings_controls_tab(
 
     ui.add_space(4.0);
     ui.horizontal(|ui| {
-        ui.label("Unkey a held PTT after");
+        ui.label(tr!("settings-controls-unkey-held-ptt-after"));
         ui.add(
             egui::DragValue::new(&mut cfg.ptt_hold_timeout_s)
                 .speed(5.0)
@@ -185,15 +186,18 @@ pub(in crate::app) fn settings_controls_tab(
         );
     })
     .response
-    .on_hover_text(
-        "Backstop against a stuck key or a controller that stops reporting. 0 disables.",
-    );
+    .on_hover_text(tr!("settings-controls-backstop-against-stuck-key-controller"));
 
     ui.add_space(10.0);
     ui.separator();
     ui.end_row();
     ui.add_space(6.0);
-    ui.label(RichText::new("Panadapter mouse").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(
+        RichText::new(tr!("settings-controls-panadapter-mouse"))
+            .size(14.0)
+            .strong()
+            .color(crate::theme::CYAN()),
+    );
     ui.add_space(6.0);
 
     let w = &mut cfg.wheel;
@@ -233,22 +237,26 @@ pub(in crate::app) fn settings_controls_tab(
             ui.end_row();
         });
     ui.add_space(4.0);
-    crate::chrome::checkbox(ui, &mut w.invert, "Invert wheel direction");
-    crate::chrome::checkbox(ui, &mut w.drag_tunes, "Left-drag tunes as well as pans")
-        .on_hover_text("Off makes left-drag pan the view only, like right-drag.");
+    crate::chrome::checkbox(ui, &mut w.invert, tr!("settings-controls-invert-wheel-direction"));
+    crate::chrome::checkbox(
+        ui,
+        &mut w.drag_tunes,
+        tr!("settings-controls-left-drag-tunes-well-pans"),
+    )
+    .on_hover_text(tr!("settings-controls-off-makes-left-drag-pan"));
     crate::chrome::checkbox(
         ui,
         &mut w.digit_wheel,
-        "Scroll a digit on the frequency readout to tune it",
+        tr!("settings-controls-scroll-digit-frequency-readout-tune"),
     );
     if w.wheel == WheelAction::Tune && w.wheel_shift == WheelAction::Tune {
         ui.label(
-            RichText::new("Both wheel actions are Tune — there is no way left to zoom.")
+            RichText::new(tr!("settings-controls-both-wheel-actions-are-tune"))
                 .color(Color32::from_rgb(230, 170, 60)),
         );
     }
     ui.add_space(6.0);
-    if crate::chrome::chip(ui, false, "Restore mouse defaults").clicked() {
+    if crate::chrome::chip(ui, false, tr!("settings-controls-restore-mouse-defaults")).clicked() {
         cfg.wheel = WheelSettings::default();
     }
 
@@ -263,6 +271,8 @@ pub(in crate::app) fn settings_controls_tab(
         "The left and right buttons are reserved for tuning and panning; the middle and \
              extra buttons are free. A side button held for PTT behaves like a footswitch.",
     );
+    ui.add_space(4.0);
+    ui.label(RichText::new(tr!("settings-controls-left-right-buttons-are-reserved")).weak());
     ui.add_space(6.0);
 
     let mut remove: Option<usize> = None;
@@ -302,7 +312,7 @@ pub(in crate::app) fn settings_controls_tab(
         cfg.mouse_buttons.remove(i);
     }
     ui.add_space(6.0);
-    if crate::chrome::chip(ui, false, "+ Add mouse button").clicked() {
+    if crate::chrome::chip(ui, false, tr!("settings-controls-add-mouse-button")).clicked() {
         cfg.mouse_buttons.push(MouseButtonBinding::default());
     }
 
@@ -342,7 +352,12 @@ fn settings_midi_section(
 ) {
     use sdroxide_types::{ActionKind, ButtonMode, MidiBinding, RelativeMode};
 
-    ui.label(RichText::new("MIDI controller").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(
+        RichText::new(tr!("settings-controls-midi-controller"))
+            .size(14.0)
+            .strong()
+            .color(crate::theme::CYAN()),
+    );
     ui.add_space(4.0);
     if !status.supported {
         super::note(
@@ -356,7 +371,7 @@ fn settings_midi_section(
         "Any class-compliant MIDI surface works: a DJ controller's jog wheel makes a fine              VFO knob, its pads make PTT and band buttons, its faders make gain controls.",
     );
     ui.add_space(6.0);
-    crate::chrome::checkbox(ui, &mut cfg.midi.enabled, "Enable");
+    crate::chrome::checkbox(ui, &mut cfg.midi.enabled, tr!("settings-controls-enable"));
     ui.add_space(6.0);
 
     ui.add_enabled_ui(cfg.midi.enabled, |ui| {
@@ -387,7 +402,7 @@ fn settings_midi_section(
             });
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            if crate::chrome::chip(ui, false, "Rescan ports").clicked() {
+            if crate::chrome::chip(ui, false, tr!("settings-controls-rescan-ports")).clicked() {
                 *rescan = true;
             }
             if status.connected {
@@ -503,11 +518,13 @@ fn settings_midi_section(
 
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        if crate::chrome::chip(ui, false, "+ Add MIDI control").clicked() {
+        if crate::chrome::chip(ui, false, tr!("settings-controls-add-midi-control")).clicked() {
             cfg.midi.bindings.push(MidiBinding::default());
             *learn = Some(crate::input::MidiLearn { row: cfg.midi.bindings.len() - 1 });
         }
-        if !cfg.midi.bindings.is_empty() && crate::chrome::chip(ui, false, "Clear all").clicked() {
+        if !cfg.midi.bindings.is_empty()
+            && crate::chrome::chip(ui, false, tr!("settings-controls-clear-all")).clicked()
+        {
             cfg.midi.bindings.clear();
             *learn = None;
         }
@@ -529,9 +546,13 @@ fn midi_port_combo(
     sel_id: &mut String,
     sel_name: &mut String,
 ) {
-    let shown = if sel_name.is_empty() { "— none —" } else { sel_name.as_str() };
+    let shown = if sel_name.is_empty() {
+        tr!("settings-controls-none")
+    } else {
+        String::from(sel_name.as_str())
+    };
     ComboBox::from_id_salt(id).width(280.0).selected_text(shown).show_styled(ui, |ui| {
-        if ui.selectable_label(sel_name.is_empty(), "— none —").clicked() {
+        if ui.selectable_label(sel_name.is_empty(), tr!("settings-controls-none")).clicked() {
             sel_id.clear();
             sel_name.clear();
         }

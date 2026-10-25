@@ -12,6 +12,7 @@
 //! list, which is all this tab ever holds: the profiles themselves live with
 //! everything else the radio remembers, wherever the radio happens to be.
 
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 
 use sdroxide_types::Command;
@@ -27,7 +28,7 @@ pub(in crate::app) fn settings_profiles_tab(
     use crate::theme;
 
     ui.label(
-        RichText::new("Profiles: the station's saved setups")
+        RichText::new(tr!("settings-profiles-profiles-station-s-saved-setups"))
             .size(14.0)
             .strong()
             .color(theme::CYAN()),
@@ -48,9 +49,11 @@ pub(in crate::app) fn settings_profiles_tab(
     ui.horizontal(|ui| {
         crate::chrome::field(
             ui,
-            egui::TextEdit::singleline(io.profile_name).hint_text("profile name"),
+            egui::TextEdit::singleline(io.profile_name)
+                .hint_text(tr!("settings-profiles-profile-name")),
         );
-        if !io.profile_name.trim().is_empty() && ui.button("Save").clicked() {
+        if !io.profile_name.trim().is_empty() && ui.button(tr!("settings-profiles-save")).clicked()
+        {
             cmds.push(Command::ProfileSave(io.profile_name.trim().to_string()));
             io.profile_name.clear();
         }
@@ -75,11 +78,8 @@ pub(in crate::app) fn settings_profiles_tab(
         ui.horizontal(|ui| {
             ui.label(RichText::new(name).strong());
             if ui
-                .button("Apply")
-                .on_hover_text(format!(
-                    "Put the station back onto \u{201c}{name}\u{201d}: dials, VFOs, mode, filters, \
-                 gains, drive, antennas, identity and band stacks."
-                ))
+                .button(tr!("settings-profiles-apply"))
+                .on_hover_text(tr!("settings-profiles-apply-hint", name = name.as_str()))
                 .clicked()
             {
                 cmds.push(Command::ProfileApply(name.clone()));
@@ -88,7 +88,11 @@ pub(in crate::app) fn settings_profiles_tab(
                 // would put the old callsign back.
                 *io.digi_reseed = true;
             }
-            if ui.button("✕").on_hover_text(format!("Delete \u{201c}{name}\u{201d}")).clicked() {
+            if ui
+                .button("✕")
+                .on_hover_text(tr!("settings-profiles-delete", name = name.as_str()))
+                .clicked()
+            {
                 cmds.push(Command::ProfileDelete(name.clone()));
             }
         });

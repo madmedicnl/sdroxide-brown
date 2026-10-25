@@ -12,6 +12,7 @@
 //! be allowed to apply defaults over the real thing.
 
 use crate::chrome::StyledCombo;
+use crate::i18n::tr;
 use eframe::egui::{self, Color32, ComboBox, RichText};
 
 /// Live status of the built-in TCI server, from `RadioEvent::TciServerStatus`.
@@ -31,7 +32,12 @@ pub(in crate::app) fn settings_wsjtx_tab(
     seeded: bool,
     apply: &mut bool,
 ) {
-    ui.label(RichText::new("WSJT-X UDP broadcast").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(
+        RichText::new(tr!("settings-servers-wsjt-x-udp-broadcast"))
+            .size(14.0)
+            .strong()
+            .color(crate::theme::CYAN()),
+    );
     ui.add_space(4.0);
     if !seeded {
         super::note(ui, "Waiting for the station's WSJT-X broadcast configuration…");
@@ -44,7 +50,7 @@ pub(in crate::app) fn settings_wsjtx_tab(
              this socket can touch the radio.",
     );
     ui.add_space(6.0);
-    crate::chrome::checkbox(ui, &mut cfg.enabled, "Enable");
+    crate::chrome::checkbox(ui, &mut cfg.enabled, tr!("settings-servers-enable"));
     ui.add_space(6.0);
     ui.add_enabled_ui(cfg.enabled, |ui| {
         egui::Grid::new("wsjtx-grid")
@@ -89,7 +95,7 @@ pub(in crate::app) fn settings_wsjtx_tab(
     ui.end_row();
     ui.add_space(6.0);
     ui.label(
-        RichText::new("N1MM+ contactinfo broadcast")
+        RichText::new(tr!("settings-servers-n1mm-contactinfo-broadcast"))
             .size(13.0)
             .strong()
             .color(crate::theme::CYAN()),
@@ -103,7 +109,7 @@ pub(in crate::app) fn settings_wsjtx_tab(
              and its own port, because a station may want both.",
     );
     ui.add_space(6.0);
-    crate::chrome::checkbox(ui, &mut cfg.n1mm.enabled, "Enable");
+    crate::chrome::checkbox(ui, &mut cfg.n1mm.enabled, tr!("settings-servers-enable"));
     ui.add_space(6.0);
     ui.add_enabled_ui(cfg.n1mm.enabled, |ui| {
         egui::Grid::new("n1mm-grid")
@@ -159,6 +165,8 @@ pub(in crate::app) fn settings_wsjtx_tab(
              each with the dial it was heard on. The WSJT-X broadcast above is a logger's protocol and \
              has no message for those modes, which is why this exists separately.",
     );
+    ui.add_space(4.0);
+    ui.label(RichText::new(tr!("settings-servers-cw-panel-s-copy-plain")).weak());
     ui.add_space(6.0);
     if super::net_seeded_note(ui, net_seeded) {
         egui::Grid::new("decode-udp-grid")
@@ -193,11 +201,11 @@ pub(in crate::app) fn settings_wsjtx_tab(
     if crate::chrome::chip_accent(
         ui,
         false,
-        RichText::new(" APPLY ").strong(),
+        RichText::new(tr!("settings-servers-apply")).strong(),
         crate::theme::GREEN(),
         crate::theme::INK_ON_CYAN(),
     )
-    .on_hover_text("Persist and (re)open the broadcast sockets")
+    .on_hover_text(tr!("settings-servers-persist-re-open-broadcast-sockets"))
     .clicked()
     {
         *apply = true;
@@ -214,7 +222,10 @@ pub(in crate::app) fn settings_rigctld_tab(
     use sdroxide_types::RigctldConfig;
 
     ui.label(
-        RichText::new("Hamlib rigctld server").size(14.0).strong().color(crate::theme::CYAN()),
+        RichText::new(tr!("settings-servers-hamlib-rigctld-server"))
+            .size(14.0)
+            .strong()
+            .color(crate::theme::CYAN()),
     );
     ui.add_space(4.0);
     if !seeded {
@@ -222,7 +233,7 @@ pub(in crate::app) fn settings_rigctld_tab(
         return;
     }
     ui.add_space(2.0);
-    crate::chrome::checkbox(ui, &mut cfg.enabled, "Enable");
+    crate::chrome::checkbox(ui, &mut cfg.enabled, tr!("settings-servers-enable"));
     ui.add_space(6.0);
 
     ui.add_enabled_ui(cfg.enabled, |ui| {
@@ -268,21 +279,20 @@ pub(in crate::app) fn settings_rigctld_tab(
                 ui.end_row();
             });
         ui.add_space(4.0);
-        crate::chrome::checkbox(ui, &mut cfg.allow_tx, "Allow clients to transmit").on_hover_text(
-            "Off refuses every key request and stops advertising a transmit range, so Hamlib \
-             itself declines to key.",
-        );
+        crate::chrome::checkbox(
+            ui,
+            &mut cfg.allow_tx,
+            tr!("settings-servers-allow-clients-transmit"),
+        )
+        .on_hover_text(tr!("settings-servers-off-refuses-every-key-request"));
     });
 
     // Same hazard as TCI: the protocol has no authentication at all.
     if cfg.enabled && cfg.is_open_to_network() {
         ui.add_space(6.0);
         ui.label(
-            RichText::new(
-                "⚠ rigctld has no authentication. On 0.0.0.0, anyone who can reach this port can \
-                 tune and key your transmitter.",
-            )
-            .color(Color32::from_rgb(230, 170, 60)),
+            RichText::new(tr!("settings-servers-rigctld-has-no-authentication-0"))
+                .color(Color32::from_rgb(230, 170, 60)),
         );
     }
 
@@ -290,18 +300,23 @@ pub(in crate::app) fn settings_rigctld_tab(
     match status {
         Some(s) if s.running => {
             let clients = match s.clients {
-                1 => "1 client".to_string(),
-                n => format!("{n} clients"),
+                1 => tr!("settings-servers-t-1-client").to_string(),
+                n => tr!("settings-servers-n-clients", n = n),
             };
             ui.label(
-                RichText::new(format!("● Listening on {} — {clients}", s.addr))
-                    .color(Color32::from_rgb(90, 200, 110)),
+                RichText::new(tr!(
+                    "settings-servers-listening",
+                    addr = s.addr.to_string(),
+                    clients = clients
+                ))
+                .color(Color32::from_rgb(90, 200, 110)),
             );
         }
         Some(s) => match &s.error {
             Some(e) => {
                 ui.label(
-                    RichText::new(format!("Failed: {e}")).color(Color32::from_rgb(230, 90, 80)),
+                    RichText::new(tr!("settings-servers-failed", error = e.to_string()))
+                        .color(Color32::from_rgb(230, 90, 80)),
                 );
             }
             None => {
@@ -317,11 +332,11 @@ pub(in crate::app) fn settings_rigctld_tab(
     if crate::chrome::chip_accent(
         ui,
         false,
-        RichText::new(" APPLY ").strong(),
+        RichText::new(tr!("settings-servers-apply")).strong(),
         crate::theme::GREEN(),
         crate::theme::INK_ON_CYAN(),
     )
-    .on_hover_text("Persist and (re)bind the server")
+    .on_hover_text(tr!("settings-servers-persist-re-bind-server"))
     .clicked()
     {
         *apply = true;
@@ -364,7 +379,7 @@ pub(in crate::app) fn settings_rotator_tab(
              rotator Hamlib drives. A controller on a serial port can also be driven directly.",
     );
     ui.add_space(6.0);
-    crate::chrome::checkbox(ui, &mut cfg.enabled, "Enable");
+    crate::chrome::checkbox(ui, &mut cfg.enabled, tr!("settings-servers-enable"));
     ui.add_space(6.0);
     ui.add_enabled_ui(cfg.enabled, |ui| {
         egui::Grid::new("rotator-grid")
@@ -486,12 +501,19 @@ pub(in crate::app) fn settings_rotator_tab(
     match status {
         Some((true, az, el, _)) => {
             ui.label(
-                RichText::new(format!("● Connected — antenna at {az:.0}° az, {el:.0}° el"))
-                    .color(Color32::from_rgb(90, 200, 110)),
+                RichText::new(tr!(
+                    "settings-servers-rotator-at",
+                    az = format!("{az:.0}"),
+                    el = format!("{el:.0}")
+                ))
+                .color(Color32::from_rgb(90, 200, 110)),
             );
         }
         Some((false, _, _, Some(e))) => {
-            ui.label(RichText::new(format!("Failed: {e}")).color(Color32::from_rgb(230, 90, 80)));
+            ui.label(
+                RichText::new(tr!("settings-servers-failed", error = e.to_string()))
+                    .color(Color32::from_rgb(230, 90, 80)),
+            );
         }
         Some((false, _, _, None)) => {
             super::note(ui, "Not connected.");
@@ -506,7 +528,7 @@ pub(in crate::app) fn settings_rotator_tab(
     if crate::chrome::chip_accent(
         ui,
         false,
-        RichText::new(" APPLY ").strong(),
+        RichText::new(tr!("settings-servers-apply")).strong(),
         crate::theme::GREEN(),
         crate::theme::INK_ON_CYAN(),
     )
@@ -531,9 +553,14 @@ pub(in crate::app) fn settings_tci_server_tab(
         return;
     }
 
-    ui.label(RichText::new("Built-in TCI server").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(
+        RichText::new(tr!("settings-servers-built-tci-server"))
+            .size(14.0)
+            .strong()
+            .color(crate::theme::CYAN()),
+    );
     ui.add_space(6.0);
-    crate::chrome::checkbox(ui, &mut cfg.enabled, "Enable");
+    crate::chrome::checkbox(ui, &mut cfg.enabled, tr!("settings-servers-enable"));
     ui.add_space(6.0);
 
     ui.add_enabled_ui(cfg.enabled, |ui| {
@@ -578,10 +605,12 @@ pub(in crate::app) fn settings_tci_server_tab(
                 ui.end_row();
             });
         ui.add_space(4.0);
-        crate::chrome::checkbox(ui, &mut cfg.allow_tx, "Allow clients to transmit").on_hover_text(
-            "Off leaves control and the receive streams working, but every key request \
-             is refused.",
-        );
+        crate::chrome::checkbox(
+            ui,
+            &mut cfg.allow_tx,
+            tr!("settings-servers-allow-clients-transmit"),
+        )
+        .on_hover_text(tr!("settings-servers-off-leaves-control-receive-streams"));
     });
 
     // Security: TCI has no authentication at all, so binding wide open hands
@@ -589,11 +618,8 @@ pub(in crate::app) fn settings_tci_server_tab(
     if cfg.enabled && cfg.is_open_to_network() {
         ui.add_space(6.0);
         ui.label(
-            RichText::new(
-                "⚠ TCI has no authentication. On 0.0.0.0, anyone who can reach this port can \
-                 tune and key your transmitter.",
-            )
-            .color(Color32::from_rgb(230, 170, 60)),
+            RichText::new(tr!("settings-servers-tci-has-no-authentication-0"))
+                .color(Color32::from_rgb(230, 170, 60)),
         );
     }
 
@@ -601,17 +627,21 @@ pub(in crate::app) fn settings_tci_server_tab(
     match status {
         Some(s) if s.running => {
             let clients = match s.clients {
-                1 => "1 client".to_string(),
-                n => format!("{n} clients"),
+                1 => tr!("settings-servers-t-1-client").to_string(),
+                n => tr!("settings-servers-n-clients", n = n),
             };
             ui.label(
-                RichText::new(format!("● Listening on {} — {clients}", s.addr))
-                    .color(Color32::from_rgb(90, 200, 110)),
+                RichText::new(tr!(
+                    "settings-servers-listening",
+                    addr = s.addr.to_string(),
+                    clients = clients
+                ))
+                .color(Color32::from_rgb(90, 200, 110)),
             );
         }
         Some(s) => match &s.error {
             Some(e) => {
-                let msg = RichText::new(format!("Failed: {e}"));
+                let msg = RichText::new(tr!("settings-servers-failed", error = e.to_string()));
                 ui.label(msg.color(Color32::from_rgb(230, 90, 80)));
             }
             None => {
@@ -627,7 +657,7 @@ pub(in crate::app) fn settings_tci_server_tab(
     if crate::chrome::chip_accent(
         ui,
         false,
-        RichText::new(" APPLY ").strong(),
+        RichText::new(tr!("settings-servers-apply")).strong(),
         crate::theme::GREEN(),
         crate::theme::INK_ON_CYAN(),
     )

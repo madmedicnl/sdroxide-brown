@@ -16,6 +16,7 @@
 //! bindings are, because there is nothing to apply and a pressed CONNECT is a
 //! poor moment to discover the address was never saved.
 
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::RemoteServer;
 
@@ -42,6 +43,8 @@ pub(in crate::app) fn settings_remote_tab(
              the decoders and the logbook stay on that machine; this screen gets the waterfall \
              and the audio, and its speakers and microphone are the ones you use.",
     );
+    ui.add_space(4.0);
+    ui.label(RichText::new(tr!("settings-remote-drive-sdroxide-running-somewhere-else")).weak());
     ui.add_space(8.0);
 
     // A pasted URL carries its own scheme and its own port (or that scheme's
@@ -108,13 +111,16 @@ pub(in crate::app) fn settings_remote_tab(
             crate::chrome::chip_accent(
                 ui,
                 false,
-                RichText::new(" CONNECT ").strong(),
+                RichText::new(tr!("settings-remote-connect")).strong(),
                 crate::theme::GREEN(),
                 crate::theme::INK_ON_CYAN(),
             )
         });
         if ready
-            && (button.inner.on_hover_text("Open this station as a radio tab of its own").clicked()
+            && (button
+                .inner
+                .on_hover_text(tr!("settings-remote-open-station-radio-tab-own"))
+                .clicked()
                 || entered)
         {
             *connect = true;
@@ -127,7 +133,7 @@ pub(in crate::app) fn settings_remote_tab(
     if !can_connect {
         ui.add_space(4.0);
         ui.label(
-            RichText::new("This client cannot hold a second connection.")
+            RichText::new(tr!("settings-remote-client-cannot-hold-second-connection"))
                 .color(crate::theme::ALERT()),
         );
     }
