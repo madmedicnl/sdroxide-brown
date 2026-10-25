@@ -702,6 +702,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn the_watch_list_is_not_asked_without_a_station_and_an_edit_waits_for_one() {
         let ctx = egui::Context::default();
         let mut c = OnlineClient::default();

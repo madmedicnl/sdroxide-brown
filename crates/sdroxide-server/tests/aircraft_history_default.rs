@@ -99,13 +99,6 @@ async fn get(port: u16, path: &str, cookie: Option<&str>) -> String {
     body
 }
 
-/// The JSON of an answer, whatever the framing round it.
-fn body(answer: &str) -> serde_json::Value {
-    let start = answer.find('{').expect("a JSON body");
-    let end = answer.rfind('}').expect("a JSON body");
-    serde_json::from_str(&answer[start..=end]).expect("valid JSON")
-}
-
 fn now() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64
 }
