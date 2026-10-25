@@ -434,6 +434,10 @@ impl MultiApp {
             app.open_schedule();
         } else if name_lower == "settings" {
             app.open_radio_settings();
+        } else if name_lower == "session_qsos" || name_lower == "live_log" || name_lower == "live log" {
+            app.show_session_qsos = true;
+            app.ui_settings.tool_windows_open |= crate::app::frame::TW_SESSION_QSOS;
+            crate::app::persist::persist_ui_settings(&app.ui_settings);
         }
     }
 
