@@ -108,7 +108,7 @@ pub fn tick(ctx: &Context) {
                 .interactable(false)
                 .show(ctx, |ui| {
                     egui::Frame::popup(ui.style()).show(ui, |ui| {
-                        ui.label("✔ Copied / Copié");
+                        ui.label("✔ Copied");
                     });
                 });
             crate::repaint::after_ms(ctx, 200);
