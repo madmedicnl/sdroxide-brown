@@ -299,6 +299,35 @@ by itself; the AIRCRAFT window's back-off still decides when it is asked again.
 
 ---
 
+## 2026-10-25 (UI) — the operator's rule: our PRs are F4NRM's to merge
+
+**Summary.** The operator set a rule while the panel work was being tested: PRs we
+open are **not** ours to merge — F4NRM reviews them or merges them himself. Nothing
+was merged by me. He also said the queue goes back to the modes list, so this closes
+the UI round.
+
+**What happened in the session, in order.** #218, #219, #222 and #223 were all merged
+**by him or from his side** at 09:02–09:03 UTC, before the last three UI commits
+existed. Those three — the narrow header that stops the floating panel drawing over
+itself, the WINDOW chip inside the floating panel, and the FLOAT chip on the panel's
+OS window — were pushed to `ui/pane-way-out` after that merge, so they went nowhere.
+They are now **PR #226** on their own branch `ui/panel-float-and-header`, rebased onto
+`main` after #224 (the English-only sweep) and green: `sdroxide-ui --lib` 1249 passed,
+gate silent apart from the four NAVTEX warnings.
+
+**The rule, recorded where a session will find it.** `AGENTS.md`, under "Pull requests
+to this fork": **"Our own PRs are never merged by us"** — not with `gh pr merge`, not
+with `--admin`, not "because it is green and he is away". A local merge for testing
+(`local/*` plus a build into `~/.cargo/bin`) stays allowed, because that is how a fix
+gets clicked before it is offered; **origin is theirs**. Same line added at the top of
+`TODO.md`.
+
+**Where the UI round stops.** #226 is the last of it. The queue is the **modes list**
+again — `MODE-PHASE-4-PROMPT.md`, STANAG 4285's coded payload first among them.
+
+**Not done.** Nothing merged, and nothing more on the screens: he has said the
+screens are F4NRM's and the programme is the modes.
+
 ## 2026-10-25 (UI) — three fixes built into one local binary, for the operator to test
 
 **Summary.** The operator's standing point, in his own words: *"I always need to test

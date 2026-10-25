@@ -394,6 +394,13 @@ F4NRM's sessions, and a PR is how a number is claimed without colliding.
   and merge cleanly (`gh pr merge <n> --merge --admin`): sensible means it does
   what its body says and carries no red flag its own body has not declared.
   Otherwise leave it and say why on the PR.
+- ⛔ **Our own PRs are never merged by us** — not with `gh pr merge`, not with
+  `--admin`, not "because it is green and he is away". They sit until **F4NRM has
+  reviewed them or merged them himself**, which is the operator's instruction of
+  2026-10-25: *"don't merge our own PR's until I say so in origin. F4NRM has to
+  review them first or merge them himself."* A local merge for testing (the
+  `local/*` branch and a build into `~/.cargo/bin`) is fine and is how a fix gets
+  clicked before it is offered; **origin is theirs to merge.**
 - A sandboxed build of the radio engine needs **both** `github.com/xiph/opus`
   and `media.xiph.org` reachable; `sdroxide-rade` fetches opus and its models at
   build time. Nothing else in the tree fetches.

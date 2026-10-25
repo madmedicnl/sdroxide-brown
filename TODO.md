@@ -47,6 +47,11 @@ maintainer's queue there, not a promise.
    and the width measured headlessly); **nobody has looked at it on a screen yet**,
    which is the one thing left.
 
+0. **⛔ Our own PRs are never merged by us.** They wait for **F4NRM to review or
+   merge them himself** — his instruction through the operator, 2026-10-25. A local
+   merge for testing (`local/*` + a build into `~/.cargo/bin`) is fine; origin is
+   theirs. The rule now lives in [`AGENTS.md`](AGENTS.md) under "Pull requests".
+
 0. **Focus, set by the operator 2026-10-24: no UI work, and the modes are the
    programme.** F4NRM is working through the detachable windows and the layout,
    so the screens are his; the only UI we touch is a new mode's own panel, or
