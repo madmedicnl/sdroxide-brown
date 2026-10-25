@@ -55,8 +55,13 @@ maintainer's queue there, not a promise.
    memory only and asks for nothing, so type and operator are found only once an
    aircraft has been looked up. Asked for by the operator.
 
-0g. **Copy summary on the aircraft card — open for review (branch
-   `claude/aircraft-share`).** A button in the Cards list copies the card as text, each
+0i. **Aircraft statistics — open for review (branch `claude/aircraft-stats`).** A
+   **Stats** view in the AIRCRAFT window: top categories and airlines from the radio,
+   top models, operators and routes from the relay's cards, most first or A–Z. The
+   station's history list now carries the card facts so the last 24 h count too. Left:
+   a look at it on a real screen with a real station. Asked for by the operator.
+
+0g. **Copy summary on the aircraft card — merged (#210).** A button in the Cards list copies the card as text, each
    line marked radio / online / station history, with the photo credit and page link.
    Position, last message and the thumbnail address are withheld. Left: a look at the
    button on a real screen and a paste into a real app. Asked for by the operator.
