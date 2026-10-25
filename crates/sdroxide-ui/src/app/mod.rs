@@ -223,10 +223,18 @@ pub struct SdroxideApp {
     wide_wf: crate::widgets::wide_spectrum::WideWaterfall,
     meters: Option<Meters>,
     /// A squelch held open from the strip's **SQL** label, and the value to put
+    /// A squelch held open from the strip's **SQL** label, and the value to put
     /// back — see [`top_bar::SqlHold`]. Session-only on purpose: it is a gesture,
     /// not a setting, and coming up with the gate open after a restart would be
     /// the opposite of what a station wants.
     sql_hold: Option<top_bar::SqlHold>,
+    /// The operating panel lifted out as a **floating panel inside this window**,
+    /// with the waterfall taking the room back. One flag for every mode, which is
+    /// what "a floating panel, not a new window" has to mean — the per-mode tool
+    /// windows are a different thing and Settings → Detachable owns them.
+    /// Session-only: where a panel sat is not worth a config field, and a station
+    /// that starts with its panel loose is one nobody asked for.
+    panel_floating: bool,
     memories: Vec<MemoryChannel>,
     mem_folders: Vec<MemoryFolder>,
     /// The scanner's settings, mirrored from the engine and edited in place —
@@ -1924,6 +1932,7 @@ impl SdroxideApp {
             wide_wf: Default::default(),
             meters: None,
             sql_hold: None,
+            panel_floating: false,
             memories: Vec::new(),
             mem_folders: Vec::new(),
             scanner: sdroxide_types::ScannerConfig::default(),

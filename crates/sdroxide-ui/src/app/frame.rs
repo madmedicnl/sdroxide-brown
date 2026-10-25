@@ -402,7 +402,13 @@ fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
         // window of its own, left and back into the main one — so the direction
         // reads without the hover, and the hover still names it in words.
         let (icon, hover) = if undocked {
-            (crate::chrome::WindowIcon::In, "DOCK — return this window into the main window")
+            // A **floating panel** docks back into the pane; an OS window docks
+            // back into the main window. Two different pictures, because they are
+            // two different places to go back to.
+            (
+                crate::chrome::WindowIcon::Dock,
+                "DOCK — return this panel to the pane below the waterfall",
+            )
         } else {
             (
                 crate::chrome::WindowIcon::Out,
@@ -1322,7 +1328,7 @@ impl eframe::App for SdroxideApp {
             // panadapter's rule is `panadapter_window_wanted`, the same one the
             // shell emits its window by, so the two cannot disagree.
             let detached = self.panadapter_window_wanted();
-            let panel_gone = self.panel_detached(mode);
+            let panel_gone = self.panel_in_a_window(mode);
             let show_wf = !detached && (!phone || on_waterfall) && layers;
             let show_panel = (!phone || !on_waterfall) && !panel_gone;
 
@@ -1443,7 +1449,7 @@ impl eframe::App for SdroxideApp {
             // A panadapter or panel drawn into its own window takes no room
             // here; whatever is left in the column gets the whole of it.
             let detached = self.panadapter_window_wanted();
-            let panel_gone = self.panel_detached(self.state.rx[0].mode);
+            let panel_gone = self.panel_in_a_window(self.state.rx[0].mode);
             let (wf_h, panel_h, show_wf, show_panel) = if !cw_mode {
                 if detached {
                     (0.0, 0.0, false, false)
@@ -1649,6 +1655,12 @@ impl eframe::App for SdroxideApp {
         if self.ui_settings.tool_windows_open != self.prev_tool_windows_mask {
             crate::app::persist::persist_ui_settings(&self.ui_settings);
             self.prev_tool_windows_mask = self.ui_settings.tool_windows_open;
+        }
+        // **The operating pane, floating in this window** — the other half of the
+        // icon in a panel's header. Drawn here, beside the tool windows, because
+        // it is one of them in everything but where its body comes from.
+        if self.panel_floating {
+            self.floating_panel_window(&ctx, &mut cmds, mode);
         }
         self.recordings_window(&ctx, &mut cmds);
         self.poll_recording_jobs(&mut cmds);
@@ -2329,11 +2341,43 @@ impl SdroxideApp {
                 // Only reached for a mode that has a panel — the shell asks
                 // `panel_window_wanted`, which is false otherwise.
                 let mode = self.state.rx[0].mode;
+                let mut dock = false;
+                let mut float = false;
                 let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+                    // **Both ways back.** A window with no way home is a one-way
+                    // door; the operator asked for the round trip — pane, floating
+                    // panel, window — so every state carries the chips that leave
+                    // it. `In` is the arrow pointing *into* the main window, which
+                    // is what floating is; `Dock` is all the way back to the pane.
+                    let row = crate::chrome::chip_height(ui, None);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), row),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            float =
+                                crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::In)
+                                    .on_hover_text(
+                                        "FLOAT — bring this panel back into the main window as a \
+                                         floating panel, not into the pane",
+                                    )
+                                    .clicked();
+                            dock = crate::chrome::chip_window_icon(
+                                ui,
+                                crate::chrome::WindowIcon::Dock,
+                            )
+                            .on_hover_text("DOCK — put this panel back under the waterfall")
+                            .clicked();
+                        },
+                    );
                     let h = ui.available_height();
                     self.draw_operating_panel(ui, &mut cmds, mode, h);
                 });
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
+                if dock || float {
+                    self.ui_settings.set_detached(sdroxide_types::DetachableModule::Panel, false);
+                    self.panel_floating = float;
+                    crate::app::persist::persist_ui_settings(&self.ui_settings);
+                }
                 self.dispatch_commands(cmds);
             }
             M::Controls => {
@@ -2546,6 +2590,102 @@ impl SdroxideApp {
                     }
                 });
             });
+    }
+
+    /// **Float the operating pane inside the main window**, and let the waterfall
+    /// take the room back.
+    ///
+    /// **One flag for every mode.** The operator's correction on the first version:
+    /// *"you open a new window whereas it should be a floating panel in the first
+    /// place"* — and then *"the chip in the panel in main window does not work"*,
+    /// which it did not on any mode without a tool window of its own (FT8 among
+    /// them). This is the panel itself, drawn into a floating window, so it works
+    /// in every mode and there is no table to keep in step.
+    pub(in crate::app) fn float_operating_panel(&mut self) {
+        self.panel_floating = true;
+    }
+
+    /// The operating pane as a **floating panel inside this window**.
+    ///
+    /// One `egui::Window` whose body is the same `draw_operating_panel` the docked
+    /// pane uses, so every mode gets it with no table of flags to keep in step —
+    /// which is what went wrong with the first attempt: it opened the mode's own
+    /// tool window, and a mode without one (FT8 among them) got nothing at all.
+    ///
+    /// The **dock chip** at its top right puts it back under the waterfall, and
+    /// closing it does the same: a panel is not a tool that can be shut, it is the
+    /// mode's control surface, and losing it would leave the mode unusable.
+    fn floating_panel_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>, mode: Mode) {
+        let title = format!("{} — panel", mode.label());
+        let mut open = true;
+        let mut dock = false;
+        let mut out = false;
+        egui::Window::new(title)
+            .id(egui::Id::new("floating-operating-panel"))
+            .default_size([540.0, 440.0])
+            .min_width(320.0)
+            .min_height(180.0)
+            .max_size(ctx.content_rect().size() * 0.95)
+            .resizable(true)
+            .collapsible(false)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                let row = crate::chrome::chip_height(ui, None);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), row),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        // **Both ways on from here.** Out to a real window — the
+                        // detachable module, which can go on another monitor — and
+                        // back into the pane. He missed the window chip in the
+                        // floating panel, and he is right: floating is one step, not
+                        // the last one.
+                        out = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
+                            .on_hover_text(
+                                "WINDOW — give this panel a window of its own, to put on \
+                                 another monitor",
+                            )
+                            .clicked();
+                        dock = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Dock)
+                            .on_hover_text("DOCK — put this panel back under the waterfall")
+                            .clicked();
+                    },
+                );
+                let h = ui.available_height();
+                self.draw_operating_panel(ui, cmds, mode, h);
+            });
+        if dock || !open {
+            self.panel_floating = false;
+        }
+        if out {
+            // One at a time: the OS window takes over from the floating panel, and
+            // the column keeps the room the pane gave up.
+            self.panel_floating = false;
+            self.detach_operating_panel();
+        }
+    }
+
+    /// **Send the operating pane into an OS window of its own** — the detachable
+    /// module, kept for the Settings page and for a panel that wants another
+    /// monitor.
+    ///
+    /// Called by the window icon at the right-hand end of a panel's own header row
+    /// (see [`crate::app::panels::window_chip`]). The control lives in the header
+    /// rather than above the pane because there is no room above it: a row there
+    /// was tried first and took a chip off WEFAX's header at 600 pt, which
+    /// `the_fax_header_row_does_not_draw_on_itself` caught. In the header it costs
+    /// nothing — the chip it replaces spelled a word.
+    pub(in crate::app) fn detach_operating_panel(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.ui_settings.set_detached(sdroxide_types::DetachableModule::Panel, true);
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+        }
+        // The browser has no second window to send a pane to, so it has no icon
+        // to click; this is here so a panel that draws one anyway does nothing
+        // surprising.
+        #[cfg(target_arch = "wasm32")]
+        let _ = &self.ui_settings;
     }
 
     /// Draw a **tool window** — the scanner, the schedule, the logbook and the
@@ -2880,6 +3020,14 @@ impl SdroxideApp {
     #[cfg(not(target_arch = "wasm32"))]
     fn panel_window_wanted(&self, mode: Mode) -> bool {
         self.panel_detached(mode)
+    }
+
+    /// The pane is not in the column this frame: either it is an OS window
+    /// (`DetachableModule::Panel`) or it has been lifted out as a **floating
+    /// panel** in this window. Either way the waterfall takes the room back.
+    pub(in crate::app) fn panel_in_a_window(&self, mode: Mode) -> bool {
+        self.panel_detached(mode)
+            || (self.panel_floating && (mode.has_bottom_panel() || mode == Mode::Cw))
     }
 
     /// The band/mode selector's window should exist this frame: undocked on the
@@ -4672,6 +4820,161 @@ mod tests {
         assert_eq!(image_window_for(Mode::Sstv), ImageWindow::Sstv);
         assert_eq!(image_window_for(Mode::SstvFm), ImageWindow::Sstv);
         assert_eq!(image_window_for(Mode::Rifp), ImageWindow::Image);
+    }
+
+    /// **The round trip: pane, floating panel, window — every state has the chip
+    /// that leaves it.** The operator asked for the window chip *in* the floating
+    /// panel ("I do miss the chip for making it a real window in that floating
+    /// panel"), and a window with no way home is a one-way door, so the panel's OS
+    /// window carries the dock chip.
+    #[test]
+    fn every_state_of_the_operating_pane_has_a_way_out_of_it() {
+        let src = include_str!("frame.rs");
+        let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
+        // The floating panel offers both.
+        assert!(
+            code.contains("WINDOW — give this panel a window of its own"),
+            "the floating panel has no chip to make it a real window"
+        );
+        assert!(
+            code.contains("DOCK — put this panel back under the waterfall"),
+            "the floating panel has no chip to put it back"
+        );
+        // And the OS window has **both** ways home: FLOAT back into the main window
+        // as a floating panel, DOCK all the way to the pane.
+        assert!(
+            code.contains("set_detached(sdroxide_types::DetachableModule::Panel, false)"),
+            "the panel's OS window cannot be brought back"
+        );
+        assert!(
+            code.contains("FLOAT — bring this panel back into the main window as a \\"),
+            "the panel's OS window cannot become a floating panel"
+        );
+        assert!(
+            code.contains("self.panel_floating = float;"),
+            "FLOAT from the window does not put the panel back in the main window"
+        );
+        // One state at a time: going out to a window drops the floating panel.
+        assert!(
+            code.contains(
+                "self.panel_floating = false;\n            self.detach_operating_panel();"
+            ),
+            "floating and windowed can both be true, so the pane is drawn twice"
+        );
+    }
+
+    /// **A narrow panel's header lays out as one wrapped row, not three zones.**
+    ///
+    /// The operator's photograph of a floating panel: *"look at the top right.. that
+    /// looks messy"* — the FT8 header's three fixed thirds, with the centre group
+    /// wider than a third of a 540 pt panel and spilling under the chips pinned to
+    /// the right-hand third. Two things were wrong, and the icon was one of them: it
+    /// was drawn inside the floating panel as well, so two arrows sat side by side
+    /// saying the same thing.
+    #[test]
+    fn a_narrow_panel_header_wraps_instead_of_overlapping_its_zones() {
+        let src = include_str!("panels/decodes.rs");
+        assert!(
+            src.contains("let roomy = row.width() >= Self::HEADER_ZONE_MIN_W;"),
+            "the header is back to three fixed thirds at every width, so a narrow \
+             panel overlaps itself again"
+        );
+        assert!(
+            src.contains("ui.horizontal_wrapped(|ui| {"),
+            "the narrow header has no wrapped row"
+        );
+        assert!(
+            src.contains("if !me.panel_in_a_window(me.state.rx[0].mode) && super::window_chip(ui)"),
+            "the way-out icon is drawn in a panel that has already been lifted out"
+        );
+        assert!(
+            src.contains("const HEADER_ZONE_MIN_W: f32 = 520.0;"),
+            "the zone threshold changed; re-measure it against the header's content"
+        );
+    }
+
+    /// **The pane has its own way out, in the header that is crowded — and it
+    /// floats, it does not open an OS window.**
+    ///
+    /// The operator's correction on the first version: *"you open a new window
+    /// whereas it should be a floating panel in the first place."* So the icon
+    /// calls `float_operating_panel`, which opens the mode's in-window tool window;
+    /// `detach_operating_panel` stays for Settings → Detachable, which is for a
+    /// panel that wants another monitor.
+    ///
+    /// He asked for the control at the top right of the panel rather than in
+    /// Settings — *"it gets crowded in some modes in the top of that
+    /// pane"* — and the two other shapes were tried and rejected: a row above the
+    /// panel took a chip off WEFAX's header at 600 pt, and a 21 pt gutter did the
+    /// same by wrapping it, both caught by
+    /// `the_fax_header_row_does_not_draw_on_itself`. It goes where the space was
+    /// made for it: the right-hand end of a panel's own header row, in place of the
+    /// word that chip used to spell.
+    #[test]
+    fn the_pane_has_its_way_out_in_the_header_that_is_crowded() {
+        let src = include_str!("frame.rs");
+        let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
+        assert!(
+            code.contains("fn float_operating_panel"),
+            "there is no way to float the operating pane"
+        );
+        // **The floating panel is the pane itself**, not a per-mode tool window:
+        // the first version opened the mode's own window, so a mode without one
+        // (FT8) got a chip that did nothing.
+        assert!(
+            code.contains("fn floating_panel_window"),
+            "the pane has no floating form, so the icon hides it and shows nothing"
+        );
+        assert!(
+            code.contains("self.draw_operating_panel(ui, cmds, mode, h);"),
+            "the floating panel does not draw the operating panel"
+        );
+        assert!(
+            !code.contains("pub(in crate::app) fn float_operating_panel(&mut self, mode: Mode)"),
+            "floating is per mode again, so a mode without a window silently loses its panel"
+        );
+        assert!(
+            code.contains("fn detach_operating_panel"),
+            "the OS-window path (Settings → Detachable) went missing"
+        );
+        assert!(
+            code.contains("set_detached(sdroxide_types::DetachableModule::Panel, true)"),
+            "the pane's way out does not detach the operating panel"
+        );
+        // And the panels that carry it, in their own header rows.
+        for (name, panel) in [
+            ("decodes.rs", include_str!("panels/decodes.rs")),
+            ("js8.rs", include_str!("panels/js8.rs")),
+            ("atchat.rs", include_str!("panels/atchat.rs")),
+            ("packet.rs", include_str!("panels/packet.rs")),
+            ("adsb.rs", include_str!("panels/adsb.rs")),
+        ] {
+            assert!(panel.contains("super::window_chip(ui)"), "{name} has no way out of its pane");
+        }
+        // **The shape that broke WEFAX must not come back**: the pane is drawn at
+        // the height it was given, with nothing above it.
+        assert!(
+            code.contains("self.operating_panel(ui, cmds, mode, panel_h);"),
+            "the operating panel is no longer drawn at its own height"
+        );
+    }
+
+    /// And the other half of the crowding: **the setup chip is a gear, without the
+    /// word.** A chip that is already a symbol does not need to spell itself out in
+    /// a header the operator says is crowded, and every one of them keeps a hover
+    /// that names it.
+    #[test]
+    fn the_setup_chip_is_a_gear_without_the_word() {
+        for (name, src) in [
+            ("decodes.rs", include_str!("panels/decodes.rs")),
+            ("js8.rs", include_str!("panels/js8.rs")),
+            ("packet.rs", include_str!("panels/packet.rs")),
+            ("atchat.rs", include_str!("panels/atchat.rs")),
+            ("adsb.rs", include_str!("panels/adsb.rs")),
+        ] {
+            assert!(!src.contains("\"⚙ SETUP\""), "{name}: the setup chip still spells out SETUP");
+            assert!(!src.contains("\"SETUP\""), "{name}: a chip is still labelled SETUP");
+        }
     }
 
     /// **#217 at the frame: entering a mode docks its panel, and opens nothing.**
