@@ -3,13 +3,12 @@
 What this fork is working on, kept here so it survives a session and is visible
 on the repo. Last updated **2026-10-25** by madmedicnl's agent.
 
-State: `main` at crate **2.1.0**, `PROTO_VERSION` **243** (`VERSION_BYTE`
-`0x3F`) — 242 was 8PSK and 243 voice hunting, both merged on 2026-10-24, and
-the aircraft online work (PR A and PR B) is merged and the hover card is next to
-be read. Latest release **v2.1.0.2_brown** (with **v2.1.0.2.1_brown** as the
-current pre-release), six open issues. The rules are
-in [`AGENTS.md`](AGENTS.md); the history is in
-[`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
+State: `main` at crate **2.1.0**, `PROTO_VERSION` **248** (`VERSION_BYTE`
+`0x44`) — 248 was the Airspy HF+'s display span, merged with PR #234, and the
+SSTV picture composer below is the uncommitted branch that takes **249**.
+Latest release **v2.1.0.2_brown** (with **v2.1.0.2.1_brown** as the current
+pre-release), six open issues. The rules are in [`AGENTS.md`](AGENTS.md); the
+history is in [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
 
 Items marked `#NNN` are **upstream** requests this fork may pick up; they are the
 maintainer's queue there, not a promise.
@@ -17,6 +16,16 @@ maintainer's queue there, not a promise.
 ---
 
 ## Now
+
+0. **SSTV/RIFP picture composer: the document is on the wire** (#237, F4NRM,
+   2026-10-25, his area + a wire change → **PR, waiting for the operator's word**)
+   — the editor built earlier drew its layers from client memory, so a second
+   screen composed a different picture and a restart lost the layout. Each
+   transmit preset now carries its own `Composer` in `ImageSlotInfo.composer`,
+   set with `Command::ImageSetComposer` and persisted in `sstv_composers.json`
+   by the engine; the panel edits a claimed working copy and writes it when an
+   edit settles. `PROTO_VERSION` 249, `VERSION_BYTE` 0x45. Pushed as a PR on
+   `fork/sstv-composer-wire`, waiting for F4NRM.
 
 0. **TCI receive audio: a server that carries baseband audio only gets silence**
    (#group, Rick Abshier KQ4Y, 2026-10-25) — reported against upstream 1.6.10, an

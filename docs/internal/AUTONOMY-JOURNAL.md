@@ -22,6 +22,66 @@ Each entry, in this order:
 ---
 
 
+## 2026-10-25 (SSTV picture editor: the document on the wire, PR for F4NRM)
+
+**In plain words.** The SSTV transmit side now has a real editor: a window over
+the preset's picture with text you drag where you want it, in one of three
+faces, at any size, optionally on a colour strip that can run across the picture
+or down its side. Each of the five transmit slots keeps its own layout, the
+radio's machine stores it, and every screen attached to that radio therefore
+draws the same picture — including after a restart. A slot nobody has composed
+still sends exactly what it sent before. It is built, installed and pushed as a
+PR; nothing of it is on `main` because a panel of F4NRM's and the wire both are.
+
+**Done.**
+- Item: issue #237 (F4NRM) — drag and drop a picture, a face chooser, movable
+  text, flexible banner placement, "the current images are not QSO-compliant",
+  and a reply flow (his picture, your call over it).
+- `crates/sdroxide-types/src/composer.rs` (new): `Composer`, `TextLayer`,
+  `Strip`, `Face`; `ImageSlotInfo.composer` and `Command::ImageSetComposer`
+  appended last. `PROTO_VERSION` 248 → **249**, `VERSION_BYTE` `0x44` → `0x45`,
+  register line written.
+- `sdroxide-radio`: `ImagePresetStore` keeps a document per slot, persists it in
+  `sstv_composers.json` (via `sdroxide-config`), and does not forget it when the
+  picture is replaced or cleared.
+- `sdroxide-ui/src/sstv_composer.rs` (new): the renderer (fractions of the frame,
+  quarter-turn text for a vertical line) and the claimed-working-copy hand-off
+  (`shown`/`claim`/`pending`/`release`). `crates/sdroxide-ui/src/sstv.rs` grew a
+  `TextSink` so one glyph loop paints both the picture and a rotated layer.
+- `crates/sdroxide-ui/src/app/panels/sstv.rs`: the "Editor…" chip and the
+  window; banner placement (top/bottom) and a text size on top of the strip
+  height; a dropped picture (X11/Windows/macOS) and a pasted path (Wayland has
+  no drag and drop at all).
+- Commands and numbers: `cargo check --workspace --all-targets` silent (the one
+  `classic.rs` unused-import warning predates this); `cargo test --release -p
+  sdroxide-types` 796 passed; `-p sdroxide-proto` 17; `-p sdroxide-ui --lib
+  sstv` 35; `-p sdroxide-radio --lib image_store` 11; `cargo check --release
+  --target wasm32-unknown-unknown -p sdroxide-ui` silent; `rustfmt --check`
+  clean on every file touched.
+- Looked at rather than assumed: `/tmp/opencode/composer-sample.png` (renderer
+  output), `/tmp/opencode/editor2.png` (the window at QSO size), and
+  `/tmp/opencode/wire-doc.png` — a document written into a scratch
+  `sstv_composers.json` the way the engine writes it, drawn by both the editor
+  and the panel's transmit preview, which is the proof that the engine's
+  document reaches the client and is composed.
+- Commits on `fork/sstv-composer-wire` (off `main` at 70867db4): `58984bc2`
+  (wire, store, engine) and `aaa3fa6a` (renderer, editor, panel).
+
+**Not done / blocked.**
+- The editor's own **write** path is unit-tested but was not clicked through
+  end to end: the `--screenshot` harness's synthetic clicks do not land on that
+  window's buttons, so pressing "＋ Text" and watching `sstv_composers.json`
+  appear stays the operator's test. Everything under it (send once, do not
+  repeat before the echo, release on switch, persist, keep through a clear) is
+  tested.
+- The document is per slot, not a station-wide overlay: a call that should be on
+  *every* picture is still the banner's job, and copying a layout is one press
+  per slot. If F4NRM wants a station overlay, it is a document on `DigiConfig`
+  and another wire bump.
+- Nothing merged: **his PR to merge, ours not to touch** (AGENTS).
+
+**Next.** Whatever the queue holds next; this item waits on F4NRM's review.
+
 ## 2026-10-25 (STANAG 4285: what the capture says, and what is left)
 
 **In plain words.** The coded payload still does not read, but the fog is gone:
