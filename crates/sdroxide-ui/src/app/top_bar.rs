@@ -21,7 +21,7 @@
 //! (a type-in readout over an S-meter bar) beside a thumb-sized PTT and two
 //! rows of menu buttons stretched to the edge of the screen.
 
-use eframe::egui::{self, Color32, ComboBox, DragValue, RichText, Slider};
+use eframe::egui::{self, Color32, ComboBox, DragValue, Label, RichText, Sense, Slider};
 use sdroxide_types::{
     AgcMode, BURST_MS_RANGE, Band, Command, CwEngine, DCS_CODES, DIV_FREEZE_ELEMENT,
     DIV_MODE_ELEMENT, DIV_RATE_ELEMENT, DIV_RESET_ELEMENT, DeviceCaps, Direction, DiversityMode,
@@ -3382,7 +3382,27 @@ impl SdroxideApp {
         // noise chips, then mute and record, the two that act on the finished
         // audio rather than on the level.
         crate::chrome::control_row(ui, narrow, |ui| {
-            ui.label("SQL");
+            // **The word is the control.** A squelch gets opened and closed all
+            // evening — to hear whether a carrier is under the noise, to let a weak
+            // one through — and both ways to do it were a chore: drag the rail to
+            // the bottom and drag it back, or type the number again. Clicking the
+            // label holds the gate wide open and turns the letters green; clicking
+            // it again puts back exactly the number that was there. No chip and no
+            // checkbox: the label is already drawn, so this costs no width and no
+            // row, and a wide-open gate is visible at a glance instead of being
+            // something to discover by ear.
+            let held = self.sql_hold.is_some();
+            let label =
+                ui.add(Label::new(sql_label(held)).sense(Sense::click())).on_hover_text(if held {
+                    "The squelch is held open. Click to put back the gate you had."
+                } else {
+                    "Click to hold the squelch open — to hear whether something is there \
+                     — and click again to put it back exactly as it was."
+                });
+            if label.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
+            let sql_held_clicked = label.clicked();
             if self.rig_squelch() {
                 // The radio's own gate, on the radio's own scale. The dBFS rail
                 // below would be a control that does nothing here: what the
@@ -3390,6 +3410,15 @@ impl SdroxideApp {
                 // squelch, so a threshold on this side can close further on
                 // what got through and can never open what was shut out
                 // (issue #192).
+                if sql_held_clicked {
+                    let (hold, send) =
+                        sql_hold_toggle(self.sql_hold, SqlHold::Rig(self.state.rig_squelch), 0.0);
+                    self.sql_hold = hold;
+                    if let Some(send) = send {
+                        self.state.rig_squelch = send; // optimistic echo
+                        cmds.push(Command::SetRigSquelch { frac: send });
+                    }
+                }
                 let mut sql = self.state.rig_squelch;
                 if crate::chrome::slider_readout(
                     ui,
@@ -3405,10 +3434,25 @@ impl SdroxideApp {
                 )
                 .changed()
                 {
+                    // Moving the rail is the operator taking the gate back: the
+                    // number they set is the one that stays, whatever the label said.
+                    self.sql_hold = None;
                     self.state.rig_squelch = sql; // optimistic echo
                     cmds.push(Command::SetRigSquelch { frac: sql });
                 }
             } else {
+                if sql_held_clicked {
+                    let (hold, send) = sql_hold_toggle(
+                        self.sql_hold,
+                        SqlHold::Dbfs(self.state.rx[0].squelch_db),
+                        sdroxide_types::SQUELCH_OPEN_DB,
+                    );
+                    self.sql_hold = hold;
+                    if let Some(send) = send {
+                        self.state.rx[0].squelch_db = send; // optimistic echo
+                        cmds.push(Command::SetSquelch { rx: RxId::Main, db: send });
+                    }
+                }
                 let mut sql = self.state.rx[0].squelch_db;
                 // What the threshold is actually compared against, so the rail
                 // can be set against a number instead of hunted across. It is
@@ -3446,6 +3490,8 @@ impl SdroxideApp {
                 ))
                 .changed()
                 {
+                    // A dragged rail is the operator taking the gate back.
+                    self.sql_hold = None;
                     self.state.rx[0].squelch_db = sql; // optimistic echo
                     cmds.push(Command::SetSquelch { rx: RxId::Main, db: sql });
                 }
@@ -7245,6 +7291,76 @@ fn db_rail_w(ui: &egui::Ui) -> f32 {
     RX_DB_RAIL_W + MODULE_ROW_SPACING + value_field_w(ui, "-888.8 dB")
 }
 
+/// The strip's **SQL** label: the word itself, in green while it is holding the
+/// gate open.
+///
+/// It is the control (see the strip's own comment), so the only thing that changes
+/// between the two states is the ink — the text, the font and therefore the width
+/// are identical, which is what keeps the request's "no additional space" true.
+pub(in crate::app) fn sql_label(held: bool) -> RichText {
+    let text = RichText::new("SQL");
+    if held { text.color(crate::theme::GREEN()) } else { text }
+}
+
+/// A squelch held wide open from the strip's **SQL** label, with the value the
+/// operator's own gate had before the click.
+///
+/// **Two scales, so the scale is stored with the value.** The strip draws one of
+/// two rails: the software gate in dBFS, or the radio's own squelch as a fraction,
+/// depending on whether the front end gates its own audio (`rig_squelch`). Which
+/// one is drawn can change under a running window when the interface is swapped
+/// (`Engine::adopt_source`), so "put it back" has to mean the right number on the
+/// right scale rather than whatever the rail happens to read afterwards.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(in crate::app) enum SqlHold {
+    /// The software gate, in dBFS.
+    Dbfs(f32),
+    /// The radio's own squelch, 0..1.
+    Rig(f32),
+}
+
+impl SqlHold {
+    fn value(self) -> f32 {
+        match self {
+            SqlHold::Dbfs(v) | SqlHold::Rig(v) => v,
+        }
+    }
+
+    /// The same scale? A hold taken on one rail and met on the other is stale.
+    fn same_scale(self, other: SqlHold) -> bool {
+        matches!(
+            (self, other),
+            (SqlHold::Dbfs(_), SqlHold::Dbfs(_)) | (SqlHold::Rig(_), SqlHold::Rig(_))
+        )
+    }
+}
+
+/// What a click on the **SQL** label does: hold the gate open, or put back the one
+/// that was there. Returns the new hold and the value to send to the engine.
+///
+/// **The number put back is the operator's own**, not a mode default and not zero:
+/// dragging the rail to the bottom and back is the thing this exists to save, and
+/// a "put it back" that guessed would be worse than the drag. `current` carries the
+/// scale, so the two rails share one decision and one test.
+pub(in crate::app) fn sql_hold_toggle(
+    hold: Option<SqlHold>,
+    current: SqlHold,
+    open: f32,
+) -> (Option<SqlHold>, Option<f32>) {
+    match hold {
+        // Already held open: give the operator their gate back.
+        Some(h) if h.same_scale(current) => (None, Some(h.value())),
+        // **A hold taken on the other rail is stale and is dropped, not applied.**
+        // The interface can be swapped under a running window, which swaps the rail
+        // with it; putting a rig's 60 % back onto a dBFS gate (or the other way
+        // round) would be a wrong number in the operator's own control, which is
+        // worse than making them set it again.
+        Some(_) => (None, None),
+        // Not held: remember what it is, and open it.
+        None => (Some(current), Some(open)),
+    }
+}
+
 /// A chip on the RX box's chip run: everything that follows the SQL rail, in
 /// the order it is drawn.
 ///
@@ -8330,7 +8446,8 @@ fn mode_listen_chip(
 /// — each has a lane of its own — but the same kind of thing to an operator
 /// choosing what to listen to, so they share one dropdown rather than a second
 /// control.
-pub(in crate::app) const WIDEBAND_MODES: [Mode; 5] = [Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab];
+pub(in crate::app) const WIDEBAND_MODES: [Mode; 5] =
+    [Mode::Adsb, Mode::Vdl2, Mode::Ais, Mode::Hfdl, Mode::Dab];
 
 /// The wideband lane chips — the five lane modes plus the ISM decoder window —
 /// laid out the same way, but with room for a sixth chip on a wide row. ISM is
@@ -9476,6 +9593,152 @@ mod tests {
         );
     }
     use super::*;
+
+    /// **The SQL label holds the gate open and puts the operator's own number
+    /// back.** Both rails share the decision, so both are checked here: a
+    /// "restore" that returned a default, or zero, or the wrong scale, would be
+    /// worse than the drag it replaces — the operator would silently lose the gate
+    /// they had set.
+    #[test]
+    fn the_sql_label_holds_the_gate_open_and_puts_the_number_back() {
+        // The software gate, in dBFS.
+        let had = SqlHold::Dbfs(-73.0);
+        let (hold, send) = sql_hold_toggle(None, had, sdroxide_types::SQUELCH_OPEN_DB);
+        assert_eq!(hold, Some(had), "what the operator had is what is remembered");
+        assert_eq!(send, Some(sdroxide_types::SQUELCH_OPEN_DB), "the rail goes to off");
+        let (hold, send) = sql_hold_toggle(
+            hold,
+            SqlHold::Dbfs(sdroxide_types::SQUELCH_OPEN_DB),
+            sdroxide_types::SQUELCH_OPEN_DB,
+        );
+        assert_eq!(hold, None, "a second click is not a third state");
+        assert_eq!(send, Some(-73.0), "the gate the operator had, not a default");
+
+        // The radio's own squelch, 0..1.
+        let had = SqlHold::Rig(0.6);
+        let (hold, send) = sql_hold_toggle(None, had, 0.0);
+        assert_eq!(hold, Some(had));
+        assert_eq!(send, Some(0.0), "the radio's gate wide open is zero, not dBFS");
+        let (hold, send) = sql_hold_toggle(hold, SqlHold::Rig(0.0), 0.0);
+        assert_eq!(hold, None);
+        assert_eq!(send, Some(0.6));
+
+        // The interface was swapped under the window: the hold is on the other
+        // rail, so it is dropped and **nothing is sent** rather than a 0.6 dBFS
+        // gate taken from a percentage.
+        let (hold, send) = sql_hold_toggle(
+            Some(SqlHold::Rig(0.6)),
+            SqlHold::Dbfs(-40.0),
+            sdroxide_types::SQUELCH_OPEN_DB,
+        );
+        assert_eq!(hold, None, "the stale hold is forgotten");
+        assert_eq!(send, None, "and nothing is put back on the wrong scale");
+
+        // An open gate is still a number worth remembering: opening a gate that is
+        // already open must not lose it, and must not leave a hold that a later
+        // click would "restore" to off.
+        let (hold, send) = sql_hold_toggle(
+            None,
+            SqlHold::Dbfs(sdroxide_types::SQUELCH_OPEN_DB),
+            sdroxide_types::SQUELCH_OPEN_DB,
+        );
+        assert_eq!(hold.map(SqlHold::value), Some(sdroxide_types::SQUELCH_OPEN_DB));
+        assert_eq!(send, Some(sdroxide_types::SQUELCH_OPEN_DB));
+    }
+
+    /// **The ink is green while the gate is held open, and the word is not one
+    /// pixel wider for it.** The second half is the request's own condition — "no
+    /// additional space or checkbox" — so it is measured rather than assumed: both
+    /// states are drawn and the text shape's width is compared.
+    #[test]
+    fn the_sql_label_is_green_while_it_holds_the_gate_open_and_no_wider() {
+        use eframe::egui;
+        let draw = |held: bool| {
+            let ctx = egui::Context::default();
+            crate::theme::apply_visuals(&ctx);
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(120.0, 40.0),
+                )),
+                ..Default::default()
+            };
+            let full = crate::test_support::run_frame(&ctx, input, |ui| {
+                let _ = ui.add(Label::new(sql_label(held)));
+            });
+            let mut ink = None;
+            let mut width = 0.0f32;
+            fn walk(s: &egui::Shape, ink: &mut Option<Color32>, width: &mut f32) {
+                match s {
+                    egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, ink, width)),
+                    egui::Shape::Text(t) => {
+                        // The ink a `RichText::color` sets lives in the galley's own
+                        // section format; `fallback_color` is the widget's default and
+                        // is what a plain label draws with.
+                        *ink = t.galley.job.sections.first().map(|s| s.format.color);
+                        *width = t.galley.size().x;
+                    }
+                    _ => {}
+                }
+            }
+            for cs in &full.shapes {
+                walk(&cs.shape, &mut ink, &mut width);
+            }
+            (ink.expect("the label drew no text"), width)
+        };
+        let (open_ink, open_w) = draw(true);
+        let (shut_ink, shut_w) = draw(false);
+        assert_eq!(open_ink, crate::theme::GREEN(), "the held-open label is not green");
+        assert_ne!(shut_ink, crate::theme::GREEN(), "the closed label is still green");
+        assert!(
+            (open_w - shut_w).abs() < 0.01,
+            "the label changes width with its colour ({open_w} vs {shut_w}), so holding the \
+             gate open would nudge the rail beside it"
+        );
+    }
+
+    /// The label is the control, and there is no second one: the strip's own
+    /// drawing site must be the clickable label, both rails must route through the
+    /// one decision, and a dragged rail must take the gate back on both scales.
+    ///
+    /// A source guard, because the property is a *layout* one — the request this
+    /// implements was "no additional space or checkbox" — and a refactor that put a
+    /// chip beside the rail would pass every other test in the file.
+    #[test]
+    fn the_sql_label_is_the_control_and_costs_no_width() {
+        let src = include_str!("top_bar.rs");
+        // The strip's own block, from the comment that explains the gesture to the
+        // next function. Whole-file counts would also count this test's strings.
+        let start = src.find("// **The word is the control.**").expect("the SQL gesture");
+        let end = src[start..].find("fn mode_defaults_chip").map_or(src.len(), |i| start + i);
+        let strip = &src[start..end];
+        assert!(
+            strip.contains("Label::new(sql_label(held)).sense(Sense::click())"),
+            "the SQL label is not clickable, so the gate cannot be held open from it"
+        );
+        assert_eq!(
+            strip.matches("sql_hold_toggle(").count(),
+            2,
+            "both rails have to route through the one decision, or one of them \
+             cannot put its number back"
+        );
+        assert_eq!(
+            strip.matches("self.sql_hold = None;").count(),
+            2,
+            "a dragged rail has to take the gate back on both scales"
+        );
+        assert!(
+            strip.contains("sql_label(held)"),
+            "the label does not say whether the gate is held open"
+        );
+        // And the only other SQL label in the file is the measuring pass, which is
+        // not interactive on purpose: it exists to price the row, not to draw it.
+        assert_eq!(
+            src.matches("ui.label(\"SQL\")").count(),
+            1,
+            "a second plain SQL label appeared; the strip's is the control"
+        );
+    }
 
     /// The real-world bug this exists to catch: minutes and seconds computed
     /// from two different roundings of the same elapsed time disagreed —

@@ -222,6 +222,11 @@ pub struct SdroxideApp {
     /// Scrolling history behind the full-band strip.
     wide_wf: crate::widgets::wide_spectrum::WideWaterfall,
     meters: Option<Meters>,
+    /// A squelch held open from the strip's **SQL** label, and the value to put
+    /// back — see [`top_bar::SqlHold`]. Session-only on purpose: it is a gesture,
+    /// not a setting, and coming up with the gate open after a restart would be
+    /// the opposite of what a station wants.
+    sql_hold: Option<top_bar::SqlHold>,
     memories: Vec<MemoryChannel>,
     mem_folders: Vec<MemoryFolder>,
     /// The scanner's settings, mirrored from the engine and edited in place —
@@ -1913,6 +1918,7 @@ impl SdroxideApp {
             wide_frame: None,
             wide_wf: Default::default(),
             meters: None,
+            sql_hold: None,
             memories: Vec::new(),
             mem_folders: Vec::new(),
             scanner: sdroxide_types::ScannerConfig::default(),
