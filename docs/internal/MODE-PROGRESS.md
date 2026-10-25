@@ -1523,6 +1523,30 @@ before: run a **corpus** `C` recording and our own transmission through the same
 hard tap and compare the bit streams, so "our modulator" and "the tap" are told
 apart by a fact. Until then the multi-carrier banks keep the refusal and its reason.
 
+**That comparison was run, and it puts the fault in our no-FEC modulator.**
+
+| | reads |
+|---|---|
+| corpus `PSK500C2.wav`, 500 baud × 2, through `PskMultiRx` (`psk_coded_probe … 500 2 none`) | **3/3 words**, "AAA TEST TEST THE EAGLE HAS LANDED 12345 SDRBROWN ZZZ" |
+| corpus `PSK125C12.wav`, 125 × 12, same path | **0/3** — so 125 baud is not a witness either way |
+| ours, 500 × **1** carrier (no spreading at all) | "ehs scrfs hcd fcpusu nt=yaI" — 20 of 26 characters, every one wrong |
+| ours, 500 × 2 | "Os scrfs deIcou Hya" |
+
+So the hard tap reads real material and does not read ours, and it fails with the
+spreading removed — the fault is in the **bit stream our no-FEC modulator produces**,
+not in the carrier distribution. Four candidates were then eliminated by experiment,
+each making it worse: reversed carrier order (".h \n\rr aubimo"), LSB-first varicode
+("i-\n \nfrc…"), no preamble ("r o mk…"), and the polarity (the tap's own rule,
+`d.re >= 0` = a one, is what `PskTx` and this transmitter both send, and a working
+inversion reads as pure noise rather than as words this close).
+
+What is left is the **symbol-to-bit framing of the no-FEC path** — the FEC path's
+chain re-times through its own deinterleaver and decoder, and the no-FEC path has
+nothing but the tap and the varicode, so it is the one place where a half-symbol
+offset would show as near-miss words instead of "nothing". Next: compare the tapped
+bit *stream* of the corpus and of ours symbol for symbol (the probe can dump it),
+which is the same differential method that settled the scrambler and the deinterleaver.
+
 **Still refused, with a reason on the chip:** the multi-carrier `C` and `RC` banks —
 their bits go on carriers `1.4 × baud` apart, which is the next step, and one carrier
 under a multi-carrier label would be a different signal answering to the same name.
