@@ -299,6 +299,48 @@ by itself; the AIRCRAFT window's back-off still decides when it is asked again.
 
 ---
 
+## 2026-10-25 (UI) — mode panels docked by default (#217, and #215 with it)
+
+**Summary.** The operator's own report: clicking a mode opened its panel in a
+floating window instead of the pane below the waterfall. It is the same block that
+caused the two SSTV windows, so both issues are one change: on the first frame of
+every mode the program opened that mode's panel as a window *and* saved that into the
+settings. The block is gone — a panel docks, and a window is opened by the operator —
+and the bits the pre-release wrote are cleared once, so the fix actually arrives on
+the installation that reported it. It is in **PR #219**, extended to cover both.
+
+**Done.** Commit `4f1bbffb` on `fix/sstv-two-windows` (PR #219, which already carried
+#215's fix `2a64eeb2`).
+- **Removed the mode-entry auto-open** — twenty `if mode.is_x() { self.show_x = true;
+  self.ui_settings.tool_windows_open |= TW_X; }` lines — so the docked branch in
+  `mode_panel` draws again and no window opens. `last_mode_for_tools` existed only
+  for that block and is gone.
+- **`UiSettings::tool_windows_repaired`** (new field, `UiSettings` is not a wire type
+  — the wire carries `ClientScreen`) and `repair_mode_panel_windows`, called once
+  beside `migrate_detached()`. It clears `MODE_PANEL_WINDOWS` and **leaves every
+  other window bit alone**: GRID, SAT, MEMORIES, EXTRAS and the rest stay as the
+  operator left them.
+- **#215's fix is subsumed.** `image_window_for` stays (the draw and the docked panel
+  ask which single window a mode would use), but with no auto-open the duplicate
+  cannot happen; #215's frame test was retired in favour of a sweep that asserts the
+  stronger thing.
+- **Tests.** `entering_a_mode_docks_its_panel_and_opens_no_window` enters twenty-odd
+  modes, drives a frame for each, and asserts no window opened and no bit was
+  written — verified failing with one auto-open line restored (*"Js8 opened ["JS8"]"*).
+  `the_mode_panel_bits_are_repaired_once_and_only_once` covers the migration, GRID's
+  survival and the second call being a no-op.
+- **Checks:** `sdroxide-ui --lib` **1241 passed**; `sdroxide-types` **793**; gate
+  silent apart from the four NAVTEX warnings that are not ours; wasm clean;
+  `rustfmt` clean on what this adds (frame.rs's 24 pre-existing hunks are untouched).
+
+**Not done / blocked.** Looked at on a screen. Docking is asserted from the app's own
+state; "the panel is under the waterfall and no window appeared" is a thing for an
+eye, and it is the operator's or F4NRM's to give.
+
+**Next.** If F4NRM would rather keep the auto-open behind a preference ("panels open
+in a window" on the Detachable page), that is the same change with one condition on
+it — his call, since the screens are his.
+
 ## 2026-10-25 (SSTV) — two windows on one panel, fixed (PR #219, not merged)
 
 **Summary.** The operator reproduced a report that opening SSTV puts two windows on

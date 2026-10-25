@@ -18,7 +18,18 @@ maintainer's queue there, not a promise.
 
 ## Now
 
-0. **SSTV opened two windows (#215) — PR #219, awaiting review.** Reported by
+0. **Mode panels docked by default, and no window on mode entry (#215, #217)** —
+   **PR #219**, awaiting review. On the first frame of every mode the program opened
+   that mode's panel as a window *and* saved the choice into `tool_windows_open`, so
+   (a) the pane below the waterfall was always suppressed and (b) SSTV opened twice,
+   because `is_image()` covers Sstv/SstvFm/Rifp and SSTV already had a window. The
+   block is gone; a panel docks and a window is the operator's (Detachable page, or
+   the dock chip in a window). The bits 2.1.0.x wrote are cleared **once**
+   (`UiSettings::tool_windows_repaired`), leaving non-panel windows alone. Two frame
+   tests: entering twenty-odd modes opens nothing, and the repair clears the mode
+   bits once and only once. **SSTV and the screens are F4NRM's**, so it is a PR.
+
+0. **SSTV opened two windows (#215) — fixed by the same PR as #217.** Reported by
    `drdatapi` against 2.1.0.2.5 and reproduced by the operator: entering SSTV or
    SSTV-FM opened both the `SSTV` window and a generic `IMAGE` one on the same
    panel, because `IMAGE`'s auto-open was written against `is_image()`, which is
