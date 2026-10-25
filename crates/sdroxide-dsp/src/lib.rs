@@ -128,7 +128,9 @@ pub use nr::SpectralNr;
 pub use nr2::Nr2;
 pub use olivia::{OliviaRx, OliviaTx};
 pub use predistort::{MAX_CORRECTION as PS_MAX_CORRECTION, PureSignal};
-pub use psk::{BpskCore, PskCarrierBank, PskMultiRx, PskRx, PskTx, PskrRx, PskrTx, VaricodeRx};
+pub use psk::{
+    BpskCore, Psk8Tx, PskCarrierBank, PskMultiRx, PskRx, PskTx, PskrRx, PskrTx, VaricodeRx,
+};
 pub use rds::{RDS_MIN_RATE, RdsRx};
 pub use replay::ReplayBuffer;
 pub use resample::{ComplexResampler, MonoResampler, StereoResampler};

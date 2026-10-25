@@ -11,7 +11,8 @@ use std::collections::VecDeque;
 use std::time::SystemTime;
 
 use sdroxide_dsp::{
-    MonoResampler, OliviaTx, PskMultiRx, PskRx, PskTx, PskrRx, PskrTx, RttyRx, RttyTx, ardop,
+    MonoResampler, OliviaTx, Psk8Tx, PskMultiRx, PskRx, PskTx, PskrRx, PskrTx, RttyRx, RttyTx,
+    ardop,
     dtmf::{DtmfRx, DtmfTx},
     ifk::{IfkRx, IfkTx, IfkVariant},
     mfsk_rx::{MfskReceiver, MfskTx, MfskVariant},
@@ -226,6 +227,8 @@ enum TxModem {
     /// The coded PSK families — see [`PskrTx`]. Single carrier for now: the
     /// `C`/`RC` banks are refused with a reason rather than sent as one carrier.
     PskCoded(PskrTx),
+    /// The no-FEC 8PSK speeds, three bits a symbol.
+    Psk8(Psk8Tx),
     Rtty(RttyTx),
     Olivia(OliviaTx),
     Thor(IfkTx),
@@ -249,6 +252,7 @@ impl TxModem {
         match self {
             TxModem::Psk(m) => m.push_text(t),
             TxModem::PskCoded(m) => m.push_text(t),
+            TxModem::Psk8(m) => m.push_text(t),
             TxModem::Rtty(m) => m.push_text(t),
             TxModem::Olivia(m) => m.push_text(t),
             TxModem::Thor(m) => m.push_text(t),
@@ -267,6 +271,9 @@ impl TxModem {
                 m.next_block(out);
             }
             TxModem::PskCoded(m) => {
+                m.next_block(out);
+            }
+            TxModem::Psk8(m) => {
                 m.next_block(out);
             }
             TxModem::Rtty(m) => {
@@ -306,6 +313,7 @@ impl TxModem {
         match self {
             TxModem::Psk(m) => m.sent_chars(),
             TxModem::PskCoded(_) => 0,
+            TxModem::Psk8(_) => 0,
             TxModem::Rtty(m) => m.sent_chars(),
             TxModem::Olivia(m) => m.sent_chars(),
             TxModem::Thor(m) => m.sent_chars(),
@@ -320,6 +328,7 @@ impl TxModem {
         match self {
             TxModem::Psk(m) => m.total_chars(),
             TxModem::PskCoded(_) => 0,
+            TxModem::Psk8(_) => 0,
             TxModem::Rtty(m) => m.total_chars(),
             TxModem::Olivia(m) => m.total_chars(),
             TxModem::Thor(m) => m.total_chars(),
@@ -334,6 +343,7 @@ impl TxModem {
         match self {
             TxModem::Psk(m) => m.clear(),
             TxModem::PskCoded(m) => m.clear(),
+            TxModem::Psk8(m) => m.clear(),
             TxModem::Rtty(m) => m.clear(),
             TxModem::Olivia(m) => m.clear(),
             TxModem::Thor(m) => m.clear(),
@@ -603,7 +613,9 @@ impl TextModemController {
                 // two halves cannot disagree; the multi-carrier banks still have
                 // no transmitter and are refused above.
                 let coded = cfg.psk_coded;
-                if mode == Mode::Psk && coded != PskCoded::Off {
+                if mode == Mode::Psk && p_psk8 {
+                    TxModem::Psk8(Psk8Tx::new(MODEM_RATE, audio_hz as f64, p_baud))
+                } else if mode == Mode::Psk && coded != PskCoded::Off {
                     TxModem::PskCoded(PskrTx::with_carriers(
                         MODEM_RATE,
                         audio_hz as f64,
@@ -727,6 +739,7 @@ impl TextModemController {
             // retuned: its baud and depth are the variant's, and a stretch of
             // audio rendered at the old ones cannot be moved to a new carrier.
             TxModem::PskCoded(_) => {}
+            TxModem::Psk8(m) => m.set_params(hz, p_baud),
             // DTMF's tone pairs are the standard's absolute frequencies, not a
             // carrier with a cursor on it — there is nothing to retune.
             TxModem::Dtmf(_) => {}
@@ -821,7 +834,7 @@ impl TextModemController {
 /// the difference between a control that does nothing and one that says so —
 /// silently sending PSK31 to an operator who selected PSK125R would put the
 /// wrong waveform on the air.
-fn tx_refusal_text(mode: Mode, cfg: &DigiConfig) -> Option<String> {
+fn tx_refusal_text(mode: Mode, _cfg: &DigiConfig) -> Option<String> {
     if mode.is_rx_only() {
         return Some(match mode {
             Mode::Ardop => "ARDOP is receive only in this build — the modem has no \
@@ -843,13 +856,6 @@ fn tx_refusal_text(mode: Mode, cfg: &DigiConfig) -> Option<String> {
     // each family's own varicode, which is the trap that cost a cycle: `C` reads
     // through `VaricodeRx` (PSK31's table) and the coded ones through
     // `MfskVaricodeRx`.
-    if mode == Mode::Psk && cfg.psk_modulation == sdroxide_types::PskModulation::Psk8 {
-        return Some(
-            "8PSK is receive only in this build — there is no eight-phase modulator, and \
-             sending BPSK instead would be a different signal"
-                .to_string(),
-        );
-    }
     None
 }
 
@@ -1196,6 +1202,54 @@ mod tests {
         );
     }
 
+    /// **8PSK transmits through the console's own objects**, at the speed the
+    /// operator picked. It was refused with "there is no eight-phase modulator";
+    /// there is one now, and it puts out fldigi's waveform: three bits a symbol
+    /// least significant first, the step a multiple of `π/4` off a `π` rotation,
+    /// and the raised-cosine cross-fade across the symbol that its receiver
+    /// expects.
+    ///
+    /// 500 baud here is the speed with sixteen samples to a symbol. See the DSP
+    /// crate's `an_8psk_transmission_reads_back` for why 1000 is not asserted.
+    #[test]
+    fn an_8psk_transmission_reads_back_through_the_controller() {
+        use sdroxide_types::{PskModulation, PskSpeed};
+        let mut cfg = DigiConfig::default();
+        cfg.psk_modulation = PskModulation::Psk8;
+        cfg.psk_speed = PskSpeed::Bps500;
+        cfg.psk_coded = PskCoded::Off;
+        let rate = 8000.0;
+        let mut tx_ctl = TextModemController::new(Mode::Psk, cfg.clone(), rate);
+        tx_ctl.set_audio_hz(1500.0);
+        tx_ctl.set_tx_text("TEST THE EAGLE HAS LANDED".into());
+        tx_ctl.set_tx_active(true);
+        tx_ctl.poll(SystemTime::now(), 0.0);
+        assert!(tx_ctl.status().tx_refused.is_none(), "8PSK still refuses the key-up");
+        let mut sig = Vec::new();
+        let mut block = vec![0.0f32; 512];
+        let mut quiet = 0;
+        while quiet < 400 {
+            let _ = tx_ctl.fill_tx_block(&mut block);
+            sig.extend_from_slice(&block);
+            // The 8PSK transmitter reports no character progress, so the over is
+            // bounded by its own drain: `fill_tx_block` stops generating once the
+            // modem has nothing left, and the tail is silence.
+            if sig.len() > 8000 * 40 {
+                quiet += 1;
+            }
+        }
+        let mut rx_ctl = TextModemController::new(Mode::Psk, cfg, OUT_RATE);
+        rx_ctl.set_audio_hz(1500.0);
+        for chunk in sig.chunks(512) {
+            rx_ctl.on_rx_audio(chunk);
+        }
+        let text = rx_ctl.status().text_rx.to_uppercase();
+        assert!(
+            text.contains("EAGLE") && text.contains("LANDED"),
+            "the 8PSK transmission did not read back: {text:?}"
+        );
+    }
+
     /// RTTY's tone pair is a standard, not a convenience: 2125 and 2295 Hz at
     /// the 170 Hz amateur shift, which is what every other RTTY program sends
     /// and expects. It used to start at 915/1085 — decodable here, but low in
@@ -1279,7 +1333,7 @@ mod tests {
     #[test]
     fn a_dtmf_keypress_reads_back_through_the_controller() {
         let keys = "123A*0#D";
-        let mut cfg = DigiConfig::default();
+        let cfg = DigiConfig::default();
         let mut tx_ctl = TextModemController::new(Mode::Dtmf, cfg.clone(), 48_000.0);
         tx_ctl.set_tx_text(keys.into());
         tx_ctl.set_tx_active(true);

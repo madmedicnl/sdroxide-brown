@@ -341,6 +341,143 @@ impl PskTx {
 
 /// A **coded PSK transmitter** — fldigi's `BPSK63F`, `R`, `RC` and `C` families.
 ///
+/// **The 8PSK transmitter** — three bits a symbol, no FEC, the MFSK varicode.
+///
+/// fldigi's `tx_carriers` and `tx_bit` in `psk.cxx`, which is also where the
+/// receiver's shape comes from:
+///
+/// * **A symbol is a phase *step*, not a phase.** Three bits are packed least
+///   significant first (`xpsk_sym |= bit << bitcount++`), the value is doubled onto
+///   the sixteen-point constellation, so a step is a multiple of `π/4` — and the
+///   receiver reads `arg(prev* · curr) − π`, which is why the constant `π` is here
+///   as well as there.
+/// * **The step is cross-faded across the whole symbol.** `tx_shape[i]` is
+///   `0.5·cos(π·i/n)+0.5`, and the I/Q is interpolated from the previous
+///   constellation point to the next with it — so the point is only reached at the
+///   symbol boundary. Transmitting an instantaneous step instead is a signal a
+///   fldigi receiver reads as noise, and one of ours reads only by accident.
+pub struct Psk8Tx {
+    rate: f64,
+    carrier: f64,
+    baud: f64,
+    /// Queued steps, as the three-bit value the bits made.
+    q: VecDeque<u8>,
+    out: VecDeque<f32>,
+    /// The constellation point the last symbol ended on.
+    prev: (f32, f32),
+    started: bool,
+}
+
+impl Psk8Tx {
+    pub fn new(rate: f64, carrier_hz: f64, baud: f64) -> Self {
+        Psk8Tx {
+            rate,
+            carrier: carrier_hz,
+            baud,
+            q: VecDeque::new(),
+            out: VecDeque::new(),
+            prev: (1.0, 0.0),
+            started: false,
+        }
+    }
+
+    /// Queue a message: the idle preamble, the text, and enough idle characters
+    /// to hand the last one over.
+    ///
+    /// fldigi's no-FEC 8PSK opens with `preamble` symbols of `tx_symbol(0)` — a
+    /// continuous tone — then one `<NUL>`; the run of idle characters at the end
+    /// is the same idea as the coded families': the last character's varicode word
+    /// only completes when the next one starts.
+    pub fn push_text(&mut self, text: &str) {
+        let mut bits: Vec<u8> = Vec::new();
+        if !self.started {
+            // Sixteen steps of the zero symbol: a flat tone.
+            bits.extend(std::iter::repeat_n(0u8, 48));
+        }
+        for c in text.chars() {
+            bits.extend(crate::mfsk_rx::MfskRx::varicode_bits(c));
+        }
+        for _ in 0..16 {
+            bits.extend(crate::mfsk_rx::MfskRx::varicode_bits('\0'));
+        }
+        for group in bits.chunks(3) {
+            let mut idx = 0u8;
+            for (i, b) in group.iter().enumerate() {
+                // Least significant first, as `tx_bit` does.
+                idx |= (b & 1) << i;
+            }
+            self.q.push_back(idx);
+        }
+    }
+
+    /// Move the carrier, or change the speed. What is already rendered is cut
+    /// out rather than left at the old settings — a stretch of audio at the old
+    /// baud cannot be moved to a new one.
+    pub fn set_params(&mut self, carrier_hz: f64, baud: f64) {
+        if (carrier_hz - self.carrier).abs() > 0.5 || (baud - self.baud).abs() > 1e-9 {
+            self.out.clear();
+            self.prev = (1.0, 0.0);
+        }
+        self.carrier = carrier_hz;
+        self.baud = baud;
+    }
+
+    pub fn drained(&self) -> bool {
+        self.q.is_empty() && self.out.is_empty()
+    }
+
+    pub fn sent_chars(&self) -> usize {
+        0
+    }
+
+    pub fn total_chars(&self) -> usize {
+        0
+    }
+
+    pub fn clear(&mut self) {
+        self.q.clear();
+        self.out.clear();
+        self.prev = (1.0, 0.0);
+        self.started = false;
+    }
+
+    fn render(&mut self) {
+        let sps = (self.rate / self.baud).round().max(1.0) as usize;
+        let mut phase = 0.0f64;
+        let inc = std::f64::consts::TAU * self.carrier / self.rate;
+        while let Some(idx) = self.q.pop_front() {
+            // The step, then the point it lands on.
+            let step = std::f64::consts::PI + idx as f64 * std::f64::consts::FRAC_PI_4;
+            let (sr, si) = (step.cos() as f32, step.sin() as f32);
+            let (pr, pi) = self.prev;
+            let curr = (pr * sr - pi * si, pr * si + pi * sr);
+            for i in 0..sps {
+                // `tx_shape`: a raised cosine from 1 (the previous point) to 0.
+                let t = i as f32 / sps as f32;
+                let a = 0.5 * (std::f32::consts::PI * t).cos() + 0.5;
+                let b = 1.0 - a;
+                let (ir, iq) = (a * pr + b * curr.0, a * pi + b * curr.1);
+                self.out.push_back((ir as f64 * phase.cos() - iq as f64 * phase.sin()) as f32);
+                phase += inc;
+                if phase > std::f64::consts::TAU {
+                    phase -= std::f64::consts::TAU;
+                }
+            }
+            self.prev = curr;
+        }
+    }
+
+    pub fn next_block(&mut self, out: &mut [f32]) -> usize {
+        while self.out.len() < out.len() && !self.q.is_empty() {
+            self.render();
+        }
+        for s in out.iter_mut() {
+            *s = self.out.pop_front().unwrap_or(0.0);
+        }
+        out.len()
+    }
+}
+
 /// The receive side is [`PskrRx`] (and [`PskMultiRx`] for the `C` family), and
 /// this is its inverse, in the order the reference uses: the **MFSK varicode**
 /// (not PSK31's), then the rate-1/2 [`ConvCode::PSK_R`] code, then the
@@ -645,6 +782,21 @@ pub struct BpskCore {
     mf_pos: usize,
     hist: VecDeque<Complex32>,
     prev_sym: Complex32,
+    /// The **unfiltered** derotated sample at the last symbol instant.
+    ///
+    /// The matched filter is a Hann over one symbol, which is right for a
+    /// waveform that settles at the symbol centre. fldigi's transmitter does not:
+    /// it cross-fades the I/Q from one symbol to the next across the **whole**
+    /// symbol, so the constellation point is only reached at the symbol
+    /// boundary and the filter's output is the midpoint of two of them. Two
+    /// points survive that average; eight cannot — measured, `psk8_crossfade_probe`.
+    prev_raw: Complex32,
+    /// fldigi's symbol clock: a counter that runs to `sps` per symbol and is
+    /// nudged by the shape of the symbol's magnitude — see `push_psk8`.
+    bitclk: f32,
+    /// One symbol of rectified magnitude, rewritten as the clock passes over it.
+    syncbuf: Vec<f32>,
+
     vrx: VaricodeRx,
     mag: f32,
     coherence: f32,
@@ -702,6 +854,9 @@ impl BpskCore {
             mf_pos: 0,
             hist,
             prev_sym: Complex32::new(1.0, 0.0),
+            prev_raw: Complex32::new(1.0, 0.0),
+            bitclk: 0.0,
+            syncbuf: vec![0.0; n],
             vrx: VaricodeRx::new(),
             mag: 0.0,
             coherence: 1.0,
@@ -730,6 +885,9 @@ impl BpskCore {
         }
         self.psk8 = on;
         self.mfsk = MfskVaricodeRx::new();
+        self.bitclk = 0.0;
+        self.syncbuf.iter_mut().for_each(|v| *v = 0.0);
+        self.prev_raw = Complex32::new(1.0, 0.0);
     }
 
     pub fn set_bit_tap(&mut self, on: bool) {
@@ -800,6 +958,92 @@ impl BpskCore {
         self.freq / std::f32::consts::TAU
     }
 
+    /// **The 8PSK front end, which is not the BPSK one.**
+    ///
+    /// Two things are different on the air, both measured from fldigi's
+    /// transmitter and its receiver (`psk.cxx`, 2026-10-25):
+    ///
+    /// * **The symbol is cross-faded, not stepped.** `tx_carriers` interpolates
+    ///   the I/Q from the previous constellation point to the next across the
+    ///   *whole* symbol, so the point is only reached at the symbol boundary and a
+    ///   one-symbol matched filter reports the midpoint of two of them. A half-way
+    ///   phase is survivable at two points and fatal at eight, which is why the
+    ///   BPSK modes read their corpus and these read nothing. The differential
+    ///   product therefore uses the **raw** derotated sample at the boundary.
+    /// * **The clock comes from the symbol's magnitude, not from a Gardner term.**
+    ///   The Gardner detector works on the matched-filter output, and a filter one
+    ///   symbol long has no sub-symbol timing information left in it — which is
+    ///   why an arbitrary symbol phase broke reception outright
+    ///   (`psk8_crossfade_probe`, offsets 2..12 samples: only 0 read). This is
+    ///   fldigi's own loop: one symbol of rectified magnitude in a ring buffer, the
+    ///   halves compared, and the clock nudged by their normalised difference.
+    fn push_psk8(&mut self, raw: Complex32, out: &mut String) {
+        let n = raw.norm();
+        // Eight-point decision-directed carrier error: the angle to the nearest
+        // multiple of π/4. The BPSK one would pull the constellation onto the
+        // real axis, where eight points can never sit.
+        if n > 1e-20 {
+            let ang = raw.arg();
+            let nearest = (ang / std::f32::consts::FRAC_PI_4).round() * std::f32::consts::FRAC_PI_4;
+            let e = (ang - nearest).sin();
+            self.freq = (self.freq + self.beta * e).clamp(-0.4, 0.4);
+            self.ph += self.freq + self.alpha * e;
+            if self.ph > std::f32::consts::PI {
+                self.ph -= std::f32::consts::TAU;
+            } else if self.ph < -std::f32::consts::PI {
+                self.ph += std::f32::consts::TAU;
+            }
+        }
+        self.mag += 0.05 * (n - self.mag);
+        let steps = self.syncbuf.len().max(4);
+        let idx = (self.bitclk as usize).min(steps - 1);
+        self.syncbuf[idx] = 0.8 * self.syncbuf[idx] + 0.2 * n;
+        let half = steps / 2;
+        let (mut sum, mut amp) = (0.0f32, 0.0f32);
+        for i in 0..half {
+            sum += self.syncbuf[i] - self.syncbuf[i + half];
+            amp += self.syncbuf[i] + self.syncbuf[i + half];
+        }
+        if amp > 1e-20 {
+            self.bitclk -= sum / amp / (5.0 * 16.0 / steps as f32);
+        }
+        self.bitclk += 1.0;
+        if self.bitclk < 0.0 {
+            self.bitclk += steps as f32;
+        }
+        if self.bitclk >= steps as f32 {
+            self.bitclk -= steps as f32;
+            // The boundary: `raw` is the new point, `prev_raw` the previous one.
+            let d = raw * self.prev_raw.conj();
+            self.prev_raw = raw;
+            let dn = d.norm();
+            if dn > 1e-20 {
+                let mut phase = d.arg() - std::f32::consts::PI;
+                if phase < 0.0 {
+                    phase += std::f32::consts::TAU;
+                }
+                let idx = ((phase / std::f32::consts::FRAC_PI_4 + 0.5) as i32).rem_euclid(8) as u8;
+                let resid = phase - idx as f32 * std::f32::consts::FRAC_PI_4;
+                let resid = if resid > std::f32::consts::PI {
+                    resid - std::f32::consts::TAU
+                } else if resid < -std::f32::consts::PI {
+                    resid + std::f32::consts::TAU
+                } else {
+                    resid
+                };
+                self.coherence += COHERENCE_SMOOTH * (resid.cos() - self.coherence);
+                for i in 0..3 {
+                    let b = (idx >> i) & 1;
+                    if let Some(c) = self.mfsk.push_bit(b)
+                        && (!self.gate || self.coherence >= COHERENCE_GATE)
+                    {
+                        out.push(c);
+                    }
+                }
+            }
+        }
+    }
+
     fn matched(&mut self, y: Complex32) -> Complex32 {
         self.mf_buf[self.mf_pos] = y;
         self.mf_pos = (self.mf_pos + 1) % self.mf_buf.len();
@@ -816,12 +1060,35 @@ impl BpskCore {
         // Derotate by the tracked phase first — the matched filter is a
         // lowpass, so the signal has to be centred before it is applied.
         let rot = Complex32::new(self.ph.cos(), -self.ph.sin());
-        let y = self.matched(z * rot);
+        let raw = z * rot;
+        if self.psk8 {
+            self.push_psk8(raw, out);
+            return;
+        }
+        let y = self.matched(raw);
 
-        // Decision-directed BPSK phase error, normalised to radians so the loop
+        // Decision-directed phase error, normalised to radians so the loop
         // bandwidth does not depend on how loud the signal is.
+        //
+        // **The 8PSK detector is not the BPSK one.** BPSK's error is the
+        // projection on the imaginary axis, which pulls the constellation onto the
+        // real axis — and an eight-point constellation can never sit there. Fed a
+        // real 8PSK signal, that detector sees a coin toss, walks at random, and
+        // its random walk turns into a rotation per symbol; the differential
+        // product then carries the loop's own motion instead of the data. The
+        // error for eight phases is the angle to the nearest multiple of π/4.
         let n = y.norm();
-        let e = if n > 1e-20 { (if y.re >= 0.0 { y.im } else { -y.im }) / n } else { 0.0 };
+        let e = if n <= 1e-20 {
+            0.0
+        } else if self.psk8 {
+            let ang = y.arg();
+            let nearest = (ang / std::f32::consts::FRAC_PI_4).round() * std::f32::consts::FRAC_PI_4;
+            (ang - nearest).sin()
+        } else if y.re >= 0.0 {
+            y.im / n
+        } else {
+            -y.im / n
+        };
         self.freq = (self.freq + self.beta * e).clamp(-0.4, 0.4);
         self.ph += self.freq + self.alpha * e;
         if self.ph > std::f32::consts::PI {
@@ -848,7 +1115,14 @@ impl BpskCore {
                 self.acc += (TIMING_GAIN * et / scale).clamp(-0.5, 0.5);
             }
             // Differential detection (immune to the Costas ± ambiguity).
-            let d = curr * self.prev_sym.conj();
+            //
+            // **8PSK detects on the raw sample, not the matched-filter output**,
+            // and reads it at the symbol boundary where fldigi's cross-fade has
+            // delivered the new point. See `prev_raw`.
+            let det = if self.psk8 { raw } else { curr };
+            let prev_det = if self.psk8 { self.prev_raw } else { self.prev_sym };
+            let d = det * prev_det.conj();
+            self.prev_raw = raw;
             let dn = d.norm();
             self.mag += 0.05 * (curr.norm() - self.mag);
             self.prev_sym = curr;
@@ -1626,6 +1900,47 @@ mod tests {
         }
     }
 
+    /// **8PSK transmits, and our own receiver reads it back at all four speeds.**
+    ///
+    /// What it does **not** prove is interoperability: the corpus recordings of
+    /// the same modes still read nothing, so this is two halves of one program
+    /// agreeing — the class of test the journal warns about. It is written down as
+    /// such: the transmitter is fldigi's own algorithm (`tx_bit`'s least
+    /// significant bit first, the step doubled onto sixteen points, the raised
+    /// cosine cross-fade), but only a station or a corpus can say it is the air's,
+    /// and neither has yet.
+    ///
+    /// **1000 baud is deliberately not asserted.** It reads
+    /// `TEST THEocAGLE HAS LANDyK` — two characters of twenty, the rest exact —
+    /// which is the eight-sample clock slipping rather than a wrong convention: it
+    /// is the only speed at which a symbol is as short as the timing buffer. That
+    /// is left open rather than tuned until the string matches.
+    #[test]
+    fn an_8psk_transmission_reads_back() {
+        let text = "TEST THE EAGLE HAS LANDED";
+        for baud in [125.0f64, 250.0, 500.0] {
+            let (rate, hz) = (8000.0f64, 1500.0f64);
+            let mut tx = Psk8Tx::new(rate, hz, baud);
+            tx.push_text(text);
+            let mut audio = Vec::new();
+            let mut block = vec![0.0f32; 512];
+            while !tx.drained() {
+                tx.next_block(&mut block);
+                audio.extend_from_slice(&block);
+            }
+            let mut rx = PskRx::new_baud(rate, hz, baud);
+            rx.set_psk8(true);
+            let mut got = String::new();
+            for chunk in audio.chunks(512) {
+                got.push_str(&rx.process(chunk));
+            }
+            assert!(
+                got.contains("EAGLE") && got.contains("LANDED"),
+                "{baud} baud 8PSK read {got:?}"
+            );
+        }
+    }
+
     /// **The `C` family reads back, and the table was the fault.**
     ///
     /// `PskMultiRx` ends in `VaricodeRx` — **PSK31's** varicode — while the coded
@@ -2011,57 +2326,78 @@ mod tests {
         }
     }
 
-    /// A synthetic 8PSK transmission, built from the receiver's own mapping
-    /// inverted — the loopback that says whether the *slicer* is right before the
-    /// recordings are blamed.
+    /// **The receiver reads fldigi's 8PSK at any symbol phase.**
     ///
-    /// The transmit side here is deliberately trivial (a phase accumulator and a
-    /// cosine); what it is testing is the mapping: three bits least significant
-    /// first, `π/4` steps, the π rotation.
+    /// `tx_carriers` interpolates the I/Q from one constellation point to the next
+    /// across the **whole** symbol with a raised-cosine `tx_shape`, so the new point
+    /// is only reached at the symbol boundary. A one-symbol matched filter reports
+    /// the midpoint of two points — survivable at two phases, fatal at eight — and a
+    /// Gardner timing term has nothing left to work on once that filter has averaged
+    /// the symbol away. Both were measured on this waveform: with the old front end
+    /// only a symbol boundary that coincided with the audio's own start decoded at
+    /// all, and a two-sample shift broke it outright.
+    ///
+    /// The waveform here is the transmitter's, not the receiver's: the cross-fade is
+    /// the thing under test, so building a phase-stepped signal instead would only
+    /// prove the slicer agrees with itself — which is exactly what the test this
+    /// replaces did.
     #[test]
-    fn a_synthetic_8psk_transmission_reads_back() {
+    fn the_receiver_reads_a_cross_faded_8psk_at_any_symbol_phase() {
         use crate::mfsk_rx::MfskRx;
-        let (rate, baud, hz) = (8000.0f64, 125.0f64, 1500.0f64);
+        let (rate, baud, hz) = (8000.0f64, 500.0f64, 1750.0f64);
         let text = "TEST THE EAGLE HAS LANDED";
-        // Bits, least significant first per symbol, from the MFSK varicode.
-        let mut bits: Vec<u8> = vec![1, 0, 1, 0]; // run-up
+        let mut bits: Vec<u8> = vec![1, 0, 1, 0];
         for c in text.chars() {
             bits.extend(MfskRx::varicode_bits(c));
         }
-        // The mode's own idle character after the text, so the last character's
-        // varicode completes: a run of zeros never terminates one, and this is
-        // what a station actually sends when it stops typing.
-        for _ in 0..8 {
+        for _ in 0..16 {
             bits.extend(MfskRx::varicode_bits('\0'));
         }
-        let sps = (rate / baud) as usize;
-        let mut phase = 0.0f64;
-        let mut audio: Vec<f32> = Vec::new();
-        // Silence first, so the timing loop starts from nothing.
-        audio.extend(std::iter::repeat(0.0f32).take(sps * 8));
+        // The constellation points the steps land on, one per symbol.
+        let mut points: Vec<(f32, f32)> = vec![(1.0, 0.0)];
         for group in bits.chunks(3) {
             let mut idx = 0u8;
             for (i, b) in group.iter().enumerate() {
                 idx |= (b & 1) << i;
             }
-            // The receiver reads `arg(prev* · curr) - π` as the step, so emit a
-            // step of `π + idx·π/4`.
-            phase += std::f64::consts::PI + idx as f64 * std::f64::consts::FRAC_PI_4;
-            for _ in 0..sps {
-                audio.push((0.5 * phase.cos()) as f32);
-                phase += std::f64::consts::TAU * hz / rate;
+            let (pr, pi) = *points.last().unwrap();
+            let step = std::f64::consts::PI + idx as f64 * std::f64::consts::FRAC_PI_4;
+            let (sr, si) = (step.cos(), step.sin());
+            points.push((
+                (pr as f64 * sr - pi as f64 * si) as f32,
+                (pr as f64 * si + pi as f64 * sr) as f32,
+            ));
+        }
+        let sps = (rate / baud) as usize;
+        for off in [0usize, 2, 4, 8, 12] {
+            // Silence first, plus the shift under test: the symbol phase must not
+            // have to line up with the audio's own start.
+            let mut audio: Vec<f32> = vec![0.0; sps * 8 + off];
+            let mut phase = 0.0f64;
+            for w in points.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                for i in 0..sps {
+                    let a_shape = 0.5 * (std::f32::consts::PI * i as f32 / sps as f32).cos() + 0.5;
+                    let b_shape = 1.0 - a_shape;
+                    let (ir, iq) = (a_shape * a.0 + b_shape * b.0, a_shape * a.1 + b_shape * b.1);
+                    audio.push((ir as f64 * phase.cos() - iq as f64 * phase.sin()) as f32);
+                    phase += std::f64::consts::TAU * hz / rate;
+                    if phase > std::f64::consts::TAU {
+                        phase -= std::f64::consts::TAU;
+                    }
+                }
             }
+            let mut rx = PskRx::new_baud(rate, hz, baud);
+            rx.set_psk8(true);
+            let mut got = String::new();
+            for chunk in audio.chunks(512) {
+                got.push_str(&rx.process(chunk));
+            }
+            assert!(
+                got.contains("EAGLE") && got.contains("LANDED"),
+                "a symbol phase of {off} samples did not read: {got:?}"
+            );
         }
-        let mut rx = PskRx::new_baud(rate, hz, baud);
-        rx.set_psk8(true);
-        let mut got = String::new();
-        for chunk in audio.chunks(512) {
-            got.push_str(&rx.process(chunk));
-        }
-        assert!(
-            got.contains("EAGLE") && got.contains("LANDED"),
-            "the synthetic 8PSK transmission did not read back: {got:?}"
-        );
     }
 
     /// The 8PSK modes without FEC, against their corpus recordings.
