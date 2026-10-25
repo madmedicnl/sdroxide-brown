@@ -15,7 +15,9 @@
 //! slot in flight at a time, dropping rather than queueing when the machine
 //! cannot keep up.
 //!
-//! Receive only in this build: transmit needs a sequencer.
+//! **Transmit is wired**: the message box takes WSJT-X's three words (`CQ K1ABC
+//! FN42`, `K1ABC W1XYZ -15`), and one burst goes out in the first slot the
+//! operator arms, starting at the sub-mode's own delay into the slot.
 
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
@@ -65,6 +67,13 @@ pub struct Q65Controller {
     pending: bool,
     last_count: u32,
     status_dirty: bool,
+
+    /// The operator's message, in WSJT-X's three words.
+    tx_text: String,
+    tx_active: bool,
+    burst: Option<crate::controller::BurstPlayer>,
+    tx_fired_slot: i64,
+    tx_problem: Option<String>,
 }
 
 impl Q65Controller {
@@ -100,6 +109,11 @@ impl Q65Controller {
             pending: false,
             last_count: 0,
             status_dirty: true,
+            tx_text: String::new(),
+            tx_active: false,
+            burst: None,
+            tx_fired_slot: i64::MIN,
+            tx_problem: None,
         }
     }
 
@@ -112,7 +126,92 @@ impl Q65Controller {
         s.mode = Mode::Q65;
         s.step = QsoStep::Idle;
         s.audio_hz = self.audio_hz;
+        s.tx_next = self.tx_active;
+        s.transmitting = self.burst.is_some();
+        s.tx_pending_msg = (!self.tx_text.is_empty()).then(|| self.tx_text.clone());
+        // Named here as well as at the key-up: the reason outlives the refusal,
+        // which is the moment the operator needs it.
+        s.tx_refused = self.tx_problem.clone();
         s
+    }
+
+    /// The three words a Q65 message is made of, refuse-named if it is not.
+    fn q65_words(&self) -> Option<(&str, &str, &str)> {
+        let mut it = self.tx_text.split_whitespace();
+        let (a, b, c) = (it.next()?, it.next()?, it.next()?);
+        if it.next().is_some() {
+            return None;
+        }
+        Some((a, b, c))
+    }
+
+    /// Synthesise the operator's message at the modem's own 12 kHz — the rate
+    /// the decoder takes.
+    fn synthesize_burst_12k(&self) -> Result<Vec<f32>, String> {
+        let Some((a, b, c)) = self.q65_words() else {
+            return Err(format!(
+                "{} wants WSJT-X's three words — \"CQ K1ABC FN42\" or \"K1ABC W1XYZ -15\"",
+                self.mode.label()
+            ));
+        };
+        let (rate, hz, amp) = (DECODE_RATE as u32, self.audio_hz, 0.5f32);
+        let audio = match self.mode {
+            Q65Mode::A15 => mfsk_core::q65::tx::synthesize_standard_for::<mfsk_core::q65::Q65a15>(
+                a, b, c, rate, hz, amp,
+            ),
+            Q65Mode::A30 => mfsk_core::q65::tx::synthesize_standard_for::<mfsk_core::q65::Q65a30>(
+                a, b, c, rate, hz, amp,
+            ),
+            Q65Mode::A60 => mfsk_core::q65::tx::synthesize_standard_for::<mfsk_core::q65::Q65a60>(
+                a, b, c, rate, hz, amp,
+            ),
+            Q65Mode::B60 => mfsk_core::q65::tx::synthesize_standard_for::<mfsk_core::q65::Q65b60>(
+                a, b, c, rate, hz, amp,
+            ),
+            Q65Mode::C60 => mfsk_core::q65::tx::synthesize_standard_for::<mfsk_core::q65::Q65c60>(
+                a, b, c, rate, hz, amp,
+            ),
+            Q65Mode::D60 => mfsk_core::q65::tx::synthesize_standard_for::<mfsk_core::q65::Q65d60>(
+                a, b, c, rate, hz, amp,
+            ),
+            Q65Mode::E60 => mfsk_core::q65::tx::synthesize_standard_for::<mfsk_core::q65::Q65e60>(
+                a, b, c, rate, hz, amp,
+            ),
+            Q65Mode::D120 => {
+                mfsk_core::q65::tx::synthesize_standard_for::<mfsk_core::q65::Q65d120>(
+                    a, b, c, rate, hz, amp,
+                )
+            }
+            Q65Mode::E120 => {
+                mfsk_core::q65::tx::synthesize_standard_for::<mfsk_core::q65::Q65e120>(
+                    a, b, c, rate, hz, amp,
+                )
+            }
+            Q65Mode::A300 => {
+                mfsk_core::q65::tx::synthesize_standard_for::<mfsk_core::q65::Q65a300>(
+                    a, b, c, rate, hz, amp,
+                )
+            }
+        };
+        audio.ok_or_else(|| {
+            format!(
+                "\"{a} {b} {c}\" is not a message {} can carry — the third word is a \
+                 four-character grid or a report, and the two calls have to be plain",
+                self.mode.label()
+            )
+        })
+    }
+
+    fn synthesize_burst(&self) -> Result<Vec<f32>, String> {
+        let audio = self.synthesize_burst_12k()?;
+        match MonoResampler::new(DECODE_RATE, 48_000.0) {
+            Some(mut r) => {
+                let mut out = Vec::with_capacity(audio.len() * 4 + 2048);
+                r.push(&audio, &mut out);
+                Ok(out)
+            }
+            None => Ok(audio),
+        }
     }
 }
 
@@ -179,6 +278,28 @@ impl DigiEngine for Q65Controller {
             self.buf_aligned = self.last_slot_idx != i64::MIN;
             self.last_slot_idx = idx;
         }
+        // Transmit. One burst per slot, started inside the window where the
+        // message still lands where the receiver looks for it.
+        if self.burst.is_none() && idx != self.tx_fired_slot && self.tx_active {
+            let into = self.scheduler.secs_into_slot(now);
+            let start = self.mode.start_delay_s();
+            if into >= start && into <= start + 2.0 {
+                self.tx_fired_slot = idx;
+                match self.synthesize_burst() {
+                    Ok(samples) => {
+                        self.tx_problem = None;
+                        self.burst = Some(crate::controller::BurstPlayer { samples, pos: 0 });
+                        actions.push(DigiAction::KeyTx);
+                    }
+                    Err(why) => {
+                        self.tx_problem = Some(why);
+                        self.tx_active = false;
+                    }
+                }
+                self.status_dirty = true;
+            }
+        }
+
         if self.status_dirty {
             self.status_dirty = false;
             actions.push(DigiAction::Status(self.digi_status()));
@@ -187,14 +308,58 @@ impl DigiEngine for Q65Controller {
     }
 
     fn tx_burst_active(&self) -> bool {
-        false
+        self.burst.is_some()
     }
 
-    fn fill_tx_block(&mut self, _out: &mut [f32]) -> bool {
-        false
+    fn fill_tx_block(&mut self, out: &mut [f32]) -> bool {
+        let Some(b) = self.burst.as_mut() else {
+            out.fill(0.0);
+            return true;
+        };
+        let mut done = false;
+        for slot in out.iter_mut() {
+            if b.pos < b.samples.len() {
+                *slot = b.samples[b.pos];
+                b.pos += 1;
+            } else {
+                *slot = 0.0;
+                done = true;
+            }
+        }
+        if done {
+            self.burst = None;
+            self.status_dirty = true;
+        }
+        done
     }
 
-    fn on_burst_done(&mut self) {}
+    fn on_burst_done(&mut self) {
+        self.status_dirty = true;
+    }
+
+    fn set_tx_text(&mut self, text: String) {
+        self.tx_text = text;
+        self.tx_problem = None;
+        self.status_dirty = true;
+    }
+
+    fn set_tx_active(&mut self, on: bool) {
+        if on {
+            match self.synthesize_burst() {
+                Ok(_) => {
+                    self.tx_problem = None;
+                    self.tx_active = true;
+                }
+                Err(why) => {
+                    self.tx_problem = Some(why);
+                    self.tx_active = false;
+                }
+            }
+        } else {
+            self.tx_active = false;
+        }
+        self.status_dirty = true;
+    }
 
     fn abort(&mut self) {
         self.slot_buf.clear();
@@ -202,7 +367,11 @@ impl DigiEngine for Q65Controller {
         self.status_dirty = true;
     }
 
-    fn abort_tx(&mut self) {}
+    fn abort_tx(&mut self) {
+        self.burst = None;
+        self.tx_active = false;
+        self.status_dirty = true;
+    }
 
     fn set_config(&mut self, cfg: DigiConfig) {
         // A sub-mode change moves the slot length and the decode, so the
@@ -234,5 +403,58 @@ impl DigiEngine for Q65Controller {
 
     fn status(&self) -> DigiStatus {
         self.digi_status()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// **Q65 transmits, and the decoder this build already had reads it back.**
+    ///
+    /// Two sub-modes at the ends of the family: the shortest period (`Q65-15A`,
+    /// 15 s) and the deepest tone spacing (`Q65-60E`), so a fault in the
+    /// period or in the spacing shows rather than hiding behind one working
+    /// case. The message is placed where the transmitter puts it and handed to
+    /// the same `decode_q65_slot` the receive path uses — our own two halves,
+    /// which is not a station.
+    #[test]
+    fn a_q65_transmission_reads_back() {
+        for sub in [Q65Mode::A15, Q65Mode::E60] {
+            let mut cfg = DigiConfig::default();
+            cfg.q65_mode = sub;
+            let mut ctl = Q65Controller::new(cfg, DECODE_RATE);
+            ctl.set_audio_hz(1000.0);
+            ctl.set_tx_text("CQ K1ABC FN42".into());
+            let burst = ctl.synthesize_burst_12k().expect("the message packs");
+            let mut slot = vec![0.0f32; ctl.slot_samples()];
+            let at = (sub.start_delay_s() * DECODE_RATE) as usize;
+            for (i, s) in burst.iter().enumerate() {
+                if let Some(d) = slot.get_mut(at + i) {
+                    *d += *s;
+                }
+            }
+            let audio: Vec<i16> =
+                slot.iter().map(|v| (v.clamp(-1.0, 1.0) * 28_000.0) as i16).collect();
+            let decodes = decode_q65_slot(&audio, sub, 0);
+            assert!(
+                decodes.iter().any(|d| d.message.contains("K1ABC")),
+                "{sub:?} did not read its own transmission back: {:?}",
+                decodes.iter().map(|d| &d.message).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    /// A message that is not three words never keys the radio, and says why.
+    #[test]
+    fn a_q65_message_that_will_not_pack_is_named() {
+        let mut ctl = Q65Controller::new(DigiConfig::default(), DECODE_RATE);
+        ctl.set_audio_hz(1000.0);
+        ctl.set_tx_text("not a q65 message".into());
+        ctl.set_tx_active(true);
+        let st = ctl.status();
+        assert!(!st.tx_next, "it armed a message it cannot send");
+        let why = st.tx_refused.expect("it refused in silence");
+        assert!(why.contains("three words"), "{why:?}");
     }
 }

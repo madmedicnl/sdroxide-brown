@@ -1604,6 +1604,50 @@ own docs say they have none. The 32 coded-PSK and 9 DominoEX variants are one
   pin both halves together, and `a_dtmf_keypress_reads_back_through_the_controller`
   runs the operator's own path.
 
+**The five slotted weak-signal modes transmit now (2026-10-25): JT65, JT9, Q65,
+FST4 and MSK144.**
+
+They were the last "QSO modes with no transmit", and most of the protocol was
+already in the vendored `mfsk-core` — what was missing was the **seam**: a
+message box, a key-up, and a burst placed at the right offset in the right slot.
+`JtController` (JT65, JT9, MSK144), `Q65Controller` and `Fst4Controller` each
+carry it now, and the shape is [`crate::WsprController`]'s: the message is packed
+and synthesised **at the key-up**, so a message that will not pack is refused by
+name before the radio is keyed, and one burst goes out in the first armed slot,
+starting at the mode's own delay into it (JT65/JT9 one second, FST4-15 half a
+second and the slow periods a second, Q65 its sub-mode's delay, MSK144 at the
+boundary).
+
+* **JT65 / JT9** — WSJT-X's three words in, `CQ K1ABC FN42` or `K1ABC W1XYZ -15`.
+  mfsk-core's `synthesize_standard` does the packing (`jt72`), RS(63,12) or the
+  K=32 convolutional code, the interleave and the tone splice.
+* **Q65** — the same three words through `wsjt77::pack77` and the Q-ary LDPC
+  codec of the sub-mode the operator picked; swept at `Q65-15A` and `Q65-60E`,
+  the two ends of the family.
+* **FST4** — the tones are period-independent and become a waveform only when the
+  period's **GFSK geometry** is applied (`FST4_15_GFSK` … `FST4_300_GFSK`), which
+  is the trap mfsk-core's own doc names: the unsuffixed helper silently means
+  FST4-60A whatever the operator chose. Swept at FST4-15 and FST4-60A, whose
+  geometries differ by more than five times.
+* **MSK144** — a different protocol inside the same controller: one 72 ms OQPSK
+  frame of LDPC(128,90) with a 13-bit CRC over the 77-bit message, **repeated
+  back to back through the period** so a meteor's brief trail catches part of
+  one. That is what `Mode::slot_timing` already said the mode does.
+
+Measured, each against the decoder this build already had (our own packing and
+our own waveform, which is not a station):
+`a_jt_transmission_reads_back` (JT65 and JT9),
+`a_q65_transmission_reads_back` (Q65-15A, Q65-60E),
+`an_fst4_transmission_reads_back` (FST4-15, FST4-60A),
+`an_msk144_transmission_reads_back`. Each refusal is pinned too — a message that
+is not three words never keys the radio and says why
+(`a_message_that_will_not_pack_is_named`, and the Q65/FST4 equivalents).
+
+**Also found on the way:** Contestia's controller test had lost its `#[test]`
+attribute and its doc comment to the test above it — an earlier edit had left one
+`#[test]` between two doc blocks — so it had **not been running**. Restored and
+passing (`a_contestia_transmission_reads_back_through_the_controller`).
+
 **8PSK transmits now, and its receive half is still open.**
 
 The four no-FEC 8PSK speeds (125/250/500/1000) were refused with "there is no

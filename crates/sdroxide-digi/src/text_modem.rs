@@ -1076,24 +1076,6 @@ impl DigiEngine for TextModemController {
 mod tests {
     use super::*;
 
-    /// **Contestia transmits.** The receiver has decoded Contestia for years and
-    /// the transmitter did not exist, so the mode was receive-only for a reason
-    /// that was not principled: Contestia is Olivia's engine with six bits per
-    /// character, a 32-symbol block and the CRC-32 scrambler. This drives the
-    /// console's own transmitter into the console's own receiver — the same
-    /// objects the band menu builds — and reads the text back.
-    ///
-    /// **The fault was the Walsh-domain sign, and it is Olivia's opposite here
-    /// on purpose.** Contestia is decoded by the vendored Jalocha engine, which
-    /// is fldigi's own code: it reads a *negative* peak as the upper half of the
-    /// alphabet (`if (Peak < 0) Char += SymbolsPerBlock`), so a transmitter that
-    /// follows fldigi's `EncodeBlock` (`FHT_Buffer < 0`) is what it expects.
-    /// Olivia's receiver is this tree's own and was measured on an off-air
-    /// capture to vote the other way, so the two modes cannot share one sign.
-    /// Emitting Olivia's polarity decoded every Contestia character as its
-    /// bit-5 twin — idle, in the console — for as long as the transmitter
-    /// existed.
-    #[test]
     /// **The coded PSK transmitter through the controller, not just the modem.**
     ///
     /// The DSP-level loopback proves the modulator; this proves the *wiring* — that
@@ -1159,6 +1141,24 @@ mod tests {
         }
     }
 
+    /// **Contestia transmits.** The receiver has decoded Contestia for years and
+    /// the transmitter did not exist, so the mode was receive-only for a reason
+    /// that was not principled: Contestia is Olivia's engine with six bits per
+    /// character, a 32-symbol block and the CRC-32 scrambler. This drives the
+    /// console's own transmitter into the console's own receiver — the same
+    /// objects the band menu builds — and reads the text back.
+    ///
+    /// **The fault was the Walsh-domain sign, and it is Olivia's opposite here
+    /// on purpose.** Contestia is decoded by the vendored Jalocha engine, which
+    /// is fldigi's own code: it reads a *negative* peak as the upper half of the
+    /// alphabet (`if (Peak < 0) Char += SymbolsPerBlock`), so a transmitter that
+    /// follows fldigi's `EncodeBlock` (`FHT_Buffer < 0`) is what it expects.
+    /// Olivia's receiver is this tree's own and was measured on an off-air
+    /// capture to vote the other way, so the two modes cannot share one sign.
+    /// Emitting Olivia's polarity decoded every Contestia character as its
+    /// bit-5 twin — idle, in the console — for as long as the transmitter
+    /// existed.
+    #[test]
     fn a_contestia_transmission_reads_back_through_the_controller() {
         use sdroxide_dsp::OliviaTx;
         let (rate, audio) = (8000.0, 1500.0);
