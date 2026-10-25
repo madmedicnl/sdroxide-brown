@@ -18,6 +18,19 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **Airspy HF+ Discovery: the waterfall shows the filter skirt (#group, Graeme
+   Davidson, 2026-10-25)** — reported on 2.1.0.2.5_brown. The spectrum and
+   waterfall draw `RadioState::sample_rate` as the span, so at 768 kSPS the
+   picture includes the decimation filter's roll-off at both edges (Airspy's own
+   figure is ~660 kHz usable, 86 % of the rate), and the view can be panned into
+   it; the auto-fit averages the bins in view, so at full span it averages the
+   skirts too. Fix: the front end reports the fraction of its rate its own
+   filters leave usable (`IqSource::usable_frac`, default 1.0, the HF+ 0.86), the
+   engine carries it in one new `RadioState` field, and the display, the zoom
+   limit and the fit use that span instead of the raw rate. **Wire change, so it
+   is a PR** — staged on `fork/hfplus-usable-span`, not pushed while the operator
+   holds pushes.
+
 0. **Mode panels docked by default, and no window on mode entry (#215, #217)** —
    **PR #219**, awaiting review. On the first frame of every mode the program opened
    that mode's panel as a window *and* saved the choice into `tool_windows_open`, so
