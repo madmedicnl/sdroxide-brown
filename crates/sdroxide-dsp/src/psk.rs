@@ -367,6 +367,12 @@ pub struct PskrTx {
     rate: f64,
     carrier: f64,
     baud: f64,
+    /// How many carriers the mode puts its bits on — one for `R`, more for the
+    /// `C` and `RC` banks, `1.4 × baud` apart.
+    carriers: usize,
+    /// Whether the mode carries the convolutional code and the interleaver. The
+    /// `C` family does neither.
+    fec: bool,
     /// The interleaver's depth, or `None` for BPSK63F, which does not interleave.
     depth: Option<usize>,
     /// Rendered audio waiting to go out.
@@ -377,7 +383,32 @@ pub struct PskrTx {
 
 impl PskrTx {
     pub fn new(rate: f64, carrier_hz: f64, baud: f64, depth: Option<usize>) -> Self {
-        PskrTx { rate, carrier: carrier_hz, baud, depth, out: VecDeque::new(), started: false }
+        Self::with_carriers(rate, carrier_hz, baud, 1, true, depth)
+    }
+
+    /// The same, for a mode that spreads its bits over `carriers` carriers, with
+    /// `fec` saying whether they are coded and interleaved first.
+    ///
+    /// **The distribution is round-robin, one bit per carrier per symbol**, which
+    /// is the order [`PskCarrierBank::take_blocks`] reads back.
+    pub fn with_carriers(
+        rate: f64,
+        carrier_hz: f64,
+        baud: f64,
+        carriers: usize,
+        fec: bool,
+        depth: Option<usize>,
+    ) -> Self {
+        PskrTx {
+            rate,
+            carrier: carrier_hz,
+            baud,
+            carriers: carriers.max(1),
+            fec,
+            depth,
+            out: VecDeque::new(),
+            started: false,
+        }
     }
 
     pub fn clear(&mut self) {
@@ -390,55 +421,117 @@ impl PskrTx {
         self.out.is_empty()
     }
 
-    /// Queue a message: preamble if this is the first, then the varicode, then
-    /// the run of 1s that flushes the last character and the interleaver.
+    /// Queue a message and render it.
+    ///
+    /// **Two varicodes, and the family chooses.** The coded modes (`R`, `RC`,
+    /// BPSK63F) carry the **MFSK** varicode, because their chain ends in
+    /// `MfskVaricodeRx`; the `C` family carries **PSK31's**, because `PskMultiRx`
+    /// ends in `VaricodeRx`. A word from the wrong table decodes as its near
+    /// neighbour — the right number of characters and every one wrong, with no
+    /// other symptom — which is exactly what this transmitter did until a corpus
+    /// recording showed it.
+    ///
+    /// The coded modes open with a **preamble of 200 alternating bits**, which is
+    /// what fills the interleaver before any text goes out; the `C` family has no
+    /// interleaver and needs none. Both close with a run of 1s, which completes the
+    /// last character's word.
     pub fn push_text(&mut self, text: &str) {
         let mut bits: Vec<u8> = Vec::new();
-        if !self.started {
-            bits.extend((0..200).map(|i| (i % 2 == 0) as u8));
-            self.started = true;
-        }
-        for c in text.bytes() {
-            let (code, len) = crate::mfsk_rx::mfsk_word(c);
-            for i in (0..len).rev() {
-                bits.push(((code >> i) & 1) as u8);
+        if self.fec {
+            if !self.started {
+                bits.extend((0..200).map(|i| (i % 2 == 0) as u8));
+            }
+            for c in text.bytes() {
+                let (code, len) = crate::mfsk_rx::mfsk_word(c);
+                for i in (0..len).rev() {
+                    bits.push(((code >> i) & 1) as u8);
+                }
+            }
+        } else {
+            if !self.started {
+                // A lead-in of **zeros** — PSK31's idle, a reversal every symbol —
+                // which is what gives `VaricodeRx` its boundaries and the receiver
+                // its lock. The coded modes get the alternating preamble above
+                // because theirs must fill an interleaver; the `C` family has
+                // nothing to fill and wants idle.
+                bits.extend(std::iter::repeat_n(0u8, 200));
+            }
+            for c in text.bytes() {
+                let code = varicode(c);
+                let code = if code.is_empty() { varicode(b'?') } else { code };
+                for ch in code.chars() {
+                    bits.push(u8::from(ch == '1'));
+                }
+                // The varicode's own two-bit terminator.
+                bits.push(0);
+                bits.push(0);
             }
         }
+        self.started = true;
         bits.extend(std::iter::repeat_n(1u8, 300));
 
-        let sps = (self.rate / self.baud).round().max(1.0) as usize;
-        let mut enc = ConvEncoder::new(ConvCode::PSK_R);
-        let mut inlv = Interleaver::new(2, self.depth.unwrap_or(2), true);
-        let mut ph = 0.0f64;
-        let inc = std::f64::consts::TAU * self.carrier / self.rate;
-        let mut prev = 1.0f32;
-        for &b in &bits {
-            let pair = enc.push(b);
-            let mut sym = [0u8; 2];
-            sym[0] = (pair >> 1) & 1;
-            sym[1] = pair & 1;
-            if self.depth.is_some() {
-                inlv.symbols(&mut sym);
+        // The channel bits: the code and the interleaver for `R`/`RC`, the
+        // varicode itself for `C`.
+        let channel: Vec<u8> = if self.fec {
+            let mut enc = ConvEncoder::new(ConvCode::PSK_R);
+            let mut inlv = Interleaver::new(2, self.depth.unwrap_or(2), true);
+            let mut ch = Vec::with_capacity(bits.len() * 2);
+            for &b in &bits {
+                let pair = enc.push(b);
+                let mut sym = [0u8; 2];
+                sym[0] = (pair >> 1) & 1;
+                sym[1] = pair & 1;
+                if self.depth.is_some() {
+                    inlv.symbols(&mut sym);
+                }
+                // The wire order: `o1` first, then `o2`.
+                ch.push(sym[1]);
+                ch.push(sym[0]);
             }
-            // The wire order: `o1` first, then `o2`.
-            for &sv in [sym[1], sym[0]].iter() {
+            ch
+        } else {
+            bits.clone()
+        };
+
+        let sps = (self.rate / self.baud).round().max(1.0) as usize;
+        let n = self.carriers;
+        let spacing = 1.4 * self.baud;
+        let mut phase = vec![0.0f64; n];
+        let mut inc = vec![0.0f64; n];
+        for (c, slot) in inc.iter_mut().enumerate() {
+            let off = (c as f64 - (n as f64 - 1.0) / 2.0) * spacing;
+            *slot = std::f64::consts::TAU * (self.carrier + off) / self.rate;
+        }
+        // One over the root of the count, so a bank of sixteen is no louder than a
+        // single carrier.
+        let amp = 0.5 / (n as f32).sqrt();
+        let mut prev = vec![1.0f32; n];
+        for group in channel.chunks(n) {
+            // One symbol time: every carrier takes its own next bit.
+            let mut cur = vec![1.0f32; n];
+            for (c, &sv) in group.iter().enumerate() {
                 // **A zero reverses the carrier, a one keeps it** — the
-                // reference's polarity, and the same one `PskTx` uses. Getting it
-                // the other way round is a working transmitter whose every bit is
-                // inverted, which reads as noise.
-                let cur = if sv == 1 { prev } else { -prev };
-                for i in 0..sps {
-                    // A raised-cosine blend of the *phasor*, so the transition
-                    // between symbols is smooth — the same shape [`PskTx`] draws.
-                    let blend = 0.5 * (1.0 + (std::f32::consts::PI * i as f32 / sps as f32).cos());
-                    let a = prev * blend + cur * (1.0 - blend);
-                    self.out.push_back((a * ph.cos() as f32) * 0.5);
-                    ph += inc;
-                    if ph > std::f64::consts::TAU {
-                        ph -= std::f64::consts::TAU;
+                // reference's polarity, and the same one `PskTx` uses. Inverted it
+                // is a working transmitter whose every bit is wrong.
+                cur[c] = if sv == 1 { prev[c] } else { -prev[c] };
+            }
+            for i in 0..sps {
+                // A raised-cosine blend of the *phasor*, so the transition between
+                // symbols is smooth — the same shape [`PskTx`] draws.
+                let blend = 0.5 * (1.0 + (std::f32::consts::PI * i as f32 / sps as f32).cos());
+                let mut acc = 0.0f32;
+                for c in 0..group.len() {
+                    let a = prev[c] * blend + cur[c] * (1.0 - blend);
+                    acc += a * phase[c].cos() as f32;
+                    phase[c] += inc[c];
+                    if phase[c] > std::f64::consts::TAU {
+                        phase[c] -= std::f64::consts::TAU;
                     }
                 }
-                prev = cur;
+                self.out.push_back(acc * amp);
+            }
+            for c in 0..group.len() {
+                prev[c] = cur[c];
             }
         }
     }
@@ -1529,6 +1622,76 @@ mod tests {
             assert!(
                 out.contains("EAGLE HAS LANDED 12345"),
                 "depth {depth:?} read {out:?} from {msg:?}"
+            );
+        }
+    }
+
+    /// **The `C` family reads back, and the table was the fault.**
+    ///
+    /// `PskMultiRx` ends in `VaricodeRx` — **PSK31's** varicode — while the coded
+    /// families end in `MfskVaricodeRx`. A `C` transmission carrying the MFSK table
+    /// therefore decodes as near neighbours: right character count, every letter
+    /// wrong, and no other symptom. That is what this transmitter did until a
+    /// corpus recording (`PSK500C2.wav`, 3/3 words through the same hard-tap path)
+    /// said the receiver was fine.
+    ///
+    /// 500 baud × 2 carriers is the case the corpus proves; the rest of the family
+    /// is swept here so the wiring of `carriers` cannot be wrong for the others.
+    #[test]
+    fn the_c_family_reads_back_with_its_own_varicode() {
+        use crate::psk::PskMultiRx;
+        let text = "THE EAGLE HAS LANDED 12345";
+        // **The centre follows the width.** A four-carrier 500-baud bank is 2.1 kHz
+        // wide, so placed at 1000 Hz its lowest carrier sits on DC — which the
+        // audio path (and the receiver's own band-pass) does not carry. The corpus
+        // generator pushed its wide banks up the band for exactly this reason, and
+        // the probe in `psk_coded_probe` was written to find them again.
+        for (baud, carriers, carrier) in [
+            (500.0f64, 2usize, 1000.0f64),
+            (500.0, 4, 1500.0),
+            (1000.0, 2, 1500.0),
+            (250.0, 6, 1500.0),
+        ] {
+            let rate = 8000.0f64;
+            let mut tx = PskrTx::with_carriers(rate, carrier, baud, carriers, false, None);
+            tx.push_text(text);
+            let mut audio: Vec<f32> = Vec::new();
+            let mut block = vec![0.0f32; 512];
+            while !tx.drained() {
+                tx.next_block(&mut block);
+                audio.extend_from_slice(&block);
+            }
+            let mut rx = PskMultiRx::new(rate, carrier, baud, carriers);
+            let got = rx.process(&audio);
+            assert!(got.contains("EAGLE HAS LANDED 12345"), "{baud} baud x{carriers} read {got:?}");
+        }
+    }
+
+    /// **The `RC` banks too: the code, the interleaver, and then the same
+    /// spreading.** The two halves were proved separately — `R` on one carrier,
+    /// `C` with no code — and this is the combination, which is what the family
+    /// actually is.
+    #[test]
+    fn the_rc_banks_read_back() {
+        let text = "THE EAGLE HAS LANDED 12345";
+        for (baud, carriers, depth, carrier) in
+            [(125.0f64, 4usize, Some(80usize), 1500.0f64), (250.0, 2, Some(160), 1200.0)]
+        {
+            let rate = 8000.0f64;
+            let mut tx = PskrTx::with_carriers(rate, carrier, baud, carriers, true, depth);
+            tx.push_text(text);
+            let mut audio: Vec<f32> = Vec::new();
+            let mut block = vec![0.0f32; 512];
+            while !tx.drained() {
+                tx.next_block(&mut block);
+                audio.extend_from_slice(&block);
+            }
+            let mut rx = PskrRx::with_carriers(rate, carrier, baud, carriers, depth);
+            let mut got = rx.process(&audio);
+            got.push_str(&rx.flush());
+            assert!(
+                got.contains("EAGLE HAS LANDED 12345"),
+                "{baud} baud x{carriers} depth {depth:?} read {got:?}"
             );
         }
     }

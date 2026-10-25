@@ -571,11 +571,13 @@ impl TextModemController {
                 // two halves cannot disagree; the multi-carrier banks still have
                 // no transmitter and are refused above.
                 let coded = cfg.psk_coded;
-                if mode == Mode::Psk && coded != PskCoded::Off && coded.carriers() == 1 {
-                    TxModem::PskCoded(PskrTx::new(
+                if mode == Mode::Psk && coded != PskCoded::Off {
+                    TxModem::PskCoded(PskrTx::with_carriers(
                         MODEM_RATE,
                         audio_hz as f64,
                         coded.baud(),
+                        coded.carriers(),
+                        coded.fec(),
                         coded.depth(),
                     ))
                 } else {
@@ -796,18 +798,12 @@ fn tx_refusal_text(mode: Mode, cfg: &DigiConfig) -> Option<String> {
             other => format!("{} is receive only in this build", other.label()),
         });
     }
-    // **The coded families split in two.** The single-carrier ones — BPSK63F and
-    // the four `R` — transmit through `PskrTx`. The multi-carrier `C` and `RC`
-    // banks need their bits spread over carriers `1.4 × baud` apart, which is the
-    // next step; sending one carrier under a multi-carrier label would be a
-    // different signal answering to the same name.
-    if mode == Mode::Psk && cfg.psk_coded != PskCoded::Off && cfg.psk_coded.carriers() > 1 {
-        return Some(format!(
-            "{} is receive only in this build — the multi-carrier transmitter is not \
-             written (the single-carrier coded modes transmit)",
-            cfg.psk_coded.label()
-        ));
-    }
+    // **Every coded variant transmits.** The single-carrier `R` and BPSK63F, the
+    // no-FEC `C` banks, and the `RC` banks that are both — `PskrTx` carries the
+    // code, the interleaver and the spreading from one table (`PskCoded`), and
+    // each family's own varicode, which is the trap that cost a cycle: `C` reads
+    // through `VaricodeRx` (PSK31's table) and the coded ones through
+    // `MfskVaricodeRx`.
     if mode == Mode::Psk && cfg.psk_modulation == sdroxide_types::PskModulation::Psk8 {
         return Some(
             "8PSK is receive only in this build — there is no eight-phase modulator, and \
@@ -1068,11 +1064,26 @@ mod tests {
         // characters — measured on the way here, and it looked like a modulator
         // fault rather than a mistuned test.
         let (rate, audio) = (8000.0, 1000.0);
-        for coded in [PskCoded::Bpsk63F, PskCoded::Psk125R, PskCoded::Psk500R] {
+        // **One from each family**: the uncoded single carrier with no interleaver,
+        // the coded single carrier, the uncoded multi-carrier bank and the coded
+        // one. The four use both varicodes, the code and the interleaver, so a
+        // wiring fault in any of them shows here.
+        for coded in [PskCoded::Bpsk63F, PskCoded::Psk125R, PskCoded::Psk500C2, PskCoded::Psk125Rc4]
+        {
             let mut cfg = DigiConfig::default();
             cfg.psk_coded = coded;
-            // The transmitter the controller would build for this config.
-            let mut tx = PskrTx::new(rate, audio, coded.baud(), coded.depth());
+            // **At the controller's own centre**, 1000 Hz: it is where the receiver
+            // listens, and a fixture anywhere else measures a mistuned receiver
+            // rather than the transmitter. Both banks here fit inside 1000 Hz —
+            // `500C2` is ±350 and `125RC4` is ±262 — so nothing needs retuning.
+            let mut tx = PskrTx::with_carriers(
+                rate,
+                audio,
+                coded.baud(),
+                coded.carriers(),
+                coded.fec(),
+                coded.depth(),
+            );
             tx.push_text("THE EAGLE HAS LANDED 12345");
             let mut sig: Vec<f32> = Vec::new();
             let mut block = vec![0.0f32; 2048];
@@ -1317,27 +1328,27 @@ mod tests {
         );
     }
 
-    /// A coded PSK selection cannot key up, and says which one it is.
+    /// **Every coded variant keys, and none of them refuses in silence.**
+    ///
+    /// This test used to pin the opposite: the multi-carrier `C` and `RC` banks
+    /// were receive-only and had to say so by name. They now transmit — the
+    /// refusal was a varicode table, not a missing modulator — so what needs
+    /// pinning is that the whole table arms the transmitter, including `Off`,
+    /// which is plain PSK.
     #[test]
-    fn a_coded_psk_selection_refuses_the_key_by_name() {
-        let mut cfg = DigiConfig::default();
-        cfg.psk_coded = PskCoded::Psk63Rc4;
-        let mut c = TextModemController::new(Mode::Psk, cfg, 48_000.0);
-        c.set_tx_text("TEST".into());
-        c.set_tx_active(true);
-        c.poll(SystemTime::now(), 0.0);
-        let s = c.status();
-        assert!(!s.tx_next, "a coded PSK selection armed the transmitter");
-        assert!(!c.tx_burst_active(), "it asked the engine to key");
-        let reason = s.tx_refused.expect("it refused in silence");
-        assert!(reason.contains("PSK63RC4"), "the refusal does not name the variant: {reason:?}");
-
-        // Plain PSK still keys, so this is not a blanket.
-        let mut plain = TextModemController::new(Mode::Psk, DigiConfig::default(), 48_000.0);
-        plain.set_tx_active(true);
-        plain.poll(SystemTime::now(), 0.0);
-        assert!(plain.status().tx_refused.is_none(), "plain PSK picked up the refusal");
-        assert!(plain.tx_burst_active(), "plain PSK stopped transmitting");
+    fn a_coded_psk_selection_keys_every_variant() {
+        for coded in PskCoded::ALL {
+            let mut cfg = DigiConfig::default();
+            cfg.psk_coded = coded;
+            let mut c = TextModemController::new(Mode::Psk, cfg, 48_000.0);
+            c.set_tx_text("TEST".into());
+            c.set_tx_active(true);
+            c.poll(SystemTime::now(), 0.0);
+            let s = c.status();
+            assert!(s.tx_refused.is_none(), "{} was refused: {:?}", coded.label(), s.tx_refused);
+            assert!(s.tx_next, "{} did not arm the transmitter", coded.label());
+            assert!(c.tx_burst_active(), "{} never asked the engine to key", coded.label());
+        }
     }
 
     /// THOR through the console's own controller — the gate that says the program

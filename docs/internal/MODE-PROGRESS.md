@@ -1523,7 +1523,7 @@ before: run a **corpus** `C` recording and our own transmission through the same
 hard tap and compare the bit streams, so "our modulator" and "the tap" are told
 apart by a fact. Until then the multi-carrier banks keep the refusal and its reason.
 
-**That comparison was run, and it puts the fault in our no-FEC modulator.**
+**That comparison was run, and it found the fault — it was the varicode table.**
 
 | | reads |
 |---|---|
@@ -1532,24 +1532,47 @@ apart by a fact. Until then the multi-carrier banks keep the refusal and its rea
 | ours, 500 × **1** carrier (no spreading at all) | "ehs scrfs hcd fcpusu nt=yaI" — 20 of 26 characters, every one wrong |
 | ours, 500 × 2 | "Os scrfs deIcou Hya" |
 
-So the hard tap reads real material and does not read ours, and it fails with the
-spreading removed — the fault is in the **bit stream our no-FEC modulator produces**,
-not in the carrier distribution. Four candidates were then eliminated by experiment,
-each making it worse: reversed carrier order (".h \n\rr aubimo"), LSB-first varicode
-("i-\n \nfrc…"), no preamble ("r o mk…"), and the polarity (the tap's own rule,
-`d.re >= 0` = a one, is what `PskTx` and this transmitter both send, and a working
-inversion reads as pure noise rather than as words this close).
+The hard tap read real material and not ours, and it failed with the spreading
+removed — so the fault was in the bit stream, not in the carriage. Four candidates
+were eliminated by experiment, each making it worse: reversed carrier order
+(".h \n\rr aubimo"), LSB-first varicode ("i-\n \nfrc…"), no preamble ("r o mk…"),
+and the polarity (`d.re >= 0` = a one is right, and an inversion reads as noise
+rather than as words this close).
 
-What is left is the **symbol-to-bit framing of the no-FEC path** — the FEC path's
-chain re-times through its own deinterleaver and decoder, and the no-FEC path has
-nothing but the tap and the varicode, so it is the one place where a half-symbol
-offset would show as near-miss words instead of "nothing". Next: compare the tapped
-bit *stream* of the corpus and of ours symbol for symbol (the probe can dump it),
-which is the same differential method that settled the scrambler and the deinterleaver.
+**There are two varicodes in this crate, and the family chooses.**
+`PskrTx` sent the **MFSK** table (`mfsk_word`) because the coded families end in
+`MfskVaricodeRx` — and that is correct for them. But `PskMultiRx` ends in
+`VaricodeRx`, which is **PSK31's** table. A word from the wrong table decodes as
+its near neighbour: the right number of characters, every one wrong, and no other
+symptom. That is precisely "ehs scrfs hcd fcpusu nt=yaI", and no amount of
+carrier, order or polarity experiment could have fixed it.
 
-**Still refused, with a reason on the chip:** the multi-carrier `C` and `RC` banks —
-their bits go on carriers `1.4 × baud` apart, which is the next step, and one carrier
-under a multi-carrier label would be a different signal answering to the same name.
+Two more facts came out of the same measurement:
+
+- **The `C` family wants a lead-in of zeros, not the alternating preamble.** The
+  alternating 200 bits exist to fill the *interleaver*; the `C` family has none,
+  and what it needs is PSK31's idle — a reversal every symbol — so the varicode
+  reader has its `00` boundaries and the timing loop has something to lock to.
+  Alternating bits here read worse than nothing.
+- **A wide bank has to clear DC.** A four-carrier 500-baud bank is 2.1 kHz wide,
+  so at 1000 Hz its lowest carrier sits on 0 Hz and neither the audio path nor the
+  receiver's band-pass carries it. That is why the corpus generator pushed its wide
+  banks up the band and why `psk_coded_probe` searches centres instead of trusting
+  the manifest. The fixture now places the bank accordingly.
+
+**All 31 coded variants transmit**: BPSK63F, the four `R`, the six `C` and the
+twenty `RC`. `PskrTx::with_carriers(rate, carrier, baud, carriers, fec, depth)` is
+the one constructor — the code, the interleaver and the spreading all come from the
+`PskCoded` table, and the two families differ only in which varicode they carry.
+The `RC` banks read back through `PskrRx::with_carriers` with the code and the
+interleaver in place (`the_rc_banks_read_back`), and the `C` banks through
+`PskMultiRx` (`the_c_family_reads_back_with_its_own_varicode`: 500×2, 500×4,
+1000×2, 250×6). The controller's own loopback
+(`a_coded_psk_transmission_reads_back_through_the_controller`) now runs one variant
+from each family — `Bpsk63F`, `Psk125R`, `Psk500C2`, `Psk125Rc4` — so a wiring
+fault in either varicode, the code, the interleaver or the bank geometry shows at
+the seam the operator actually uses. The refusal for multi-carrier banks is gone
+because there is nothing left to refuse.
 
 ### The count
 
