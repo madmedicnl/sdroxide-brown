@@ -18,6 +18,19 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **A receive-only mode showed a transmitter in the strip** (issue #239, F4NRM,
+   2026-10-25) — the top strip asked `tx_capable()` ("can this radio transmit?")
+   and not "does this mode transmit at all?", so WEFAX, NAVTEX, DSC, ADS-B,
+   ACARS, VDL2 and AIS inherited the transceiver's PTT/Drive/Tune/XIT/DUPLEX. On
+   3855 kHz that is a key-down with nothing to modulate on a broadcast
+   frequency. Fixed with `tx_chrome_ok()` and a scan test; **PR #243**. The rest
+   of his list is his WEFAX PR #164, **reverted on 2026-10-25 13:28**
+   (`5e87cd34`) — the sensitivity/"false signal detector" and the automatic
+   phasing calibration — which is the operator's decision to restore or explain.
+   Two more findings to act on: the CTR anchor treats only SSTV as a picture
+   mode, so a fax sits 1900 Hz off centre; and detaching is native-only, which
+   is why the browser has no float arrow.
+
 0. **TCI receive audio: a server that carries baseband audio only gets silence**
    (#group, Rick Abshier KQ4Y, 2026-10-25) — reported against upstream 1.6.10, an
    Icom 7300 MK2 through Remote Ham Radio's TCI platform with LocalMate: TCI CAT
