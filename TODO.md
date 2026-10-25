@@ -60,6 +60,11 @@ maintainer's queue there, not a promise.
    top models, operators and routes from the relay's cards, most first or A–Z. The
    station's history list now carries the card facts so the last 24 h count too. Left:
    a look at it on a real screen with a real station. Asked for by the operator.
+0h. **Aircraft history compression — open for review (branch
+   `claude/aircraft-history-compression`).** `aircraft-history.json` is written gzipped,
+   same name, once it passes 5 MB; either form is read. Still opt-in, still atomic.
+   Left: the server wiring and its tests need the opus download (CI); a look at a
+   real, big file. Asked for by the operator.
 
 0g. **Copy summary on the aircraft card — merged (#210).** A button in the Cards list copies the card as text, each
    line marked radio / online / station history, with the photo credit and page link.

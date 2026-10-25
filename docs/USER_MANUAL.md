@@ -6148,7 +6148,8 @@ registrations it used, and the card the station's relay gave for it — page and
 credit of the photo, never the picture. It is kept in `aircraft-history.json` in
 the station's config folder, at most 300 points per aircraft and 50 000 in all,
 and the aircraft heard least recently go first; a test that fills it to those
-ceilings measures about 4.6 MB of JSON. Nothing is kept about who was looking.
+ceilings measures about 4.6 MB of JSON. Should the file ever pass 5 MB it is
+written gzipped, under the same name, and read back either way. Nothing is kept about who was looking.
 **It is off by default**: the station's operator switches it on with
 `SDROXIDE_AIRCRAFT_HISTORY=1` (also `true`, `yes` or `on`), and until then nothing
 is read, kept, written or served. It asks nobody for anything: it only writes down
