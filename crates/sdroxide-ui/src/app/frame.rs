@@ -1596,30 +1596,13 @@ impl eframe::App for SdroxideApp {
         if self.show_navtex { self.navtex_window(&ctx, &mut cmds); }
         if self.show_wefax { self.wefax_window(&ctx, &mut cmds); }
         let mode = self.state.rx[0].mode;
-        // Auto-open the floating window when entering the mode (once).
-        if self.last_mode_for_tools != Some(mode) {
-            if mode.is_sstv() { self.show_sstv = true; self.ui_settings.tool_windows_open |= TW_SSTV; }
-            if mode == sdroxide_types::Mode::Dab { self.show_dab = true; self.ui_settings.tool_windows_open |= TW_DAB; }
-            if mode.is_js8() { self.show_js8 = true; self.ui_settings.tool_windows_open |= TW_JS8; }
-            if mode == sdroxide_types::Mode::Acars { self.show_acars = true; self.ui_settings.tool_windows_open |= TW_ACARS; }
-            if mode.is_aprs() { self.show_aprs = true; self.ui_settings.tool_windows_open |= TW_APRS; }
-            if mode.is_hfdl() { self.show_hfdl = true; self.ui_settings.tool_windows_open |= TW_HFDL; }
-            if mode.is_vdl2() { self.show_vdl2 = true; self.ui_settings.tool_windows_open |= TW_VDL2; }
-            if mode.is_ais() { self.show_ais = true; self.ui_settings.tool_windows_open |= TW_AIS; }
-            if mode.is_adsb() { self.show_adsb = true; self.ui_settings.tool_windows_open |= TW_ADSB; }
-            if mode.is_fsq() { self.show_fsq = true; self.ui_settings.tool_windows_open |= TW_FSQ; }
-            if mode.is_hell() { self.show_hell = true; self.ui_settings.tool_windows_open |= TW_HELL; }
-            if mode.is_packet() { self.show_packet = true; self.ui_settings.tool_windows_open |= TW_PACKET; }
-            if mode.is_wspr() { self.show_wspr = true; self.ui_settings.tool_windows_open |= TW_WSPR; }
-            if mode.is_pi4() { self.show_pi4 = true; self.ui_settings.tool_windows_open |= TW_PI4; }
-            if mode.is_text_modem() { self.show_text = true; self.ui_settings.tool_windows_open |= TW_TEXT; }
-            if mode == sdroxide_types::Mode::UvPacket { self.show_uvpacket = true; self.ui_settings.tool_windows_open |= TW_UVPACKET; }
-            if mode == sdroxide_types::Mode::Jtty { self.show_jtty = true; self.ui_settings.tool_windows_open |= TW_JTTY; }
-            if mode == sdroxide_types::Mode::Ale { self.show_ale = true; self.ui_settings.tool_windows_open |= TW_ALE; }
-            if mode.is_rf_paint() { self.show_rf_paint = true; self.ui_settings.tool_windows_open |= TW_RFPAINT; }
-            if mode.is_image() { self.show_image = true; self.ui_settings.tool_windows_open |= TW_IMAGE; }
-            self.last_mode_for_tools = Some(mode);
-        }
+        // **A mode's panel docks under the waterfall; a window is opened by the
+        // operator** (the Detachable page in Settings, the `⇱` chip in the panel's
+        // own window to dock it again). This block used to open each mode's panel
+        // as a floating window the first time the mode was entered *and* write that
+        // into `tool_windows_open`, so every mode came up in a window instead of in
+        // the pane below the waterfall, which is the default the operator asked for
+        // (issue #217). The windows are all still there, all still detachable.
         if mode.is_sstv() && self.show_sstv { self.sstv_window(&ctx, &mut cmds); }
         if mode == sdroxide_types::Mode::Dab && self.show_dab { self.dab_window(&ctx, &mut cmds); }
         if mode.is_js8() && self.show_js8 { self.js8_window(&ctx, &mut cmds); }
@@ -1639,7 +1622,9 @@ impl eframe::App for SdroxideApp {
         if mode == sdroxide_types::Mode::Jtty && self.show_jtty { self.jtty_window(&ctx, &mut cmds); }
         if mode == sdroxide_types::Mode::Ale && self.show_ale { self.ale_window(&ctx, &mut cmds); }
         if mode.is_rf_paint() && self.show_rf_paint { self.rf_paint_window(&ctx, &mut cmds); }
-        if mode.is_image() && self.show_image { self.image_window(&ctx, &mut cmds, mode); }
+        if mode.is_image() && image_window_for(mode) == ImageWindow::Image && self.show_image {
+            self.image_window(&ctx, &mut cmds, mode);
+        }
         // Persist existing tool windows' mask (sync show_* -> mask).
         if self.schedule.show { self.ui_settings.tool_windows_open |= TW_SCHEDULE; } else { self.ui_settings.tool_windows_open &= !TW_SCHEDULE; }
         if self.show_listen { self.ui_settings.tool_windows_open |= TW_LISTEN; } else { self.ui_settings.tool_windows_open &= !TW_LISTEN; }
@@ -4131,7 +4116,7 @@ impl SdroxideApp {
             self.jtty_panel(ui, cmds, panel_h);
         } else if mode == Mode::Ale && !self.show_ale {
             self.ale_panel(ui, cmds, panel_h);
-        } else if mode.is_image() && !(mode.is_sstv() && self.show_sstv) && !self.show_image {
+        } else if mode.is_image() && !self.image_window_open(mode) {
             self.image_panel(ui, cmds, mode);
         } else if mode.is_rf_paint() && !self.show_rf_paint {
             self.rf_paint_panel(ui, cmds, panel_h);
@@ -4658,6 +4643,210 @@ mod tests {
         waterfall_bw_text,
     };
 
+    /// **The reported bug (#215): SSTV opened two windows, `SSTV` and `IMAGE`, on
+    /// the same panel.**
+    ///
+    /// SSTV and SSTV-FM have a window of their own; `IMAGE` belongs to the image
+    /// modes that have none. Every image mode therefore uses exactly one of them,
+    /// and this pins both halves so an auto-open that matches `is_image()` again
+    /// cannot bring the duplicate back.
+    #[test]
+    fn an_image_mode_opens_one_window_and_never_both() {
+        use super::{ImageWindow, image_window_for};
+        let image_modes: Vec<Mode> = Mode::ALL.into_iter().filter(|m| m.is_image()).collect();
+        assert!(
+            image_modes.len() >= 3,
+            "the image modes went missing from Mode::ALL: {image_modes:?}"
+        );
+        for m in &image_modes {
+            let want = if m.is_sstv() { ImageWindow::Sstv } else { ImageWindow::Image };
+            assert_eq!(image_window_for(*m), want, "{m:?} would open the wrong window");
+            // And never both: the choice is a single enum, so this is the whole
+            // property — but assert the two modes that share a panel are on
+            // opposite sides of it, which is what the report was about.
+            assert!(
+                image_window_for(*m) != image_window_for(Mode::Rifp) || !m.is_sstv(),
+                "{m:?} shares RIFP's window as well as its own"
+            );
+        }
+        assert_eq!(image_window_for(Mode::Sstv), ImageWindow::Sstv);
+        assert_eq!(image_window_for(Mode::SstvFm), ImageWindow::Sstv);
+        assert_eq!(image_window_for(Mode::Rifp), ImageWindow::Image);
+    }
+
+    /// **#217 at the frame: entering a mode docks its panel, and opens nothing.**
+    ///
+    /// The report: *"When clicking a mode by default a window opens instead of
+    /// opening in the pane below the waterfall what is and should be the
+    /// default."* Every mode that used to pop a window is entered in turn and no
+    /// window may open. The detachable windows all still exist — they are the
+    /// operator's to open now.
+    #[test]
+    fn entering_a_mode_docks_its_panel_and_opens_no_window() {
+        use crate::multi::frame_test_lock;
+        use sdroxide_types::RadioController;
+        let _guard = frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-dock-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        #[derive(Default)]
+        struct Silent;
+        impl RadioController for Silent {
+            fn send(&mut self, _cmd: sdroxide_types::Command) {}
+            fn poll_event(&mut self) -> Option<sdroxide_types::RadioEvent> {
+                None
+            }
+        }
+
+        let ctx = egui::Context::default();
+        let mut app = super::SdroxideApp::new_tab(&ctx, None, None, Box::new(Silent), 0, true);
+        // The modes that used to be opened on entry, and a few that never were, so
+        // the sweep is not only the list it was written from.
+        let modes = [
+            Mode::Sstv,
+            Mode::SstvFm,
+            Mode::Rifp,
+            Mode::Dab,
+            Mode::Js8,
+            Mode::Psk,
+            Mode::Rtty,
+            Mode::Olivia,
+            Mode::Thor,
+            Mode::Packet,
+            Mode::Wspr,
+            Mode::Pi4,
+            Mode::Jtty,
+            Mode::Ale,
+            Mode::RfPaint,
+            Mode::Adsb,
+            Mode::Hfdl,
+            Mode::Vdl2,
+            Mode::Acars,
+            Mode::Aprs,
+            Mode::Fsq,
+            Mode::Hell,
+            Mode::Sstv,
+        ];
+        for mode in modes {
+            app.state.rx[0].mode = mode;
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1280.0, 800.0),
+                )),
+                ..Default::default()
+            };
+            ctx.run_ui(input, |ui| {
+                eframe::App::ui(&mut app, ui, &mut eframe::Frame::_new_kittest());
+            })
+            .drop_without_applying_deltas();
+            let opened: Vec<&str> = [
+                ("SSTV", app.show_sstv),
+                ("IMAGE", app.show_image),
+                ("DAB", app.show_dab),
+                ("JS8", app.show_js8),
+                ("ACARS", app.show_acars),
+                ("APRS", app.show_aprs),
+                ("HFDL", app.show_hfdl),
+                ("VDL2", app.show_vdl2),
+                ("AIS", app.show_ais),
+                ("ADS-B", app.show_adsb),
+                ("FSQ", app.show_fsq),
+                ("HELL", app.show_hell),
+                ("PACKET", app.show_packet),
+                ("WSPR", app.show_wspr),
+                ("PI4", app.show_pi4),
+                ("TEXT", app.show_text),
+                ("UVPACKET", app.show_uvpacket),
+                ("JTTY", app.show_jtty),
+                ("ALE", app.show_ale),
+                ("RF PAINT", app.show_rf_paint),
+            ]
+            .into_iter()
+            .filter(|(_, open)| *open)
+            .map(|(name, _)| name)
+            .collect();
+            assert!(
+                opened.is_empty(),
+                "{mode:?} opened {opened:?} — a mode's panel belongs in the pane below \
+                 the waterfall (#217)"
+            );
+        }
+        assert_eq!(
+            app.ui_settings.tool_windows_open & super::MODE_PANEL_WINDOWS,
+            0,
+            "entering modes wrote window bits into the settings again (#217)"
+        );
+    }
+
+    /// The repair: the bits a previous run wrote are cleared **once**, and the
+    /// version that makes it once is written — otherwise every restart would shut a
+    /// window the operator had opened on purpose.
+    #[test]
+    fn the_mode_panel_bits_are_repaired_once_and_only_once() {
+        use super::{MODE_PANEL_WINDOWS, TW_GRID, TW_SSTV, repair_mode_panel_windows};
+        let mut ui = sdroxide_types::UiSettings::default();
+        // What 2.1.0.x left behind: the panels it opened, plus GRID, which the
+        // operator opened himself and which must survive.
+        ui.tool_windows_open = MODE_PANEL_WINDOWS | TW_GRID;
+        assert!(repair_mode_panel_windows(&mut ui), "the repair did nothing");
+        assert_eq!(ui.tool_windows_repaired, 1);
+        assert_eq!(
+            ui.tool_windows_open & MODE_PANEL_WINDOWS,
+            0,
+            "a mode panel's window would still open on its own"
+        );
+        assert_eq!(
+            ui.tool_windows_open & TW_GRID,
+            TW_GRID,
+            "a window the operator opened was closed by the repair"
+        );
+        // And never again: a window opened later stays open.
+        ui.tool_windows_open |= TW_SSTV;
+        assert!(!repair_mode_panel_windows(&mut ui), "the repair ran twice");
+        assert_eq!(ui.tool_windows_open & TW_SSTV, TW_SSTV);
+    }
+
+    /// **Nothing opens a mode panel's window on the mode's behalf**, and the one
+    /// that is drawn is the mode's own.
+    ///
+    /// This is the source half of #215 and #217 together: #215 was two windows
+    /// because two auto-opens fired for one mode, and #217 is the auto-open itself
+    /// — it put every panel in a window instead of the pane below the waterfall.
+    /// With it gone the duplicate cannot happen, and `image_window_for` still
+    /// decides which single window a mode would draw *if* one is open.
+    #[test]
+    fn nothing_opens_a_mode_panel_and_only_the_modes_own_image_window_draws() {
+        let src = include_str!("frame.rs");
+        let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
+        assert!(
+            !code.contains("if mode.is_image() && self.show_image {"),
+            "the IMAGE window is drawn on a bare is_image() again (#215)"
+        );
+        assert!(
+            code.contains("image_window_for(mode) == ImageWindow::Image"),
+            "the draw has to ask which window the mode uses"
+        );
+        // The docked panel asks the same decision, through the helper that reads
+        // the mode's *own* window — the part that used to blank an SSTV panel when
+        // RIFP's window had been left open.
+        assert!(
+            src.contains("fn image_window_open")
+                && src.contains("ImageWindow::Sstv => self.show_sstv"),
+            "the docked panel no longer asks which window the mode uses"
+        );
+        assert!(
+            !code.contains("self.show_sstv = true; self.ui_settings.tool_windows_open |= TW_SSTV;"),
+            "a window is opened on mode entry again (#217)"
+        );
+        assert!(
+            !code.contains("if mode.is_js8() { self.show_js8 = true;"),
+            "a window is opened on mode entry again (#217)"
+        );
+    }
+
     /// The reported bug, in one line: a profile's control bindings reached the
     /// server and were written to disk correctly, survived a restart, and were
     /// then **discarded at sign-in with nothing said** — because the opt-in that
@@ -5087,6 +5276,16 @@ impl SdroxideApp {
         if open { self.ui_settings.tool_windows_open |= TW_RFPAINT; } else { self.ui_settings.tool_windows_open &= !TW_RFPAINT; }
         crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
+    /// Is this mode's **own** image window open? The docked panel is drawn only
+    /// when it is not — and only the window that mode actually uses counts, so a
+    /// `IMAGE` left open from RIFP cannot blank SSTV's panel.
+    fn image_window_open(&self, mode: Mode) -> bool {
+        match image_window_for(mode) {
+            ImageWindow::Sstv => self.show_sstv,
+            ImageWindow::Image => self.show_image,
+        }
+    }
+
     pub(in crate::app) fn image_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>, mode: sdroxide_types::Mode) {
         let open = self.tool_window(ctx, "image", "IMAGE", [760.0, 600.0], self.show_image,
             |me, ui| { me.image_panel(ui, cmds, mode); });
@@ -5095,6 +5294,70 @@ impl SdroxideApp {
         crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
 }
+/// **Which of the two image windows a mode uses — never both.**
+///
+/// SSTV and SSTV-FM have had their own `SSTV` window since their panel was made
+/// detachable. `IMAGE` arrived later, for the image modes that had no window of
+/// their own (RIFP), and the auto-open that came with it matched **every** image
+/// mode — so opening SSTV opened the same panel twice, once under each title
+/// (#215, reported against 2.1.0.2.5). One decision, used by the auto-open, by the
+/// draw and by the docked panel, is what keeps it to one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(in crate::app) enum ImageWindow {
+    /// The mode's own `SSTV` window (`TW_SSTV`).
+    Sstv,
+    /// The shared `IMAGE` window (`TW_IMAGE`), for an image mode without one.
+    Image,
+}
+
+/// The window this image mode uses. See [`ImageWindow`]: exactly one, always.
+pub(in crate::app) fn image_window_for(mode: Mode) -> ImageWindow {
+    if mode.is_sstv() { ImageWindow::Sstv } else { ImageWindow::Image }
+}
+
+/// The bits the program itself used to set: every mode panel it opened on the
+/// operator's behalf. See [`repair_mode_panel_windows`] and issue #217.
+pub const MODE_PANEL_WINDOWS: u64 = TW_DSC
+    | TW_NAVTEX
+    | TW_WEFAX
+    | TW_SSTV
+    | TW_DAB
+    | TW_JS8
+    | TW_ACARS
+    | TW_APRS
+    | TW_HFDL
+    | TW_VDL2
+    | TW_AIS
+    | TW_ADSB
+    | TW_FSQ
+    | TW_HELL
+    | TW_PACKET
+    | TW_WSPR
+    | TW_PI4
+    | TW_TEXT
+    | TW_UVPACKET
+    | TW_JTTY
+    | TW_ALE
+    | TW_RFPAINT
+    | TW_IMAGE;
+
+/// **Dock the mode panels again, once** (issue #217).
+///
+/// Until this repair, choosing a mode opened its panel as a window and wrote that
+/// into [`sdroxide_types::UiSettings::tool_windows_open`], so the bits a previous
+/// run left behind cannot be told apart from the operator's own. They are cleared
+/// once — the version in [`sdroxide_types::UiSettings::tool_windows_repaired`]
+/// makes it once — and from then on a panel window is open only because somebody
+/// opened it. Returns true when it changed anything, so the caller can save.
+pub(in crate::app) fn repair_mode_panel_windows(ui: &mut sdroxide_types::UiSettings) -> bool {
+    if ui.tool_windows_repaired >= 1 {
+        return false;
+    }
+    ui.tool_windows_open &= !MODE_PANEL_WINDOWS;
+    ui.tool_windows_repaired = 1;
+    true
+}
+
 // Tool window bit indices (persisted in UiSettings.tool_windows_open).
 pub const TW_DSC: u64 = 1 << 0;
 pub const TW_NAVTEX: u64 = 1 << 1;
