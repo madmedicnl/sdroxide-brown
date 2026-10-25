@@ -2316,16 +2316,6 @@ pub struct DigiConfig {
     /// tuning instruction for the service reads.
     #[serde(default)]
     pub navtex_reverse: bool,
-    /// NAVTEX receive sensitivity, `-5..=+5`. See the WEFAX one for the
-    /// shape of the control: `+` accepts a weaker or noisier signal, `−`
-    /// waits for a cleaner one before declaring sync. Appended last, so this
-    /// is a wire change.
-    #[serde(default)]
-    pub navtex_rx_sensitivity: i8,
-    /// NAVTEX receive is using its reference thresholds. When true,
-    /// `navtex_rx_sensitivity` is ignored and the slider sits at 0.
-    #[serde(default = "yes")]
-    pub navtex_rx_auto: bool,
     /// Let the RTTY decoder track tuning error rather than staying pinned to
     /// the cursor. On by default; the matched-filter detector is much less
     /// forgiving of mistuning than a wideband discriminator would be.
@@ -3276,8 +3266,6 @@ impl Default for DigiConfig {
             rtty_shift_hz: 170.0,
             rtty_reverse: false,
             navtex_reverse: false,
-            navtex_rx_sensitivity: 0,
-            navtex_rx_auto: true,
             rtty_afc: true,
             olivia_tones: 32,
             olivia_bw_hz: 1000.0,
