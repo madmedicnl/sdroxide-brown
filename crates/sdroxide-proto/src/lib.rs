@@ -2051,6 +2051,15 @@ use sdroxide_types::{
 /// so the gap at 242 is that PR's to fill.
 /// `PROTO_VERSION` 242 → 243, `VERSION_BYTE` 0x3E → 0x3F. A downstream (fork)
 /// change.
+/// v244: **NAVTEX receive sensitivity** (PR #202). [`sdroxide_types::DigiConfig`]
+/// gains `navtex_rx_sensitivity` (i8) and `navtex_rx_auto` (bool) between
+/// `navtex_reverse` and `rtty_afc` — a receive sensitivity control for the
+/// NAVTEX decoder, -5 to +5, with Auto meaning the reference thresholds.
+/// `DigiConfig` rides `SetDigiConfig`/`DigiStatus` whole, so the inserted
+/// fields move the layout. `#[serde(default)]`, so a stored config loads
+/// unchanged. `PROTO_VERSION` 243 → 244, `VERSION_BYTE` 0x3F → 0x40.
+/// A downstream (fork) change.
+/// Reverted in v247.
 /// v245: **revert of PR #163** (SSTV receive sensitivity control). The
 /// `sstv_rx_sensitivity` (i8) and `sstv_rx_auto` (bool) fields are removed
 /// from [`sdroxide_types::DigiConfig`], the audio gain in `SstvController` is
@@ -2068,8 +2077,16 @@ use sdroxide_types::{
 /// whole, so removing the appended fields moves the layout; `#[serde(default)]`
 /// keeps a stored config loading. `PROTO_VERSION` 245 → 246,
 /// `VERSION_BYTE` 0x41 → 0x42.
-pub const PROTO_VERSION: u16 = 246;
-const VERSION_BYTE: u8 = 0x42;
+/// v247: **revert of PR #202** (NAVTEX receive sensitivity control). The
+/// `navtex_rx_sensitivity` (i8) and `navtex_rx_auto` (bool) fields are removed
+/// from [`sdroxide_types::DigiConfig`], the threshold handling in the NAVTEX
+/// DSP and controller is dropped, and the Sensitivity slider/Auto chip is
+/// removed from the NAVTEX panel. `DigiConfig` rides `SetDigiConfig`/
+/// `DigiStatus` whole, so removing the inserted fields moves the layout;
+/// `#[serde(default)]` keeps a stored config loading. `PROTO_VERSION` 246 →
+/// 247, `VERSION_BYTE` 0x42 → 0x43.
+pub const PROTO_VERSION: u16 = 247;
+const VERSION_BYTE: u8 = 0x43;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {

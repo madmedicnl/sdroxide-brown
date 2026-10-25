@@ -44,10 +44,6 @@ const TEXT_CAP: usize = 8_000;
 /// not append to it.
 const BODY_CAP: usize = 20_000;
 
-fn sensitivity(cfg: &DigiConfig) -> i8 {
-    if cfg.navtex_rx_auto { 0 } else { cfg.navtex_rx_sensitivity }
-}
-
 pub struct NavtexController {
     cfg: DigiConfig,
     rx: NavtexRx,
@@ -76,7 +72,6 @@ impl NavtexController {
     ) -> Self {
         let mut rx = NavtexRx::new(tap_rate);
         rx.set_reverse(cfg.navtex_reverse);
-        rx.set_sensitivity(sensitivity(&cfg));
         let mut ctrl = NavtexController {
             cfg,
             rx,
@@ -364,12 +359,6 @@ impl DigiEngine for NavtexController {
     fn set_config(&mut self, cfg: DigiConfig) {
         if cfg.navtex_reverse != self.cfg.navtex_reverse {
             self.rx.set_reverse(cfg.navtex_reverse);
-            self.status_dirty = true;
-        }
-        if cfg.navtex_rx_sensitivity != self.cfg.navtex_rx_sensitivity
-            || cfg.navtex_rx_auto != self.cfg.navtex_rx_auto
-        {
-            self.rx.set_sensitivity(sensitivity(&cfg));
             self.status_dirty = true;
         }
         self.cfg = cfg;
