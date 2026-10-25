@@ -16,6 +16,9 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 ### Needs feedback
 - **ALE (2G)** decodes a synthesized word exactly and has never copied a real burst. If you can hear one, a minute of WAV on 11175 / 8992 / 15016 kHz USB (or the amateur channels near 14109.5 kHz) would finish the mode — see the manual, §3.29.
 
+### Added
+- **Copy summary** on an aircraft's card — the card as plain text on the clipboard, each line marked *radio*, *online* or *station history*, with the photo credit and link; never the position, the last message or the picture's address.
+
 ### Changed
 - **JTTY, brought up to the reference's own standard** — upstream's six follow-up commits, taken whole: the 1500 Hz centre, four-letter words packed as text, the reference waveform timing, the frequency search around the operator's tuning, one line per message, a non-ASCII transmit panic, the burst tail and the stop button.
 

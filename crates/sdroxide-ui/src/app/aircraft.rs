@@ -25,6 +25,7 @@ use super::aircraft_card::{self, CardKey};
 use super::aircraft_history::{self, HistoryOffer, HistoryState};
 use super::aircraft_online::{self, Badge, Provenance, ThumbStatus};
 use super::aircraft_search;
+use super::aircraft_share;
 
 /// The opening size of the window and its floor.
 const AIRCRAFT_SIZE: [f32; 2] = [920.0, 560.0];
@@ -389,8 +390,26 @@ impl super::SdroxideApp {
                             history_pressed = icao;
                         }
                     }
+                    let card_rows = aircraft_online::rows(card, &state, now);
+                    ui.add_space(4.0);
+                    if ui
+                        .small_button("Copy summary")
+                        .on_hover_text(
+                            "Copy this card as text: what is known, and where each line came from. \
+                             The position and the last message are left out.",
+                        )
+                        .clicked()
+                    {
+                        let text = aircraft_share::summary_text(
+                            &aircraft_card::title(&sel, card),
+                            &aircraft_card::detail(&sel, card),
+                            &card_rows,
+                            photo.as_ref(),
+                        );
+                        ui.ctx().copy_text(text);
+                    }
                     ui.add_space(6.0);
-                    rows_grid(ui, "aircraft_card_fields", aircraft_online::rows(card, &state, now));
+                    rows_grid(ui, "aircraft_card_fields", card_rows);
                     if let Some(i) = icao.filter(|i| self.aircraft_online.history.on() == Some(*i))
                     {
                         ui.add_space(6.0);

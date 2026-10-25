@@ -55,8 +55,13 @@ maintainer's queue there, not a promise.
    memory only and asks for nothing, so type and operator are found only once an
    aircraft has been looked up. Asked for by the operator.
 
-0f. **Aircraft history on the station — open for review (branch
-   `claude/aircraft-history-server`).** The station keeps a day of what its radios
+0g. **Copy summary on the aircraft card — open for review (branch
+   `claude/aircraft-share`).** A button in the Cards list copies the card as text, each
+   line marked radio / online / station history, with the photo credit and page link.
+   Position, last message and the thumbnail address are withheld. Left: a look at the
+   button on a real screen and a paste into a real app. Asked for by the operator.
+
+0f. **Aircraft history on the station — merged (#208).** The station keeps a day of what its radios
    heard of each aircraft — positions, callsigns, registrations and the relay's card —
    in `aircraft-history.json`, **off by default** (`SDROXIDE_AIRCRAFT_HISTORY=1` turns it
    on), served on `/aircraft-history`. **Show history** in the pinned card and the

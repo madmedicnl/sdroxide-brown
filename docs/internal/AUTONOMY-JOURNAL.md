@@ -21,6 +21,30 @@ Each entry, in this order:
 
 ---
 
+
+## 2026-10-25 (aircraft share)
+
+**In plain words.** The aircraft card in the Cards list now has a *Copy summary*
+button: it puts what is known about the aircraft on the clipboard as text, each line
+saying whether the radio or the online lookup gave it, with the photo credit and
+link. The position and the last message are left out on purpose. Not yet looked at
+on a real screen or pasted into a real app.
+
+The night's brief listed four PRs; the first three (online card, hover card,
+search and filters) were already merged (#205, #206, #207), so only this one was
+left to do. Branch `claude/aircraft-share`, a pure module `aircraft_share.rs` and one
+button in `aircraft.rs`. Tests written with the code, then four mutations (position
+allowed, missing lines exported, notes appended, thumbnail address exported): each
+failed exactly the test meant for it.
+
+- `cargo test -p sdroxide-ui`: 1147 passed, 0 failed, 8 ignored (8 new).
+- wasm `cargo check --release`: clean for this module; `cargo check -p sdroxide-ui
+  --all-targets`: clean; `rustfmt --check` clean on the new file and on `aircraft.rs`.
+- Not run: `cargo check --workspace --all-targets` (the radio engine's opus fetch is
+  refused by the sandbox proxy). The change touches only `sdroxide-ui`.
+- Open: the real clipboard write (`copy_text`) is not exercised by a test, only that
+  the card calls it once, through the pure function.
+
 ## 2026-10-25 (aircraft history) — the station remembers each aircraft for a day
 
 **Summary.** The station now keeps a day of what its radios heard of every
