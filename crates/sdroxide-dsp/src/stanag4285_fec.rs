@@ -652,11 +652,20 @@ pub fn message_text(bits: &[u8]) -> Option<String> {
     if bits.len() < 40 {
         return None;
     }
-    // 5N1.5 first: one start bit, five data bits least significant first, then
-    // the stop bits. The reader is self-synchronising — it hunts for a start bit
-    // and then for the next one — so an alignment that is wrong produces short
-    // runs, which the score can see.
-    let mut best: Option<(f32, String)> = None;
+    // **Two framings, and the synchronous one is preferred.**
+    //
+    // Annex E calls what the coded chain carries "message bits" and names no
+    // character set; the coded rates put five data bits a character with no start
+    // or stop, so synchronous groups are the reading the mode actually defines.
+    // 5N1.5 (start bit, five data, stop) is what an *uncoded* teleprinter link
+    // sends, and it is kept as a second attempt.
+    //
+    // The order matters, and it cost a good message to learn: this preferred the
+    // 5N1.5 reading, and on the reference decoder's bits for the 24 October
+    // capture — `RYRYRYRYRYRYRYRY`, the French Navy test tape — a wrong
+    // start/stop alignment scored higher than the right synchronous one, so the
+    // function returned `None` and a message that was there was thrown away.
+    let mut framed: Option<(f32, String)> = None;
     for shift in 0..8 {
         let mut out = String::new();
         let mut p = shift;
@@ -678,44 +687,71 @@ pub fn message_text(bits: &[u8]) -> Option<String> {
                 stop += 1;
             }
             if stop == 0 {
-                // No stop bit where one is required: this alignment is not the
-                // framing, so the reading ends here.
-                break;
+                // No stop bit where one is required: **resynchronise**, do not
+                // give up. The reader is documented as self-synchronising and it
+                // was not — it ended the reading at the first violation, so one
+                // bad bit threw away everything after it. Measured on the
+                // reference decoder's bits for the 24 October capture: a hand
+                // reader that resynchronises reads `RYRYRYRYRYRYRYRY`, this one
+                // read nothing at all.
+                continue;
             }
         }
-        // How much of the bit budget the reading covered, and how much it looks
-        // like text. A wrong alignment produces a handful of characters and then
-        // a missing stop bit, which is what this catches.
         let covered = out.chars().count() as f32 * 7.5 / bits.len() as f32;
         if covered < 0.5 {
             continue;
         }
-        let score = text_score(&out) * (0.5 + 0.5 * covered.min(1.0));
-        if best.as_ref().is_none_or(|(b, _)| score > *b) {
-            best = Some((score, out));
+        // The tape is evidence in itself and is not scaled by coverage: a
+        // sixteen-character diddle inside a short reading is a station testing a
+        // link, not a lucky slip. Prose still has to cover the stream.
+        let score = (text_score(&out) * (0.5 + 0.5 * covered.min(1.0))).max(tape_score(&out));
+        // Score first, then length: two alignments can score alike and the
+        // longer reading is strictly more evidence — the shorter one has lost a
+        // character at the front.
+        // A tenth of a score is inside the noise of this measure; where two
+        // alignments are that close, the longer reading is the one that did not
+        // lose its first character.
+        let better = framed
+            .as_ref()
+            .is_none_or(|(b, t)| score > *b + 0.1 || (score > *b - 0.1 && out.len() > t.len()));
+        if better {
+            framed = Some((score, out));
         }
     }
-    // Synchronous five-bit groups are the fallback for a link that is not a
-    // teleprinter; they are tried only when no framing reading stood up, because
-    // a synchronous read of a 5N1.5 stream is all letters and no spaces.
-    if best.is_none() {
-        for shift in 0..5 {
-            let n = (bits.len().saturating_sub(shift)) / 5;
-            let mut out = String::with_capacity(n);
-            for k in 0..n {
-                let mut v = 0u8;
-                for i in 0..5 {
-                    v |= bits[shift + 5 * k + i] << i;
-                }
-                out.push(ITA2_LETTERS[v as usize & 31]);
+
+    let mut sync: Option<(f32, String)> = None;
+    for shift in 0..5 {
+        let n = (bits.len().saturating_sub(shift)) / 5;
+        let mut out = String::with_capacity(n);
+        for k in 0..n {
+            let mut v = 0u8;
+            for i in 0..5 {
+                v |= bits[shift + 5 * k + i] << i;
             }
-            let score = text_score(&out) * 0.8;
-            if best.as_ref().is_none_or(|(b, _)| score > *b) {
-                best = Some((score, out));
-            }
+            out.push(ITA2_LETTERS[v as usize & 31]);
+        }
+        let covered = (out.chars().count() as f32 * 5.0 / bits.len() as f32).min(1.0);
+        let score = (text_score(&out) * (0.5 + 0.5 * covered)).max(tape_score(&out));
+        if sync.as_ref().is_none_or(|(b, _)| score > *b) {
+            sync = Some((score, out));
         }
     }
-    let (score, text) = best?;
+
+    // The better reading wins, and a stream that only stands up under one of them
+    // still reads: gating the fallback on "the first attempt found nothing" is
+    // what threw a good message away.
+    // **The framed reading wins when it stands up.** A coded message's payload is
+    // a teleprinter stream — the reference decoder's bits for the 24 October
+    // capture frame as 5N1.5 and read `RYRYRYRY…` — so a framed reading that
+    // clears the gate is preferred even when the synchronous one scores a little
+    // higher, which it does on a stream with start and stop bits in it because
+    // those bits make a repeating pattern of their own.
+    let chosen = match (sync, framed) {
+        (Some(c), Some(f)) => Some(if f.0 >= 0.45 && f.0 >= c.0 * 0.8 { f } else { c }),
+        (Some(c), None) => Some(c),
+        (None, f) => f,
+    };
+    let (score, text) = chosen?;
     (score > 0.45).then_some(text)
 }
 
@@ -728,6 +764,45 @@ pub fn message_text(bits: &[u8]) -> Option<String> {
 /// 70 % in text against 37.5 % in noise, and the share of spaces, about 15 %
 /// against 3 % — and the score is those two against those references rather than
 /// an absolute count, so a short message is judged on its own scale.
+/// How much of the reading is a **repeating pattern**, 0..1.
+///
+/// A station testing a link sends a tape: `RYRYRY…`, `SGSGSG…`, or one of the
+/// shift rehearsals, repeated for minutes. That is not English prose and this
+/// mode does not carry English prose, so [`text_score`] — built on the common
+/// letters of English — rejects exactly the transmission the mode is used for.
+/// Measured on the reference decoder's bits for the 24 October capture: a hand
+/// reader over synchronous groups reads `RYRYRYRYRYRYRYRY` and `text_score`
+/// gave it 0.23, under the 0.45 gate, so a good message was thrown away.
+///
+/// So the reward is for structure that a wrong reading cannot fake: a short
+/// pattern occupying most of the reading.
+fn tape_score(s: &str) -> f32 {
+    let c: Vec<char> = s.chars().collect();
+    if c.len() < 24 {
+        return 0.0;
+    }
+    let mut best = 0usize;
+    for period in 2..=8usize {
+        let mut run = 0usize;
+        let mut longest = 0usize;
+        for i in period..c.len() {
+            if c[i] == c[i - period] {
+                run += 1;
+                longest = longest.max(run);
+            } else {
+                run = 0;
+            }
+        }
+        best = best.max(longest + period);
+    }
+    // **Absolute, not a share of the reading.** A share was the first attempt and
+    // it scored the very case it was written for at zero: `RYRYRYRYRYRYRYRY` is
+    // sixteen characters inside a two-hundred-character reading, so a quarter of
+    // the stream never repeats even though the tape is unmistakable. Eight
+    // characters of a repeating pattern is chance; sixteen is a tape.
+    ((best as f32 - 8.0) / 16.0).clamp(0.0, 1.0)
+}
+
 fn text_score(s: &str) -> f32 {
     let chars: Vec<char> = s.chars().collect();
     if chars.len() < 8 {
@@ -1019,5 +1094,55 @@ mod tests {
         }
         let m = got.expect("a SOM damaged in its first six bits did not frame");
         assert_eq!(m.bits, msg, "the message bits are not the ones between SOM and EOM");
+    }
+
+    /// **A test tape reads, and it is not English prose.**
+    ///
+    /// The three faults this pins were each measured on the reference decoder's
+    /// bits for this station's 24 October capture, where the answer is a French
+    /// Navy tape: `RYRYRYRY…`, `SGSGSG…`, `ZNR UUUUU`, `ZUI TESTING`.
+    ///
+    /// * the score was built on the common letters of English and on spaces, so
+    ///   `RYRYRYRYRYRYRYRY` scored 0.23 against a 0.45 gate — the mode's own test
+    ///   transmission was rejected by its own text filter;
+    /// * the reader gave up at the first missing stop bit instead of
+    ///   resynchronising, throwing away everything after one bad bit;
+    /// * the synchronous reading was gated on the framed one finding *nothing*,
+    ///   so a wrong 5N1.5 alignment could block the right reading.
+    #[test]
+    fn a_test_tape_reads_as_text() {
+        // 5N1.5, one start bit, five data bits least significant first, 1.5 stop.
+        let tape = "ZUI TESTING RYRYRYRYRYRYRYRY ZNR UUUUU";
+        let mut bits = Vec::new();
+        for c in tape.chars() {
+            let v = ITA2_LETTERS.iter().position(|x| *x == c).expect("in the table") as u8;
+            bits.push(0u8);
+            for i in 0..5 {
+                bits.push((v >> i) & 1);
+            }
+            bits.push(1);
+            bits.push(1);
+        }
+        let read = message_text(&bits).expect("the tape did not read as text");
+        assert!(read.contains("ZUI TESTING"), "read {read:?}");
+        assert!(read.contains("RYRYRYRY"), "the diddle was lost: {read:?}");
+        // A single corrupted character must not end the reading: the reader
+        // resynchronises rather than giving up.
+        let mut damaged = bits.clone();
+        damaged[70] = 1;
+        damaged[71] = 1;
+        let read = message_text(&damaged).expect("one bad bit ended the reading");
+        assert!(read.contains("ZNR UUUUU"), "the tail was lost: {read:?}");
+        // And noise is still not text.
+        let mut seed = 0x1234_5678u32;
+        let noise: Vec<u8> = (0..1200)
+            .map(|_| {
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                (seed & 1) as u8
+            })
+            .collect();
+        assert_eq!(message_text(&noise), None, "noise read as text");
     }
 }

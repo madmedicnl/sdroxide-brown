@@ -103,6 +103,39 @@ correlation. Both decode a clean signal; on a marginal one they diverge.
 DFE trained on sync + references, swept against **decoded bits**, not
 concentration.
 
+**And then the text layer turned out to be throwing good messages away.** With the
+reference's bits in hand — bits that plainly contain a French Navy tape — the
+mode's own reader returned **nothing**:
+
+```
+message_text(reference bits) -> None
+     …while the same bits read by hand are:
+     AVQVA C  RYRYRYRYRYRYRYRY  SGSGSGSGSGSGSGSG  NNNN  ZNR UUUUU  ZUI TESTING
+```
+
+Three faults, each measured, each now fixed and pinned by `a_test_tape_reads_as_text`:
+
+1. **The score was English prose.** `text_score` rewards E T A O I N S H R D U L
+   and spaces; `RYRYRYRYRYRYRYRY` scored 0.23 against a 0.45 gate. A station
+   testing a link sends a tape, not prose — so the mode's own test transmission
+   was rejected by its own text filter. A `tape_score` now rewards a repeating
+   pattern, measured in characters (a sixteen-character diddle is unmistakable;
+   a *share* of the reading is not, and the first attempt scored this case at
+   zero).
+2. **The reader gave up at the first missing stop bit** instead of
+   resynchronising, which the code's own doc claimed it did. One bad bit ended
+   the reading and everything after it.
+3. **The synchronous reading was gated on the framed one finding nothing**, so a
+   wrong 5N1.5 alignment could block the right reading. Both are computed now and
+   the framed one is preferred when it clears the gate, because the coded payload
+   *is* a teleprinter stream.
+
+With that fixed, the same reference bits read `RYRYRYRYRYRYRYRY`, `SGSGSG`,
+`NNNN`, `ZNR UUUUU`, `ZUI TESTING`. **This is the first time this tree has read
+the text of a real STANAG 4285 transmission** — not through our own chain, but
+through the reference's bits feeding our message layer. The mode's remaining
+fault is the soft decisions, exactly as (1) and (2) above say.
+
 
 
 **In plain words.** Went through every open issue and discussion and closed the

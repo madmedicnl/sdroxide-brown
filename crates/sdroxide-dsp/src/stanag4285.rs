@@ -621,6 +621,11 @@ pub struct S4285Receiver {
     pending: Vec<S4285Message>,
     /// How the coded path picks its channel — see [`EqMode`].
     eq_mode: EqMode,
+    /// Forward taps, feedback taps, training passes and step size for
+    /// [`Self::dfe_symbols`]. **Settable from the bench only** — the defaults
+    /// are what the receiver runs — because the choice has to be swept against
+    /// *decoded bits*, not against how tightly the constellation reads.
+    dfe_params: (usize, usize, usize, f32),
     /// Every soft decision the Annex E chains were actually fed, erasures
     /// included, when tracing is on — see [`S4285Receiver::coded_stream`].
     coded_trace: Option<Vec<f32>>,
@@ -643,6 +648,11 @@ const ACQ_SPAN: u64 = (ACQ_FRAMES as u64 + 1) * FRAME as u64 * SPS as u64;
 impl S4285Receiver {
     /// Choose how the coded path picks its channel. Only the frames that feed the
     /// Annex E chains are affected; the displayed frame keeps [`EqMode::Auto`].
+    /// Sweep the equaliser's shape — see [`Self::dfe_params`]. Bench only.
+    pub fn set_dfe_params(&mut self, ff: usize, fb: usize, passes: usize, mu: f32) {
+        self.dfe_params = (ff.max(3) | 1, fb.max(1), passes.max(1), mu);
+    }
+
     pub fn set_eq_mode(&mut self, mode: EqMode) {
         self.eq_mode = mode;
     }
@@ -714,6 +724,7 @@ impl S4285Receiver {
             coded_messages: 0,
             pending: Vec::new(),
             eq_mode: EqMode::Auto,
+            dfe_params: (11, 4, 2, 0.05),
             coded_trace: None,
             coded_quality: Vec::new(),
             last_frame_usable: false,
@@ -1079,7 +1090,7 @@ impl S4285Receiver {
         // taps and more passes measured worse (21/8 → 0.713, 15/6 over three →
         // 0.761) because 256 symbols a frame is not enough to train a longer
         // filter.
-        let (ff, fb, passes, mu) = (11usize, 4usize, 2usize, 0.05f32);
+        let (ff, fb, passes, mu) = self.dfe_params;
         let centre = ff / 2;
         let sync = sync_symbols();
         let pos0 = start as f64 - self.base as f64 + (phase as f64) * SPS as f64;
@@ -3037,16 +3048,14 @@ mod tests {
         // sends them the other way round every decoded bit is wrong while the
         // metric stays flat. Decode both ways and look for the SOM.
         let best_match = |bits: &[u8]| -> (String, usize, i32) {
-            let pat = |p: u32| -> Vec<u8> {
-                (0..32).map(|k| ((p >> (31 - k)) & 1) as u8).collect()
-            };
+            let pat =
+                |p: u32| -> Vec<u8> { (0..32).map(|k| ((p >> (31 - k)) & 1) as u8).collect() };
             let mut out = (String::new(), 0usize, i32::MIN);
             for (name, p) in [("SOM", fec::SOM), ("EOM", fec::EOM)] {
                 let want = pat(p);
                 for w in 0..bits.len().saturating_sub(32) {
-                    let score: i32 = (0..32)
-                        .map(|k| if bits[w + k] == want[k] { 1 } else { -1 })
-                        .sum();
+                    let score: i32 =
+                        (0..32).map(|k| if bits[w + k] == want[k] { 1 } else { -1 }).sum();
                     if score > out.2 {
                         out = (name.to_string(), w, score);
                     }
@@ -3110,9 +3119,7 @@ mod tests {
             let mut best = (0usize, 0i32);
             let want = pat(p);
             for w in 0..bits.len().saturating_sub(32) {
-                let score: i32 = (0..32)
-                    .map(|k| if bits[w + k] == want[k] { 1 } else { -1 })
-                    .sum();
+                let score: i32 = (0..32).map(|k| if bits[w + k] == want[k] { 1 } else { -1 }).sum();
                 if score > best.1 {
                     best = (w, score);
                 }
@@ -3248,6 +3255,43 @@ mod tests {
         let n = ours.len().min(theirs.len());
         let same = (0..n).filter(|&i| ours[i] == theirs[i]).count();
         eprintln!("agree on {same} of {n} bits ({:.1}%)", 100.0 * same as f64 / n as f64);
+        // **Does our chain decode at all when the soft decisions are good?** Both
+        // pair orders, and the text each produces: the reference's own bits read
+        // `RYRY`, so this is the question of whether the fault is ours alone.
+        let ry = |bits: &[u8]| -> usize {
+            match fec::message_text(bits) {
+                Some(t) => t.matches("RY").count(),
+                None => 0,
+            }
+        };
+        for swap in [false, true] {
+            let mut de2 = fec::ConvInterleaver::deinterleaver(fec::CodedRate::Bps600.j());
+            let mut d2: Vec<f32> = Vec::with_capacity(raw.len());
+            for &v in &raw {
+                d2.push(de2.push(128.0 - v as f32));
+            }
+            let mut ours2: Vec<u8> = Vec::new();
+            for chunk in d2.chunks_exact(256) {
+                let mut pairs = fec::average_pairs(chunk, 1);
+                if swap {
+                    for p in pairs.chunks_exact_mut(2) {
+                        p.swap(0, 1);
+                    }
+                }
+                ours2.extend(fec::viterbi_decode(&pairs));
+            }
+            eprintln!(
+                "our chain on their soft, swap {swap}: {} bits, RY pairs {}, text {:?}",
+                ours2.len(),
+                ry(&ours2),
+                fec::message_text(&ours2).map(|t| t.chars().take(60).collect::<String>())
+            );
+        }
+        eprintln!(
+            "reference's own bits: RY pairs {} text {:?}",
+            ry(&theirs),
+            fec::message_text(&theirs).map(|t| t.chars().take(80).collect::<String>())
+        );
         // Also look for the reference's own text: ITA2 5N1.5 over their bits.
         if let Some(t) = fec::message_text(&theirs) {
             eprintln!("reference bits as text: {:?}", &t[..t.len().min(120)]);
@@ -3262,5 +3306,108 @@ mod tests {
         // establishes is that the reference decodes this capture — its ITA2
         // reading is `RYRYRYRY…` — and ours does not, on the same soft
         // decisions. The next session starts from that.
+    }
+
+    /// **Sweep the equaliser against decoded text, not against the
+    /// constellation.**
+    ///
+    /// The DFE's shape was chosen by how tightly the data constellation
+    /// collapsed, which is not the same question as whether the bits decode — the
+    /// reference implementation's 121-tap filter reads this capture and our
+    /// 11-tap one does not, while reading *better* on the constellation. So this
+    /// prints the text each shape produces and how much of the French Navy test
+    /// tape pattern (`RYRY`) appears in it.
+    #[test]
+    #[ignore]
+    fn the_capture_equaliser_swept_against_text() {
+        let path = std::env::var("SDROXIDE_S4285_SAMPLE").expect("set SDROXIDE_S4285_SAMPLE");
+        let mut reader = hound::WavReader::open(&path).expect("open the wav");
+        let spec = reader.spec();
+        let raw: Vec<f32> = match spec.sample_format {
+            hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
+            hound::SampleFormat::Int => {
+                let scale = 1.0 / (1i64 << (spec.bits_per_sample - 1)) as f32;
+                reader.samples::<i32>().map(|s| s.unwrap() as f32 * scale).collect()
+            }
+        };
+        let ch = spec.channels.max(1) as usize;
+        let audio: Vec<f32> = if ch == 1 {
+            raw
+        } else {
+            raw.chunks(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect()
+        };
+        let rate = spec.sample_rate as f64;
+        for (ff, fb, passes, mu) in [
+            (11usize, 4usize, 2usize, 0.05f32),
+            (21, 6, 2, 0.05),
+            (41, 8, 3, 0.02),
+            (61, 8, 4, 0.01),
+            (81, 12, 4, 0.01),
+        ] {
+            let mut rx = S4285Receiver::new(rate, 1800.0);
+            rx.set_eq_mode(EqMode::Dfe);
+            rx.set_dfe_params(ff, fb, passes, mu);
+            let mut text = String::new();
+            let mut msgs = 0usize;
+            for chunk in audio.chunks(1024) {
+                for ev in rx.process(chunk) {
+                    match ev {
+                        S4285Event::Text(t) => text.push_str(&t),
+                        S4285Event::Message(_) => msgs += 1,
+                        _ => {}
+                    }
+                }
+            }
+            let ry = text.matches("RY").count();
+            eprintln!(
+                "ff {ff:2} fb {fb:2} passes {passes} mu {mu:.3}: RY {ry:3} msgs {msgs} report {:?}",
+                rx.report().coded
+            );
+            if ry > 0 {
+                eprintln!("    text: {:?}", &text[..text.len().min(160)]);
+            }
+        }
+    }
+
+    /// Dump **our** soft decisions in the reference's own format (128 per frame,
+    /// 0..255, high = one) so the C++ driver can run the two chains on the same
+    /// numbers and say which half is at fault.
+    #[test]
+    #[ignore]
+    fn dump_our_soft_decisions_for_the_reference() {
+        let path = std::env::var("SDROXIDE_S4285_SAMPLE").expect("set SDROXIDE_S4285_SAMPLE");
+        let mut reader = hound::WavReader::open(&path).expect("open the wav");
+        let spec = reader.spec();
+        let raw: Vec<f32> = match spec.sample_format {
+            hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
+            hound::SampleFormat::Int => {
+                let scale = 1.0 / (1i64 << (spec.bits_per_sample - 1)) as f32;
+                reader.samples::<i32>().map(|s| s.unwrap() as f32 * scale).collect()
+            }
+        };
+        let ch = spec.channels.max(1) as usize;
+        let audio: Vec<f32> = if ch == 1 {
+            raw
+        } else {
+            raw.chunks(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect()
+        };
+        let mut rx = S4285Receiver::new(spec.sample_rate as f64, 1800.0);
+        rx.trace_coded_stream(true);
+        for chunk in audio.chunks(1024) {
+            rx.process(chunk);
+        }
+        // The trace is the BPSK stream: one value per data symbol, 128 a frame.
+        let soft = rx.coded_stream();
+        let mut bytes: Vec<u8> = Vec::with_capacity(soft.len());
+        for &v in soft {
+            // Ours: positive is zero; theirs: 255 is one. Clamp to the same
+            // saturation their LLR table has (25..230) so the comparison is of
+            // decisions, not of scale.
+            let p = (0.5 - 0.5 * v.clamp(-1.0, 1.0)) * 255.0;
+            bytes.push(p.clamp(25.0, 230.0) as u8);
+        }
+        eprintln!("soft values {} ({} frames)", soft.len(), soft.len() / 128);
+        let n = bytes.len() / 128 * 128;
+        std::fs::write("/tmp/opencode/our_soft.bin", &bytes[..n]).expect("write");
     }
 }
