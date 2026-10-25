@@ -1233,7 +1233,18 @@ impl SdroxideApp {
                 .max_rect(zone(2.0))
                 .layout(egui::Layout::right_to_left(egui::Align::Center)),
             |ui| {
-                if crate::chrome::chip(ui, self.show_digi_settings, "⚙ SETUP").clicked() {
+                // **A gear, not the word.** The operator's note: the top of the
+                // operating pane is crowded in some modes, and a word on a chip
+                // that is already a symbol is the first thing to give up. The
+                // hover still names it in words, and this is the same chip in
+                // every digimode panel.
+                if super::window_chip(ui) {
+                    self.float_operating_panel(self.state.rx[0].mode);
+                }
+                if crate::chrome::chip(ui, self.show_digi_settings, "⚙")
+                    .on_hover_text("SETUP — the station identity and the templates these QSO modes share")
+                    .clicked()
+                {
                     self.show_digi_settings = !self.show_digi_settings;
                 }
             },

@@ -126,13 +126,12 @@ impl SdroxideApp {
             }
 
             crate::chrome::row_tail(ui, |ui| {
-                if crate::chrome::chip(
-                    ui,
-                    self.show_digi_settings,
-                    RichText::new("⚙ SETUP").size(9.5),
-                )
-                .on_hover_text("Station callsign and the virtual-channel address")
-                .clicked()
+                if super::window_chip(ui) {
+                    self.float_operating_panel(self.state.rx[0].mode);
+                }
+                if crate::chrome::chip(ui, self.show_digi_settings, RichText::new("⚙").size(9.5))
+                    .on_hover_text("Station callsign and the virtual-channel address")
+                    .clicked()
                 {
                     self.show_digi_settings = !self.show_digi_settings;
                 }

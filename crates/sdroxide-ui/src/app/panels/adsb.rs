@@ -166,7 +166,10 @@ impl SdroxideApp {
             }
 
             ui.separator();
-            if crate::chrome::chip(ui, self.show_adsb_setup, "SETUP")
+            if super::window_chip(ui) {
+                self.float_operating_panel(sdroxide_types::Mode::Adsb);
+            }
+            if crate::chrome::chip(ui, self.show_adsb_setup, "⚙")
                 .on_hover_text("Timeouts, trail length and how far ahead the speed vectors reach")
                 .clicked()
             {
