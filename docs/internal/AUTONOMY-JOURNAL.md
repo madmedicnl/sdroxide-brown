@@ -21,6 +21,70 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-25 (aircraft history) — the station remembers each aircraft for a day
+
+**Summary.** The station now keeps a day of what its radios heard of every
+aircraft: where it was, which callsigns and registrations it used, and the card the
+relay gave for it. A new **Show history** button in the pinned card, and in the Cards
+list, draws that aircraft's trail on the map — fainter the older it is — and adds
+lines to the card saying when it was first and last heard and how high it went. It
+is **off by default**: the station's operator switches it on with
+`SDROXIDE_AIRCRAFT_HISTORY=1`. It asks nobody
+for anything and records nobody who looks. It has not been seen on a real screen or
+with a real station yet.
+
+**Done.** Branch `claude/aircraft-history-server`. No wire change
+(`PROTO_VERSION` untouched: it is plain JSON on two new routes like
+`/aircraft-info`), no change to the relay's logic.
+- A new pure crate `sdroxide-aircraft-history` (the model: which positions are kept,
+  retention, the ceilings, the file's text), the server's `history.rs` (feeds it from
+  the ADS-B and VDL2 events of every radio, serves `/aircraft-history` and
+  `/aircraft-history/{icao}`, writes the file atomically at most once a minute and
+  only when something changed), and the client's `aircraft_history.rs` (when to ask,
+  the trail, the lines).
+- The relay is touched by one line in `aircraft.rs`, after its answer is made, which
+  hands the answer to the history; a test counts that there is exactly one. The
+  relay crate itself is unchanged.
+- The first version kept 400 000 points and was on by default; see "Changed after review" below.
+- Tests written first against neutral stubs: 22 failed in the crate, 19 on the
+  server, 23 in the UI (plus the map trail's two); the ones that passed vacuously
+  were given positive controls. The server's wiring tests that came after the code
+  (routes, root names, the pump reporting its events) were shown failing by removing
+  those lines and putting them back.
+- Numbers: `cargo test -p sdroxide-aircraft-history` 25 passed; `cargo test -p
+  sdroxide-ui` 1139 passed / 0 failed / 8 ignored (1113 before); wasm `cargo check`
+  clean (one old `QsoInfo` warning in `solar3d`); `rustfmt --check` clean on every
+  file touched.
+- **Server tests were run with `sdroxide-radio` taken out of the server's
+  dev-dependencies, temporarily**: that crate pulls `sdroxide-rade`, whose build
+  downloads opus from GitHub, which this sandbox's proxy refuses (403). With it out:
+  `--lib` 57 passed, `--test aircraft_history` 3 passed, `--test
+  aircraft_history_default` 1 passed, `--test aircraft_info` 3 passed. The manifest and `Cargo.lock` were put back, and the lock differs from
+  `main`'s only by the new crate and the two lines that depend on it. The server's
+  other integration tests (`multi_radio`, `session`, …) need the radio crate and were
+  not run; `cargo check --workspace --all-targets` could not run for the same reason.
+  Not claimed.
+- The disk of this sandbox filled during the work; the build's `incremental` and
+  `examples` folders were deleted to go on. Nothing of the repository.
+
+**Changed after review (same day).** Opt-in instead of opt-out: unset or anything but
+1/true/yes/on means nothing is read, kept, written or served, and a second
+integration binary (`aircraft_history_default`) checks that a station with the switch
+unset answers 503 and keeps nothing. The ceilings came down from 600 / 400 000 to 300
+points per aircraft and 50 000 in all; a test fills a history to its ceilings with
+synthetic data and measures it: 3846 aircraft, 49 998 points, 4 589 995 bytes of JSON,
+asserted under 6 MB. A write now cannot start while another is still running, and tests
+show a failed write leaves the old file whole and that what is written was pruned first.
+
+**Not done / blocked.** The trail and the card on a real screen; a real station with
+a real day of traffic (the 4.6 MB is measured on synthetic data at the ceilings, not on
+real traffic); the server's other integration tests and the workspace check, which
+need the opus download.
+
+**Next.** The mode work.
+
+---
+
 ## 2026-10-25 (aircraft search) — one search box over the table, the Cards list and the map
 
 **Summary.** There is now a search box over the ADS-B table, the AIRCRAFT window's

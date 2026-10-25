@@ -21,7 +21,8 @@
 use eframe::egui::{self, RichText};
 use sdroxide_types::{Command, Mode, RxId};
 
-use super::aircraft_card;
+use super::aircraft_card::{self, CardKey};
+use super::aircraft_history::{self, HistoryOffer, HistoryState};
 use super::aircraft_online::{self, Badge, Provenance, ThumbStatus};
 use super::aircraft_search;
 
@@ -66,6 +67,7 @@ const LIST_W: f32 = 230.0;
 
 const RADIO_GREEN: egui::Color32 = egui::Color32::from_rgb(110, 210, 140);
 const ONLINE_BLUE: egui::Color32 = egui::Color32::from_rgb(110, 165, 255);
+const HISTORY_VIOLET: egui::Color32 = egui::Color32::from_rgb(190, 150, 255);
 
 fn chip(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
     ui.label(
@@ -83,6 +85,7 @@ pub(in crate::app) fn badge_chip(ui: &mut egui::Ui, badge: Badge) {
     match badge {
         Badge::Radio => chip(ui, "radio", RADIO_GREEN),
         Badge::Online => chip(ui, "online", ONLINE_BLUE),
+        Badge::History => chip(ui, "history", HISTORY_VIOLET),
         Badge::Missing => {
             ui.label("");
         }
@@ -96,6 +99,23 @@ pub(in crate::app) fn provenance_chip(ui: &mut egui::Ui, p: Provenance) {
         Provenance::RadioOnline | Provenance::Online => chip(ui, p.label(), ONLINE_BLUE),
         Provenance::Nothing => {}
     }
+}
+
+/// Lines of a card in four columns: the label, where it comes from, the value
+/// and a note.
+fn rows_grid(ui: &mut egui::Ui, id: &str, rows: Vec<aircraft_online::Row>) {
+    egui::Grid::new(id).num_columns(4).spacing([12.0, 4.0]).show(ui, |ui| {
+        for r in rows {
+            ui.label(RichText::new(r.label).color(crate::theme::gray(160)));
+            badge_chip(ui, r.badge);
+            match r.badge {
+                Badge::Missing => ui.label(RichText::new(r.value).weak()),
+                _ => ui.label(r.value),
+            };
+            ui.label(RichText::new(r.note).size(10.5).color(crate::theme::gray(130)));
+            ui.end_row();
+        }
+    });
 }
 
 /// A mode button is lit only while the map is the thing on show.
@@ -282,6 +302,9 @@ impl super::SdroxideApp {
         let want = aircraft_card::lookup(&self.aircraft_registry, &sel)
             .and_then(|c| aircraft_online::want_for(&sel, c));
         self.aircraft_online.poll(&ctx, now);
+        // The station's own record of the aircraft whose history is on, fetched
+        // again every 30 s while it is; nothing is asked unless it is on.
+        self.aircraft_online.ask_history(&ctx, peer.as_deref(), now);
         // A card shown only because the box left it first was not chosen: it is
         // not asked about, and its photo is not fetched.
         self.aircraft_online.ask(
@@ -308,6 +331,8 @@ impl super::SdroxideApp {
             photo = aircraft_online::photo_view(&state, status);
         }
         let mut picked = None;
+        let mut history_pressed = None;
+        let has_station = peer.is_some();
         ui.horizontal_top(|ui| {
             ui.allocate_ui_with_layout(
                 egui::vec2(LIST_W, h),
@@ -343,24 +368,48 @@ impl super::SdroxideApp {
                             .size(11.0)
                             .color(crate::theme::gray(160)),
                     );
+                    // The station's record of this aircraft, on a button: it is
+                    // asked for only once this is pressed.
+                    let icao = match &sel {
+                        CardKey::Icao(i) => Some(*i & 0xff_ffff),
+                        CardKey::Fallback(_) => None,
+                    };
+                    let offer = aircraft_history::offer(
+                        self.aircraft_online.history.on(),
+                        icao,
+                        has_station,
+                    );
+                    if offer != HistoryOffer::Hidden {
+                        ui.add_space(4.0);
+                        let b = ui.small_button(offer.label()).on_hover_text(
+                            "Show where this aircraft has been in the last day, from the \
+                             station's own record. It asks your station, never the internet.",
+                        );
+                        if b.clicked() {
+                            history_pressed = icao;
+                        }
+                    }
                     ui.add_space(6.0);
-                    egui::Grid::new("aircraft_card_fields")
-                        .num_columns(4)
-                        .spacing([12.0, 4.0])
-                        .show(ui, |ui| {
-                            for r in aircraft_online::rows(card, &state, now) {
-                                ui.label(RichText::new(r.label).color(crate::theme::gray(160)));
-                                badge_chip(ui, r.badge);
-                                match r.badge {
-                                    Badge::Missing => ui.label(RichText::new(r.value).weak()),
-                                    _ => ui.label(r.value),
-                                };
-                                ui.label(
-                                    RichText::new(r.note).size(10.5).color(crate::theme::gray(130)),
+                    rows_grid(ui, "aircraft_card_fields", aircraft_online::rows(card, &state, now));
+                    if let Some(i) = icao.filter(|i| self.aircraft_online.history.on() == Some(*i))
+                    {
+                        ui.add_space(6.0);
+                        match self.aircraft_online.history.state(i) {
+                            HistoryState::Ready(j) => {
+                                rows_grid(
+                                    ui,
+                                    "aircraft_card_history",
+                                    aircraft_history::rows(j, now),
                                 );
-                                ui.end_row();
                             }
-                        });
+                            HistoryState::Unavailable(r) => {
+                                ui.label(RichText::new(r.note()).size(10.5).weak());
+                            }
+                            HistoryState::Idle | HistoryState::Loading => {
+                                ui.label(RichText::new("asking the station…").size(10.5).weak());
+                            }
+                        }
+                    }
                     if let Some(p) = &photo {
                         ui.add_space(8.0);
                         self.photo_block(ui, p);
@@ -368,6 +417,9 @@ impl super::SdroxideApp {
                 }
             });
         });
+        if let Some(i) = history_pressed {
+            self.aircraft_online.history.toggle(i);
+        }
         if picked.is_some() {
             self.aircraft_card_sel = picked;
         }

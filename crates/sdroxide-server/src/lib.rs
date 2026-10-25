@@ -17,6 +17,7 @@
 
 mod aircraft;
 mod auth;
+mod history;
 mod probe;
 mod session;
 mod session_cookie;
@@ -303,6 +304,10 @@ pub(crate) struct Station {
     pub auth: Arc<auth::AuthGate>,
     /// The relay behind `/aircraft-info`, switched on or off for the life of the process.
     pub aircraft: Arc<aircraft::AircraftHub>,
+    /// What the station remembers of each aircraft for a day, fed by every
+    /// radio and served on `/aircraft-history`. Off unless the operator
+    /// switched it on.
+    pub history: Arc<history::HistoryHub>,
     /// The one probe worker, kept here so a radio added later shares it rather
     /// than starting a second thread that would scan the same bus.
     probes: Arc<probe::ProbeHub>,
@@ -528,6 +533,7 @@ impl Station {
             spectrum_rx,
             wide_spectrum_rx,
             solar: self.solar.clone(),
+            history: self.history.clone(),
             auth: self.auth.clone(),
             probes: self.probes.clone(),
             station: Arc::downgrade(self),
@@ -573,6 +579,9 @@ pub(crate) struct Shared {
     /// one says what the station is doing, because two radios both announcing
     /// it would take turns overwriting each other.
     pub primary: bool,
+    /// The station's memory of the aircraft its decoders hear: every radio
+    /// reports into the same one.
+    pub history: Arc<history::HistoryHub>,
     pub cmd_tx: crossbeam_channel::Sender<Command>,
     pub latest: Mutex<Latest>,
     pub session: Mutex<Option<SessionTx>>,
@@ -646,6 +655,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         solar: Arc::new(solar::SolarHub::default()),
         auth: Arc::new(auth::AuthGate::new(params.access)),
         aircraft: Arc::new(aircraft::AircraftHub::start(params.aircraft_online)),
+        history: Arc::new(history::HistoryHub::start()),
         probes: Arc::new(probe::ProbeHub::start(params.probe)),
         add: params.add_radio,
         remove: params.remove_radio,
@@ -693,6 +703,8 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         .route("/radios", get(radios_route))
         .route("/solar-ws", get(solar::ws_route))
         .route("/aircraft-info/{icao}", get(aircraft::info_route))
+        .route("/aircraft-history", get(history::list_route))
+        .route("/aircraft-history/{icao}", get(history::one_route))
         // Where a browser trades its password for a signed cookie, and gives
         // it back. Both are plain HTTP because a cookie is a response header
         // and the socket handshake's headers are spent before the sign-in
@@ -724,11 +736,12 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
 /// and nowhere else.
 fn is_root_route(path: &str) -> bool {
     match path {
-        "/ws" | "/solar-ws" | "/radios" => true,
+        "/ws" | "/solar-ws" | "/radios" | "/aircraft-history" => true,
         // Whatever follows is the question, and a bad one is the endpoint's to
         // refuse with a 400, not the static handler's to answer with a page.
         _ if path
             .strip_prefix("/aircraft-info/")
+            .or_else(|| path.strip_prefix("/aircraft-history/"))
             .is_some_and(|q| !q.is_empty() && !q.contains('/')) =>
         {
             true
@@ -970,6 +983,8 @@ fn now_utc() -> i64 {
 }
 
 fn handle_event(shared: &Shared, ev: RadioEvent) {
+    // The station remembers what the decoders hear, whatever the clients do.
+    history::observe(&shared.history, &ev);
     // Two of these also feed the globe's QSO layer. Relayed unconditionally
     // rather than only while a map is open: `broadcast::send` with no receivers
     // is a no-op, and keeping the cache warm means a viewer that connects
@@ -1553,6 +1568,24 @@ mod proxy_prefix_tests {
         );
         assert_ne!(strip_proxy_prefix("/aircraft-info/"), None, "no question, no endpoint");
         assert_ne!(strip_proxy_prefix("/aircraft-info/484006/x"), None);
+    }
+
+    /// `/aircraft-history` is the list and `/aircraft-history/<icao>` one
+    /// aircraft: both are endpoints, whatever a reverse proxy left in front.
+    #[test]
+    fn the_history_endpoints_are_recognised_at_the_end_of_a_prefix() {
+        assert_eq!(strip_proxy_prefix("/aircraft-history"), None);
+        assert_eq!(strip_proxy_prefix("/aircraft-history/484006"), None);
+        assert_eq!(
+            strip_proxy_prefix("/sdroxide/aircraft-history"),
+            Some("/aircraft-history".to_string())
+        );
+        assert_eq!(
+            strip_proxy_prefix("/shack/sdr/aircraft-history/4ca1fa"),
+            Some("/aircraft-history/4ca1fa".to_string())
+        );
+        assert_ne!(strip_proxy_prefix("/aircraft-history/"), None, "no address, no endpoint");
+        assert_ne!(strip_proxy_prefix("/aircraft-history/484006/x"), None);
     }
 }
 

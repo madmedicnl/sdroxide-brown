@@ -18,6 +18,7 @@ use sdroxide_types::AdsbAircraft;
 
 use super::aircraft::{badge_chip, provenance_chip};
 use super::aircraft_card::{self, CardKey, icao_hex, source_label};
+use super::aircraft_history::HistoryOffer;
 use super::aircraft_online::{self, Badge, OnlineState, Provenance, Reason, Row, ThumbStatus};
 use super::aircraft_online_io::OnlineClient;
 use super::aircraft_registry::{AircraftCard, AircraftRegistry, Source};
@@ -189,7 +190,7 @@ pub(in crate::app) fn draw(
     card: &HoverCard,
     texture: Option<&egui::TextureHandle>,
 ) -> egui::Rect {
-    draw_inner(ui, card, texture, None, LookupOffer::None)
+    draw_inner(ui, card, texture, None, LookupOffer::None, HistoryOffer::Hidden)
 }
 
 /// [`draw`] for the tooltip, or for the pinned card when `pin` is given: there
@@ -200,6 +201,7 @@ fn draw_inner(
     texture: Option<&egui::TextureHandle>,
     mut pin: Option<&mut PinnedOut>,
     offer: LookupOffer,
+    history: HistoryOffer,
 ) -> egui::Rect {
     let gray = crate::theme::gray(160);
     ui.scope(|ui| {
@@ -306,6 +308,17 @@ fn draw_inner(
                 }
                 LookupOffer::None => {}
             }
+            if history != HistoryOffer::Hidden {
+                ui.add_space(4.0);
+                let r = ui.small_button(history.label()).on_hover_text(
+                    "Where this aircraft has been in the last day, from your station's own \
+                     record. It asks your station, never the internet.",
+                );
+                if r.clicked() {
+                    out.actions.push(PinAction::History);
+                }
+                out.history = Some(r.rect);
+            }
         }
     })
     .response
@@ -349,6 +362,8 @@ pub(in crate::app) enum PinAction {
     Close,
     OpenLink(String),
     Lookup,
+    /// Show or hide where this aircraft has been, from the station's record.
+    History,
 }
 
 /// What drawing the pinned card produced: what was pressed, and where the
@@ -360,6 +375,7 @@ pub(in crate::app) struct PinnedOut {
     pub link: Option<egui::Rect>,
     pub close: Option<egui::Rect>,
     pub lookup: Option<egui::Rect>,
+    pub history: Option<egui::Rect>,
 }
 
 /// The card for an aircraft, from what the app already holds: the registry, the
@@ -396,9 +412,10 @@ pub(in crate::app) fn draw_pinned(
     card: &HoverCard,
     texture: Option<&egui::TextureHandle>,
     offer: LookupOffer,
+    history: HistoryOffer,
 ) -> PinnedOut {
     let mut out = PinnedOut::default();
-    out.area = Some(draw_inner(ui, card, texture, Some(&mut out), offer));
+    out.area = Some(draw_inner(ui, card, texture, Some(&mut out), offer, history));
     out
 }
 
@@ -909,13 +926,23 @@ mod tests {
         card: &HoverCard,
         offer: LookupOffer,
     ) -> PinnedOut {
+        pinned_frame_h(ctx, events, card, offer, HistoryOffer::Hidden)
+    }
+
+    fn pinned_frame_h(
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        card: &HoverCard,
+        offer: LookupOffer,
+        history: HistoryOffer,
+    ) -> PinnedOut {
         let mut raw = egui::RawInput::default();
         raw.screen_rect =
             Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
         raw.events = events;
         let mut out = PinnedOut::default();
         let mut full = ctx.run_ui(raw, |ui| {
-            out = draw_pinned(ui, card, None, offer);
+            out = draw_pinned(ui, card, None, offer, history);
         });
         full.textures_delta.clear();
         out
@@ -923,14 +950,22 @@ mod tests {
 
     /// The card, laid out once, then a click at `pick(layout)` in the next frame.
     fn press(offer: LookupOffer, pick: impl Fn(&PinnedOut) -> Option<egui::Rect>) -> PinnedOut {
+        press_h(offer, HistoryOffer::Hidden, pick)
+    }
+
+    fn press_h(
+        offer: LookupOffer,
+        history: HistoryOffer,
+        pick: impl Fn(&PinnedOut) -> Option<egui::Rect>,
+    ) -> PinnedOut {
         use super::super::aircraft_online::Answer;
         let reg = registry_with_live();
         let mut online = OnlineClient::default();
         online.store.deliver(0x4840D6, Answer::Info(Box::new(info())), NOW);
         let (card, _) = card_view(&live(), &reg, &online, true, Some(HOME), NOW);
         let ctx = egui::Context::default();
-        let laid = pinned_frame(&ctx, vec![], &card, offer);
-        let _ = pinned_frame(&ctx, vec![], &card, offer);
+        let laid = pinned_frame_h(&ctx, vec![], &card, offer, history);
+        let _ = pinned_frame_h(&ctx, vec![], &card, offer, history);
         let at = pick(&laid).expect("the thing to press was not drawn").center();
         let button = |pressed| egui::Event::PointerButton {
             pos: at,
@@ -938,11 +973,12 @@ mod tests {
             pressed,
             modifiers: egui::Modifiers::NONE,
         };
-        pinned_frame(
+        pinned_frame_h(
             &ctx,
             vec![egui::Event::PointerMoved(at), button(true), button(false)],
             &card,
             offer,
+            history,
         )
     }
 
@@ -1042,5 +1078,36 @@ mod tests {
         for b in banned {
             assert!(!code.contains(b), "the hover contains {b}");
         }
+    }
+
+    // ── the history button ────────────────────────────────────────────────
+
+    #[test]
+    fn pressing_the_history_button_asks_to_toggle_it() {
+        for h in [HistoryOffer::Show, HistoryOffer::On] {
+            let out = press_h(LookupOffer::None, h, |o| o.history);
+            assert_eq!(out.actions, [PinAction::History], "{h:?}");
+        }
+    }
+
+    #[test]
+    fn the_history_button_is_drawn_only_when_offered() {
+        let reg = registry_with_live();
+        let online = OnlineClient::default();
+        let (card, _) = card_view(&live(), &reg, &online, true, Some(HOME), NOW);
+        let ctx = egui::Context::default();
+        let hidden = pinned_frame_h(&ctx, vec![], &card, LookupOffer::None, HistoryOffer::Hidden);
+        assert!(hidden.history.is_none(), "{hidden:?}");
+        let ctx = egui::Context::default();
+        let shown = pinned_frame_h(&ctx, vec![], &card, LookupOffer::None, HistoryOffer::Show);
+        assert!(shown.history.is_some(), "the control: offered, so drawn");
+        // The hover card is not the pinned card: it has no buttons at all.
+        let ctx = egui::Context::default();
+        let mut area = None;
+        let mut full = ctx.run_ui(egui::RawInput::default(), |ui| {
+            area = Some(draw(ui, &card, None));
+        });
+        full.textures_delta.clear();
+        assert!(area.is_some());
     }
 }

@@ -48,13 +48,21 @@ maintainer's queue there, not a promise.
    card asks the station's relay for that one aircraft. Seen on a real screen with a
    real station. Asked for by the operator.
 
-0e. **Aircraft search and filters — open for review (branch `claude/aircraft-search-filters`).**
+0e. **Aircraft search and filters — merged (#207).**
    One search box over the ADS-B table, the Cards list and the map: ICAO, callsign,
    registration, type, operator (`reg:` `type:` `op:` limit a word to a field). The
    map hides what does not match and the pinned or selected aircraft stays. It reads
    memory only and asks for nothing, so type and operator are found only once an
-   aircraft has been looked up. Left: a look at it on a real screen. Asked for by the
-   operator.
+   aircraft has been looked up. Asked for by the operator.
+
+0f. **Aircraft history on the station — open for review (branch
+   `claude/aircraft-history-server`).** The station keeps a day of what its radios
+   heard of each aircraft — positions, callsigns, registrations and the relay's card —
+   in `aircraft-history.json`, **off by default** (`SDROXIDE_AIRCRAFT_HISTORY=1` turns it
+   on), served on `/aircraft-history`. **Show history** in the pinned card and the
+   Cards list draws the trail on the map and adds the record to the card. Left: a
+   look at it on a real screen with a real station; the server's other integration
+   tests and the workspace check need the opus download. Asked for by the operator.
 
 1. **The mode work — the live queue, and it has its own brief.**
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):

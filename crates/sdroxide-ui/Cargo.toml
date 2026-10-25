@@ -67,6 +67,9 @@ sdroxide-speech = { path = "../sdroxide-speech", default-features = false }
 # build reads exactly what the server writes. The client never asks adsbdb or
 # Planespotters itself: only the station's relay does.
 sdroxide-aircraft-online = { path = "../sdroxide-aircraft-online" }
+# What the station remembers of each aircraft, as it serves it
+# (`GET /aircraft-history/{icao}`): the same types, read here.
+sdroxide-aircraft-history = { path = "../sdroxide-aircraft-history" }
 
 [features]
 # WebSocket RemoteController for the browser (and native remote) client.

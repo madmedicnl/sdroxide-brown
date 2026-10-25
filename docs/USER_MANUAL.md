@@ -6122,6 +6122,30 @@ only for aircraft whose card has been looked up; when a word begins `type:` or
 online data — open their card*). The search is not saved: closing the program
 clears it.
 
+**History.** A station remembers what its radios heard of each aircraft for the
+last 24 hours: its positions (at most one every 10 seconds, and not before it has
+moved 100 m, with a point a minute for one that is parked), the callsigns and
+registrations it used, and the card the station's relay gave for it — page and
+credit of the photo, never the picture. It is kept in `aircraft-history.json` in
+the station's config folder, at most 300 points per aircraft and 50 000 in all,
+and the aircraft heard least recently go first; a test that fills it to those
+ceilings measures about 4.6 MB of JSON. Nothing is kept about who was looking.
+**It is off by default**: the station's operator switches it on with
+`SDROXIDE_AIRCRAFT_HISTORY=1` (also `true`, `yes` or `on`), and until then nothing
+is read, kept, written or served. It asks nobody for anything: it only writes down
+what has already arrived. HFDL is not in it, and a program running its own radio,
+with no station to connect to, has none.
+
+Nothing shows it until you ask. Press **Show history** in a pinned card, or in
+an aircraft's card in the Cards list, and the map draws where that aircraft has
+been as a violet trail, fainter the older it is, and the card adds lines marked
+**history**: when it was first and last heard, how many points are kept, the
+highest altitude, the callsigns and registrations, and what the relay said about
+it. The request goes to your station only, one at a time, and again every 30
+seconds while it is on; **Hide history** (or closing the pin it was turned on
+from) stops it. If the station has not switched the history on, or wants a sign-in,
+the card says so.
+
 #### Setup
 
 **SETUP** in the panel header opens the decoder's own settings.

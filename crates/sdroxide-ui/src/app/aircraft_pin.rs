@@ -15,6 +15,7 @@ use sdroxide_types::AdsbAircraft;
 
 use super::SdroxideApp;
 use super::aircraft_card::CardKey;
+use super::aircraft_history;
 use super::aircraft_hover::{self, LookupOffer, PinAction};
 use super::aircraft_online::{self, OnlineState, ThumbStatus, Want};
 use super::aircraft_registry::AircraftCard;
@@ -67,6 +68,14 @@ impl SdroxideApp {
         home: Option<(f64, f64)>,
         now: i64,
     ) {
+        // The record turned on from the pin goes when the pin does.
+        let (on, owner) = aircraft_history::after_pin(
+            self.aircraft_online.history.on(),
+            self.pin_history_owner,
+            self.adsb_map.pinned,
+        );
+        self.aircraft_online.history.set_on(on);
+        self.pin_history_owner = owner;
         let Some(pinned) = self.adsb_map.pinned else {
             self.adsb_map.lookup = None;
             return;
@@ -93,6 +102,8 @@ impl SdroxideApp {
         self.aircraft_online.poll(&ctx, now);
         let peer = self.ctrl.peer_url();
         let has_station = peer.is_some();
+        // The station's own record, fetched again every 30 s while it is on.
+        self.aircraft_online.ask_history(&ctx, peer.as_deref(), now);
         let icao = a.icao & 0xff_ffff;
         let state = self.aircraft_online.store.state_for(icao, has_station).clone();
         self.adsb_map.lookup = lookup_after(self.adsb_map.lookup, Some(pinned), &state);
@@ -104,6 +115,8 @@ impl SdroxideApp {
             has_station,
             self.aircraft_online.store.line_busy(now),
         );
+        let history =
+            aircraft_history::offer(self.aircraft_online.history.on(), Some(icao), has_station);
 
         let size = self
             .adsb_map
@@ -124,7 +137,7 @@ impl SdroxideApp {
             .constrain_to(bounds)
             .show(&ctx, |ui| {
                 egui::Frame::popup(ui.style())
-                    .show(ui, |ui| aircraft_hover::draw_pinned(ui, &card, tex, offer))
+                    .show(ui, |ui| aircraft_hover::draw_pinned(ui, &card, tex, offer, history))
                     .inner
             });
         self.adsb_map.pin_size = Some(shown.response.rect.size());
@@ -139,6 +152,12 @@ impl SdroxideApp {
                     if !crate::download::open_external(&url) {
                         tracing::warn!(%url, "no handler for this link");
                     }
+                }
+                PinAction::History => {
+                    self.aircraft_online.history.toggle(icao);
+                    // Turned on from here, it goes with this pin.
+                    self.pin_history_owner =
+                        (self.aircraft_online.history.on() == Some(icao)).then_some(icao);
                 }
                 PinAction::Lookup => {
                     let none = AircraftCard::default();

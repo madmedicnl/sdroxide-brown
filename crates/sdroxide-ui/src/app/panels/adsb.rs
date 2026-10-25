@@ -22,6 +22,7 @@ use eframe::egui::{self, RichText};
 use sdroxide_types::{AdsbAircraft, AdsbStatus, Command};
 
 use crate::app::SdroxideApp;
+use crate::app::aircraft_history;
 use crate::app::aircraft_hover;
 use crate::app::aircraft_search;
 use crate::app::util::fmt_age;
@@ -460,6 +461,15 @@ impl SdroxideApp {
             found.hint.as_deref(),
         );
         self.adsb_map.visible = found.visible;
+        // Where the aircraft whose history is on has been, from the station's
+        // record; nothing when none is on or the record has not come yet.
+        self.adsb_map.trail = self
+            .aircraft_online
+            .history
+            .on()
+            .and_then(|i| self.aircraft_online.history.journal(i))
+            .map(|j| aircraft_history::trail_segments(j, now))
+            .unwrap_or_default();
         // The box takes a row of its own, and its note another.
         let h = (h - 26.0 - if found.hint.is_some() { 16.0 } else { 0.0 }).max(100.0);
         // The hover card reads what the AIRCRAFT window's card already holds and

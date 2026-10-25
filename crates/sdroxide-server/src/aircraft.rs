@@ -192,6 +192,7 @@ pub(crate) async fn info_route(
             })
             .await
             .unwrap_or_else(|_| Info::bare(Status::Unavailable));
+            station.history.note_card(now_unix(), icao, &info);
             json(http_status(info.status), &info)
         }
     }

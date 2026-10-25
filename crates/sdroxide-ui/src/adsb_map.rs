@@ -58,6 +58,10 @@ const MIN_LON_SPAN: f64 = 0.5;
 /// Extra margin left around the outermost target.
 const PAD: f64 = 1.25;
 
+/// The colour of the station's record of an aircraft: the card's *history*
+/// badge, so the trail and the lines say they are the same thing.
+const HISTORY_TRAIL: Color32 = Color32::from_rgb(190, 150, 255);
+
 /// Per-frame ease toward the auto-fit.
 const EASE: f64 = 0.06;
 
@@ -94,10 +98,23 @@ pub struct AdsbMapState {
     /// in it is neither drawn, nor hovered, nor counted in the framing — except
     /// the pinned and the selected aircraft: see [`map_visible`].
     pub visible: Option<std::collections::HashSet<u32>>,
+    /// Where the aircraft whose history is on has been, as line segments, the
+    /// newest the most opaque. Written by the panel each frame from what the
+    /// station sent; empty when no history is on.
+    pub trail: Vec<TrailSeg>,
     /// The map under the picture: land, rivers and borders as an image rather
     /// than the dot stipple the propagation maps use. Rebuilt only when the
     /// view moves by more than a texel.
     pub ground: crate::widgets::worldmap::GroundCache,
+}
+
+/// One stretch of an aircraft's past track: two positions (latitude, longitude)
+/// and how opaque it is drawn, 0 to 1.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TrailSeg {
+    pub from: (f64, f64),
+    pub to: (f64, f64),
+    pub alpha: f32,
 }
 
 /// Which of the map's optional layers are drawn.
@@ -669,6 +686,16 @@ pub fn show(
         && let Some(khz) = nav_hover.as_ref().and_then(|h| h.freq_khz)
     {
         tune = Some(MapTune { hz: tune_hz(khz), vfo: other_dial(active_vfo) });
+    }
+
+    // ── the station's record of the one aircraft whose history is on ──
+    // Under the live tracks, fainter the older it is. A stretch wholly off the
+    // map is skipped.
+    for t in &state.trail {
+        let (from, to) = (project(t.from.0, t.from.1), project(t.to.0, t.to.1));
+        if rect.contains(from) || rect.contains(to) {
+            p.line_segment([from, to], Stroke::new(1.8, alpha(HISTORY_TRAIL, t.alpha * 255.0)));
+        }
     }
 
     // ── history, under everything else ──
@@ -1487,5 +1514,64 @@ mod tests {
         map_frame(&eframe::egui::Context::default(), &mut a, &list, vec![]);
         map_frame(&eframe::egui::Context::default(), &mut b, &list, vec![]);
         assert_eq!((a.view.clat, a.view.clon), (b.view.clat, b.view.clon));
+    }
+
+    // ── the trail of the aircraft whose history is on ─────────────────────
+
+    /// How many shapes one frame of the map paints.
+    fn shapes_in_a_frame(state: &mut AdsbMapState, list: &[AdsbAircraft]) -> usize {
+        let mut raw = eframe::egui::RawInput::default();
+        raw.screen_rect = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0)));
+        let out = crate::test_support::run_frame(&eframe::egui::Context::default(), raw, |ui| {
+            show(
+                ui,
+                state,
+                list,
+                None,
+                1_000,
+                AdsbSettings::default(),
+                None,
+                sdroxide_types::MapStyle::Radar,
+                400.0,
+                Vfo::A,
+                None,
+            );
+        });
+        out.shapes.len()
+    }
+
+    fn seg(from: (f64, f64), to: (f64, f64), alpha: f32) -> TrailSeg {
+        TrailSeg { from, to, alpha }
+    }
+
+    #[test]
+    fn the_trail_is_painted_under_the_aircraft_one_line_a_stretch() {
+        let list = [at(1, 52.0, 5.0)];
+        let mut bare = AdsbMapState::default();
+        let without = shapes_in_a_frame(&mut bare, &list);
+        let mut with = AdsbMapState::default();
+        with.trail = vec![
+            seg((52.0, 5.0), (52.01, 5.0), 0.3),
+            seg((52.01, 5.0), (52.02, 5.0), 0.6),
+            seg((52.02, 5.0), (52.03, 5.0), 0.9),
+        ];
+        let painted = shapes_in_a_frame(&mut with, &list);
+        assert!(painted >= without + 3, "{painted} shapes with a trail, {without} without");
+        // The control: an empty trail paints what no trail paints.
+        let mut empty = AdsbMapState::default();
+        assert_eq!(shapes_in_a_frame(&mut empty, &list), without);
+    }
+
+    #[test]
+    fn a_stretch_of_trail_off_the_map_is_not_painted() {
+        let list = [at(1, 52.0, 5.0)];
+        let mut bare = AdsbMapState::default();
+        let without = shapes_in_a_frame(&mut bare, &list);
+        let mut far = AdsbMapState::default();
+        far.trail = vec![seg((-40.0, 150.0), (-41.0, 151.0), 0.9)];
+        assert_eq!(shapes_in_a_frame(&mut far, &list), without, "wholly out of view");
+        let mut near = AdsbMapState::default();
+        near.trail = vec![seg((52.0, 5.0), (52.01, 5.0), 0.9)];
+        assert!(shapes_in_a_frame(&mut near, &list) > without, "the control: in view it is");
     }
 }

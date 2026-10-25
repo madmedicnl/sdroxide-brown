@@ -22,12 +22,16 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 
 use eframe::egui;
 
+use super::aircraft_history::{self, HistoryStore};
 use super::aircraft_online::{
     Answer, OnlineStore, ThumbStatus, Want, classify, info_url, thumb_fetchable,
 };
 
 /// The most bytes read of a reply from the relay.
 const MAX_INFO_BYTES: u64 = 64 * 1024;
+/// The most bytes read of the station's record of one aircraft: up to 600
+/// positions, a few dozen bytes each.
+const MAX_HISTORY_BYTES: u64 = 256 * 1024;
 /// The most bytes read of a thumbnail. They are a few tens of kilobytes.
 const MAX_THUMB_BYTES: u64 = 2 * 1024 * 1024;
 /// Widest or tallest a thumbnail may decode to.
@@ -37,6 +41,7 @@ const KEEP_THUMBS: usize = 8;
 
 enum Msg {
     Info { icao: u32, status: Option<u16>, body: String },
+    History { icao: u32, status: Option<u16>, body: String },
     Thumb { url: String, bytes: Option<Vec<u8>> },
 }
 
@@ -49,6 +54,8 @@ struct Thumb {
 /// The online half of the AIRCRAFT window, held for the session in memory.
 pub(in crate::app) struct OnlineClient {
     pub store: OnlineStore,
+    /// The station's record of the one aircraft whose history is on.
+    pub history: HistoryStore,
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
     thumbs: Vec<Thumb>,
@@ -57,7 +64,13 @@ pub(in crate::app) struct OnlineClient {
 impl Default for OnlineClient {
     fn default() -> Self {
         let (tx, rx) = channel();
-        Self { store: OnlineStore::default(), tx, rx, thumbs: Vec::new() }
+        Self {
+            store: OnlineStore::default(),
+            history: HistoryStore::default(),
+            tx,
+            rx,
+            thumbs: Vec::new(),
+        }
     }
 }
 
@@ -88,6 +101,9 @@ impl OnlineClient {
             match msg {
                 Msg::Info { icao, status, body } => {
                     self.store.deliver(icao, classify(status, &body), now);
+                }
+                Msg::History { icao, status, body } => {
+                    self.history.deliver(icao, aircraft_history::classify(status, &body), now);
                 }
                 Msg::Thumb { url, bytes } => {
                     let image = bytes.as_deref().and_then(decode_thumb);
@@ -129,7 +145,30 @@ impl OnlineClient {
             return;
         };
         let station = peer.map(crate::login::station_key).unwrap_or_default();
-        send_info(url, station, w.icao, self.tx.clone(), ctx.clone());
+        send_info(url, station, Kind::Info(w.icao), self.tx.clone(), ctx.clone());
+    }
+
+    /// Fetch the station's record of the aircraft whose history is on, if the
+    /// store says one is due. Without a station, or with nothing on, nothing
+    /// is sent.
+    pub(in crate::app) fn ask_history(
+        &mut self,
+        ctx: &egui::Context,
+        peer: Option<&str>,
+        now: i64,
+    ) {
+        let Some(icao) = self.history.next_request(peer.is_some(), now) else { return };
+        let Some(url) = peer.and_then(|p| aircraft_history::history_url(p, icao)) else {
+            // A connection that is not an address cannot be asked.
+            self.history.deliver(
+                icao,
+                aircraft_history::Answer::Unavailable(aircraft_history::Reason::NoStation),
+                now,
+            );
+            return;
+        };
+        let station = peer.map(crate::login::station_key).unwrap_or_default();
+        send_info(url, station, Kind::History(icao), self.tx.clone(), ctx.clone());
     }
 
     pub(in crate::app) fn thumb_status(&self, url: &str) -> ThumbStatus {
@@ -175,18 +214,45 @@ fn agent() -> ureq::Agent {
         .into()
 }
 
+/// Which question a reply answers: the relay's card, or the station's record.
+#[derive(Clone, Copy)]
+enum Kind {
+    Info(u32),
+    History(u32),
+}
+
+impl Kind {
+    fn limit(self) -> u64 {
+        match self {
+            Kind::Info(_) => MAX_INFO_BYTES,
+            Kind::History(_) => MAX_HISTORY_BYTES,
+        }
+    }
+
+    fn message(self, status: Option<u16>, body: String) -> Msg {
+        match self {
+            Kind::Info(icao) => Msg::Info { icao, status, body },
+            Kind::History(icao) => Msg::History { icao, status, body },
+        }
+    }
+}
+
 /// `GET` with an optional cookie: the status and the body, or `None` for no
 /// answer at all.
 #[cfg(not(target_arch = "wasm32"))]
-fn get_info(agent: &ureq::Agent, url: &str, cookie: Option<&str>) -> Option<(u16, String)> {
+fn get_info(
+    agent: &ureq::Agent,
+    url: &str,
+    cookie: Option<&str>,
+    limit: u64,
+) -> Option<(u16, String)> {
     let mut req = agent.get(url);
     if let Some(c) = cookie {
         req = req.header("Cookie", c);
     }
     let mut resp = req.call().ok()?;
     let status = resp.status().as_u16();
-    let body =
-        resp.body_mut().with_config().limit(MAX_INFO_BYTES).read_to_string().unwrap_or_default();
+    let body = resp.body_mut().with_config().limit(limit).read_to_string().unwrap_or_default();
     Some((status, body))
 }
 
@@ -211,22 +277,22 @@ fn sign_in(agent: &ureq::Agent, station: &str) -> Option<String> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn send_info(url: String, station: String, icao: u32, tx: Sender<Msg>, ctx: egui::Context) {
+fn send_info(url: String, station: String, kind: Kind, tx: Sender<Msg>, ctx: egui::Context) {
     std::thread::spawn(move || {
         let agent = agent();
         let cookie = COOKIES.lock().unwrap_or_else(|e| e.into_inner()).get(&station).cloned();
-        let mut got = get_info(&agent, &url, cookie.as_deref());
+        let mut got = get_info(&agent, &url, cookie.as_deref(), kind.limit());
         if got.as_ref().is_some_and(|(s, _)| *s == 401) {
             if let Some(c) = sign_in(&agent, &station) {
                 COOKIES.lock().unwrap_or_else(|e| e.into_inner()).insert(station, c.clone());
-                got = get_info(&agent, &url, Some(&c));
+                got = get_info(&agent, &url, Some(&c), kind.limit());
             }
         }
         let (status, body) = match got {
             Some((s, b)) => (Some(s), b),
             None => (None, String::new()),
         };
-        let _ = tx.send(Msg::Info { icao, status, body });
+        let _ = tx.send(kind.message(status, body));
         ctx.request_repaint();
     });
 }
@@ -269,7 +335,7 @@ async fn fetch(url: &str, info: bool) -> Option<web_sys::Response> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn send_info(url: String, _station: String, icao: u32, tx: Sender<Msg>, ctx: egui::Context) {
+fn send_info(url: String, _station: String, kind: Kind, tx: Sender<Msg>, ctx: egui::Context) {
     wasm_bindgen_futures::spawn_local(async move {
         let (status, body) = match fetch(&url, true).await {
             Some(r) => {
@@ -282,8 +348,8 @@ fn send_info(url: String, _station: String, icao: u32, tx: Sender<Msg>, ctx: egu
             }
             None => (None, String::new()),
         };
-        let body = if body.len() as u64 > MAX_INFO_BYTES { String::new() } else { body };
-        let _ = tx.send(Msg::Info { icao, status, body });
+        let body = if body.len() as u64 > kind.limit() { String::new() } else { body };
+        let _ = tx.send(kind.message(status, body));
         ctx.request_repaint();
     });
 }
@@ -393,6 +459,55 @@ mod tests {
             &super::super::aircraft_online::OnlineState::Unavailable(
                 super::super::aircraft_online::Reason::NoStation
             )
+        );
+    }
+
+    #[test]
+    fn a_history_reply_from_the_station_reaches_the_history_store() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        c.history.set_on(Some(7));
+        assert_eq!(c.history.next_request(true, 0), Some(7));
+        let body = serde_json::to_string(&sdroxide_aircraft_history::AircraftReply::bare(
+            sdroxide_aircraft_history::Status::Disabled,
+        ))
+        .unwrap();
+        c.tx.send(Msg::History { icao: 7, status: Some(503), body }).unwrap();
+        c.poll(&ctx, 1);
+        assert_eq!(
+            c.history.state(7),
+            &aircraft_history::HistoryState::Unavailable(aircraft_history::Reason::Disabled)
+        );
+        assert!(!c.history.line_busy(1), "the answer freed the line");
+        // The relay's store is a different thing and was not touched.
+        assert_eq!(c.store.len(), 0);
+    }
+
+    #[test]
+    fn history_is_not_asked_until_it_is_on_and_there_is_a_station() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        c.ask_history(&ctx, Some("wss://shack.example/ws"), 0);
+        assert!(c.rx.try_recv().is_err(), "nothing on, nothing sent");
+        assert!(!c.history.line_busy(0));
+        c.history.set_on(Some(9));
+        c.ask_history(&ctx, None, 0);
+        assert!(!c.history.line_busy(0), "no station, nothing sent");
+        // The control: on, with a station, a request is out.
+        c.ask_history(&ctx, Some("wss://shack.example/ws"), 0);
+        assert!(c.history.line_busy(0), "a request went");
+    }
+
+    #[test]
+    fn a_connection_that_is_not_an_address_is_told_no_station_without_a_request() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        c.history.set_on(Some(9));
+        c.ask_history(&ctx, Some("not an address"), 0);
+        assert!(c.rx.try_recv().is_err());
+        assert_eq!(
+            c.history.state(9),
+            &aircraft_history::HistoryState::Unavailable(aircraft_history::Reason::NoStation)
         );
     }
 }
