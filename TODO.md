@@ -18,6 +18,16 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **SSTV opened two windows (#215) — PR #219, awaiting review.** Reported by
+   `drdatapi` against 2.1.0.2.5 and reproduced by the operator: entering SSTV or
+   SSTV-FM opened both the `SSTV` window and a generic `IMAGE` one on the same
+   panel, because `IMAGE`'s auto-open was written against `is_image()`, which is
+   `Sstv | SstvFm | Rifp`. One decision (`image_window_for`) now picks the window
+   for the auto-open, the draw and the docked panel, and a frame test enters each
+   image mode and counts what opened — it fails on the release with the report's own
+   symptom. Also cured a latent blanking: an `IMAGE` left open from RIFP would have
+   hidden SSTV's panel entirely. **SSTV is F4NRM's**, so it is a PR.
+
 0. **Squelch hold-open from the SQL label — PR #218, awaiting review.** Asked for
    by the operator 2026-10-25: a click on the word **SQL** holds the squelch open
    (green letters) and a second click puts back the operator's own number, with no

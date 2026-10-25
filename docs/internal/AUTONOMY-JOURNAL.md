@@ -299,6 +299,47 @@ by itself; the AIRCRAFT window's back-off still decides when it is asked again.
 
 ---
 
+## 2026-10-25 (SSTV) — two windows on one panel, fixed (PR #219, not merged)
+
+**Summary.** The operator reproduced a report that opening SSTV puts two windows on
+screen. It was not the decoder: SSTV has its own window, and a second generic one
+called IMAGE was added later for the image modes that had none, with an auto-open
+that matched every image mode — so SSTV opened both, and the second looked like an
+FT8 receive pane because it is the same picture panel drawn twice. One decision now
+picks the window; a test enters each image mode and counts what opened, and fails on
+the released build with exactly the reported symptom. It is up as a PR because SSTV
+is F4NRM's.
+
+**Done.** Branch `fix/sstv-two-windows`, **PR #219**, commit `2a64eeb2`.
+- `8cac8eb1` (F4NRM, "Convert … image panels to tool windows") added
+  `if mode.is_image() { self.show_image = true; … }`, and `is_image()` is
+  `Sstv | SstvFm | Rifp`, while `d3fcc48a` had already given SSTV its own window.
+- `image_window_for(mode)` is now the single decision, asked by the **auto-open**, the
+  **draw**, and the **docked panel's suppression** — the last of which also cures a
+  latent fault: the old condition suppressed the docked panel on `!self.show_image`
+  whatever the mode, so an `IMAGE` left open from RIFP would have blanked SSTV's
+  panel rather than doubling it.
+- **Tests.** `entering_an_image_mode_opens_one_window` drives a frame per image mode
+  with a silent controller and counts the windows; verified failing on the old code
+  with `Sstv opened [("SSTV", true), ("IMAGE", true)]`, passing after. A source guard
+  (`nothing_gates_the_image_window_on_is_image_alone`) pins the bare `is_image()` out
+  of both call sites, since a decision test cannot see an auto-open added beside it.
+  One trap found by the test itself: each case needs **its own settings folder** —
+  the strip syncs each window's open bit from the saved settings every frame, so a
+  shared folder handed RIFP the window SSTV had just opened.
+- **Checks:** `sdroxide-ui --lib` **1240 passed**; gate silent apart from the four
+  NAVTEX warnings that are not ours; wasm clean. `frame.rs` has 24 pre-existing
+  rustfmt hunks (his one-line-if style) and this change adds none — checked by
+  formatting a copy and diffing for my own identifiers.
+
+**Not done / blocked.** Looked at on a screen. The count is asserted from the app's
+own state, which is the reported symptom, but one window titled `SSTV` with the panel
+in it is a thing for an eye.
+
+**Next.** A comment is on #215 saying it is fixed and in the next pre-release; if
+F4NRM wants the two windows merged into one instead (IMAGE for everything), that is a
+different shape and his call.
+
 ## 2026-10-25 (UI) — the SQL label holds the squelch open (PR #218, not merged)
 
 **Summary.** The operator asked for a way to open the squelch for a moment without
