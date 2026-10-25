@@ -71,6 +71,7 @@ pub(in crate::app) mod recording_jobs;
 pub(in crate::app) mod rotor;
 pub(in crate::app) mod sat;
 pub(in crate::app) mod save_text;
+pub(in crate::app) mod session_qsos;
 pub(in crate::app) mod scanner;
 pub(in crate::app) mod schedule;
 pub(in crate::app) mod settings;
@@ -849,6 +850,7 @@ pub struct SdroxideApp {
     /// reports back how many characters have been sent so we colour them green).
     text_tx: String,
     qso_log: Vec<QsoRecord>,
+    session_qso_ids: std::collections::HashSet<u64>,
     /// The listener's reception log (`swl_log.json`) — separate from the QSO
     /// log on purpose. See [`crate::app::swl_log`].
     pub(in crate::app) swl_log: Vec<sdroxide_types::SwlEntry>,
@@ -1233,6 +1235,8 @@ pub struct SdroxideApp {
     flags: crate::flags::Flags,
     /// Logbook overlay open state, and the in-progress new/edit entry (if any).
     show_logbook: bool,
+    /// SESSION QSOs window open state.
+    show_session_qsos: bool,
     /// Which stored set the last `RadioEvent::ClientSettings` came from —
     /// a profile name, or `None` for the station default. `None` also before
     /// any has arrived, which the Settings label reads as "not using any".
@@ -2158,6 +2162,7 @@ impl SdroxideApp {
             weather: Default::default(),
             text_tx: String::new(),
             qso_log: load_qso_log(storage),
+            session_qso_ids: std::collections::HashSet::new(),
             swl_log: load_swl_log(storage),
             swl_report: load_swl_report(),
             swl_report_note: None,
@@ -2311,6 +2316,7 @@ impl SdroxideApp {
             digi_free_text: String::new(),
             flags: Default::default(),
             show_logbook: false,
+            show_session_qsos: false,
             client_settings_from: None,
             client_save_last: 0.0,
             client_settings_stored: None,

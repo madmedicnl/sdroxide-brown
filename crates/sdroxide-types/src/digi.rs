@@ -1284,6 +1284,11 @@ pub struct QsoRecord {
     /// [`Self::hamqth_sent`] gives.
     #[serde(default)]
     pub log11dx_sent: bool,
+    /// Final message that completed this QSO (73 / RR73 / RRR), empty for a
+    /// manually logged contact. Appended after `log11dx_sent` for the reason
+    /// [`Self::hamqth_sent`] gives.
+    #[serde(default)]
+    pub final_msg: String,
     /// In the operator's Wavelog: uploaded from here and acknowledged, or
     /// downloaded from it in the first place. Appended for the reason
     /// [`Self::hamqth_sent`] gives.
@@ -3650,11 +3655,53 @@ pub(crate) fn adif_field(name: &str, value: &str) -> String {
 /// Windows logging software can refuse a file with bare LF endings.
 pub fn qso_log_to_adif(records: &[QsoRecord]) -> String {
     let mut out = String::from(
-        "ADIF export from sdroxide\r\n<ADIF_VER:5>3.1.4\r\n<PROGRAMID:8>sdroxide\r\n<EOH>\r\n",
+        "ADIF export from sdroxide\r\n<ADIF_VER:5>3.1.8\r\n<PROGRAMID:8>sdroxide\r\n<EOH>\r\n",
     );
     for r in records {
         out.push_str(&qso_to_adif_record(r));
         out.push_str("\r\n");
+    }
+    out
+}
+
+/// A QSO log as CSV (comma, UTF-8, header row). Used by the SESSION QSOs
+/// window's export. Fields that may contain a comma are quoted.
+pub fn qso_log_to_csv(records: &[QsoRecord]) -> String {
+    let mut out = String::from(
+        "Time UTC,Call,Grid,Band,Mode,RST Sent,RST Rcvd,Country,CQ Zone,Distance km,Final\n",
+    );
+    for r in records {
+        let dist = crate::geo::grid_distance_km(&r.my_grid, r.grid.as_deref().unwrap_or(""))
+            .map(|v| format!("{:.0}", v))
+            .unwrap_or_default();
+        let fields = [
+            {
+                let (y, mo, d, h, mi, _) = crate::utc_ymd_hms(r.start_utc);
+                format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}")
+            },
+            r.call.clone(),
+            r.grid.clone().unwrap_or_default(),
+            r.band.clone(),
+            r.mode.clone(),
+            r.rst_sent.map(|v| v.to_string()).unwrap_or_default(),
+            r.rst_rcvd.map(|v| v.to_string()).unwrap_or_default(),
+            r.country.clone(),
+            r.cq_zone.map(|v| v.to_string()).unwrap_or_default(),
+            dist,
+            r.final_msg.clone(),
+        ];
+        let line: Vec<String> = fields
+            .iter()
+            .map(|f| {
+                if f.contains(',') || f.contains('"') || f.contains('\n') {
+                    format!("\"{}\"", f.replace('"', "\"\""))
+                } else {
+                    f.clone()
+                }
+            })
+            .collect();
+        out.push_str(&line.join(","));
+        out.push('\n');
     }
     out
 }
