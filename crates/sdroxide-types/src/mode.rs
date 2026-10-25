@@ -1152,12 +1152,6 @@ impl Mode {
                 // not built at all: receive only in both senses.
                 | Mode::Stanag4285
                 | Mode::Cis11
-                // DominoEX has a receiver that reads its corpus and no modulator:
-                // the panel greys the sending half rather than handing text to a
-                // modem that has none.
-                | Mode::DominoEx
-                // DTMF is decoded and has no keypad to send from yet.
-                | Mode::Dtmf
                 // Two broadcast lanes that were never *in* this list and never
                 // should have offered a transmit UI. DRM's own doc says "no
                 // transmit, no QSO, no transcript"; HFDL's says "has neither

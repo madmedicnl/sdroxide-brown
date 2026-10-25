@@ -1079,8 +1079,9 @@ impl IfkTx {
             sent: 0,
             // Enough idle characters to push the last one through the interleaver:
             // its latency is `(size - 1) × depth` symbols and a character is about
-            // four symbols here.
-            drain: (3 * variant.depth.max(1) / 4).max(8),
+            // four symbols here. DominoEX has no interleaver — it needs one idle
+            // character to hand the last real one to a receiver at all.
+            drain: if variant.thor { (3 * variant.depth.max(1) / 4).max(8) } else { 3 },
         }
     }
 
@@ -1134,7 +1135,7 @@ impl IfkTx {
         self.sent = 0;
         self.pre = 16;
         self.stage = TxStage::Preamble;
-        self.drain = (3 * self.variant.depth.max(1) / 4).max(8);
+        self.drain = if self.variant.thor { (3 * self.variant.depth.max(1) / 4).max(8) } else { 3 };
         self.filled = 0;
         self.sh = [0; 4];
         self.enc = ConvEncoder::new(Self::code(self.variant));
@@ -1146,8 +1147,29 @@ impl IfkTx {
         self.stage == TxStage::Done && self.out.is_empty()
     }
 
-    /// One character through the code and the interleaver, four bits per symbol.
+    /// One character, in the shape the variant uses.
+    ///
+    /// **DominoEX has no code and no interleaver**: a character is one to three
+    /// nibbles of its own alphabet, one nibble per symbol, and bit 3 of a nibble
+    /// says another one of the same character follows. That continuation bit is
+    /// what lets a receiver start listening in the middle of a transmission, and
+    /// it is also why the receiver completes a character when the *next* start
+    /// nibble arrives rather than when the last one ends.
+    ///
+    /// **THOR is the other half**: the MFSK varicode bits through the K = 7 or
+    /// K = 15 code and the `4 × 4 × depth` interleaver, four bits per symbol.
     fn push_char(&mut self, c: char) {
+        if !self.variant.thor {
+            let n = DOMINO_CODE[(c as u32 as usize) & 0xFF];
+            let mut len = 1;
+            while len < 3 && n[len] & 8 != 0 {
+                len += 1;
+            }
+            for &nib in &n[..len] {
+                self.symbol(nib);
+            }
+            return;
+        }
         for bit in MfskRx::varicode_bits(c) {
             let d = self.enc.push(bit);
             for i in 0..2 {
@@ -1337,6 +1359,47 @@ mod tests {
             assert!(
                 rx.text().contains("EAGLE") && rx.text().contains("LANDED"),
                 "{name} did not read its own transmission back: {:?}",
+                rx.text()
+            );
+        }
+    }
+
+    /// **DominoEX transmits now, and it reads back at every speed.**
+    ///
+    /// The nine speeds are one `Mode`, so a wiring fault in the no-FEC branch
+    /// would show as one broken variant and eight working ones — or, worse, as
+    /// one broken variant and eight working ones nobody swept. Each is fed its
+    /// own transmission here.
+    ///
+    /// The nibble order is the table's own: a character's nibbles go out in
+    /// table order, the first with bit 3 clear and the rest with it set, and the
+    /// receiver reassembles the key with the *last* nibble lowest — which is why
+    /// `domino_char` reads the row backwards. Get that backwards and characters
+    /// arrive as their alphabet neighbours, the same class of fault as the two
+    /// varicodes in the coded PSK banks.
+    #[test]
+    fn a_dominoex_transmission_reads_back_at_every_speed() {
+        for variant in DOMINO {
+            let text = "TEST THE EAGLE HAS LANDED";
+            let mut tx = IfkTx::new(variant, variant.fs, 1500.0);
+            tx.push_text(text);
+            let mut audio = Vec::new();
+            let mut block = vec![0.0f32; 400];
+            let mut guard = 0;
+            while !tx.drained() && guard < 400_000 {
+                tx.next_block(&mut block);
+                audio.extend_from_slice(&block);
+                guard += 1;
+            }
+            assert!(tx.drained(), "{} never finished its transmission", variant.name);
+            let mut rx = IfkRx::new(variant.fs, 1500.0, variant);
+            for chunk in audio.chunks(512) {
+                rx.feed(chunk);
+            }
+            assert!(
+                rx.text().contains("EAGLE") && rx.text().contains("LANDED"),
+                "{} did not read its own transmission back: {:?}",
+                variant.name,
                 rx.text()
             );
         }

@@ -1576,10 +1576,33 @@ because there is nothing left to refuse.
 
 ### The count
 
-61 `Mode` variants, of which **38 can key a transmitter** and 23 cannot (checked by
-`is_rx_only`, and `the_lanes_with_no_transmitter_do_not_offer_one` pins the ones
-whose own docs say they have none). 32 coded-PSK variants and 9 DominoEX variants
-are one `Mode` each.
+63 `Mode` variants, 62 of them reachable (`DAB` is reached from the wideband row
+rather than the picker). **40 can key a transmitter** and **22 cannot**, checked by
+`is_rx_only`; `the_lanes_with_no_transmitter_do_not_offer_one` pins the ones whose
+own docs say they have none. The 32 coded-PSK and 9 DominoEX variants are one
+`Mode` each.
+
+**Two of the twenty-two left the list on 2026-10-25:**
+
+* **DominoEX** — nine speeds, one mode, and no modulator until now. It is THOR's
+  front end with the code and the interleaver taken out: a character is one to
+  three nibbles of its own alphabet, one nibble per symbol, and bit 3 of a nibble
+  says another of the same character follows. That continuation bit is the whole
+  of its framing, and it is why the receiver completes a character when the next
+  *start* nibble arrives. `IfkVariant::thor` is the single switch between the two
+  halves of one transmitter. Measured: `a_dominoex_transmission_reads_back_at_every_speed`
+  sweeps all nine (`DOMEX4` 3.9 baud to `DOMEX88` 100 baud) and each reads
+  "EAGLE HAS LANDED" back, and
+  `a_dominoex_transmission_reads_back_through_the_controller` proves the seam at
+  both ends of the family.
+* **DTMF** — decoded and had no way to key a tone. The text box is the keypad:
+  `DtmfTx` sends the phone standard's 100 ms press and 50 ms gap, drops characters
+  that have no tone (there is no key for `Q`), and treats a space as a silent
+  press. The gap is not decoration — a held key is one digit at the receiver, so
+  `11` without it would be heard as one `1`.
+  `the_transmitter_reads_back_every_key` and `two_presses_of_one_key_are_two_digits`
+  pin both halves together, and `a_dtmf_keypress_reads_back_through_the_controller`
+  runs the operator's own path.
 
 ## Needs me
 

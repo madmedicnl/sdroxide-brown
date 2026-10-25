@@ -168,6 +168,104 @@ impl DtmfRx {
     }
 }
 
+/// The DTMF transmitter: keys in, the standard's own tones out.
+///
+/// The inverse of [`DtmfRx`], and the telephone standard rather than a house
+/// convention: a key is two equal-amplitude tones held for **100 ms** with
+/// **50 ms** of silence between presses. The gap is not decoration — a held key
+/// is one digit at the receiver, so two identical digits sent back to back would
+/// be heard as one press.
+///
+/// Everything that is a key goes out; a space becomes a gap of the same length
+/// so a typed " 123 " is spaced the way it was typed; anything else (letters past
+/// `A`–`D`, punctuation) is dropped, because there is no tone for it to be. That
+/// is quieter than inventing one and matches what a keypad can actually send.
+pub struct DtmfTx {
+    rate: f64,
+    q: VecDeque<Option<char>>,
+    out: VecDeque<f32>,
+    sent: usize,
+    total: usize,
+}
+
+/// How long a press is held, and how long the silence between presses is.
+const PRESS_S: f64 = 0.100;
+const GAP_S: f64 = 0.050;
+
+impl DtmfTx {
+    pub fn new(rate: f64) -> Self {
+        DtmfTx { rate, q: VecDeque::new(), out: VecDeque::new(), sent: 0, total: 0 }
+    }
+
+    /// Queue keys. A space is queued as a silent press; anything else without a
+    /// tone is dropped.
+    pub fn push_text(&mut self, text: &str) {
+        for ch in text.chars() {
+            let up = ch.to_ascii_uppercase();
+            if CHARS.contains(&up) {
+                self.q.push_back(Some(up));
+                self.total += 1;
+            } else if ch == ' ' {
+                self.q.push_back(None);
+            }
+        }
+    }
+
+    pub fn sent_chars(&self) -> usize {
+        self.sent
+    }
+
+    pub fn total_chars(&self) -> usize {
+        self.total
+    }
+
+    pub fn drained(&self) -> bool {
+        self.q.is_empty() && self.out.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.q.clear();
+        self.out.clear();
+        self.sent = 0;
+        self.total = 0;
+    }
+
+    fn render(&mut self, key: Option<char>) {
+        let pair = key.and_then(|ch| {
+            let i = CHARS.iter().position(|&c| c == ch)?;
+            Some((ROWS[i / 4], COLS[i % 4]))
+        });
+        let n = (self.rate * PRESS_S).round().max(1.0) as usize;
+        for k in 0..n {
+            let t = k as f64 / self.rate;
+            let v = match pair {
+                Some((row, col)) => {
+                    (std::f64::consts::TAU * row * t).sin()
+                        + (std::f64::consts::TAU * col * t).sin()
+                }
+                None => 0.0,
+            };
+            self.out.push_back((0.4 * v) as f32);
+        }
+        let gap = (self.rate * GAP_S).round().max(1.0) as usize;
+        for _ in 0..gap {
+            self.out.push_back(0.0);
+        }
+    }
+
+    pub fn next_block(&mut self, out: &mut [f32]) -> usize {
+        while self.out.len() < out.len() {
+            let Some(key) = self.q.pop_front() else { break };
+            self.render(key);
+            self.sent += key.is_some() as usize;
+        }
+        for s in out.iter_mut() {
+            *s = self.out.pop_front().unwrap_or(0.0);
+        }
+        out.len()
+    }
+}
+
 fn best(v: &[f64; 4]) -> (usize, f64) {
     let mut i = 0;
     let mut m = f64::NEG_INFINITY;
@@ -226,6 +324,74 @@ mod tests {
         }
         let want: String = CHARS.iter().collect();
         assert_eq!(got, want, "keys decoded as {got:?}, wanted {want:?}");
+    }
+
+    /// **Every key, through our own transmitter and back.** The test above proves
+    /// the decoder against the specification; this one proves the transmitter
+    /// against it too, and pins the two together so a timing change on either
+    /// side is a failing test rather than a silent mismatch on the air.
+    #[test]
+    fn the_transmitter_reads_back_every_key() {
+        let rate = 8000.0;
+        let keys: String = CHARS.iter().collect();
+        let mut tx = DtmfTx::new(rate);
+        tx.push_text(&format!(" {keys} "));
+        let mut audio = Vec::new();
+        let mut block = vec![0.0f32; 256];
+        while !tx.drained() {
+            tx.next_block(&mut block);
+            audio.extend_from_slice(&block);
+        }
+        let mut rx = DtmfRx::new(rate);
+        let mut got = String::new();
+        for chunk in audio.chunks(256) {
+            got.push_str(&rx.process(chunk));
+        }
+        assert_eq!(got, keys, "the transmitter sent {got:?}, wanted {keys:?}");
+        assert_eq!(tx.sent_chars(), tx.total_chars(), "it did not count what it sent");
+    }
+
+    /// Two presses of the same key are two digits, which is the one thing the
+    /// inter-press gap exists for: a held key is one press at the receiver, so
+    /// `11` without a gap would be heard as `1`.
+    #[test]
+    fn two_presses_of_one_key_are_two_digits() {
+        let rate = 8000.0;
+        let mut tx = DtmfTx::new(rate);
+        tx.push_text("11");
+        let mut audio = Vec::new();
+        let mut block = vec![0.0f32; 128];
+        while !tx.drained() {
+            tx.next_block(&mut block);
+            audio.extend_from_slice(&block);
+        }
+        let mut rx = DtmfRx::new(rate);
+        let mut got = String::new();
+        for chunk in audio.chunks(256) {
+            got.push_str(&rx.process(chunk));
+        }
+        assert_eq!(got, "11", "a doubled press decoded as {got:?}");
+    }
+
+    /// A character with no tone is not a tone: letters past `A`–`D` are dropped
+    /// rather than sent as something else, and a space is silent.
+    #[test]
+    fn characters_without_a_tone_are_dropped() {
+        let mut tx = DtmfTx::new(8000.0);
+        tx.push_text("Q Z 7");
+        assert_eq!(tx.total_chars(), 1, "it queued something with no tone");
+        let mut audio = Vec::new();
+        let mut block = vec![0.0f32; 64];
+        while !tx.drained() {
+            tx.next_block(&mut block);
+            audio.extend_from_slice(&block);
+        }
+        let mut rx = DtmfRx::new(8000.0);
+        let mut got = String::new();
+        for chunk in audio.chunks(256) {
+            got.push_str(&rx.process(chunk));
+        }
+        assert_eq!(got, "7");
     }
 
     /// Noise is not a key press. The eight Goertzel outputs always have a

@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use sdroxide_dsp::{
     MonoResampler, OliviaTx, PskMultiRx, PskRx, PskTx, PskrRx, PskrTx, RttyRx, RttyTx, ardop,
-    dtmf::DtmfRx,
+    dtmf::{DtmfRx, DtmfTx},
     ifk::{IfkRx, IfkTx, IfkVariant},
     mfsk_rx::{MfskReceiver, MfskTx, MfskVariant},
     mt63::{Mt63Receiver, Mt63Tx},
@@ -229,6 +229,12 @@ enum TxModem {
     Rtty(RttyTx),
     Olivia(OliviaTx),
     Thor(IfkTx),
+    /// The same transmitter at the DominoEX speeds — one object, because it is
+    /// one waveform: the variant's `thor` flag is the only difference.
+    Domino(IfkTx),
+    /// DTMF: no carrier to tune, no text to code — a keypress is two tones, and
+    /// the text box is its keypad.
+    Dtmf(DtmfTx),
     Mt63(Mt63Tx),
     Mfsk(MfskTx),
     /// A mode whose modulator is not written yet. It holds the controller's
@@ -246,6 +252,8 @@ impl TxModem {
             TxModem::Rtty(m) => m.push_text(t),
             TxModem::Olivia(m) => m.push_text(t),
             TxModem::Thor(m) => m.push_text(t),
+            TxModem::Domino(m) => m.push_text(t),
+            TxModem::Dtmf(m) => m.push_text(t),
             TxModem::Mfsk(m) => m.push_text(t),
             TxModem::Mt63(m) => m.push_text(t),
             TxModem::Receive => {
@@ -268,6 +276,12 @@ impl TxModem {
                 m.next_block(out);
             }
             TxModem::Thor(m) => {
+                m.next_block(out);
+            }
+            TxModem::Domino(m) => {
+                m.next_block(out);
+            }
+            TxModem::Dtmf(m) => {
                 m.next_block(out);
             }
             TxModem::Mfsk(m) => {
@@ -295,6 +309,8 @@ impl TxModem {
             TxModem::Rtty(m) => m.sent_chars(),
             TxModem::Olivia(m) => m.sent_chars(),
             TxModem::Thor(m) => m.sent_chars(),
+            TxModem::Domino(m) => m.sent_chars(),
+            TxModem::Dtmf(m) => m.sent_chars(),
             TxModem::Mfsk(m) => m.sent_chars(),
             TxModem::Mt63(m) => m.sent_chars(),
             TxModem::Receive => 0,
@@ -307,6 +323,8 @@ impl TxModem {
             TxModem::Rtty(m) => m.total_chars(),
             TxModem::Olivia(m) => m.total_chars(),
             TxModem::Thor(m) => m.total_chars(),
+            TxModem::Domino(m) => m.total_chars(),
+            TxModem::Dtmf(m) => m.total_chars(),
             TxModem::Mfsk(m) => m.total_chars(),
             TxModem::Mt63(m) => m.total_chars(),
             TxModem::Receive => 0,
@@ -319,6 +337,8 @@ impl TxModem {
             TxModem::Rtty(m) => m.clear(),
             TxModem::Olivia(m) => m.clear(),
             TxModem::Thor(m) => m.clear(),
+            TxModem::Domino(m) => m.clear(),
+            TxModem::Dtmf(m) => m.clear(),
             TxModem::Mfsk(m) => m.clear(),
             TxModem::Mt63(m) => m.clear(),
             TxModem::Receive => {}
@@ -554,6 +574,18 @@ impl TextModemController {
                 MODEM_RATE,
                 audio_hz as f64,
             )),
+            // The same transmitter object at the DominoEX speeds: the variant
+            // carries `thor: false`, and that flag is the whole difference — a
+            // character goes out as one to three of its own nibbles, one per
+            // symbol, with no code and no interleaver.
+            // DTMF has no carrier: the keys are the waveform, and the text box is
+            // the keypad the panel never had.
+            Mode::Dtmf => TxModem::Dtmf(DtmfTx::new(MODEM_RATE)),
+            Mode::DominoEx => TxModem::Domino(IfkTx::new(
+                IfkVariant::named(cfg.domino_mode.label()).expect("the DominoEX tables agree"),
+                MODEM_RATE,
+                audio_hz as f64,
+            )),
             // MFSK is one modem at eleven symbol rates, so the transmitter takes
             // the variant the config names, exactly as the receiver does.
             Mode::Mfsk => TxModem::Mfsk(MfskTx::new(
@@ -682,6 +714,10 @@ impl TextModemController {
                 hz,
                 IfkVariant::named(self.cfg.thor_mode.label()).expect("the THOR tables agree"),
             ),
+            TxModem::Domino(m) => m.set_params(
+                hz,
+                IfkVariant::named(self.cfg.domino_mode.label()).expect("the DominoEX tables agree"),
+            ),
             TxModem::Mfsk(m) => m.set_params(
                 hz,
                 MfskVariant::named(self.cfg.mfsk_mode.label()).expect("the MFSK tables agree"),
@@ -691,6 +727,9 @@ impl TextModemController {
             // retuned: its baud and depth are the variant's, and a stretch of
             // audio rendered at the old ones cannot be moved to a new carrier.
             TxModem::PskCoded(_) => {}
+            // DTMF's tone pairs are the standard's absolute frequencies, not a
+            // carrier with a cursor on it — there is nothing to retune.
+            TxModem::Dtmf(_) => {}
             TxModem::Receive => {}
         }
     }
@@ -834,7 +873,7 @@ impl DigiEngine for TextModemController {
     /// is the guard.
     fn tx_peak(&self) -> f32 {
         match self.tx {
-            TxModem::Thor(_) => 1.0,
+            TxModem::Thor(_) | TxModem::Domino(_) => 1.0,
             _ => 0.5,
         }
     }
@@ -1175,6 +1214,95 @@ mod tests {
 
         let psk = TextModemController::new(Mode::Psk, cfg, 48_000.0);
         assert_eq!(psk.audio_hz(), 1000.0);
+    }
+
+    /// **DominoEX's transmitter into its receiver, through the console's own
+    /// objects** — the seam the operator actually uses.
+    ///
+    /// It was receive-only until now: the panel greyed the sending half because
+    /// there was no modulator. The waveform is THOR's front end with the code and
+    /// the interleaver taken out, and `IfkVariant::thor` is the whole switch — so
+    /// the two speeds here are the two ends of the family (`DOMEX4` slowest,
+    /// `DOMEX88` fastest) rather than two similar ones.
+    ///
+    /// **The over ends where a real one does.** `tx_active` stays latched after
+    /// the last character — that is the type-ahead hold, and `fill_tx_block` goes
+    /// on returning `false` because the carrier is still up, so a loop that waits
+    /// for it to return `true` collects half an hour of audio and measures the
+    /// receiver's behaviour on noise instead of the transmitter. This one stops
+    /// once every character has been sent, plus four seconds for the idles that
+    /// hand the last one over.
+    #[test]
+    fn a_dominoex_transmission_reads_back_through_the_controller() {
+        use sdroxide_types::DominoMode;
+        let message = "TEST THE EAGLE HAS LANDED";
+        for (variant, rate) in [(DominoMode::Dom4, 8000.0f64), (DominoMode::Dom88, 11_025.0)] {
+            let mut cfg = DigiConfig::default();
+            cfg.domino_mode = variant;
+            let mut tx_ctl = TextModemController::new(Mode::DominoEx, cfg.clone(), rate);
+            tx_ctl.set_audio_hz(1500.0);
+            tx_ctl.set_tx_text(message.into());
+            tx_ctl.set_tx_active(true);
+            tx_ctl.poll(SystemTime::now(), 0.0);
+            let mut sig = Vec::new();
+            let mut block = vec![0.0f32; 512];
+            let mut quiet = 0;
+            while quiet < 400 {
+                let _ = tx_ctl.fill_tx_block(&mut block);
+                sig.extend_from_slice(&block);
+                if tx_ctl.status().tx_sent >= message.chars().count() {
+                    quiet += 1;
+                } else {
+                    quiet = 0;
+                }
+            }
+            let mut rx_ctl = TextModemController::new(Mode::DominoEx, cfg, OUT_RATE);
+            rx_ctl.set_audio_hz(1500.0);
+            for chunk in sig.chunks(512) {
+                rx_ctl.on_rx_audio(chunk);
+            }
+            let text = rx_ctl.status().text_rx.to_uppercase();
+            assert!(
+                text.contains("EAGLE") && text.contains("LANDED"),
+                "{variant:?} did not read back through the controller: {text:?}"
+            );
+        }
+    }
+
+    /// **DTMF sends from the text box now.** The panel decoded tones and gave the
+    /// operator no way to key one; the text box is the keypad, and the digits go
+    /// out at the standard's 100 ms on / 50 ms off.
+    ///
+    /// The mode is deliberately absent from the band menu's QSO modes, so this is
+    /// the only path it has — which is why the test is at the controller and not
+    /// at the modem.
+    #[test]
+    fn a_dtmf_keypress_reads_back_through_the_controller() {
+        let keys = "123A*0#D";
+        let mut cfg = DigiConfig::default();
+        let mut tx_ctl = TextModemController::new(Mode::Dtmf, cfg.clone(), 48_000.0);
+        tx_ctl.set_tx_text(keys.into());
+        tx_ctl.set_tx_active(true);
+        tx_ctl.poll(SystemTime::now(), 0.0);
+        assert!(tx_ctl.status().tx_refused.is_none(), "DTMF refused the key-up");
+        let mut sig = Vec::new();
+        let mut block = vec![0.0f32; 512];
+        let mut quiet = 0;
+        while quiet < 400 {
+            let _ = tx_ctl.fill_tx_block(&mut block);
+            sig.extend_from_slice(&block);
+            if tx_ctl.status().tx_sent >= keys.chars().count() {
+                quiet += 1;
+            } else {
+                quiet = 0;
+            }
+        }
+        let mut rx_ctl = TextModemController::new(Mode::Dtmf, cfg, OUT_RATE);
+        for chunk in sig.chunks(512) {
+            rx_ctl.on_rx_audio(chunk);
+        }
+        let got = rx_ctl.status().text_rx;
+        assert_eq!(got, keys, "the keypad sent {keys:?} and the decoder read {got:?}");
     }
 
     /// THOR's transmitter into its receiver, through the console's own objects.
