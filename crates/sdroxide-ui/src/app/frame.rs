@@ -1325,7 +1325,7 @@ impl eframe::App for SdroxideApp {
             // panadapter's rule is `panadapter_window_wanted`, the same one the
             // shell emits its window by, so the two cannot disagree.
             let detached = self.panadapter_window_wanted();
-            let panel_gone = self.panel_detached(mode);
+            let panel_gone = self.panel_in_a_window(mode);
             let show_wf = !detached && (!phone || on_waterfall) && layers;
             let show_panel = (!phone || !on_waterfall) && !panel_gone;
 
@@ -1446,7 +1446,7 @@ impl eframe::App for SdroxideApp {
             // A panadapter or panel drawn into its own window takes no room
             // here; whatever is left in the column gets the whole of it.
             let detached = self.panadapter_window_wanted();
-            let panel_gone = self.panel_detached(self.state.rx[0].mode);
+            let panel_gone = self.panel_in_a_window(self.state.rx[0].mode);
             let (wf_h, panel_h, show_wf, show_panel) = if !cw_mode {
                 if detached {
                     (0.0, 0.0, false, false)
@@ -1652,6 +1652,12 @@ impl eframe::App for SdroxideApp {
         if self.ui_settings.tool_windows_open != self.prev_tool_windows_mask {
             crate::app::persist::persist_ui_settings(&self.ui_settings);
             self.prev_tool_windows_mask = self.ui_settings.tool_windows_open;
+        }
+        // **The operating pane, floating in this window** — the other half of the
+        // icon in a panel's header. Drawn here, beside the tool windows, because
+        // it is one of them in everything but where its body comes from.
+        if self.panel_floating {
+            self.floating_panel_window(&ctx, &mut cmds, mode);
         }
         self.recordings_window(&ctx, &mut cmds);
         self.poll_recording_jobs(&mut cmds);
@@ -2554,42 +2560,56 @@ impl SdroxideApp {
     /// **Float the operating pane inside the main window**, and let the waterfall
     /// take the room back.
     ///
-    /// **A floating panel, not a new OS window.** The operator's note on the first
-    /// version: *"you open a new window whereas it should be a floating panel in
-    /// the first place."* A mode's panel already has an in-window floating form —
-    /// its tool window, the one that used to pop up on mode entry (#217) — so this
-    /// opens exactly that, and the dock chip in its header puts it back. The OS
-    /// window is still there, deliberately, on the Detachable page in Settings: it
-    /// is a different thing (it can go on another monitor) and not what the pane's
-    /// own icon should do.
-    pub(in crate::app) fn float_operating_panel(&mut self, mode: Mode) {
-        match mode {
-            m if m.is_sstv() => self.show_sstv = true,
-            m if m.is_image() => self.show_image = true,
-            Mode::Dab => self.show_dab = true,
-            m if m.is_js8() => self.show_js8 = true,
-            Mode::Acars => self.show_acars = true,
-            m if m.is_aprs() => self.show_aprs = true,
-            m if m.is_hfdl() => self.show_hfdl = true,
-            m if m.is_vdl2() => self.show_vdl2 = true,
-            m if m.is_ais() => self.show_ais = true,
-            m if m.is_adsb() => self.show_adsb = true,
-            m if m.is_fsq() => self.show_fsq = true,
-            m if m.is_hell() => self.show_hell = true,
-            m if m.is_packet() => self.show_packet = true,
-            m if m.is_wspr() => self.show_wspr = true,
-            m if m.is_pi4() => self.show_pi4 = true,
-            m if m.is_text_modem() => self.show_text = true,
-            Mode::UvPacket => self.show_uvpacket = true,
-            Mode::Jtty => self.show_jtty = true,
-            Mode::Ale => self.show_ale = true,
-            m if m.is_rf_paint() => self.show_rf_paint = true,
-            // NAVTEX, DSC and WEFAX draw their window from their own flag beside
-            // the pane, so they float from their own headers and not from here.
-            _ => {}
+    /// **One flag for every mode.** The operator's correction on the first version:
+    /// *"you open a new window whereas it should be a floating panel in the first
+    /// place"* — and then *"the chip in the panel in main window does not work"*,
+    /// which it did not on any mode without a tool window of its own (FT8 among
+    /// them). This is the panel itself, drawn into a floating window, so it works
+    /// in every mode and there is no table to keep in step.
+    pub(in crate::app) fn float_operating_panel(&mut self) {
+        self.panel_floating = true;
+    }
+
+    /// The operating pane as a **floating panel inside this window**.
+    ///
+    /// One `egui::Window` whose body is the same `draw_operating_panel` the docked
+    /// pane uses, so every mode gets it with no table of flags to keep in step —
+    /// which is what went wrong with the first attempt: it opened the mode's own
+    /// tool window, and a mode without one (FT8 among them) got nothing at all.
+    ///
+    /// The **dock chip** at its top right puts it back under the waterfall, and
+    /// closing it does the same: a panel is not a tool that can be shut, it is the
+    /// mode's control surface, and losing it would leave the mode unusable.
+    fn floating_panel_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>, mode: Mode) {
+        let title = format!("{} — panel", mode.label());
+        let mut open = true;
+        let mut dock = false;
+        egui::Window::new(title)
+            .id(egui::Id::new("floating-operating-panel"))
+            .default_size([540.0, 440.0])
+            .min_width(320.0)
+            .min_height(180.0)
+            .max_size(ctx.content_rect().size() * 0.95)
+            .resizable(true)
+            .collapsible(false)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                let row = crate::chrome::chip_height(ui, None);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), row),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        dock = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Dock)
+                            .on_hover_text("DOCK — put this panel back under the waterfall")
+                            .clicked();
+                    },
+                );
+                let h = ui.available_height();
+                self.draw_operating_panel(ui, cmds, mode, h);
+            });
+        if dock || !open {
+            self.panel_floating = false;
         }
-        // The window draws it from here, and the window's own function is what
-        // writes its open bit and persists — one place, not two.
     }
 
     /// **Send the operating pane into an OS window of its own** — the detachable
@@ -2947,6 +2967,14 @@ impl SdroxideApp {
     #[cfg(not(target_arch = "wasm32"))]
     fn panel_window_wanted(&self, mode: Mode) -> bool {
         self.panel_detached(mode)
+    }
+
+    /// The pane is not in the column this frame: either it is an OS window
+    /// (`DetachableModule::Panel`) or it has been lifted out as a **floating
+    /// panel** in this window. Either way the waterfall takes the room back.
+    fn panel_in_a_window(&self, mode: Mode) -> bool {
+        self.panel_detached(mode)
+            || (self.panel_floating && (mode.has_bottom_panel() || mode == Mode::Cw))
     }
 
     /// The band/mode selector's window should exist this frame: undocked on the
@@ -4765,6 +4793,21 @@ mod tests {
         assert!(
             code.contains("fn float_operating_panel"),
             "there is no way to float the operating pane"
+        );
+        // **The floating panel is the pane itself**, not a per-mode tool window:
+        // the first version opened the mode's own window, so a mode without one
+        // (FT8) got a chip that did nothing.
+        assert!(
+            code.contains("fn floating_panel_window"),
+            "the pane has no floating form, so the icon hides it and shows nothing"
+        );
+        assert!(
+            code.contains("self.draw_operating_panel(ui, cmds, mode, h);"),
+            "the floating panel does not draw the operating panel"
+        );
+        assert!(
+            !code.contains("pub(in crate::app) fn float_operating_panel(&mut self, mode: Mode)"),
+            "floating is per mode again, so a mode without a window silently loses its panel"
         );
         assert!(
             code.contains("fn detach_operating_panel"),

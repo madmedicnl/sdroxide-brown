@@ -314,7 +314,7 @@ impl SdroxideApp {
                 // in: FT8 reaches it from the QSO area, and the keyboard modes
                 // keep their parameters in the header instead.
                 if super::window_chip(ui) {
-                    self.float_operating_panel(sdroxide_types::Mode::Js8);
+                    self.float_operating_panel();
                 }
                 if crate::chrome::chip(ui, self.show_digi_settings, "⚙")
                     .on_hover_text(

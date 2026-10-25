@@ -222,6 +222,17 @@ pub struct SdroxideApp {
     /// Scrolling history behind the full-band strip.
     wide_wf: crate::widgets::wide_spectrum::WideWaterfall,
     meters: Option<Meters>,
+    /// A squelch held open from the strip's **SQL** label, and the value to put
+    /// not a setting, and coming up with the gate open after a restart would be
+    /// the opposite of what a station wants.
+    /// The operating panel lifted out as a **floating panel inside this window**,
+    /// with the waterfall taking the room back. One flag for every mode, which is
+    /// what "a floating panel, not a new window" has to mean — the per-mode tool
+    /// windows are a different thing and Settings → Detachable owns them.
+    /// Session-only: where a panel sat is not worth a config field, and a station
+    /// that starts with its panel loose is one nobody asked for.
+    panel_floating: bool,
+
     memories: Vec<MemoryChannel>,
     mem_folders: Vec<MemoryFolder>,
     /// The scanner's settings, mirrored from the engine and edited in place —
@@ -1918,6 +1929,8 @@ impl SdroxideApp {
             wide_frame: None,
             wide_wf: Default::default(),
             meters: None,
+            panel_floating: false,
+
             memories: Vec::new(),
             mem_folders: Vec::new(),
             scanner: sdroxide_types::ScannerConfig::default(),

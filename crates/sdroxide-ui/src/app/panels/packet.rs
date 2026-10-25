@@ -139,7 +139,7 @@ impl SdroxideApp {
             self.show_digi_settings = !self.show_digi_settings;
         }
         if detach {
-            self.float_operating_panel(sdroxide_types::Mode::Packet);
+            self.float_operating_panel();
         }
 
         egui::ScrollArea::vertical()
