@@ -24,12 +24,14 @@ maintainer's queue there, not a promise.
    picture includes the decimation filter's roll-off at both edges (Airspy's own
    figure is ~660 kHz usable, 86 % of the rate), and the view can be panned into
    it; the auto-fit averages the bins in view, so at full span it averages the
-   skirts too. Fix: the front end reports the fraction of its rate its own
-   filters leave usable (`IqSource::usable_frac`, default 1.0, the HF+ 0.86), the
-   engine carries it in one new `RadioState` field, and the display, the zoom
-   limit and the fit use that span instead of the raw rate. **Wire change, so it
-   is a PR** — staged on `fork/hfplus-usable-span`, not pushed while the operator
-   holds pushes.
+   skirts too. **Built and tested** on `fork/hfplus-usable-span`:
+   `IqSource::usable_frac` (default 1.0, the HF+ 0.86), `RadioState::usable_hz`
+   (`PROTO_VERSION` 246 → 247, `VERSION_BYTE` 0x42 → 0x43), and the UI's
+   `dev_span` for the window, the zoom clamp, the pan bound and the fit key —
+   the analyzer keeps the raw rate, so decoders and the skimmer still see
+   everything. Wire change, so it is a PR: **not pushed**, waiting on the
+   operator's word. Not looked at on an HF+ (the span arithmetic is measured; the
+   picture is not).
 
 0. **Mode panels docked by default, and no window on mode entry (#215, #217)** —
    **PR #219**, awaiting review. On the first frame of every mode the program opened

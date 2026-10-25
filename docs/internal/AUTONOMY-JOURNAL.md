@@ -22,7 +22,45 @@ Each entry, in this order:
 ---
 
 
-## 2026-10-25 (a rule change: his PRs are his to merge)
+## 2026-10-25 (the Airspy HF+'s waterfall was wider than the radio)
+
+**In plain words.** An Airspy HF+ listener reported that the waterfall at 768 kHz
+shows the filter's roll-off at both edges, that zooming in and scrolling right
+walks into it, and that the automatic contrast sometimes sits too high. The
+picture was drawn from the radio's sample rate, and a decimation filter rolls
+off inside that rate — about 660 of the 768 kHz is real. The display now uses
+the usable part only, and the fit can no longer see the skirt. Built and tested,
+but not looked at on an HF+, and not pushed: it changes the protocol, so it is
+waiting as a pull request.
+
+**Done.** Branch `fork/hfplus-usable-span`, commit `e91dfb9c`.
+`IqSource::usable_frac()` (default 1.0) with the Airspy HF+ at 0.86 — 660/768,
+Airspy's own figure and the listener's measurement, taken as constant across the
+rates because it is the same filter scaled, and said so. `RadioState::usable_hz`
+at the tail (`PROTO_VERSION` 246 → 247, `VERSION_BYTE` 0x42 → 0x43, register
+line). `usable_span()` in the engine: rate × fraction, widened back to the whole
+rate at decimation ≥ 2 because the engine's decimator is the sharper filter —
+narrowing there would show less band than exists. UI: `dev_span()` feeds the
+panadapter window, the zoom clamp, the pan bound and the fit key; the analyzer
+keeps the raw rate so decoders and the skimmer still see everything.
+
+Measured: `usable_span` (768 000 × 0.86 = 660 480, decimated keeps the whole
+rate, 0.0 means no opinion, a fraction above one cannot widen the radio);
+`display_span` (three cases); the `ServerMsg::State` postcard round-trip now
+carries a real `usable_hz` rather than only its default. `cargo check
+--workspace --all-targets` silent apart from the UI's pre-existing unused
+import; `sdroxide-types` 17, `sdroxide-proto` 793, `sdroxide-ui` 1245,
+`sdroxide-radio --lib` 203 — all green.
+
+**Not done / blocked.** Not seen on an Airspy HF+ here: the arithmetic is
+measured, the picture is not, and the fit half of the report needs Graeme's
+answer about whether it still misbehaves when the skirt is out of view. Pushing
+and opening the PR are the operator's.
+
+**Next.** Answer the group thread with what changed, and take the next item in
+`TODO.md`.
+
+
 
 **In plain words.** We stop pressing merge on F4NRM's pull requests. He merges
 his own, always, and we leave the button alone even when the change is green,
