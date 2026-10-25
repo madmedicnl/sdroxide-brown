@@ -19,6 +19,19 @@
 //! below directly; what they expose *to each other* is marked
 //! `pub(in crate::app)`, which is as wide as anything here ever gets.
 
+pub(in crate::app) mod aircraft;
+pub(in crate::app) mod aircraft_card;
+pub(in crate::app) mod aircraft_export;
+pub(in crate::app) mod aircraft_history;
+pub(in crate::app) mod aircraft_hover;
+pub(in crate::app) mod aircraft_online;
+pub(in crate::app) mod aircraft_online_io;
+pub(in crate::app) mod aircraft_pin;
+pub(in crate::app) mod aircraft_registry;
+pub(in crate::app) mod aircraft_search;
+pub(in crate::app) mod aircraft_share;
+pub(in crate::app) mod aircraft_stats;
+pub(in crate::app) mod aircraft_watch;
 pub(in crate::app) mod alerts;
 pub(in crate::app) mod auto_mode;
 pub(in crate::app) mod awards;
@@ -34,17 +47,6 @@ pub(in crate::app) mod dial_hold;
 pub(in crate::app) mod drm;
 pub(in crate::app) mod duo_power;
 pub(in crate::app) mod enigma;
-pub(in crate::app) mod aircraft;
-pub(in crate::app) mod aircraft_card;
-pub(in crate::app) mod aircraft_export;
-pub(in crate::app) mod aircraft_history;
-pub(in crate::app) mod aircraft_hover;
-pub(in crate::app) mod aircraft_online;
-pub(in crate::app) mod aircraft_online_io;
-pub(in crate::app) mod aircraft_pin;
-pub(in crate::app) mod aircraft_registry;
-pub(in crate::app) mod aircraft_search;
-pub(in crate::app) mod aircraft_share;
 pub(in crate::app) mod extras;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
@@ -553,7 +555,17 @@ pub struct SdroxideApp {
     /// The AIRCRAFT window shows the merged aircraft cards instead of a map, and
     /// which card is open there.
     aircraft_cards: bool,
+    /// The AIRCRAFT window shows the statistics instead of a map or the cards,
+    /// and how their tables are ordered. Memory only.
+    aircraft_stats_view: bool,
+    aircraft_stats_sort: aircraft_stats::SortBy,
     aircraft_card_sel: Option<aircraft_card::CardKey>,
+    /// The AIRCRAFT window shows the watch list instead of a map or the cards,
+    /// what is typed in its box, and the tracker that raises the alerts. The
+    /// tracker runs whether or not the window is open. Memory only.
+    aircraft_watch_view: bool,
+    aircraft_watch_input: String,
+    aircraft_tracker: aircraft_watch::Tracker,
     /// What the station's relay says about the cards looked at this session —
     /// see [`aircraft_online`]. Memory only: never saved, never in the browser.
     aircraft_online: aircraft_online_io::OnlineClient,
@@ -2025,7 +2037,12 @@ impl SdroxideApp {
             aircraft_was_open: false,
             aircraft_view: sdroxide_types::Mode::Adsb,
             aircraft_cards: false,
+            aircraft_stats_view: false,
+            aircraft_stats_sort: aircraft_stats::SortBy::default(),
             aircraft_card_sel: None,
+            aircraft_watch_view: false,
+            aircraft_watch_input: String::new(),
+            aircraft_tracker: aircraft_watch::Tracker::default(),
             aircraft_online: aircraft_online_io::OnlineClient::default(),
             show_rds: false,
             show_drm: false,
@@ -3169,9 +3186,11 @@ impl SdroxideApp {
 }
 
 #[cfg(test)]
-mod touch_lock_tests;
-#[cfg(test)]
 mod aircraft_export_frame_tests;
+#[cfg(test)]
+mod aircraft_watch_frame_tests;
+#[cfg(test)]
+mod touch_lock_tests;
 #[cfg(test)]
 mod tests {
 
@@ -4529,7 +4548,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
-        let w: f32 = std::env::var("AIRCRAFT_W").ok().and_then(|v| v.parse().ok()).unwrap_or(1600.0);
+        let w: f32 =
+            std::env::var("AIRCRAFT_W").ok().and_then(|v| v.parse().ok()).unwrap_or(1600.0);
         let h: f32 = std::env::var("AIRCRAFT_H").ok().and_then(|v| v.parse().ok()).unwrap_or(900.0);
         let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
         let ctx = egui::Context::default();

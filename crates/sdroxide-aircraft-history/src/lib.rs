@@ -11,6 +11,9 @@
 //! frames, a picture, or anything about who was looking.
 
 pub mod export;
+#[cfg(feature = "gzip")]
+pub mod gz;
+pub mod watch;
 
 use std::collections::HashMap;
 
@@ -170,6 +173,19 @@ pub struct Summary {
     pub first_seen: i64,
     pub last_seen: i64,
     pub points: usize,
+    /// The ADS-B emitter category the radio reported, as the decoder wrote it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    /// From the relay's card, when it gave one: the airframe, the operator and
+    /// the airport codes of the route. The statistics read these.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub type_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operator: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination: Option<String>,
 }
 
 /// The answer to `GET /aircraft-history`.
@@ -377,6 +393,15 @@ impl History {
                 first_seen: j.first_seen,
                 last_seen: j.last_seen,
                 points: j.points.len(),
+                category: j.category.clone(),
+                type_name: j.card.as_ref().and_then(|c| c.type_name.clone()),
+                operator: j.card.as_ref().and_then(|c| c.operator.clone()),
+                origin: j.card.as_ref().and_then(|c| c.origin.as_ref()).map(|p| p.code.clone()),
+                destination: j
+                    .card
+                    .as_ref()
+                    .and_then(|c| c.destination.as_ref())
+                    .map(|p| p.code.clone()),
             })
             .collect()
     }
@@ -540,6 +565,73 @@ mod tests {
             total_points: total,
             aircraft,
         })
+    }
+
+    // ── what the list says about each aircraft ────────────────────────────
+
+    fn carded(h: &mut History, icao: u32) {
+        let place = |c: &str| Some(Place { code: c.into(), name: format!("{c} airport") });
+        h.note_card(
+            NOW,
+            icao,
+            SeenCard {
+                at: NOW,
+                type_name: Some("747-8".into()),
+                operator: Some("KLM".into()),
+                origin: place("AMS"),
+                destination: place("JFK"),
+                ..SeenCard::default()
+            },
+        );
+    }
+
+    #[test]
+    fn the_list_carries_the_category_and_the_relays_card_facts() {
+        let mut h = History::default();
+        heard(&mut h, NOW, A, fix(NOW, 52.0, 5.0));
+        carded(&mut h, A);
+        let s = &h.summaries()[0];
+        assert_eq!(s.category.as_deref(), Some("heavy"));
+        assert_eq!(s.type_name.as_deref(), Some("747-8"));
+        assert_eq!(s.operator.as_deref(), Some("KLM"));
+        assert_eq!((s.origin.as_deref(), s.destination.as_deref()), (Some("AMS"), Some("JFK")));
+    }
+
+    #[test]
+    fn an_aircraft_with_no_card_has_none_of_the_card_facts() {
+        let mut h = History::default();
+        heard(&mut h, NOW, B, fix(NOW, 52.0, 5.0));
+        let s = &h.summaries()[0];
+        assert_eq!(s.category.as_deref(), Some("heavy"), "the radio's own");
+        assert_eq!(
+            (&s.type_name, &s.operator, &s.origin, &s.destination),
+            (&None, &None, &None, &None)
+        );
+    }
+
+    #[test]
+    fn the_list_leaves_out_what_it_does_not_have_and_reads_an_older_list() {
+        let mut h = History::default();
+        h.note_heard(NOW, B, None, None, None);
+        let json = serde_json::to_string(&h.list_reply()).unwrap();
+        for key in ["category", "type_name", "operator", "origin", "destination"] {
+            assert!(!json.contains(key), "{key} in {json}");
+        }
+        let old = r#"{"v":1,"status":"ok","aircraft":[{"icao":1,"callsign":null,"registration":null,"first_seen":1,"last_seen":2,"points":0}]}"#;
+        let back: ListReply = serde_json::from_str(old).unwrap();
+        assert_eq!(back.aircraft[0].type_name, None);
+    }
+
+    #[test]
+    fn the_list_with_the_card_facts_stays_small_for_four_thousand_aircraft() {
+        let mut h = History::default();
+        for i in 0..MAX_AIRCRAFT as u32 {
+            heard(&mut h, NOW, 0x400000 + i, fix(NOW, 52.0, 5.0));
+            carded(&mut h, 0x400000 + i);
+        }
+        let json = serde_json::to_string(&h.list_reply()).unwrap();
+        assert_eq!(h.summaries().len(), MAX_AIRCRAFT);
+        assert!(json.len() < 1_500_000, "{} bytes", json.len());
     }
 
     // ── which positions are kept ──────────────────────────────────────────

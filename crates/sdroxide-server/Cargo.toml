@@ -23,7 +23,7 @@ sdroxide-aircraft-online = { path = "../sdroxide-aircraft-online", features = ["
 sdroxide-solar = { path = "../sdroxide-solar" }
 # What the station remembers of each aircraft for a day (src/history.rs): the
 # model is pure, the file and the routes are this crate's.
-sdroxide-aircraft-history = { path = "../sdroxide-aircraft-history" }
+sdroxide-aircraft-history = { path = "../sdroxide-aircraft-history", features = ["gzip"] }
 sdroxide-types = { path = "../sdroxide-types" }
 # The sign-in cookie's signature (`session_cookie`): HMAC-SHA256, whose hash is
 # already in the tree through rustls, so this is a direct use of a crate the

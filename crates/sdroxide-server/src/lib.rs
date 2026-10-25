@@ -18,6 +18,7 @@
 mod aircraft;
 mod auth;
 mod history;
+mod watchlist;
 mod probe;
 mod session;
 mod session_cookie;
@@ -308,6 +309,9 @@ pub(crate) struct Station {
     /// radio and served on `/aircraft-history`. Off unless the operator
     /// switched it on.
     pub history: Arc<history::HistoryHub>,
+    /// The aircraft the operator asked to be told about, served on
+    /// `/aircraft-watch`. The same from every screen that connects.
+    pub watch: Arc<watchlist::WatchHub>,
     /// The one probe worker, kept here so a radio added later shares it rather
     /// than starting a second thread that would scan the same bus.
     probes: Arc<probe::ProbeHub>,
@@ -656,6 +660,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         auth: Arc::new(auth::AuthGate::new(params.access)),
         aircraft: Arc::new(aircraft::AircraftHub::start(params.aircraft_online)),
         history: Arc::new(history::HistoryHub::start()),
+        watch: Arc::new(watchlist::WatchHub::start()),
         probes: Arc::new(probe::ProbeHub::start(params.probe)),
         add: params.add_radio,
         remove: params.remove_radio,
@@ -706,6 +711,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         .route("/aircraft-history", get(history::list_route))
         .route("/aircraft-history/{icao}", get(history::one_route))
         .route("/aircraft-export", get(history::export_route))
+        .route("/aircraft-watch", get(watchlist::get_route).post(watchlist::post_route))
         // Where a browser trades its password for a signed cookie, and gives
         // it back. Both are plain HTTP because a cookie is a response header
         // and the socket handshake's headers are spent before the sign-in
@@ -737,7 +743,12 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
 /// and nowhere else.
 fn is_root_route(path: &str) -> bool {
     match path {
-        "/ws" | "/solar-ws" | "/radios" | "/aircraft-history" | "/aircraft-export" => true,
+        "/ws"
+        | "/solar-ws"
+        | "/radios"
+        | "/aircraft-history"
+        | "/aircraft-export"
+        | "/aircraft-watch" => true,
         // Whatever follows is the question, and a bad one is the endpoint's to
         // refuse with a 400, not the static handler's to answer with a page.
         _ if path
@@ -1581,6 +1592,16 @@ mod proxy_prefix_tests {
             Some("/aircraft-export".to_string())
         );
         assert_ne!(strip_proxy_prefix("/aircraft-export/x"), None, "it takes no address");
+    }
+
+    #[test]
+    fn the_watch_endpoint_is_recognised_at_the_end_of_a_prefix() {
+        assert_eq!(strip_proxy_prefix("/aircraft-watch"), None);
+        assert_eq!(
+            strip_proxy_prefix("/shack/sdr/aircraft-watch"),
+            Some("/aircraft-watch".to_string())
+        );
+        assert_ne!(strip_proxy_prefix("/aircraft-watch/x"), None, "it takes no address");
     }
 
     #[test]

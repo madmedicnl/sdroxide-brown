@@ -8,3 +8,13 @@ description = "What the station has heard of each aircraft in the last day: its 
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+# Gzip for the file once it grows (`gz`): server only, so the client build never
+# carries it. Already in the tree through ureq.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"], optional = true }
+
+[features]
+gzip = ["dep:flate2"]
+
+[dev-dependencies]
+# So the plain `cargo test` of this crate runs the gzip tests too.
+sdroxide-aircraft-history = { path = ".", features = ["gzip"] }
