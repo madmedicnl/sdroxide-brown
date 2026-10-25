@@ -22,7 +22,36 @@ Each entry, in this order:
 ---
 
 
-## 2026-10-25 (aircraft export)
+## 2026-10-25 (a rule change: his PRs are his to merge)
+
+**In plain words.** We stop pressing merge on F4NRM's pull requests. He merges
+his own, always, and we leave the button alone even when the change is green,
+sensible and he is away. Nothing in the program changed; what changed is whose
+hand is allowed on his work.
+
+**Done.** `AGENTS.md`, "Pull requests to this fork": the rule that F4NRM's PRs
+are "approved and merged without waiting (`gh pr merge <n> --merge --admin`)"
+is replaced, on the operator's instruction of 2026-10-25: *"we will stop merging
+his PR's as they were on auto merge because I trust his work blindly."* The
+trust is the reason rather than despite it — a merge pressed by us puts his work
+on `main` on our timing and under our hand, with no diff of our own for him to
+read.
+
+**Why it was worth writing down.** The audit the same day found three merges of
+his PRs made by us (`#212`, `#213`, `#214`, all `mergedBy=madmedicnl`) and one
+place where we had *edited* his code before merging it: commit `aea09ccc`, inside
+his `#214` aircraft branch, adding a missing `#[test]` to a test that had never
+run and deleting a helper nothing called — two lines, correct, and still his
+branch. Our own PRs were all merged by him (`#218`, `#219`, `#222`, `#223`), and
+`#226` is untouched and open. Nothing we wrote that day touched his modes, his
+panels or the wire: fourteen commits, twelve files, all ours.
+
+**Not done / blocked.** Nothing — it is a rule, not a build.
+
+**Next.** The next time one of his PRs looks wrong, say it in a PR comment and
+change nothing. The modes programme continues after ARDOP.
+
+
 
 **In plain words.** The AIRCRAFT window now has CSV and JSON buttons that save the
 tracked aircraft as a table: who they are, what they fly, where from and to, when they

@@ -390,10 +390,15 @@ a check cannot be run, do not open it: say what blocked it.
 see "The wire": a `PROTO_VERSION`/`VERSION_BYTE` bump is one counter shared with
 F4NRM's sessions, and a PR is how a number is claimed without colliding.
 
-- **F4NRM's PRs are approved and merged without waiting** when they are sensible
-  and merge cleanly (`gh pr merge <n> --merge --admin`): sensible means it does
-  what its body says and carries no red flag its own body has not declared.
-  Otherwise leave it and say why on the PR.
+- ⛔ **F4NRM's PRs are never merged by us either.** He merges his own, always.
+  This reverses the earlier "approved and merged without waiting" rule, on the
+  operator's instruction of 2026-10-25: *"we will stop merging his PR's as they
+  were on auto merge because I trust his work blindly"* — and the trust is the
+  reason, not despite it. A merge pressed by us puts his work on `main` on our
+  timing and under our hand, with no diff of our own for him to read; when it is
+  his, that is his call and his commit. Read his PRs if they are useful, say what
+  we think on the PR if it matters, and **leave the merge button alone**. That
+  holds even when it is green, sensible and he is away.
 - ⛔ **Our own PRs are never merged by us** — not with `gh pr merge`, not with
   `--admin`, not "because it is green and he is away". They sit until **F4NRM has
   reviewed them or merged them himself**, which is the operator's instruction of
