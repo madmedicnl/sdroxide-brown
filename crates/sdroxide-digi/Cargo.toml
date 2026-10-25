@@ -12,6 +12,10 @@ edition.workspace = true
 license = "GPL-3.0-or-later"
 
 [dependencies]
+# The vendored STANAG 4285 reference decoder (GPL-3.0, native only). This crate
+# already carries the GPL obligation for mfsk-core, so the C++ sits here and
+# nowhere else.
+sdroxide-s4285 = { workspace = true }
 sdroxide-types.workspace = true
 sdroxide-dsp.workspace = true
 sdroxide-olivia.workspace = true

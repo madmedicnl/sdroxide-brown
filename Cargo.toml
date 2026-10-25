@@ -137,6 +137,7 @@ sdroxide-r82xx = { path = "crates/sdroxide-r82xx" }
 sdroxide-rtlsdr = { path = "crates/sdroxide-rtlsdr" }
 sdroxide-rx888 = { path = "crates/sdroxide-rx888" }
 sdroxide-airspyhf = { path = "crates/sdroxide-airspyhf" }
+sdroxide-s4285 = { path = "crates/sdroxide-s4285" }
 sdroxide-airspy = { path = "crates/sdroxide-airspy" }
 sdroxide-hydrasdr = { path = "crates/sdroxide-hydrasdr" }
 sdroxide-hackrf = { path = "crates/sdroxide-hackrf" }

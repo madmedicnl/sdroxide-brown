@@ -1,0 +1,17 @@
+[package]
+name = "sdroxide-s4285"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "STANAG 4285 decoder: the vendored GPL reference implementation, driven from Rust"
+
+[dependencies]
+# Only for its resampler: the vendored decoder works at 12 kHz, five samples a
+# symbol, and a capture's own rate is whatever the sound card had.
+sdroxide-dsp = { workspace = true }
+
+[dev-dependencies]
+hound = "3"
+
+[build-dependencies]
+cc = "1"

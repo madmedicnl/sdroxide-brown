@@ -86,6 +86,7 @@ impl ArdopRx {
     /// A retune abandons any part-decoded frame: it is not ours any more.
     fn reset(&mut self) {
         self.rx.reset();
+        self.buf.clear();
     }
 }
 
@@ -96,6 +97,27 @@ impl ArdopRx {
 struct StanagRx {
     rx: stanag4285::S4285Receiver,
     level: f32,
+    /// Audio for the **vendored reference decoder**, which is what actually reads
+    /// the coded payload.
+    ///
+    /// The receiver above reads the sync, the reference blocks, the constellation
+    /// and the *uncoded* text, and has never read the coded payload off the air.
+    /// The reference implementation does — on this station's 24 October capture of
+    /// 13031.2 kHz it reads a French Navy test tape (`RYRYRYRY…`, `ZNR UUUUU`,
+    /// `ZUI TESTING`) where ours produces noise — so it runs beside it on the same
+    /// audio. Its output is the message; the receiver's report is the panel.
+    buf: Vec<f32>,
+    /// Lines already handed to the console. The decoder re-reads its whole window
+    /// every couple of seconds, so the same line arrives many times and the window
+    /// slides underneath it — a prefix difference is not enough, and a line that
+    /// has been shown once does not need showing again.
+    shown: std::collections::VecDeque<String>,
+    /// Samples since the last decode.
+    since: usize,
+    /// The reference decoder works at 12 kHz, five samples a symbol; this path
+    /// carries the modem's own 8 kHz.
+    rs: Option<sdroxide_dsp::MonoResampler>,
+    up: Vec<f32>,
 }
 
 impl StanagRx {
@@ -106,18 +128,69 @@ impl StanagRx {
                 sdroxide_types::Mode::Stanag4285.audio_centre_hz() as f64,
             ),
             level: 0.0,
+            buf: Vec::new(),
+            shown: std::collections::VecDeque::new(),
+            since: 0,
+            rs: sdroxide_dsp::MonoResampler::new(MODEM_RATE, 12_000.0),
+            up: Vec::new(),
         }
     }
 
     fn process(&mut self, audio: &[f32]) -> String {
         let mut out = String::new();
+        // The receiver's own reading is the **uncoded** one. On a coded
+        // transmission it is letters made of noise, so once the reference decoder
+        // has read anything at all this stops being shown: a console that prints
+        // both a tape and its own misreading of the same signal is worse than one
+        // that prints the tape.
+        let mut uncoded = String::new();
         for ev in self.rx.process(audio) {
             if let stanag4285::S4285Event::Text(t) = ev {
-                out.push_str(&t);
+                uncoded.push_str(&t);
             }
         }
+        // **The transport is the reference decoder, so the uncoded reading is not
+        // shown at all.** On a coded transmission it is letters made of noise; on
+        // an uncoded one it is right but the reference decoder reads those too.
+        // Printing both would be a console that argues with itself.
+        let _ = &uncoded;
         let rms = (audio.iter().map(|v| v * v).sum::<f32>() / audio.len().max(1) as f32).sqrt();
         self.level = (0.98 * self.level + 0.02 * (rms * 8.0).min(1.0)).min(1.0);
+        // The reference decoder runs in `process_reference`, on the tap at
+        // 12 kHz — mixing this 8 kHz audio into its buffer would feed it two
+        // different sample rates at once, which is what happened first.
+        out
+    }
+
+    /// The reference decoder, fed the tap at 12 kHz (see `on_rx_audio`).
+    fn process_reference(&mut self, audio: &[f32]) -> String {
+        let mut out = String::new();
+        self.buf.extend_from_slice(audio);
+        let cap = (REF_WINDOW_S * 12_000.0) as usize;
+        if self.buf.len() > cap {
+            let cut = self.buf.len() - cap;
+            self.buf.drain(..cut);
+        }
+        self.since += audio.len();
+        if self.since < (REF_DECODE_EVERY_S * 12_000.0) as usize || self.buf.len() <= audio.len() {
+            return out;
+        }
+        self.since = 0;
+        let d = sdroxide_s4285::decode(&self.buf, 12_000.0, 2, 1800.0);
+        for line in d.text.lines() {
+            let line = line.trim();
+            // Two characters is the shortest thing worth a line: a tape is
+            // `RYRY…`, and a stray letter is the decoder warming up.
+            if line.len() < 2 || self.shown.iter().any(|l| l == line) {
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+            self.shown.push_back(line.to_string());
+            if self.shown.len() > 64 {
+                self.shown.pop_front();
+            }
+        }
         out
     }
 
@@ -129,6 +202,9 @@ impl StanagRx {
 
     fn reset(&mut self) {
         self.rx.reset();
+        self.buf.clear();
+        self.shown.clear();
+        self.since = 0;
     }
 
     fn report(&self) -> &stanag4285::S4285Report {
@@ -144,6 +220,13 @@ const MODEM_RATE: f64 = 8000.0;
 const OUT_RATE: f64 = 48_000.0;
 /// Cap the rolling RX text so it can't grow without bound.
 const RX_TEXT_CAP: usize = 8000;
+/// How much audio the vendored STANAG decoder keeps: long enough to hold the
+/// interleaver's ten seconds and a message after it, short enough that a decode
+/// stays cheap.
+const REF_WINDOW_S: f64 = 40.0;
+/// How often it runs. Every two seconds keeps up with a test tape without
+/// spending the audio thread's budget on it.
+const REF_DECODE_EVERY_S: f64 = 2.0;
 
 enum RxModem {
     Psk(PskAny),
@@ -447,6 +530,9 @@ pub struct TextModemController {
 
     scratch8: Vec<f32>,
     scratch48: Vec<f32>,
+    /// The tap resampled for the vendored STANAG decoder — see `on_rx_audio`.
+    stanag_rs: Option<MonoResampler>,
+    scratch12: Vec<f32>,
     status_dirty: bool,
 }
 
@@ -654,6 +740,10 @@ impl TextModemController {
             over_had_text: false,
             scratch8: Vec::new(),
             scratch48: Vec::new(),
+            stanag_rs: (mode == Mode::Stanag4285)
+                .then(|| MonoResampler::new(tap_rate, 12_000.0))
+                .flatten(),
+            scratch12: Vec::new(),
             status_dirty: true,
         }
     }
@@ -890,7 +980,18 @@ impl DigiEngine for TextModemController {
             Some(r) => r.push(tap, &mut self.scratch8),
             None => self.scratch8.extend_from_slice(tap),
         }
-        let decoded = self.rx.process(&self.scratch8);
+        // **STANAG gets the tap at 12 kHz as well.** The vendored reference decoder
+        // needs the full 300-3300 Hz the mode occupies and five samples a symbol;
+        // the modem's own 8 kHz path is enough for our receiver and marginal for
+        // it, so it is fed from the tap rather than through the 8 kHz stage.
+        if let Some(rs) = self.stanag_rs.as_mut() {
+            self.scratch12.clear();
+            rs.push(tap, &mut self.scratch12);
+        }
+        let mut decoded = self.rx.process(&self.scratch8);
+        if let RxModem::Stanag(r) = &mut self.rx {
+            decoded.push_str(&r.process_reference(&self.scratch12));
+        }
         // Squelch: drop decoded text while the signal sits at the noise floor so
         // pure noise doesn't fill the window. `digi_squelch` is the sensitivity.
         //
@@ -1842,5 +1943,52 @@ mod tests {
         for w in ["TEST", "EAGLE", "12345", "SDRBROWN"] {
             assert!(text.contains(w), "the controller lost {w}: {text:?}");
         }
+    }
+
+    /// **The mode reads a real transmission through the console's own path.**
+    ///
+    /// This station's 24 October capture of 13031.2 kHz — a French Navy test tape
+    /// the reference decoder reads and our own chain does not — played through
+    /// `TextModemController` as STANAG 4285. It is the whole path: the vendored
+    /// reference front end, our text reader, and the incremental hand-over to the
+    /// console.
+    ///
+    ///     SDROXIDE_S4285_SAMPLE=~/Downloads/....wav \
+    ///       cargo test -p sdroxide-digi --release -- --ignored --nocapture this_tape
+    #[test]
+    #[ignore]
+    fn this_tape_reads_through_the_console() {
+        let path = std::env::var("SDROXIDE_S4285_SAMPLE").expect("set SDROXIDE_S4285_SAMPLE");
+        let mut reader = hound::WavReader::open(&path).expect("open the wav");
+        let spec = reader.spec();
+        let raw: Vec<f32> = match spec.sample_format {
+            hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
+            hound::SampleFormat::Int => {
+                let scale = 1.0 / (1i64 << (spec.bits_per_sample - 1)) as f32;
+                reader.samples::<i32>().map(|s| s.unwrap() as f32 * scale).collect()
+            }
+        };
+        let ch = spec.channels.max(1) as usize;
+        let audio: Vec<f32> = if ch == 1 {
+            raw
+        } else {
+            raw.chunks(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect()
+        };
+        // The controller takes the station's own rate.
+        let mut ctl = TextModemController::new(
+            Mode::Stanag4285,
+            DigiConfig::default(),
+            spec.sample_rate as f64,
+        );
+        for chunk in audio.chunks(512) {
+            ctl.on_rx_audio(chunk);
+        }
+        let text = ctl.status().text_rx;
+        let tail = &text[text.len().saturating_sub(400)..];
+        eprintln!("console text (tail): {tail:?}");
+        assert!(
+            text.contains("ZUI TESTING") || text.contains("RYRY"),
+            "the tape did not read through the console: {text:?}"
+        );
     }
 }

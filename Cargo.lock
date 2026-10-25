@@ -5301,6 +5301,7 @@ dependencies = [
  "sdroxide-dsp",
  "sdroxide-olivia",
  "sdroxide-rade",
+ "sdroxide-s4285",
  "sdroxide-types",
  "serde",
  "serde_json",
@@ -5738,6 +5739,15 @@ dependencies = [
  "thiserror 2.0.20",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "sdroxide-s4285"
+version = "2.1.0"
+dependencies = [
+ "cc",
+ "hound",
+ "sdroxide-dsp",
 ]
 
 [[package]]
