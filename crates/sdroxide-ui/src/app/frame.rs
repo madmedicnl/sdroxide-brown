@@ -405,7 +405,10 @@ fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
             // A **floating panel** docks back into the pane; an OS window docks
             // back into the main window. Two different pictures, because they are
             // two different places to go back to.
-            (crate::chrome::WindowIcon::Dock, "DOCK — return this panel to the pane below the waterfall")
+            (
+                crate::chrome::WindowIcon::Dock,
+                "DOCK — return this panel to the pane below the waterfall",
+            )
         } else {
             (
                 crate::chrome::WindowIcon::Out,
@@ -2338,11 +2341,33 @@ impl SdroxideApp {
                 // Only reached for a mode that has a panel — the shell asks
                 // `panel_window_wanted`, which is false otherwise.
                 let mode = self.state.rx[0].mode;
+                let mut dock = false;
                 let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+                    // **The way back.** A window with no way home is a one-way
+                    // door; the operator asked for the round trip — pane, floating
+                    // panel, window — so every state has the chip that leaves it.
+                    let row = crate::chrome::chip_height(ui, None);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), row),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            dock = crate::chrome::chip_window_icon(
+                                ui,
+                                crate::chrome::WindowIcon::Dock,
+                            )
+                            .on_hover_text("DOCK — put this panel back under the waterfall")
+                            .clicked();
+                        },
+                    );
                     let h = ui.available_height();
                     self.draw_operating_panel(ui, &mut cmds, mode, h);
                 });
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
+                if dock {
+                    self.ui_settings
+                        .set_detached(sdroxide_types::DetachableModule::Panel, false);
+                    crate::app::persist::persist_ui_settings(&self.ui_settings);
+                }
                 self.dispatch_commands(cmds);
             }
             M::Controls => {
@@ -2584,6 +2609,7 @@ impl SdroxideApp {
         let title = format!("{} — panel", mode.label());
         let mut open = true;
         let mut dock = false;
+        let mut out = false;
         egui::Window::new(title)
             .id(egui::Id::new("floating-operating-panel"))
             .default_size([540.0, 440.0])
@@ -2599,6 +2625,17 @@ impl SdroxideApp {
                     egui::vec2(ui.available_width(), row),
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
+                        // **Both ways on from here.** Out to a real window — the
+                        // detachable module, which can go on another monitor — and
+                        // back into the pane. He missed the window chip in the
+                        // floating panel, and he is right: floating is one step, not
+                        // the last one.
+                        out = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
+                            .on_hover_text(
+                                "WINDOW — give this panel a window of its own, to put on \
+                                 another monitor",
+                            )
+                            .clicked();
                         dock = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Dock)
                             .on_hover_text("DOCK — put this panel back under the waterfall")
                             .clicked();
@@ -2609,6 +2646,12 @@ impl SdroxideApp {
             });
         if dock || !open {
             self.panel_floating = false;
+        }
+        if out {
+            // One at a time: the OS window takes over from the floating panel, and
+            // the column keeps the room the pane gave up.
+            self.panel_floating = false;
+            self.detach_operating_panel();
         }
     }
 
@@ -4767,6 +4810,36 @@ mod tests {
         assert_eq!(image_window_for(Mode::Sstv), ImageWindow::Sstv);
         assert_eq!(image_window_for(Mode::SstvFm), ImageWindow::Sstv);
         assert_eq!(image_window_for(Mode::Rifp), ImageWindow::Image);
+    }
+
+    /// **The round trip: pane, floating panel, window — every state has the chip
+    /// that leaves it.** The operator asked for the window chip *in* the floating
+    /// panel ("I do miss the chip for making it a real window in that floating
+    /// panel"), and a window with no way home is a one-way door, so the panel's OS
+    /// window carries the dock chip.
+    #[test]
+    fn every_state_of_the_operating_pane_has_a_way_out_of_it() {
+        let src = include_str!("frame.rs");
+        let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
+        // The floating panel offers both.
+        assert!(
+            code.contains("WINDOW — give this panel a window of its own"),
+            "the floating panel has no chip to make it a real window"
+        );
+        assert!(
+            code.contains("DOCK — put this panel back under the waterfall"),
+            "the floating panel has no chip to put it back"
+        );
+        // And the OS window has the way home.
+        assert!(
+            code.contains("set_detached(sdroxide_types::DetachableModule::Panel, false)"),
+            "the panel's OS window cannot be brought back"
+        );
+        // One state at a time: going out to a window drops the floating panel.
+        assert!(
+            code.contains("self.panel_floating = false;\n            self.detach_operating_panel();"),
+            "floating and windowed can both be true, so the pane is drawn twice"
+        );
     }
 
     /// **A narrow panel's header lays out as one wrapped row, not three zones.**
