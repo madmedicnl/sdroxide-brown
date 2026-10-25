@@ -3131,6 +3131,24 @@ pub struct DigiConfig {
     /// (`PROTO_VERSION` 234 → 235).
     #[serde(default)]
     pub wavelog_station_id: u32,
+
+    /// Auto CQ (issue #236): how many CQ calls one run may make before it ends.
+    /// 0 is no limit of its own — the transmit watchdog and the inactivity stop
+    /// still bound the run — which is what every station had before this was a
+    /// setting.
+    ///
+    /// Appended at the tail, so this is a wire change.
+    #[serde(default)]
+    pub auto_cq_repeats: u16,
+    /// Auto CQ: after [`Self::auto_cq_repeats`] calls, **switch to Auto Rx**
+    /// (listen and answer) rather than stopping entirely. Unused while the
+    /// repeat count is 0.
+    ///
+    /// The default is `true`: a run that reaches its limit goes on listening
+    /// rather than shutting the station up, which is the gentler of the two and
+    /// the one an unattended station wants.
+    #[serde(default = "auto_cq_then_listen_default")]
+    pub auto_cq_then_listen: bool,
 }
 
 fn cw_default_tx_idle_s() -> f32 {
@@ -3247,6 +3265,10 @@ fn default_atchat_virtual_addr() -> String {
 
 fn cw_default_wpm() -> f32 {
     20.0
+}
+
+fn auto_cq_then_listen_default() -> bool {
+    true
 }
 
 impl Default for DigiConfig {
@@ -3392,6 +3414,8 @@ impl Default for DigiConfig {
             psk_coded: PskCoded::default(),
             domino_mode: DominoMode::default(),
             wavelog_station_id: 0,
+            auto_cq_repeats: 0,
+            auto_cq_then_listen: auto_cq_then_listen_default(),
         }
     }
 }

@@ -3086,7 +3086,7 @@ impl SdroxideApp {
         // Any stop control — STOP QSO, STOP TX, a bound Abort TX — disarms auto
         // mode. An unattended run must never be left sequencing after the
         // operator has told the radio to stop, whatever route they used.
-        if self.auto_mode
+        if self.auto_role.is_some()
             && cmds.iter().any(|c| matches!(c, Command::DigiStopQso | Command::DigiAbortTx))
         {
             self.disarm_auto("auto stopped: a stop control was used".into());

@@ -2097,8 +2097,17 @@ use sdroxide_types::{
 /// #233 (the NAVTEX sensitivity revert) claimed it and landed while this was in
 /// review, so the later of two colliding branches moves. `PROTO_VERSION`
 /// 247 → 248, `VERSION_BYTE` 0x43 → 0x44. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 248;
-const VERSION_BYTE: u8 = 0x44;
+/// v250: **the Auto CQ run's own bound** — [`sdroxide_types::DigiConfig`] gains
+/// `auto_cq_repeats` and `auto_cq_then_listen` at its tail, so an unattended CQ
+/// run can end after a set number of calls instead of only on the watchdog's
+/// clock (issue #236). Appended last, and postcard is positional — a v248 peer's
+/// payload does not decode and the version byte is what refuses it;
+/// `#[serde(default)]` covers a stored config loading. **249 is claimed by PR
+/// #240** (the picture composer's document), which is open; the later of two
+/// colliding branches moves, so this one takes 250. `PROTO_VERSION` 249 → 250,
+/// `VERSION_BYTE` 0x45 → 0x46. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 250;
+const VERSION_BYTE: u8 = 0x46;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
