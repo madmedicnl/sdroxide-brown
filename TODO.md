@@ -337,6 +337,16 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-25
+- **The five slotted weak-signal modes transmit** — JT65, JT9, Q65, FST4 and
+  MSK144 take WSJT-X's three words in the message box and put one burst out in
+  the first armed slot, at the mode's own delay into it. Each is verified by the
+  decoder this build already had, at both ends of its family where it has one
+  (Q65-15A/Q65-60E, FST4-15/FST4-60A), and a message that will not pack is
+  refused by name before the radio is keyed. **Not tested on the air.**
+- **ARDOP's modulator** — `ardop::encode_frame` is the exact inverse of the
+  demodulator and round-trips all sixteen data modes (4PSK/8PSK/16QAM at 1, 2, 4
+  and 8 carriers, 4FSK at 50 and 100 baud). **Not wired to a transmit row**:
+  ARDOP's over is an ARQ session, and the state machine is the remaining work.
 - **The coded PSK banks all transmit** — the multi-carrier `C` and `RC` families
   were refused because their output came back mangled even on one carrier. The
   fault was the **varicode table**: `PskMultiRx` ends in `VaricodeRx` (PSK31's)
