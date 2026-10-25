@@ -1009,7 +1009,7 @@ pub fn show(
         p.text(
             rect.right_bottom() + vec2(-6.0, -4.0),
             Align2::RIGHT_BOTTOM,
-            "double-click to reframe",
+            tr!("adsbmap-double-click-reframe"),
             FontId::proportional(9.0),
             alpha(Color32::WHITE, 110.0),
         );

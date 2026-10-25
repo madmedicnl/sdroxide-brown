@@ -5,6 +5,7 @@
 //! back is applied to the in-progress QSO and appended to the rolling log the
 //! SPOTS window shows.
 
+use crate::i18n::tr;
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -341,7 +342,7 @@ impl SdroxideApp {
         let loaded = match loaded {
             Ok(loaded) => loaded,
             Err(e) => {
-                self.push_net_log(format!("ADIF import failed: {e}"));
+                self.push_net_log(tr!("net-adif-import-failed", error = e.to_string()));
                 return;
             }
         };
@@ -349,7 +350,7 @@ impl SdroxideApp {
         let parsed =
             catch_unwind(AssertUnwindSafe(|| sdroxide_types::adif_to_qso_log_counting_swl(&text)));
         let Ok((records, swl)) = parsed else {
-            self.push_net_log("ADIF import failed: the file could not be parsed".to_string());
+            self.push_net_log(tr!("net-adif-import-failed-file-could").to_string());
             return;
         };
         // One pass to index the existing log by call and band, so the duplicate
@@ -389,17 +390,21 @@ impl SdroxideApp {
         // name that came out as nonsense is then a code page to report, not a
         // decoder to doubt.
         let assumed = match loaded.assumed {
-            Some(enc) => format!(" (not Unicode; read as {enc})"),
+            Some(enc) => tr!("net-not-unicode-read", enc = enc),
             None => String::new(),
         };
         // A file of received reports — the decode list's own ADIF export —
         // adds nothing, and saying why beats reporting an empty import.
         let reports = match swl {
             0 => String::new(),
-            n => format!(", {n} received reports (SWL) left out"),
+            n => tr!("net-received-reports-swl-left-out", n = n),
         };
-        self.push_net_log(format!(
-            "ADIF import: {added} added, {skipped} duplicates skipped{reports}{assumed}"
+        self.push_net_log(tr!(
+            "net-adif-import-added-duplicates-skipped",
+            added = added,
+            skipped = skipped,
+            reports = reports,
+            assumed = assumed
         ));
     }
 
@@ -419,7 +424,7 @@ impl SdroxideApp {
         let loaded = match loaded {
             Ok(loaded) => loaded,
             Err(e) => {
-                self.push_net_log(format!("Channel import failed: {e}"));
+                self.push_net_log(tr!("net-channel-import-failed", error = e.to_string()));
                 return;
             }
         };
@@ -427,31 +432,33 @@ impl SdroxideApp {
         let parsed =
             catch_unwind(AssertUnwindSafe(|| sdroxide_types::chirp_csv_to_memories(&text)));
         let Ok((channels, skipped)) = parsed else {
-            self.push_net_log("Channel import failed: the file could not be read".to_string());
+            self.push_net_log(tr!("net-channel-import-failed-file-could").to_string());
             return;
         };
         if channels.is_empty() {
             // The commonest way to get here is a file that is not a CHIRP
             // export at all, so say what was expected rather than "0 imported".
-            self.push_net_log(
-                "Channel import: nothing to read — a CHIRP CSV file starts with a header                  row naming its columns, one of which must be Frequency"
-                    .to_string(),
-            );
+            self.push_net_log(tr!("net-channel-import-nothing-read-chirp").to_string());
             return;
         }
         let n = channels.len();
         cmds.push(Command::ImportMemories(channels));
         let skipped = match skipped {
             0 => String::new(),
-            n => format!(", {n} line(s) skipped"),
+            n => tr!("net-line-s-skipped", n = n),
         };
         let assumed = match loaded.assumed {
-            Some(enc) => format!(" (not Unicode; read as {enc})"),
+            Some(enc) => tr!("net-not-unicode-read-2", enc = enc),
             None => String::new(),
         };
         // "read", not "added": the engine drops the channels already stored,
         // and the memory list itself is what shows the result.
-        self.push_net_log(format!("Channel import: {n} channel(s) read{skipped}{assumed}"));
+        self.push_net_log(tr!(
+            "net-channel-import-channel-s-read",
+            n = n,
+            skipped = skipped,
+            assumed = assumed
+        ));
     }
 }
 

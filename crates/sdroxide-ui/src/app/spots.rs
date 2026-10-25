@@ -5,6 +5,7 @@
 //! one list filtered by kind, by the current view span, and by a fuzzy search.
 //! Clicking one tunes the radio and pre-fills the logbook.
 
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::{Command, Mode, RxId, Spot, SpotKind};
 

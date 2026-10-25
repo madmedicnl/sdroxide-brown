@@ -11,6 +11,7 @@
 //! use one radio, and whichever asks first gets it — the other is told so, here,
 //! in this pane's own transcript.
 
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::{Command, Mode, PacketLinkOwner, PacketStatus, PacketTermKind};
 
@@ -35,20 +36,21 @@ pub(super) fn packet_monitor_header(
 ) -> bool {
     let mut setup = false;
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("MONITOR").strong().color(theme::CYAN()));
-        ui.label(RichText::new(format!("{} baud", st.baud.label())).weak());
+        ui.label(RichText::new(tr!("packet-monitor")).strong().color(theme::CYAN()));
+        ui.label(RichText::new(format!("{baud} baud", baud = st.baud.label())).weak());
         // Channel busy and bad frames are the two numbers that explain a
         // link that is not working: one says somebody else is talking, the
         // other says the path is marginal.
         if st.dcd {
-            ui.label(RichText::new("BUSY").strong().color(theme::ALERT()));
+            ui.label(RichText::new(tr!("packet-busy")).strong().color(theme::ALERT()));
         }
         if st.bad_frames > 0 {
-            ui.label(RichText::new(format!("{} bad", st.bad_frames)).weak().color(theme::ALERT()))
-                .on_hover_text(
-                    "Frames that arrived but failed their check sequence — a collision, a fade, \
-                     or a signal too weak to read.",
-                );
+            ui.label(
+                RichText::new(tr!("packet-bad", bad_frames = st.bad_frames))
+                    .weak()
+                    .color(theme::ALERT()),
+            )
+            .on_hover_text(tr!("packet-frames-arrived-but-failed-their"));
         }
         crate::chrome::row_tail(ui, |ui| {
             super::clear_rx_chip_at(ui, cmds, true);
@@ -86,7 +88,7 @@ impl SdroxideApp {
     ) {
         let st: Option<PacketStatus> = self.digi_status.as_ref().and_then(|s| s.packet.clone());
         let Some(st) = st else {
-            ui.label(RichText::new("starting the packet modem…").weak());
+            ui.label(RichText::new(tr!("packet-starting-packet-modem")).weak());
             return;
         };
         // Monitoring the channel is worth doing on a receiver; announcing
@@ -148,7 +150,7 @@ impl SdroxideApp {
             .stick_to_bottom(true)
             .show(ui, |ui| {
                 if st.heard.is_empty() {
-                    ui.label(RichText::new("nothing heard yet").weak());
+                    ui.label(RichText::new(tr!("packet-nothing-heard-yet")).weak());
                 }
                 for h in &st.heard {
                     let via = if h.via.is_empty() {
@@ -202,54 +204,50 @@ impl SdroxideApp {
 
         // ── status row ────────────────────────────────────────────────────
         ui.horizontal(|ui| {
-            ui.label(RichText::new("TERMINAL").strong().color(theme::CYAN()));
+            ui.label(RichText::new(tr!("packet-terminal")).strong().color(theme::CYAN()));
             let (label, colour) = if connected {
-                (" CONNECTED ", theme::GREEN())
+                (tr!("packet-connected"), theme::GREEN())
             } else if working {
-                (" CALLING ", theme::YELLOW())
+                (tr!("packet-calling"), theme::YELLOW())
             } else {
-                (" IDLE ", theme::CYAN_DIM())
+                (tr!("packet-idle"), theme::CYAN_DIM())
             };
             ui.label(RichText::new(label).strong().color(colour))
-                .on_hover_text(format!("The link layer is in {}", link.state));
+                .on_hover_text(tr!("packet-link-layer", link = link.state));
             if let Some(peer) = &link.peer
                 && (connected || working)
             {
                 let via = if link.via.is_empty() {
                     String::new()
                 } else {
-                    format!(" via {}", link.via.join(","))
+                    tr!("packet-via", via = link.via.join(","))
                 };
                 ui.label(RichText::new(format!("{peer}{via}")).monospace());
             }
             if link.ext {
                 ui.label(RichText::new("mod-128").weak())
-                    .on_hover_text("Extended sequence numbers — a window of up to 127 frames.");
+                    .on_hover_text(tr!("packet-extended-sequence-numbers-window-up"));
             }
             // The two numbers that explain a session that has gone quiet.
             if link.unacked > 0 {
-                ui.label(RichText::new(format!("{} unacked", link.unacked)).weak())
-                    .on_hover_text("Frames sent and not yet acknowledged by the far end.");
+                ui.label(RichText::new(tr!("packet-unacked", unacked = link.unacked)).weak())
+                    .on_hover_text(tr!("packet-frames-sent-not-yet-acknowledged"));
             }
             if link.retries > 0 {
                 ui.label(
-                    RichText::new(format!("retry {}", link.retries)).weak().color(theme::ALERT()),
+                    RichText::new(tr!("packet-retry", retries = link.retries))
+                        .weak()
+                        .color(theme::ALERT()),
                 )
-                .on_hover_text(
-                    "Retries against this link's limit. A count climbing while the unacknowledged \
-                     frames stay put is what a fading path looks like from this side.",
-                );
+                .on_hover_text(tr!("packet-retries-against-link-s-limit"));
             }
         });
 
         if busy {
             ui.label(
-                RichText::new("The MAIL window is using the link.").weak().color(theme::YELLOW()),
+                RichText::new(tr!("packet-mail-window-using-link")).weak().color(theme::YELLOW()),
             )
-            .on_hover_text(
-                "One radio, one channel, one link. A Winlink session and this terminal are two \
-                 ways to use it, and whichever asks first gets it.",
-            );
+            .on_hover_text(tr!("packet-one-radio-one-channel-one"));
         }
 
         // ── connect bar ───────────────────────────────────────────────────
@@ -370,13 +368,7 @@ impl SdroxideApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 if st.term.is_empty() && st.term_partial.is_empty() {
-                    ui.label(
-                        RichText::new(
-                            "Not connected. Type a callsign above and press CONNECT to call a \
-                             node or a BBS.",
-                        )
-                        .weak(),
-                    );
+                    ui.label(RichText::new(tr!("packet-not-connected-type-callsign-above")).weak());
                 }
                 for l in &st.term {
                     let colour = match l.kind {

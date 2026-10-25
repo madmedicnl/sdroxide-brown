@@ -5,6 +5,7 @@
 //! and every panel that transmits an image opens the same file picker, so those
 //! live here rather than in whichever panel happened to grow them first.
 
+use crate::i18n::tr;
 use std::sync::{Arc, Mutex};
 
 use eframe::egui::{self, Color32, RichText};
@@ -35,11 +36,13 @@ pub(in crate::app) fn station_card(
             ui.label(RichText::new(call).size(16.0).strong().color(crate::theme::TEXT_STRONG()));
         }
         None if d.free_text => {
-            ui.label(RichText::new("free text").size(13.0).italics().color(dim));
+            ui.label(RichText::new(tr!("widgets-free-text")).size(13.0).italics().color(dim));
         }
         // A hashed callsign nobody on this receiver has heard in full yet.
         None => {
-            ui.label(RichText::new("hashed callsign, not yet heard in full").size(13.0).color(dim));
+            ui.label(
+                RichText::new(tr!("widgets-hashed-callsign-not-yet-heard")).size(13.0).color(dim),
+            );
         }
     }
 
@@ -58,16 +61,18 @@ pub(in crate::app) fn station_card(
                 );
             });
             ui.label(
-                RichText::new(format!(
-                    "{} · CQ zone {} · ITU zone {}",
-                    e.continent, e.cq_zone, e.itu_zone
+                RichText::new(tr!(
+                    "widgets-cq-zone-itu-zone",
+                    continent = e.continent,
+                    cq_zone = e.cq_zone,
+                    itu_zone = e.itu_zone
                 ))
                 .size(11.5)
                 .color(dim),
             );
         }
         None if d.from.is_some() => {
-            ui.label(RichText::new("entity unknown").size(11.5).color(dim));
+            ui.label(RichText::new(tr!("widgets-entity-unknown")).size(11.5).color(dim));
         }
         None => {}
     }
@@ -95,16 +100,16 @@ pub(in crate::app) fn station_card(
     if let Some(target) = d.cq_to.as_deref() {
         ui.label(
             RichText::new(if cq_for_us {
-                format!("Calling CQ {target} — that includes you")
+                tr!("widgets-calling-cq-includes-you", target = target)
             } else {
-                format!("Calling CQ {target} — not aimed at you")
+                tr!("widgets-calling-cq-not-aimed-you", target = target)
             })
             .size(11.5)
             .color(if cq_for_us { crate::theme::GREEN() } else { dim }),
         );
     }
     if queued {
-        ui.label(RichText::new("In the call queue").size(11.5).color(crate::theme::GREEN()));
+        ui.label(RichText::new(tr!("widgets-call-queue")).size(11.5).color(crate::theme::GREEN()));
     }
     ui.label(
         RichText::new(format!("{:+} dB · {:.0} Hz · DT {:+.1} s", d.snr_db, d.audio_hz, d.dt))
@@ -496,8 +501,9 @@ pub(in crate::app) fn pick_image(inbox: Arc<Mutex<Option<Vec<u8>>>>) {
     std::thread::Builder::new()
         .name("sdroxide-pick".into())
         .spawn(move || {
-            if let Some(path) =
-                rfd::FileDialog::new().add_filter("Image", &["png", "jpg", "jpeg"]).pick_file()
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter(tr!("widgets-image"), &["png", "jpg", "jpeg"])
+                .pick_file()
             {
                 if let Ok(bytes) = std::fs::read(&path) {
                     if let Ok(mut g) = inbox.lock() {
@@ -513,7 +519,7 @@ pub(in crate::app) fn pick_image(inbox: Arc<Mutex<Option<Vec<u8>>>>) {
 pub(in crate::app) fn pick_image(inbox: Arc<Mutex<Option<Vec<u8>>>>) {
     wasm_bindgen_futures::spawn_local(async move {
         if let Some(file) = rfd::AsyncFileDialog::new()
-            .add_filter("Image", &["png", "jpg", "jpeg"])
+            .add_filter(tr!("widgets-image"), &["png", "jpg", "jpeg"])
             .pick_file()
             .await
         {

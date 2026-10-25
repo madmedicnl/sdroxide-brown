@@ -6,6 +6,7 @@
 //! exception that gets its own panel — it paints a scrolling image rather than
 //! producing characters.
 
+use crate::i18n::tr;
 use eframe::egui::{self, Color32, RichText};
 use sdroxide_types::{Command, Mode};
 
@@ -137,10 +138,16 @@ impl SdroxideApp {
                     .size(11.0)
                     .color(crate::theme::gray(150)),
             );
-            if crate::chrome::chip(ui, false, "−").on_hover_text("Tune down 10 Hz").clicked() {
+            if crate::chrome::chip(ui, false, "−")
+                .on_hover_text(tr!("textmodem-tune-down-10-hz"))
+                .clicked()
+            {
                 cmds.push(Command::SetDigiAudioFreq((audio_hz - 10.0).clamp(200.0, 3500.0)));
             }
-            if crate::chrome::chip(ui, false, "+").on_hover_text("Tune up 10 Hz").clicked() {
+            if crate::chrome::chip(ui, false, "+")
+                .on_hover_text(tr!("textmodem-tune-up-10-hz"))
+                .clicked()
+            {
                 cmds.push(Command::SetDigiAudioFreq((audio_hz + 10.0).clamp(200.0, 3500.0)));
             }
             crate::app::panels::on_air_readout(ui, on_air);
@@ -202,7 +209,7 @@ impl SdroxideApp {
                         .show_themed(ui, |ui| {
                             if rx_text.is_empty() {
                                 ui.label(
-                                    RichText::new("— listening —")
+                                    RichText::new(tr!("textmodem-listening"))
                                         .monospace()
                                         .size(12.0)
                                         .color(crate::theme::gray(90)),
@@ -302,9 +309,9 @@ impl SdroxideApp {
                                             .frame(egui::Frame::NONE)
                                             .desired_width(f32::INFINITY)
                                             .hint_text(if send_on_enter {
-                                                "Type a line, Return sends it…"
+                                                tr!("textmodem-type-line-return-sends")
                                             } else {
-                                                "Type here to transmit…"
+                                                tr!("textmodem-type-here-transmit")
                                             }),
                                     )
                                 })
@@ -335,7 +342,7 @@ impl SdroxideApp {
 
         // Controls.
         ui.horizontal(|ui| {
-            let label = if tx_on { "  TX ON  " } else { "   TX   " };
+            let label = if tx_on { tr!("textmodem-tx-2") } else { tr!("textmodem-tx-3") };
             if tx_gated(ui, tx_ok, |ui| {
                 crate::chrome::chip_accent(
                     ui,
@@ -359,7 +366,7 @@ impl SdroxideApp {
                 crate::chrome::chip_accent(
                     ui,
                     false,
-                    RichText::new(" CALL CQ ").size(13.0).strong(),
+                    RichText::new(tr!("textmodem-call-cq")).size(13.0).strong(),
                     crate::theme::GREEN(),
                     crate::theme::INK_ON_CYAN(),
                 )
@@ -367,26 +374,24 @@ impl SdroxideApp {
             .clicked()
             {
                 // Own the CQ text so the green sent-progress shows locally.
-                let call = if my_call.is_empty() { "NOCALL".to_string() } else { my_call.clone() };
+                let call = if my_call.is_empty() {
+                    tr!("textmodem-nocall").to_string()
+                } else {
+                    my_call.clone()
+                };
                 let cq = format!("CQ CQ CQ DE {call} {call} {call} PSE K\n");
                 cmds.push(Command::DigiAbortTx);
                 self.text_tx = cq.clone();
                 cmds.push(Command::DigiTxText(cq));
                 cmds.push(Command::DigiTxActive(true));
             }
-            if crate::chrome::chip(ui, false, " CLEAR ").clicked() {
+            if crate::chrome::chip(ui, false, tr!("textmodem-clear")).clicked() {
                 self.text_tx.clear();
                 cmds.push(Command::DigiAbortTx);
                 cmds.push(Command::DigiTxText(String::new()));
             }
             crate::chrome::row_tail(ui, |ui| {
-                self.send_on_return_chip(
-                    ui,
-                    cmds,
-                    "Hold what is typed until Return, then send the line in one piece \
-                     instead of streaming each character onto the air as it is typed. \
-                     Lets a line be read back and corrected before any of it goes out.",
-                );
+                self.send_on_return_chip(ui, cmds, &tr!("textmodem-hold-what-typed-until-return"));
                 self.text_msg_edit_chip(ui);
             });
         });
@@ -427,7 +432,7 @@ impl SdroxideApp {
     ) {
         if super::macros::macro_window(
             ctx,
-            "MESSAGES",
+            &tr!("textmodem-messages"),
             "TextMacros",
             &mut self.text_macro_edit,
             &mut self.digi_cfg_edit.text_macros,
@@ -460,16 +465,27 @@ impl SdroxideApp {
 
         // Header: mode + tuning readout / nudges, variant chips, TX indicator.
         ui.horizontal(|ui| {
-            ui.label(RichText::new("HELL").size(11.0).strong().color(crate::theme::CYAN()));
+            ui.label(
+                RichText::new(tr!("textmodem-hell"))
+                    .size(11.0)
+                    .strong()
+                    .color(crate::theme::CYAN()),
+            );
             ui.label(
                 RichText::new(format!("{audio_hz:.0} Hz"))
                     .size(11.0)
                     .color(crate::theme::gray(150)),
             );
-            if crate::chrome::chip(ui, false, "−").on_hover_text("Tune down 10 Hz").clicked() {
+            if crate::chrome::chip(ui, false, "−")
+                .on_hover_text(tr!("textmodem-tune-down-10-hz"))
+                .clicked()
+            {
                 cmds.push(Command::SetDigiAudioFreq(audio_hz - 10.0));
             }
-            if crate::chrome::chip(ui, false, "+").on_hover_text("Tune up 10 Hz").clicked() {
+            if crate::chrome::chip(ui, false, "+")
+                .on_hover_text(tr!("textmodem-tune-up-10-hz"))
+                .clicked()
+            {
                 cmds.push(Command::SetDigiAudioFreq(audio_hz + 10.0));
             }
             self.digi_freq_chip(ui, cmds);
@@ -477,7 +493,10 @@ impl SdroxideApp {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if transmitting {
                     ui.label(
-                        RichText::new("● TX").size(11.0).strong().color(crate::theme::ALERT()),
+                        RichText::new(tr!("textmodem-tx"))
+                            .size(11.0)
+                            .strong()
+                            .color(crate::theme::ALERT()),
                     );
                 }
                 self.digi_squelch_slider(ui, cmds);
@@ -491,15 +510,19 @@ impl SdroxideApp {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             let v = &mut self.view.hell;
-            ui.label(RichText::new("Contrast").size(10.5).color(crate::theme::CYAN_DIM()));
+            ui.label(
+                RichText::new(tr!("textmodem-contrast")).size(10.5).color(crate::theme::CYAN_DIM()),
+            );
             ui.spacing_mut().slider_width = 70.0;
             crate::chrome::slider(
                 ui,
                 egui::Slider::new(&mut v.contrast, 0.4..=3.0).show_value(false),
             )
-            .on_hover_text("Harder or softer dots — redraws the whole strip");
+            .on_hover_text(tr!("textmodem-harder-softer-dots-redraws-whole"));
             ui.add_space(6.0);
-            ui.label(RichText::new("Width").size(10.5).color(crate::theme::CYAN_DIM()));
+            ui.label(
+                RichText::new(tr!("textmodem-width")).size(10.5).color(crate::theme::CYAN_DIM()),
+            );
             for px in [1.0f32, 2.0, 3.0, 4.0] {
                 let sel = (v.col_px - px).abs() < 0.01;
                 if ui.selectable_label(sel, format!("{px:.0}×")).clicked() {
@@ -507,29 +530,29 @@ impl SdroxideApp {
                 }
             }
             ui.add_space(6.0);
-            if crate::chrome::chip(ui, v.doubled, " 2ROW ")
-                .on_hover_text(
-                    "Draw every column twice, stacked. Hell has no vertical sync, so this \
-                     keeps one complete copy of the text readable whatever the phase.",
-                )
+            if crate::chrome::chip(ui, v.doubled, tr!("textmodem-t-2row"))
+                .on_hover_text(tr!("textmodem-draw-every-column-twice-stacked"))
                 .clicked()
             {
                 v.doubled = !v.doubled;
             }
-            if crate::chrome::chip(ui, v.reverse, " REV ")
-                .on_hover_text("Reverse video — light dots on dark paper")
+            if crate::chrome::chip(ui, v.reverse, tr!("textmodem-rev"))
+                .on_hover_text(tr!("textmodem-reverse-video-light-dots-dark"))
                 .clicked()
             {
                 v.reverse = !v.reverse;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if crate::chrome::chip(ui, false, " CLEAR RX ").clicked() {
+                if crate::chrome::chip(ui, false, tr!("textmodem-clear-rx")).clicked() {
                     self.hell.clear();
                 }
                 ui.label(
-                    RichText::new(format!("{:.1} char/s", variant.chars_per_sec()))
-                        .size(10.5)
-                        .color(crate::theme::gray(120)),
+                    RichText::new(tr!(
+                        "textmodem-char-s",
+                        chars_per_sec = format!("{:.1}", variant.chars_per_sec())
+                    ))
+                    .size(10.5)
+                    .color(crate::theme::gray(120)),
                 );
             });
         });
@@ -632,9 +655,9 @@ impl SdroxideApp {
                                             .frame(egui::Frame::NONE)
                                             .desired_width(f32::INFINITY)
                                             .hint_text(if send_on_enter {
-                                                "Type a line, Return sends it…"
+                                                tr!("textmodem-type-line-return-sends")
                                             } else {
-                                                "Type here to transmit…"
+                                                tr!("textmodem-type-here-transmit")
                                             }),
                                     )
                                 })
@@ -659,7 +682,7 @@ impl SdroxideApp {
         ui.add_space(gap);
 
         ui.horizontal(|ui| {
-            let label = if tx_on { "  TX ON  " } else { "   TX   " };
+            let label = if tx_on { tr!("textmodem-tx-2") } else { tr!("textmodem-tx-3") };
             if tx_gated(ui, tx_ok, |ui| {
                 crate::chrome::chip_accent(
                     ui,
@@ -668,9 +691,7 @@ impl SdroxideApp {
                     crate::theme::ALERT(),
                     Color32::WHITE,
                 )
-                .on_hover_text(
-                    "Hold the channel: idle sends blank paper, so the strip keeps scrolling",
-                )
+                .on_hover_text(tr!("textmodem-hold-channel-idle-sends-blank"))
             })
             .clicked()
             {
@@ -687,21 +708,25 @@ impl SdroxideApp {
                 crate::chrome::chip_accent(
                     ui,
                     false,
-                    RichText::new(" CALL CQ ").size(13.0).strong(),
+                    RichText::new(tr!("textmodem-call-cq")).size(13.0).strong(),
                     crate::theme::GREEN(),
                     crate::theme::INK_ON_CYAN(),
                 )
             })
             .clicked()
             {
-                let call = if my_call.is_empty() { "NOCALL".to_string() } else { my_call.clone() };
+                let call = if my_call.is_empty() {
+                    tr!("textmodem-nocall").to_string()
+                } else {
+                    my_call.clone()
+                };
                 let cq = format!("CQ CQ CQ DE {call} {call} {call} PSE K ");
                 cmds.push(Command::DigiAbortTx);
                 self.text_tx = cq.clone();
                 cmds.push(Command::DigiTxText(cq));
                 cmds.push(Command::DigiTxActive(true));
             }
-            if crate::chrome::chip(ui, false, " CLEAR ").clicked() {
+            if crate::chrome::chip(ui, false, tr!("textmodem-clear")).clicked() {
                 self.text_tx.clear();
                 cmds.push(Command::DigiAbortTx);
                 cmds.push(Command::DigiTxText(String::new()));
@@ -732,10 +757,7 @@ impl SdroxideApp {
                 self.send_on_return_chip(
                     ui,
                     cmds,
-                    "Hold what is typed until Return, then send the line in one piece \
-                     instead of painting each character onto the strip as it is typed. \
-                     A correction typed live is already on the paper; one made before \
-                     Return never was.",
+                    &tr!("textmodem-hold-what-typed-until-return-2"),
                 );
             });
         });
@@ -783,7 +805,7 @@ impl SdroxideApp {
                     // 450 is what the Deutscher Wetterdienst broadcasts use and
                     // is far enough from 425 to matter; the nudge covers the
                     // rest, since commercial shifts are not a short list.
-                    cap(ui, "Shift");
+                    cap(ui, &tr!("textmodem-shift"));
                     for s in [170.0f32, 425.0, 450.0, 850.0] {
                         let sel = (cfg.rtty_shift_hz - s).abs() < 0.5;
                         if ui.selectable_label(sel, format!("{s:.0}")).clicked() {
@@ -791,11 +813,11 @@ impl SdroxideApp {
                             changed = true;
                         }
                     }
-                    if ui.small_button("−").on_hover_text("Shift −5 Hz").clicked() {
+                    if ui.small_button("−").on_hover_text(tr!("textmodem-shift-5-hz")).clicked() {
                         cfg.rtty_shift_hz = (cfg.rtty_shift_hz - 5.0).clamp(20.0, 1200.0);
                         changed = true;
                     }
-                    if ui.small_button("+").on_hover_text("Shift +5 Hz").clicked() {
+                    if ui.small_button("+").on_hover_text(tr!("textmodem-shift-5-hz-2")).clicked() {
                         cfg.rtty_shift_hz = (cfg.rtty_shift_hz + 5.0).clamp(20.0, 1200.0);
                         changed = true;
                     }
@@ -808,7 +830,7 @@ impl SdroxideApp {
                         cap(ui, &format!("{:.0}", cfg.rtty_shift_hz));
                     }
                     ui.add_space(8.0);
-                    cap(ui, "Baud");
+                    cap(ui, &tr!("textmodem-baud"));
                     for b in [45.45f32, 50.0, 75.0, 100.0] {
                         let sel = (cfg.rtty_baud - b).abs() < 0.5;
                         let lbl = if (b - 45.45).abs() < 0.5 {
@@ -824,11 +846,7 @@ impl SdroxideApp {
                     ui.add_space(8.0);
                     if ui
                         .selectable_label(cfg.rtty_reverse, "RV")
-                        .on_hover_text(
-                            "Reverse: swap mark and space. Needed when the signal \
-                             is received on the opposite sideband to the one it \
-                             was sent on, which inverts the tones.",
-                        )
+                        .on_hover_text(tr!("textmodem-reverse-swap-mark-space-needed"))
                         .clicked()
                     {
                         cfg.rtty_reverse = !cfg.rtty_reverse;
@@ -836,10 +854,7 @@ impl SdroxideApp {
                     }
                     if ui
                         .selectable_label(cfg.rtty_afc, "AFC")
-                        .on_hover_text(
-                            "Track tuning error automatically instead of staying \
-                             pinned to the cursor.",
-                        )
+                        .on_hover_text(tr!("textmodem-track-tuning-error-automatically-instead"))
                         .clicked()
                     {
                         cfg.rtty_afc = !cfg.rtty_afc;
@@ -888,7 +903,7 @@ impl SdroxideApp {
                     }
                 }
                 Mode::Thor => {
-                    cap(ui, "Mode");
+                    cap(ui, &tr!("textmodem-mode"));
                     for m in sdroxide_types::ThorMode::ALL {
                         if ui.selectable_label(cfg.thor_mode == m, m.label()).clicked() {
                             cfg.thor_mode = m;
@@ -1183,17 +1198,26 @@ impl SdroxideApp {
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
-            ui.label(RichText::new("Mode").size(10.5).strong().color(crate::theme::CYAN_DIM()));
+            ui.label(
+                RichText::new(tr!("textmodem-mode"))
+                    .size(10.5)
+                    .strong()
+                    .color(crate::theme::CYAN_DIM()),
+            );
             let cfg = &mut self.digi_cfg_edit;
             let mut changed = false;
             for v in sdroxide_types::HellVariant::ALL {
                 let sel = cfg.hell_variant == v;
-                let hint = format!(
-                    "{} — {:.1} char/s, {:.0} Hz wide, {}",
-                    v.label(),
-                    v.chars_per_sec(),
-                    v.bandwidth_hz(),
-                    if v.is_fsk() { "frequency-shifted" } else { "on/off keyed" }
+                let hint = tr!(
+                    "textmodem-char-s-hz-wide",
+                    value = v.label(),
+                    chars_per_sec = format!("{:.1}", v.chars_per_sec()),
+                    bandwidth_hz = format!("{:.0}", v.bandwidth_hz()),
+                    keyed = &if v.is_fsk() {
+                        tr!("textmodem-frequency-shifted")
+                    } else {
+                        tr!("textmodem-off-keyed")
+                    }
                 );
                 if ui.selectable_label(sel, v.label()).on_hover_text(hint).clicked() && !sel {
                     cfg.hell_variant = v;

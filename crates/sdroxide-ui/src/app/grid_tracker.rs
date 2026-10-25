@@ -19,6 +19,7 @@
 //! toggle. The heard layer is drawn under the worked one so a square or country
 //! that is both reads as worked.
 
+use crate::i18n::tr;
 use eframe::egui::{self, Rect, Sense, Ui, pos2, vec2};
 use std::collections::HashSet;
 

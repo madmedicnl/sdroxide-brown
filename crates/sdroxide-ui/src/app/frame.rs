@@ -5,6 +5,7 @@
 //! so the frame draws the newest state, and the repaint request at the end is
 //! what keeps the app idling instead of spinning when no stream is flowing.
 
+use crate::i18n::tr;
 use eframe::egui::{self, Color32, RichText};
 use sdroxide_types::{Band, Command, Mode, RadioEvent, SpectrumConfig, Spot};
 
@@ -1271,11 +1272,10 @@ impl eframe::App for SdroxideApp {
                             // actually clears it in the engine.
                             if let Some(swr) = self.state.tx.swr_tripped {
                                 if ui
-                                    .button(RichText::new("Acknowledge").size(13.0))
-                                    .on_hover_text(format!(
-                                        "Re-enables transmit after {swr:.1}:1. Check the antenna \
-                                         first: if the fault is still there, the next \
-                                         transmission stops too."
+                                    .button(RichText::new(tr!("frame-acknowledge")).size(13.0))
+                                    .on_hover_text(tr!(
+                                        "frame-re-enables-transmit-after-1",
+                                        swr = format!("{:.1}", swr)
                                     ))
                                     .clicked()
                                 {
@@ -1395,15 +1395,18 @@ impl eframe::App for SdroxideApp {
                     ui.add_space(10.0);
                     ui.label(
                         RichText::new(match due_in {
-                            Some(s) if s >= 1.0 => format!("Reconnecting in {}s…", s.ceil() as u64),
-                            Some(_) => "Reconnecting…".to_string(),
-                            None => "Not connected.".to_string(),
+                            Some(s) if s >= 1.0 => {
+                                tr!("frame-reconnecting-s", value = s.ceil() as u64)
+                            }
+                            Some(_) => tr!("frame-reconnecting").to_string(),
+                            None => tr!("frame-not-connected").to_string(),
                         })
                         .size(13.0)
                         .color(crate::theme::gray(150)),
                     );
                     ui.add_space(10.0);
-                    retry = ui.button(RichText::new("Reconnect now").size(16.0)).clicked();
+                    retry =
+                        ui.button(RichText::new(tr!("frame-reconnect-now")).size(16.0)).clicked();
                 }
             });
             if retry {
@@ -4627,30 +4630,21 @@ impl SdroxideApp {
                 crate::chrome::window_body_bg(ui);
                 ui.set_max_width(crate::layout::window_w(ctx, 430.0));
                 ui.label(
-                    RichText::new(
-                        "This engine was started with --oob-tx. The amateur-band lockout is \
-                         off: it will key the transmitter on any frequency the hardware \
-                         supports.",
-                    )
-                    .color(crate::theme::TEXT_STRONG())
-                    .size(13.0),
+                    RichText::new(tr!("frame-engine-was-started-oob-tx"))
+                        .color(crate::theme::TEXT_STRONG())
+                        .size(13.0),
                 );
                 ui.add_space(6.0);
                 ui.label(
-                    RichText::new(
-                        "Transmitting outside your licence is an offence in every country that \
-                         issues one. Only continue if you are authorised to use the frequencies \
-                         you are about to key on — a MARS/CAP or commercial licence, an \
-                         experimental permit, or a dummy load.",
-                    )
-                    .color(crate::theme::TEXT()),
+                    RichText::new(tr!("frame-transmitting-outside-your-licence-offence"))
+                        .color(crate::theme::TEXT()),
                 );
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
                     if crate::chrome::chip_accent(
                         ui,
                         false,
-                        RichText::new("  I UNDERSTAND  ").strong(),
+                        RichText::new(tr!("frame-i-understand")).strong(),
                         crate::theme::ALERT(),
                         crate::theme::TEXT_STRONG(),
                     )

@@ -5,6 +5,7 @@
 //! and worked-entity tallies are cached by log length, because the decode list
 //! asks them what would be new on every row of every slot.
 
+use crate::i18n::tr;
 use eframe::egui::{self, Color32, RichText};
 use sdroxide_types::{Command, LookupProvider, QsoRecord, UploadTarget};
 
@@ -374,9 +375,10 @@ impl SdroxideApp {
             persist_qso_log(&self.qso_log);
             self.log_content_changed();
         }
-        self.push_net_log(format!(
-            "Confirmations: {} downloaded, {matched} newly confirmed",
-            recs.len()
+        self.push_net_log(tr!(
+            "logbook-confirmations-downloaded-newly-confirmed",
+            recs = recs.len(),
+            matched = matched
         ));
     }
 
@@ -551,14 +553,18 @@ impl SdroxideApp {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
                         ui.label(
-                            RichText::new(if f.id == 0 { "NEW QSO" } else { "EDIT QSO" })
-                                .size(11.0)
-                                .strong()
-                                .color(crate::theme::CYAN()),
+                            RichText::new(if f.id == 0 {
+                                tr!("logbook-new-qso")
+                            } else {
+                                tr!("logbook-edit-qso")
+                            })
+                            .size(11.0)
+                            .strong()
+                            .color(crate::theme::CYAN()),
                         );
                         if dupe {
                             ui.label(
-                                RichText::new(format!("⚠ WORKED BEFORE ({dupe_band})"))
+                                RichText::new(tr!("logbook-worked-before", dupe_band = dupe_band))
                                     .size(11.0)
                                     .strong()
                                     .color(crate::theme::PINK()),
@@ -583,20 +589,20 @@ impl SdroxideApp {
                         crate::chrome::field(ui, egui::TextEdit::singleline(s).desired_width(w));
                     };
                     ui.horizontal(|ui| {
-                        lbl(ui, "Call");
+                        lbl(ui, &tr!("logbook-call"));
                         let cr = crate::chrome::field(
                             ui,
                             egui::TextEdit::singleline(&mut f.call).desired_width(150.0),
                         );
                         if has_provider
-                            && crate::chrome::chip(ui, false, "LOOKUP")
-                                .on_hover_text("Look up name / QTH / grid")
+                            && crate::chrome::chip(ui, false, tr!("logbook-lookup"))
+                                .on_hover_text(tr!("logbook-look-up-name-qth-grid"))
                                 .clicked()
                             && !f.call.trim().is_empty()
                         {
                             lookup_call = Some(f.call.trim().to_string());
                         }
-                        lbl(ui, "Grid");
+                        lbl(ui, &tr!("logbook-grid"));
                         field(ui, 110.0, &mut f.grid);
                         // Auto-lookup when the call field loses focus.
                         if cr.lost_focus()
@@ -609,37 +615,37 @@ impl SdroxideApp {
                     });
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        lbl(ui, "Freq MHz");
+                        lbl(ui, &tr!("logbook-freq-mhz"));
                         field(ui, 150.0, &mut f.freq_mhz);
-                        lbl(ui, "Mode");
+                        lbl(ui, &tr!("logbook-mode"));
                         field(ui, 120.0, &mut f.mode);
                     });
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        lbl(ui, "RST sent");
+                        lbl(ui, &tr!("logbook-rst-sent"));
                         field(ui, 150.0, &mut f.rst_sent);
-                        lbl(ui, "RST rcvd");
+                        lbl(ui, &tr!("logbook-rst-rcvd"));
                         field(ui, 120.0, &mut f.rst_rcvd);
                     });
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        lbl(ui, "Name");
+                        lbl(ui, &tr!("logbook-name"));
                         field(ui, 150.0, &mut f.name);
                         lbl(ui, "QTH");
                         field(ui, 120.0, &mut f.qth);
                     });
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        lbl(ui, "State");
+                        lbl(ui, &tr!("logbook-state"));
                         field(ui, 150.0, &mut f.state);
-                        lbl(ui, "Country");
+                        lbl(ui, &tr!("logbook-country"));
                         field(ui, 120.0, &mut f.country);
                     });
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        lbl(ui, "Date UTC");
+                        lbl(ui, &tr!("logbook-date-utc"));
                         field(ui, 150.0, &mut f.date);
-                        lbl(ui, "Time");
+                        lbl(ui, &tr!("logbook-time"));
                         field(ui, 90.0, &mut f.time);
                         if crate::chrome::chip(ui, false, "NOW").clicked() {
                             set_now = true;
@@ -647,18 +653,18 @@ impl SdroxideApp {
                     });
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        lbl(ui, "Pwr W");
+                        lbl(ui, &tr!("logbook-pwr-w"));
                         field(ui, 60.0, &mut f.tx_pwr);
-                        lbl(ui, "Contest");
+                        lbl(ui, &tr!("logbook-contest"));
                         field(ui, 96.0, &mut f.contest_id);
-                        lbl(ui, "S# sent");
+                        lbl(ui, &tr!("logbook-s-sent"));
                         field(ui, 56.0, &mut f.stx);
-                        lbl(ui, "S# rcvd");
+                        lbl(ui, &tr!("logbook-s-rcvd"));
                         field(ui, 56.0, &mut f.srx);
                     });
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        lbl(ui, "Comment");
+                        lbl(ui, &tr!("logbook-comment"));
                         field(ui, 500.0, &mut f.comment);
                     });
                     ui.add_space(4.0);
@@ -666,7 +672,7 @@ impl SdroxideApp {
                         if crate::chrome::chip_accent(
                             ui,
                             false,
-                            RichText::new(" SAVE ").strong(),
+                            RichText::new(tr!("logbook-save")).strong(),
                             crate::theme::GREEN(),
                             crate::theme::INK_ON_CYAN(),
                         )
@@ -674,7 +680,7 @@ impl SdroxideApp {
                         {
                             action = 1;
                         }
-                        if crate::chrome::chip(ui, false, "CANCEL").clicked() {
+                        if crate::chrome::chip(ui, false, tr!("logbook-cancel")).clicked() {
                             action = 2;
                         }
                     });
@@ -742,11 +748,11 @@ impl SdroxideApp {
     fn log_day_header(ui: &mut egui::Ui, g: &LogGroup, count: usize) {
         ui.label(RichText::new(&g.day).size(12.0).strong().color(crate::theme::CYAN()));
         ui.label(
-            RichText::new(format!(
-                "{}–{} UTC · {} QSO",
-                time_str(g.oldest),
-                time_str(g.newest),
-                count
+            RichText::new(tr!(
+                "logbook-utc-qso",
+                oldest = time_str(g.oldest),
+                newest = time_str(g.newest),
+                value = count
             ))
             .size(10.5)
             .color(crate::theme::gray(130)),
@@ -866,7 +872,7 @@ impl SdroxideApp {
                             if !qsl_tip.is_empty() {
                                 qsl_tip.push_str(", ");
                             }
-                            qsl_tip.push_str(name);
+                            qsl_tip.push_str(&name);
                         }
                     }
                     {
@@ -892,19 +898,23 @@ impl SdroxideApp {
                             crate::theme::PINK(),
                             Color32::WHITE,
                         )
-                        .on_hover_text("Delete this entry")
+                        .on_hover_text(tr!("logbook-delete-entry"))
                         .clicked()
                         {
                             to_delete = Some(r.id);
                         }
-                        if crate::chrome::chip(ui, false, RichText::new("EDIT").size(11.0))
-                            .clicked()
+                        if crate::chrome::chip(
+                            ui,
+                            false,
+                            RichText::new(tr!("logbook-edit")).size(11.0),
+                        )
+                        .clicked()
                         {
                             to_edit = Some(r.id);
                         }
                         if !up_targets.is_empty()
                             && crate::chrome::chip(ui, false, RichText::new("UP").size(11.0))
-                                .on_hover_text("Upload this QSO to configured logs")
+                                .on_hover_text(tr!("logbook-upload-qso-configured-logs"))
                                 .clicked()
                         {
                             to_upload = Some(r.id);
@@ -950,8 +960,7 @@ impl SdroxideApp {
         if view.items.is_empty() {
             ui.add_space(8.0);
             ui.label(
-                RichText::new("no QSOs yet — run FT8/FT4 or add a manual entry")
-                    .color(crate::theme::gray(120)),
+                RichText::new(tr!("logbook-no-qsos-yet-run-ft8")).color(crate::theme::gray(120)),
             );
             return;
         }

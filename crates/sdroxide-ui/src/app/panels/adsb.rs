@@ -18,6 +18,7 @@
 //! lane cannot run at all, the sentence saying why, with the retune that fixes
 //! it beside it.
 
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::{AdsbAircraft, AdsbStatus, Command};
 
@@ -55,7 +56,7 @@ impl SdroxideApp {
         let st: AdsbStatus = match self.adsb_status.as_ref() {
             Some(s) => (**s).clone(),
             None => {
-                ui.label(RichText::new("starting the ADS-B decoder…").weak());
+                ui.label(RichText::new(tr!("adsb-starting-ads-b-decoder")).weak());
                 return;
             }
         };
@@ -111,16 +112,13 @@ impl SdroxideApp {
 
         ui.horizontal_wrapped(|ui| {
             ui.set_min_height(22.0);
-            ui.label(RichText::new("ADS-B").size(11.0).strong().color(theme::CYAN()));
-            ui.label(RichText::new("1090 MHz Mode S").weak().size(10.5));
+            ui.label(RichText::new(tr!("adsb-ads-b")).size(11.0).strong().color(theme::CYAN()));
+            ui.label(RichText::new(tr!("adsb-t-1090-mhz-mode-s")).weak().size(10.5));
 
             // The one preset there is. A chip rather than a note, because the
             // fix for "nothing is decoding" is nearly always this.
             if crate::chrome::chip(ui, on_channel, "1090.000")
-                .on_hover_text(
-                    "Tune the receiver to 1090.000 MHz, the worldwide ADS-B \
-                     downlink. There is only one channel.",
-                )
+                .on_hover_text(tr!("adsb-tune-receiver-1090-000-mhz"))
                 .clicked()
             {
                 cmds.push(Command::SetVfo {
@@ -130,23 +128,28 @@ impl SdroxideApp {
             }
 
             ui.separator();
-            slot(ui, 76.0, &format!("{} aircraft", st.aircraft.len()), theme::CYAN());
-            slot(ui, 74.0, &format!("{} frames", count(st.frames)), theme::gray(150));
+            slot(ui, 76.0, &tr!("adsb-aircraft-3", aircraft = st.aircraft.len()), theme::CYAN());
+            slot(ui, 74.0, &tr!("adsb-frames", frames = count(st.frames)), theme::gray(150));
             // A high preamble count with no frames is the honest picture of a
             // band that is busy with something the decoder cannot read, or of a
             // receiver picking up its own noise. Worth showing rather than
             // leaving the panel looking broken.
-            slot(ui, 88.0, &format!("{} preambles", count(st.preambles)), theme::gray(120));
-            slot(ui, 78.0, &format!("{} bad CRC", count(st.bad_crc)), theme::gray(120));
+            slot(
+                ui,
+                88.0,
+                &tr!("adsb-preambles", preambles = count(st.preambles)),
+                theme::gray(120),
+            );
+            slot(ui, 78.0, &tr!("adsb-bad-crc", bad_crc = count(st.bad_crc)), theme::gray(120));
 
             if st.window_rate_hz > 0.0 {
                 slot(
                     ui,
                     148.0,
                     &format!(
-                        "{:.3} MHz / {:.2} Msps",
-                        st.window_center_hz / 1e6,
-                        st.window_rate_hz / 1e6
+                        "{e6:.3} MHz / {e62:.2} Msps",
+                        e6 = st.window_center_hz / 1e6,
+                        e62 = st.window_rate_hz / 1e6
                     ),
                     theme::gray(120),
                 );
@@ -169,7 +172,12 @@ impl SdroxideApp {
                 ui.label(RichText::new(why).size(10.5).color(theme::HAZARD()));
                 if let Some(hz) = st.suggest_center_hz
                     && (dial - hz).abs() > 1.0
-                    && crate::chrome::chip(ui, false, format!("TUNE {:.3}", hz / 1e6)).clicked()
+                    && crate::chrome::chip(
+                        ui,
+                        false,
+                        tr!("adsb-tune", mhz = format!("{:.3}", hz / 1e6)),
+                    )
+                    .clicked()
                 {
                     cmds.push(Command::SetVfo { vfo: self.state.active_vfo, hz });
                 }
@@ -259,7 +267,7 @@ impl SdroxideApp {
             .auto_shrink([false, false])
             .show_themed(ui, |ui| {
                 if rows.is_empty() {
-                    ui.label(RichText::new("nothing heard yet").weak());
+                    ui.label(RichText::new(tr!("adsb-nothing-heard-yet")).weak());
                 }
                 for (i, a) in rows.iter().enumerate() {
                     if adsb_row(ui, a, now, selected, home, drop_map_s, i) {
@@ -307,11 +315,13 @@ impl SdroxideApp {
                         ui.label(RichText::new(c).size(10.5).color(theme::CYAN_DIM()));
                     }
                     if a.on_ground {
-                        ui.label(RichText::new("on ground").size(10.5).color(theme::GREEN()));
+                        ui.label(
+                            RichText::new(tr!("adsb-ground")).size(10.5).color(theme::GREEN()),
+                        );
                     }
                     if a.lat.is_some() && a.pos_stale(now, self.state.adsb.drop_map_s) {
                         ui.label(
-                            RichText::new("position stale")
+                            RichText::new(tr!("adsb-position-stale"))
                                 .size(10.5)
                                 .color(theme::HAZARD())
                                 .italics(),
@@ -322,7 +332,7 @@ impl SdroxideApp {
                     ui.label(RichText::new(e).strong().color(theme::HAZARD()));
                 }
 
-                let mut rows: Vec<(&str, String)> = Vec::new();
+                let mut rows: Vec<(String, String)> = Vec::new();
                 if let Some(ft) = a.altitude_ft {
                     rows.push((
                         "altitude",
@@ -336,10 +346,10 @@ impl SdroxideApp {
                     rows.push(("ground speed", sdroxide_types::AirUnits::current().speed(kt)));
                 }
                 if let Some(t) = a.track_deg {
-                    rows.push(("track", format!("{t:.0}°")));
+                    rows.push((tr!("adsb-row-track"), format!("{t:.0}°")));
                 }
                 if a.turn_rate_deg_s.abs() > 0.2 {
-                    rows.push(("turning", format!("{:.1}°/s", a.turn_rate_deg_s)));
+                    rows.push((tr!("adsb-row-turning"), format!("{:.1}°/s", a.turn_rate_deg_s)));
                 }
                 if let Some(v) = a.vertical_rate_fpm {
                     rows.push((
@@ -348,7 +358,7 @@ impl SdroxideApp {
                     ));
                 }
                 if a.squawk.is_some() {
-                    rows.push(("squawk", a.fmt_squawk()));
+                    rows.push((tr!("adsb-row-squawk"), a.fmt_squawk()));
                 }
                 if let (Some((hlat, hlon)), Some((lat, lon))) = (home, a.lat.zip(a.lon)) {
                     let km = sdroxide_types::distance_km((hlat, hlon), (lat, lon));
@@ -359,11 +369,14 @@ impl SdroxideApp {
                     ));
                 }
                 if let Some((lat, lon)) = a.lat.zip(a.lon) {
-                    rows.push(("position", format!("{lat:.4}, {lon:.4}")));
+                    rows.push((tr!("adsb-row-position"), format!("{lat:.4}, {lon:.4}")));
                 }
-                rows.push(("signal", format!("{:.0} dBFS", a.rssi_dbfs)));
-                rows.push(("frames", format!("{} ({})", a.frames, a.source.label())));
-                rows.push(("first heard", fmt_age(now - a.first_at)));
+                rows.push((
+                    tr!("adsb-row-signal"),
+                    format!("{rssi_dbfs:.0} dBFS", rssi_dbfs = a.rssi_dbfs),
+                ));
+                rows.push((tr!("adsb-row-frames"), format!("{} ({})", a.frames, a.source.label())));
+                rows.push((tr!("adsb-first-heard"), fmt_age(now - a.first_at)));
 
                 egui::Grid::new("adsb-card-grid").num_columns(2).spacing([10.0, 1.0]).show(
                     ui,
@@ -382,9 +395,13 @@ impl SdroxideApp {
 
                 ui.horizontal_wrapped(|ui| {
                     if a.has_position()
-                        && crate::chrome::chip(ui, false, RichText::new("CENTER").size(10.0))
-                            .on_hover_text("Put this aircraft in the middle of the map")
-                            .clicked()
+                        && crate::chrome::chip(
+                            ui,
+                            false,
+                            RichText::new(tr!("adsb-center")).size(10.0),
+                        )
+                        .on_hover_text(tr!("adsb-put-aircraft-middle-map"))
+                        .clicked()
                         && let Some((lat, lon)) = a.lat.zip(a.lon)
                     {
                         self.adsb_map.view.centre_on(lat, lon);
@@ -398,7 +415,7 @@ impl SdroxideApp {
                             .color(theme::gray(110))
                             .weak(),
                     )
-                    .on_hover_text("The last frame accepted from this aircraft");
+                    .on_hover_text(tr!("adsb-last-frame-accepted-aircraft"));
                 }
             });
     }
@@ -695,7 +712,7 @@ fn adsb_head_row(ui: &mut egui::Ui, have_home: bool, sort: &mut AdsbSort, desc: 
     crate::app::panels::widgets::sort_head_row(
         ui,
         &[
-            (cols.call, L, "CALL", Some(AdsbSort::Callsign)),
+            (cols.call, L, &tr!("adsb-call"), Some(AdsbSort::Callsign)),
             // The address is the callsign column's fallback, not an order
             // anybody wants a sky in.
             (cols.icao, L, "ICAO", None),

@@ -31,6 +31,7 @@
 //! published; a band with no paths was either shut or unattended, and this
 //! window does not claim to know which.
 
+use crate::i18n::tr;
 use eframe::egui::{self, Color32, RichText};
 use sdroxide_solar::BandRating;
 use sdroxide_types::Band;
@@ -173,16 +174,20 @@ impl SdroxideApp {
 
         ui.horizontal(|ui| {
             ui.label(
-                RichText::new(if self.daylight { "☀ DAYLIGHT" } else { "☾ NIGHT" })
-                    .size(10.0)
-                    .color(crate::theme::CYAN_DIM()),
+                RichText::new(if self.daylight {
+                    tr!("bands-daylight")
+                } else {
+                    tr!("bands-night")
+                })
+                .size(10.0)
+                .color(crate::theme::CYAN_DIM()),
             );
             match conditions_age(self) {
                 Some(a) => {
-                    ui.label(dim(&format!("· forecast from HAMQSL.com, {a} old")));
+                    ui.label(dim(&tr!("bands-forecast-hamqsl-com-old", value = a)));
                 }
                 None => {
-                    ui.label(dim("· no forecast yet — fetching from HAMQSL.com"));
+                    ui.label(dim(&tr!("bands-no-forecast-yet-fetching-hamqsl")));
                 }
             }
             if let Some(a) = activity_age(self) {
@@ -333,10 +338,17 @@ impl SdroxideApp {
         let dim = |s: &str| RichText::new(s.to_string()).size(9.5).color(dim_ink());
         ui.add_space(12.0);
         ui.label(
-            RichText::new("METEOR SHOWERS").size(10.0).strong().color(crate::theme::CYAN_DIM()),
+            RichText::new(tr!("bands-meteor-showers"))
+                .size(10.0)
+                .strong()
+                .color(crate::theme::CYAN_DIM()),
         );
         ui.add_space(2.0);
-        ui.label(dim(&format!("radiants placed for {lat:.0}°, {lon:.0}°")));
+        ui.label(dim(&tr!(
+            "bands-radiants-placed",
+            lat = format!("{:.0}", lat),
+            lon = format!("{:.0}", lon)
+        )));
         ui.add_space(3.0);
         for a in &active {
             let s = a.shower;
@@ -365,10 +377,10 @@ impl SdroxideApp {
                 }
                 if a.radiant_up() {
                     ui.label(
-                        RichText::new(format!(
-                            "radiant {:.0}° {}",
-                            a.alt_deg,
-                            sdroxide_solar::satellites::compass(a.az_deg)
+                        RichText::new(tr!(
+                            "bands-radiant",
+                            alt_deg = format!("{:.0}", a.alt_deg),
+                            az_deg = sdroxide_solar::satellites::compass(a.az_deg)
                         ))
                         .size(10.5),
                     )
@@ -436,8 +448,5 @@ impl SdroxideApp {
 
 /// "3 Jan" from a `(month, day)` pair, for the hover.
 fn peak_label(peak: (u32, u32)) -> String {
-    const MONTHS: [&str; 12] =
-        ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    let name = MONTHS.get(peak.0.saturating_sub(1) as usize).copied().unwrap_or("?");
-    format!("{} {name}", peak.1)
+    tr!("bands-peak-date", day = peak.1, month = peak.0)
 }

@@ -5,6 +5,7 @@
 //! copied, because the window republishes it every frame.
 
 // The globe's award layer is native-only, and it is the sole user here.
+use crate::i18n::tr;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 
@@ -23,8 +24,14 @@ fn award_summary<K>(
     let (w, c) = sdroxide_types::counts(map);
     ui.horizontal(|ui| {
         ui.add_sized([90.0, 20.0], egui::Label::new(RichText::new(name).strong()));
-        ui.label(RichText::new(format!("{w} worked")).color(crate::theme::YELLOW()).monospace());
-        ui.label(RichText::new(format!("{c} confirmed")).color(crate::theme::GREEN()).monospace());
+        ui.label(
+            RichText::new(tr!("awards-worked", w = w)).color(crate::theme::YELLOW()).monospace(),
+        );
+        ui.label(
+            RichText::new(tr!("awards-confirmed", value = c))
+                .color(crate::theme::GREEN())
+                .monospace(),
+        );
     });
 }
 

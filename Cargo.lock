@@ -6091,6 +6091,7 @@ dependencies = [
  "eframe",
  "egui-winit",
  "ewebsock",
+ "fluent",
  "fluent-syntax",
  "i18n-embed",
  "i18n-embed-fl",
