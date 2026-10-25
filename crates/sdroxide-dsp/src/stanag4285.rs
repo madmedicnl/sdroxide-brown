@@ -3452,4 +3452,62 @@ mod tests {
         let n = bytes.len() / 128 * 128;
         std::fs::write("/tmp/opencode/our_soft.bin", &bytes[..n]).expect("write");
     }
+
+    /// **Which wiring of the deinterleaver reproduces the reference decoder's own
+    /// bits?**
+    ///
+    /// The annex's wording does not say which of the interleaver's two commutators
+    /// is the receiver's, so this tree carries four wirings and runs one of them
+    /// ([`fec::Interleave::Announce`]). A loopback cannot tell them apart — all
+    /// four round-trip through our own encoder — so this asks an independent
+    /// decoder instead: feed its own soft decisions through each wiring and see
+    /// which reproduces the bits it produced.
+    #[test]
+    #[ignore]
+    fn which_interleaver_wiring_matches_the_reference() {
+        let soft_path = std::env::var("SDROXIDE_S4285_REF_SOFT")
+            .unwrap_or_else(|_| "/tmp/opencode/ref_soft.bin".into());
+        let bits_path = std::env::var("SDROXIDE_S4285_REF_BITS")
+            .unwrap_or_else(|_| "/tmp/opencode/ref_bits_clean.txt".into());
+        let raw = std::fs::read(&soft_path).expect("ref soft");
+        let theirs_txt = std::fs::read_to_string(&bits_path).expect("ref bits");
+        let theirs: Vec<u8> =
+            theirs_txt.trim().bytes().map(|b| if b == b'1' { 1 } else { 0 }).collect();
+        let best_match = |ours: &[u8], theirs: &[u8]| -> (f64, usize) {
+            let mut best = (0.0f64, 0usize);
+            for off in 0..ours.len().saturating_sub(theirs.len()).min(40_000) {
+                let hits = (0..theirs.len()).filter(|&i| ours[off + i] == theirs[i]).count();
+                let frac = hits as f64 / theirs.len() as f64;
+                if frac > best.0 {
+                    best = (frac, off);
+                }
+            }
+            best
+        };
+        for style in fec::Interleave::ALL {
+            for swap in [false, true] {
+                let mut de = fec::ConvInterleaver::deinterleaver_with(fec::CodedRate::Bps600.j(), style);
+                let mut deint: Vec<f32> = Vec::with_capacity(raw.len());
+                for &v in &raw {
+                    deint.push(de.push(128.0 - v as f32));
+                }
+                let mut ours: Vec<u8> = Vec::new();
+                for chunk in deint.chunks_exact(256) {
+                    let mut pairs = fec::average_pairs(chunk, 1);
+                    if swap {
+                        for p in pairs.chunks_exact_mut(2) {
+                            p.swap(0, 1);
+                        }
+                    }
+                    ours.extend(fec::viterbi_decode(&pairs));
+                }
+                let (frac, off) = best_match(&ours, &theirs);
+                eprintln!(
+                    "wiring {:12} swap {swap}: {:.1}% at offset {off}",
+                    style.label(),
+                    frac * 100.0
+                );
+            }
+        }
+    }
 }

@@ -121,6 +121,33 @@ frame twice. Porting theirs is the remaining work — the header is 190 lines an
 the ground truth (their bits, their soft decisions, and the text they produce) is
 already on disk.
 
+**And the coding chain was cleared against their decoder too.** The interleaver's
+wiring is the one thing the annex leaves ambiguous, so this tree carries four;
+`which_interleaver_wiring_matches_the_reference` runs the reference's own soft
+decisions through each and asks which reproduces the bits that decoder produced:
+
+| wiring | agreement |
+|---|---|
+| **announce** (the one we run) | **66.5 %** / 67.2 % |
+| swapped | 54.0 % / 54.5 % |
+| rows-flipped | 54.2 % / 55.3 % |
+| swapped+flipped | 55.8 % / 54.3 % |
+
+Three of the four sit at chance and ours is clearly ahead, so the wiring is right
+and the deinterleaver's geometry is confirmed a second time. Also verified on the
+capture: the chain is fed **one frame per frame** (feed spacing exactly 1280
+samples, 559 feeds over 556 frames of audio), it is **never restarted** (resets
+zero), and the material is five times the interleaver's fill need.
+
+So every part of the receiver except the demodulated soft decisions has now been
+checked against an independent implementation that decodes this transmission. The
+remaining work is one thing: **the front end**. The reference filters the frame
+with a 121-tap fractionally-spaced LMS equaliser plus four symbol taps, trained
+symbol by symbol through the sync and the reference blocks, and takes
+log-likelihood soft decisions from a running noise estimate — where this tree
+filters eleven taps, applies a line fitted through the three reference blocks, and
+decides on the real part.
+
 **And then the text layer turned out to be throwing good messages away.** With the
 reference's bits in hand — bits that plainly contain a French Navy tape — the
 mode's own reader returned **nothing**:
