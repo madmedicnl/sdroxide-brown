@@ -527,7 +527,25 @@ impl super::SdroxideApp {
                 }
             });
         }
-        classic_row(ui, "Squelch", |ui| {
+        // **The caption is the control here too.** #218 put the hold-open on the
+        // strip's `SQL` label, and the operator — who runs the Classic UI — could
+        // not find it: this column draws its own squelch row, with the word in its
+        // gutter. Same gesture, same state, same decision.
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().slider_width = 520.0;
+            let held = self.sql_hold.is_some();
+            if gutter_label_button(ui, "Squelch", held) {
+                let (hold, send) = super::top_bar::sql_hold_toggle(
+                    self.sql_hold,
+                    super::top_bar::SqlHold::Dbfs(self.state.rx[0].squelch_db),
+                    sdroxide_types::SQUELCH_OPEN_DB,
+                );
+                self.sql_hold = hold;
+                if let Some(send) = send {
+                    self.state.rx[0].squelch_db = send; // optimistic echo
+                    cmds.push(Command::SetSquelch { rx: RxId::Main, db: send });
+                }
+            }
             let sql = self.state.rx[0].squelch_db;
             let mut v = sql;
             let resp = crate::chrome::slider_readout(
@@ -739,6 +757,60 @@ fn classic_row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) 
         gutter_label(ui, label);
         add(ui);
     });
+}
+
+/// The gutter caption when it is **also a control**: the same box, the words in
+/// green while it is holding something on, and a click that reports. Used by the
+/// squelch row, where the caption is the hold-open (#218, and the Classic UI's own
+/// drawing of it).
+pub(in crate::app) fn gutter_label_button(ui: &mut egui::Ui, label: &str, lit: bool) -> bool {
+    let colour = if lit { crate::theme::GREEN() } else { crate::theme::gray(150) };
+    let text = RichText::new(label).size(10.5).color(colour);
+    let resp = ui
+        .allocate_ui_with_layout(
+            egui::vec2(LABEL_W, 16.0),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| ui.add(egui::Label::new(text).sense(egui::Sense::click())),
+        )
+        .inner;
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    resp.on_hover_text(if lit {
+        "Holding the squelch open. Click to put back the gate you had."
+    } else {
+        "Click to hold the squelch open — to hear whether something is there — and click \
+         again to put it back exactly as it was."
+    })
+    .clicked()
+}
+
+#[cfg(test)]
+mod squelch_tests {
+    use super::*;
+
+    /// **The Classic UI's squelch row is the hold-open too.** #218 put the gesture
+    /// on the strip's `SQL` label; the operator runs the Classic column, which
+    /// draws its own squelch row, and reported that he could not find it. Two
+    /// draw sites, one behaviour — this pins the second one to the first's decision
+    /// so a third cannot appear without it.
+    #[test]
+    fn the_classic_squelch_caption_is_the_hold_open() {
+        let src = include_str!("classic.rs");
+        let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
+        assert!(
+            code.contains("gutter_label_button(ui, \"Squelch\", held)"),
+            "the Classic column's Squelch caption is a plain label again"
+        );
+        assert!(
+            code.contains("super::top_bar::sql_hold_toggle("),
+            "the Classic column does not use the strip's one decision"
+        );
+        assert!(
+            code.contains("sdroxide_types::SQUELCH_OPEN_DB"),
+            "the Classic column's hold does not open the gate to the same place"
+        );
+    }
 }
 
 /// The caption in the column's left gutter: the width reserved, and the words at
