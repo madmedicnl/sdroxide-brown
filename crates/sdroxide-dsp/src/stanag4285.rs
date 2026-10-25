@@ -1687,8 +1687,14 @@ impl S4285Receiver {
         if self.coded.is_empty() {
             self.coded = coded_chains();
         }
-        let soft: Vec<f32> =
-            if self.llr_n >= 8 { llr.clone() } else { data.iter().map(|c| c.re * scale).collect() };
+        // **The linear reading, because the log-likelihood one measured worse on a
+        // clean signal.** Swapping it in broke two synthetic coded chains that had
+        // been decoding (a two-path channel and a truncated band), and produced no
+        // message on the capture either. The estimate is kept — it is what the
+        // reference uses and it may be what the front-end port needs — but it is
+        // not wired in on this evidence.
+        let _ = &llr;
+        let soft: Vec<f32> = data.iter().map(|c| c.re * scale).collect();
         // The same symbols as two bits each.
         let mut soft2: Vec<f32> = Vec::with_capacity(data.len() * 2);
         for c in &data {
