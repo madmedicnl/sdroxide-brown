@@ -145,12 +145,15 @@ fn pick_levels(bins: &[u8], db_floor: f32, db_ceil: f32) -> Option<(f32, f32)> {
     let reach = |clipped: bool, margin: f32| if clipped { 15.0 } else { margin };
     let mut floor = noise - reach(noise <= db_floor + step, 5.0); // noise just above the floor (dark)
     let mut ceil = peak + reach(peak >= db_ceil - step, 6.0); // headroom so strong signals don't clip
-    // Keep a usable dynamic range even on an empty/flat band.
+    // Keep a usable dynamic range even on an empty/flat band — but **anchor it at
+    // the noise, not at the middle of the window**. Centring it put a dead band
+    // half way up the colour map, which in a scheme whose middle is warm is a
+    // wall of yellow and red across a band with nothing on it: reported with an
+    // Airspy HF+ at 768 kSPS and no antenna. Anchored at the floor, the same band
+    // reads dark and a signal appearing on it is visible at once.
     let min_range = 24.0;
     if ceil - floor < min_range {
-        let mid = 0.5 * (ceil + floor);
-        floor = mid - 0.5 * min_range;
-        ceil = mid + 0.5 * min_range;
+        ceil = floor + min_range;
     }
     // Clamp to the same bounds as the manual controls.
     let floor = floor.clamp(-160.0, -40.0);
@@ -308,7 +311,7 @@ impl SdroxideApp {
         {
             return window;
         }
-        let dev_span = self.state.sample_rate;
+        let dev_span = self.dev_span();
         let stated = self.caps.as_ref().map_or(0.0, |c| c.wide_span_hz);
         let span = match self.wide_window() {
             Some((_, seen)) => seen.max(stated),
@@ -350,6 +353,21 @@ impl SdroxideApp {
     pub(in crate::app) fn note_panadapter_width(&mut self, ui: &eframe::egui::Ui) {
         let px = (ui.available_width() * ui.ctx().pixels_per_point()).max(0.0) as u32;
         self.panadapter_px = self.panadapter_px.max(px);
+    }
+
+    /// **The span the front end can actually deliver**, which is what everything
+    /// the operator sees the band through is built on: the panadapter's window,
+    /// its zoom limit, the pan bound, and the auto-fit's key.
+    ///
+    /// Not [`RadioState::sample_rate`]: a zero-IF receiver's decimation filter
+    /// rolls off inside its rate (the Airspy HF+ at 768 kSPS carries about
+    /// 660 kHz), so a display on the raw rate shows filter skirt as band — and
+    /// can be panned into it, which is exactly what a listener reported
+    /// (`TODO.md`, 2026-10-25). The engine publishes the narrowed figure in
+    /// `usable_hz`; `0.0` from a peer that predates it means "use the rate", so
+    /// nothing changes for a client talking to an older server.
+    pub(in crate::app) fn dev_span(&self) -> f64 {
+        display_span(self.state.sample_rate, self.state.usable_hz)
     }
 
     pub(in crate::app) fn panadapter_bins(&self) -> u32 {
@@ -606,7 +624,7 @@ impl SdroxideApp {
         match (sent.viewport, ideal.viewport) {
             (None, None) => true,
             (Some((slo, shi)), Some(_)) => {
-                let full_span = self.state.sample_rate;
+                let full_span = self.dev_span();
                 let dev_lo = self.state.center_hz - full_span / 2.0;
                 let dev_hi = self.state.center_hz + full_span / 2.0;
                 let sspan = shi - slo;
@@ -917,7 +935,7 @@ impl SdroxideApp {
             self.view.view_hi_hz,
             self.view.fft_size,
             self.panadapter_bins(),
-            self.state.sample_rate,
+            self.dev_span(),
             sdroxide_types::Band::containing(self.state.active_freq_hz()),
         );
         if self.fit.key != Some(key) {
@@ -1012,8 +1030,8 @@ impl SdroxideApp {
         if let Some((centre, span)) =
             sstv_audio_window(self.state.rx[0].mode, self.state.active_freq_hz())
         {
-            let span =
-                if self.state.sample_rate > 0.0 { span.min(self.state.sample_rate) } else { span };
+            let dev = self.dev_span();
+            let span = if dev > 0.0 { span.min(dev) } else { span };
             self.view.fit(centre, span);
         }
     }
@@ -1063,7 +1081,7 @@ impl SdroxideApp {
             self.state.sample_rate,
             self.view.span(),
         ) {
-            self.view.fit(self.state.center_hz, self.state.sample_rate);
+            self.view.fit(self.state.center_hz, self.dev_span());
             return;
         }
         // A zoom window only means anything against the span the front end is
@@ -1096,7 +1114,7 @@ impl SdroxideApp {
         let moved = (vfo - prev_vfo).abs() > 0.5 || band_changed;
         let outside = !(self.view.view_lo_hz..=self.view.view_hi_hz).contains(&focus);
         if (moved || first || band_changed) && (outside || band_changed) {
-            let span = self.view.span().min(self.state.sample_rate);
+            let span = self.view.span().min(self.dev_span());
             self.view.view_lo_hz = focus - span / 2.0;
             self.view.view_hi_hz = focus + span / 2.0;
         }
@@ -1275,6 +1293,16 @@ pub(in crate::app) const SSTV_TONE_HZ: f64 = 1750.0;
 /// as much again either side, so a neighbouring picture shows at the edges.
 /// One value for every front end and every build.
 const SSTV_VIEW_SPAN_HZ: f64 = 3000.0;
+
+/// The display span from the two numbers the state carries: the rate, and the
+/// part of it the front end leaves usable (`0.0` when it has no opinion, which
+/// is what a peer that predates the field says).
+///
+/// A free function for the reason the tree's other decisions are: the app is not
+/// needed to answer it, so the answer can be pinned without standing one up.
+fn display_span(rate: f64, usable: f64) -> f64 {
+    if usable > 0.0 && usable < rate { usable } else { rate }
+}
 
 /// Where to put the view for SSTV — `None` for every other mode, so the
 /// caller keeps its own answer. On a demod-audio front end it is also the
@@ -1845,5 +1873,39 @@ mod focus_tests {
             focus_hz(Mode::RttyFm, dial, sdroxide_types::RTTY_CENTER_HZ, false, false),
             dial
         );
+    }
+
+    /// **The band on screen is the front end's usable span, not its sample
+    /// rate.** The report behind this (`TODO.md`, 2026-10-25): an Airspy HF+ at
+    /// 768 kSPS drew 768 kHz of waterfall, 14 % of which was the decimation
+    /// filter rolling off — and the view could be panned into it.
+    ///
+    /// The three cases are the whole rule: a narrowed span is taken, a peer with
+    /// no opinion (0.0) keeps the rate, and a number that would widen the radio
+    /// is not a licence to invent band.
+    #[test]
+    fn the_display_span_is_the_usable_part_of_the_rate() {
+        assert_eq!(super::display_span(768_000.0, 660_480.0), 660_480.0);
+        assert_eq!(super::display_span(768_000.0, 0.0), 768_000.0);
+        assert_eq!(super::display_span(768_000.0, 900_000.0), 768_000.0);
+        // A sound card or a file: the rate is the band.
+        assert_eq!(super::display_span(48_000.0, 48_000.0), 48_000.0);
+    }
+
+    /// **A dead band reads dark, not warm.**
+    ///
+    /// When the measured spread is narrower than the fit's minimum range, the
+    /// window used to be centred on the noise — half way up the colour map, which
+    /// in a scheme whose middle is warm is a wall of yellow across a band with
+    /// nothing on it. Reported with an Airspy HF+ at 768 kSPS and no antenna.
+    #[test]
+    fn a_flat_band_is_fitted_to_the_bottom_of_the_map() {
+        let bins: Vec<u8> = (0..256).map(|i| (120 + (i % 4)) as u8).collect();
+        let (floor, ceil) = super::pick_levels(&bins, -120.0, -20.0).expect("a fit");
+        let range = ceil - floor;
+        assert!((range - 24.0).abs() < 0.5, "the flat band got {range:.1} dB of range");
+        let noise = -120.0 + 121.0 / 255.0 * 100.0;
+        let at = (noise - floor) / range;
+        assert!((0.05..0.30).contains(&at), "the noise sits at {:.0}% of the map", at * 100.0);
     }
 }

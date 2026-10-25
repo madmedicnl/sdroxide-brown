@@ -142,6 +142,28 @@ pub trait IqSource: Send {
     fn center_hz(&self) -> f64;
     fn set_center_hz(&mut self, hz: f64) -> Result<()>;
 
+    /// The fraction of [`Self::sample_rate`] this front end's own filters leave
+    /// **usable** — the part of the span that is signal rather than the skirt of
+    /// the decimation filter.
+    ///
+    /// A zero-IF receiver delivers exactly what its ADC clock says, and its
+    /// anti-alias/decimation filter rolls off *inside* that: the Airspy HF+ at
+    /// 768 kSPS is 768 kHz of stream carrying about 660 kHz of spectrum
+    /// (0.86 — see [`AirspyHfSource`]'s override). A display built on the raw
+    /// rate therefore shows filter skirt as if it were band, which was reported
+    /// as a fault on the HF+ (`TODO.md`, 2026-10-25): the panadapter was 14 %
+    /// wider than the radio, the view could be panned into the skirt, and the
+    /// auto-fit averaged it into the noise floor.
+    ///
+    /// Default `1.0`, which is right for every front end whose filter is
+    /// sharper than its rate (direct-sampling and low-IF hardware, a sound card,
+    /// a file) and for one that has already decimated: the engine's own
+    /// decimator is the sharper of the two, so a decimated band carries none of
+    /// the source's skirt (see `Engine::usable_span_hz`).
+    fn usable_frac(&self) -> f64 {
+        1.0
+    }
+
     /// How far above the operator's VFO this front end wants its LO parked, or
     /// `0.0` to tune the LO straight to the VFO.
     ///
