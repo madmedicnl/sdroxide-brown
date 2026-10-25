@@ -65,7 +65,8 @@ PR; nothing of it is on `main` because a panel of F4NRM's and the wire both are.
   and the panel's transmit preview, which is the proof that the engine's
   document reaches the client and is composed.
 - Commits on `fork/sstv-composer-wire` (off `main` at 70867db4): `58984bc2`
-  (wire, store, engine) and `aaa3fa6a` (renderer, editor, panel).
+  (wire, store, engine), `aaa3fa6a` (renderer, editor, panel) and `c329abcb`
+  (queue and journal). **PR #240**, and a comment on #237 pointing at it.
 
 **Not done / blocked.**
 - The editor's own **write** path is unit-tested but was not clicked through

@@ -24,8 +24,8 @@ maintainer's queue there, not a promise.
    transmit preset now carries its own `Composer` in `ImageSlotInfo.composer`,
    set with `Command::ImageSetComposer` and persisted in `sstv_composers.json`
    by the engine; the panel edits a claimed working copy and writes it when an
-   edit settles. `PROTO_VERSION` 249, `VERSION_BYTE` 0x45. Pushed as a PR on
-   `fork/sstv-composer-wire`, waiting for F4NRM.
+   edit settles. `PROTO_VERSION` 249, `VERSION_BYTE` 0x45. Pushed as **PR #240**
+   (`fork/sstv-composer-wire`), waiting for F4NRM.
 
 0. **TCI receive audio: a server that carries baseband audio only gets silence**
    (#group, Rick Abshier KQ4Y, 2026-10-25) — reported against upstream 1.6.10, an
