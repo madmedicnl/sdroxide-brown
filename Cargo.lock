@@ -5118,6 +5118,8 @@ dependencies = [
 name = "sdroxide-aircraft-history"
 version = "2.1.0"
 dependencies = [
+ "flate2",
+ "sdroxide-aircraft-history",
  "serde",
  "serde_json",
 ]

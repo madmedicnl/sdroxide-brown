@@ -22,6 +22,30 @@ Each entry, in this order:
 ---
 
 
+## 2026-10-25 (aircraft history compression)
+
+**In plain words.** The station's aircraft history file no longer grows without
+limit on disk: past 5 MB it is saved compressed, under the same name, and read back
+either way, so a file from before still opens. It stays off unless the operator turns
+it on, and a crash while saving still leaves the old file. The compression itself is
+tested here; the few lines that plug it into the server could not be compiled in this
+sandbox, so CI has to confirm them. Next: aircraft statistics.
+
+**Done.** Branch `claude/aircraft-history-compression`. A `gz` module in the history
+crate (feature `gzip`, on only for the server): `encode(text, above)` gives gzip over
+the threshold and plain text at or under it, `decode` tells them apart by the gzip
+magic. Server: reads through `decode`, writes through `encode` on the flush thread
+with `write_atomic_bytes`; the old `write_atomic` is kept for the existing tests.
+`cargo test -p sdroxide-aircraft-history`: 33 passed (8 new). Five mutations (`<=`→`<`,
+never compress, ignore the magic, no compression, swallow a bad stream) each failed
+their test. wasm check clean, `rustfmt --check` clean on the touched files.
+
+**Not done / blocked.** `cargo check -p sdroxide-server` and its tests need the opus
+download (403 here): five new server tests (disk round trip, plain file from before,
+damaged file, failed write, one threshold) are written but unrun. CI to cover.
+
+**Next.** Aircraft statistics.
+
 ## 2026-10-25 (aircraft share)
 
 **In plain words.** The aircraft card in the Cards list now has a *Copy summary*

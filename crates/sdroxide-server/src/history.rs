@@ -18,6 +18,7 @@ use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
+use sdroxide_aircraft_history::gz::{self, COMPRESS_ABOVE_BYTES};
 use sdroxide_aircraft_history::{AircraftReply, Fix, History, ListReply, Place, SeenCard, Status};
 use sdroxide_aircraft_online::{Info, Status as InfoStatus};
 use sdroxide_types::{AdsbStatus, RadioEvent, Vdl2AddrKind, Vdl2Payload, Vdl2Status};
@@ -78,7 +79,8 @@ impl HistoryHub {
         let file = file.filter(|_| enabled);
         let history = file
             .as_ref()
-            .and_then(|f| std::fs::read_to_string(f).ok())
+            .and_then(|f| std::fs::read(f).ok())
+            .and_then(|bytes| gz::decode(&bytes))
             .map(|text| History::from_json(&text, now))
             .unwrap_or_default();
         HistoryHub {
@@ -194,7 +196,8 @@ impl HistoryHub {
             let writing = self.writing.clone();
             writing.store(true, Ordering::SeqCst);
             std::thread::spawn(move || {
-                if let Err(e) = write_atomic(&path, &text) {
+                let bytes = gz::encode(&text, COMPRESS_ABOVE_BYTES);
+                if let Err(e) = write_atomic_bytes(&path, &bytes) {
                     tracing::warn!(error = %e, "could not write the aircraft history");
                 }
                 writing.store(false, Ordering::SeqCst);
@@ -219,6 +222,10 @@ impl HistoryHub {
 /// Replace `path` by a sibling temp file renamed into place, so a crash leaves
 /// the old file, never half of a new one.
 pub(crate) fn write_atomic(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    write_atomic_bytes(path, text.as_bytes())
+}
+
+pub(crate) fn write_atomic_bytes(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -228,7 +235,7 @@ pub(crate) fn write_atomic(path: &std::path::Path, text: &str) -> std::io::Resul
     let tmp = PathBuf::from(tmp);
     {
         let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(text.as_bytes())?;
+        f.write_all(bytes)?;
         // On disk before the rename makes it the real file.
         f.sync_all()?;
     }
@@ -789,6 +796,64 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
         assert!(fresh.exists(), "switched on, the file is written");
+    }
+
+    // ── the file, once it grows ───────────────────────────────────────────
+
+    fn busy(n: u32) -> HistoryHub {
+        let hub = on();
+        let planes: Vec<_> = (0..n)
+            .map(|i| plane(0x400000 + i, &format!("BAW{i}"), 51.0 + f64::from(i) * 1e-3, 0.5, NOW))
+            .collect();
+        observe_at(&hub, &adsb(planes), NOW);
+        hub
+    }
+
+    #[test]
+    fn a_big_history_is_written_gzipped_and_read_back_whole() {
+        let path = tmp("gz-roundtrip");
+        let text = busy(2000).with(|h| h.to_json());
+        write_atomic_bytes(&path, &gz::encode(&text, 1000)).unwrap();
+        let on_disk = std::fs::read(&path).unwrap();
+        assert_eq!(on_disk[..2], [0x1f, 0x8b]);
+        assert!((on_disk.len() as u64) < text.len() as u64 / 3);
+        HistoryHub::open(true, Some(path), NOW + 10).with(|h| {
+            assert_eq!(h.len(), 2000);
+            assert_eq!(h.journal(0x400000).unwrap().callsign(), Some("BAW0"));
+        });
+    }
+
+    #[test]
+    fn a_plain_file_from_before_is_still_read() {
+        let path = tmp("plain-before");
+        std::fs::write(&path, busy(50).with(|h| h.to_json())).unwrap();
+        HistoryHub::open(true, Some(path), NOW + 10).with(|h| assert_eq!(h.len(), 50));
+    }
+
+    #[test]
+    fn a_damaged_file_starts_an_empty_history() {
+        let path = tmp("damaged-gz");
+        std::fs::write(&path, [0x1f, 0x8b, 0x08, 0x00, 0xde, 0xad]).unwrap();
+        HistoryHub::open(true, Some(path), NOW).with(|h| assert!(h.is_empty()));
+    }
+
+    #[test]
+    fn a_failed_gzip_write_leaves_the_old_file_whole() {
+        let path = tmp("gz-failed");
+        std::fs::write(&path, "the old file").unwrap();
+        let mut tmp_name = path.as_os_str().to_owned();
+        tmp_name.push(".tmp");
+        std::fs::create_dir(&tmp_name).unwrap();
+        let text = busy(300).with(|h| h.to_json());
+        assert!(write_atomic_bytes(&path, &gz::encode(&text, 10)).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "the old file");
+    }
+
+    #[test]
+    fn the_flush_thread_encodes_with_the_one_threshold() {
+        let src = include_str!("history.rs");
+        let code = &src[..src.find("#[cfg(test)]").unwrap()];
+        assert_eq!(code.matches("gz::encode(&text, COMPRESS_ABOVE_BYTES)").count(), 1);
     }
 
     // ── what this module may not do ───────────────────────────────────────
