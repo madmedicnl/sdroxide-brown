@@ -11021,6 +11021,17 @@ impl Engine {
                 }
                 return;
             }
+            // The picture composer's document. Like the message above, it is the
+            // preset's own text and outlives its picture: clearing a picture is
+            // replacing it, not forgetting what it said.
+            ImageSetComposer { slot, composer } => {
+                if slot as usize >= sdroxide_types::IMAGE_SLOTS {
+                    warn!(slot, "picture document for a slot that does not exist");
+                } else if self.images.set_composer(slot as usize, composer) {
+                    self.emit_image_presets();
+                }
+                return;
+            }
             // Answered inline: the bytes are already in memory and bounded to
             // a thousand pixels, so there is nothing here worth a thread.
             ImageGetSlot(slot) => {

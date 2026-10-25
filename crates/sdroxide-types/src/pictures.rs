@@ -104,6 +104,21 @@ pub struct ImageSlotInfo {
     /// Carried in the snapshot rather than fetched, because the panel draws all
     /// five slot buttons at once and only ever composes from one of them.
     pub thumb: Vec<u8>,
+    /// **What this preset prints on its picture**: the layers of the picture
+    /// composer. An empty document means the station's banner strip and
+    /// [`Self::message`] are used instead, which is what every preset did before
+    /// the composer existed.
+    ///
+    /// Per slot rather than per station because a preset *is* a picture and its
+    /// text: one slot is a CQ picture with the call across the top, another is a
+    /// reply with the other station's picture underneath. Editing one must not
+    /// rewrite the other four.
+    ///
+    /// It rides here, on the wire, so that the console, a browser tab attached
+    /// to the same radio and the next session all compose the same picture from
+    /// the same fractions — the old caption was one string that each client drew
+    /// where it liked.
+    pub composer: crate::Composer,
 }
 
 impl ImageSlotInfo {

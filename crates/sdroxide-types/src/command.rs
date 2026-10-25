@@ -1369,6 +1369,24 @@ pub enum Command {
     ///
     /// Appended for the usual reason — postcard numbers variants by position.
     TestPictureUpload(Box<crate::PictureUploadConfig>),
+    /// Set a preset's **picture document**: the layers the composer draws over
+    /// that slot's picture.
+    ///
+    /// It rides the engine rather than staying in the panel because the
+    /// document has to mean the same thing on every screen — the console, a
+    /// browser tab attached to the same radio and the next session all compose
+    /// from it, and only one of the three has a filesystem to keep it in. Sent
+    /// when an edit settles, not on every dragged pixel: the engine writes it to
+    /// disk.
+    ///
+    /// Answered with a fresh [`crate::RadioEvent::ImagePresets`], like the other
+    /// preset writes, so every client adopts the same document.
+    ///
+    /// Appended for the usual reason — postcard numbers variants by position.
+    ImageSetComposer {
+        slot: u8,
+        composer: crate::Composer,
+    },
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.

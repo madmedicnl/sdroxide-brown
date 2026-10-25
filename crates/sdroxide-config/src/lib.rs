@@ -2444,6 +2444,20 @@ pub fn save_sstv_messages(messages: &[String]) -> Result<(), ConfigError> {
     save_json("sstv_messages.json", &messages)
 }
 
+/// The picture composer's documents, one per transmit preset.
+///
+/// An engine-side file like the messages beside it, and for the same reason:
+/// the document decides what the picture says, so the console, a browser tab
+/// attached to the same radio and the next session all have to read the same
+/// one. A browser has nowhere to keep it.
+pub fn load_sstv_composers() -> Vec<sdroxide_types::Composer> {
+    load_json("sstv_composers.json")
+}
+
+pub fn save_sstv_composers(composers: &[sdroxide_types::Composer]) -> Result<(), ConfigError> {
+    save_json("sstv_composers.json", &composers)
+}
+
 /// The operator's satellite additions: element sets pasted in by hand, and
 /// frequency entries that override or extend the built-in table.
 ///

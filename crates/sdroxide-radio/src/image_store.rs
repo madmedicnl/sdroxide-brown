@@ -285,6 +285,9 @@ struct Slot {
 pub struct ImagePresetStore {
     slots: Vec<Slot>,
     messages: Vec<String>,
+    /// What each preset prints on its picture. An empty document means the
+    /// station's banner and the message above are used instead.
+    composers: Vec<sdroxide_types::Composer>,
     /// Where `slot{i}.png` lives. `None` when the config directory could not be
     /// resolved — the presets then work for the session and store nothing,
     /// exactly as the voice keyer does.
@@ -304,11 +307,16 @@ impl ImagePresetStore {
         let mut store = ImagePresetStore {
             slots: vec![Slot::default(); IMAGE_SLOTS],
             messages: vec![String::new(); IMAGE_SLOTS],
+            composers: vec![sdroxide_types::Composer::default(); IMAGE_SLOTS],
             dir,
         };
         let saved = sdroxide_config::load_sstv_messages();
         for (i, m) in saved.into_iter().take(IMAGE_SLOTS).enumerate() {
             store.messages[i] = m;
+        }
+        let saved = sdroxide_config::load_sstv_composers();
+        for (i, c) in saved.into_iter().take(IMAGE_SLOTS).enumerate() {
+            store.composers[i] = c;
         }
         for i in 0..IMAGE_SLOTS {
             let Some(path) = store.dir.as_ref().map(|d| slot_path(d, i)) else { continue };
@@ -342,6 +350,7 @@ impl ImagePresetStore {
         ImagePresetStore {
             slots: vec![Slot::default(); IMAGE_SLOTS],
             messages: vec![String::new(); IMAGE_SLOTS],
+            composers: vec![sdroxide_types::Composer::default(); IMAGE_SLOTS],
             dir: None,
         }
     }
@@ -352,12 +361,14 @@ impl ImagePresetStore {
                 .slots
                 .iter()
                 .zip(&self.messages)
-                .map(|(s, m)| ImageSlotInfo {
+                .zip(&self.composers)
+                .map(|((s, m), c)| ImageSlotInfo {
                     message: m.clone(),
                     width: s.w,
                     height: s.h,
                     version: s.version,
                     thumb: s.thumb.clone(),
+                    composer: c.clone(),
                 })
                 .collect(),
         }
@@ -400,6 +411,22 @@ impl ImagePresetStore {
             if let Err(e) = sdroxide_config::save_sstv_messages(&self.messages) {
                 warn!("saving transmit-image messages: {e}");
             }
+        }
+        true
+    }
+
+    /// Set a preset's picture document. Returns whether anything changed, so an
+    /// echo of a document the engine already holds does not re-announce the
+    /// presets to every client.
+    pub fn set_composer(&mut self, slot: usize, composer: sdroxide_types::Composer) -> bool {
+        if slot >= self.composers.len() || self.composers[slot] == composer {
+            return false;
+        }
+        self.composers[slot] = composer;
+        if self.dir.is_some()
+            && let Err(e) = sdroxide_config::save_sstv_composers(&self.composers)
+        {
+            warn!("saving transmit-image composers: {e}");
         }
         true
     }
@@ -842,13 +869,30 @@ mod tests {
         // The caption survives its picture being replaced.
         assert_eq!(store.status().slot(1).message, "CQ CQ");
 
+        // **A document is the preset's own text**, so it outlives the picture
+        // the same way the caption does, and a second screen gets it from the
+        // presets it is announced in.
+        let mut doc = sdroxide_types::Composer::default();
+        doc.layers.push(sdroxide_types::TextLayer {
+            text: "19DCG373".into(),
+            vertical: true,
+            ..sdroxide_types::TextLayer::default()
+        });
+        let picture_version = store.status().slot(1).version;
+        assert!(store.set_composer(1, doc.clone()));
+        assert_eq!(store.status().slot(1).composer, doc);
+        assert!(!store.set_composer(1, doc.clone()), "the same document is not a change");
+        assert_eq!(store.status().slot(1).version, picture_version, "text is not pixels");
+
         assert!(store.clear(1));
         assert!(!store.status().slot(1).has_picture());
         assert_eq!(store.status().slot(1).message, "CQ CQ", "clearing a picture keeps the text");
+        assert_eq!(store.status().slot(1).composer, doc, "and keeps the layout too");
         assert!(!store.clear(1), "an empty slot is not a change");
         // Out-of-range indices are a client bug, not a panic.
         assert!(!store.adopt(99, vec![1], 1, 1));
         assert!(!store.set_message(99, "x".into()));
+        assert!(!store.set_composer(99, sdroxide_types::Composer::default()));
     }
 
     /// CRC-32 as PNG defines it, for the malformed-header test above.

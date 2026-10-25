@@ -26,6 +26,7 @@ mod cb_callsign;
 mod cb_country;
 mod chirp;
 mod command;
+mod composer;
 mod contacts;
 mod contest;
 mod controller;
@@ -152,6 +153,7 @@ pub use cb_callsign::{
 pub use cb_country::cb_callsign_in;
 pub use chirp::{chirp_csv_to_memories, memories_to_chirp_csv};
 pub use command::{Command, KNOWN_CALLS_REPLY_MAX, KnownCallsReply};
+pub use composer::{Composer, Face, Strip, TextLayer};
 pub use contacts::FsqContact;
 pub use contest::{
     ContestId, ContestScore, ContestSession, ContestSpec, Exchange, Multiplier, cabrillo_contest,

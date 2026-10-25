@@ -2097,8 +2097,17 @@ use sdroxide_types::{
 /// #233 (the NAVTEX sensitivity revert) claimed it and landed while this was in
 /// review, so the later of two colliding branches moves. `PROTO_VERSION`
 /// 247 → 248, `VERSION_BYTE` 0x43 → 0x44. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 248;
-const VERSION_BYTE: u8 = 0x44;
+/// v249: **the picture composer's document** —
+/// [`sdroxide_types::ImageSlotInfo`] gains `composer` at its tail and
+/// [`sdroxide_types::Command`] gains `ImageSetComposer` last: each transmit
+/// preset now carries the layers drawn over its picture, so every client
+/// composes the same picture instead of one caption drawn where it likes.
+/// Appended last, and postcard is positional — so a v248 peer's payload does not
+/// decode and the version byte is what refuses it; `#[serde(default)]` covers the
+/// paths that read a bare value (a stored blob, a fixture). `PROTO_VERSION`
+/// 248 → 249, `VERSION_BYTE` 0x44 → 0x45. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 249;
+const VERSION_BYTE: u8 = 0x45;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3087,6 +3096,27 @@ mod tests {
                         height: 768,
                         version: 0xdead_beef,
                         thumb: vec![0x89, 0x50, 0x4e, 0x47, 0x0d],
+                        // The composer's document: a turned line with a faded
+                        // band, which is the shape a misplaced field would
+                        // corrupt worst.
+                        composer: sdroxide_types::Composer {
+                            layers: vec![sdroxide_types::TextLayer {
+                                text: "OE1TEST".into(),
+                                face: sdroxide_types::Face::Mono,
+                                px: 30,
+                                ink: [255, 255, 0],
+                                outline: Some([0, 0, 0]),
+                                x: 0.07,
+                                y: 0.5,
+                                vertical: true,
+                                band: Some(sdroxide_types::Strip {
+                                    thickness: 30,
+                                    fill: [0, 0, 120],
+                                    fill2: Some([0, 0, 20]),
+                                }),
+                                hidden: false,
+                            }],
+                        },
                     },
                     ImageSlotInfo::default(),
                 ],
@@ -3141,6 +3171,23 @@ mod tests {
         let cmds = [
             ClientMsg::Command(Command::ImageSetSlot { slot: 2, bytes: vec![0xff, 0xd8, 0xff] }),
             ClientMsg::Command(Command::ImageSetMessage { slot: 2, message: "73".into() }),
+            ClientMsg::Command(Command::ImageSetComposer {
+                slot: 4,
+                composer: sdroxide_types::Composer {
+                    layers: vec![sdroxide_types::TextLayer {
+                        text: "PSE K".into(),
+                        x: 0.5,
+                        y: 0.8,
+                        ..sdroxide_types::TextLayer::default()
+                    }],
+                },
+            }),
+            // ...and an empty one, which is what "this preset uses the banner"
+            // looks like on the wire.
+            ClientMsg::Command(Command::ImageSetComposer {
+                slot: 0,
+                composer: sdroxide_types::Composer::default(),
+            }),
             ClientMsg::Command(Command::ImageGetSlot(4)),
             ClientMsg::Command(Command::ImageClearSlot(0)),
             ClientMsg::Command(Command::ImageList { kind: ImageKind::Wefax, offset: 0, count: 48 }),
