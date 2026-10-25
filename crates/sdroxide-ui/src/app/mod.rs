@@ -2931,6 +2931,15 @@ impl SdroxideApp {
 
     /// Toggle the ALL chip on the SCHEDULE window (favourite all / clear all).
     /// Delegates to `set_broadcast_all`.
+    /// **Clear the notice banners, for a screenshot.** The "this radio is
+    /// receive-only" nudge spans the top of the panadapter: right for an operator
+    /// with a signal generator, noise in a manual's picture of the program.
+    /// Screenshot-only — nothing else calls it.
+    pub fn dismiss_notices(&mut self) {
+        self.rx_only_nudge_dismissed = true;
+        self.radio_notice = None;
+    }
+
     pub fn toggle_all_chip(&mut self) {
         self.set_broadcast_all(!self.broadcast_all);
     }
