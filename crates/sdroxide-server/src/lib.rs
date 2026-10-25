@@ -705,6 +705,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         .route("/aircraft-info/{icao}", get(aircraft::info_route))
         .route("/aircraft-history", get(history::list_route))
         .route("/aircraft-history/{icao}", get(history::one_route))
+        .route("/aircraft-export", get(history::export_route))
         // Where a browser trades its password for a signed cookie, and gives
         // it back. Both are plain HTTP because a cookie is a response header
         // and the socket handshake's headers are spent before the sign-in
@@ -736,7 +737,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
 /// and nowhere else.
 fn is_root_route(path: &str) -> bool {
     match path {
-        "/ws" | "/solar-ws" | "/radios" | "/aircraft-history" => true,
+        "/ws" | "/solar-ws" | "/radios" | "/aircraft-history" | "/aircraft-export" => true,
         // Whatever follows is the question, and a bad one is the endpoint's to
         // refuse with a 400, not the static handler's to answer with a page.
         _ if path
@@ -1572,6 +1573,16 @@ mod proxy_prefix_tests {
 
     /// `/aircraft-history` is the list and `/aircraft-history/<icao>` one
     /// aircraft: both are endpoints, whatever a reverse proxy left in front.
+    #[test]
+    fn the_export_endpoint_is_recognised_at_the_end_of_a_prefix() {
+        assert_eq!(strip_proxy_prefix("/aircraft-export"), None);
+        assert_eq!(
+            strip_proxy_prefix("/shack/sdr/aircraft-export"),
+            Some("/aircraft-export".to_string())
+        );
+        assert_ne!(strip_proxy_prefix("/aircraft-export/x"), None, "it takes no address");
+    }
+
     #[test]
     fn the_history_endpoints_are_recognised_at_the_end_of_a_prefix() {
         assert_eq!(strip_proxy_prefix("/aircraft-history"), None);

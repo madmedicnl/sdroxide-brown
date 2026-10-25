@@ -18,6 +18,8 @@ const PASS: &str = "correct horse battery staple";
 const PORT_OPEN: u16 = 39491;
 const PORT_PASSWORD: u16 = 39492;
 const PORT_BAD: u16 = 39493;
+const PORT_EXPORT: u16 = 39510;
+const PORT_EXPORT_PASSWORD: u16 = 39511;
 
 /// The station reads and writes its history in the config directory; this
 /// test's is a folder of its own, so the operator's is never touched.
@@ -202,4 +204,62 @@ async fn behind_a_password_it_wants_the_cookie() {
         let signed = get(PORT_PASSWORD, path, Some(&cookie)).await;
         assert!(signed.starts_with("HTTP/1.1 200"), "{path}: {signed}");
     }
+}
+
+/// The kept aircraft as a table: CSV and JSON on request, as a download, through a
+/// proxy's prefix too, with no position in either, and a format that is neither is
+/// a 400.
+#[tokio::test]
+async fn the_fleet_is_exported_as_csv_or_json_without_a_position() {
+    let events = spawn_station(PORT_EXPORT, false).await;
+    events.send(status_with_a_plane()).unwrap();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+
+    let csv = get(PORT_EXPORT, "/aircraft-export?format=csv", None).await;
+    assert!(csv.starts_with("HTTP/1.1 200"), "{csv}");
+    let lower = csv.to_ascii_lowercase();
+    assert!(lower.contains("content-type: text/csv"), "{csv}");
+    assert!(lower.contains("content-disposition: attachment; filename=\"aircraft-"), "{csv}");
+    assert!(lower.contains("cache-control: no-store"), "{csv}");
+    assert!(csv.contains("icao,callsign,registration,"), "{csv}");
+    assert!(csv.contains("4840D6,KLM1234,"), "{csv}");
+
+    for path in ["/aircraft-export?format=json", "/sdroxide/aircraft-export?format=JSON"] {
+        let json = get(PORT_EXPORT, path, None).await;
+        assert!(json.starts_with("HTTP/1.1 200"), "{path}: {json}");
+        assert!(json.to_ascii_lowercase().contains("application/json"), "{json}");
+        let j = body(&json);
+        assert_eq!(j["aircraft"][0]["icao"], "4840D6", "{path}");
+        assert_eq!(j["aircraft"][0]["callsign"], "KLM1234", "{path}");
+        assert_eq!(j["aircraft"][0]["positions_kept"], 1, "{path}");
+    }
+    for answer in [&csv, &get(PORT_EXPORT, "/aircraft-export?format=json", None).await] {
+        for banned in ["52.0", "35000", "\"lat\"", "\"lon\"", "altitude"] {
+            assert!(!answer.contains(banned), "`{banned}` in {answer}");
+        }
+    }
+
+    for path in ["/aircraft-export", "/aircraft-export?format=xml", "/aircraft-export?format="] {
+        let bad = get(PORT_EXPORT, path, None).await;
+        assert!(bad.starts_with("HTTP/1.1 400"), "{path}: {bad}");
+        assert!(bad.contains("\"status\":\"invalid\""), "{path}: {bad}");
+    }
+}
+
+/// Behind a password the export wants the cookie like everything else.
+#[tokio::test]
+async fn the_export_behind_a_password_wants_the_cookie() {
+    spawn_station(PORT_EXPORT_PASSWORD, true).await;
+    let without = get(PORT_EXPORT_PASSWORD, "/aircraft-export?format=csv", None).await;
+    assert!(without.starts_with("HTTP/1.1 401"), "{without}");
+    let forged = get(
+        PORT_EXPORT_PASSWORD,
+        "/aircraft-export?format=csv",
+        Some("sdroxide_session=forged.token"),
+    )
+    .await;
+    assert!(forged.starts_with("HTTP/1.1 401"), "{forged}");
+    let cookie = tokio::task::spawn_blocking(|| sign_in(PORT_EXPORT_PASSWORD)).await.unwrap();
+    let signed = get(PORT_EXPORT_PASSWORD, "/aircraft-export?format=csv", Some(&cookie)).await;
+    assert!(signed.starts_with("HTTP/1.1 200"), "{signed}");
 }

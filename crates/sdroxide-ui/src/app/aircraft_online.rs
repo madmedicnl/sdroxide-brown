@@ -194,6 +194,14 @@ impl OnlineStore {
         self.entries.len()
     }
 
+    /// Every card the relay has answered for this session, with its address.
+    pub(in crate::app) fn infos(&self) -> impl Iterator<Item = (u32, &Info)> {
+        self.entries.iter().filter_map(|(icao, e)| match &e.state {
+            OnlineState::Ready(info) => Some((*icao, &**info)),
+            _ => None,
+        })
+    }
+
     /// What to draw for this card.
     pub(in crate::app) fn state_for(&self, icao: u32, has_station: bool) -> &OnlineState {
         if let Some(Entry { state: s @ OnlineState::Ready(_), .. }) = self.entries.get(&icao) {

@@ -6122,6 +6122,22 @@ only for aircraft whose card has been looked up; when a word begins `type:` or
 online data — open their card*). The search is not saved: closing the program
 clears it.
 
+**Export.** The **CSV** and **JSON** buttons under *Export* in the AIRCRAFT window
+save the tracked aircraft as a table you can open in a spreadsheet or feed to a
+script. One row per aircraft: ICAO address, callsign, registration, category, type,
+operator, origin and destination (airport codes), first and last heard in UTC, how
+many positions the station kept, and a *source* of `radio`, `online` or
+`radio + online`. When the station you are connected to keeps a history
+(`SDROXIDE_AIRCRAFT_HISTORY=1`) the file is its last 24 hours, with the relay's cards;
+otherwise, or with no station, the program writes what it holds now, the aircraft heard
+in the last ten minutes and the cards the relay has already answered for, and a line in
+the window says which you got and why. The file never holds a position, an altitude,
+the last ACARS message, a photo or its address, or anything about your session, so it
+is safe to share; a callsign that begins with `=`, `+`, `-` or `@` is written with a
+leading apostrophe so that a spreadsheet does not run it. The station serves the same
+table at `/aircraft-export?format=csv` and `?format=json`, behind the same sign-in as
+the rest.
+
 **Copy summary.** The button under an aircraft's name in the Cards list puts the
 card on the clipboard as plain text: the name, the detail line, every line
 somebody has with where it came from (*radio*, *online* or *station history*), and

@@ -14,10 +14,11 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
+use sdroxide_aircraft_history::export::{self, Format};
 use sdroxide_aircraft_history::{AircraftReply, Fix, History, ListReply, Place, SeenCard, Status};
 use sdroxide_aircraft_online::{Info, Status as InfoStatus};
 use sdroxide_types::{AdsbStatus, RadioEvent, Vdl2AddrKind, Vdl2Payload, Vdl2Status};
@@ -206,6 +207,13 @@ impl HistoryHub {
         self.lock().history.list_reply()
     }
 
+    /// The kept aircraft as a table, one row each, in the format asked for. No
+    /// position, no picture and no address is in it (see [`export`]).
+    pub(crate) fn export(&self, format: Format, now: i64) -> String {
+        let rows = export::rows_from_history(&self.lock().history);
+        format.render(&rows, export::Scope::History, now)
+    }
+
     pub(crate) fn one(&self, icao: u32) -> AircraftReply {
         self.lock().history.aircraft_reply(icao)
     }
@@ -309,6 +317,32 @@ pub(crate) fn judge(
     }
 }
 
+/// What the export route answers to, decided before anything is read: sign-in
+/// first, then the switch, then the format.
+#[derive(Debug, PartialEq)]
+pub(crate) enum ExportVerdict {
+    Reject(Status),
+    Send(Format),
+}
+
+pub(crate) fn judge_export(
+    enabled: bool,
+    sign_in_needed: bool,
+    signed_in: bool,
+    format: Option<&str>,
+) -> ExportVerdict {
+    if sign_in_needed && !signed_in {
+        return ExportVerdict::Reject(Status::Unauthorized);
+    }
+    if !enabled {
+        return ExportVerdict::Reject(Status::Disabled);
+    }
+    match format.and_then(Format::parse) {
+        Some(f) => ExportVerdict::Send(f),
+        None => ExportVerdict::Reject(Status::Invalid),
+    }
+}
+
 pub(crate) fn http_status(s: Status) -> StatusCode {
     match s {
         Status::Ok => StatusCode::OK,
@@ -352,6 +386,46 @@ pub(crate) async fn one_route(
         Verdict::Reject(s) => json(http_status(s), &AircraftReply::bare(s)),
         Verdict::One(icao) => json(StatusCode::OK, &station.history.one(icao)),
         Verdict::List => json(StatusCode::OK, &station.history.list()),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub(crate) struct ExportQuery {
+    format: Option<String>,
+}
+
+pub(crate) async fn export_route(
+    State(station): State<Arc<Station>>,
+    Query(q): Query<ExportQuery>,
+    headers: HeaderMap,
+) -> Response {
+    let needed = station.auth.required().is_some();
+    let signed = crate::session_cookie::from_headers(&headers, &station.auth).is_some();
+    match judge_export(station.history.enabled, needed, signed, q.format.as_deref()) {
+        ExportVerdict::Reject(s) => json(http_status(s), &ListReply::bare(s)),
+        ExportVerdict::Send(format) => {
+            let now = now_unix();
+            let (kind, body) = (
+                match format {
+                    Format::Csv => "text/csv; charset=utf-8",
+                    Format::Json => "application/json",
+                },
+                station.history.export(format, now),
+            );
+            (
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, kind.to_string()),
+                    (header::CACHE_CONTROL, "no-store".to_string()),
+                    (
+                        header::CONTENT_DISPOSITION,
+                        format!("attachment; filename=\"{}\"", format.file_name(now)),
+                    ),
+                ],
+                body,
+            )
+                .into_response()
+        }
     }
 }
 
@@ -789,6 +863,55 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
         assert!(fresh.exists(), "switched on, the file is written");
+    }
+
+    // ── the export ────────────────────────────────────────────────────────
+
+    #[test]
+    fn the_export_wants_the_sign_in_then_the_switch_then_a_format() {
+        use ExportVerdict::{Reject, Send};
+        use Format::{Csv, Json};
+        assert_eq!(judge_export(true, true, false, Some("csv")), Reject(Status::Unauthorized));
+        assert_eq!(judge_export(false, true, false, Some("csv")), Reject(Status::Unauthorized));
+        assert_eq!(judge_export(false, false, false, Some("csv")), Reject(Status::Disabled));
+        assert_eq!(judge_export(true, false, false, None), Reject(Status::Invalid));
+        assert_eq!(judge_export(true, false, false, Some("xml")), Reject(Status::Invalid));
+        assert_eq!(judge_export(true, false, false, Some("")), Reject(Status::Invalid));
+        assert_eq!(judge_export(true, false, false, Some("csv")), Send(Csv));
+        assert_eq!(judge_export(true, true, true, Some(" JSON ")), Send(Json));
+    }
+
+    #[test]
+    fn the_export_holds_what_was_heard_and_no_position() {
+        let hub = on();
+        observe_at(&hub, &adsb(vec![plane(A, "KLM1234", 52.3123, 4.7634, NOW)]), NOW);
+        let csv = hub.export(Format::Csv, NOW + 5);
+        assert!(csv.starts_with("icao,callsign,"), "{csv}");
+        assert!(csv.contains("4840D6,KLM1234,"), "{csv}");
+        let json = hub.export(Format::Json, NOW + 5);
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["aircraft"][0]["callsign"], "KLM1234");
+        assert_eq!(v["aircraft"][0]["positions_kept"], 1);
+        assert_eq!(v["generated_utc"], export::iso_utc(NOW + 5));
+        for text in [csv, json] {
+            for banned in ["52.31", "4.76", "35000", "\"lat\"", "\"lon\"", "altitude"] {
+                assert!(!text.contains(banned), "`{banned}` in {text}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_hub_that_is_off_exports_nothing_it_never_kept() {
+        let hub = HistoryHub::open(false, None, NOW);
+        observe_at(&hub, &adsb(vec![plane(A, "KLM1234", 52.0, 5.0, NOW)]), NOW);
+        assert_eq!(hub.export(Format::Csv, NOW).lines().count(), 1, "the header only");
+    }
+
+    #[test]
+    fn the_export_route_is_one_line_in_the_station() {
+        let src = include_str!("lib.rs");
+        assert!(src.contains("history::export_route"));
+        assert!(src.contains("\"/aircraft-export\""));
     }
 
     // ── what this module may not do ───────────────────────────────────────

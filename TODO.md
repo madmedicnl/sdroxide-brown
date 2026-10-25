@@ -55,8 +55,14 @@ maintainer's queue there, not a promise.
    memory only and asks for nothing, so type and operator are found only once an
    aircraft has been looked up. Asked for by the operator.
 
-0g. **Copy summary on the aircraft card — open for review (branch
-   `claude/aircraft-share`).** A button in the Cards list copies the card as text, each
+0k. **Aircraft export — open for review (branch `claude/aircraft-export`).** **CSV** and
+   **JSON** buttons save the tracked fleet: the station's 24 h history table
+   (`/aircraft-export`) when it keeps one, else a table made from the cards held. No
+   positions, no photo or address, no session; spreadsheet formulas made inert. Left: a
+   look at the buttons on a real screen and a file opened in a real spreadsheet.
+   Asked for by the operator.
+
+0g. **Copy summary on the aircraft card — merged (#210).** A button in the Cards list copies the card as text, each
    line marked radio / online / station history, with the photo credit and page link.
    Position, last message and the thumbnail address are withheld. Left: a look at the
    button on a real screen and a paste into a real app. Asked for by the operator.

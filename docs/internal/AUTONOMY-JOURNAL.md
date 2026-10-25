@@ -22,6 +22,46 @@ Each entry, in this order:
 ---
 
 
+## 2026-10-25 (aircraft export)
+
+**In plain words.** The AIRCRAFT window now has CSV and JSON buttons that save the
+tracked aircraft as a table: who they are, what they fly, where from and to, when they
+were first and last heard, and whether each fact came from the radio, the online
+lookup or both. If the station keeps its day of history, the file is that day;
+otherwise it is what the program holds now, and a line says which you got. It never
+holds a position or a photo address, and a callsign that a spreadsheet would run as a
+formula is defused. Not yet opened in a real spreadsheet or seen on a real screen.
+This was the last of the night's four tasks.
+
+**Done.** Branch `claude/aircraft-export`. History crate: an `export` module (rows from
+the history, CSV with quoting and formula guard, JSON, ISO UTC, `Format`). Server:
+`GET /aircraft-export?format=csv|json` in the history module (sign-in, then the
+history switch, then the format; downloaded as `aircraft-YYYYMMDD.ext`; added to
+`is_root_route`). Client: a pure `aircraft_export` module (rows made from the live
+cards and the relay's answers, the answer check that refuses a web page where a table
+was asked for, the store with a 30 s wait and the fall-back to a local file), the
+plumbing in the I/O code, two buttons and a note in the AIRCRAFT window. Tests:
+history crate 42 passed (17 new), server lib 62 passed (5 new) and the station tests
+`aircraft_history` 5 and `aircraft_history_default` 2 passed (3 new), `sdroxide-ui`
+1173 passed (26 new, including four whole-app frame tests: both buttons drawn, a press
+starts an export, the file made with no station, the relay's cards in it). Mutations
+over the three layers; the survivors (heard-but-bare radio flag, a bare Ok answer
+becoming a row, the click wiring, the relay's cards reaching the file) each got a test
+and were then killed. One mutation, dropping the route from `is_root_route`, cannot be
+told apart by any test: a path under a proxy prefix is reduced to its last segment by
+the file rule anyway, so the entry is for the rule's sake. wasm check clean, rustfmt
+clean on the touched files.
+
+**How the server half was run.** As for the alerts: a throwaway `build.rs` for
+`sdroxide-rade` and `--unresolved-symbols=ignore-all` on the server's test binaries;
+restored with `git checkout` before the commit, in no commit.
+
+**Not done / blocked.** Not seen on a real screen, not opened in a real spreadsheet.
+The file dialog on save is the existing one (`download::save`) and was not exercised
+in a test. The workspace check is CI's.
+
+**Next.** Nothing queued; the night's four tasks are done and open as PRs.
+
 ## 2026-10-25 (aircraft share)
 
 **In plain words.** The aircraft card in the Cards list now has a *Copy summary*

@@ -17,6 +17,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 - **ALE (2G)** decodes a synthesized word exactly and has never copied a real burst. If you can hear one, a minute of WAV on 11175 / 8992 / 15016 kHz USB (or the amateur channels near 14109.5 kHz) would finish the mode — see the manual, §3.29.
 
 ### Added
+- **Export the fleet** — **CSV** and **JSON** buttons in the AIRCRAFT window save the tracked aircraft as a table: callsign, registration, category, type, operator, route, first and last heard, positions kept, and whether each row is radio, online or both. The station's last 24 hours if it keeps a history (`GET /aircraft-export?format=csv|json`), else what the program holds now, and it says which. Never a position, a photo or its address, or anything about the session; a callsign that a spreadsheet would run as a formula is made inert.
 - **Copy summary** on an aircraft's card — the card as plain text on the clipboard, each line marked *radio*, *online* or *station history*, with the photo credit and link; never the position, the last message or the picture's address.
 
 ### Changed

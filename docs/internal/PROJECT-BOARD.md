@@ -80,10 +80,14 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
   on the map is open for review; it reads what the card has already fetched and
   asks for nothing. Still to do: a live run against a real station and the real
   services, and a look at the hover card on a screen.
+- **Aircraft export.** CSV and JSON buttons save the tracked fleet: the station's 24 h
+  history table when it keeps one, else the cards held; radio / online / both on every
+  row; no positions. Branch `claude/aircraft-export`, open for review; not yet seen on
+  a screen or opened in a spreadsheet.
 - **Copy summary on the aircraft card.** A button copies the card as plain text,
   each line marked radio / online / station history, with the photo credit and link;
   never the position, the last message or the picture's address. Branch
-  `claude/aircraft-share`, open for review; not yet seen on a screen.
+  `claude/aircraft-share`, merged (#210); not yet seen on a screen.
 - **Aircraft history on the station.** The station keeps a day of each aircraft's
   positions, callsigns, registrations and relay card (off by default,
   `SDROXIDE_AIRCRAFT_HISTORY=1` turns it on); **Show history** draws the trail on
