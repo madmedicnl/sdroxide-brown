@@ -80,6 +80,10 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
   on the map is open for review; it reads what the card has already fetched and
   asks for nothing. Still to do: a live run against a real station and the real
   services, and a look at the hover card on a screen.
+- **Aircraft statistics.** A Stats view counts top categories and airlines (radio)
+  and models, operators and routes (relay cards, online); the station's history list
+  adds the last day. Branch `claude/aircraft-stats`, open for review; not yet seen on
+  a screen with a real station.
 - **Aircraft history compression.** The history file is written gzipped, under the
   same name, once it passes 5 MB, and read either way; off by default, atomic.
   Branch `claude/aircraft-history-compression`, open for review; the server half

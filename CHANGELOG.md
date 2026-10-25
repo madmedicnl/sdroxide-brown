@@ -17,6 +17,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 - **ALE (2G)** decodes a synthesized word exactly and has never copied a real burst. If you can hear one, a minute of WAV on 11175 / 8992 / 15016 kHz USB (or the amateur channels near 14109.5 kHz) would finish the mode — see the manual, §3.29.
 
 ### Added
+- **Aircraft statistics** — a **Stats** view in the AIRCRAFT window counts the most common categories and airlines (from the radio, green) and models, operators and routes (from the relay's cards, blue), most first or A–Z. It uses what is already known: the live cards, the relay's answers, and the station's history list when it keeps one. No new source, nothing asked unless the view is open.
 - **Copy summary** on an aircraft's card — the card as plain text on the clipboard, each line marked *radio*, *online* or *station history*, with the photo credit and link; never the position, the last message or the picture's address.
 
 ### Changed

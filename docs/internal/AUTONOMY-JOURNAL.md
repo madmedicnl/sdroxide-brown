@@ -22,6 +22,30 @@ Each entry, in this order:
 ---
 
 
+## 2026-10-25 (aircraft stats)
+
+**In plain words.** The AIRCRAFT window has a new *Stats* button: five small tables
+of what the sky is made of, with the radio's own counts first (the category an
+aircraft reported, and its airline from the start of its callsign) and the relay's
+models, operators and routes as a complement, each with its green or blue badge. It
+counts what is already known and asks nothing unless the view is open. It has not
+been looked at on a real screen. Next: alerts for chosen aircraft.
+
+**Done.** Branch `claude/aircraft-stats`. History list: each line now also carries
+category, type, operator and the route's two airport codes (optional, so an older list
+still reads). UI: a pure `aircraft_stats` module (counting, sorting, merging live and
+history facts, the airline code, the fetch gate) and a Stats view. `cargo test -p
+sdroxide-ui`: 1177 passed (30 new); history crate 31 passed. Ten mutations; two
+survived the first round (history winning the merge, a non-OK answer), tests added,
+both then failed. The render test caught a long operator name widening the table; the
+label is now cut with the whole of it in the hover. 4000 aircraft are counted in well
+under 250 ms. wasm check clean, `rustfmt --check` clean.
+
+**Not done / blocked.** The server was not compiled here (opus 403), but its list
+route is unchanged: it serves the history crate's `Summary`, which grew optional
+fields. Not seen on a screen; routes only count aircraft the relay has answered.
+
+**Next.** Alerts for chosen aircraft.
 ## 2026-10-25 (aircraft history compression)
 
 **In plain words.** The station's aircraft history file no longer grows without

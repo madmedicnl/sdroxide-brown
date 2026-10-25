@@ -44,6 +44,7 @@ pub(in crate::app) mod aircraft_pin;
 pub(in crate::app) mod aircraft_registry;
 pub(in crate::app) mod aircraft_search;
 pub(in crate::app) mod aircraft_share;
+pub(in crate::app) mod aircraft_stats;
 pub(in crate::app) mod extras;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
@@ -552,6 +553,10 @@ pub struct SdroxideApp {
     /// The AIRCRAFT window shows the merged aircraft cards instead of a map, and
     /// which card is open there.
     aircraft_cards: bool,
+    /// The AIRCRAFT window shows the statistics instead of a map or the cards,
+    /// and how their tables are ordered. Memory only.
+    aircraft_stats_view: bool,
+    aircraft_stats_sort: aircraft_stats::SortBy,
     aircraft_card_sel: Option<aircraft_card::CardKey>,
     /// What the station's relay says about the cards looked at this session —
     /// see [`aircraft_online`]. Memory only: never saved, never in the browser.
@@ -2024,6 +2029,8 @@ impl SdroxideApp {
             aircraft_was_open: false,
             aircraft_view: sdroxide_types::Mode::Adsb,
             aircraft_cards: false,
+            aircraft_stats_view: false,
+            aircraft_stats_sort: aircraft_stats::SortBy::default(),
             aircraft_card_sel: None,
             aircraft_online: aircraft_online_io::OnlineClient::default(),
             show_rds: false,

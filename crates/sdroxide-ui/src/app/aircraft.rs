@@ -26,6 +26,7 @@ use super::aircraft_history::{self, HistoryOffer, HistoryState};
 use super::aircraft_online::{self, Badge, Provenance, ThumbStatus};
 use super::aircraft_search;
 use super::aircraft_share;
+use super::aircraft_stats::{self, SortBy, Stats};
 
 /// The opening size of the window and its floor.
 const AIRCRAFT_SIZE: [f32; 2] = [920.0, 560.0];
@@ -119,6 +120,78 @@ fn rows_grid(ui: &mut egui::Ui, id: &str, rows: Vec<aircraft_online::Row>) {
     });
 }
 
+const STATS_TABLE_W: f32 = 250.0;
+/// A row's label is cut to this; the whole of it is in the hover.
+const STATS_LABEL_W: f32 = 190.0;
+
+/// The statistics view: the way to order the tables, where the numbers come
+/// from, and one table each with its badge.
+fn stats_view(ui: &mut egui::Ui, stats: &Stats, note: &str, sort: &mut SortBy, h: f32) {
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(format!("{} aircraft", stats.total)).strong());
+        ui.add_space(8.0);
+        for (s, label) in [(SortBy::Count, "Most first"), (SortBy::Name, "A\u{2013}Z")] {
+            if ui.selectable_label(*sort == s, label).clicked() {
+                *sort = s;
+            }
+        }
+    });
+    ui.label(RichText::new(note).size(11.0).color(crate::theme::gray(160)));
+    if stats.total == 0 {
+        ui.add_space(6.0);
+        ui.label(
+            RichText::new(
+                "No aircraft yet. The tables fill from ADS-B, VDL2, HFDL and ACARS; nothing \
+                 here needs the internet.",
+            )
+            .size(11.5)
+            .color(crate::theme::gray(160)),
+        );
+        return;
+    }
+    ui.label(
+        RichText::new(
+            "Model, operator and route count only the aircraft the relay has answered about \
+             \u{2014} open a card in Cards to look one up.",
+        )
+        .size(10.5)
+        .color(crate::theme::gray(130)),
+    );
+    egui::ScrollArea::vertical().max_height((h - 56.0).max(80.0)).show(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            for (i, t) in stats.tables.iter().enumerate() {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(STATS_TABLE_W, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(t.title).strong());
+                            badge_chip(ui, t.badge);
+                        });
+                        ui.label(
+                            RichText::new(format!("{} known \u{b7} {} kinds", t.known, t.distinct))
+                                .size(10.5)
+                                .color(crate::theme::gray(130)),
+                        );
+                        egui::Grid::new(("aircraft_stats", i)).num_columns(2).show(ui, |ui| {
+                            for r in &t.rows {
+                                ui.add_sized(
+                                    [STATS_LABEL_W, 16.0],
+                                    egui::Label::new(&r.label).truncate(),
+                                )
+                                .on_hover_text(&r.label);
+                                ui.label(RichText::new(r.count.to_string()).monospace());
+                                ui.end_row();
+                            }
+                        });
+                        ui.add_space(8.0);
+                    },
+                );
+            }
+        });
+    });
+}
+
 /// A mode button is lit only while the map is the thing on show.
 fn mode_chip_lit(chip: Mode, shown: Mode, cards_view: bool) -> bool {
     !cards_view && chip == shown
@@ -128,6 +201,7 @@ impl super::SdroxideApp {
     pub(in crate::app) fn aircraft_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         if !self.show_aircraft {
             self.aircraft_was_open = false;
+            self.aircraft_online.stats.set_on(false);
             return;
         }
         // Each opening gets its own window id, so egui holds no position or
@@ -177,6 +251,8 @@ impl super::SdroxideApp {
 
     fn aircraft_body(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
         crate::chrome::window_body_bg(ui);
+        // The station's list is fetched only while the statistics are on show.
+        self.aircraft_online.stats.set_on(self.aircraft_stats_view);
         // A resizable window shrinks to its content, and the map has no height
         // of its own: hold the size the window was given.
         ui.set_min_size(ui.available_size());
@@ -197,7 +273,11 @@ impl super::SdroxideApp {
                     for m in MODES {
                         let b = crate::chrome::chip_sized(
                             ui,
-                            mode_chip_lit(m.mode, shown, self.aircraft_cards),
+                            mode_chip_lit(
+                                m.mode,
+                                shown,
+                                self.aircraft_cards || self.aircraft_stats_view,
+                            ),
                             m.label,
                             egui::vec2(COLUMN_W - 8.0, BUTTON_H),
                         )
@@ -205,6 +285,7 @@ impl super::SdroxideApp {
                         if b.clicked() {
                             self.aircraft_view = m.mode;
                             self.aircraft_cards = false;
+                            self.aircraft_stats_view = false;
                             cmds.push(Command::SetMode { rx: RxId::Main, mode: m.mode });
                         }
                     }
@@ -222,18 +303,62 @@ impl super::SdroxideApp {
                     );
                     if b.clicked() {
                         self.aircraft_cards = !self.aircraft_cards;
+                        self.aircraft_stats_view = false;
+                    }
+                    let b = crate::chrome::chip_sized(
+                        ui,
+                        self.aircraft_stats_view,
+                        "Stats",
+                        egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                    )
+                    .on_hover_text(
+                        "The most common categories, airlines, models, operators and routes \
+                         among the aircraft this station knows — counted from the radio first, \
+                         with the relay's cards as a complement",
+                    );
+                    if b.clicked() {
+                        self.aircraft_stats_view = !self.aircraft_stats_view;
+                        self.aircraft_cards = false;
                     }
                 },
             );
             ui.vertical(|ui| {
                 ui.set_min_width(ui.available_width());
-                if self.aircraft_cards {
+                if self.aircraft_stats_view {
+                    self.aircraft_stats_pane(ui, h);
+                } else if self.aircraft_cards {
                     self.aircraft_cards_pane(ui, h);
                 } else {
                     self.aircraft_map(ui, cmds, shown, active, h);
                 }
             });
         });
+    }
+
+    /// The statistics: the live registry and the relay's cards, with the
+    /// station's list of the last day when it keeps one. It asks for that list
+    /// while this view is open, and for nothing else.
+    fn aircraft_stats_pane(&mut self, ui: &mut egui::Ui, h: f32) {
+        let now = crate::time::now_unix();
+        let ctx = ui.ctx().clone();
+        let peer = self.ctrl.peer_url();
+        self.aircraft_online.poll(&ctx, now);
+        self.aircraft_online.ask_stats(&ctx, peer.as_deref(), now);
+        let live = aircraft_stats::facts_from_live(
+            self.aircraft_registry.entries(),
+            self.aircraft_online.store.infos(),
+        );
+        let kept = match self.aircraft_online.stats.state() {
+            aircraft_stats::StatsState::Ready(list) => aircraft_stats::facts_from_summaries(list),
+            _ => Vec::new(),
+        };
+        let stats = aircraft_stats::compute(
+            &aircraft_stats::merge(live, kept),
+            self.aircraft_stats_sort,
+            aircraft_stats::TOP,
+        );
+        let note = aircraft_stats::source_note(self.aircraft_online.stats.state(), peer.is_some());
+        stats_view(ui, &stats, &note, &mut self.aircraft_stats_sort, h);
     }
 
     /// The list of aircraft on the left, the open card on the right.
@@ -545,5 +670,51 @@ mod tests {
         for m in MODES {
             assert!(m.label.len() <= 6, "{} is too long for a {COLUMN_W} pt column", m.label);
         }
+    }
+
+    // ── the statistics view ───────────────────────────────────────────────
+
+    fn stats_of(n: u32) -> Stats {
+        let facts: Vec<aircraft_stats::Fact> = (0..n)
+            .map(|i| aircraft_stats::Fact {
+                icao: i,
+                callsign: Some(format!("KLM{i}")),
+                category: Some(format!("cat{}", i % 5)),
+                type_name: Some(format!("Model {}", i % 12)),
+                operator: Some("A rather long operator name indeed".repeat(3)),
+                origin: Some("AMS".into()),
+                destination: Some(format!("D{}", i % 9)),
+            })
+            .collect();
+        aircraft_stats::compute(&facts, SortBy::Count, aircraft_stats::TOP)
+    }
+
+    #[test]
+    fn the_statistics_draw_inside_the_pane_with_and_without_aircraft() {
+        for n in [0u32, 1, 4000] {
+            let stats = stats_of(n);
+            let ctx = egui::Context::default();
+            let mut sort = SortBy::Count;
+            let mut rect = egui::Rect::NOTHING;
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                ui.set_max_width(700.0);
+                let before = ui.cursor().min;
+                stats_view(ui, &stats, "a note", &mut sort, 400.0);
+                rect = egui::Rect::from_min_max(before, ui.min_rect().max);
+            });
+            out.textures_delta.clear();
+            assert!(rect.width() > 40.0 && rect.height() > 10.0, "{n}: nothing drawn {rect:?}");
+            assert!(rect.width() <= 701.0, "{n}: too wide {rect:?}");
+            assert!(rect.height() <= 401.0, "{n}: past the pane {rect:?}");
+        }
+    }
+
+    #[test]
+    fn the_stats_button_is_one_view_among_three_and_the_store_follows_it() {
+        let src = include_str!("aircraft.rs");
+        let code = &src[..src.find("#[cfg(test)]").unwrap()];
+        assert_eq!(code.matches("aircraft_stats_pane(ui, h)").count(), 1);
+        assert_eq!(code.matches("ask_stats(").count(), 1, "asked from the pane only");
+        assert_eq!(code.matches("stats.set_on(").count(), 2, "the body and the closed window");
     }
 }
