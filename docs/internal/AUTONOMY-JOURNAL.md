@@ -103,6 +103,24 @@ correlation. Both decode a clean signal; on a marginal one they diverge.
 DFE trained on sync + references, swept against **decoded bits**, not
 concentration.
 
+**Then the equaliser was tried, and told us what it is not.** A sweep of the DFE
+against decoded text (the probe `the_capture_equaliser_swept_against_text`, which
+prints the text each shape produces) gave `RY` counts of 1, 0, 1, 2 and 3 for
+filters from 11 to 81 taps with up to four passes — no better than the shortest,
+and never a message. Carrying the weights between frames instead of restarting
+them at zero every frame — which is what the reference does, and what ours did
+not — moved nothing either, so that change was reverted rather than kept: an
+untested improvement is churn.
+
+What that leaves is a *structural* difference, not a tuning one: the reference
+runs a 121-tap fractionally-spaced LMS filter on the 5-samples-per-symbol
+baseband with four symbol taps, trained symbol by symbol through the frame, and
+takes its soft decisions from a **log-likelihood ratio** quantised to 25..230.
+Ours filters 11 taps, decides linearly on the real part, and sweeps the same
+frame twice. Porting theirs is the remaining work — the header is 190 lines and
+the ground truth (their bits, their soft decisions, and the text they produce) is
+already on disk.
+
 **And then the text layer turned out to be throwing good messages away.** With the
 reference's bits in hand — bits that plainly contain a French Navy tape — the
 mode's own reader returned **nothing**:
