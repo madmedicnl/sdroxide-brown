@@ -123,6 +123,42 @@ impl SdroxideApp {
                  the picture to solid black or solid white.",
             );
             self.digi_squelch_slider(ui, cmds);
+
+            // Receive sensitivity. Not a volume: a fax is frequency modulated,
+            // so its greys come from the 1500 / 2300 Hz tones and not from how
+            // strong the signal is. This scales the decoder's thresholds
+            // instead, and 0 is the reference behaviour. Persisted in DigiConfig.
+            ui.label(RichText::new("Sensitivity").size(10.0).weak());
+            {
+                let mut v = self.digi_cfg_edit.wefax_rx_sensitivity;
+                let resp =
+                    crate::chrome::slider(ui, egui::Slider::new(&mut v, -5..=5).fixed_decimals(0))
+                        .on_hover_text(
+                            "Sensitivity — how readily the decoder starts and keeps a chart.\n\n\
+                     Auto uses the thresholds measured from the chart's own phasing signal, \
+                     which is the reference 0.\n\n\
+                     + accepts weaker, fainter or noisier charts; − waits for a clean signal \
+                     before it starts.\n\n\
+                     Not volume and not contrast: a fax is frequency modulated, so the greys \
+                     come from the 1500 / 2300 Hz tones, not from how strong the signal is.",
+                        );
+                if resp.changed() {
+                    self.digi_cfg_edit.wefax_rx_sensitivity = v;
+                    self.digi_cfg_edit.wefax_rx_auto = v == 0;
+                    cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+                }
+            }
+            if crate::chrome::chip(ui, self.digi_cfg_edit.wefax_rx_auto, "Auto")
+                .on_hover_text(
+                    "Returns to the reference thresholds (0) and leaves the decoder's own \
+                     measurements in charge. Highlighted while active.",
+                )
+                .clicked()
+            {
+                self.digi_cfg_edit.wefax_rx_auto = true;
+                self.digi_cfg_edit.wefax_rx_sensitivity = 0;
+                cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+            }
         });
 
         ui.add_space(4.0);
@@ -641,7 +677,7 @@ impl SdroxideApp {
     /// below the published carrier — the subtraction that otherwise produces a
     /// blank page and no clue why.
     fn wefax_station_chip(&self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
-        use sdroxide_types::{WEFAX_STATIONS, WefaxStation};
+        use sdroxide_types::{WefaxStation, WEFAX_STATIONS};
         let dial = self.state.active_freq_hz();
         // The station we are on, if any, so the chip reads as a position.
         let here = WefaxStation::at_dial(dial);

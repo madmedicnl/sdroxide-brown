@@ -40,6 +40,8 @@ pub(super) fn navtex_list_header(
     status: Option<&sdroxide_types::DigiStatus>,
     cmds: &mut Vec<Command>,
     rev: bool,
+    cfg: &mut sdroxide_types::DigiConfig,
+    seeded: bool,
 ) -> bool {
     let mut flip = false;
     ui.horizontal_wrapped(|ui| {
@@ -78,6 +80,40 @@ pub(super) fn navtex_list_header(
                  slots later, and those where both were bad. A NAVTEX character is sent \
                  twice; that is the whole of its error correction.",
             );
+        }
+        // Receive sensitivity. NAVTEX is FSK, so signal strength does not change
+        // the alphabet — this moves the detection thresholds instead (signal
+        // presence, phase lock, AFC tracking). 0 is the reference behaviour.
+        ui.label(RichText::new("Sensitivity").size(10.0).weak());
+        {
+            let mut v = cfg.navtex_rx_sensitivity;
+            let resp =
+                crate::chrome::slider(ui, egui::Slider::new(&mut v, -5..=5).fixed_decimals(0))
+                    .on_hover_text(
+                        "Sensitivity — how readily the decoder locks onto and keeps a signal.\n\n\
+                     Auto uses the reference thresholds (0), which is the behaviour as shipped.\n\n\
+                     + accepts a weaker or noisier signal; − waits for a cleaner one before \
+                     declaring sync, which is what stops noise being read as characters.\n\n\
+                     Not volume: NAVTEX is FSK, so the greys come from the tones, not from how \
+                     strong the signal is.",
+                    );
+            if resp.changed() {
+                cfg.navtex_rx_sensitivity = v;
+                cfg.navtex_rx_auto = v == 0;
+                if seeded {
+                    cmds.push(Command::SetDigiConfig(cfg.clone()));
+                }
+            }
+        }
+        if crate::chrome::chip(ui, cfg.navtex_rx_auto, "Auto")
+            .on_hover_text("Returns to the reference thresholds (0). Highlighted while active.")
+            .clicked()
+        {
+            cfg.navtex_rx_auto = true;
+            cfg.navtex_rx_sensitivity = 0;
+            if seeded {
+                cmds.push(Command::SetDigiConfig(cfg.clone()));
+            }
         }
         crate::chrome::row_tail(ui, |ui| {
             super::clear_rx_chip_at(ui, cmds, !st.messages.is_empty() || st.live.is_some());
@@ -190,6 +226,8 @@ impl SdroxideApp {
             self.digi_status.as_ref(),
             cmds,
             self.digi_cfg_edit.navtex_reverse,
+            &mut self.digi_cfg_edit,
+            self.digi_cfg_seeded,
         );
         if rev_pressed {
             self.digi_cfg_edit.navtex_reverse = !self.digi_cfg_edit.navtex_reverse;
