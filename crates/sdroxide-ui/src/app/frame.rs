@@ -1528,6 +1528,9 @@ impl eframe::App for SdroxideApp {
         self.settings_window(&ctx, &mut cmds);
         self.digi_settings_window(&ctx, &mut cmds);
         self.logbook_window(&ctx, &mut cmds);
+        if self.show_session_qsos {
+            self.session_qsos_window(&ctx, &mut cmds);
+        }
         self.contest_window(&ctx, &mut cmds);
         self.swl_window(&ctx, &mut cmds);
         self.listen_window(&ctx, &mut cmds);
@@ -1575,6 +1578,7 @@ impl eframe::App for SdroxideApp {
         sync!(self.schedule.show, TW_SCHEDULE);
         sync!(self.show_listen, TW_LISTEN);
         sync!(self.show_logbook, TW_LOGBOOK);
+        sync!(self.show_session_qsos, TW_SESSION_QSOS);
         sync!(self.show_settings, TW_SETTINGS);
         sync!(self.show_swl, TW_SWL_LOG);
         sync!(self.show_spots, TW_SPOTS);
@@ -1644,6 +1648,7 @@ impl eframe::App for SdroxideApp {
         if self.schedule.show { self.ui_settings.tool_windows_open |= TW_SCHEDULE; } else { self.ui_settings.tool_windows_open &= !TW_SCHEDULE; }
         if self.show_listen { self.ui_settings.tool_windows_open |= TW_LISTEN; } else { self.ui_settings.tool_windows_open &= !TW_LISTEN; }
         if self.show_logbook { self.ui_settings.tool_windows_open |= TW_LOGBOOK; } else { self.ui_settings.tool_windows_open &= !TW_LOGBOOK; }
+        if self.show_session_qsos { self.ui_settings.tool_windows_open |= TW_SESSION_QSOS; } else { self.ui_settings.tool_windows_open &= !TW_SESSION_QSOS; }
         if self.show_settings { self.ui_settings.tool_windows_open |= TW_SETTINGS; } else { self.ui_settings.tool_windows_open &= !TW_SETTINGS; }
         if self.show_swl { self.ui_settings.tool_windows_open |= TW_SWL_LOG; } else { self.ui_settings.tool_windows_open &= !TW_SWL_LOG; }
         if self.show_spots { self.ui_settings.tool_windows_open |= TW_SPOTS; } else { self.ui_settings.tool_windows_open &= !TW_SPOTS; }
@@ -3570,6 +3575,7 @@ impl SdroxideApp {
                     let call = r.call.clone();
                     let adif = auto_upload_adif(&self.net_cfg_edit, &r);
                     self.last_logged_qso_id = Some(r.id);
+                    self.session_qso_ids.insert(r.id);
                     self.qso_log.push(r);
                     self.session_qsos += 1;
                     persist_qso_log(&self.qso_log);
@@ -5146,3 +5152,4 @@ pub const TW_SCHEDULE: u64 = 1 << 46;
 pub const TW_PLAYBACK: u64 = 1 << 47;
 pub const TW_PUBLICSDR: u64 = 1 << 48;
 pub const TW_AIRCRAFT: u64 = 1 << 49;
+pub const TW_SESSION_QSOS: u64 = 1 << 50;

@@ -1090,6 +1090,12 @@ pub struct UiSettings {
     /// ouvert. Reste `Copy` (u64).
     #[serde(default)]
     pub tool_windows_open: u64,
+    /// SESSION QSOs window: sort column (0=Time,1=Call,2=Grid,3=Band,4=Mode,
+    /// 5=RST sent,6=RST rcvd,7=Country,8=CQ,9=Distance,10=Final) and direction.
+    #[serde(default)]
+    pub session_qso_sort: u8,
+    #[serde(default = "default_true")]
+    pub session_qso_sort_desc: bool,
     /// Keep the screen on: ask the browser for a Screen Wake Lock so a phone
     /// or tablet left on the waterfall does not dim and lock itself. A
     /// property of this screen, like the theme, and carried with the profile's
@@ -1667,6 +1673,8 @@ impl Default for UiSettings {
             classic_ui: false,
             classic_sections: String::new(),
             tool_windows_open: 0,
+            session_qso_sort: 0,
+            session_qso_sort_desc: true,
         }
     }
 }
