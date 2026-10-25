@@ -1499,6 +1499,30 @@ wrong, which reads as noise. And the controller puts a PSK carrier at **1000 Hz*
 1500, so a loopback at 1500 reads mangled characters that look like a modulator fault
 and are a receiver 500 Hz off.
 
+**The multi-carrier banks were tried and are not landed, with the measurement
+that stops them.** The distribution is the receiver's own — one bit per carrier per
+symbol, in carrier order (`PskCarrierBank::take_blocks`), each carrier its own
+differential state, carriers `1.4 × baud` apart. Through the **soft** path (`R`,
+`RC`; `set_pskr`) that is the same chain that reads the corpus, and it is untested
+because it cannot be reached before the first fault is fixed:
+
+| case | reads |
+|---|---|
+| 125 baud × **1** carrier, `C` (no FEC), hard tap | **no** — "ahs scrfs hcd fcpusu nt=ya" for "THE EAGLE HAS LANDED 12345" |
+| 125 baud × 12 carriers, `C`, hard tap | no — "hu rfs hSd fcpusu not yaI " |
+
+**One carrier is the finding.** With the distribution removed the `C` path still
+mangles the text, so the fault is not the spreading — it is the **hard-tap path**
+(`set_bit_tap`, `d.re >= 0` = a one) reading our signal. Some characters come back
+exact (H, and the word lengths are close), which is a bit-level slip rather than a
+wrong stream: the polarity rule is right (`PskTx` and this transmitter agree, and
+the tap agrees with them), so what is left is the tap's own timing or level.
+
+The next step is therefore a *differential* measurement, the one this tree has used
+before: run a **corpus** `C` recording and our own transmission through the same
+hard tap and compare the bit streams, so "our modulator" and "the tap" are told
+apart by a fact. Until then the multi-carrier banks keep the refusal and its reason.
+
 **Still refused, with a reason on the chip:** the multi-carrier `C` and `RC` banks —
 their bits go on carriers `1.4 × baud` apart, which is the next step, and one carrier
 under a multi-carrier label would be a different signal answering to the same name.
