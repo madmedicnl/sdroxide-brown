@@ -476,6 +476,11 @@ struct CodedChain {
     /// Soft decisions it has ever been fed — the honest count, unlike the buffer
     /// length, which is drained as it is consumed.
     fed: u64,
+    /// Viterbi chunks decoded. **A counter, not `consumed / 512`**: the buffer is
+    /// drained as it fills, so a figure derived from `consumed` collapses back to
+    /// nothing every 64 kB and reads as "the chain decoded ten chunks out of a
+    /// hundred and forty". It did read that, and it was the counter lying.
+    decoded: u64,
     /// How many times it has been restarted. A restart throws away the
     /// interleaver's ten seconds of history, so a stream that restarts often can
     /// never complete a message.
@@ -507,6 +512,7 @@ impl CodedChain {
             framer: fec::MessageFramer::new(rate),
             messages: 0,
             fed: 0,
+            decoded: 0,
             resets: 0,
         }
     }
@@ -536,6 +542,7 @@ impl CodedChain {
         while self.soft.len() - self.consumed >= need {
             let slice = &self.soft[self.consumed..self.consumed + need];
             let pairs = fec::average_pairs(slice, self.times);
+            self.decoded += 1;
             let bits = fec::viterbi_decode(&pairs);
             for b in bits.iter().skip(VITERBI_OVERLAP).take(CHUNK_PAIRS) {
                 if let Some(m) = self.framer.push(*b) {
@@ -639,6 +646,12 @@ pub struct S4285Receiver {
     /// are what the receiver runs — because the choice has to be swept against
     /// *decoded bits*, not against how tightly the constellation reads.
     dfe_params: (usize, usize, usize, f32),
+    /// Running noise estimate for the log-likelihood soft decisions: the mean
+    /// squared distance from each symbol to the point it decided on, smoothed
+    /// the way the reference implementation smooths it.
+    llr_var: f32,
+    /// How many symbols have gone into that estimate.
+    llr_n: u32,
     /// The equaliser's weights, carried between frames. SCRATCH: on trial.
     dfe_taps: Option<(Vec<C>, Vec<C>)>,
     /// Every soft decision the Annex E chains were actually fed, erasures
@@ -740,6 +753,8 @@ impl S4285Receiver {
             pending: Vec::new(),
             eq_mode: EqMode::Auto,
             dfe_params: (11, 4, 2, 0.05),
+            llr_var: 0.0,
+            llr_n: 0,
             dfe_taps: None,
             coded_trace: None,
             coded_quality: Vec::new(),
@@ -761,7 +776,7 @@ impl S4285Receiver {
                 sign: c.sign,
                 swap: c.swap,
                 pushed: c.fed as usize,
-                chunks: (c.consumed / (CHUNK_PAIRS * 2 * c.times)) as u64,
+                chunks: c.decoded,
                 messages: c.messages,
                 som: c.framer.best_som,
                 resets: c.resets,
@@ -1645,13 +1660,35 @@ impl S4285Receiver {
         if sum <= 1e-9 {
             return Vec::new();
         }
-        // A BPSK symbol's soft decision is its real part, scaled so a clean
-        // symbol is ±1 — Annex E's "linear distance from the decision boundary".
+        // **Log-likelihood soft decisions, the way the reference implementation
+        // makes them.** A BPSK symbol's evidence is the distance to the two
+        // points it could have been, divided by a running estimate of the noise
+        // variance: a clean symbol saturates, a marginal one counts for little,
+        // and a fading frame does not drown the strong symbols beside it.
+        //
+        // The linear real part (what this did) weights every symbol by its own
+        // amplitude, so on a fading path a burst of strong symbols outvotes
+        // everything else and the Viterbi follows them into error.
+        let mut llr: Vec<f32> = Vec::with_capacity(data.len());
+        for c in &data {
+            // The two BPSK points are +1 and -1 on the real axis.
+            let d0 = (c.re - 1.0) * (c.re - 1.0) + c.im * c.im;
+            let d1 = (c.re + 1.0) * (c.re + 1.0) + c.im * c.im;
+            let near = d0.min(d1);
+            self.llr_n = (self.llr_n + 1).min(4096);
+            let alpha = 1.0 / self.llr_n as f32;
+            self.llr_var += (2.0 * near - self.llr_var) * alpha;
+            let var = self.llr_var.max(1e-4);
+            // Positive for a symbol that decided on "zero", which is this tree's
+            // signed convention; scaled so a clean one is about ±3.
+            llr.push(((d1 - d0) / var).clamp(-6.0, 6.0));
+        }
         let scale = data.len() as f32 / sum;
         if self.coded.is_empty() {
             self.coded = coded_chains();
         }
-        let soft: Vec<f32> = data.iter().map(|c| c.re * scale).collect();
+        let soft: Vec<f32> =
+            if self.llr_n >= 8 { llr.clone() } else { data.iter().map(|c| c.re * scale).collect() };
         // The same symbols as two bits each.
         let mut soft2: Vec<f32> = Vec::with_capacity(data.len() * 2);
         for c in &data {
@@ -3377,10 +3414,14 @@ mod tests {
             // **The reference implementation's own shape** (taps_data 12 at two
             // samples a symbol = 121 taps at five, four symbol taps, one pass,
             // mu 0.05): the setting that decodes this capture there.
-            (121, 4, 1, 0.05),
-            (121, 4, 2, 0.05),
-            (81, 4, 1, 0.05),
-            (41, 4, 1, 0.05),
+            // **The step size, scaled to our unit-power inputs.** The reference
+            // filters raw samples of amplitude about 0.5 with mu 0.05; ours are
+            // normalised to unit power first, so the same mu is a step about ten
+            // times too large and the filter rings instead of converging.
+            (121, 4, 1, 0.002),
+            (121, 4, 1, 0.005),
+            (121, 4, 3, 0.002),
+            (41, 4, 3, 0.002),
         ] {
             let mut rx = S4285Receiver::new(rate, 1800.0);
             rx.set_eq_mode(EqMode::Dfe);
@@ -3486,7 +3527,8 @@ mod tests {
         };
         for style in fec::Interleave::ALL {
             for swap in [false, true] {
-                let mut de = fec::ConvInterleaver::deinterleaver_with(fec::CodedRate::Bps600.j(), style);
+                let mut de =
+                    fec::ConvInterleaver::deinterleaver_with(fec::CodedRate::Bps600.j(), style);
                 let mut deint: Vec<f32> = Vec::with_capacity(raw.len());
                 for &v in &raw {
                     deint.push(de.push(128.0 - v as f32));
@@ -3507,6 +3549,79 @@ mod tests {
                     style.label(),
                     frac * 100.0
                 );
+            }
+        }
+    }
+
+    /// **How much of the stream the chain actually decodes.** Pushing values with
+    /// no message in them should still run the Viterbi once per 512 values; if it
+    /// does not, most of the capture is being thrown away before the decoder sees
+    /// it — which is what the counters on the real capture say.
+    #[test]
+    fn the_chain_decodes_every_chunk_it_is_fed() {
+        let mut out = Vec::new();
+        let mut chain = CodedChain::new(fec::CodedRate::Bps600, 1.0);
+        let fed = 71_552usize;
+        for i in 0..fed {
+            chain.push(((i % 7) as f32) - 3.0, &mut out);
+        }
+        eprintln!("fed {fed} decoded {} chunks", chain.decoded);
+        assert!(
+            chain.decoded >= (fed / 512 - 2) as u64,
+            "only {} chunks decoded from {fed} values — the rest is discarded",
+            chain.decoded
+        );
+    }
+
+    /// Our descrambled data symbols beside the reference decoder's, for the same
+    /// audio: the front ends' difference, in numbers.
+    #[test]
+    #[ignore]
+    fn our_symbols_beside_the_references() {
+        let path = std::env::var("SDROXIDE_S4285_SAMPLE").expect("set SDROXIDE_S4285_SAMPLE");
+        let mut reader = hound::WavReader::open(&path).expect("open the wav");
+        let spec = reader.spec();
+        let raw: Vec<f32> = match spec.sample_format {
+            hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
+            hound::SampleFormat::Int => {
+                let scale = 1.0 / (1i64 << (spec.bits_per_sample - 1)) as f32;
+                reader.samples::<i32>().map(|s| s.unwrap() as f32 * scale).collect()
+            }
+        };
+        let ch = spec.channels.max(1) as usize;
+        let audio: Vec<f32> = if ch == 1 {
+            raw
+        } else {
+            raw.chunks(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect()
+        };
+        let mut rx = S4285Receiver::new(spec.sample_rate as f64, 1800.0);
+        let mut shown = 0;
+        for chunk in audio.chunks(1024) {
+            for ev in rx.process(chunk) {
+                if let S4285Event::Frame(f) = ev {
+                    if shown < 2 {
+                        let re: Vec<f32> = f
+                            .symbols
+                            .iter()
+                            .take(24)
+                            .map(|c| (c.re * 100.0).round() / 100.0)
+                            .collect();
+                        let im: Vec<f32> = f
+                            .symbols
+                            .iter()
+                            .take(24)
+                            .map(|c| (c.im * 100.0).round() / 100.0)
+                            .collect();
+                        let m: Vec<f32> = f.symbols.iter().map(|c| c.norm()).collect();
+                        eprintln!(
+                            "ours frame {shown}: |s| {:.3}",
+                            m.iter().sum::<f32>() / m.len() as f32
+                        );
+                        eprintln!("   re {re:?}");
+                        eprintln!("   im {im:?}");
+                        shown += 1;
+                    }
+                }
             }
         }
     }
