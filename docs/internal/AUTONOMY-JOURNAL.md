@@ -299,6 +299,44 @@ by itself; the AIRCRAFT window's back-off still decides when it is asked again.
 
 ---
 
+## 2026-10-25 (UI) — three fixes built into one local binary, for the operator to test
+
+**Summary.** The operator's standing point, in his own words: *"I always need to test
+what we fix."* So the three UI fixes of this session are folded into one local build
+and installed, rather than left on branches waiting for a merge: the SQL label that
+holds the squelch open, mode panels docking under the waterfall instead of opening in
+windows, and the gear-only setup chip with a window icon that sends the pane to a
+window of its own. What he has to test is listed below, because a fix nobody clicked
+is not finished.
+
+**Done.** Local branch `local/sql-and-panels`, merges `eab2cfcf` (#218),
+`0f55df8f` (#219: #215 + #217) and `03192a69` (#222). Built and installed at
+`~/.cargo/bin/sdroxide`, 09:26, checksum matched, `SDR Oxide Brown 2.1.0_brown`.
+`sdroxide-ui --lib` **1246 passed, 0 failed**; workspace gate silent apart from the
+four NAVTEX warnings, which are F4NRM's and are the subject of a report to him.
+
+**What the operator is testing, and what would be wrong:**
+- **SQL**: click the word → letters green, rail to *off* (**open** on a rig with its
+  own squelch). Click again → the number he had. Dragging the rail while green →
+  held state ends and the number he set stays. Wrong if the letters do not change
+  colour, if the number does not come back exactly, or if the first start of this
+  build still opens panels in windows.
+- **Docking**: pick any mode → its panel is *in the pane below the waterfall*, no
+  window appears. Windows are opened by Detachable in Settings or the icon below.
+  Wrong if a panel still pops up on mode entry, or if a panel is missing entirely.
+- **Gear and the way out**: the setup chip is a gear with no word, and a window icon
+  sits at the right-hand end of that row; clicking it detaches the pane and the
+  waterfall grows. Wrong if the icon covers a chip, if the pane does not come back
+  (dock chip in the new window), or if the gear alone reads as nothing.
+
+**Not done.** Merged on `origin`: **no** — #218, #219 and #222 are still PRs, and the
+installed binary is ahead of `main`. Looked at on a screen: **no**, by me — which is
+exactly why it is installed rather than reported as finished.
+
+**Next.** His verdict on each of the three. Anything wrong goes back to the branch
+that carries it; anything right, and the PRs get merged and the binary is rebuilt
+from `main` instead.
+
 ## 2026-10-25 (UI) — mode panels docked by default (#217, and #215 with it)
 
 **Summary.** The operator's own report: clicking a mode opened its panel in a
