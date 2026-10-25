@@ -187,16 +187,19 @@ impl super::SdroxideApp {
             if dab.clicked() {
                 cmds.push(Command::SetMode { rx: RxId::Main, mode: Mode::Dab });
             }
+            let unseen = self.aircraft_tracker.unseen();
             let air = crate::chrome::chip_sized(
                 ui,
                 self.show_aircraft,
-                "AIRCRAFT",
+                format!("AIRCRAFT{}", super::aircraft_watch::chip_suffix(unseen)),
                 egui::vec2(SLOT_W, SLOT_H),
             )
-            .on_hover_text(
+            .on_hover_text(if unseen > 0 {
+                "AIRCRAFT — an aircraft on your watch list is on the air; open the Watch view"
+            } else {
                 "AIRCRAFT — the map of what the radio hears: aircraft and radiosondes, \
-                 in a window you can detach",
-            );
+                 in a window you can detach"
+            });
             if air.clicked() {
                 self.show_aircraft = !self.show_aircraft;
             }

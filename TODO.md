@@ -55,8 +55,14 @@ maintainer's queue there, not a promise.
    memory only and asks for nothing, so type and operator are found only once an
    aircraft has been looked up. Asked for by the operator.
 
-0g. **Copy summary on the aircraft card — open for review (branch
-   `claude/aircraft-share`).** A button in the Cards list copies the card as text, each
+0j. **Aircraft alerts — open for review (branch `claude/aircraft-alerts`).** A **Watch**
+   view in the AIRCRAFT window: a list of callsigns and registrations kept by the
+   station (`aircraft-watch.json`, `/aircraft-watch`), and an alert, a line and a count
+   on the AIRCRAFT chip, when one appears or comes back. No sound, no mail. Left: a look
+   at it on a real screen with a real station, and the same list from the browser.
+   Asked for by the operator.
+
+0g. **Copy summary on the aircraft card — merged (#210).** A button in the Cards list copies the card as text, each
    line marked radio / online / station history, with the photo credit and page link.
    Position, last message and the thumbnail address are withheld. Left: a look at the
    button on a real screen and a paste into a real app. Asked for by the operator.

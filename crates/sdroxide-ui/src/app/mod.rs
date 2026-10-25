@@ -44,6 +44,7 @@ pub(in crate::app) mod aircraft_pin;
 pub(in crate::app) mod aircraft_registry;
 pub(in crate::app) mod aircraft_search;
 pub(in crate::app) mod aircraft_share;
+pub(in crate::app) mod aircraft_watch;
 pub(in crate::app) mod extras;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
@@ -553,6 +554,12 @@ pub struct SdroxideApp {
     /// which card is open there.
     aircraft_cards: bool,
     aircraft_card_sel: Option<aircraft_card::CardKey>,
+    /// The AIRCRAFT window shows the watch list instead of a map or the cards,
+    /// what is typed in its box, and the tracker that raises the alerts. The
+    /// tracker runs whether or not the window is open. Memory only.
+    aircraft_watch_view: bool,
+    aircraft_watch_input: String,
+    aircraft_tracker: aircraft_watch::Tracker,
     /// What the station's relay says about the cards looked at this session —
     /// see [`aircraft_online`]. Memory only: never saved, never in the browser.
     aircraft_online: aircraft_online_io::OnlineClient,
@@ -2025,6 +2032,9 @@ impl SdroxideApp {
             aircraft_view: sdroxide_types::Mode::Adsb,
             aircraft_cards: false,
             aircraft_card_sel: None,
+            aircraft_watch_view: false,
+            aircraft_watch_input: String::new(),
+            aircraft_tracker: aircraft_watch::Tracker::default(),
             aircraft_online: aircraft_online_io::OnlineClient::default(),
             show_rds: false,
             show_drm: false,
@@ -3169,6 +3179,8 @@ impl SdroxideApp {
 
 #[cfg(test)]
 mod touch_lock_tests;
+#[cfg(test)]
+mod aircraft_watch_frame_tests;
 #[cfg(test)]
 mod tests {
 

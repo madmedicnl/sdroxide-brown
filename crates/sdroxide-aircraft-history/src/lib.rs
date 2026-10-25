@@ -10,6 +10,8 @@
 //! registrations an address used, and the card the relay gave. Never audio, raw
 //! frames, a picture, or anything about who was looking.
 
+pub mod watch;
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};

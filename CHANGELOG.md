@@ -17,6 +17,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 - **ALE (2G)** decodes a synthesized word exactly and has never copied a real burst. If you can hear one, a minute of WAV on 11175 / 8992 / 15016 kHz USB (or the amateur channels near 14109.5 kHz) would finish the mode — see the manual, §3.29.
 
 ### Added
+- **Aircraft alerts** — a **Watch** view in the AIRCRAFT window keeps a list of callsigns and registrations; when one appears, or comes back after ten minutes off the air, the window shows a line and the AIRCRAFT chip wears a count. The list is kept by the station (`aircraft-watch.json`, served on `/aircraft-watch`), so it is the same from every screen. No sound, no mail, nothing asked of anybody to find an aircraft.
 - **Copy summary** on an aircraft's card — the card as plain text on the clipboard, each line marked *radio*, *online* or *station history*, with the photo credit and link; never the position, the last message or the picture's address.
 
 ### Changed

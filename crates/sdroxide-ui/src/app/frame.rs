@@ -1684,6 +1684,7 @@ impl eframe::App for SdroxideApp {
         self.poll_playback_list(&mut cmds);
         self.playback_window(&ctx, &mut cmds);
         self.extras_window(&ctx, &mut cmds);
+        self.aircraft_watch_tick(&ctx);
         self.aircraft_window(&ctx, &mut cmds);
         self.help.ui(&ctx);
         // Last, so it lands on top of everything else that opened this frame.
