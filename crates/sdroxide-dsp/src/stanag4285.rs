@@ -454,6 +454,8 @@ pub struct ChainStat {
     pub messages: u64,
     /// Closest approach to the start-of-message pattern, in matching bits of 32.
     pub som: u8,
+    /// How many times this branch was restarted.
+    pub resets: u64,
 }
 
 struct CodedChain {
@@ -471,6 +473,13 @@ struct CodedChain {
     framer: fec::MessageFramer,
     /// Messages this branch has framed; the first one is what names the rate.
     messages: u64,
+    /// Soft decisions it has ever been fed — the honest count, unlike the buffer
+    /// length, which is drained as it is consumed.
+    fed: u64,
+    /// How many times it has been restarted. A restart throws away the
+    /// interleaver's ten seconds of history, so a stream that restarts often can
+    /// never complete a message.
+    resets: u64,
 }
 
 impl CodedChain {
@@ -497,10 +506,13 @@ impl CodedChain {
             consumed: 0,
             framer: fec::MessageFramer::new(rate),
             messages: 0,
+            fed: 0,
+            resets: 0,
         }
     }
 
     fn reset(&mut self) {
+        self.resets += 1;
         self.deint.reset();
         self.soft.clear();
         self.consumed = 0;
@@ -509,6 +521,7 @@ impl CodedChain {
 
     /// One soft decision from the demodulator (positive means a zero).
     fn push(&mut self, v: f32, out: &mut Vec<S4285Message>) {
+        self.fed += 1;
         self.soft.push(self.deint.push(v * self.sign));
         // A chunk of `CHUNK_PAIRS` coded pairs, plus an overlap in front of it
         // that is decoded and **thrown away**.
@@ -626,6 +639,8 @@ pub struct S4285Receiver {
     /// are what the receiver runs — because the choice has to be swept against
     /// *decoded bits*, not against how tightly the constellation reads.
     dfe_params: (usize, usize, usize, f32),
+    /// The equaliser's weights, carried between frames. SCRATCH: on trial.
+    dfe_taps: Option<(Vec<C>, Vec<C>)>,
     /// Every soft decision the Annex E chains were actually fed, erasures
     /// included, when tracing is on — see [`S4285Receiver::coded_stream`].
     coded_trace: Option<Vec<f32>>,
@@ -725,6 +740,7 @@ impl S4285Receiver {
             pending: Vec::new(),
             eq_mode: EqMode::Auto,
             dfe_params: (11, 4, 2, 0.05),
+            dfe_taps: None,
             coded_trace: None,
             coded_quality: Vec::new(),
             last_frame_usable: false,
@@ -744,10 +760,11 @@ impl S4285Receiver {
                 rate: c.rate,
                 sign: c.sign,
                 swap: c.swap,
-                pushed: c.soft.len() + c.consumed,
+                pushed: c.fed as usize,
                 chunks: (c.consumed / (CHUNK_PAIRS * 2 * c.times)) as u64,
                 messages: c.messages,
                 som: c.framer.best_som,
+                resets: c.resets,
             })
             .collect()
     }
@@ -1083,7 +1100,13 @@ impl S4285Receiver {
     ///
     /// Returns the **descrambled** symbols, so everything downstream (the soft
     /// decisions, the Annex E chains) is unchanged.
-    fn dfe_symbols(&self, start: u64, phase: f32, reversed: bool, offset: f32) -> [C; SCRAMBLED] {
+    fn dfe_symbols(
+        &mut self,
+        start: u64,
+        phase: f32,
+        reversed: bool,
+        offset: f32,
+    ) -> [C; SCRAMBLED] {
         // Swept on Mark's recording, judged by the data constellation the frame
         // reports: 11 forward taps with 4 feedback taps over two passes reads
         // 0.833 where the receiver's own channel fit reads 0.750, and both more
@@ -1117,9 +1140,14 @@ impl S4285Receiver {
             }
         }
 
-        let mut w = vec![C::default(); ff];
-        w[centre] = C::new(1.0, 0.0);
-        let mut b = vec![C::default(); fb];
+        let (mut w, mut b) = match self.dfe_taps.take() {
+            Some((w, b)) if w.len() == ff && b.len() == fb => (w, b),
+            _ => {
+                let mut w = vec![C::default(); ff];
+                w[centre] = C::new(1.0, 0.0);
+                (w, vec![C::default(); fb])
+            }
+        };
         let mut past = vec![C::default(); fb];
         let mut out = [C::default(); SCRAMBLED];
         // Two passes: the first trains the filter on the known symbols and its own
@@ -1175,10 +1203,17 @@ impl S4285Receiver {
                 }
             }
         }
+        self.dfe_taps = Some((w, b));
         out
     }
 
-    fn coded_symbols(&self, start: u64, phase: f32, reversed: bool, offset: f32) -> [C; SCRAMBLED] {
+    fn coded_symbols(
+        &mut self,
+        start: u64,
+        phase: f32,
+        reversed: bool,
+        offset: f32,
+    ) -> [C; SCRAMBLED] {
         if self.eq_mode == EqMode::Dfe {
             return self.dfe_symbols(start, phase, reversed, offset);
         }
@@ -3175,8 +3210,8 @@ mod tests {
             );
             for c in rx.chain_stats() {
                 eprintln!(
-                    "   rate {:?} sign {:+.0} swap {} pushed {} chunks {} msgs {} som {}",
-                    c.rate, c.sign, c.swap, c.pushed, c.chunks, c.messages, c.som
+                    "   rate {:?} sign {:+.0} swap {} pushed {} chunks {} msgs {} som {} resets {}",
+                    c.rate, c.sign, c.swap, c.pushed, c.chunks, c.messages, c.som, c.resets
                 );
             }
         }
@@ -3339,10 +3374,13 @@ mod tests {
         let rate = spec.sample_rate as f64;
         for (ff, fb, passes, mu) in [
             (11usize, 4usize, 2usize, 0.05f32),
-            (21, 6, 2, 0.05),
-            (41, 8, 3, 0.02),
-            (61, 8, 4, 0.01),
-            (81, 12, 4, 0.01),
+            // **The reference implementation's own shape** (taps_data 12 at two
+            // samples a symbol = 121 taps at five, four symbol taps, one pass,
+            // mu 0.05): the setting that decodes this capture there.
+            (121, 4, 1, 0.05),
+            (121, 4, 2, 0.05),
+            (81, 4, 1, 0.05),
+            (41, 4, 1, 0.05),
         ] {
             let mut rx = S4285Receiver::new(rate, 1800.0);
             rx.set_eq_mode(EqMode::Dfe);
@@ -3396,10 +3434,14 @@ mod tests {
         for chunk in audio.chunks(1024) {
             rx.process(chunk);
         }
-        // The trace is the BPSK stream: one value per data symbol, 128 a frame.
-        let soft = rx.coded_stream();
+        // **The trace is two values per data symbol** — the in-phase and the
+        // quadrature part — because the QPSK chains are fed both. The BPSK chain
+        // takes every second one, so that is what the reference's deinterleaver
+        // must be given: one soft decision per data symbol, 128 a frame.
+        let trace = rx.coded_stream();
+        let soft: Vec<f32> = trace.iter().step_by(2).copied().collect();
         let mut bytes: Vec<u8> = Vec::with_capacity(soft.len());
-        for &v in soft {
+        for &v in &soft {
             // Ours: positive is zero; theirs: 255 is one. Clamp to the same
             // saturation their LLR table has (25..230) so the comparison is of
             // decisions, not of scale.
