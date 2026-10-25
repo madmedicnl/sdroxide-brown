@@ -1801,7 +1801,11 @@ fn oc_pins(rx: u8, tx: u8) -> String {
             (0..7).filter(|b| w & (1 << b) != 0).map(|b| (b + 1).to_string()).collect();
         if pins.is_empty() { "—".into() } else { pins.join(", ") }
     };
-    if rx == tx { list(rx) } else { format!("{} / TX {}", list(rx), list(tx)) }
+    if rx == tx {
+        list(rx)
+    } else {
+        tr!("settings-radio-rx-tx-words", rx = list(rx), tx = list(tx))
+    }
 }
 
 /// RTL-SDR interface: which dongle, sample rate, gain/AGC, frequency
@@ -4985,10 +4989,10 @@ pub(in crate::app) fn settings_elad_tab(
             if !ELAD_CAT_BAUDS.contains(&cfg.cat.serial.baud) {
                 ui.add(
                     egui::Label::new(
-                        RichText::new(format!(
-                            "the radio has no {} baud setting — {ELAD_DEFAULT_CAT_BAUD} will be \
-                             used instead",
-                            cfg.cat.serial.baud,
+                        RichText::new(tr!(
+                            "settings-radio-no-such-baud",
+                            baud = cfg.cat.serial.baud,
+                            default = ELAD_DEFAULT_CAT_BAUD
                         ))
                         .color(crate::theme::YELLOW()),
                     )
@@ -6685,10 +6689,9 @@ pub(in crate::app) fn settings_sdrplay_tab(
     // though a receiver were selected.
     if listed.is_none() && !cfg.sdrplay.serial.trim().is_empty() && !devices.is_empty() {
         ui.label(
-            RichText::new(format!(
-                "Serial {} is not among the receivers the SDRplay service reports. Pick one \
-                 of the listed receivers, or replug this one and press Rescan.",
-                cfg.sdrplay.serial.trim()
+            RichText::new(tr!(
+                "settings-radio-sdrplay-serial-missing",
+                serial = cfg.sdrplay.serial.trim()
             ))
             .color(Color32::from_rgb(220, 170, 70)),
         );
@@ -7378,12 +7381,8 @@ pub(in crate::app) fn settings_sdrplay_tab(
             );
             if !maybe_duo {
                 ui.label(
-                    RichText::new(format!(
-                        "Only an RSPduo has a second tuner, and the receiver selected here \
-                         is an {}, so this will do nothing.",
-                        model.label()
-                    ))
-                    .color(Color32::from_rgb(220, 170, 70)),
+                    RichText::new(tr!("settings-radio-rspduo-only", model = model.label()))
+                        .color(Color32::from_rgb(220, 170, 70)),
                 );
             } else if devices.is_empty() {
                 super::note(
@@ -8115,12 +8114,9 @@ pub(in crate::app) fn settings_lime_tab(
         // reads downstream as a transmitter that does not work at all.
         if cfg.lime.tx_gain_db < LimeConfig::LOW_DRIVE_DB {
             ui.label(
-                egui::RichText::new(format!(
-                    "Transmit gain is {:.0} dB, at the bottom of its range — a few microwatts \
-                     out of the board, which will read as nothing on a power meter whatever is \
-                     downstream of it. That is the default so that an armed transmitter cannot \
-                     surprise you; raise it before you key.",
-                    cfg.lime.tx_gain_db
+                egui::RichText::new(tr!(
+                    "settings-radio-lime-tx-gain-low",
+                    db = format!("{:.0}", cfg.lime.tx_gain_db)
                 ))
                 .color(egui::Color32::from_rgb(220, 170, 70)),
             );
