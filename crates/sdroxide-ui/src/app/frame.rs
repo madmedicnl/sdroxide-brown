@@ -841,6 +841,11 @@ impl eframe::App for SdroxideApp {
             crate::theme::apply_visuals(&ctx);
             ctx.request_repaint();
         }
+        if self.applied_language != self.ui_settings.language {
+            self.applied_language = self.ui_settings.language;
+            crate::i18n::set_language(self.applied_language);
+            ctx.request_repaint();
+        }
         // The panadapter and skimmer font sizes need no visuals rewrite —
         // everything they size is laid out per frame — so they are simply
         // re-stored each frame.
@@ -6631,7 +6636,11 @@ mod public_sdr_dead_tests {
     fn a_failure_without_a_previous_pick_marks_nothing() {
         let mut last = None;
         let mut dead = std::collections::HashSet::new();
-        assert!(!charge_failed_public_sdr(Some("Interface change failed: timeout"), &mut last, &mut dead));
+        assert!(!charge_failed_public_sdr(
+            Some("Interface change failed: timeout"),
+            &mut last,
+            &mut dead
+        ));
         assert!(dead.is_empty());
     }
 }

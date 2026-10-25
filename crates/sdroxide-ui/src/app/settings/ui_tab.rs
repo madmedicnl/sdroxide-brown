@@ -16,6 +16,7 @@ use eframe::egui::{self, Color32, ComboBox, RichText};
 use sdroxide_types::{BandplanKind, CallsignStyle, FreqStyle, SpeechSettings, SpotKind, Verbosity};
 
 use crate::colormap;
+use crate::i18n::{Tr, tr};
 
 use crate::app::settings::enum_combo;
 use crate::app::settings::general::device_combo;
@@ -133,24 +134,12 @@ pub(in crate::app) fn settings_ui_tab(
         enum_combo(ui, "ui-theme", &mut cfg.theme, &UiTheme::ALL, UiTheme::label);
         ui.end_row();
 
-        ui.label("Button style");
-        enum_combo(
-            ui,
-            "ui-btn-style",
-            &mut cfg.button_style,
-            &ChromeStyle::ALL,
-            ChromeStyle::label,
-        );
+        ui.label(tr!("settings-ui-theme"));
+        enum_combo(ui, "ui-theme", &mut cfg.theme, &UiTheme::ALL, UiTheme::tr);
         ui.end_row();
 
-        ui.label("Window style");
-        enum_combo(
-            ui,
-            "ui-win-style",
-            &mut cfg.window_style,
-            &ChromeStyle::ALL,
-            ChromeStyle::label,
-        );
+        ui.label(tr!("settings-ui-button-style"));
+        enum_combo(ui, "ui-btn-style", &mut cfg.button_style, &ChromeStyle::ALL, ChromeStyle::tr);
         ui.end_row();
 
         ui.label("Updates");
@@ -240,15 +229,19 @@ pub(in crate::app) fn settings_ui_tab(
 
         ui.label("Screen update rate");
         ComboBox::from_id_salt("ui-fps")
-            .selected_text(format!("{} fps", cfg.frame_rate_fps))
+            .selected_text(tr!("settings-ui-fps", fps = cfg.frame_rate_fps))
             .show_styled(ui, |ui| {
                 for f in UiSettings::FPS_OPTIONS {
-                    ui.selectable_value(&mut cfg.frame_rate_fps, f, format!("{f} fps"));
+                    ui.selectable_value(
+                        &mut cfg.frame_rate_fps,
+                        f,
+                        tr!("settings-ui-fps", fps = f),
+                    );
                 }
             });
         ui.end_row();
 
-        ui.label("Waterfall palette");
+        ui.label(tr!("settings-ui-palette"));
         ComboBox::from_id_salt("ui-palette")
             .selected_text(colormap::NAMES[cfg.waterfall_palette.min(colormap::NAMES.len() - 1)])
             .show_styled(ui, |ui| {
@@ -258,7 +251,7 @@ pub(in crate::app) fn settings_ui_tab(
             });
         ui.end_row();
 
-        ui.label("Tuning buttons");
+        ui.label(tr!("settings-ui-tuning-buttons"));
         ui.horizontal(|ui| {
             crate::chrome::checkbox(ui, &mut cfg.tune_step_buttons, "Show on phone and tablet")
                 .on_hover_text(
@@ -277,35 +270,32 @@ pub(in crate::app) fn settings_ui_tab(
             crate::chrome::checkbox(
                 ui,
                 &mut cfg.tune_step_round_first,
-                "First press snaps to the step",
+                tr!("settings-ui-tuning-snap"),
             )
-            .on_hover_text(
-                "A dial left between two multiples of the step goes to the next one in the \
-                 direction pressed — 7 074 300 goes up to 7 075 000 at a 1 kHz step, down to \
-                 7 074 000. After that the buttons move by the step as usual. Off, every press \
-                 moves by exactly the step.",
-            );
+            .on_hover_text(tr!("settings-ui-tuning-snap", "hint"));
             ui.end_row();
         }
 
-        ui.label("Waterfall smoothing");
-        crate::chrome::checkbox(ui, &mut cfg.waterfall_smooth, "Interpolate").on_hover_text(
-            "Blend each screen pixel with the bins and rows around it, so a signal looks \
-                 continuous where the display is wider than the transform. Turn it off for a \
-                 rectangular waterfall — one block per bin, one per row — which is what \
-                 reading a signal's shape off the picture needs: an interpolated signal cannot \
-                 be told apart from a genuinely wider one. A bigger FFT (the FFT chip) is the \
-                 other half of that.",
-        );
+        ui.label(tr!("settings-ui-smoothing"));
+        crate::chrome::checkbox(
+            ui,
+            &mut cfg.waterfall_smooth,
+            tr!("settings-ui-smoothing-interpolate"),
+        )
+        .on_hover_text(tr!("settings-ui-smoothing-interpolate", "hint"));
         ui.end_row();
 
         ui.label("Spectrum background");
         ui.horizontal(|ui| {
-            crate::chrome::checkbox(ui, &mut cfg.spectrum_gradient, "Gradient");
+            crate::chrome::checkbox(
+                ui,
+                &mut cfg.spectrum_gradient,
+                tr!("settings-ui-background-gradient"),
+            );
             ui.add_enabled_ui(cfg.spectrum_gradient, |ui| {
-                ui.label("top");
+                ui.label(tr!("settings-ui-background-top"));
                 ui.color_edit_button_srgb(&mut cfg.gradient_top);
-                ui.label("bottom");
+                ui.label(tr!("settings-ui-background-bottom"));
                 ui.color_edit_button_srgb(&mut cfg.gradient_bottom);
             });
         });
@@ -407,20 +397,17 @@ pub(in crate::app) fn settings_ui_tab(
         });
         ui.end_row();
 
-        ui.label("Skimmer font size");
-        enum_combo(ui, "ui-skim-font", &mut cfg.skimmer_font_size, &FontSize::ALL, FontSize::label);
+        ui.label(tr!("settings-ui-skimmer-font"));
+        enum_combo(ui, "ui-skim-font", &mut cfg.skimmer_font_size, &FontSize::ALL, FontSize::tr);
         ui.end_row();
 
-        ui.label("Waterfall / spectrum font size");
-        enum_combo(ui, "ui-wf-font", &mut cfg.waterfall_font_size, &FontSize::ALL, FontSize::label);
+        ui.label(tr!("settings-ui-waterfall-font"));
+        enum_combo(ui, "ui-wf-font", &mut cfg.waterfall_font_size, &FontSize::ALL, FontSize::tr);
         ui.end_row();
 
-        ui.label("Interface font size").on_hover_text(
-            "Scales the whole interface — menus, dialogs, windows, the radio \
-             tabs, the top bar and its buttons. The two sizes above are \
-             relative to it.",
-        );
-        enum_combo(ui, "ui-menu-font", &mut cfg.menu_font_size, &FontSize::ALL, FontSize::label);
+        ui.label(tr!("settings-ui-interface-font"))
+            .on_hover_text(tr!("settings-ui-interface-font", "hint"));
+        enum_combo(ui, "ui-menu-font", &mut cfg.menu_font_size, &FontSize::ALL, FontSize::tr);
         ui.end_row();
 
         ui.label("Simple UI").on_hover_text(
@@ -839,7 +826,9 @@ pub(in crate::app) fn settings_ui_tab(
 
     let Some(cloud_march) = cloud_march else { return };
     ui.add_space(14.0);
-    ui.label(RichText::new("3D view").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(
+        RichText::new(tr!("settings-ui-3d-view")).size(14.0).strong().color(crate::theme::CYAN()),
+    );
     ui.add_space(6.0);
     egui::Grid::new("ui-grid-3d")
         .num_columns(2)
@@ -881,10 +870,10 @@ pub(in crate::app) fn speech_settings(
     status: &SpeechStatus,
     test: &mut bool,
 ) {
-    ui.label(RichText::new("Voice announcements").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(RichText::new(tr!("speech-title")).size(14.0).strong().color(crate::theme::CYAN()));
     ui.add_space(6.0);
-    crate::chrome::checkbox(ui, &mut cfg.enabled, "Speak changes to the radio")
-        .on_hover_text("Reads out what changed, so the radio can be operated without seeing it");
+    crate::chrome::checkbox(ui, &mut cfg.enabled, tr!("speech-enabled"))
+        .on_hover_text(tr!("speech-enabled", "hint"));
 
     ui.add_enabled_ui(cfg.enabled, |ui| {
         egui::Grid::new("speech-grid")
@@ -965,7 +954,7 @@ pub(in crate::app) fn speech_settings(
 
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if ui.button("Test").clicked() {
+            if ui.button(tr!("speech-test")).clicked() {
                 *test = true;
             }
             if let Some(note) = status.note() {
@@ -1072,12 +1061,11 @@ pub(in crate::app) fn speech_settings(
             );
             ui.add_enabled_ui(cfg.tune.swr_while_tuning, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Every");
-                    crate::chrome::slider(
+                    crate::chrome::checkbox(ui, &mut cfg.text.cw, tr!("speech-text-cw"));
+                    crate::chrome::checkbox(
                         ui,
-                        egui::Slider::new(&mut cfg.tune.period_s, 1.0..=10.0)
-                            .step_by(0.5)
-                            .suffix(" s"),
+                        &mut cfg.text.rtty_psk,
+                        tr!("speech-text-rtty-psk"),
                     );
                 });
             });
@@ -1120,12 +1108,57 @@ pub(in crate::app) fn speech_settings(
                     ui.end_row();
                 });
 
-            ui.add_space(6.0);
-            crate::chrome::checkbox(ui, &mut cfg.duck_on_ptt, "Stay quiet while transmitting")
-                .on_hover_text(
-                    "Speech goes to your speakers, and therefore into your microphone. High-SWR \
-                 warnings still get through.",
+            ui.add_space(8.0);
+            ui.label(RichText::new(tr!("speech-tuning-up")).strong());
+            crate::chrome::checkbox(
+                ui,
+                &mut cfg.tune.swr_while_tuning,
+                tr!("speech-swr-while-tuning"),
+            );
+            ui.add_enabled_ui(cfg.tune.swr_while_tuning, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(tr!("speech-swr-every"));
+                    crate::chrome::slider(
+                        ui,
+                        egui::Slider::new(&mut cfg.tune.period_s, 1.0..=10.0)
+                            .step_by(0.5)
+                            .suffix(" s"),
+                    );
+                });
+            });
+            crate::chrome::checkbox(
+                ui,
+                &mut cfg.tune.summary_after_tune,
+                tr!("speech-swr-summary"),
+            );
+            crate::chrome::checkbox(ui, &mut cfg.tune.alarm_always, tr!("speech-swr-alarm"));
+
+            ui.add_space(8.0);
+            ui.label(RichText::new(tr!("speech-how-read")).strong());
+            egui::Grid::new("speech-style").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
+                ui.label(tr!("speech-frequencies"));
+                crate::app::settings::enum_combo(
+                    ui,
+                    "speech-freq-style",
+                    &mut cfg.freq_style,
+                    &FreqStyle::ALL,
+                    FreqStyle::tr,
                 );
+                ui.end_row();
+                ui.label(tr!("speech-callsigns"));
+                crate::app::settings::enum_combo(
+                    ui,
+                    "speech-call-style",
+                    &mut cfg.callsign_style,
+                    &CallsignStyle::ALL,
+                    CallsignStyle::tr,
+                );
+                ui.end_row();
+            });
+
+            ui.add_space(6.0);
+            crate::chrome::checkbox(ui, &mut cfg.duck_on_ptt, tr!("speech-quiet-on-tx"))
+                .on_hover_text(tr!("speech-quiet-on-tx", "hint"));
         });
     });
 

@@ -28,6 +28,7 @@ mod fuzzy;
 mod hell;
 mod help;
 mod hfdl_map;
+mod i18n;
 mod input;
 /// Which layout the window wears — desktop strip, tablet menus, or the compact
 /// phone strip — and the metrics that follow from it.
@@ -40,11 +41,6 @@ mod multi;
 mod prop_map;
 #[cfg(feature = "remote")]
 mod remote;
-/// Test-only helpers shared across the crate — see [`test_support::run_frame`]
-/// for the one that matters: a frame's texture deltas have to be taken, or
-/// `epaint` asserts in `Drop` and takes the whole test binary with it.
-#[cfg(test)]
-mod test_support;
 /// Asking egui for the next frame at the rate actually asked for.
 pub mod repaint;
 mod rf_paint;
@@ -60,6 +56,11 @@ mod sstv;
 mod sstv_composer;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test_raster;
+/// Test-only helpers shared across the crate — see [`test_support::run_frame`]
+/// for the one that matters: a frame's texture deltas have to be taken, or
+/// `epaint` asserts in `Drop` and takes the whole test binary with it.
+#[cfg(test)]
+mod test_support;
 pub mod theme;
 mod time;
 mod tooltip_copy;

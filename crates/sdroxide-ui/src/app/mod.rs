@@ -33,6 +33,7 @@ pub(in crate::app) mod aircraft_share;
 pub(in crate::app) mod aircraft_stats;
 pub(in crate::app) mod aircraft_watch;
 pub(in crate::app) mod alerts;
+pub(in crate::app) mod antenna;
 pub(in crate::app) mod auto_mode;
 pub(in crate::app) mod awards;
 pub(in crate::app) mod bands;
@@ -40,6 +41,7 @@ pub(in crate::app) mod bands;
 /// off the desktop and a browser has one window with nowhere to put it.
 #[cfg(not(target_arch = "wasm32"))]
 pub(in crate::app) mod classic;
+mod colour_edit;
 pub(in crate::app) mod contest;
 #[cfg(all(not(target_arch = "wasm32"), target_os = "linux"))]
 pub(in crate::app) mod cw_key;
@@ -48,7 +50,6 @@ pub(in crate::app) mod drm;
 pub(in crate::app) mod duo_power;
 pub(in crate::app) mod enigma;
 pub(in crate::app) mod extras;
-pub(in crate::app) mod antenna;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
 pub(in crate::app) mod hd;
@@ -62,7 +63,6 @@ pub(in crate::app) mod logbook;
 pub(in crate::app) mod morse;
 pub(in crate::app) mod net;
 pub(in crate::app) mod panels;
-mod colour_edit;
 pub(crate) mod persist;
 pub(in crate::app) mod playback;
 pub(in crate::app) mod publicsdr;
@@ -484,6 +484,11 @@ pub struct SdroxideApp {
     /// factor, for the same reason — and so the zoom is left alone in between,
     /// where it belongs to egui's own ctrl+plus / ctrl+minus.
     applied_ui_font: sdroxide_types::FontSize,
+    /// The interface language last loaded, for the same reason: the picker in
+    /// the UI tab takes effect on the next frame. Per tab like the look, so a
+    /// second tab holding the setting from before the change does not switch
+    /// the whole window back.
+    applied_language: sdroxide_types::UiLanguage,
     /// Spoken announcements: the state machine that decides what to say, and
     /// the synthesizer that says it. Always present — switched off, it holds a
     /// null sink and costs a comparison per event.
@@ -1999,6 +2004,7 @@ impl SdroxideApp {
         crate::theme::set_bandplan_colors(&ui_settings.bandplan_colors);
         crate::theme::set_map_cities(ui_settings.map_cities);
         crate::theme::set_ui_zoom(ui_settings.ui_zoom);
+        crate::i18n::set_language(ui_settings.language);
         crate::theme::apply(egui_ctx);
         // What this renderer will carry. Gathered here because it is the one
         // place that holds the render state and the controller at once, and
@@ -2123,6 +2129,7 @@ impl SdroxideApp {
             applied_look: (ui_settings.theme, ui_settings.button_style, ui_settings.window_style),
             classic_collapsed: false,
             applied_ui_font: ui_settings.menu_font_size,
+            applied_language: ui_settings.language,
             speech: speech::SpeechRuntime::new(load_speech_settings(storage)),
             speech_voices: Vec::new(),
             alerts: alerts::AlertRuntime::station(load_alerts_settings(storage)),
@@ -2452,7 +2459,8 @@ impl SdroxideApp {
             prop_heat: Default::default(),
             night_shade: Default::default(),
             wspr_spots: Vec::new(),
-            wspr_sort: 0,            pi4_spots: Vec::new(),
+            wspr_sort: 0,
+            pi4_spots: Vec::new(),
             digi_hover_ll: None,
             digi_free_text: String::new(),
             flags: Default::default(),

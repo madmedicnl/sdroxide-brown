@@ -1084,12 +1084,12 @@ fn tx_eq_band_row(
     ui.end_row();
 }
 
-pub(in crate::app) fn enum_combo<T: PartialEq + Copy>(
+pub(in crate::app) fn enum_combo<T: PartialEq + Copy, L: Into<egui::WidgetText>>(
     ui: &mut egui::Ui,
     id: &str,
     cur: &mut T,
     all: &[T],
-    label: impl Fn(T) -> &'static str,
+    label: impl Fn(T) -> L,
 ) {
     ComboBox::from_id_salt(id).selected_text(label(*cur)).show_styled(ui, |ui| {
         for &opt in all {
@@ -3760,7 +3760,12 @@ impl SdroxideApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     use sdroxide_types::DetachableModule;
-                    ui.label(RichText::new("Detachable windows").size(14.0).strong().color(crate::theme::CYAN()));
+                    ui.label(
+                        RichText::new("Detachable windows")
+                            .size(14.0)
+                            .strong()
+                            .color(crate::theme::CYAN()),
+                    );
                     ui.add_space(6.0);
                     note(
                         ui,
@@ -3789,18 +3794,12 @@ impl SdroxideApp {
                     if any_out || any_in {
                         ui.label("");
                         ui.horizontal(|ui| {
-                            if any_out
-                                && crate::chrome::chip(ui, false, "DOCK ALL")
-                                    .clicked()
-                            {
+                            if any_out && crate::chrome::chip(ui, false, "DOCK ALL").clicked() {
                                 for m in DetachableModule::ALL {
                                     io.ui_edit.set_detached(m, false);
                                 }
                             }
-                            if any_in
-                                && crate::chrome::chip(ui, false, "UNDOCK ALL")
-                                    .clicked()
-                            {
+                            if any_in && crate::chrome::chip(ui, false, "UNDOCK ALL").clicked() {
                                 for m in DetachableModule::ALL {
                                     io.ui_edit.set_detached(m, true);
                                 }
@@ -3810,7 +3809,9 @@ impl SdroxideApp {
                     }
                 }
                 ui.add_space(10.0);
-                ui.label(RichText::new("Tool windows").size(12.0).strong().color(crate::theme::CYAN()));
+                ui.label(
+                    RichText::new("Tool windows").size(12.0).strong().color(crate::theme::CYAN()),
+                );
                 ui.add_space(4.0);
                 note(ui, "Panels converted to floating windows. Their open state is remembered.");
                 ui.add_space(4.0);
