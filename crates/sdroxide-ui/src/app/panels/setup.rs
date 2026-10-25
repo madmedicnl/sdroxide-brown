@@ -4,6 +4,7 @@
 //! panels share, reachable from any of them. The identity half is the same
 //! store the Settings dialog's General tab edits.
 
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::Band;
 use sdroxide_types::Command;
@@ -39,13 +40,13 @@ impl SdroxideApp {
         // header, so this dialog only carries the shared identity + the
         // message templates the slotted QSO modes share.
         let title = if mode.is_aprs() {
-            "APRS Setup".to_string()
+            tr!("setup-aprs-setup").to_string()
         } else if mode.is_packet() {
-            "Packet Setup".to_string()
+            tr!("setup-packet-setup").to_string()
         } else if mode.is_text_modem() || mode.is_hell() || mode.is_js8() {
-            format!("{} Setup", mode.label())
+            tr!("setup-mode-setup", mode = mode.label())
         } else {
-            "FT8 / FT4 / FT2 Setup".to_string()
+            tr!("setup-ft8-ft4-ft2-setup").to_string()
         };
         let open = self.tool_window(
             ctx,
