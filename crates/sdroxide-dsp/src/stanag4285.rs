@@ -3202,4 +3202,65 @@ mod tests {
         // And nothing is duplicated or invented.
         assert_eq!(chains.len(), 12, "twelve branches: 4 BPSK rates x 2 signs + 4 QPSK");
     }
+
+    /// **Our deinterleaver and Viterbi against the reference decoder's own soft
+    /// decisions.**
+    ///
+    /// The reference implementation (`luwangg/signal-analysis`, driven by a
+    /// small C++ driver in `/tmp/opencode/sa`) decodes this station's capture:
+    /// its ITA2 reading is `RYRYRYRY…`. This takes *its* 128 soft decisions per
+    /// frame, runs **our** deinterleaver and Viterbi over them, and compares the
+    /// bits. If they agree, the two implementations' coding chain is the same and
+    /// the fault is in the soft decisions this receiver makes — i.e. the front
+    /// end, not the code.
+    #[test]
+    #[ignore]
+    fn the_reference_soft_decisions_through_our_chain() {
+        let soft_path = std::env::var("SDROXIDE_S4285_REF_SOFT")
+            .unwrap_or_else(|_| "/tmp/opencode/ref_soft.bin".into());
+        let bits_path = std::env::var("SDROXIDE_S4285_REF_BITS")
+            .unwrap_or_else(|_| "/tmp/opencode/ref_bits_clean.txt".into());
+        let raw = std::fs::read(&soft_path).expect("ref soft");
+        let theirs = std::fs::read_to_string(&bits_path).expect("ref bits");
+        let theirs: Vec<u8> =
+            theirs.trim().bytes().map(|b| if b == b'1' { 1 } else { 0 }).collect();
+        assert_eq!(raw.len() % 128, 0, "not whole frames");
+        let frames = raw.len() / 128;
+        eprintln!("reference: {frames} frames, {} bits", theirs.len());
+
+        // Their values are 0..255 with 128 as the erasure and **high = one**;
+        // ours are signed with positive = zero, so `128 - v` is the same number
+        // the other way round. Only the sign and relative weight matter to the
+        // metric.
+        let mut de = fec::ConvInterleaver::deinterleaver(fec::CodedRate::Bps600.j());
+        let mut deint: Vec<f32> = Vec::with_capacity(raw.len());
+        for &v in &raw {
+            deint.push(de.push(128.0 - v as f32));
+        }
+        let mut ours: Vec<u8> = Vec::new();
+        for chunk in deint.chunks_exact(256) {
+            let pairs = fec::average_pairs(chunk, 1);
+            ours.extend(fec::viterbi_decode(&pairs));
+        }
+        eprintln!("ours: {} bits", ours.len());
+        let text: String = ours.iter().map(|b| if *b == 1 { '1' } else { '0' }).collect();
+        let _ = std::fs::write("/tmp/opencode/our_bits_on_ref_soft.txt", &text);
+        let n = ours.len().min(theirs.len());
+        let same = (0..n).filter(|&i| ours[i] == theirs[i]).count();
+        eprintln!("agree on {same} of {n} bits ({:.1}%)", 100.0 * same as f64 / n as f64);
+        // Also look for the reference's own text: ITA2 5N1.5 over their bits.
+        if let Some(t) = fec::message_text(&theirs) {
+            eprintln!("reference bits as text: {:?}", &t[..t.len().min(120)]);
+        }
+        if let Some(t) = fec::message_text(&ours) {
+            eprintln!("our bits on their soft decisions: {:?}", &t[..t.len().min(120)]);
+        }
+        // **A measurement, not a gate.** Agreement here is 36.5 % raw and 66.5 %
+        // at the best alignment, so the two chains are *not* the same machine:
+        // the reference's metric is an XOR of saturated bytes (a hard decision in
+        // disguise, `viterbi2.hpp`), ours is a soft correlation. What this probe
+        // establishes is that the reference decodes this capture — its ITA2
+        // reading is `RYRYRYRY…` — and ours does not, on the same soft
+        // decisions. The next session starts from that.
+    }
 }

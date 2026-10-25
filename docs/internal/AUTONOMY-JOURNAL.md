@@ -69,18 +69,39 @@ which leaves the demodulated symbols themselves as the suspect.
 - soft-decision polarity, pair order and value shaping — all variants run, none
   frames a message.
 
-**Not done / blocked.** The suspect is now the **demodulated symbol stream**:
-ours comes from `frame_symbols`/`coded_symbols` (plain, least-squares or DFE), and
-the reference's comes from its own 5-samples/symbol frame detector and LMS
-equaliser. Deciding between them needs the reference run on the same wav, which
-needs a small standalone C++ driver around its headers (no octave here) — that is
-the next step and it is bounded.
+**Then the reference was driven on the same audio, and it decodes.** A small
+standalone C++ driver around its headers (no Octave here) is in
+[`tools/s4285-reference/`](../../tools/s4285-reference/) with the commands that
+built it. Its ITA2 reading of this capture is:
 
-**Next.** Write that driver, get their bit stream for this capture, and diff the
-symbol decisions. If theirs reads and ours does not, port their front end into
-the coded path (the equaliser work is already there for the display). If neither
-reads, the transmission is not the open test tape the manual describes, and the
-material question comes back — but with 283 frames in hand, not 82.
+```
+LTRS… AVUA FIG S CH  RYRYRYRYRYRYRYRY  SGSGSGSG  NNNN …
+```
+
+`RYRY` is the French Navy test tape. **So the capture is good, the payload is
+readable, and the fault is ours.**
+
+**And the two coding chains are not the same machine.** Feeding the reference's
+own 128 soft decisions per frame (367 frames dumped from its equaliser) through
+*our* deinterleaver and Viterbi and comparing bit for bit: 36.5 per cent agree
+raw, 66.5 per cent at the best alignment — not the ~100 per cent that would mean
+"same chain, different front end". Their metric is an XOR of saturated bytes
+(`viterbi2.hpp`: `sym0 ^ 255`), a hard decision in disguise; ours is a soft
+correlation. Both decode a clean signal; on a marginal one they diverge.
+
+**Not done / blocked.** Two faults, in this order:
+1. **The Viterbi/metric** — port the reference's exactly and A/B against its bit
+   stream on its own soft decisions until the two agree; that is pure algorithm
+   work with a ground truth already on disk (`ref_soft.bin`, `ref_bits_clean.txt`).
+2. **The soft decisions** — ours come from a 11-tap DFE judged by *constellation
+   concentration*, theirs from a 121-tap fractionally-spaced LMS DFE judged by
+   whether the bits decode. On this recording the constellation metric prefers a
+   filter that does not decode, which is this journal's own recurring trap: the
+   instrument did not measure the thing.
+
+**Next.** Do (1) first — it is bounded and has a pass/fail. Then (2): a longer
+DFE trained on sync + references, swept against **decoded bits**, not
+concentration.
 
 
 
