@@ -19,6 +19,7 @@ use sdroxide_types::AdsbAircraft;
 use super::aircraft::{badge_chip, provenance_chip};
 use super::aircraft_card::{self, CardKey, icao_hex, source_label};
 use super::aircraft_online::{self, Badge, OnlineState, Provenance, Reason, Row, ThumbStatus};
+use super::aircraft_online_io::OnlineClient;
 use super::aircraft_registry::{AircraftCard, AircraftRegistry, Source};
 
 /// Width of the card, points.
@@ -188,6 +189,18 @@ pub(in crate::app) fn draw(
     card: &HoverCard,
     texture: Option<&egui::TextureHandle>,
 ) -> egui::Rect {
+    draw_inner(ui, card, texture, None, LookupOffer::None)
+}
+
+/// [`draw`] for the tooltip, or for the pinned card when `pin` is given: there
+/// the link can be followed, the close button is drawn and the lookup is offered.
+fn draw_inner(
+    ui: &mut egui::Ui,
+    card: &HoverCard,
+    texture: Option<&egui::TextureHandle>,
+    mut pin: Option<&mut PinnedOut>,
+    offer: LookupOffer,
+) -> egui::Rect {
     let gray = crate::theme::gray(160);
     ui.scope(|ui| {
         ui.set_max_width(HOVER_W);
@@ -196,6 +209,15 @@ pub(in crate::app) fn draw(
         ui.horizontal(|ui| {
             ui.label(RichText::new(&card.title).strong().size(13.0));
             provenance_chip(ui, card.provenance);
+            if let Some(out) = pin.as_deref_mut() {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let r = ui.small_button("✕").on_hover_text("Close (Esc)");
+                    if r.clicked() {
+                        out.actions.push(PinAction::Close);
+                    }
+                    out.close = Some(r.rect);
+                });
+            }
         });
         for r in &card.lines {
             ui.horizontal(|ui| {
@@ -233,22 +255,151 @@ pub(in crate::app) fn draw(
                     .truncate(),
                 );
                 // A tooltip goes with the pointer, so the link cannot be
-                // followed from here: it is named, and clickable in the card.
-                if p.page_url.is_some() {
-                    ui.label(
-                        RichText::new("Planespotters")
-                            .size(10.0)
-                            .color(ui.visuals().hyperlink_color),
-                    );
+                // followed from there: it is named, and clickable in the
+                // pinned card.
+                match (&p.page_url, pin.as_deref_mut()) {
+                    (Some(url), Some(out)) => {
+                        let r = ui.link(RichText::new("Planespotters").size(10.0));
+                        if r.clicked() {
+                            out.actions.push(PinAction::OpenLink(url.clone()));
+                        }
+                        out.link = Some(r.rect);
+                    }
+                    (Some(_), None) => {
+                        ui.label(
+                            RichText::new("Planespotters")
+                                .size(10.0)
+                                .color(ui.visuals().hyperlink_color),
+                        );
+                    }
+                    (None, _) => {}
                 }
             });
         }
         if let Some(f) = card.footer {
             ui.label(RichText::new(f).size(10.0).color(crate::theme::gray(130)));
         }
+        if let Some(out) = pin.as_deref_mut() {
+            match offer {
+                LookupOffer::Button => {
+                    ui.add_space(4.0);
+                    let r = ui.small_button("Look up online").on_hover_text(
+                        "Ask this station's relay about this aircraft: type, operator, \
+                         route and a photo. Nothing is asked until you press it.",
+                    );
+                    if r.clicked() {
+                        out.actions.push(PinAction::Lookup);
+                    }
+                    out.lookup = Some(r.rect);
+                }
+                LookupOffer::Asking => {
+                    ui.add_space(4.0);
+                    ui.label(RichText::new("asking the station…").size(10.0).weak());
+                }
+                LookupOffer::Waiting => {
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new("another lookup is running — one at a time")
+                            .size(10.0)
+                            .weak(),
+                    );
+                }
+                LookupOffer::None => {}
+            }
+        }
     })
     .response
     .rect
+}
+
+// ── the pinned card ───────────────────────────────────────────────────────
+
+/// What the pinned card offers about the online half.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) enum LookupOffer {
+    /// Nothing to press: there is no one to ask, or it has been asked already.
+    None,
+    /// "Look up online" can be pressed.
+    Button,
+    /// The question for this aircraft is out.
+    Asking,
+    /// Another aircraft's question is out; one at a time.
+    Waiting,
+}
+
+/// Whether the pinned card offers the lookup. Only an aircraft nobody has asked
+/// about, on a station that will answer: once asked, whatever came back is what
+/// the card says, and the card's own back-off decides about asking again.
+pub(in crate::app) fn lookup_offer(
+    state: &OnlineState,
+    has_station: bool,
+    line_busy: bool,
+) -> LookupOffer {
+    match state {
+        OnlineState::Idle if has_station && line_busy => LookupOffer::Waiting,
+        OnlineState::Idle if has_station => LookupOffer::Button,
+        OnlineState::Loading => LookupOffer::Asking,
+        _ => LookupOffer::None,
+    }
+}
+
+/// What the pinned card asks of its owner when it is pressed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::app) enum PinAction {
+    Close,
+    OpenLink(String),
+    Lookup,
+}
+
+/// What drawing the pinned card produced: what was pressed, and where the
+/// things that can be pressed are.
+#[derive(Debug, Clone, Default)]
+pub(in crate::app) struct PinnedOut {
+    pub area: Option<egui::Rect>,
+    pub actions: Vec<PinAction>,
+    pub link: Option<egui::Rect>,
+    pub close: Option<egui::Rect>,
+    pub lookup: Option<egui::Rect>,
+}
+
+/// The card for an aircraft, from what the app already holds: the registry, the
+/// station's answer, the thumbnail if it is in memory. The hover and the pinned
+/// card both come from here, so they cannot disagree. It only reads.
+pub(in crate::app) fn card_view<'a>(
+    live: &AdsbAircraft,
+    registry: &AircraftRegistry,
+    online: &'a OnlineClient,
+    has_station: bool,
+    home: Option<(f64, f64)>,
+    now: i64,
+) -> (HoverCard, Option<&'a egui::TextureHandle>) {
+    let icao = live.icao & 0xff_ffff;
+    let state = online.store.state_for(icao, has_station);
+    let thumb_url = match state {
+        OnlineState::Ready(info) => info.photo.as_ref().map(|p| p.thumb_url.as_str()),
+        _ => None,
+    };
+    let thumb = thumb_url.map_or(ThumbStatus::NotTried, |u| online.thumb_status(u));
+    let card = hover_card(live, registry.card(icao), state, thumb, home, now);
+    let tex = card
+        .photo
+        .as_ref()
+        .and_then(|p| p.thumb_url.as_deref())
+        .and_then(|u| online.thumb_texture(u));
+    (card, tex)
+}
+
+/// Draw the pinned card: the same lines as the hover, with the link that can be
+/// followed, a close button and, where offered, the lookup button.
+pub(in crate::app) fn draw_pinned(
+    ui: &mut egui::Ui,
+    card: &HoverCard,
+    texture: Option<&egui::TextureHandle>,
+    offer: LookupOffer,
+) -> PinnedOut {
+    let mut out = PinnedOut::default();
+    out.area = Some(draw_inner(ui, card, texture, Some(&mut out), offer));
+    out
 }
 
 #[cfg(test)]
@@ -636,6 +787,205 @@ mod tests {
     }
 
     // ── the hover asks for nothing ────────────────────────────────────────
+
+    // ── the pinned card ───────────────────────────────────────────────────
+
+    fn registry_with_live() -> AircraftRegistry {
+        let mut r = AircraftRegistry::default();
+        r.ingest_adsb(&live());
+        r
+    }
+
+    #[test]
+    fn the_pinned_card_is_the_hover_card() {
+        use super::super::aircraft_online::Answer;
+        let reg = registry_with_live();
+        let mut online = OnlineClient::default();
+        online.store.deliver(0x4840D6, Answer::Info(Box::new(info())), NOW);
+        let (pinned, tex) = card_view(&live(), &reg, &online, true, Some(HOME), NOW);
+        let state = online.store.state_for(0x4840D6, true).clone();
+        let hover =
+            hover_card(&live(), reg.card(0x4840D6), &state, ThumbStatus::NotTried, Some(HOME), NOW);
+        assert_eq!(pinned, hover);
+        assert!(!pinned.lines.is_empty());
+        assert!(tex.is_none(), "no thumbnail has been loaded");
+    }
+
+    #[test]
+    fn the_pinned_link_is_only_a_planespotters_page() {
+        use super::super::aircraft_online::Answer;
+        let reg = registry_with_live();
+        let mut online = OnlineClient::default();
+        online.store.deliver(0x4840D6, Answer::Info(Box::new(info())), NOW);
+        let (c, _) = card_view(&live(), &reg, &online, true, None, NOW);
+        assert_eq!(
+            c.photo.as_ref().and_then(|p| p.page_url.as_deref()),
+            Some("https://www.planespotters.net/photo/12345/x")
+        );
+        let mut other = info();
+        other.photo.as_mut().unwrap().page_url = "https://evil.example/photo/1".into();
+        online.store.deliver(0x4840D6, Answer::Info(Box::new(other)), NOW);
+        let (c, _) = card_view(&live(), &reg, &online, true, None, NOW);
+        let p = c.photo.expect("the credit is still there");
+        assert_eq!(p.page_url, None, "a page that is not Planespotters' is not linked");
+        assert!(p.credit.contains("A. Spotter"));
+    }
+
+    #[test]
+    fn the_pinned_card_shows_the_thumbnail_only_when_already_loaded() {
+        use super::super::aircraft_online::Answer;
+        let reg = registry_with_live();
+        let mut online = OnlineClient::default();
+        online.store.deliver(0x4840D6, Answer::Info(Box::new(info())), NOW);
+        let (c, tex) = card_view(&live(), &reg, &online, true, None, NOW);
+        let p = c.photo.expect("credit and link are there");
+        assert_eq!(p.thumb_url, None, "never loaded, so no picture");
+        assert!(tex.is_none());
+        assert!(p.credit.contains("Planespotters") && p.page_url.is_some());
+    }
+
+    #[test]
+    fn pinning_asks_for_nothing() {
+        use super::super::aircraft_online::{Answer, Want};
+        let reg = registry_with_live();
+        let mut online = OnlineClient::default();
+        online.store.deliver(0x4840D6, Answer::Info(Box::new(info())), NOW);
+        let before = online.store.len();
+        let url = "https://t.plnspttrs.net/12345/abc_t.jpg";
+        let (c, _) = card_view(&live(), &reg, &online, true, Some(HOME), NOW);
+        assert!(c.photo.is_some(), "the card is built from the answer already held");
+        let _ = card_view(&live(), &reg, &online, false, Some(HOME), NOW);
+        assert_eq!(online.store.len(), before);
+        assert_eq!(online.thumb_status(url), ThumbStatus::NotTried, "a pin started a download");
+        // An aircraft only pinned is still one nobody has asked about.
+        let want = Want { icao: 0x123456, callsign: None, registration: None };
+        assert_eq!(online.store.next_request(Some(&want), true, NOW), Some(want));
+    }
+
+    #[test]
+    fn the_lookup_button_is_offered_only_for_an_aircraft_nobody_has_asked_about() {
+        use LookupOffer::*;
+        assert_eq!(lookup_offer(&OnlineState::Idle, true, false), Button);
+        assert_eq!(lookup_offer(&OnlineState::Idle, true, true), Waiting);
+        assert_eq!(lookup_offer(&OnlineState::Loading, true, true), Asking);
+        assert_eq!(lookup_offer(&ready(info()), true, false), None);
+        for r in [Reason::Offline, Reason::Busy, Reason::Unknown] {
+            assert_eq!(
+                lookup_offer(&OnlineState::Unavailable(r), true, false),
+                None,
+                "{r:?} is mended by the back-off, not by a button"
+            );
+        }
+        assert_eq!(lookup_offer(&OnlineState::Idle, false, false), None, "no station");
+    }
+
+    #[test]
+    fn no_lookup_button_when_the_relay_is_off() {
+        use super::super::aircraft_online::Answer;
+        use LookupOffer::*;
+        // Control: the same aircraft on a station that has not said no is offered it.
+        let fresh = super::super::aircraft_online::OnlineStore::default();
+        assert_eq!(lookup_offer(fresh.state_for(1, true), true, false), Button);
+        let mut store = super::super::aircraft_online::OnlineStore::default();
+        // The station says it will not answer: every aircraft's state follows.
+        store.deliver(1, Answer::Unavailable(Reason::Disabled), NOW);
+        for icao in [1_u32, 2, 3] {
+            let st = store.state_for(icao, true);
+            assert_eq!(lookup_offer(st, true, false), None, "{icao}: {st:?}");
+        }
+        let mut store = super::super::aircraft_online::OnlineStore::default();
+        store.deliver(1, Answer::Unavailable(Reason::Unauthorized), NOW);
+        assert_eq!(lookup_offer(store.state_for(2, true), true, false), None);
+        let store = super::super::aircraft_online::OnlineStore::default();
+        assert_eq!(lookup_offer(store.state_for(2, false), false, false), None);
+    }
+
+    // ── pressing the pinned card ──────────────────────────────────────────
+
+    /// One frame of `draw_pinned` in a window of its own, with `events` fed in.
+    fn pinned_frame(
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        card: &HoverCard,
+        offer: LookupOffer,
+    ) -> PinnedOut {
+        let mut raw = egui::RawInput::default();
+        raw.screen_rect =
+            Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+        raw.events = events;
+        let mut out = PinnedOut::default();
+        let mut full = ctx.run_ui(raw, |ui| {
+            out = draw_pinned(ui, card, None, offer);
+        });
+        full.textures_delta.clear();
+        out
+    }
+
+    /// The card, laid out once, then a click at `pick(layout)` in the next frame.
+    fn press(offer: LookupOffer, pick: impl Fn(&PinnedOut) -> Option<egui::Rect>) -> PinnedOut {
+        use super::super::aircraft_online::Answer;
+        let reg = registry_with_live();
+        let mut online = OnlineClient::default();
+        online.store.deliver(0x4840D6, Answer::Info(Box::new(info())), NOW);
+        let (card, _) = card_view(&live(), &reg, &online, true, Some(HOME), NOW);
+        let ctx = egui::Context::default();
+        let laid = pinned_frame(&ctx, vec![], &card, offer);
+        let _ = pinned_frame(&ctx, vec![], &card, offer);
+        let at = pick(&laid).expect("the thing to press was not drawn").center();
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        pinned_frame(
+            &ctx,
+            vec![egui::Event::PointerMoved(at), button(true), button(false)],
+            &card,
+            offer,
+        )
+    }
+
+    #[test]
+    fn pressing_the_link_hands_back_the_page() {
+        let out = press(LookupOffer::None, |o| o.link);
+        assert_eq!(
+            out.actions,
+            [PinAction::OpenLink("https://www.planespotters.net/photo/12345/x".into())]
+        );
+    }
+
+    #[test]
+    fn pressing_the_cross_closes_the_card() {
+        let out = press(LookupOffer::None, |o| o.close);
+        assert_eq!(out.actions, [PinAction::Close]);
+    }
+
+    #[test]
+    fn pressing_the_lookup_button_asks_to_look_up() {
+        let out = press(LookupOffer::Button, |o| o.lookup);
+        assert_eq!(out.actions, [PinAction::Lookup]);
+    }
+
+    #[test]
+    fn the_lookup_button_is_drawn_only_when_offered_and_never_pressable_while_asking() {
+        use super::super::aircraft_online::Answer;
+        let reg = registry_with_live();
+        let online = OnlineClient::default();
+        let _ = Answer::Unavailable(Reason::Offline);
+        let (card, _) = card_view(&live(), &reg, &online, true, Some(HOME), NOW);
+        let ctx = egui::Context::default();
+        for (offer, drawn) in [
+            (LookupOffer::None, false),
+            (LookupOffer::Button, true),
+            (LookupOffer::Asking, false),
+            (LookupOffer::Waiting, false),
+        ] {
+            let out = pinned_frame(&ctx, vec![], &card, offer);
+            assert_eq!(out.lookup.is_some(), drawn, "{offer:?}");
+            assert!(out.actions.is_empty());
+        }
+    }
 
     fn shipped(src: &str) -> &str {
         src.split("\n#[cfg(test)]").next().unwrap_or(src)

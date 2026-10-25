@@ -6083,6 +6083,25 @@ greyed. It is deliberately not faded instead: a dim square at a half-minute-old
 position is still a claim about where an aeroplane is, made in the same ink as
 the true ones, and the map is the one place with no room for a hedge.
 
+**Rest the pointer on an aircraft for its card; click it to pin the card.** The
+hover card lists what your radio heard first (green **radio** badges, with the
+source and how long ago), then, if the station has already been asked, the
+type, operator and route (blue **online** badges). A line nobody has shows `—`.
+The card never asks the internet anything: an aircraft you have not opened or
+looked up simply has no online lines.
+
+A **click** on an aircraft pins its card beside it. The pin stays while you pan
+and zoom, and a click on empty map does not close it; a click on another
+aircraft moves it, **✕** or **Esc** closes it, and it closes by itself when the
+aircraft drops off the map. In the pinned card the **Planespotters** link opens
+the photo's page, and the picture is shown if it has already been loaded.
+
+**Look up online** is the one thing that asks, and only when you press it. It
+appears when you are connected to a station and the aircraft has not been asked
+about, and asks that station's relay for that aircraft alone, one lookup at a
+time. If the station's operator has not switched the relay on, or you are not
+signed in, the card says so instead of offering the button.
+
 #### Setup
 
 **SETUP** in the panel header opens the decoder's own settings.

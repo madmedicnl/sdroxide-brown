@@ -208,6 +208,12 @@ impl OnlineStore {
         self.entries.get(&icao).map_or(&IDLE, |e| &e.state)
     }
 
+    /// Whether a question is out and still being waited for. One at a time:
+    /// while this is true no other aircraft can be asked about.
+    pub(in crate::app) fn line_busy(&self, now: i64) -> bool {
+        self.in_flight.is_some_and(|(_, at)| now - at < FLIGHT_TIMEOUT_S)
+    }
+
     /// The question to send now, if any. Called every frame the card is open:
     /// it answers `Some` once, and then only when a back-off has run out.
     pub(in crate::app) fn next_request(
@@ -477,6 +483,18 @@ mod tests {
     use sdroxide_aircraft_online::{AircraftInfo, Airport, FORMAT_VERSION, Photo, Route, Status};
 
     const NOW: i64 = 1_000_000;
+
+    #[test]
+    fn the_line_is_busy_while_a_question_is_out_and_free_after_its_answer_or_timeout() {
+        let mut st = OnlineStore::default();
+        assert!(!st.line_busy(NOW));
+        let w = Want { icao: 5, callsign: None, registration: None };
+        assert!(st.next_request(Some(&w), true, NOW).is_some());
+        assert!(st.line_busy(NOW + 1));
+        assert!(!st.line_busy(NOW + FLIGHT_TIMEOUT_S), "a question that never came back");
+        st.deliver(5, Answer::Unavailable(Reason::Offline), NOW + 2);
+        assert!(!st.line_busy(NOW + 3));
+    }
 
     fn stamped<T>(value: T, source: Source, age: i64) -> Option<Stamped<T>> {
         Some(Stamped { value, source, at: NOW - age })

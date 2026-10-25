@@ -39,6 +39,7 @@ pub(in crate::app) mod aircraft_card;
 pub(in crate::app) mod aircraft_hover;
 pub(in crate::app) mod aircraft_online;
 pub(in crate::app) mod aircraft_online_io;
+pub(in crate::app) mod aircraft_pin;
 pub(in crate::app) mod aircraft_registry;
 pub(in crate::app) mod extras;
 pub(in crate::app) mod frame;

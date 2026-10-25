@@ -1,7 +1,7 @@
 # TODO — SDR Oxide Brown
 
 What this fork is working on, kept here so it survives a session and is visible
-on the repo. Last updated **2026-10-24** by madmedicnl's agent.
+on the repo. Last updated **2026-10-25** by madmedicnl's agent.
 
 State: `main` at crate **2.1.0**, `PROTO_VERSION` **243** (`VERSION_BYTE`
 `0x3F`) — 242 was 8PSK and 243 voice hunting, both merged on 2026-10-24, and
@@ -34,11 +34,19 @@ maintainer's queue there, not a promise.
    look at whether the CDN lets a browser load the thumbnail. The screen is
    F4NRM's to look at. Asked for by the operator.
 
-0c. **Aircraft hover card — open for review.** Resting the pointer on an aircraft on
+0c. **Aircraft hover card — merged (#205).** Resting the pointer on an aircraft on
    the map shows a compact card: the radio's lines first (green), then the online
    ones the open card has already fetched (blue), the badge at the top, the
    picture only if it is already in memory. It asks for nothing. Asked for by the
    operator.
+
+0d. **Aircraft pinned card — open for review (branch `claude/aircraft-pinned-card`).** A
+   click on an aircraft on the map pins a small card beside it, with a clickable
+   Planespotters link and the thumbnail if it is already in memory. It stays until
+   the ✕ or Esc, or until another aircraft is clicked; a click on empty map does not
+   close it. A click or a hover asks for nothing; a "Look up online" button in the
+   card asks the station's relay for that one aircraft. Left: a look at it on a real
+   screen and a lookup against a station with the relay on. Asked for by the operator.
 
 1. **The mode work — the live queue, and it has its own brief.**
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
