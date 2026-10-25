@@ -154,6 +154,35 @@ pub(in crate::app) fn prop_source_for(mode: Mode) -> Option<sdroxide_types::Prop
     }
 }
 
+/// **The pane's way out**: a window icon for the right-hand end of a panel's own
+/// header row, and a plain function so every panel draws it the same way.
+///
+/// It lives in the header rather than in a row above the pane because there is no
+/// room above it — a row there took a chip off WEFAX's header at 600 pt, and the
+/// pane's own header is where the crowdedness the operator reported is, so the
+/// answer belongs there too. Returns whether it was clicked; the caller calls
+/// [`crate::app::SdroxideApp::detach_operating_panel`].
+///
+/// **Not drawn in a browser**: there is no second window to send a pane to, so
+/// the function is a quiet `false` there rather than a control that does nothing —
+/// and it stays a function so a panel does not have to carry a `cfg` per call.
+pub(in crate::app) fn window_chip(ui: &mut egui::Ui) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
+            .on_hover_text(
+                "WINDOW — move this panel into a window of its own and give the waterfall \
+                 the room back",
+            )
+            .clicked()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = ui;
+        false
+    }
+}
+
 /// A **SAVE** chip for a log a panel holds outside [`sdroxide_types::DigiStatus`]
 /// — HFDL, VDL2, WSPR, PI4 and the skimmer. `text` is built only on click, so a
 /// long log costs nothing until the operator asks for it (issue #533).
@@ -1592,7 +1621,9 @@ mod tests {
                 });
                 rows.push(("NAVTEX", r.response.rect));
                 let r =
-                    ui.scope(|ui| packet::packet_monitor_header(ui, &packet, s, true, &mut cmds));
+                    ui.scope(|ui| {
+                        packet::packet_monitor_header(ui, &packet, s, true, &mut cmds, &mut false)
+                    });
                 rows.push(("packet", r.response.rect));
             })
             .drop_without_applying_deltas();

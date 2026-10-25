@@ -2548,6 +2548,28 @@ impl SdroxideApp {
             });
     }
 
+    /// **Send the operating pane into a window of its own**, and let the waterfall
+    /// take the room back.
+    ///
+    /// Called by the window icon at the right-hand end of a panel's own header row
+    /// (see [`crate::app::panels::window_chip`]). The control lives in the header
+    /// rather than above the pane because there is no room above it: a row there
+    /// was tried first and took a chip off WEFAX's header at 600 pt, which
+    /// `the_fax_header_row_does_not_draw_on_itself` caught. In the header it costs
+    /// nothing — the chip it replaces spelled a word.
+    pub(in crate::app) fn detach_operating_panel(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.ui_settings.set_detached(sdroxide_types::DetachableModule::Panel, true);
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+        }
+        // The browser has no second window to send a pane to, so it has no icon
+        // to click; this is here so a panel that draws one anyway does nothing
+        // surprising.
+        #[cfg(target_arch = "wasm32")]
+        let _ = &self.ui_settings;
+    }
+
     /// Draw a **tool window** — the scanner, the schedule, the logbook and the
     /// rest — either as an egui window in this viewport (docked, the default) or
     /// as its own OS window (undocked). Returns whether it is still open, so the
@@ -4672,6 +4694,64 @@ mod tests {
         assert_eq!(image_window_for(Mode::Sstv), ImageWindow::Sstv);
         assert_eq!(image_window_for(Mode::SstvFm), ImageWindow::Sstv);
         assert_eq!(image_window_for(Mode::Rifp), ImageWindow::Image);
+    }
+
+    /// **The pane has its own way out, in the header that is crowded.**
+    ///
+    /// The operator asked for the detach control at the top right of the panel
+    /// rather than in Settings — *"it gets crowded in some modes in the top of that
+    /// pane"* — and the two other shapes were tried and rejected: a row above the
+    /// panel took a chip off WEFAX's header at 600 pt, and a 21 pt gutter did the
+    /// same by wrapping it, both caught by
+    /// `the_fax_header_row_does_not_draw_on_itself`. It goes where the space was
+    /// made for it: the right-hand end of a panel's own header row, in place of the
+    /// word that chip used to spell.
+    #[test]
+    fn the_pane_has_its_way_out_in_the_header_that_is_crowded() {
+        let src = include_str!("frame.rs");
+        let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
+        assert!(
+            code.contains("fn detach_operating_panel"),
+            "there is no way to send the operating pane into a window"
+        );
+        assert!(
+            code.contains("set_detached(sdroxide_types::DetachableModule::Panel, true)"),
+            "the pane's way out does not detach the operating panel"
+        );
+        // And the panels that carry it, in their own header rows.
+        for (name, panel) in [
+            ("decodes.rs", include_str!("panels/decodes.rs")),
+            ("js8.rs", include_str!("panels/js8.rs")),
+            ("atchat.rs", include_str!("panels/atchat.rs")),
+            ("packet.rs", include_str!("panels/packet.rs")),
+            ("adsb.rs", include_str!("panels/adsb.rs")),
+        ] {
+            assert!(panel.contains("super::window_chip(ui)"), "{name} has no way out of its pane");
+        }
+        // **The shape that broke WEFAX must not come back**: the pane is drawn at
+        // the height it was given, with nothing above it.
+        assert!(
+            code.contains("self.operating_panel(ui, cmds, mode, panel_h);"),
+            "the operating panel is no longer drawn at its own height"
+        );
+    }
+
+    /// And the other half of the crowding: **the setup chip is a gear, without the
+    /// word.** A chip that is already a symbol does not need to spell itself out in
+    /// a header the operator says is crowded, and every one of them keeps a hover
+    /// that names it.
+    #[test]
+    fn the_setup_chip_is_a_gear_without_the_word() {
+        for (name, src) in [
+            ("decodes.rs", include_str!("panels/decodes.rs")),
+            ("js8.rs", include_str!("panels/js8.rs")),
+            ("packet.rs", include_str!("panels/packet.rs")),
+            ("atchat.rs", include_str!("panels/atchat.rs")),
+            ("adsb.rs", include_str!("panels/adsb.rs")),
+        ] {
+            assert!(!src.contains("\"⚙ SETUP\""), "{name}: the setup chip still spells out SETUP");
+            assert!(!src.contains("\"SETUP\""), "{name}: a chip is still labelled SETUP");
+        }
     }
 
     /// **#217 at the frame: entering a mode docks its panel, and opens nothing.**

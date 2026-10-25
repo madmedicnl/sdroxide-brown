@@ -29,6 +29,9 @@ pub(super) fn packet_monitor_header(
     status: Option<&sdroxide_types::DigiStatus>,
     setup_open: bool,
     cmds: &mut Vec<Command>,
+    // Set when the pane's way out was clicked; the caller has the app, this
+    // function does not.
+    detach: &mut bool,
 ) -> bool {
     let mut setup = false;
     ui.horizontal_wrapped(|ui| {
@@ -56,7 +59,11 @@ pub(super) fn packet_monitor_header(
             // chip existed nothing anywhere opened it: an operator told to
             // "set a station callsign in the packet settings first" had
             // nowhere to go and look (issue #159).
-            if crate::chrome::chip(ui, setup_open, RichText::new("⚙ SETUP").size(9.5))
+            // The pane's way out, at the right-hand end of the row this chip is in.
+            if super::window_chip(ui) {
+                *detach = true;
+            }
+            if crate::chrome::chip(ui, setup_open, RichText::new("⚙").size(9.5))
                 .on_hover_text(
                     "Station callsign, speed, TX delay, the digipeater path, the beacon and the \
                      KISS server",
@@ -120,8 +127,19 @@ impl SdroxideApp {
         st: &PacketStatus,
         panel_h: f32,
     ) {
-        if packet_monitor_header(ui, st, self.digi_status.as_ref(), self.show_digi_settings, cmds) {
+        let mut detach = false;
+        if packet_monitor_header(
+            ui,
+            st,
+            self.digi_status.as_ref(),
+            self.show_digi_settings,
+            cmds,
+            &mut detach,
+        ) {
             self.show_digi_settings = !self.show_digi_settings;
+        }
+        if detach {
+            self.detach_operating_panel();
         }
 
         egui::ScrollArea::vertical()

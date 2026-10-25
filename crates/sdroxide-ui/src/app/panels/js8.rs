@@ -313,7 +313,16 @@ impl SdroxideApp {
                 // window, and the JS8 panel is the only one with no other way
                 // in: FT8 reaches it from the QSO area, and the keyboard modes
                 // keep their parameters in the header instead.
-                if crate::chrome::chip(ui, self.show_digi_settings, "⚙ SETUP").clicked() {
+                if super::window_chip(ui) {
+                    self.detach_operating_panel();
+                }
+                if crate::chrome::chip(ui, self.show_digi_settings, "⚙")
+                    .on_hover_text(
+                        "SETUP — callsign, groups, the auto-reply, the beacon interval and the \
+                         status message",
+                    )
+                    .clicked()
+                {
                     self.show_digi_settings = !self.show_digi_settings;
                 }
                 if transmitting {
