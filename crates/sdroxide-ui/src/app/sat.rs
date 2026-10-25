@@ -599,11 +599,7 @@ fn mode_for_link(l: &sdroxide_types::SatLink) -> Mode {
 /// and then found A had been retuned behind their back. The pass-window path
 /// already asked `active_vfo`; the chip did not, and one bug in two places is
 /// exactly what a helper prevents.
-fn tune_commands(
-    link: &sdroxide_types::SatLink,
-    active_vfo: Vfo,
-    active_hz: f64,
-) -> [Command; 2] {
+fn tune_commands(link: &sdroxide_types::SatLink, active_vfo: Vfo, active_hz: f64) -> [Command; 2] {
     [
         Command::SetMode { rx: sdroxide_types::RxId::Main, mode: mode_for_link(link) },
         Command::SetVfo { vfo: active_vfo, hz: lock_downlink_hz(link, active_hz) },
