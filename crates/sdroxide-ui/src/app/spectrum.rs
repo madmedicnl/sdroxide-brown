@@ -145,12 +145,16 @@ fn pick_levels(bins: &[u8], db_floor: f32, db_ceil: f32) -> Option<(f32, f32)> {
     let reach = |clipped: bool, margin: f32| if clipped { 15.0 } else { margin };
     let mut floor = noise - reach(noise <= db_floor + step, 5.0); // noise just above the floor (dark)
     let mut ceil = peak + reach(peak >= db_ceil - step, 6.0); // headroom so strong signals don't clip
-    // Keep a usable dynamic range even on an empty/flat band.
+    // Keep a usable dynamic range even on an empty/flat band — but **anchor it at
+    // the noise, not at the middle of the window**. Centring it put a dead band
+    // half way up the colour map, which in a scheme whose middle is warm is a
+    // wall of yellow and red across a band with nothing on it: reported with an
+    // Airspy HF+ at 768 kSPS and no antenna, where the fitted floor and ceiling
+    // sat 24 dB apart with the noise between them. Anchored at the floor, the
+    // same band reads dark and a signal appearing on it is visible at once.
     let min_range = 24.0;
     if ceil - floor < min_range {
-        let mid = 0.5 * (ceil + floor);
-        floor = mid - 0.5 * min_range;
-        ceil = mid + 0.5 * min_range;
+        ceil = floor + min_range;
     }
     // Clamp to the same bounds as the manual controls.
     let floor = floor.clamp(-160.0, -40.0);
@@ -1845,5 +1849,26 @@ mod focus_tests {
             focus_hz(Mode::RttyFm, dial, sdroxide_types::RTTY_CENTER_HZ, false, false),
             dial
         );
+    }
+
+    /// **A dead band reads dark, not warm.**
+    ///
+    /// When the measured spread is narrower than the minimum range, the fit used
+    /// to centre the window on the noise, which put an empty band half way up the
+    /// colour map. Reported with an Airspy HF+ at 768 kSPS and no antenna: FIT
+    /// left the baseline yellow and red on a band carrying nothing. Anchored at
+    /// the floor, the same band fills the bottom fifth of the map.
+    #[test]
+    fn a_flat_band_is_fitted_to_the_bottom_of_the_map() {
+        // 256 bins of pure noise, all within 3 dB of each other, mapped through a
+        // 100 dB frame.
+        let bins: Vec<u8> = (0..256).map(|i| (120 + (i % 4)) as u8).collect();
+        let (floor, ceil) = super::pick_levels(&bins, -120.0, -20.0).expect("a fit");
+        let range = ceil - floor;
+        assert!((range - 24.0).abs() < 0.5, "the flat band got {range:.1} dB of range");
+        // The noise sits in the bottom quarter of the window.
+        let noise = -120.0 + 121.0 / 255.0 * 100.0;
+        let at = (noise - floor) / range;
+        assert!((0.05..0.30).contains(&at), "the noise sits at {:.0}% of the map", at * 100.0);
     }
 }
