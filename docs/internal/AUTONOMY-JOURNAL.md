@@ -59,6 +59,13 @@ Discussions with IDEA/FEED/REQ in the subject, while the group has moved to
 groups.google.com/g/sdroxide. That one needs an update, not a close, and it is a
 public announcement — the operator's to rewrite.
 
+**Correction, same day, the operator's word.** #73 (the working rules) and #168
+(the etiquette post) are **closed as well**, so the count below is nine plus two:
+#73's rules are kept in `AGENTS.md`, which is the copy every session actually
+reads, and #168's etiquette moved with the discussions to
+groups.google.com/g/sdroxide. Both were listed above as "standing" and the
+operator decided otherwise.
+
 **Measured.** `gh issue list --state open` → 6; discussions closed by this work →
 9; `cargo check` and the tests untouched by it. Numbers in `AGENTS.md` and
 `TODO.md` re-measured from the queue (`AGENTS.md` said five issues and "no open
