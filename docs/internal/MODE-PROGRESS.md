@@ -1463,6 +1463,46 @@ program copied us** — the only one that proves interop).
 | APRS (1) | air | air | — | the bench |
 | UVPacket (1) | no | no | — | receive-only; the burst format decodes a generated frame |
 
+### 2026-10-25 — the coded PSK transmitter, five of the thirty-four
+
+**What changed.** `BPSK63F` and the four single-carrier `R` variants
+(`PSK125R/250R/500R/1000R`) transmit. They were refused with *"the coded PSK
+transmitter is not written"*, which was true and is not any more.
+
+**How, and what was not invented.** The waveform is the receive chain's inverse in
+the reference's own order: MFSK varicode → `ConvCode::PSK_R` → the `2 × 2 × idepth`
+interleaver (skipped by BPSK63F) → differential BPSK, one coded bit per symbol, with
+the reference's **200-bit alternating preamble** and its run of trailing 1s. `psk.rs`
+already rendered a correct coded signal in its own test module (`pskr_audio`, proven
+by `the_pskr_chain_round_trips_its_own_bits` at depths None/40/80/160), so `PskrTx`
+is that promoted and streamed, wired through the controller with
+`PskCoded::baud()`/`depth()` as the only table.
+
+**Measured, loopback (our receiver reading our transmitter).**
+
+| variant | reads |
+|---|---|
+| BPSK63F (62.5, no interleave) | yes |
+| PSK125R (125, depth 40) | yes |
+| PSK500R (500, depth 160) | yes |
+| PSK1000R (1000, depth 160) | yes |
+| PSK250R (250, depth 80) | **no** |
+
+The 250 baud failure is the *existing* fixture's, not this change's: `pskr_audio`'s
+own note records it — the corpus recording of PSK250R reads **394 of 394 bits**
+through the same receiver — so the transmitter is not implicated, and 250 is left
+out of the assertion rather than written into the suite as expected.
+
+**Two traps, both measured, both now in the code's own comments.** A **zero reverses**
+the carrier and a one keeps it; inverted, the transmitter works and every bit is
+wrong, which reads as noise. And the controller puts a PSK carrier at **1000 Hz**, not
+1500, so a loopback at 1500 reads mangled characters that look like a modulator fault
+and are a receiver 500 Hz off.
+
+**Still refused, with a reason on the chip:** the multi-carrier `C` and `RC` banks —
+their bits go on carriers `1.4 × baud` apart, which is the next step, and one carrier
+under a multi-carrier label would be a different signal answering to the same name.
+
 ### The count
 
 61 `Mode` variants, of which **38 can key a transmitter** and 23 cannot (checked by
