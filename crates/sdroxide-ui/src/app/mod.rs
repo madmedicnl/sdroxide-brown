@@ -1134,6 +1134,12 @@ pub struct SdroxideApp {
     auto_role: Option<sdroxide_types::auto::AutoRole>,
     /// The Auto CQ run's CQ count, read from the engine's exchange log.
     auto_cq: sdroxide_types::auto::CqCounter,
+    /// How many times each station has been called in this session, so a station
+    /// that does not answer is passed over after the operator's retry budget
+    /// rather than called into the void while others wait.
+    auto_attempts: std::collections::HashMap<String, u8>,
+    /// When the run was armed, for the session limit.
+    auto_armed_at: f64,
     /// A DAB channel scan in progress: which Band III block it is sitting on,
     /// and when it arrived there. Session-only — a scan is an act, not a
     /// setting; what it *finds* goes in `state.dab.found` and is remembered.
@@ -2287,6 +2293,8 @@ impl SdroxideApp {
             digi_preview: None,
             auto_role: None,
             auto_cq: sdroxide_types::auto::CqCounter::default(),
+            auto_attempts: std::collections::HashMap::new(),
+            auto_armed_at: 0.0,
             dab_scan: None,
             dab_vu: Default::default(),
             dab_vu_at: None,

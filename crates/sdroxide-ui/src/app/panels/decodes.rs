@@ -1845,6 +1845,8 @@ impl SdroxideApp {
             let then_listen = self.digi_cfg_edit.auto_cq_then_listen;
             let engine_step = status.as_ref().map(|s| s.step);
             let auto_note = self.auto_note.clone();
+            let session_min = self.digi_cfg_edit.auto_session_min;
+            let cq_repeats = self.digi_cfg_edit.auto_cq_repeats;
             // The hover for each chip is built **before** the loop: it needs the
             // operator's auto settings, and the loop takes `self` mutably.
             let hover = |role: sdroxide_types::auto::AutoRole| -> String {
@@ -1874,6 +1876,23 @@ impl SdroxideApp {
                          watchdog paces it and the inactivity stop disarms it."
                             .to_string()
                     }
+                    sdroxide_types::auto::AutoRole::Continuous => {
+                        format!(
+                            "The whole workflow, unattended: finish the QSO, work whoever is \
+                             calling you, answer a station calling CQ, and call CQ only when \
+                             there is nothing else. Runs until you stop it{}. {bound}",
+                            if session_min == 0 {
+                                String::new()
+                            } else {
+                                format!(" or {session_min} minutes are up")
+                            },
+                            bound = if cq_repeats == 0 {
+                                "Each CQ run has no call limit of its own."
+                            } else {
+                                "Each CQ run is bounded by its own call count."
+                            },
+                        )
+                    }
                     sdroxide_types::auto::AutoRole::Cq => {
                         let bound = if repeats == 0 {
                             "No call limit of its own — the watchdog and the inactivity \
@@ -1898,6 +1917,12 @@ impl SdroxideApp {
                 }
             };
             ui.horizontal_wrapped(|ui| {
+                // **Two chips and a tick.** The operating panel is a column with
+                // no room to grow — a third full chip pushed it past the dock
+                // edge in the layout test — so the continuous role, which is the
+                // two chips run in sequence, is armed by the compact tick beside
+                // them. It is a role of its own rather than a modifier, because
+                // the operator asked that the other two not change meaning.
                 for role in [sdroxide_types::auto::AutoRole::Rx, sdroxide_types::auto::AutoRole::Cq] {
                     let is_armed = armed == Some(role);
                     if crate::chrome::chip_enabled(ui, tx_ok && auto_block.is_none(), is_armed, role.label())
@@ -1911,6 +1936,26 @@ impl SdroxideApp {
                         {
                             // Auto mode is a sequencer running itself; without
                             // Auto Seq it would advance only on a button press.
+                            self.digi_cfg_edit.auto_seq = true;
+                            cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+                        }
+                    }
+                }
+                {
+                    let role = sdroxide_types::auto::AutoRole::Continuous;
+                    let mut on = armed == Some(role);
+                    let tick = ui
+                        .add_enabled_ui(tx_ok && auto_block.is_none(), |ui| {
+                            crate::chrome::checkbox(ui, &mut on, "cont")
+                        })
+                        .inner
+                        .on_hover_text(hover(role));
+                    if tick.changed() {
+                        if armed == Some(role) {
+                            self.stop_auto(format!("{} stopped by the operator", role.label()), cmds);
+                        } else if self.arm_auto(ui.input(|i| i.time), role)
+                            && !self.digi_cfg_edit.auto_seq
+                        {
                             self.digi_cfg_edit.auto_seq = true;
                             cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
                         }

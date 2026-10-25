@@ -3159,6 +3159,19 @@ pub struct DigiConfig {
     /// the one an unattended station wants.
     #[serde(default = "auto_cq_then_listen_default")]
     pub auto_cq_then_listen: bool,
+    /// Auto mode: how many times one station may be called before the run gives
+    /// up on it and moves down the queue. 1..=5, two by default.
+    ///
+    /// A station that answers once needs one call; one that does not answer is
+    /// not worth a third, and a run that keeps calling the same silent station
+    /// while others wait is the behaviour this exists to stop. Appended at the
+    /// tail, so this is a wire change.
+    #[serde(default = "auto_call_retries_default")]
+    pub auto_call_retries: u8,
+    /// Auto mode's overall session limit in minutes, 0 for none. The backstop
+    /// for a continuous run: it stops whether or not contacts are being made.
+    #[serde(default)]
+    pub auto_session_min: u16,
     /// SSTV receive sensitivity, -5..=+5. 0 = the automatic level (Auto).
     /// Adjusts the signal level fed to the decoder: negative attenuates,
     /// positive boosts. Does not change the decoder itself.
@@ -3304,6 +3317,10 @@ fn default_atchat_virtual_addr() -> String {
 
 fn cw_default_wpm() -> f32 {
     20.0
+}
+
+fn auto_call_retries_default() -> u8 {
+    2
 }
 
 fn auto_cq_then_listen_default() -> bool {
@@ -3457,6 +3474,8 @@ impl Default for DigiConfig {
             wavelog_station_id: 0,
             auto_cq_repeats: 0,
             auto_cq_then_listen: auto_cq_then_listen_default(),
+            auto_call_retries: auto_call_retries_default(),
+            auto_session_min: 0,
             sstv_rx_sensitivity: 0,
             sstv_rx_auto: true,
             wefax_rx_sensitivity: 0,
