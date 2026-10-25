@@ -591,6 +591,25 @@ fn mode_for_link(l: &sdroxide_types::SatLink) -> Mode {
 }
 
 /// The downlink dial a link starts on: the current dial if it already sits
+/// **What a TUNE press asks for**: the link's mode on the main receiver, and the
+/// downlink on the VFO the operator is actually using.
+///
+/// Issue #244: the dial went to **VFO A** whatever was selected, so an operator
+/// working on B pressed TUNE, saw nothing change on the dial in front of them,
+/// and then found A had been retuned behind their back. The pass-window path
+/// already asked `active_vfo`; the chip did not, and one bug in two places is
+/// exactly what a helper prevents.
+fn tune_commands(
+    link: &sdroxide_types::SatLink,
+    active_vfo: Vfo,
+    active_hz: f64,
+) -> [Command; 2] {
+    [
+        Command::SetMode { rx: sdroxide_types::RxId::Main, mode: mode_for_link(link) },
+        Command::SetVfo { vfo: active_vfo, hz: lock_downlink_hz(link, active_hz) },
+    ]
+}
+
 /// inside the passband (re-locking must not yank a tuned-in operator to the
 /// centre), else the passband centre.
 fn lock_downlink_hz(l: &sdroxide_types::SatLink, dial_hz: f64) -> f64 {
@@ -1339,15 +1358,9 @@ impl SdroxideApp {
                 .clicked()
             {
                 if link.downlink.is_some() {
-                    cmds.push(Command::SetVfo {
-                        vfo: Vfo::A,
-                        hz: lock_downlink_hz(link, self.state.active_freq_hz()),
-                    });
+                    let active_hz = self.state.active_freq_hz();
+                    cmds.extend(tune_commands(link, self.state.active_vfo, active_hz));
                 }
-                cmds.push(Command::SetMode {
-                    rx: sdroxide_types::RxId::Main,
-                    mode: mode_for_link(link),
-                });
             }
             if crate::chrome::chip_accent(
                 ui,
@@ -1459,11 +1472,8 @@ impl SdroxideApp {
         self.show_sat = true;
         self.sat_win.selected = Some(norad_id);
         self.sat_win.link_idx = link_idx;
-        cmds.push(Command::SetMode { rx: sdroxide_types::RxId::Main, mode: mode_for_link(link) });
-        cmds.push(Command::SetVfo {
-            vfo: self.state.active_vfo,
-            hz: lock_downlink_hz(link, self.state.active_freq_hz()),
-        });
+        let active_hz = self.state.active_freq_hz();
+        cmds.extend(tune_commands(link, self.state.active_vfo, active_hz));
     }
 }
 
@@ -1471,6 +1481,21 @@ impl SdroxideApp {
 mod tests {
     use super::*;
     use sdroxide_types::{Passband, SatLink};
+
+    /// **Issue #244: TUNE tunes the VFO the operator is using**, whichever one
+    /// that is — and the mode still goes to the main receiver it always did.
+    #[test]
+    fn tune_uses_the_active_vfo_and_the_links_mode() {
+        let cw = SatLink::down("CW beacon", "CW", Passband::at(145.800));
+        let [mode, dial] = tune_commands(&cw, Vfo::B, 145_900_000.0);
+        assert!(matches!(mode, Command::SetMode { mode: Mode::Cw, .. }));
+        assert!(
+            matches!(dial, Command::SetVfo { vfo: Vfo::B, .. }),
+            "TUNE on VFO B tuned something else: {dial:?}"
+        );
+        let [_, dial] = tune_commands(&cw, Vfo::A, 145_900_000.0);
+        assert!(matches!(dial, Command::SetVfo { vfo: Vfo::A, .. }));
+    }
 
     /// Issue #622: TUNE on the ISS SSTV downlink lands in SSTV-FM, where the
     /// picture is decoded, rather than plain NFM.
