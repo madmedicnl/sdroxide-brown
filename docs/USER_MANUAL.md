@@ -6122,6 +6122,13 @@ only for aircraft whose card has been looked up; when a word begins `type:` or
 online data — open their card*). The search is not saved: closing the program
 clears it.
 
+**Copy summary.** The button under an aircraft's name in the Cards list puts the
+card on the clipboard as plain text: the name, the detail line, every line
+somebody has with where it came from (*radio*, *online* or *station history*), and
+the photo's credit with the link to its page. Lines nobody has are left out. The
+position and the last message are never copied, nor is the picture's address, and
+nothing about your station or your session. It asks nobody for anything.
+
 **History.** A station remembers what its radios heard of each aircraft for the
 last 24 hours: its positions (at most one every 10 seconds, and not before it has
 moved 100 m, with a point a minute for one that is parked), the callsigns and

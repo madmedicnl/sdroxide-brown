@@ -43,6 +43,7 @@ pub(in crate::app) mod aircraft_online_io;
 pub(in crate::app) mod aircraft_pin;
 pub(in crate::app) mod aircraft_registry;
 pub(in crate::app) mod aircraft_search;
+pub(in crate::app) mod aircraft_share;
 pub(in crate::app) mod extras;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
