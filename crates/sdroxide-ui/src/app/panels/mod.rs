@@ -1601,15 +1601,12 @@ mod tests {
                 let r = ui.scope(|ui| acars::acars_header(ui, &acars, s, &mut cmds));
                 rows.push(("ACARS", r.response.rect));
                 let r = ui.scope(|ui| {
-                    navtex::navtex_list_header(
-                        ui,
-                        &navtex,
-                        s,
-                        &mut cmds,
-                        true,
-                        &mut DigiConfig::default(),
-                        false,
-                    )
+                    // Five arguments: the NAVTEX sensitivity revert (#233)
+                    // took the two the float branch still passed here. #233
+                    // shrank the signature and #226 — merged after it — brought
+                    // the branch's seven-argument call back, so `main` on origin
+                    // does not compile. This is that seam.
+                    navtex::navtex_list_header(ui, &navtex, s, &mut cmds, true)
                 });
                 rows.push(("NAVTEX", r.response.rect));
                 let r =
