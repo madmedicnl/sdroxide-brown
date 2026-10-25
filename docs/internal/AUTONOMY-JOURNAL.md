@@ -22,7 +22,49 @@ Each entry, in this order:
 ---
 
 
-## 2026-10-25 (the Airspy HF+'s waterfall was wider than the radio)
+## 2026-10-25 (the queue closed out: two issues and nine discussions)
+
+**In plain words.** Went through every open issue and discussion and closed the
+ones that were finished — either because the answer had already concluded them or
+because a merged fix had. Two issues and nine discussions went; six issues and
+four discussions stay, each for a named reason, all written down below so nobody
+has to guess later.
+
+**Closed as fixed.** #216 (squelch hold-open) — merged as #218, told the reporter
+what to look for and that it lands in the next pre-release, invited a reopen if
+the build does not do it.
+
+**Closed as answered.** #162 (NAVTEX 518 vs 516.6) — the preset already applies
+the 1.7 kHz shift, DK8JV confirmed 518 decodes with it, and the remainder in that
+report is a reference error at the reporter's end; the closer names the
+calibration setting and the one condition that would make it ours again.
+Discussion #92 (is PR #45 still in) — yes, answered. #79 (DAB frequency after an
+update) — the reporter found it: a rescan. #144 (how to get an unmerged PR into
+main) — the workflow answer stands, and Mark's two side questions were answered.
+#169 (Brick2 for Jarvis) — the PR he asked for is merged (#170); #132 and #133
+stay open for the missing radio. #125 (the 2.14 changelog) — that version shipped.
+#56 (2.0.8 ready to cut) — already said "closing this out" in the thread months
+of releases ago, and never pressed the button. #76 (an identity note). #200 (a
+thank-you). #107 (AppImage idea) — duplicate of issue #105, which is where the
+answer will land.
+
+**Left open, and why.** #132/#133 Brick2 — code merged, needs the radio.
+#153 Pluto — waiting on the diagnostic report that was asked for and not sent.
+#146 Listen/TX controls — F4NRM deferred it himself ("too many security risks for
+now"); it is his call, not a stale item. #91 WEEFAX — his, and it needs a ten-page
+test. #105 AppImage — planned for a stable release. Discussions #165 (STANAG
+recordings — waiting on material), #73 (the rules) and #2 (welcome) are standing
+posts, and **#168 is now stale on purpose**: it tells people to use GitHub
+Discussions with IDEA/FEED/REQ in the subject, while the group has moved to
+groups.google.com/g/sdroxide. That one needs an update, not a close, and it is a
+public announcement — the operator's to rewrite.
+
+**Measured.** `gh issue list --state open` → 6; discussions closed by this work →
+9; `cargo check` and the tests untouched by it. Numbers in `AGENTS.md` and
+`TODO.md` re-measured from the queue (`AGENTS.md` said five issues and "no open
+PRs", which was wrong twice: six issues, and #226 open).
+
+
 
 **In plain words.** An Airspy HF+ listener reported that the waterfall at 768 kHz
 shows the filter's roll-off at both edges, that zooming in and scrolling right

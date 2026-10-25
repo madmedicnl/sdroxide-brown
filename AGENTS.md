@@ -470,12 +470,16 @@ State at 2026-10-24, and the thing to re-measure rather than trust:
   **vendor a mode when the port and the bench have both been exhausted**. The
   measurements are in [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md), and
   the mode table at the end of the brief is the deliverable.
-- **Open issues** (5): #132 and #133 the Brick2 frequency and LSB-as-USB reports
-  ([`BRICK2-HANDOVER.md`](docs/internal/BRICK2-HANDOVER.md) — the code half is
-  merged, the radio half needs a Brick2), #153 Pluto socket stalls (asks for the
-  diagnostic report), #162 NAVTEX needing to tune 516.6 kHz instead of 518
-  (the dial-is-channel−1.7 kHz rule), #105 AppImage (planned for a stable
-  release). **No open PRs.**
+- **Open issues** (6, re-measured 2026-10-25): #132 and #133 the Brick2 frequency
+  and LSB-as-USB reports ([`BRICK2-HANDOVER.md`](docs/internal/BRICK2-HANDOVER.md)
+  — the code half is merged, the radio half needs a Brick2), #153 Pluto socket
+  stalls (asks for the diagnostic report), #146 hiding the transmit controls by
+  band/mode (F4NRM deferred it: the out-of-band risk is too high for now),
+  #91 WEEFAX pages breaking after a few (F4NRM's, needs a ten-page test), #105
+  AppImage (planned for a stable release). #162 (NAVTEX 518 vs 516.6) was closed
+  on 2026-10-25 as answered — the preset applies the shift, and the rest was a
+  reference error at the reporter's end. **Open PRs: #226**, ours, UI, waiting
+  for F4NRM.
 - **Live handovers**: ALE (built, **never decoded a real burst** — the manual
   §3.29 asks for a recording, and that is the only thing missing), STANAG 4285
   (needs a coded off-air capture), Olivia (receive proven; our transmit unproven

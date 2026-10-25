@@ -7,7 +7,7 @@ State: `main` at crate **2.1.0**, `PROTO_VERSION` **243** (`VERSION_BYTE`
 `0x3F`) — 242 was 8PSK and 243 voice hunting, both merged on 2026-10-24, and
 the aircraft online work (PR A and PR B) is merged and the hover card is next to
 be read. Latest release **v2.1.0.2_brown** (with **v2.1.0.2.1_brown** as the
-current pre-release), five open issues. The rules are
+current pre-release), six open issues. The rules are
 in [`AGENTS.md`](AGENTS.md); the history is in
 [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
 
