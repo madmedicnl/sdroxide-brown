@@ -2342,15 +2342,25 @@ impl SdroxideApp {
                 // `panel_window_wanted`, which is false otherwise.
                 let mode = self.state.rx[0].mode;
                 let mut dock = false;
+                let mut float = false;
                 let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    // **The way back.** A window with no way home is a one-way
+                    // **Both ways back.** A window with no way home is a one-way
                     // door; the operator asked for the round trip — pane, floating
-                    // panel, window — so every state has the chip that leaves it.
+                    // panel, window — so every state carries the chips that leave
+                    // it. `In` is the arrow pointing *into* the main window, which
+                    // is what floating is; `Dock` is all the way back to the pane.
                     let row = crate::chrome::chip_height(ui, None);
                     ui.allocate_ui_with_layout(
                         egui::vec2(ui.available_width(), row),
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
+                            float =
+                                crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::In)
+                                    .on_hover_text(
+                                        "FLOAT — bring this panel back into the main window as a \
+                                         floating panel, not into the pane",
+                                    )
+                                    .clicked();
                             dock = crate::chrome::chip_window_icon(
                                 ui,
                                 crate::chrome::WindowIcon::Dock,
@@ -2363,9 +2373,9 @@ impl SdroxideApp {
                     self.draw_operating_panel(ui, &mut cmds, mode, h);
                 });
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
-                if dock {
-                    self.ui_settings
-                        .set_detached(sdroxide_types::DetachableModule::Panel, false);
+                if dock || float {
+                    self.ui_settings.set_detached(sdroxide_types::DetachableModule::Panel, false);
+                    self.panel_floating = float;
                     crate::app::persist::persist_ui_settings(&self.ui_settings);
                 }
                 self.dispatch_commands(cmds);
@@ -4830,14 +4840,25 @@ mod tests {
             code.contains("DOCK — put this panel back under the waterfall"),
             "the floating panel has no chip to put it back"
         );
-        // And the OS window has the way home.
+        // And the OS window has **both** ways home: FLOAT back into the main window
+        // as a floating panel, DOCK all the way to the pane.
         assert!(
             code.contains("set_detached(sdroxide_types::DetachableModule::Panel, false)"),
             "the panel's OS window cannot be brought back"
         );
+        assert!(
+            code.contains("FLOAT — bring this panel back into the main window as a \\"),
+            "the panel's OS window cannot become a floating panel"
+        );
+        assert!(
+            code.contains("self.panel_floating = float;"),
+            "FLOAT from the window does not put the panel back in the main window"
+        );
         // One state at a time: going out to a window drops the floating panel.
         assert!(
-            code.contains("self.panel_floating = false;\n            self.detach_operating_panel();"),
+            code.contains(
+                "self.panel_floating = false;\n            self.detach_operating_panel();"
+            ),
             "floating and windowed can both be true, so the pane is drawn twice"
         );
     }
