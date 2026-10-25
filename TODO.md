@@ -138,6 +138,20 @@ maintainer's queue there, not a promise.
      gap in the tree), **8PSK** ("no eight-phase modulator"), **DominoEX**,
      **DTMF**, **ARDOP** (no ARQ), **STANAG 4285** (no modulator), and
      **JT65 / JT9 / FST4 / Q65 / MSK144** ("transmit is not wired in this build").
+     - **The coded PSK transmitter, in hand (2026-10-25).** The pieces are all
+       there and the shape is settled: `ConvEncoder::new(ConvCode::PSK_R)` gives
+       the two coded bits per data bit, `mfsk_rx::Interleaver::new(2, depth, true)`
+       is already the **transmit** direction (the receiver's mirror is
+       `forward: false`), `mfsk_word` gives the varicode, and `PskCoded` carries
+       baud/carriers/depth/fec per variant. **`psk.rs`'s own test module already
+       renders a correct coded signal** (`pskr_audio`, proven by
+       `the_pskr_chain_round_trips_its_own_bits` at depths None/40/80/160) — so
+       the first step is to promote that into a real `PskrTx`, not to invent a
+       modulator. Then: the single-carrier coded five (BPSK63F + the four `R`)
+       first, the multi-carrier `C`/`RC` next (bits distributed round-robin over
+       carriers `1.4 × baud` apart, each with its own differential state), and a
+       loopback per variant as the test. `text_modem.rs`'s refusal narrows to the
+       families not yet wired, so the honest message stays on the chip.
    - **RX faults on modes we ship** — PSK 31/63 lose a word, BPSK1000 locks from
      its second in; PSK500C4/1000C2/500RC4 **0/3** and four RC banks 1–2 of 3;
      8PSK **0/4**; Hell five of seven at 0.33–0.48; MFSK8/MFSK11; DominoEX 3 of 9
