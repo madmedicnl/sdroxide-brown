@@ -2243,10 +2243,15 @@ pub fn chip_window_icon_label() -> &'static str {
 /// reversed, which is what makes a pair of them readable without a word.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum WindowIcon {
-    /// Out to a window of its own.
+    /// Out to a window of its own: a square with an arrow leaving through its
+    /// top-right corner, which is the picture every desktop uses for "pop this
+    /// out" (the operator's own reference).
     Out,
-    /// Back into the main window.
+    /// Back into the main window: the same square, the arrow pointing **in**.
     In,
+    /// Dock a floating panel back into the pane: a panel with a chevron pushing
+    /// into it, from the operator's second reference.
+    Dock,
 }
 
 /// A chip whose face is a **drawn** window icon rather than a word or a glyph.
@@ -2292,26 +2297,45 @@ pub fn chip_window_icon(ui: &mut Ui, icon: WindowIcon) -> Response {
 fn paint_window_icon(p: &egui::Painter, r: Rect, ink: Color32, icon: WindowIcon) {
     let s = r.height();
     let stroke = Stroke::new(1.3, ink);
-    // The frame takes the far side from the arrow, so the arrow is always the
-    // thing moving.
-    let fw = s * 0.56;
-    let frame = match icon {
-        WindowIcon::Out => Rect::from_min_size(r.min, vec2(fw, s)),
-        WindowIcon::In => Rect::from_min_size(pos2(r.max.x - fw, r.min.y), vec2(fw, s)),
-    };
-    p.rect_stroke(frame, 2.0, stroke, StrokeKind::Inside);
-
-    // The shaft runs from the frame's edge out to the far side of the box, and
-    // the head is two short strokes meeting at the tip.
-    let (tip, dir) = match icon {
-        WindowIcon::Out => (pos2(r.max.x, r.center().y), 1.0),
-        WindowIcon::In => (pos2(r.min.x, r.center().y), -1.0),
-    };
-    let tail = pos2(tip.x - dir * s * 0.34, tip.y);
-    p.line_segment([tail, tip], stroke);
-    let head = s * 0.26;
-    for dy in [-head, head] {
-        p.line_segment([pos2(tip.x - dir * head, tip.y + dy), tip], stroke);
+    if icon == WindowIcon::Dock {
+        // A panel, with a chevron pushing into it: the picture the operator
+        // pointed at for "dock this back".
+        let panel = Rect::from_min_size(pos2(r.min.x, r.min.y + s * 0.1), vec2(s * 0.42, s * 0.8));
+        p.rect_stroke(panel, 2.0, stroke, StrokeKind::Inside);
+        let tip = pos2(r.max.x - s * 0.08, r.center().y);
+        let back = s * 0.34;
+        p.line_segment([pos2(tip.x + back, tip.y - back), tip], stroke);
+        p.line_segment([pos2(tip.x + back, tip.y + back), tip], stroke);
+        return;
+    }
+    // **The square with a diagonal arrow**, out through the top-right corner or
+    // in towards the middle — the two states of one picture, which is what makes
+    // them readable without a word.
+    let inset = s * 0.08;
+    let square = Rect::from_min_max(
+        pos2(r.min.x + inset, r.min.y + inset),
+        pos2(r.max.x - inset, r.max.y - inset),
+    );
+    p.rect_stroke(square, s * 0.18, stroke, StrokeKind::Inside);
+    let head = s * 0.22;
+    match icon {
+        WindowIcon::Out => {
+            // From the middle out to the corner, the head at the corner.
+            let tip = pos2(square.max.x, square.min.y);
+            let tail = pos2(square.center().x - s * 0.02, square.center().y + s * 0.02);
+            p.line_segment([tail, tip], stroke);
+            p.line_segment([pos2(tip.x - head, tip.y), tip], stroke);
+            p.line_segment([pos2(tip.x, tip.y + head), tip], stroke);
+        }
+        _ => {
+            // The same line the other way: the head at the middle, so the arrow
+            // points *into* the square.
+            let from = pos2(square.max.x, square.min.y);
+            let tip = pos2(square.center().x - s * 0.02, square.center().y + s * 0.02);
+            p.line_segment([from, tip], stroke);
+            p.line_segment([pos2(tip.x + head, tip.y), tip], stroke);
+            p.line_segment([pos2(tip.x, tip.y - head), tip], stroke);
+        }
     }
 }
 
