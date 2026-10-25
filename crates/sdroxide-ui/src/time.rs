@@ -23,7 +23,7 @@ pub fn utc_and_local(unix: i64, offset_secs: i64) -> String {
         format!("{utc} UTC")
     } else {
         let (_, _, _, h, mi, _) = sdroxide_types::utc_ymd_hms(unix + offset_secs);
-        format!("{utc} UTC · {h:02}:{mi:02} local")
+        tr!("time-utc-and-local", utc = utc, local = format!("{h:02}:{mi:02}"))
     }
 }
 

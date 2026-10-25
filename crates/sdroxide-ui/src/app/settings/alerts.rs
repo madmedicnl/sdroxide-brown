@@ -5,7 +5,7 @@
 //! *decode matters*, which is unmissable by design — the whole point is to
 //! reach the operator when they are not looking at sdroxide.
 
-use crate::i18n::tr;
+use crate::i18n::{Tr, tr};
 use eframe::egui::{self, Color32, RichText};
 
 use crate::app::alerts::AlertStatus;
@@ -95,7 +95,7 @@ pub(in crate::app) fn alerts_settings(
                             &format!("alert-reply-{}", event.as_str()),
                             &mut rule.reply,
                             &AlertReply::ALL,
-                            AlertReply::label,
+                            AlertReply::tr,
                         );
                     });
                     enum_combo(

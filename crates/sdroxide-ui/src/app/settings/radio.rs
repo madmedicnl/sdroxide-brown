@@ -5,7 +5,7 @@
 //! discovery buttons (HPSDR scan, RTL-SDR rescan, TCI connection test) only
 //! set a flag — the blocking work happens after the window closure.
 
-use crate::i18n::tr;
+use crate::i18n::{Tr, tr};
 use eframe::egui::{self, Color32, ComboBox, DragValue, RichText, Slider};
 use sdroxide_types::{Command, Direction};
 
@@ -2487,7 +2487,7 @@ pub(in crate::app) fn settings_spyserver_tab(
             &format!("{salt}_fmt"),
             &mut fmt,
             &SpyServerFormat::ALL,
-            SpyServerFormat::label,
+            SpyServerFormat::tr,
         );
         cfg.iq_format = fmt;
         ui.end_row();
@@ -3069,11 +3069,12 @@ pub(in crate::app) fn settings_icomnet_tab(
             .selected_text(net.rx_source.label())
             .show_styled(ui, |ui| {
                 for s in IcomRxSource::ALL {
-                    if ui.selectable_label(net.rx_source == s, s.label()).clicked() {
+                    if ui.selectable_label(net.rx_source == s, s.tr()).clicked() {
                         net.rx_source = s;
                     }
                 }
-            });
+            },
+        );
         ui.end_row();
 
         radio_antenna_row(ui, caps, antenna_rx, "icomnet_antenna", cmds);
@@ -3139,11 +3140,11 @@ pub(in crate::app) fn settings_icomnet_tab(
 
         ui.label(tr!("settings-radio-cw-keying"))
             .on_hover_text(tr!("settings-radio-how-cw-panel-s-keyer-2"));
-        ComboBox::from_id_salt("icomnet_cw").selected_text(net.cw_keying.label()).show_styled(
+        ComboBox::from_id_salt("icomnet_cw").selected_text(net.cw_keying.tr()).show_styled(
             ui,
             |ui| {
                 for k in CwKeying::ALL {
-                    if ui.selectable_label(net.cw_keying == k, k.label()).clicked() {
+                    if ui.selectable_label(net.cw_keying == k, k.tr()).clicked() {
                         net.cw_keying = k;
                     }
                 }
@@ -3169,10 +3170,10 @@ pub(in crate::app) fn settings_icomnet_tab(
             ui.label(tr!("settings-radio-scope-span"))
                 .on_hover_text(tr!("settings-radio-how-wide-sweep-only-wide"));
             ComboBox::from_id_salt("icomnet_scope_span")
-                .selected_text(net.scope_span.label())
+                .selected_text(net.scope_span.tr())
                 .show_styled(ui, |ui| {
                     for sp in IcomScopeSpan::ALL {
-                        if ui.selectable_label(net.scope_span == sp, sp.label()).clicked() {
+                        if ui.selectable_label(net.scope_span == sp, sp.tr()).clicked() {
                             net.scope_span = sp;
                         }
                     }
@@ -3449,7 +3450,7 @@ pub(in crate::app) fn settings_pluto_tab(
         ui.label(tr!("settings-radio-agc"))
             .on_hover_text(tr!("settings-radio-ad9361-has-four-modes-not"));
         let mut agc = cfg.pluto.agc;
-        enum_combo(ui, "pluto_agc", &mut agc, &PlutoAgc::ALL, PlutoAgc::label);
+        enum_combo(ui, "pluto_agc", &mut agc, &PlutoAgc::ALL, PlutoAgc::tr);
         if agc != cfg.pluto.agc {
             cfg.pluto.agc = agc;
             cmds.push(Command::SetGain {
@@ -3556,7 +3557,7 @@ pub(in crate::app) fn settings_pluto_tab(
         ui.label(tr!("settings-radio-ptt-pins"))
             .on_hover_text(tr!("settings-radio-pluto-s-four-gpo-test"));
         let mut ptt = cfg.pluto.ptt_gpo;
-        enum_combo(ui, "pluto_ptt", &mut ptt, &PlutoPtt::ALL, PlutoPtt::label);
+        enum_combo(ui, "pluto_ptt", &mut ptt, &PlutoPtt::ALL, PlutoPtt::tr);
         cfg.pluto.ptt_gpo = ptt;
         ui.end_row();
 
@@ -5009,13 +5010,7 @@ pub(in crate::app) fn settings_elad_tab(
 
         ui.label(tr!("settings-radio-transmit-input"))
             .on_hover_text(tr!("settings-radio-where-radio-takes-transmit-audio-2"));
-        enum_combo(
-            ui,
-            "elad_txin",
-            &mut cfg.cat.elad_tx_input,
-            &EladTxInput::ALL,
-            EladTxInput::label,
-        );
+        enum_combo(ui, "elad_txin", &mut cfg.cat.elad_tx_input, &EladTxInput::ALL, EladTxInput::tr);
         ui.end_row();
 
         ui.label(tr!("settings-radio-antenna"))
@@ -5042,7 +5037,7 @@ pub(in crate::app) fn settings_elad_tab(
             "elad_modectl",
             &mut cfg.cat.mode_control,
             &ModeControl::ALL,
-            ModeControl::label,
+            ModeControl::tr,
         );
         ui.end_row();
 
@@ -7215,7 +7210,7 @@ pub(in crate::app) fn settings_sdrplay_tab(
                         "sdrplay_duo_role",
                         &mut role,
                         &SdrPlayDuoRole::ALL,
-                        SdrPlayDuoRole::label,
+                        SdrPlayDuoRole::tr,
                     );
                     cfg.sdrplay.duo.role = role;
                     ui.end_row();
@@ -7244,10 +7239,10 @@ pub(in crate::app) fn settings_sdrplay_tab(
                 .show(ui, |ui| {
                     ui.label("What to do with it");
                     ComboBox::from_id_salt("sdrplay_div_mode")
-                        .selected_text(div.mode.label())
+                        .selected_text(div.mode.tr())
                         .show_styled(ui, |ui| {
                             for m in DiversityMode::ALL {
-                                if ui.selectable_label(div.mode == m, m.label()).clicked() {
+                                if ui.selectable_label(div.mode == m, m.tr()).clicked() {
                                     div.mode = m;
                                     push_gain(
                                         cmds,

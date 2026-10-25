@@ -2623,7 +2623,7 @@ impl SdroxideApp {
         crate::chrome::menu_caption(ui, &tr!("topbar-repeater-shift"));
         ui.horizontal_wrapped(|ui| {
             for s in Shift::ALL {
-                if crate::chrome::chip(ui, r.shift == s, s.label()).clicked() {
+                if crate::chrome::chip(ui, r.shift == s, s.tr()).clicked() {
                     r.shift = s;
                     // Chosen by hand, so stop following the plan — otherwise
                     // the next turn of the dial would put it straight back and
@@ -2759,7 +2759,7 @@ impl SdroxideApp {
         }
         ui.horizontal(|ui| {
             for m in ToneMode::ALL {
-                if crate::chrome::chip(ui, r.tone == m, m.label()).clicked() {
+                if crate::chrome::chip(ui, r.tone == m, m.tr()).clicked() {
                     r.tone = m;
                     changed = true;
                 }
@@ -4175,7 +4175,7 @@ impl SdroxideApp {
     fn nr_button(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
         let nr = self.state.rx[0].noise_reduction;
         let hover = match nr.engine() {
-            Some(e) => tr!("topbar-nr-hover", strength = nr.label(), engine = e.name()),
+            Some(e) => tr!("topbar-nr-hover", strength = nr.tr(), engine = e.name()),
             None => tr!("topbar-noise-reduction-voice-off-click").to_string(),
         };
         let btn = crate::chrome::chip(ui, nr.is_on(), "NR").on_hover_text(hover);
@@ -4740,7 +4740,7 @@ impl SdroxideApp {
                 // These work with NR off too: they switch it on at that strength
                 // on RNNoise, which is what reaching for "Med" on a dead chip
                 // means.
-                if crate::chrome::chip(ui, nr.strength() == Some(st), st.label()).clicked() {
+                if crate::chrome::chip(ui, nr.strength() == Some(st), st.tr()).clicked() {
                     pick(self, cmds, nr.with_strength(st));
                 }
             }
@@ -5928,7 +5928,7 @@ impl SdroxideApp {
                     crate::chrome::menu_caption(ui, &tr!("topbar-cw-decoder"));
                     ui.horizontal_wrapped(|ui| {
                         for d in CwEngine::ALL {
-                            if crate::chrome::chip(ui, cfg.cw_decoder == d, d.label())
+                            if crate::chrome::chip(ui, cfg.cw_decoder == d, d.tr())
                                 .on_hover_text(d.hint())
                                 .clicked()
                             {
@@ -6256,7 +6256,7 @@ impl SdroxideApp {
             )
             .on_hover_text(tr!("topbar-how-fast-3d-spectrum-flows"));
             for step in Speed::SURFACE {
-                let label = step.label().to_uppercase();
+                let label = step.tr().to_uppercase();
                 let r = crate::chrome::chip_enabled(ui, on, cfg.spectrum_3d_speed == step, &label);
                 if !on {
                     r.on_disabled_hover_text(&grey);
@@ -7773,10 +7773,8 @@ fn rx_rows(
     // and DRM the chain bypasses the AGC and neither the chip nor the manual
     // rail is drawn at all (Mode::audio_agc).
     if mode.audio_agc() {
-        receive += g + AgcMode::ALL
-            .iter()
-            .map(|a| chip(&format!("AGC {}", a.label())))
-            .fold(0.0, f32::max);
+        receive +=
+            g + AgcMode::ALL.iter().map(|a| chip(&format!("AGC {}", a.tr()))).fold(0.0, f32::max);
         if agc_off {
             receive += g + label(&tr!("topbar-man")) + g + db_rail_w(ui);
         }
@@ -7970,7 +7968,7 @@ fn speed_row(ui: &mut egui::Ui, caption: &str, value: &mut Speed, steps: &[Speed
         ui.label(RichText::new(caption).size(10.0).color(crate::theme::CYAN_DIM()))
             .on_hover_text(hint);
         for step in steps {
-            if crate::chrome::chip(ui, value == step, step.label().to_uppercase()).clicked() {
+            if crate::chrome::chip(ui, value == step, step.tr().to_uppercase()).clicked() {
                 *value = *step;
             }
         }
@@ -8042,7 +8040,7 @@ fn panadapter_group_w(ui: &egui::Ui) -> f32 {
     let speeds = |steps: &[Speed]| -> f32 {
         steps
             .iter()
-            .map(|s| crate::chrome::chip_width(ui, &s.label().to_uppercase(), None) + gap)
+            .map(|s| crate::chrome::chip_width(ui, &s.tr().to_uppercase(), None) + gap)
             .sum()
     };
     let detail: f32 = SpectrumDetail::ALL

@@ -5,7 +5,7 @@
 //! one they will make again after the next restart. MIDI learn works the same
 //! way: arm a row, move the control, and the row captures whatever arrives.
 
-use crate::i18n::tr;
+use crate::i18n::{Tr, tr};
 use eframe::egui::{self, Color32, ComboBox, RichText};
 use sdroxide_types::MemoryChannel;
 
@@ -285,10 +285,10 @@ pub(in crate::app) fn settings_controls_tab(
             for (i, b) in cfg.mouse_buttons.iter_mut().enumerate() {
                 ComboBox::from_id_salt(("mb", i))
                     .width(130.0)
-                    .selected_text(b.button.label())
+                    .selected_text(b.button.tr())
                     .show_styled(ui, |ui| {
                         for m in MouseButton::ALL {
-                            if ui.selectable_label(b.button == m, m.label()).clicked() {
+                            if ui.selectable_label(b.button == m, m.tr()).clicked() {
                                 b.button = m;
                             }
                         }
@@ -296,7 +296,7 @@ pub(in crate::app) fn settings_controls_tab(
                 action_combo(ui, ("mbact", i), &mut b.action, memories);
                 ui.horizontal(|ui| {
                     for m in ButtonMode::ALL {
-                        if crate::chrome::chip(ui, b.button_mode == m, m.label()).clicked() {
+                        if crate::chrome::chip(ui, b.button_mode == m, m.tr()).clicked() {
                             b.button_mode = m;
                         }
                     }
@@ -567,9 +567,9 @@ fn midi_port_combo(
 
 /// Dropdown over [`WheelAction`].
 fn wheel_action_combo(ui: &mut egui::Ui, id: &str, act: &mut sdroxide_types::WheelAction) {
-    ComboBox::from_id_salt(id).width(130.0).selected_text(act.label()).show_styled(ui, |ui| {
+    ComboBox::from_id_salt(id).width(130.0).selected_text(act.tr()).show_styled(ui, |ui| {
         for a in sdroxide_types::WheelAction::ALL {
-            if ui.selectable_label(*act == a, a.label()).clicked() {
+            if ui.selectable_label(*act == a, a.tr()).clicked() {
                 *act = a;
             }
         }

@@ -4,7 +4,7 @@
 //! panels share, reachable from any of them. The identity half is the same
 //! store the Settings dialog's General tab edits.
 
-use crate::i18n::tr;
+use crate::i18n::{Tr, tr};
 use eframe::egui::{self, RichText};
 use sdroxide_types::Band;
 use sdroxide_types::Command;

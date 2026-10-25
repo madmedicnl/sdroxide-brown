@@ -16,7 +16,7 @@
 //! 3. that a transceiver keyed at its own microphone is seen late, and what to
 //!    do about it.
 
-use crate::i18n::tr;
+use crate::i18n::{Tr, tr};
 use eframe::egui::{self, Color32, ComboBox, RichText};
 use sdroxide_types::{
     FailSafe, RelayChannel, RelayConfig, RelayDevice, RelayFamily, RelayLink, RelayRole,
@@ -283,7 +283,7 @@ pub(in crate::app) fn settings_relay_tab(
             );
             ComboBox::from_id_salt(("relay-role", i))
                 .width(180.0)
-                .selected_text(ch.role.label())
+                .selected_text(ch.role.tr())
                 .show_styled(ui, |ui| {
                     for r in [
                         RelayRole::SdrAntenna,
@@ -295,7 +295,7 @@ pub(in crate::app) fn settings_relay_tab(
                         if r == RelayRole::BandDecoder && !band_decoder_ok && ch.role != r {
                             continue;
                         }
-                        if ui.selectable_label(ch.role == r, r.label()).clicked() {
+                        if ui.selectable_label(ch.role == r, r.tr()).clicked() {
                             ch.role = r;
                             let (lead, hold) = r.default_timing();
                             ch.lead_ms = lead;

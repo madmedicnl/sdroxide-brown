@@ -31,7 +31,7 @@ pub(in crate::app) mod ui_tab;
 pub(in crate::app) mod alerts;
 pub(in crate::app) mod audio;
 
-use crate::i18n::tr;
+use crate::i18n::{Tr, tr};
 use eframe::egui::{self, Color32, ComboBox, RichText};
 use sdroxide_types::{Command, LoginTarget, LookupProvider, NetworkConfig, UploadTarget};
 
@@ -2849,7 +2849,7 @@ impl SdroxideApp {
                         // still clamping the dial after the tab was switched
                         // back to an IC-9700 over the LAN.
                         let mut chosen = cfg.backend;
-                        enum_combo(ui, "iface", &mut chosen, io.iface_opts, Backend::label);
+                        enum_combo(ui, "iface", &mut chosen, io.iface_opts, Backend::tr);
                         if chosen != cfg.backend {
                             cfg.set_backend(chosen);
                             // The two boxes below are showing what was typed
@@ -2868,7 +2868,7 @@ impl SdroxideApp {
                             *site = cfg.rx_site.clone();
                         }
                     } else {
-                        ui.label(backend.label()).on_hover_text(tr!(
+                        ui.label(backend.tr()).on_hover_text(tr!(
                             "settings-waiting-machine-radio-attached-interface"
                         ));
                     }
@@ -3065,7 +3065,7 @@ impl SdroxideApp {
                             use sdroxide_types::ConverterTx as Tx;
                             let tx = &mut cfg.converter_tx;
                             egui::ComboBox::from_id_salt("converter-tx")
-                                .selected_text(tx.label())
+                                .selected_text(tx.tr())
                                 .show_styled(ui, |ui| {
                                     for opt in [Tx::Off, Tx::Transverter, Tx::Own(0.0)] {
                                         // Matched on the *kind*, so choosing "its
@@ -3073,7 +3073,7 @@ impl SdroxideApp {
                                         // number already typed beside it.
                                         let on = std::mem::discriminant(&opt)
                                             == std::mem::discriminant(tx);
-                                        if ui.selectable_label(on, opt.label()).clicked() && !on {
+                                        if ui.selectable_label(on, opt.tr()).clicked() && !on {
                                             *tx = opt;
                                         }
                                     }
@@ -4262,11 +4262,11 @@ impl SdroxideApp {
                 ui.horizontal(|ui| {
                     ui.add_sized([96.0, 22.0], egui::Label::new(tr!("settings-provider")));
                     egui::ComboBox::from_id_salt("lookup_provider")
-                        .selected_text(io.net_edit.lookup_provider.label())
+                        .selected_text(io.net_edit.lookup_provider.tr())
                         .show_styled(ui, |ui| {
                             for p in LookupProvider::ALL {
                                 let cur = &mut io.net_edit.lookup_provider;
-                                ui.selectable_value(cur, p, p.label());
+                                ui.selectable_value(cur, p, p.tr());
                             }
                         });
                 });
