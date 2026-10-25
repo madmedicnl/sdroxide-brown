@@ -1090,6 +1090,14 @@ pub struct UiSettings {
     /// ouvert. Reste `Copy` (u64).
     #[serde(default)]
     pub tool_windows_open: u64,
+    /// Which repair [`UiSettings::tool_windows_open`] has had. **1** clears the
+    /// bits the program used to set when a mode was selected — until then,
+    /// choosing a mode opened its panel in a window of its own instead of docking
+    /// it under the waterfall, and wrote that into the settings, so the bits it
+    /// left are indistinguishable from the operator's (issue #217). Cleared once;
+    /// from then on a panel window is open only because somebody opened it.
+    #[serde(default)]
+    pub tool_windows_repaired: u8,
     /// Keep the screen on: ask the browser for a Screen Wake Lock so a phone
     /// or tablet left on the waterfall does not dim and lock itself. A
     /// property of this screen, like the theme, and carried with the profile's
@@ -1667,6 +1675,7 @@ impl Default for UiSettings {
             classic_ui: false,
             classic_sections: String::new(),
             tool_windows_open: 0,
+            tool_windows_repaired: 0,
         }
     }
 }

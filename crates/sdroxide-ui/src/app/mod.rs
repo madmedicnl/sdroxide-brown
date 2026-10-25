@@ -658,7 +658,6 @@ pub struct SdroxideApp {
     show_ale: bool,
     show_rf_paint: bool,
     show_image: bool,
-    last_mode_for_tools: Option<sdroxide_types::Mode>,
     prev_tool_windows_mask: u64,
     /// Scroll the Settings window back to its tab bar on the frame it opens.
     /// The window's scroll offset is egui memory, which outlives both the
@@ -1846,6 +1845,12 @@ impl SdroxideApp {
         // Fold a pre-map config's panadapter undock into the `detached` map, so
         // an operator who had it open does not find it docked after the update.
         ui_settings.migrate_detached();
+        // A mode's panel is docked by default; the mode-entry auto-open that put
+        // it in a window (and saved that choice) is repaired once here, so an
+        // installation that ran 2.1.0.x comes back docked (issue #217).
+        if crate::app::frame::repair_mode_panel_windows(&mut ui_settings) {
+            crate::app::persist::persist_ui_settings(&ui_settings);
+        }
         // Start in SWL mode when asked: either the stored preference or this
         // run's `--swl`. The per-radio switch can still turn it off for a
         // session (which clears this seed), but the next start honours the
@@ -2167,7 +2172,6 @@ impl SdroxideApp {
             show_ale: false,
             show_rf_paint: false,
             show_image: false,
-            last_mode_for_tools: None,
             prev_tool_windows_mask: 0,
             listen_history: false,
             listen_sel: None,
