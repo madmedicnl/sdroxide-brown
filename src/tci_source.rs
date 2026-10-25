@@ -46,9 +46,19 @@ pub struct TciSource {
     /// [`IqSource::stream_delay_s`]. Read once at open; the operator changes it
     /// by re-applying the radio settings, like every other TCI field.
     stream_delay_s: f64,
+    /// The connection's transport: baseband audio rather than IQ.
+    audio_only: bool,
 }
 
 impl TciSource {
+    /// Whether this server carries baseband audio rather than IQ — see
+    /// `TciDevice::audio_only`. The engine builds its receiver from this: an
+    /// audio-band front end has no DDC, no panadapter wider than the audio, and
+    /// its tuning is the rig's own.
+    pub fn audio_only(&self) -> bool {
+        self.audio_only
+    }
+
     /// Attach receiver `rx_index` of the rig at `address`, connecting only if
     /// no radio in this process already holds that connection. The IQ rate is
     /// a property of the connection, so whoever connects first sets it and a
@@ -68,6 +78,7 @@ impl TciSource {
             })
             .map_err(anyhow::Error::msg)?;
         let rx = dev.rx(rx_index).map_err(|e| anyhow::Error::msg(e.to_string()))?;
+        let audio_only = dev.audio_only();
         rx.set_center(center_hz);
         let label = if rx_index == 0 {
             format!("TCI {} @ {address} ({:.0} kHz IQ)", dev.device(), dev.sample_rate_hz() / 1e3)
@@ -90,7 +101,11 @@ impl TciSource {
             last_telem: None,
             // Negative or absurd values are an edited config, not a request:
             // clamp rather than let the panadapter's axis run backwards.
-            stream_delay_s: (stream_delay_ms / 1e3).clamp(0.0, 2.0),
+            // **An audio-band server has no wideband stream to be late**: the
+            // delay exists to line a rig's IQ up with its own `dds:` echo, and
+            // audio arrives at the rig's own pace.
+            stream_delay_s: if audio_only { 0.0 } else { (stream_delay_ms / 1e3).clamp(0.0, 2.0) },
+            audio_only,
         })
     }
 

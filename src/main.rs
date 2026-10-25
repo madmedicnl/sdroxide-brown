@@ -2811,7 +2811,7 @@ fn open_tci_source(
         radio.tci.stream_delay_ms,
     )
     .context("connecting to TCI server")?;
-    let caps = tci_caps(&radio.tci.address, src.sample_rate_hz(), radio.tci.rx);
+    let caps = tci_caps(&radio.tci.address, src.sample_rate_hz(), src.audio_only(), radio.tci.rx);
     Ok((Box::new(src), caps))
 }
 
@@ -2828,18 +2828,27 @@ fn open_tci_source(
 /// and 3 get their whole allocation; the amateur-band gate that runs straight
 /// after this one is region-aware and holds a Region 1 station to 146 MHz,
 /// and the rig declines anything it cannot do regardless.
-fn tci_caps(address: &str, iq_rate: f64, rx: u32) -> DeviceCaps {
-    let (label, tx_channels, tx_audio) = if rx == 0 {
-        (format!("TCI {address} ({:.0} kHz IQ)", iq_rate / 1000.0), 1, true)
+fn tci_caps(address: &str, rate: f64, audio_only: bool, rx: u32) -> DeviceCaps {
+    // **A server with only the radio's audio is an audio-band rig.** Remote Ham
+    // Radio's LocalMate is one: the transceiver has no IQ tap, so the stream it
+    // carries is the demodulated audio and nothing else. The engine already knows
+    // that shape from a CAT rig on a sound card, so it is the same path.
+    let kind = if audio_only {
+        format!("{:.0} kHz audio", rate / 1000.0)
     } else {
-        (format!("TCI RX{} {address} ({:.0} kHz IQ)", rx + 1, iq_rate / 1000.0), 0, false)
+        format!("{:.0} kHz IQ", rate / 1000.0)
+    };
+    let (label, tx_channels, tx_audio) = if rx == 0 {
+        (format!("TCI {address} ({kind})"), 1, true)
+    } else {
+        (format!("TCI RX{} {address} ({kind})", rx + 1), 0, false)
     };
     DeviceCaps {
         driver: "tci".into(),
         label,
         rx_channels: 1,
         tx_channels,
-        audio_mode: false,
+        audio_mode: audio_only,
         tx_audio,
         freq_ranges_rx: vec![(0.0, 160_000_000.0)],
         freq_ranges_tx: if tx_channels > 0 {
@@ -2847,7 +2856,11 @@ fn tci_caps(address: &str, iq_rate: f64, rx: u32) -> DeviceCaps {
         } else {
             Vec::new()
         },
-        sample_rates: sdroxide_types::TciConfig::IQ_RATES.to_vec(),
+        sample_rates: if audio_only {
+            vec![rate]
+        } else {
+            sdroxide_types::TciConfig::IQ_RATES.to_vec()
+        },
         // No RX gains: the SunSDR2DX ATT/Preamp is not reachable over TCI
         // (verified against ExpertSDR3 — no command spelling drives it, and
         // toggling it in the GUI emits nothing on the wire). TCI gain control
@@ -3075,7 +3088,7 @@ mod tests {
     /// every TCI rig has, and 2 m is what the VHF ones add.
     #[test]
     fn a_tci_rig_may_transmit_on_two_metres() {
-        let caps = tci_caps("127.0.0.1:40001", 312_000.0, 0);
+        let caps = tci_caps("127.0.0.1:40001", 312_000.0, false, 0);
         assert!(caps.may_tx_hz(14_200_000.0), "HF");
         assert!(caps.may_tx_hz(50_150_000.0), "6 m");
         assert!(caps.may_tx_hz(144_300_000.0), "2 m, Region 1");
@@ -3086,7 +3099,7 @@ mod tests {
         assert!(!caps.may_tx_hz(435_000_000.0), "70 cm — no TCI rig reaches it");
 
         // A second receiver still has no transmitter of its own.
-        assert!(tci_caps("127.0.0.1:40001", 312_000.0, 1).freq_ranges_tx.is_empty());
+        assert!(tci_caps("127.0.0.1:40001", 312_000.0, false, 1).freq_ranges_tx.is_empty());
     }
 
     /// A CAT rig is whatever the operator plugged in, and the envelope here is
@@ -3287,5 +3300,37 @@ mod tests {
     fn a_run_that_skips_the_restore_keeps_the_old_default() {
         assert_eq!(Cli::parse_from(["sdroxide"]).center_hz(), 14_200_000.0);
         assert_eq!(Cli::parse_from(["sdroxide", "--freq", "50150000"]).center_hz(), 50_150_000.0);
+    }
+
+    /// **A TCI server that carries only the radio's audio is an audio-band rig.**
+    ///
+    /// Remote Ham Radio's LocalMate is one: the transceiver has no IQ tap, so the
+    /// stream is demodulated audio. Reported as "TCI CAT works, no audio, CW keys
+    /// but nothing is sent", and the caps are where the engine decides which kind
+    /// of receiver to build — an audio mode has no DDC and no panadapter wider
+    /// than the audio, and its only rate is the one the audio arrives at.
+    #[test]
+    fn an_audio_only_tci_server_is_an_audio_band_radio() {
+        let iq = tci_caps("10.0.0.2:50001", 768_000.0, false, 0);
+        assert!(!iq.audio_mode, "an IQ server was set up as an audio source");
+        assert!(iq.label.contains("IQ"), "the label hides the transport: {}", iq.label);
+        // An IQ source offers the rates the operator may ask it for; an audio one
+        // offers only the rate it arrives at.
+        assert!(!iq.sample_rates.is_empty(), "an IQ source offers no rate at all");
+
+        let audio = tci_caps("10.0.0.2:50001", 48_000.0, true, 0);
+        assert!(audio.audio_mode, "an audio-only server was set up as an IQ source");
+        assert!(audio.label.contains("audio"), "the label hides the transport: {}", audio.label);
+        assert_eq!(
+            audio.sample_rates,
+            vec![48_000.0],
+            "an audio source offers the audio rate only"
+        );
+        // Transmit is unchanged either way: TCI always sends the rig raw audio.
+        assert!(audio.tx_audio && audio.tx_channels == 1);
+
+        // A secondary receiver still has no transmitter.
+        let second = tci_caps("10.0.0.2:50001", 48_000.0, true, 1);
+        assert_eq!(second.tx_channels, 0);
     }
 }

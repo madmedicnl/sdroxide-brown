@@ -106,6 +106,14 @@ struct DevInner {
     join: Mutex<Option<JoinHandle<()>>>,
     device: String,
     sample_rate_hz: f64,
+    /// The server carries **baseband audio**, not IQ. Some TCI servers — Remote
+    /// Ham Radio's LocalMate among them — can only hand out the radio's audio,
+    /// because the radio itself has no IQ tap. Their `RxAudio` stream is then the
+    /// only receive path there is, and this receiver runs as an audio-band one.
+    audio_only: bool,
+    /// The audio stream's rate, which is what the samples are when
+    /// [`Self::audio_only`].
+    audio_rate_hz: f64,
     /// Independent receivers the rig announced (`trx_count:`). 1 when the
     /// server never said — every server names what it has, and refusing a
     /// receiver it never offered beats streaming silence from it.
@@ -132,6 +140,57 @@ impl Drop for DevInner {
 #[derive(Clone)]
 pub struct TciDevice {
     inner: Arc<DevInner>,
+}
+
+/// How long the transport probe listens. Short enough not to be felt at connect,
+/// long enough for a server to answer on a busy machine.
+const TRANSPORT_PROBE: Duration = Duration::from_millis(600);
+
+/// **Ask the server for both streams and see which it sends.**
+///
+/// A TCI server with IQ starts it. One that carries only the radio's own audio —
+/// a remote station whose transceiver has no IQ tap — sends `RxAudio` instead,
+/// and asking that server for IQ gets silence for ever. That is the reported
+/// "TCI CAT works, no audio, and CW keys without sending anything".
+///
+/// Returns whether the connection carries audio only, and any status text that
+/// arrived while listening (the caller replays it rather than losing it).
+fn probe_transport(ws: &mut tungstenite::WebSocket<std::net::TcpStream>) -> bool {
+    use tungstenite::Message;
+    send_text(ws, p::iq_start(TX_RX));
+    send_text(ws, p::audio_start(TX_RX));
+    let _ = ws.flush();
+    let deadline = Instant::now() + TRANSPORT_PROBE;
+    let (mut saw_iq, mut saw_audio) = (false, false);
+    while Instant::now() < deadline && !(saw_iq && saw_audio) {
+        match ws.read() {
+            Ok(Message::Binary(b)) => {
+                if let Some(h) = p::parse_header(&b) {
+                    match h.dtype {
+                        p::DataType::Iq => saw_iq = true,
+                        p::DataType::RxAudio => saw_audio = true,
+                        _ => {}
+                    }
+                }
+            }
+            // Status text during the probe: nothing is attached yet, so there
+            // is nothing to apply it to.
+            Ok(Message::Text(_)) => {}
+            Ok(Message::Close(_)) => break,
+            Ok(_) => {}
+            Err(tungstenite::Error::Io(e))
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut => {}
+            Err(_) => break,
+        }
+    }
+    send_text(ws, p::iq_stop(TX_RX));
+    send_text(ws, p::audio_stop(TX_RX));
+    let _ = ws.flush();
+    // Audio **and no IQ** is the audio-only case. A server that sent neither is
+    // taken as an IQ server, which is what every server did before this probe
+    // existed — so nothing that works today changes.
+    saw_audio && !saw_iq
 }
 
 impl TciDevice {
@@ -218,6 +277,14 @@ impl TciDevice {
         send_text(&mut ws, p::tx_sensors_enable(true));
         let _ = ws.flush();
 
+        // **Which stream does this server actually carry?** Ask for both for a
+        // moment and see what arrives. A TCI server with IQ starts it; one that
+        // has only the radio's audio — a remote station whose transceiver has no
+        // IQ tap — sends `RxAudio` instead, and asking it for IQ gets silence
+        // for ever. That is the reported "TCI CAT works, no audio, CW keys but
+        // sends nothing".
+        let audio_only = probe_transport(&mut ws);
+
         let (tx_prod, tx_cons) = RingBuffer::<f32>::new(1 << 15);
         let (ctrl_tx, ctrl_rx) = crossbeam_channel::unbounded();
         let (telem_tx, telem_rx) = crossbeam_channel::unbounded();
@@ -236,6 +303,7 @@ impl TciDevice {
 
         let thread = NetThread {
             ws,
+            audio_only,
             slots: HashMap::new(),
             tx: tx_cons,
             ctrl: ctrl_rx,
@@ -267,7 +335,9 @@ impl TciDevice {
                 alive,
                 join: Mutex::new(Some(join)),
                 device,
-                sample_rate_hz: iq_rate_hz,
+                sample_rate_hz: if audio_only { TX_RATE_HZ as f64 } else { iq_rate_hz },
+                audio_only,
+                audio_rate_hz: TX_RATE_HZ as f64,
                 trx_count,
                 tx_endpoint: Mutex::new(Some((tx_prod, telem_rx))),
                 attached: Mutex::new(std::collections::HashSet::new()),
@@ -290,6 +360,13 @@ impl TciDevice {
 
     pub fn sample_rate_hz(&self) -> f64 {
         self.inner.sample_rate_hz
+    }
+
+    /// Whether this connection carries baseband audio rather than IQ — see
+    /// [`probe_transport`]. An audio-only server is a radio whose audio is all it
+    /// can hand out, so the engine runs it as an audio-band source.
+    pub fn audio_only(&self) -> bool {
+        self.inner.audio_only
     }
 
     /// Independent receivers the rig announced.
@@ -638,6 +715,8 @@ struct NetThread {
     chrono_seen: bool,
     /// Whether the TX ring has filled enough to start feeding chronos from it.
     tx_primed: bool,
+    /// The connection carries baseband audio only — see [`probe_transport`].
+    audio_only: bool,
 }
 
 /// How long an attached receiver may go without IQ — on a connection that is
@@ -676,7 +755,12 @@ impl NetThread {
                         }
                         self.slots.insert(rx, RxSlot::new(ring, updates));
                         send_text(&mut self.ws, p::rx_enable(rx, true));
-                        send_text(&mut self.ws, p::iq_start(rx));
+                        if self.audio_only {
+                            // The only receive path this server has.
+                            send_text(&mut self.ws, p::audio_start(rx));
+                        } else {
+                            send_text(&mut self.ws, p::iq_start(rx));
+                        }
                         dirty = true;
                         tracing::debug!(rx, "TCI receiver attached");
                     }
@@ -692,7 +776,11 @@ impl NetThread {
                                 self.tx_on_at = None;
                                 while self.tx.pop().is_ok() {}
                             }
-                            send_text(&mut self.ws, p::iq_stop(rx));
+                            if self.audio_only {
+                                send_text(&mut self.ws, p::audio_stop(rx));
+                            } else {
+                                send_text(&mut self.ws, p::iq_stop(rx));
+                            }
                             // Only the stream is stopped — `rx_enable` is
                             // deliberately left alone. Disabling the rig's
                             // second receiver here (as this once did) toggles
@@ -824,7 +912,11 @@ impl NetThread {
                             send_text(&mut self.ws, p::trx(TX_RX, false, false));
                         }
                         for (&rx, _) in self.slots.iter() {
-                            send_text(&mut self.ws, p::iq_stop(rx));
+                            if self.audio_only {
+                                send_text(&mut self.ws, p::audio_stop(rx));
+                            } else {
+                                send_text(&mut self.ws, p::iq_stop(rx));
+                            }
                         }
                         let _ = self.ws.flush();
                         let _ = self.ws.close(None);
@@ -862,6 +954,28 @@ impl NetThread {
                                         }
                                         let _ = slot.ring.push(pair[0]);
                                         let _ = slot.ring.push(pair[1]);
+                                    }
+                                }
+                            }
+                            // **Baseband audio, for a server that has no IQ.** The
+                            // radio's own audio, stereo, at the audio rate: mixed to
+                            // mono and pushed as real samples — the shape the engine's
+                            // audio-band path already takes from a CAT rig on a sound
+                            // card.
+                            p::DataType::RxAudio => {
+                                if self.audio_only
+                                    && let Some(slot) = self.slots.get_mut(&h.receiver)
+                                {
+                                    slot.last_iq_at = Instant::now();
+                                    slot.kicked_at = None;
+                                    iq_scratch.clear();
+                                    p::decode_f32_payload(&b, &h, &mut iq_scratch);
+                                    for frame in iq_scratch.chunks_exact(2) {
+                                        if slot.ring.slots() < 2 {
+                                            break;
+                                        }
+                                        let _ = slot.ring.push(0.5 * (frame[0] + frame[1]));
+                                        let _ = slot.ring.push(0.0);
                                     }
                                 }
                             }
@@ -946,7 +1060,14 @@ impl NetThread {
             }
             slot.kicked_at = Some(Instant::now());
             send_text(&mut self.ws, p::rx_enable(rx, true));
-            send_text(&mut self.ws, p::iq_start(rx));
+            // Ask for the stream this server actually carries. An audio-only
+            // server ignores `iq_start` for ever, so a kick that sent it would
+            // warn every three seconds and never fix anything.
+            if self.audio_only {
+                send_text(&mut self.ws, p::audio_start(rx));
+            } else {
+                send_text(&mut self.ws, p::iq_start(rx));
+            }
             *dirty = true;
         }
     }
