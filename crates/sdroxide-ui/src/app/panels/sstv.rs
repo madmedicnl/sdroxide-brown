@@ -1042,52 +1042,6 @@ impl SdroxideApp {
                                 }
 
                             });
-                            // **Receive sensitivity, on a line of its own.**
-                            // It is a label, a slider and a chip — broad enough
-                            // that sharing the Restart/Clear row pushed that
-                            // row, and with it the panel, over the dock at 960
-                            // points: the #643 guard's exact report, *"Sstv at
-                            // 960 pt: ink x 0..704 crosses the dock edge at
-                            // 681"*. Its own wrapped row and a capped slider is
-                            // what keeps it inside the column at every width.
-                            ui.horizontal_wrapped(|ui| {
-                                ui.label(RichText::new("Sensitivity").size(10.0).weak());
-                                {
-                                    let mut v = self.digi_cfg_edit.sstv_rx_sensitivity;
-                                    ui.spacing_mut().slider_width = 90.0;
-                                    let resp = crate::chrome::slider(
-                                        ui,
-                                        egui::Slider::new(&mut v, -5..=5).fixed_decimals(0),
-                                    )
-                                    .on_hover_text(
-                                        "Adjusts the signal level fed to the SSTV decoder. \
-                                         0 = current automatic level (Auto). Negative values \
-                                         attenuate, positive values boost. Click Auto to return \
-                                         to the automatic level.",
-                                    );
-                                    if resp.changed() {
-                                        self.digi_cfg_edit.sstv_rx_sensitivity = v;
-                                        self.digi_cfg_edit.sstv_rx_auto = v == 0;
-                                        cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
-                                    }
-                                }
-                                if crate::chrome::chip(
-                                    ui,
-                                    self.digi_cfg_edit.sstv_rx_auto,
-                                    "Auto",
-                                )
-                                .on_hover_text(
-                                    "Returns to the automatic level (reference 0) and \
-                                     disables manual adjustment. Highlighted while active.",
-                                )
-                                .clicked()
-                                {
-                                    self.digi_cfg_edit.sstv_rx_auto = true;
-                                    self.digi_cfg_edit.sstv_rx_sensitivity = 0;
-                                    cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
-                                }
-
-                            });
                         });
                     ui.add_space(6.0);
 

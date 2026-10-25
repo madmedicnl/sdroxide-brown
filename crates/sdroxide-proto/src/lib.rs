@@ -2007,6 +2007,7 @@ use sdroxide_types::{
 /// Appended by hand under the register's own rule (the number was taken twice
 /// on two branches; the later one moves). `PROTO_VERSION` 237 → 238,
 /// `VERSION_BYTE` 0x39 → 0x3A.
+/// Reverted in v245.
 /// v237: [`sdroxide_types::DigiConfig`] gains `wefax_rx_sensitivity` (i8) and
 /// `wefax_rx_auto` (bool) on its tail — a receive sensitivity control for the
 /// WEFAX decoder, -5 to +5, with Auto meaning the reference thresholds. Unlike
@@ -2016,6 +2017,7 @@ use sdroxide_types::{
 /// `#[serde(default)]`, so a stored config loads unchanged.
 /// `PROTO_VERSION` 238 → 239, `VERSION_BYTE` 0x3A → 0x3B. A downstream (fork)
 /// change.
+/// Reverted in v246.
 /// v240: [`sdroxide_types::NetworkConfig`] gains `decode_udp` (String) on its
 /// tail — where the station's decoded text may be sent, `host:port`, one JSON
 /// line per decode over UDP, empty meaning off. `NetworkConfig` rides
@@ -2049,8 +2051,25 @@ use sdroxide_types::{
 /// so the gap at 242 is that PR's to fill.
 /// `PROTO_VERSION` 242 → 243, `VERSION_BYTE` 0x3E → 0x3F. A downstream (fork)
 /// change.
-pub const PROTO_VERSION: u16 = 244;
-const VERSION_BYTE: u8 = 0x40;
+/// v245: **revert of PR #163** (SSTV receive sensitivity control). The
+/// `sstv_rx_sensitivity` (i8) and `sstv_rx_auto` (bool) fields are removed
+/// from [`sdroxide_types::DigiConfig`], the audio gain in `SstvController` is
+/// dropped, and the Sensitivity slider/Auto chip is removed from the SSTV
+/// panel. The WEFAX receive sensitivity fields added afterwards are untouched.
+/// `DigiConfig` rides `SetDigiConfig`/`DigiStatus` whole, so removing the
+/// appended fields moves the layout; `#[serde(default)]` keeps a stored config
+/// loading. `PROTO_VERSION` 244 → 245, `VERSION_BYTE` 0x40 → 0x41.
+/// v246: **revert of PR #164** (WEFAX receive sensitivity control). The
+/// `wefax_rx_sensitivity` (i8) and `wefax_rx_auto` (bool) fields are removed
+/// from [`sdroxide_types::DigiConfig`], the threshold handling in the WEFAX
+/// DSP and controller is dropped, and the Sensitivity slider/Auto chip is
+/// removed from the WEFAX panel. The SSTV receive sensitivity fields removed
+/// earlier stay removed. `DigiConfig` rides `SetDigiConfig`/`DigiStatus`
+/// whole, so removing the appended fields moves the layout; `#[serde(default)]`
+/// keeps a stored config loading. `PROTO_VERSION` 245 → 246,
+/// `VERSION_BYTE` 0x41 → 0x42.
+pub const PROTO_VERSION: u16 = 246;
+const VERSION_BYTE: u8 = 0x42;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3729,38 +3748,6 @@ mod tests {
         let answer =
             ClientMsg::Auth { username: "oe1test".into(), password: "pässwörd ✓".into() };
         assert_eq!(decode::<ClientMsg>(&encode(&answer).unwrap()).unwrap(), answer);
-    }
-
-    /// The receive-sensitivity pair crosses the wire at values other than its
-    /// defaults: WEFAX's fields (v237) sit at the very tail of `DigiConfig`, which
-    /// rides `SetDigiConfig` and `DigiStatus` whole. A field appended in the
-    /// wrong place decodes into another setting rather than failing, so only a
-    /// non-default value shows it — and Auto's default is `true`, which a zeroed
-    /// `bool` would silently turn off.
-    #[test]
-    fn roundtrip_receive_sensitivity() {
-        use sdroxide_types::DigiConfig;
-
-        let cfg = DigiConfig {
-            my_call: "OE1XYZ".into(),
-            wefax_rx_sensitivity: 4,
-            wefax_rx_auto: false,
-            ..DigiConfig::default()
-        };
-        let m = ClientMsg::Command(Command::SetDigiConfig(cfg.clone()));
-        assert_eq!(decode::<ClientMsg>(&encode(&m).unwrap()).unwrap(), m);
-
-        let m = ServerMsg::Ft8Status(DigiStatus::idle(cfg));
-        let back = decode::<ServerMsg>(&encode(&m).unwrap()).unwrap();
-        assert_eq!(back, m);
-        let ServerMsg::Ft8Status(s) = back else { panic!("not a status") };
-        assert_eq!(s.config.wefax_rx_sensitivity, 4);
-        assert!(!s.config.wefax_rx_auto);
-
-        // A configuration that never set them still arrives at Auto and zero,
-        // which is the behaviour a station had before the field existed.
-        let d = DigiConfig::default();
-        assert_eq!((d.wefax_rx_sensitivity, d.wefax_rx_auto), (0, true));
     }
 
     #[test]
