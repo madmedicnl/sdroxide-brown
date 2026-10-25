@@ -1574,6 +1574,30 @@ fault in either varicode, the code, the interleaver or the bank geometry shows a
 the seam the operator actually uses. The refusal for multi-carrier banks is gone
 because there is nothing left to refuse.
 
+### STANAG 4285 decodes now (2026-10-25)
+
+**It works, and not through our own chain.** `vendor/s4285-ref` is
+`luwangg/signal-analysis`'s decoder, GPL-3.0 like this tree, unmodified at its
+upstream commit, driven from `crates/sdroxide-s4285` by a shim that replaces their
+Octave glue (Hilbert, the carrier mixed to zero, the level normalised — their
+equaliser carries an absolute step size, so a capture 30 per cent quieter decoded
+nothing until that was fixed). `sdroxide-digi`'s STANAG front end runs it beside
+our own receiver, on the tap at 12 kHz, and the console shows its text.
+
+Through `TextModemController`, this station's 24 October capture of 13031.2 kHz:
+
+```
+FAAA   DE FUF   ZNR UUUUU   ZUI TESTING   RYRYRYRYRYRYRYRY   SGSGSGSGSGSGSGSG   NNNN
+```
+
+A French Navy test tape, read end to end — the first time this mode has decoded
+anything off the air. Pinned by `this_tape_reads_through_the_console` (ignored: it
+needs the capture) and `the_capture_decodes` in the new crate.
+
+Our own receiver is unchanged and still does not read the coded payload; the port
+of the reference equaliser to Rust is in the tree as `EqMode::Lms` and does not
+converge yet. What the vendoring bought was the mode, not the port.
+
 ### The count
 
 63 `Mode` variants, 62 of them reachable (`DAB` is reached from the wideband row

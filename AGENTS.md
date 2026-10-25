@@ -482,7 +482,9 @@ State at 2026-10-24, and the thing to re-measure rather than trust:
   for F4NRM.
 - **Live handovers**: ALE (built, **never decoded a real burst** — the manual
   §3.29 asks for a recording, and that is the only thing missing), STANAG 4285
-  (needs a coded off-air capture), Olivia (receive proven; our transmit unproven
+  (**decodes**: the vendored GPL reference decoder in `vendor/s4285-ref`, driven
+  from `crates/sdroxide-s4285`; our own chain still does not read the coded
+  payload, and its Rust equaliser port does not converge), Olivia (receive proven; our transmit unproven
   by another station), CW keyer (built and benched), SWL schedule sources
   (scoped, not built), FST4W (do not ship as wired).
 - **Confirmed on the air by users**, so not to be re-opened as unproven: WEFAX,

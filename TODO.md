@@ -352,6 +352,18 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-25
+- **STANAG 4285 decodes off the air** — the vendored GPL reference decoder
+  (`vendor/s4285-ref`, driven from `crates/sdroxide-s4285`) runs beside our own
+  receiver and the console shows its text. This station's 24 Oct capture of
+  13031.2 kHz reads a French Navy tape: `FAAA`, `DE FUF`, `ZNR UUUUU`,
+  `ZUI TESTING`, `RYRYRYRY…`. Our own chain still does not read the coded
+  payload; the Rust port of that equaliser does not converge yet.
+- **Airspy HF+ waterfall span** — PR #234, wire 247 → 248: the display uses the
+  usable band rather than the sample rate, so the filter skirt is not drawn, not
+  pannable and not fitted. Not looked at on an HF+.
+
+
+### 2026-10-25
 - **The five slotted weak-signal modes transmit** — JT65, JT9, Q65, FST4 and
   MSK144 take WSJT-X's three words in the message box and put one burst out in
   the first armed slot, at the mode's own delay into it. Each is verified by the
