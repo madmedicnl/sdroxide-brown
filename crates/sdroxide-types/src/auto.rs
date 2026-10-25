@@ -293,6 +293,64 @@ pub fn pick_cq(
     })
 }
 
+/// **A station calling *us*** — the pending-caller queue's source.
+///
+/// Distinct from [`pick_cq`], and the distinction is the whole of Auto CQ: that
+/// one answers a station calling CQ, which is Auto Rx's job, while this is
+/// somebody addressing our callsign — the message that arrives while we are
+/// already working somebody else, which the panel shows as "also calling: …"
+/// and which used to need the operator's hand on REPLY.
+///
+/// Kept pure for the same reason as the rest of this file: the choice of who to
+/// work next is a decision, and the engine's sequencing is the side effect.
+pub fn pick_caller(
+    decodes: &[Decode],
+    my_call: &str,
+    log: &LogIndex,
+    tried: &HashSet<String>,
+    skip: impl Fn(&Decode) -> bool,
+) -> Option<AutoTarget> {
+    let mine = my_call.trim().to_ascii_uppercase();
+    if mine.is_empty() {
+        return None;
+    }
+    let mut best: Option<&Decode> = None;
+    for d in decodes {
+        if skip(d) {
+            continue;
+        }
+        let Some(to) = d.to.as_deref() else { continue };
+        if !to.eq_ignore_ascii_case(&mine) {
+            continue;
+        }
+        // A message *from* ourselves can only be our own transmission echoed
+        // back by a receiver, or a station that has our callsign in the `from`
+        // field by mistake. Either way there is nobody to work.
+        let Some(from) = d.from.as_deref().filter(|c| !c.is_empty()) else { continue };
+        if from.eq_ignore_ascii_case(&mine) {
+            continue;
+        }
+        let key = from.to_ascii_uppercase();
+        if tried.contains(&key) {
+            continue;
+        }
+        // Nobody is worked twice in a session, the rule Auto Rx already keeps.
+        if !log.novelty(&key, d.grid.as_deref(), "").new_call {
+            continue;
+        }
+        match best {
+            Some(b) if (d.snr_db, d.slot_utc) <= (b.snr_db, b.slot_utc) => {}
+            _ => best = Some(d),
+        }
+    }
+    best.map(|d| AutoTarget {
+        call: d.from.clone().unwrap_or_default(),
+        grid: d.grid.clone(),
+        snr_db: d.snr_db,
+        audio_hz: d.audio_hz,
+    })
+}
+
 /// Whether the licence gate lets this band be keyed, mirroring the engine's
 /// own key-down test: every amateur allocation always, and 11 m when the
 /// operator has opened it. The broadcast services and general coverage never.
@@ -508,5 +566,69 @@ mod tests {
         assert_eq!(AutoRole::Rx.label(), "AUTO RX");
         assert_eq!(AutoRole::Cq.label(), "AUTO CQ");
         assert_ne!(AutoRole::Rx, AutoRole::Cq);
+    }
+
+    // ── the pending caller (Auto CQ's queue) ──
+
+    fn caller(from: &str, to: &str, snr: i16, slot: i64) -> Decode {
+        Decode {
+            slot_utc: slot,
+            snr_db: snr,
+            dt: 0.0,
+            audio_hz: 1500.0,
+            message: format!("{to} {from} -{snr}"),
+            to: Some(to.into()),
+            from: Some(from.into()),
+            grid: None,
+            is_cq: false,
+            cq_to: None,
+            free_text: false,
+            rr73_to: None,
+        }
+    }
+
+    /// **A station calling *us*** is the one the queue is for, and nobody else
+    /// is: an unrelated CQ belongs to Auto Rx, and our own echo belongs to
+    /// nobody.
+    #[test]
+    fn only_a_station_addressing_our_callsign_is_a_pending_caller() {
+        let empty = LogIndex::build(&[]);
+        let none = HashSet::new();
+        let d = [
+            caller("IU5HIU", "19DCG373", -8, 10),
+            // Somebody calling CQ in general — not ours to take in Auto CQ.
+            Decode { is_cq: true, ..caller("SP3JHZ", "CQ", -3, 12) },
+            // Our own transmission, echoed back by a receiver.
+            caller("19DCG373", "SP3JHZ", -1, 14),
+            // Addressed to another station.
+            caller("DL1ABC", "F4NRM", -2, 16),
+        ];
+        let t = pick_caller(&d, "19DCG373", &empty, &none, |_| false).expect("IU5HIU is calling");
+        assert_eq!(t.call, "IU5HIU");
+    }
+
+    /// The strongest caller wins, so the queue starts with the contact most
+    /// likely to complete; and a station already tried this session is not in
+    /// it again.
+    #[test]
+    fn the_queue_takes_the_strongest_caller_once() {
+        let empty = LogIndex::build(&[]);
+        let d = [caller("WEAK", "19DCG373", -18, 10), caller("LOUD", "19DCG373", -2, 12)];
+        let t = pick_caller(&d, "19DCG373", &empty, &HashSet::new(), |_| false).unwrap();
+        assert_eq!(t.call, "LOUD");
+        let mut tried = HashSet::new();
+        tried.insert("LOUD".to_string());
+        let t = pick_caller(&d, "19DCG373", &empty, &tried, |_| false).unwrap();
+        assert_eq!(t.call, "WEAK", "a station already tried is passed over");
+    }
+
+    /// An empty callsign is a station that has not been configured yet, and it
+    /// must not turn every decode into a caller.
+    #[test]
+    fn an_unconfigured_callsign_has_no_callers() {
+        let empty = LogIndex::build(&[]);
+        let d = [caller("IU5HIU", "19DCG373", -8, 10)];
+        assert!(pick_caller(&d, "", &empty, &HashSet::new(), |_| false).is_none());
+        assert!(pick_caller(&d, "   ", &empty, &HashSet::new(), |_| false).is_none());
     }
 }

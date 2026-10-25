@@ -124,6 +124,20 @@ impl SdroxideApp {
         // works whoever answers, and does not go chasing somebody else's CQ —
         // that is the other role's job, and they are switched rather than
         // blended (issue #236).
+        // A station calling **us** takes the next contact, in both roles.
+        let caller = |me: &mut Self, my_call: &str, cmds: &mut Vec<Command>| -> bool {
+            let Some(t) = me.auto_caller(my_call) else { return false };
+            me.auto_tried.insert(t.call.to_ascii_uppercase());
+            me.auto_note = format!("auto: answering {} (called us)", t.call);
+            cmds.push(Command::DigiStartQso {
+                from: t.call,
+                grid: t.grid,
+                snr: t.snr_db,
+                audio_hz: t.audio_hz,
+                wait_for_cq: false,
+            });
+            true
+        };
         let answer = |me: &mut Self, cmds: &mut Vec<Command>| -> bool {
             match me.auto_target(&my_call, &my_grid) {
                 Some(t) => {
@@ -147,12 +161,20 @@ impl SdroxideApp {
         };
         match role {
             auto::AutoRole::Rx => {
-                if !answer(self, cmds) {
+                // **Somebody calling us comes first**, ahead of any CQ on the
+                // band: a station addressing our callsign is the one contact
+                // that is already half made.
+                if !caller(self, &my_call, cmds) && !answer(self, cmds) {
                     // Nothing worth answering: stay quiet and keep listening.
                     // This is the difference from Auto CQ, and it must not look
                     // like a stalled loop.
                     self.auto_note = "auto rx: listening".into();
                 }
+            }
+            auto::AutoRole::Cq if caller(self, &my_call, cmds) => {
+                // **The pending caller is worked before another CQ goes out**,
+                // and it does not count against the run's call limit: the limit
+                // bounds the calling, and this is the call being answered.
             }
             auto::AutoRole::Cq => match auto::cq_limit_action(
                 cq_sent,
@@ -204,6 +226,39 @@ impl SdroxideApp {
     /// predicate so it can drop those rows in place. An earlier cut built a
     /// filtered `Vec` of the whole decode list instead, which meant cloning up
     /// to 200 rows every frame for the sake of the few that were muted.
+    /// Take a station that is calling **us**, if there is one.
+    ///
+    /// This is the pending-caller queue issue #236 asks for: IU5HIU calling
+    /// while we are finishing with SP3JHZ used to be a line in the panel saying
+    /// "also calling" and nothing more. Here it is the next contact, so the run
+    /// goes finish the QSO → work whoever called → and only then call CQ again.
+    ///
+    /// Nobody is worked twice a session and the mute list is honoured, the same
+    /// two rules [`Self::auto_target`] keeps. A station that never comes back is
+    /// dropped by [`QsoMachine`]'s own give-up count, so this needs no separate
+    /// retry budget: it is asked again only while it is still calling.
+    ///
+    /// [`QsoMachine`]: sdroxide_digi::qso::QsoMachine
+    fn auto_caller(&mut self, my_call: &str) -> Option<auto::AutoTarget> {
+        let len = self.qso_log.len();
+        if self.log_index_cache.as_ref().map(|(l, _)| *l) != Some(len) {
+            self.log_index_cache = Some((len, sdroxide_types::LogIndex::build(&self.qso_log)));
+        }
+        let ix = &self.log_index_cache.as_ref().expect("just filled").1;
+        if self.session_ignored.is_empty() {
+            return auto::pick_caller(
+                &self.digi_decodes,
+                my_call,
+                ix,
+                &self.auto_tried,
+                |_| false,
+            );
+        }
+        auto::pick_caller(&self.digi_decodes, my_call, ix, &self.auto_tried, |d| {
+            crate::app::ignore::is_ignored(&self.session_ignored, d.from.as_deref())
+        })
+    }
+
     fn auto_target(&mut self, my_call: &str, my_grid: &str) -> Option<auto::AutoTarget> {
         let len = self.qso_log.len();
         if self.log_index_cache.as_ref().map(|(l, _)| *l) != Some(len) {
