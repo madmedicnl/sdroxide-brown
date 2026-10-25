@@ -337,6 +337,23 @@ reception log · #642 S-meter calibration.
 ## Recently done
 
 ### 2026-10-25
+- **The coded PSK banks all transmit** — the multi-carrier `C` and `RC` families
+  were refused because their output came back mangled even on one carrier. The
+  fault was the **varicode table**: `PskMultiRx` ends in `VaricodeRx` (PSK31's)
+  and the coded families in `MfskVaricodeRx`, so a `C` transmission carrying the
+  MFSK table decoded as near neighbours — right character count, every letter
+  wrong. All 31 coded variants key now.
+- **DominoEX transmits** — nine speeds, one mode, no modulator before this. It is
+  THOR's front end with the code and the interleaver taken out: one to three
+  nibbles per character, one per symbol, bit 3 continuing. All nine read back, and
+  the controller reads the two ends of the family.
+- **DTMF transmits** — the text box is the keypad: 100 ms press, 50 ms gap, the
+  phone standard, every key read back once.
+- **8PSK transmits** — 125/250/500 read back through our own receiver and the
+  controller; 1000 baud has two characters of twenty wrong and is written down as
+  open. Its receiver now matches fldigi's cross-faded waveform (before, only an
+  exactly aligned symbol phase decoded at all), but the corpus recordings still
+  read 0/3 — the remaining difference is the signal's amplitude envelope.
 - **STANAG 4285's uncoded text reads** — the character layer cut each frame's bits
   into groups of five, but a teleprinter character is **seven** bits (start, five
   data, stop), so an uncoded 1200 bps transmission could never be read however clean
