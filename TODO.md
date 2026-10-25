@@ -125,7 +125,29 @@ maintainer's queue there, not a promise.
    look at it on a real screen with a real station; the server's other integration
    tests and the workspace check need the opus download. Asked for by the operator.
 
-1. **The mode work — the live queue, and it has its own brief.**
+1. **The mode work — the live queue, and it has its own brief.** The table is
+   **done** (operator, 2026-10-25: "that table is already done a few sessions ago"),
+   so it is not the next task. **What is left, checked against the code on
+   2026-10-25** — every line read out of `Mode::is_rx_only`, the refusal texts in
+   `text_modem.rs`, and `MODE-PROGRESS.md`'s table:
+   - **STANAG 4285's coded payload** — the programme's head. Receiver measured;
+     the code has never been read off the air. Needs a capture with 93 continuous
+     usable frames; none of ours has more than 82.
+   - **TX where fldigi sends and we do not** — the coded PSK families (**34
+     waveforms**, "the coded PSK transmitter is not written" — the largest single
+     gap in the tree), **8PSK** ("no eight-phase modulator"), **DominoEX**,
+     **DTMF**, **ARDOP** (no ARQ), **STANAG 4285** (no modulator), and
+     **JT65 / JT9 / FST4 / Q65 / MSK144** ("transmit is not wired in this build").
+   - **RX faults on modes we ship** — PSK 31/63 lose a word, BPSK1000 locks from
+     its second in; PSK500C4/1000C2/500RC4 **0/3** and four RC banks 1–2 of 3;
+     8PSK **0/4**; Hell five of seven at 0.33–0.48; MFSK8/MFSK11; DominoEX 3 of 9
+     short; THOR 4 of 15; Contestia 64/500; MT63 2KL partial and 1KS/1KL/500L not
+     offered; FSQ unproven; PI4 and UVPacket read nothing.
+   - **No decoder at all, recordings already in `samples/fldigi`** — **OFDM (3),
+     THROB (3), SCAMP (6), SITOR-B (1)**.
+   - **Needs the bench, not a session** — ALE (one burst), ARDOP (a station),
+     STANAG (a coded tape), 8PSK and FSQ (a clean recording).
+   - The line below still holds, and F4NRM's list is still his.
    [`docs/internal/MODE-PHASE-4-PROMPT.md`](docs/internal/MODE-PHASE-4-PROMPT.md):
    finish the missing modes and get TX working for everything fldigi can
    transmit, and **vendor a mode when the port and the bench have both been
