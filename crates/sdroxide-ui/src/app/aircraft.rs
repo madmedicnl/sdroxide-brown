@@ -23,6 +23,7 @@ use sdroxide_types::{Command, Mode, RxId};
 
 use super::aircraft_card;
 use super::aircraft_online::{self, Badge, Provenance, ThumbStatus};
+use super::aircraft_search;
 
 /// The opening size of the window and its floor.
 const AIRCRAFT_SIZE: [f32; 2] = [920.0, 560.0];
@@ -236,7 +237,44 @@ impl super::SdroxideApp {
                 self.aircraft_card_sel = None;
             }
         }
-        let sel = self.aircraft_card_sel.clone().unwrap_or_else(|| rows[0].key.clone());
+        // The search box narrows the list from what is in memory; it asks for
+        // nothing. See [`aircraft_search`].
+        let query = aircraft_search::Query::parse(&self.aircraft_query);
+        let found = aircraft_search::search_rows(
+            &query,
+            rows,
+            &self.aircraft_registry,
+            &self.aircraft_online.store,
+            self.ctrl.peer_url().is_some(),
+        );
+        let counts = (!query.is_blank()).then_some((found.rows.len(), found.total));
+        aircraft_search::search_box(
+            ui,
+            &mut self.aircraft_query,
+            200.0,
+            counts,
+            found.hint.as_deref(),
+        );
+        let h = (h - 26.0 - if found.hint.is_some() { 16.0 } else { 0.0 }).max(80.0);
+        let rows = found.rows;
+        // The card open is the one chosen while it matches; when the box leaves
+        // it out, the first match is shown instead and the choice is kept for
+        // when the box lets it back.
+        let Some(open) =
+            aircraft_search::open_card(self.aircraft_card_sel.as_ref(), &rows, !query.is_blank())
+        else {
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new(format!(
+                    "No aircraft match \u{201c}{}\u{201d}.",
+                    self.aircraft_query.trim()
+                ))
+                .size(11.5)
+                .color(crate::theme::gray(160)),
+            );
+            return;
+        };
+        let sel = open.key.clone();
         // The relay's half: poll what arrived, ask what is due, and start the
         // thumbnail. All of it from the card that is open, and nothing else.
         let ctx = ui.ctx().clone();
@@ -244,12 +282,24 @@ impl super::SdroxideApp {
         let want = aircraft_card::lookup(&self.aircraft_registry, &sel)
             .and_then(|c| aircraft_online::want_for(&sel, c));
         self.aircraft_online.poll(&ctx, now);
-        self.aircraft_online.ask(&ctx, peer.as_deref(), want.as_ref(), now);
+        // A card shown only because the box left it first was not chosen: it is
+        // not asked about, and its photo is not fetched.
+        self.aircraft_online.ask(
+            &ctx,
+            peer.as_deref(),
+            want.as_ref().filter(|_| !open.by_filter),
+            now,
+        );
         let state = match &want {
             Some(w) => self.aircraft_online.store.state_for(w.icao, peer.is_some()).clone(),
             None => aircraft_online::OnlineState::Idle,
         };
         let mut photo = aircraft_online::photo_view(&state, ThumbStatus::NotTried);
+        if open.by_filter {
+            if let Some(p) = photo.as_mut() {
+                p.show_image = false;
+            }
+        }
         if let Some(p) = photo.as_ref().filter(|p| p.show_image) {
             self.aircraft_online.want_thumb(&ctx, &p.thumb_url);
             // Now that it has been asked for, what became of it decides whether

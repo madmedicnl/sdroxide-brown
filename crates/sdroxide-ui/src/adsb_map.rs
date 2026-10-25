@@ -89,6 +89,11 @@ pub struct AdsbMapState {
     /// The aircraft the operator pressed "Look up online" for: its thumbnail is
     /// loaded once the answer is in. `None` until that button is pressed.
     pub lookup: Option<u32>,
+    /// The aircraft the search box lets through, by ICAO address; `None` when
+    /// nothing is searched for. Written by the panel each frame. Whatever is not
+    /// in it is neither drawn, nor hovered, nor counted in the framing — except
+    /// the pinned and the selected aircraft: see [`map_visible`].
+    pub visible: Option<std::collections::HashSet<u32>>,
     /// The map under the picture: land, rivers and borders as an image rather
     /// than the dot stipple the propagation maps use. Rebuilt only when the
     /// view moves by more than a texel.
@@ -540,11 +545,15 @@ pub fn show(
     let p = ui.painter_at(rect);
     p.rect_filled(rect, 0.0, map.sea);
 
-    // Only the targets with a position fresh enough to draw. Everything below
-    // works from this list, so a stale aircraft cannot pull the view toward
-    // where it used to be either.
-    let live: Vec<&AdsbAircraft> =
-        aircraft.iter().filter(|a| !a.pos_stale(now, cfg.drop_map_s)).collect();
+    // Only the targets with a position fresh enough to draw, and that the search
+    // box lets through. Everything below works from this list, so a stale
+    // aircraft cannot pull the view toward where it used to be either — and
+    // neither can one the search has hidden.
+    let live: Vec<&AdsbAircraft> = aircraft
+        .iter()
+        .filter(|a| !a.pos_stale(now, cfg.drop_map_s))
+        .filter(|a| map_visible(state.visible.as_ref(), a.icao, state.pinned, state.selected))
+        .collect();
 
     // ── the view ──
     let aspect = (rect.height() / rect.width()) as f64;
@@ -890,6 +899,18 @@ pub fn pin_keep(
         .find(|a| a.icao == icao)
         .filter(|a| !a.pos_stale(now, drop_map_s))
         .map(|a| a.icao)
+}
+
+/// Whether the map draws this aircraft: the search lets it through, or it is
+/// the one whose card is pinned or open, which must not vanish from under its
+/// own card because the box is narrower than it was.
+pub fn map_visible(
+    visible: Option<&std::collections::HashSet<u32>>,
+    icao: u32,
+    pinned: Option<u32>,
+    selected: Option<u32>,
+) -> bool {
+    visible.is_none_or(|set| set.contains(&icao)) || pinned == Some(icao) || selected == Some(icao)
 }
 
 /// Whether the hover card is drawn over this aircraft: not over the one whose
@@ -1349,5 +1370,122 @@ mod tests {
         assert!(span >= MIN_LON_SPAN);
         let (_, _, span) = target_view(None, &[], 0.5);
         assert_eq!(span, 360.0);
+    }
+
+    // ── the search box on the map ─────────────────────────────────────────
+
+    #[test]
+    fn the_map_draws_what_the_search_lets_through_and_the_aircraft_with_a_card() {
+        use std::collections::HashSet;
+        let only: HashSet<u32> = HashSet::from([1]);
+        assert!(map_visible(None, 5, None, None), "no search, everything shows");
+        assert!(map_visible(Some(&only), 1, None, None));
+        assert!(!map_visible(Some(&only), 2, None, None), "not matched, not drawn");
+        assert!(map_visible(Some(&only), 2, Some(2), None), "the pinned one stays");
+        assert!(map_visible(Some(&only), 3, None, Some(3)), "so does the selected one");
+        assert!(!map_visible(Some(&only), 4, Some(2), Some(3)), "and only those");
+    }
+
+    fn map_frame(
+        ctx: &eframe::egui::Context,
+        state: &mut AdsbMapState,
+        list: &[AdsbAircraft],
+        events: Vec<eframe::egui::Event>,
+    ) {
+        let mut raw = eframe::egui::RawInput::default();
+        raw.screen_rect = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0)));
+        raw.events = events;
+        let _ = crate::test_support::run_frame(ctx, raw, |ui| {
+            show(
+                ui,
+                state,
+                list,
+                None,
+                1_000,
+                AdsbSettings::default(),
+                None,
+                sdroxide_types::MapStyle::Radar,
+                400.0,
+                Vfo::A,
+                None,
+            );
+        });
+    }
+
+    fn at(icao: u32, lat: f64, lon: f64) -> AdsbAircraft {
+        let mut a = on_map(icao, 0);
+        a.lat = Some(lat);
+        a.lon = Some(lon);
+        a
+    }
+
+    #[test]
+    fn an_aircraft_the_search_hides_does_not_pull_the_view() {
+        // One over Amsterdam, one over Singapore; only the first is searched for.
+        let list = [at(1, 52.0, 5.0), at(2, 1.3, 103.8)];
+        let mut all = AdsbMapState::default();
+        map_frame(&eframe::egui::Context::default(), &mut all, &list, vec![]);
+        assert!(
+            all.view.clat < 40.0,
+            "the control: both in view frames them both ({})",
+            all.view.clat
+        );
+
+        let mut some = AdsbMapState::default();
+        some.visible = Some(std::collections::HashSet::from([1]));
+        map_frame(&eframe::egui::Context::default(), &mut some, &list, vec![]);
+        assert!(
+            (some.view.clat - 52.0).abs() < 1.0 && (some.view.clon - 5.0).abs() < 1.0,
+            "framed on the one that shows: {} {}",
+            some.view.clat,
+            some.view.clon
+        );
+    }
+
+    /// A click on the middle of the map, where two aircraft sit on top of each
+    /// other: returns which one took it.
+    fn click_the_middle(visible: Option<std::collections::HashSet<u32>>) -> Option<u32> {
+        use eframe::egui::{Event, PointerButton};
+        // The last one in the list wins a tie, so the hidden one is last.
+        let list = [at(2, 52.0, 5.0), at(1, 52.0, 5.0)];
+        let mut st = AdsbMapState::default();
+        st.visible = visible;
+        let ctx = eframe::egui::Context::default();
+        map_frame(&ctx, &mut st, &list, vec![]);
+        let c = st.pin_bounds.expect("the map was drawn").center();
+        let button = |pressed| Event::PointerButton {
+            pos: c,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: eframe::egui::Modifiers::NONE,
+        };
+        map_frame(&ctx, &mut st, &list, vec![Event::PointerMoved(c)]);
+        map_frame(&ctx, &mut st, &list, vec![Event::PointerMoved(c), button(true), button(false)]);
+        st.pinned
+    }
+
+    #[test]
+    fn a_hidden_aircraft_is_not_hovered_or_clicked() {
+        assert_eq!(
+            click_the_middle(None),
+            Some(1),
+            "the control: with no search the top one is hit"
+        );
+        assert_eq!(
+            click_the_middle(Some(std::collections::HashSet::from([2]))),
+            Some(2),
+            "with the search on 2, the click lands on 2 and not on the one over it"
+        );
+    }
+
+    #[test]
+    fn no_search_leaves_the_map_as_it_was() {
+        let list = [at(1, 52.0, 5.0), at(2, 1.3, 103.8)];
+        let mut a = AdsbMapState::default();
+        let mut b = AdsbMapState::default();
+        b.visible = Some(std::collections::HashSet::from([1, 2]));
+        map_frame(&eframe::egui::Context::default(), &mut a, &list, vec![]);
+        map_frame(&eframe::egui::Context::default(), &mut b, &list, vec![]);
+        assert_eq!((a.view.clat, a.view.clon), (b.view.clat, b.view.clon));
     }
 }
