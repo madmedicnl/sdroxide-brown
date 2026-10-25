@@ -18,6 +18,28 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **TCI receive audio: a server that offers baseband audio only gets silence
+   (#group, Rick Abshier KQ4Y, 2026-10-25)** — reported against upstream 1.6.10,
+   Icom 7300 MK2 through Remote Ham Radio's TCI platform with LocalMate: TCI CAT
+   works, receive audio does not, and CW keys the transmitter but sends nothing.
+   RHR's own answer is the right one: their TCI stream carries **baseband audio**,
+   and this tree's TCI receive asks for **IQ** only.
+
+   Checked in the code rather than taken on report:
+   `crates/sdroxide-tci/src/protocol.rs` parses `DataType::RxAudio`
+   (type 1, stereo L/R f32), and `net.rs`'s binary dispatch handles **only**
+   `DataType::Iq` and `DataType::TxChrono` — an `RxAudio` packet is dropped on the
+   floor. `Ctrl::Attach` sends `iq_start`; `audio_start` is sent only for the
+   transmit path. `tci_caps` in `src/main.rs` sets `audio_mode: false`
+   unconditionally.
+
+   **The fix, wire-neutral:** detect the server's transport during the handshake
+   (TCI servers announce `audio_samplerate`; a server that never starts an IQ
+   stream has none), and when there is no IQ, publish `caps.audio_mode = true`
+   with the audio rate, send `audio_start`, and route `RxAudio` frames into the
+   receiver's ring as real samples. No config field, no protocol bump — `audio_mode`
+   and the audio-source path already exist for CAT rigs on a sound card.
+
 0. **Airspy HF+ Discovery: the waterfall shows the filter skirt (#group, Graeme
    Davidson, 2026-10-25)** — reported on 2.1.0.2.5_brown. The spectrum and
    waterfall draw `RadioState::sample_rate` as the span, so at 768 kSPS the
