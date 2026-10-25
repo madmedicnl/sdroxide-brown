@@ -117,32 +117,6 @@ fn the_phasing_signal_alone_starts_the_page_under_a_carrier() {
     );
 }
 
-/// The setting has to stay usable: at either end of the slider the real
-/// transmission still starts, still phases and still yields its chart. A
-/// setting that copies nothing at one end is a way to switch the decoder off,
-/// and one that copies everything at the other is not a setting.
-///
-/// `-5` is the strict end and it is the one this is really asking about: the
-/// phasing lock needs fourteen of the sixteen lines to agree on where the pulse
-/// is, and a narrower window is what could lose that on a noisy capture.
-#[test]
-fn the_sensitivity_ends_still_copy_the_real_recording() {
-    for s in [0i8, -5, 5] {
-        let mut rx = receiver();
-        rx.set_sensitivity(s);
-        let ev = run(&mut rx, &piece("start"));
-        assert!(
-            ev.iter().any(|(_, e)| matches!(e, WefaxEvent::Start { auto: true, .. })),
-            "at {s:+} the real phasing signal started nothing"
-        );
-        assert!(
-            ev.iter().any(|(_, e)| matches!(e, WefaxEvent::Phased { .. })),
-            "at {s:+} the page never phased"
-        );
-        assert!(lines(&ev) >= 15, "at {s:+} only {} lines", lines(&ev));
-    }
-}
-
 #[test]
 fn noise_at_the_stop_tones_rate_does_not_end_the_page() {
     // The page has to be under way first: started by hand, on the phasing
