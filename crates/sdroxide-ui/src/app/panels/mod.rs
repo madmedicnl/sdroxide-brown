@@ -833,9 +833,9 @@ impl SdroxideApp {
                             // Auto mode's always-visible tell: it keys the
                             // transmitter with nobody watching, so it must not
                             // be possible to leave it armed and forget.
-                            if self.auto_mode {
+                            if let Some(role) = self.auto_role {
                                 ui.label(
-                                    RichText::new("● AUTO")
+                                    RichText::new(format!("● {}", role.label()))
                                         .size(10.0)
                                         .strong()
                                         .color(crate::theme::ALERT()),

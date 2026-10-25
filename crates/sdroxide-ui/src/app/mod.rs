@@ -1128,8 +1128,12 @@ pub struct SdroxideApp {
     // and the clocks it is run against. Deliberately session-only, never
     // persisted: a restart must not bring up a transmitting radio nobody asked
     // for.
-    /// Whether auto mode is armed.
-    auto_mode: bool,
+    /// **Which unattended role is armed**, or `None`. One toggle used to do
+    /// both jobs; the operator could not say "only listen" or "only call", which
+    /// is what issue #236 asked for.
+    auto_role: Option<sdroxide_types::auto::AutoRole>,
+    /// The Auto CQ run's CQ count, read from the engine's exchange log.
+    auto_cq: sdroxide_types::auto::CqCounter,
     /// A DAB channel scan in progress: which Band III block it is sitting on,
     /// and when it arrived there. Session-only — a scan is an act, not a
     /// setting; what it *finds* goes in `state.dab.found` and is remembered.
@@ -2275,7 +2279,8 @@ impl SdroxideApp {
             cw_key_error: None,
             digi_tx_hz_edit: String::new(),
             digi_preview: None,
-            auto_mode: false,
+            auto_role: None,
+            auto_cq: sdroxide_types::auto::CqCounter::default(),
             dab_scan: None,
             dab_vu: Default::default(),
             dab_vu_at: None,

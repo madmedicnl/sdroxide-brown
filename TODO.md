@@ -18,6 +18,17 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **FT8 Auto Rx and Auto CQ are two roles, and a CQ run has a bound** (issue
+   #236, F4NRM, 2026-10-25 — his area + a wire change → **PR**) — one AUTO chip
+   did both jobs, so the operator could not say "only listen" or "only call".
+   Now `AUTO RX` answers a CQ and never calls one, `AUTO CQ` calls and works
+   whoever answers and never chases another station's CQ, and an Auto CQ run has
+   `DigiConfig::auto_cq_repeats` calls before it switches to Auto Rx or stops
+   (0 = no limit of its own). The count is read from the engine's exchange log,
+   because the sequencer repeats the CQ by itself. `PROTO_VERSION` 250 (249 is
+   PR #240's). Tests in `sdroxide_types::auto`. Not done: band rotation, which
+   moves the dial unattended and needs its own decision.
+
 0. **TCI receive audio: a server that carries baseband audio only gets silence**
    (#group, Rick Abshier KQ4Y, 2026-10-25) — reported against upstream 1.6.10, an
    Icom 7300 MK2 through Remote Ham Radio's TCI platform with LocalMate: TCI CAT
