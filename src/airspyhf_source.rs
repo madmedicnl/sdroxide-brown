@@ -60,7 +60,22 @@ impl AirspyHfSource {
     }
 }
 
+/// The fraction of the rate the HF+ Discovery's own decimation filter leaves as
+/// spectrum: about **660 kHz of 768 kSPS**, which is Airspy's own figure for
+/// that rate and what a listener measured on the waterfall (report of
+/// 2026-10-25). The filter is the same one scaled to each rate, so the fraction
+/// is taken as constant — the figure is *measured* at 768 kSPS and assumed at
+/// the others, and a rate that turns out to differ should be re-measured rather
+/// than reasoned about.
+const USABLE_FRAC: f64 = 0.86;
+
 impl IqSource for AirspyHfSource {
+    /// See [`USABLE_FRAC`]: a display built on the raw rate shows the filter
+    /// skirt as band, and the operator can pan into it.
+    fn usable_frac(&self) -> f64 {
+        USABLE_FRAC
+    }
+
     /// The engine is transmitting and has stopped reading, or has started
     /// again. Passed straight through to the stream thread, which keeps
     /// receiving either way — this only decides whether a full ring is

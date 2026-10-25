@@ -2085,8 +2085,20 @@ use sdroxide_types::{
 /// `DigiStatus` whole, so removing the inserted fields moves the layout;
 /// `#[serde(default)]` keeps a stored config loading. `PROTO_VERSION` 246 →
 /// 247, `VERSION_BYTE` 0x42 → 0x43.
-pub const PROTO_VERSION: u16 = 247;
-const VERSION_BYTE: u8 = 0x43;
+/// v248: **the Airspy HF+'s usable span** — [`sdroxide_types::RadioState`] gains
+/// `usable_hz` at its tail: the part of `sample_rate` the front end's own
+/// decimation filter leaves as spectrum (the HF+ at 768 kSPS carries about
+/// 660 kHz of it), or `0.0` for "no opinion, use the rate". A display built on
+/// the raw rate showed filter skirt as band, could be panned into it, and the
+/// auto-fit averaged it into the noise floor. Appended last, and postcard is
+/// positional — so a v247 peer's payload does not decode and the version byte is
+/// what refuses it; `#[serde(default)]` covers the paths that read a bare value
+/// (a stored blob, a fixture). **This branch took 247 first and then moved**:
+/// #233 (the NAVTEX sensitivity revert) claimed it and landed while this was in
+/// review, so the later of two colliding branches moves. `PROTO_VERSION`
+/// 247 → 248, `VERSION_BYTE` 0x43 → 0x44. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 248;
+const VERSION_BYTE: u8 = 0x44;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -2752,6 +2764,20 @@ mod tests {
         let bytes = encode(&m).unwrap();
         let back: ServerMsg = decode(&bytes).unwrap();
         assert_eq!(back, m);
+
+        // …and the new tail field carries a *number*, not only its default: a
+        // display narrowing itself to the usable span is the whole point of it.
+        let mut narrowed = RadioState::default();
+        narrowed.sample_rate = 768_000.0;
+        narrowed.usable_hz = 660_480.0;
+        let back: ServerMsg = decode(&encode(&ServerMsg::State(narrowed)).unwrap()).unwrap();
+        match back {
+            ServerMsg::State(s) => {
+                assert_eq!(s.usable_hz, 660_480.0, "the usable span did not ride the wire");
+                assert_eq!(s.sample_rate, 768_000.0);
+            }
+            other => panic!("expected a state, got {other:?}"),
+        }
 
         let m = ServerMsg::Profiles(vec!["Contest".into(), "DX".into()]);
         let back: ServerMsg = decode(&encode(&m).unwrap()).unwrap();

@@ -631,6 +631,20 @@ pub struct RadioState {
     /// numbers fields by position.
     #[serde(default)]
     pub recording_format: crate::RecordingFormat,
+    /// The span this front end can **actually deliver**, in Hz — the usable
+    /// part of [`Self::sample_rate`], which is what a display should be built
+    /// on. `0.0` means "no opinion": use `sample_rate`, which is what every peer
+    /// that predates this field says, and what a front end whose filter is
+    /// sharper than its rate says too.
+    ///
+    /// A zero-IF receiver's decimation filter rolls off *inside* its sample
+    /// rate — the Airspy HF+ at 768 kSPS delivers about 660 kHz of spectrum —
+    /// so a panadapter drawn on the raw rate shows skirt as band and can be
+    /// panned into it. The engine narrows this figure by the source's own
+    /// (`IqSource::usable_frac`) and widens it back to the whole rate once the
+    /// engine has decimated, because its decimator is the sharper filter.
+    #[serde(default)]
+    pub usable_hz: f64,
 }
 
 impl Default for RadioState {
@@ -643,6 +657,9 @@ impl Default for RadioState {
             split: false,
             center_hz: freq,
             sample_rate: 1_536_000.0,
+            // "No opinion": a default state has no front end behind it, and a
+            // display that guessed a fraction here would be inventing one.
+            usable_hz: 0.0,
             decimation: no_decimation(),
             rx: [RxState::with_mode(mode), RxState::with_mode(mode)],
             sub_rx_enabled: false,

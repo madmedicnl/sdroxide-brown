@@ -4445,6 +4445,7 @@ fn engine_thread(
     let mut state = RadioState::default();
     state.center_hz = source.center_hz();
     state.sample_rate = source.sample_rate();
+    state.usable_hz = usable_span(state.sample_rate, 1, source.usable_frac());
     state.vfo_a_hz = source.center_hz();
     state.vfo_b_hz = source.center_hz();
     state.band = Band::containing(state.vfo_a_hz);
@@ -4687,6 +4688,7 @@ fn engine_thread(
     state.decimation = decimation_for(want_decimation, radio_fs, audio_mode);
     let decim = (state.decimation > 1).then(|| Decimator::new(state.decimation));
     state.sample_rate = radio_fs / state.decimation as f64;
+    state.usable_hz = usable_span(state.sample_rate, state.decimation, source.usable_frac());
 
     let cfg = SpectrumConfig::default();
     // In audio mode the analyzer FFTs the real audio at the card rate;
@@ -6071,6 +6073,27 @@ impl Drop for Engine {
 /// `sample_rate`. The arithmetic lives in `sdroxide-types` so the engine's
 /// warning and the radio tab's advice read one ladder — see
 /// [`sdroxide_types::dab_window_rate`].
+/// **The span a display should be built on**: the rate, narrowed to the part
+/// the front end's own filters leave usable, and widened back to the whole rate
+/// once the engine has decimated.
+///
+/// Two facts make the second half true. The source's filter rolls off *inside*
+/// its rate (the Airspy HF+ at 768 kSPS delivers about 660 kHz of spectrum); and
+/// the engine's decimator is a sharper filter than that, so a band decimated by
+/// two or more carries none of the source's skirt at all. Every fraction this
+/// tree publishes needs less than two (`0.86` needs 1.17), which is why the test
+/// pins the boundary rather than an arbitrary one.
+///
+/// `frac` is [`sdroxide_radio::IqSource::usable_frac`]; `0.0` is treated as
+/// "no opinion" so a source that never set it keeps the whole rate.
+fn usable_span(rate: f64, decimation: u32, frac: f64) -> f64 {
+    if rate <= 0.0 {
+        return 0.0;
+    }
+    let frac = if decimation >= 2 || !(frac > 0.0) { 1.0 } else { frac.min(1.0) };
+    rate * frac
+}
+
 fn dab_window_rate(sample_rate: f64) -> f64 {
     sdroxide_types::dab_window_rate(sample_rate)
 }
@@ -7397,6 +7420,9 @@ impl Engine {
         if let Some((center, span)) = self.scope_main_window() {
             self.state.center_hz = center;
             self.state.sample_rate = span;
+            // A radio's own scope delivers what it says it does; there is no
+            // filter skirt in a number a rig reports.
+            self.state.usable_hz = span;
             return;
         }
         // The dial is the *middle* of the window, not its edge. A demod-audio
@@ -7407,6 +7433,9 @@ impl Engine {
         let dial = self.state.rx_freq_hz();
         self.state.center_hz = dial;
         self.state.sample_rate = self.audio_bw * 2.0;
+        // Demodulated audio is not an ADC's output: the band the demodulator
+        // passed is the band there is.
+        self.state.usable_hz = self.state.sample_rate;
     }
 
     /// Follow the front end's centre after it reported a dial move of its own.
@@ -17377,6 +17406,7 @@ impl Engine {
         self.state.decimation = factor;
         self.decim = (factor > 1).then(|| Decimator::new(factor));
         self.state.sample_rate = self.radio_fs / factor as f64;
+        self.state.usable_hz = self.usable_span_hz();
 
         self.analyzer = build_analyzer(
             self.cfg.fft_size as usize,
@@ -18373,6 +18403,12 @@ impl Engine {
 
     /// [`Self::calibrated`] applied to the transmit drive, which is what scales
     /// the modulated I/Q.
+    /// See [`usable_span`]: the display span for the front end and decimation in
+    /// force now.
+    fn usable_span_hz(&self) -> f64 {
+        usable_span(self.state.sample_rate, self.state.decimation, self.source.usable_frac())
+    }
+
     fn tx_drive(&self) -> f32 {
         self.calibrated(self.state.tx.drive)
     }
@@ -22889,6 +22925,37 @@ mod cb_opening_tests {
         let paths = cb_paths(&[dec(99, Some("0A1ZZZ")), dec(99, Some("JA1ABC"))], "EU");
         assert_eq!(paths.len(), 1);
         assert_eq!(paths[0].call, "JA1ABC");
+    }
+}
+
+#[cfg(test)]
+mod usable_span_tests {
+    use super::usable_span;
+
+    /// **The display span is the rate narrowed by the front end's filter, and
+    /// the whole rate again once the engine has decimated.**
+    ///
+    /// The numbers are the report's: an Airspy HF+ at 768 kSPS carries about
+    /// 660 kHz of spectrum, so 768 000 × 0.86 = 660 480 Hz — the figure a
+    /// listener measured on the waterfall. The second half is the part that is
+    /// easy to get wrong in the other direction: once the engine decimates by
+    /// two, its own filter is the sharper one and nothing of the source's skirt
+    /// survives, so narrowing again would show *less* band than there is.
+    #[test]
+    fn the_display_span_follows_the_filter_and_the_decimator() {
+        assert!((usable_span(768_000.0, 1, 0.86) - 660_480.0).abs() < 0.5);
+        // A source with no opinion is the whole rate, which is every front end
+        // whose filter is sharper than its clock.
+        assert_eq!(usable_span(768_000.0, 1, 1.0), 768_000.0);
+        assert_eq!(usable_span(768_000.0, 1, 0.0), 768_000.0);
+        // Decimated: the engine's filter is the one that defines the band.
+        assert_eq!(usable_span(384_000.0, 2, 0.86), 384_000.0);
+        assert_eq!(usable_span(192_000.0, 4, 0.86), 192_000.0);
+        // Nonsense in, no span out rather than a negative one.
+        assert_eq!(usable_span(0.0, 1, 0.86), 0.0);
+        assert_eq!(usable_span(-1.0, 1, 0.86), 0.0);
+        // A fraction above one cannot widen the rate.
+        assert_eq!(usable_span(100_000.0, 1, 1.4), 100_000.0);
     }
 }
 
