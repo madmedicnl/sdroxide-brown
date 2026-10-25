@@ -1018,6 +1018,34 @@ mod tests {
         assert_eq!(store.composed_document(1, &sdroxide_types::Composer::default()), own);
     }
 
+    /// **Loading a layout writes only the document.** A template is text and
+    /// strips: the slot's picture, its message and its overlay switch are other
+    /// fields and must not move when one is applied — the operator's requirement
+    /// that a template load preserves the source image (or the mosaic).
+    #[test]
+    fn loading_a_layout_leaves_the_picture_message_and_overlay_alone() {
+        let mut store = ImagePresetStore::detached();
+        let (png, w, h) = normalise(&png_of(64, 32), 1024).unwrap();
+        assert!(store.adopt(1, png, w, h));
+        assert!(store.set_message(1, "CQ CQ".into()));
+        assert!(store.set_overlay(1, false));
+        let before = store.status().slot(1);
+
+        let mut template = sdroxide_types::Composer::default();
+        template.layers.push(sdroxide_types::TextLayer {
+            text: "FROM A LAYOUT".into(),
+            ..Default::default()
+        });
+        assert!(store.set_composer(1, template.clone()));
+
+        let after = store.status().slot(1);
+        assert_eq!(after.composer, template, "the layout did not land");
+        assert_eq!(after.version, before.version, "a layout load changed the picture");
+        assert_eq!(after.message, before.message, "a layout load rewrote the caption");
+        assert_eq!(after.apply_overlay, before.apply_overlay, "a layout load moved the overlay switch");
+        assert!(after.has_picture(), "a layout load emptied the slot");
+    }
+
     /// **The layout library** keeps a named document, replaces one of the same
     /// name rather than duplicating it, refuses an empty name, and forgets one.
     #[test]
