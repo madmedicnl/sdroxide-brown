@@ -3161,6 +3161,21 @@ pub struct DigiConfig {
     /// the picture. This scales the text inside the strip instead.
     #[serde(default = "sstv_default_banner_text_pct")]
     pub sstv_banner_text_pct: u16,
+    /// **The station-wide picture overlay**: the layers every transmit preset
+    /// draws under its own document — the callsign, usually, in the corner the
+    /// operator likes.
+    ///
+    /// Station-wide rather than per slot because it is the station's
+    /// identification, not a picture's caption: the thing an operator sets once.
+    /// It composes *with* each preset's own layers rather than replacing them,
+    /// and a preset can switch it off where the picture already carries it
+    /// ([`crate::ImageSlotInfo::apply_overlay`]).
+    ///
+    /// On `DigiConfig` because that is the station's identity, and it already
+    /// rides the wire whole and is stored for us; appending it here is what
+    /// makes it a wire change.
+    #[serde(default)]
+    pub station_overlay: crate::Composer,
     /// SSTV receive sensitivity, -5..=+5. 0 = the automatic level (Auto).
     /// Adjusts the signal level fed to the decoder: negative attenuates,
     /// positive boosts. Does not change the decoder itself.
@@ -3361,6 +3376,7 @@ impl Default for DigiConfig {
             sstv_banner_height: sstv_default_banner_height(),
             sstv_banner_bottom: false,
             sstv_banner_text_pct: sstv_default_banner_text_pct(),
+            station_overlay: crate::Composer::default(),
             rf_paint_speed: 0.25,
             auto_tx_freq: true,
             hold_tx_freq: false,

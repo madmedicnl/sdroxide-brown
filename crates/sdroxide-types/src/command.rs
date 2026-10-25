@@ -1387,6 +1387,26 @@ pub enum Command {
         slot: u8,
         composer: crate::Composer,
     },
+    /// Draw the station-wide overlay under transmit preset `slot`'s own
+    /// document, or stop drawing it there. Answered with a fresh
+    /// [`crate::RadioEvent::ImagePresets`].
+    ImageSetOverlay {
+        slot: u8,
+        on: bool,
+    },
+    /// Save a named layout template, replacing one of the same name.
+    ///
+    /// The name is trimmed and capped at [`crate::TEMPLATE_NAME_MAX`]; an empty
+    /// one, or a library already at [`crate::TEMPLATE_MAX`] under a new name, is
+    /// refused with a [`crate::RadioEvent::Notice`] rather than silently.
+    ImageSaveTemplate {
+        name: String,
+        composer: crate::Composer,
+    },
+    /// Forget a named layout template.
+    ImageDeleteTemplate {
+        name: String,
+    },
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.

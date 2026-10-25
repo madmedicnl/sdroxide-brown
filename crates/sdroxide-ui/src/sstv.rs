@@ -647,6 +647,7 @@ mod tests {
 
     fn presets(messages: &[&str]) -> ImagePresets {
         ImagePresets {
+            templates: Vec::new(),
             slots: messages
                 .iter()
                 .map(|m| ImageSlotInfo { message: (*m).into(), ..ImageSlotInfo::default() })

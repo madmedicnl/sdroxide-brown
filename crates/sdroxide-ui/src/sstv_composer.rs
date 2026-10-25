@@ -72,6 +72,92 @@ pub(crate) fn draw_onto(doc: &Composer, img: &mut [u8], w: u16, h: u16) {
     }
 }
 
+/// **A mosaic of received pictures**, composed to `(w, h)`.
+///
+/// The layout is a grid decided by how many pictures there are: one fills the
+/// frame, two sit side by side, three and four make a 2×2 — the arrangement
+/// issue #237 asked for, since the operator's case is "four pictures the other
+/// station missed".
+///
+/// Each cell is **letterboxed, never stretched**: the picture is scaled until it
+/// fits inside its cell and the difference is black, so a portrait shot is not
+/// squeezed into a landscape half. The cells are centred, and the originals are
+/// only read — nothing in the received store is touched.
+pub(crate) fn mosaic(
+    w: u16,
+    h: u16,
+    cells: &[(&[u8], u16, u16)],
+) -> (Vec<u8>, u16, u16) {
+    let mut img = vec![0u8; usize::from(w) * usize::from(h) * 3];
+    let n = cells.len().min(4);
+    if n == 0 {
+        return (img, w, h);
+    }
+    // The grid: one cell fills the frame, two sit in a row, three and four make
+    // a square. Integer halving, so the four cells are exactly equal and the
+    // second pair starts where the first ends.
+    let (cols, rows) = match n {
+        1 => (1u16, 1u16),
+        2 => (2, 1),
+        _ => (2, 2),
+    };
+    let (w, h) = (w, h);
+    for (i, (rgb, sw, sh)) in cells.iter().take(n).enumerate() {
+        let (i, sw, sh) = (i as u16, *sw, *sh);
+        if sw == 0 || sh == 0 {
+            continue;
+        }
+        let (cx, cy) = (i % cols, i / cols);
+        let (x0, y0) = (w * cx / cols, h * cy / rows);
+        let (x1, y1) = (w * (cx + 1) / cols, h * (cy + 1) / rows);
+        let (cw, ch) = (x1.saturating_sub(x0), y1.saturating_sub(y0));
+        if cw == 0 || ch == 0 {
+            continue;
+        }
+        // Fit inside the cell, keeping the aspect ratio; the leftover is black.
+        let scale = (cw as f32 / sw as f32).min(ch as f32 / sh as f32);
+        let dw = ((sw as f32 * scale).round() as u16).max(1).min(cw);
+        let dh = ((sh as f32 * scale).round() as u16).max(1).min(ch);
+        let scaled = crop_scale_fit(rgb, sw, sh, dw, dh);
+        let ox = x0 + (cw - dw) / 2;
+        let oy = y0 + (ch - dh) / 2;
+        blit(&mut img, w, h, &scaled, dw, dh, ox, oy);
+    }
+    (img, w, h)
+}
+
+/// Scale a picture to exactly `(dw, dh)` **without cropping it** — the whole
+/// frame, letterboxed by the caller.
+fn crop_scale_fit(src: &[u8], sw: u16, sh: u16, dw: u16, dh: u16) -> Vec<u8> {
+    let Some(img) = image::RgbImage::from_raw(u32::from(sw), u32::from(sh), src.to_vec()) else {
+        return vec![0u8; usize::from(dw) * usize::from(dh) * 3];
+    };
+    image::DynamicImage::ImageRgb8(img)
+        .resize_exact(u32::from(dw), u32::from(dh), image::imageops::FilterType::Triangle)
+        .to_rgb8()
+        .into_raw()
+}
+
+/// Copy a `dw × dh` picture into the frame at `(ox, oy)`, clipping at the edges.
+fn blit(dst: &mut [u8], w: u16, h: u16, src: &[u8], dw: u16, dh: u16, ox: u16, oy: u16) {
+    let (w, h) = (usize::from(w), usize::from(h));
+    for y in 0..usize::from(dh) {
+        let ty = usize::from(oy) + y;
+        if ty >= h {
+            break;
+        }
+        for x in 0..usize::from(dw) {
+            let tx = usize::from(ox) + x;
+            if tx >= w {
+                break;
+            }
+            let si = (y * usize::from(dw) + x) * 3;
+            let di = (ty * w + tx) * 3;
+            dst[di..di + 3].copy_from_slice(&src[si..si + 3]);
+        }
+    }
+}
+
 /// The box `doc.layers[i]` covers at frame size `(w, h)`, for hit-testing a drag
 /// and for drawing the selection outline.
 pub(crate) fn layer_box(doc: &Composer, i: usize, w: u16, h: u16) -> Option<Box2> {
@@ -327,6 +413,7 @@ mod tests {
 
     fn presets(docs: &[Composer]) -> ImagePresets {
         ImagePresets {
+            templates: Vec::new(),
             slots: docs
                 .iter()
                 .map(|c| ImageSlotInfo { composer: c.clone(), ..ImageSlotInfo::default() })
@@ -448,6 +535,90 @@ mod tests {
         c.layers[0].x = 0.8;
         let after = layer_box(&c, 0, 320, 256).unwrap();
         assert!(after.0 > before.0, "the box did not move right");
+    }
+
+    // ── the mosaic ──
+
+    /// A solid colour rectangle, so the cells can be told apart.
+    fn solid(w: u16, h: u16, rgb: [u8; 3]) -> Vec<u8> {
+        let mut v = Vec::with_capacity(usize::from(w) * usize::from(h) * 3);
+        for _ in 0..usize::from(w) * usize::from(h) {
+            v.extend_from_slice(&rgb);
+        }
+        v
+    }
+
+    fn pixel(img: &[u8], w: u16, x: u16, y: u16) -> [u8; 3] {
+        let i = (usize::from(y) * usize::from(w) + usize::from(x)) * 3;
+        [img[i], img[i + 1], img[i + 2]]
+    }
+
+    /// **Four pictures make a 2×2**, each in its own quarter, and the originals
+    /// are only read.
+    #[test]
+    fn four_pictures_make_a_two_by_two_grid() {
+        let red = solid(64, 48, [220, 0, 0]);
+        let green = solid(64, 48, [0, 220, 0]);
+        let blue = solid(64, 48, [0, 0, 220]);
+        let white = solid(64, 48, [220, 220, 220]);
+        let cells: Vec<(&[u8], u16, u16)> =
+            vec![(&red, 64, 48), (&green, 64, 48), (&blue, 64, 48), (&white, 64, 48)];
+        let (img, w, h) = mosaic(320, 256, &cells);
+        assert_eq!((w, h), (320, 256));
+        // One probe inside each quarter.
+        assert_eq!(pixel(&img, w, 80, 64), [220, 0, 0], "top left");
+        assert_eq!(pixel(&img, w, 240, 64), [0, 220, 0], "top right");
+        assert_eq!(pixel(&img, w, 80, 192), [0, 0, 220], "bottom left");
+        assert_eq!(pixel(&img, w, 240, 192), [220, 220, 220], "bottom right");
+        // And the originals are untouched: the source buffers still hold what
+        // they held.
+        assert_eq!(pixel(&red, 64, 0, 0), [220, 0, 0]);
+    }
+
+    /// **A cell is letterboxed, never stretched.** A wide picture in a square
+    /// quarter keeps its shape, and the leftover is black rather than smeared.
+    #[test]
+    fn a_picture_keeps_its_shape_inside_its_cell() {
+        // A 4:1 strip, pure red.
+        let strip = solid(160, 40, [200, 0, 0]);
+        let (img, w, _) = mosaic(320, 256, &[(&strip, 160, 40)]);
+        // It fills the full width of the frame (160/40 is wider than 320/256),
+        // so rows above and below it are black.
+        assert_eq!(pixel(&img, w, 160, 4), [0, 0, 0], "the top is not black: 4:1 was stretched");
+        assert_eq!(pixel(&img, w, 160, 128), [200, 0, 0], "the strip is not where it should be");
+        assert_eq!(pixel(&img, w, 160, 251), [0, 0, 0], "the bottom is not black");
+    }
+
+    /// One picture fills the frame; two sit side by side; three leave the fourth
+    /// quarter black rather than stretching one of them into it.
+    #[test]
+    fn one_two_and_three_pictures_have_their_own_arrangements() {
+        let red = solid(32, 32, [200, 0, 0]);
+        let green = solid(32, 32, [0, 200, 0]);
+        let (img, w, _) = mosaic(320, 256, &[(&red, 32, 32)]);
+        // A square picture in a 5:4 frame is letterboxed left and right, not
+        // stretched across it: the middle is the picture, the edges are black.
+        assert_eq!(pixel(&img, w, 160, 128), [200, 0, 0], "the picture is not in the middle");
+        assert_eq!(pixel(&img, w, 4, 128), [0, 0, 0], "a square was stretched across the frame");
+
+        let (img, w, _) = mosaic(320, 256, &[(&red, 32, 32), (&green, 32, 32)]);
+        assert_eq!(pixel(&img, w, 40, 128), [200, 0, 0]);
+        assert_eq!(pixel(&img, w, 280, 128), [0, 200, 0]);
+
+        let (img, w, _) = mosaic(320, 256, &[(&red, 32, 32), (&green, 32, 32), (&red, 32, 32)]);
+        assert_eq!(pixel(&img, w, 240, 192), [0, 0, 0], "the empty quarter is not black");
+    }
+
+    /// No pictures is an empty frame, not a panic, and a zero-sized source is
+    /// skipped rather than dividing by zero.
+    #[test]
+    fn an_empty_or_broken_mosaic_is_a_blank_frame() {
+        let (img, w, h) = mosaic(64, 48, &[]);
+        assert_eq!((w, h), (64, 48));
+        assert!(img.iter().all(|b| *b == 0));
+        let empty: Vec<u8> = Vec::new();
+        let (img, ..) = mosaic(64, 48, &[(&empty, 0, 0)]);
+        assert!(img.iter().all(|b| *b == 0));
     }
 
     // ── the hand-off ──

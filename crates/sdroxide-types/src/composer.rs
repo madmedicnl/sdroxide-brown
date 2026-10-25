@@ -195,6 +195,25 @@ impl Composer {
         Composer { layers }
     }
 
+    /// **Two documents over one picture**: the station's overlay first, then
+    /// this preset's own layers on top.
+    ///
+    /// Neither replaces the other — that is the operator's requirement, and it is
+    /// the right one: the station overlay is the identification every picture
+    /// needs, and the preset's document is what *this* picture says. A preset
+    /// already carrying its identification can switch the overlay off with
+    /// [`ImageSlotInfo::apply_overlay`](crate::ImageSlotInfo) and keep its own.
+    ///
+    /// The overlay is drawn first so a preset's line always wins where they
+    /// overlap: the more specific document is the one the operator is looking at
+    /// when they place it.
+    pub fn over(&self, overlay: &Composer) -> Composer {
+        let mut layers = Vec::with_capacity(overlay.layers.len() + self.layers.len());
+        layers.extend(overlay.layers.iter().cloned());
+        layers.extend(self.layers.iter().cloned());
+        Composer { layers }
+    }
+
     /// Every layer's text, for a summary line in a panel that has no room for
     /// the picture.
     pub fn summary(&self) -> String {
@@ -235,6 +254,33 @@ mod tests {
         assert!(!empty.is_active());
     }
 
+    /// **The station overlay and the preset's own document compose; neither
+    /// replaces the other.** The overlay goes underneath, so a preset's line wins
+    /// where they overlap.
+    #[test]
+    fn an_overlay_and_a_presets_own_layers_compose_together() {
+        let overlay = Composer::seeded("19DCG373", "", "", Face::default(), 20, None, 256);
+        let own = Composer::seeded("", "", "CQ CQ", Face::default(), 24, None, 256);
+        let both = own.over(&overlay);
+        assert_eq!(both.layers.len(), 2, "one layer lost: {both:?}");
+        assert_eq!(both.layers[0].text, "19DCG373", "the overlay is drawn first");
+        assert_eq!(both.layers[1].text, "CQ CQ");
+        // An empty overlay changes nothing, which is the default station.
+        assert_eq!(own.over(&Composer::default()), own);
+        // And an inactive overlay is still "underneath" rather than absent.
+        assert!(own.over(&Composer::default()).is_active());
+    }
+
+    /// A template name is trimmed and capped, so it can be keyed by the store
+    /// and shown on a chip without either surprising the other.
+    #[test]
+    fn a_template_name_is_trimmed_and_capped() {
+        assert_eq!(LayoutTemplate::clean_name("  CQ layout  "), "CQ layout");
+        let long = "x".repeat(TEMPLATE_NAME_MAX + 20);
+        assert_eq!(LayoutTemplate::clean_name(&long).chars().count(), TEMPLATE_NAME_MAX);
+        assert_eq!(LayoutTemplate::clean_name("   "), "");
+    }
+
     /// A band on the top edge must not have half of itself above the picture.
     #[test]
     fn a_seeded_band_fits_inside_the_frame() {
@@ -244,5 +290,35 @@ mod tests {
             let top = l.y * 256.0 - 20.0;
             assert!(top >= -0.5, "line at y={} starts above the picture", l.y);
         }
+    }
+}
+
+/// **A named layout the operator keeps** — "CQ", "Reply", "Mosaic retransmission".
+///
+/// Held by the engine beside the presets rather than in a panel, for the reason
+/// the documents themselves are: a template is only useful if the browser and
+/// the console and next week's session all have the same one.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LayoutTemplate {
+    /// What the operator called it. Unique among the templates (the store
+    /// replaces on the same name), and the handle a client loads it by.
+    pub name: String,
+    pub composer: Composer,
+}
+
+/// The longest template name accepted from a client.
+pub const TEMPLATE_NAME_MAX: usize = 48;
+
+/// How many templates the store will keep. A layout is a few kilobytes; the
+/// cap is there so a hostile or broken client cannot grow the engine's memory
+/// without bound, not because a station needs a limit.
+pub const TEMPLATE_MAX: usize = 40;
+
+impl LayoutTemplate {
+    /// The name as it is stored: trimmed, and shortened to
+    /// [`TEMPLATE_NAME_MAX`] characters.
+    pub fn clean_name(name: &str) -> String {
+        name.trim().chars().take(TEMPLATE_NAME_MAX).collect()
     }
 }

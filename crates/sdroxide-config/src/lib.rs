@@ -2458,6 +2458,21 @@ pub fn save_sstv_composers(composers: &[sdroxide_types::Composer]) -> Result<(),
     save_json("sstv_composers.json", &composers)
 }
 
+/// The operator's named layout library, beside the per-slot documents.
+///
+/// An engine-side file for the same reason those are: a template is only useful
+/// if every screen attached to the radio, and next week's session, has the same
+/// one — and a browser has nowhere to keep it.
+pub fn load_sstv_templates() -> Vec<sdroxide_types::LayoutTemplate> {
+    load_json("sstv_templates.json")
+}
+
+pub fn save_sstv_templates(
+    templates: &[sdroxide_types::LayoutTemplate],
+) -> Result<(), ConfigError> {
+    save_json("sstv_templates.json", &templates)
+}
+
 /// The operator's satellite additions: element sets pasted in by hand, and
 /// frequency entries that override or extend the built-in table.
 ///

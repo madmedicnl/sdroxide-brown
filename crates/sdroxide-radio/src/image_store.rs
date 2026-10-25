@@ -288,6 +288,11 @@ pub struct ImagePresetStore {
     /// What each preset prints on its picture. An empty document means the
     /// station's banner and the message above are used instead.
     composers: Vec<sdroxide_types::Composer>,
+    /// Whether each preset draws the station-wide overlay under its own
+    /// document. On unless the operator turned it off for that picture.
+    overlays: Vec<bool>,
+    /// The operator's named layout library, oldest first.
+    templates: Vec<sdroxide_types::LayoutTemplate>,
     /// Where `slot{i}.png` lives. `None` when the config directory could not be
     /// resolved — the presets then work for the session and store nothing,
     /// exactly as the voice keyer does.
@@ -308,6 +313,8 @@ impl ImagePresetStore {
             slots: vec![Slot::default(); IMAGE_SLOTS],
             messages: vec![String::new(); IMAGE_SLOTS],
             composers: vec![sdroxide_types::Composer::default(); IMAGE_SLOTS],
+            overlays: vec![true; IMAGE_SLOTS],
+            templates: Vec::new(),
             dir,
         };
         let saved = sdroxide_config::load_sstv_messages();
@@ -318,6 +325,8 @@ impl ImagePresetStore {
         for (i, c) in saved.into_iter().take(IMAGE_SLOTS).enumerate() {
             store.composers[i] = c;
         }
+        store.templates = sdroxide_config::load_sstv_templates();
+        store.templates.truncate(sdroxide_types::TEMPLATE_MAX);
         for i in 0..IMAGE_SLOTS {
             let Some(path) = store.dir.as_ref().map(|d| slot_path(d, i)) else { continue };
             let Ok(bytes) = std::fs::read(&path) else { continue };
@@ -351,6 +360,8 @@ impl ImagePresetStore {
             slots: vec![Slot::default(); IMAGE_SLOTS],
             messages: vec![String::new(); IMAGE_SLOTS],
             composers: vec![sdroxide_types::Composer::default(); IMAGE_SLOTS],
+            overlays: vec![true; IMAGE_SLOTS],
+            templates: Vec::new(),
             dir: None,
         }
     }
@@ -362,15 +373,18 @@ impl ImagePresetStore {
                 .iter()
                 .zip(&self.messages)
                 .zip(&self.composers)
-                .map(|((s, m), c)| ImageSlotInfo {
+                .zip(&self.overlays)
+                .map(|(((s, m), c), o)| ImageSlotInfo {
                     message: m.clone(),
                     width: s.w,
                     height: s.h,
                     version: s.version,
                     thumb: s.thumb.clone(),
                     composer: c.clone(),
+                    apply_overlay: *o,
                 })
                 .collect(),
+            templates: self.templates.clone(),
         }
     }
 
@@ -429,6 +443,80 @@ impl ImagePresetStore {
             warn!("saving transmit-image composers: {e}");
         }
         true
+    }
+
+    /// Draw (or stop drawing) the station-wide overlay under a preset's own
+    /// document. Announced like any other preset change.
+    pub fn set_overlay(&mut self, slot: usize, on: bool) -> bool {
+        if slot >= self.overlays.len() || self.overlays[slot] == on {
+            return false;
+        }
+        self.overlays[slot] = on;
+        true
+    }
+
+    /// Save a named layout, replacing one of the same name.
+    ///
+    /// `Err` carries the sentence for the operator: an empty name, or a library
+    /// already at [`sdroxide_types::TEMPLATE_MAX`] under a name it does not
+    /// hold. A refusal that says nothing is the one thing a store must not do.
+    pub fn save_template(
+        &mut self,
+        name: &str,
+        composer: sdroxide_types::Composer,
+    ) -> Result<(), String> {
+        let name = sdroxide_types::LayoutTemplate::clean_name(name);
+        if name.is_empty() {
+            return Err("A layout needs a name".into());
+        }
+        if let Some(t) = self.templates.iter_mut().find(|t| t.name == name) {
+            t.composer = composer;
+        } else if self.templates.len() >= sdroxide_types::TEMPLATE_MAX {
+            return Err(format!(
+                "The layout library holds {} — delete one first",
+                sdroxide_types::TEMPLATE_MAX
+            ));
+        } else {
+            self.templates.push(sdroxide_types::LayoutTemplate { name, composer });
+        }
+        if self.dir.is_some()
+            && let Err(e) = sdroxide_config::save_sstv_templates(&self.templates)
+        {
+            warn!("saving transmit-image layouts: {e}");
+        }
+        Ok(())
+    }
+
+    /// Forget a named layout. Returns whether one was there.
+    pub fn delete_template(&mut self, name: &str) -> bool {
+        let name = sdroxide_types::LayoutTemplate::clean_name(name);
+        let before = self.templates.len();
+        self.templates.retain(|t| t.name != name);
+        let gone = self.templates.len() != before;
+        if gone
+            && self.dir.is_some()
+            && let Err(e) = sdroxide_config::save_sstv_templates(&self.templates)
+        {
+            warn!("saving transmit-image layouts: {e}");
+        }
+        gone
+    }
+
+    /// What a preset **actually draws**: the station-wide overlay under the
+    /// preset's own document, or just its own when the overlay is switched off
+    /// for it.
+    ///
+    /// Composed here rather than in the panel so an engine-side reader (a later
+    /// server-side renderer, a test) gets the same answer as the client, and so
+    /// the rule "the overlay never replaces a preset's own layers" has one home.
+    pub fn composed_document(
+        &self,
+        slot: usize,
+        overlay: &sdroxide_types::Composer,
+    ) -> sdroxide_types::Composer {
+        let own = self.composers.get(slot).cloned().unwrap_or_default();
+        let on = self.overlays.get(slot).copied().unwrap_or(true);
+        if on && overlay.is_active() { own.over(overlay) } else { own }
     }
 
     /// A slot's stored source and the fingerprint it had when it was read.
@@ -893,6 +981,65 @@ mod tests {
         assert!(!store.adopt(99, vec![1], 1, 1));
         assert!(!store.set_message(99, "x".into()));
         assert!(!store.set_composer(99, sdroxide_types::Composer::default()));
+    }
+
+    /// **The overlay and a preset's own document compose; the switch per preset
+    /// decides whether it is there at all.**
+    #[test]
+    fn the_station_overlay_composes_under_a_presets_own_layers() {
+        let mut store = ImagePresetStore::detached();
+        let mut overlay = sdroxide_types::Composer::default();
+        overlay.layers.push(sdroxide_types::TextLayer {
+            text: "19DCG373".into(),
+            y: 0.1,
+            ..Default::default()
+        });
+        let mut own = sdroxide_types::Composer::default();
+        own.layers.push(sdroxide_types::TextLayer {
+            text: "CQ CQ".into(),
+            y: 0.6,
+            ..Default::default()
+        });
+        assert!(store.set_composer(1, own.clone()));
+
+        // On by default, and the overlay is drawn first.
+        let doc = store.composed_document(1, &overlay);
+        assert_eq!(doc.layers.len(), 2);
+        assert_eq!(doc.layers[0].text, "19DCG373");
+        assert_eq!(doc.layers[1].text, "CQ CQ");
+
+        // Switched off for this preset: its own layers survive untouched.
+        assert!(store.set_overlay(1, false));
+        assert!(!store.status().slot(1).apply_overlay);
+        assert_eq!(store.composed_document(1, &overlay), own);
+
+        // An empty station overlay is the default station and draws nothing.
+        assert!(store.set_overlay(1, true));
+        assert_eq!(store.composed_document(1, &sdroxide_types::Composer::default()), own);
+    }
+
+    /// **The layout library** keeps a named document, replaces one of the same
+    /// name rather than duplicating it, refuses an empty name, and forgets one.
+    #[test]
+    fn a_layout_can_be_saved_replaced_and_forgotten_by_name() {
+        let mut store = ImagePresetStore::detached();
+        let mut cq = sdroxide_types::Composer::default();
+        cq.layers.push(sdroxide_types::TextLayer { text: "CQ".into(), ..Default::default() });
+        assert!(store.save_template("  CQ layout  ", cq.clone()).is_ok());
+        assert_eq!(store.status().templates.len(), 1);
+        assert_eq!(store.status().templates[0].name, "CQ layout", "trimmed");
+
+        let mut reply = sdroxide_types::Composer::default();
+        reply.layers.push(sdroxide_types::TextLayer { text: "PSE K".into(), ..Default::default() });
+        assert!(store.save_template("CQ layout", reply.clone()).is_ok());
+        assert_eq!(store.status().templates.len(), 1, "same name replaces, it does not duplicate");
+        assert_eq!(store.status().templates[0].composer, reply);
+
+        assert!(store.save_template("   ", cq).is_err(), "a nameless layout is refused");
+
+        assert!(store.delete_template("CQ layout"));
+        assert!(!store.delete_template("CQ layout"), "forgetting twice is not a change");
+        assert!(store.status().templates.is_empty());
     }
 
     /// CRC-32 as PNG defines it, for the malformed-header test above.

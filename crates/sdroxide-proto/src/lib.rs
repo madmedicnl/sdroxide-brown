@@ -2111,8 +2111,21 @@ use sdroxide_types::{
 /// first and took 251, so the later of the two moved, as the register says it
 /// must. `PROTO_VERSION` 251 → 252, `VERSION_BYTE` 0x47 → 0x48. A downstream
 /// (fork) change.
-pub const PROTO_VERSION: u16 = 252;
-const VERSION_BYTE: u8 = 0x48;
+/// v254: **the composer's overlay, its template library and the mosaic's
+/// picture** — [`sdroxide_types::ImageSlotInfo`] gains `apply_overlay` at its
+/// tail, [`sdroxide_types::ImagePresets`] gains `templates`, and
+/// [`sdroxide_types::Command`] gains `ImageSetOverlay`, `ImageSaveTemplate` and
+/// `ImageDeleteTemplate` last. The station-wide overlay lets one layout identify
+/// every picture while each preset keeps its own layers under it; the templates
+/// are named layouts the operator saves and recalls, and they ride the presets
+/// so the console and a browser tab keep the same library.
+///
+/// **253 belongs to PR #242** (the Auto CQ split), which took it while this one
+/// was in review; the later of the colliding branches moves, so this takes 254.
+/// `PROTO_VERSION` 252 → 254, `VERSION_BYTE` 0x48 → 0x4A. A downstream (fork)
+/// change.
+pub const PROTO_VERSION: u16 = 254;
+const VERSION_BYTE: u8 = 0x4A;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3104,6 +3117,7 @@ mod tests {
                         // The composer's document: a turned line with a faded
                         // band, which is the shape a misplaced field would
                         // corrupt worst.
+                        apply_overlay: true,
                         composer: sdroxide_types::Composer {
                             layers: vec![sdroxide_types::TextLayer {
                                 text: "OE1TEST".into(),
@@ -3125,6 +3139,18 @@ mod tests {
                     },
                     ImageSlotInfo::default(),
                 ],
+                templates: vec![sdroxide_types::LayoutTemplate {
+                    name: "CQ".into(),
+                    composer: sdroxide_types::Composer::seeded(
+                        "19DCG373",
+                        "",
+                        "CQ CQ",
+                        sdroxide_types::Face::Mono,
+                        26,
+                        None,
+                        320,
+                    ),
+                }],
             }),
             ServerMsg::ImageSlotSource {
                 slot: 3,
@@ -3193,6 +3219,20 @@ mod tests {
                 slot: 0,
                 composer: sdroxide_types::Composer::default(),
             }),
+            ClientMsg::Command(Command::ImageSetOverlay { slot: 3, on: false }),
+            ClientMsg::Command(Command::ImageSaveTemplate {
+                name: "Reply".into(),
+                composer: sdroxide_types::Composer::seeded(
+                    "",
+                    "",
+                    "PSE K",
+                    sdroxide_types::Face::Chakra,
+                    30,
+                    None,
+                    256,
+                ),
+            }),
+            ClientMsg::Command(Command::ImageDeleteTemplate { name: "Reply".into() }),
             ClientMsg::Command(Command::ImageGetSlot(4)),
             ClientMsg::Command(Command::ImageClearSlot(0)),
             ClientMsg::Command(Command::ImageList { kind: ImageKind::Wefax, offset: 0, count: 48 }),

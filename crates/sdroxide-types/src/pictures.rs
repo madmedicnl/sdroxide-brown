@@ -119,6 +119,22 @@ pub struct ImageSlotInfo {
     /// the same fractions — the old caption was one string that each client drew
     /// where it liked.
     pub composer: crate::Composer,
+    /// Draw the **station-wide overlay** under this preset's own document.
+    ///
+    /// On by default, because the overlay is what identifies the station on every
+    /// picture and a preset that has not composed anything at all should still
+    /// carry the callsign. Off for a picture that already holds the
+    /// identification — a retransmitted mosaic, usually — so it is not stamped
+    /// twice.
+    ///
+    /// It never replaces the preset's own layers: the overlay is drawn first and
+    /// the preset's document over it.
+    #[serde(default = "apply_overlay_default")]
+    pub apply_overlay: bool,
+}
+
+fn apply_overlay_default() -> bool {
+    true
 }
 
 impl ImageSlotInfo {
@@ -135,11 +151,20 @@ impl ImageSlotInfo {
 pub struct ImagePresets {
     /// Always [`IMAGE_SLOTS`] entries; index = slot number.
     pub slots: Vec<ImageSlotInfo>,
+    /// **The operator's layout library** — named composers, independent of the
+    /// five transmit slots.
+    ///
+    /// Announced with the presets rather than fetched on demand: a layout is a
+    /// few kilobytes and the editor wants all the names at once. Appended last,
+    /// so this is a wire change; `#[serde(default)]` keeps an older stored
+    /// snapshot and a bare fixture loading.
+    #[serde(default)]
+    pub templates: Vec<crate::LayoutTemplate>,
 }
 
 impl Default for ImagePresets {
     fn default() -> Self {
-        ImagePresets { slots: vec![ImageSlotInfo::default(); IMAGE_SLOTS] }
+        ImagePresets { slots: vec![ImageSlotInfo::default(); IMAGE_SLOTS], templates: Vec::new() }
     }
 }
 

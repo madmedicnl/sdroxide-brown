@@ -11032,6 +11032,36 @@ impl Engine {
                 }
                 return;
             }
+            // The station-wide overlay switch, per preset: the overlay is every
+            // picture's identification, and a picture that already carries one —
+            // a retransmitted mosaic, usually — turns it off here.
+            ImageSetOverlay { slot, on } => {
+                if slot as usize >= sdroxide_types::IMAGE_SLOTS {
+                    warn!(slot, "overlay switch for a slot that does not exist");
+                } else if self.images.set_overlay(slot as usize, on) {
+                    self.emit_image_presets();
+                }
+                return;
+            }
+            // **The layout library.** Saved and forgotten here rather than in a
+            // panel, for the reason the documents themselves live here: the
+            // console, a browser tab and the next session have to see the same
+            // templates.
+            ImageSaveTemplate { name, composer } => {
+                match self.images.save_template(&name, composer) {
+                    Ok(()) => self.emit_image_presets(),
+                    Err(why) => {
+                        let _ = self.event_tx.send(RadioEvent::Notice(Some(why)));
+                    }
+                }
+                return;
+            }
+            ImageDeleteTemplate { name } => {
+                if self.images.delete_template(&name) {
+                    self.emit_image_presets();
+                }
+                return;
+            }
             // Answered inline: the bytes are already in memory and bounded to
             // a thousand pixels, so there is nothing here worth a thread.
             ImageGetSlot(slot) => {
