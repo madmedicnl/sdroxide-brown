@@ -3159,6 +3159,41 @@ pub struct DigiConfig {
     /// the one an unattended station wants.
     #[serde(default = "auto_cq_then_listen_default")]
     pub auto_cq_then_listen: bool,
+    /// SSTV: draw the banner strip along the **bottom** of the picture instead
+    /// of across the top. `false` is the top, which is what every picture before
+    /// this setting looked like.
+    ///
+    /// Wanted because the useful half of a picture is not always at the top: a
+    /// QSO picture taken from a webcam has the operator's face in the middle and
+    /// sky above, and a strip across the bottom covers the least. Appended last,
+    /// so this is a wire change.
+    #[serde(default)]
+    pub sstv_banner_bottom: bool,
+    /// SSTV: the banner text's size as a **percentage of the strip's own** — 100
+    /// is what it has always been.
+    ///
+    /// A 16-pixel strip prints 11-pixel letters, and the report behind this was
+    /// that current pictures are "not QSO-compliant": the call has to be
+    /// readable after a noisy 8-second decode, and making the strip taller is not
+    /// the only way to get bigger lettering — a taller strip also eats more of
+    /// the picture. This scales the text inside the strip instead.
+    #[serde(default = "sstv_default_banner_text_pct")]
+    pub sstv_banner_text_pct: u16,
+    /// **The station-wide picture overlay**: the layers every transmit preset
+    /// draws under its own document — the callsign, usually, in the corner the
+    /// operator likes.
+    ///
+    /// Station-wide rather than per slot because it is the station's
+    /// identification, not a picture's caption: the thing an operator sets once.
+    /// It composes *with* each preset's own layers rather than replacing them,
+    /// and a preset can switch it off where the picture already carries it
+    /// ([`crate::ImageSlotInfo::apply_overlay`]).
+    ///
+    /// On `DigiConfig` because that is the station's identity, and it already
+    /// rides the wire whole and is stored for us; appending it here is what
+    /// makes it a wire change.
+    #[serde(default)]
+    pub station_overlay: crate::Composer,
     /// SSTV receive sensitivity, -5..=+5. 0 = the automatic level (Auto).
     /// Adjusts the signal level fed to the decoder: negative attenuates,
     /// positive boosts. Does not change the decoder itself.
@@ -3287,6 +3322,12 @@ fn sstv_default_banner_ink() -> [u8; 3] {
     [255, 255, 255]
 }
 
+/// Default for [`DigiConfig::sstv_banner_text_pct`] — the size the banner text
+/// has always been, as a percentage of the strip's height.
+pub fn sstv_default_banner_text_pct() -> u16 {
+    100
+}
+
 /// Default for [`DigiConfig::sstv_banner_height`], in picture pixels.
 fn sstv_default_banner_height() -> u16 {
     16
@@ -3355,6 +3396,9 @@ impl Default for DigiConfig {
             sstv_banner_fill: sstv_default_banner_fill(),
             sstv_banner_ink: sstv_default_banner_ink(),
             sstv_banner_height: sstv_default_banner_height(),
+            sstv_banner_bottom: false,
+            sstv_banner_text_pct: sstv_default_banner_text_pct(),
+            station_overlay: crate::Composer::default(),
             rf_paint_speed: 0.25,
             auto_tx_freq: true,
             hold_tx_freq: false,

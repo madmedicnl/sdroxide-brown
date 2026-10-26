@@ -59,6 +59,7 @@ maintainer's queue there, not a promise.
    the same area: a browser tab that is not the station writer never persists
    the logbook, which is the argument for putting the log on the wire the way
    the picture document now is.
+
 0. **SSTV/RIFP picture composer: the document is on the wire** (#237, F4NRM,
    2026-10-25, his area + a wire change → **PR, waiting for the operator's word**)
    — the editor built earlier drew its layers from client memory, so a second
@@ -68,6 +69,7 @@ maintainer's queue there, not a promise.
    by the engine; the panel edits a claimed working copy and writes it when an
    edit settles. `PROTO_VERSION` 249, `VERSION_BYTE` 0x45. Pushed as **PR #240**
    (`fork/sstv-composer-wire`), waiting for F4NRM.
+
 
 
 0. **TCI receive audio: a server that carries baseband audio only gets silence**
@@ -214,6 +216,14 @@ reception log · #642 S-meter calibration.
 ---
 
 ## Recently done
+
+- **2026-10-26** — WEFAX on the bench: 150 s each on 3855 kHz (gain 40) and
+  13 882.5 kHz (gain 20). A strong **carrier** on both, no modulated chart —
+  the panel stayed "listening", which is what the code is meant to do with a
+  standing carrier. Not a decoder fault; nothing scheduled was on the air at
+  10:40 UTC. 40 dB on the long wire showed broadband speckle; 20 dB was clean.
+
+
 
 - **2026-10-26** — the review round: F4NRM merged #242, #243, #245, #246, #255;
   #240 (composer, wire 254) and #241 (logbook fix) are approved and closed,

@@ -157,6 +157,7 @@ the fax CTR anchor centred the carrier rather than the chart (#255, open).
 **Next.** The SWL side of the mode programme: STANAG 4285's payload, then the
 half-done list in `MODE-PROGRESS.md`.
 
+
 ## 2026-10-25 (STANAG 4285: what the capture says, and what is left)
 
 **In plain words.** The coded payload still does not read, but the fog is gone:
