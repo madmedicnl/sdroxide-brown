@@ -1,10 +1,12 @@
 # Windows, docking and the layout state — handover
 
-Issue: the operator (Roy) cannot control windows from his tiling WM (no
-titlebars), which is why chips were bolted onto panels, and those chips are ugly.
-He wants panels detachable to a **floating** state or a **separate window**, with
-**no more chips** (icons are fine), and he asked for the work to be built and
-tested on a local branch before anything is pushed.
+**Merged as PR #261** (`16d4339a`, merge `3ed50c4c`, 2026-10-26) on top of the
+extraordinary circumstance that the operator asked for the merge himself; F4NRM
+had not reviewed it. Everything below describes `main` as it stands after that.
+
+The issue: the operator (Roy) cannot control windows from his tiling WM — there
+are no titlebars, so no close box and nowhere to put window controls — which is
+why chips were bolted onto panels, and those chips are ugly.
 
 ## What the operator said, in his words
 
@@ -20,138 +22,128 @@ tested on a local branch before anything is pushed.
 - The bug that started this: "I run Classic UI, the controls are in the left
   column. If I detach a panel or window it also starts showing the controls
   underneath the frequency (the regular layout), so it starts mixing two layouts."
-- Decisions taken: **the in-app floating window is not the destination** —
-  separate windows are (the WM tiles them beside the main one); floating is a
-  peek. **A detached panadapter window should be just the picture** (readout,
-  spectrum, waterfall, its panel, no tools): in Classic the column *is* the
-  control surface, and a second one on another monitor is a second place to
-  change the same thing.
+- And the complaint that shaped the last pass: "the amount of chips … they are not
+  logical, esp for simple controls. Icons would do … window controls have standard
+  icons allover the world yet we somehow can't seem to use those."
 
-## The agreed design
+## What the program does now — the grammar
 
-1. **One icon, one list.** A `▣` beside the gear opens a list of every detachable
-   module (`sdroxide_types::DetachableModule`), each row showing its state as
-   three icons — docked / floating in this window / its own window — and its key.
-   The list **is** the recovery: a window lost on another workspace or behind the
-   main one is still a row, and "bring it back" does not depend on the window
-   being visible. Every float/dock chip and the radiotab's windows button fold
-   into it.
-2. **Two detach targets, two mechanisms.** Floating = an egui window inside our
-   frame (no WM can tile or lose it). Separate = an OS viewport, which carries a
-   **header we draw** (title, dock icon, close) precisely because a tiling WM
-   draws none.
-3. **One shortcut, not N.** `Ctrl+Alt+W` opens the list anywhere, with a filter
-   box; arrows move, `D`/`F`/`S` set docked/floating/separate, `Esc` leaves.
-   `Ctrl+Alt+F` toggles float/dock for the panel in focus. Two keys in total.
-4. **Workspaces are the real answer for a keyboard WM.** The app already saves
-   workspaces; each should be bindable (`Ctrl+Alt+1…9`), because a tiling user
-   wants "my listening layout" on a key, not per-panel nudging.
+One icon per verb, always in the same place, words only for nouns:
 
-## The architectural fault underneath it
+| state | control | where |
+|---|---|---|
+| docked panel | ⇱ *float* | the panel's own header row, all panels that have one |
+| floating panel | roll-up · ⤢ *out to a window* · ✕ *close (docks)* | its **own title bar**, drawn by us |
+| its own OS window | ⇲ *dock* | one glyph, top right of the window's content |
+| any screen | ▣ *module list* | beside the gear; and `Ctrl+Alt+W` anywhere |
 
-The per-frame UI state is published **once per frame on the shared
-`egui::Context`** and read by every window:
+- **The float's title bar is ours** — `title_bar(false)` plus a row: the mode
+  name at the left, `WindowIcon::Out`, roll-up and `Close` at the right, in that
+  order. egui has no hook for a fourth title-bar button (`title_ui` is private and
+  draws only collapse, title and close). With no title bar egui falls back to
+  dragging from anywhere on the window, so the bar's ground and the body's empty
+  space move it and controls keep their own drags. **Close docks**: a panel is the
+  mode's control surface, not a tool that can be shut.
+- **Roll-up** (session state, `panel_rolled`) is the answer to floating on a
+  laptop: the body is not drawn, `min_height` is 0, so the float is its bar.
+  `float_operating_panel()` unrolls, because a float remembered rolled up would
+  hand back a bar and nothing else.
+- **The bar's numbers are one place**: `chrome::{BAR_H, BAR_CHIP, BAR_FONT,
+  BAR_INSET}` = 16 / 14 / 12 / 8, and `chip_window_icon_sized` draws the pictures
+  at an exact box with a fixed 2 pt inset (the theme's chip padding is sized for
+  buttons and leaves an 8 pt chip holding a 6 pt picture).
+- **One drawn family** for every window button: `WindowIcon::{Out, In, Dock,
+  Collapse, Unfold, Close}`, all painted at the same 1.3 stroke and the same
+  fractions of the box. The font glyphs (`×`, `▾`) were three weights beside one
+  painted arrow and the operator spotted it immediately.
+- **The panel's OS window wears the same bar**, on the panel's own background
+  (`theme::PANEL()`, which is what egui's `window_fill` is), so the window does
+  not read as a chip strip pasted over a black panel.
+- **The browser has no `out` button**: the floating panel is shared code, so the
+  web client wears the same bar — but detaching is native-only, and an out button
+  there would *dock* the panel instead of giving it a window.
 
-- `layout::set_tier` (frame.rs ~695) — from the **main window's** rect.
-- `SdroxideApp::classic_column_this_frame` (frame.rs 3129) — Classic UI *and*
-  "the column fits this width"; only the main window ever draws the column.
-- `band_dock_room`, `set_radio_salt` — same pattern.
+## The module list, and the keys
 
-A detached viewport shares that context, so it answers those questions with the
-main window's geometry: a small panel window lays itself out as though it were
-desktop-wide (the strip's chips clip at the right edge — seen in the operator's
-photograph), and Classic's arrangement is half-applied. **The fix is to scope
-that state to the viewport being drawn** (`set` on entry, restore on exit), so
-each window answers for itself.
+- `▣` beside the gear (System box and the phone's ☰) lists every
+  `DetachableModule`: name, three icon slots — docked / floating / its own window
+  — the current one lit, an **empty slot** where a module cannot go (floating is
+  the operating panel's alone), and DOCK ALL / UNDOCK ALL. Rows write through
+  `set_module_window_state`, the one place the state changes.
+- **The list is the recovery**: a window left on another workspace is still a row.
+  It is a window of its own (`module_windows_window`) — a popup is anchored to the
+  chip that opened it and the key has no chip to hang one on — so `Ctrl+Alt+W`
+  reaches it with every module docked.
+- The **▣ chip is on the strip only while a module is out** (or the list is open):
+  as a permanent ninth chip it took the widest 1600 pt arrangement from two rows
+  to three, which is issue #294's rule (`the_cessb_rail_costs_the_desktop_strip_no_row`).
+- **Keys**: `Ctrl+Alt+W` list, `Ctrl+Alt+F` float/dock the operating panel,
+  `Ctrl+Alt+1…9` and `0` recall a saved workspace (`workspace_slot`, a pure
+  mapping; an empty slot names itself on the notice banner). Read where F1 is, so
+  a text field never eats them, and from the **events**, so a chord pressed and
+  released inside one frame still arrives and a repeat cannot flicker a window.
+- The two conditions are separate and both live on the app:
+  `module_windows_chip_wanted()` (is anything out, so is the ▣ on the strip) and
+  `panels::window_chip` (the docked panel's ⇱, drawn by the panels that have a
+  header chip row).
 
-## Done on `local/windows` (not pushed)
+## The layout state, scoped per window
 
-- `classic_column_this_frame` now consults `controls_detached()`
-  (frame.rs 3155): with the Controls module detached, the main window keeps its
-  own strip controls instead of drawing a readout-only strip that expects a
-  column living in another window. Test:
-  `a_detached_column_hands_the_controls_back_to_the_strip` (app/mod.rs).
-- **Step 1, the per-viewport state, is done (`196827a3`).** `layout::ViewportScope`
-  holds the five answers the frame publishes (tier, tight, short-tablet, the
-  band dock's room, the radio salt), publishes the child window's, and puts the
-  main window's back when it drops. Every module, every tool window and the
-  floating panel enter it through `detached_viewport`, which now takes a
-  `ChildWindow` — the type is what stops a call site being written without
-  saying whether it is a window in its own right (`Own`) or a desk tool
-  (`Desk`, the console, the band selector and the rotator, as before).
-  - A child window's tier comes from its **width alone**
-    (`layout::tier_for_window`): the height rules describe a screen, and a
-    window tiled short is not a phone. Floored at `Tablet`, because the phone
-    design is one pane at a time behind a tab row and that row is the main
-    window's.
-  - The band dock's room moved from an app field to a context register
-    (`layout::band_dock_room`), which is what let it be scoped at all — and
-    fixed a control window's band chip hiding a column in the main window.
-- Built and installed for testing (`~/.cargo/bin/sdroxide`, 13:15 on the 25th).
-- **Found by looking, and it is the next step's work**: at 560 pt the floating
-  FT8 panel still draws its two columns and the QSO area's chips run past the
-  window's right edge (`floating_panel_preview`, new ignored tool). The phone
-  arrangement is what fits there, and it needs the panel window's **own** pane
-  tabs first — which is step 2 below. The finding is on `tier_for_window`.
-- **Step 2, the narrow panel window, is done (`3a5b1d9e`).** Under 600 pt a
-  panel window (detached or floating) draws its own **DECODES / QSO** row —
-  `panel_tabs(mode, waterfall: false)`, so no waterfall tab: the picture is the
-  main window's — and shows one pane at a time. `WindowShape::Panes` is the one
-  shape allowed past `tier_for_window`'s Tablet floor, because it carries the
-  row that makes one pane reachable. The window's pane is its own
-  (`panel_window_pane`, swapped in around the draw the way AUX SP swaps its
-  view), clamped to a real pane first. Widening past 600 brings both columns
-  back. Looked at: `/tmp/opencode/float-560-after.png` (one pane, nothing past
-  the edge) and `/tmp/opencode/float-wide-after.png`.
+The per-frame UI answers were published once on the shared `egui::Context` and
+read by every window, so a detached viewport answered with the **main window's**
+geometry — a 520 pt panel laid itself out as though it were desktop-wide, its
+chips running past its right edge.
 
-## Next, in order
+`layout::ViewportScope` now holds tier, tight, short-tablet, the band dock's room,
+the radio salt **and** the Classic answer, publishes the child window's, and puts
+the main window's back on `Drop`. `detached_viewport` takes a `ChildWindow` —
+whose radio, which layout override, which `WindowShape` — so no call site can be
+written without saying what kind of window it is.
 
-1. ~~**Scope the state per viewport**~~ — **done**, `196827a3`.
-2. ~~**A child window is self-contained and minimal**~~ — **done for the panel
-   window**, `3a5b1d9e`: it draws its panel, its own pane row and the way home.
-   **Classic, done (`7574093c`)**: the strip had been re-deriving "is the column
-   here?" from the width left *after* the column took its share, so a Classic
-   window with a panel detached drew the full strip under the frequency beside a
-   column holding the same controls. One answer now, published where the column
-   is drawn (`layout::classic_column`), and a child window publishes `false` for
-   its own draw so the console keeps every control. **Still owed**: in Classic a
-   detached *panadapter* should draw no tools at all — it still carries its DISP
-   chip.
-3. ~~**The `▣` list**~~ — **done**, `aa716e97`: `ModuleWindow` on the app, the
-   list at the end of the System box and the phone's ☰, three icon slots per row
-   with the current one lit, DOCK ALL / UNDOCK ALL, and the state round-tripping
-   in tests. **The chip is on the row only while a module is out** (or the list
-   is open) — as a permanent ninth chip it cost the widest 1600 pt strip a row,
-   which is issue #294's rule. Preview: `module_windows_preview`.
-   Notes for the step that follows:
-   - **The ▣ is in every panel header that has a chip row** (`7574093c`): SSTV,
-     the FT8 family, JS8, AtCHAT, packet, ADS-B, plus the floating panel's own
-     row and the detached panel window's. The panels with **no chip row** — WSPR,
-     PI4, NAVTEX, FSQ, JTTY, CW, RADE, RF Paint, the text modems — have nowhere to
-     put it without being given a row, which is a height change on F4NRM's
-     panels; the operator has to say which way he wants that.
-   - The list is a **window of its own** now (`module_windows_window`), opened by
-     the ▣ chip and by `Ctrl+Alt+W`; step 4 took it out of the SYS menu because a
-     popup is anchored to the chip that opened it and the key has no chip.
-   - So `Ctrl+Alt+W` (step 4) needs somewhere to put the same list: either an
-     in-window `egui::Window` drawn from `module_windows_list` (which is
-     `pub(in crate::app)` and needs nothing but a `Ui`), or a popup anchored to
-     the strip. Prefer the window: it is what "does not depend on any window
-     being visible" means, and it reuses the body as it stands.
-   - `set_module_window_state` is the one write path; the keys should call it too.
-4. ~~**`Ctrl+Alt+W` / `Ctrl+Alt+F`**, and workspaces bound to `Ctrl+Alt+1…9`~~ —
-   **done**, `1dd73489` (the keys; the list is a window now so the key has
-   somewhere to open) and `a8a2a842` (workspaces on the number row, `0` for the
-   tenth, and an empty slot names itself on the banner). **Still owed from the
-   design**: a filter box and arrow-key navigation inside the list (`D`/`F`/`S`
-   per row). The rows are pointer-driven for now.
-5. Delete the chips: `super::window_chip` call sites, the float/dock icons inside
-   the detached Panel window, and the windows button on the radiotab row.
+- `WindowShape::{Own, Desk, Panes}`: `Own` measures the window's **width alone**
+  (`tier_for_window`, height rules are about a screen and a window tiled short is
+  not a phone) and floors at Tablet, because the phone design is one pane at a
+  time behind a tab row and that row is the main window's. `Desk` is the console,
+  the band selector and the rotator, desktop-shaped whatever their height.
+  `Panes` is a panel window: the one shape allowed past the floor, because it
+  draws the tab row itself.
+- **A narrow panel window** (under 600 pt) draws `digi_tabs(ui, mode, false)` — no
+  waterfall tab, because the picture is the main window's — and shows one pane at
+  a time. Measured: at 560 pt the two columns put the QSO area's chips past the
+  window's edge. Its pane is its own (`panel_window_pane`, swapped in around the
+  draw the way AUX SP swaps its view), clamped to a real pane first.
+- **Classic has one answer.** The strip used to re-derive "is the column here?"
+  from the width left *after* the column took its share, so a Classic window with
+  a panel detached drew the full strip under the frequency beside a column holding
+  the same controls. It is now decided once, where the column is drawn, from the
+  window's whole width, and **published** (`layout::classic_column`); a child
+  window publishes `false` for its own draw, so the RX control console keeps every
+  control.
+
+## Still owed
+
+- **Step 5, the chips that remain**: the band popup still carries its own DOCK
+  (the docked band column) and WINDOW (the selector's own window) icons, and the
+  radio strip still has the `🪟 WINDOWS` menu (multi.rs); both now overlap the
+  list. `panels::window_chip` stays on purpose — it is the docked panel's ⇱, the
+  only control that *starts* a float.
+- **The list's filter box and arrow-key navigation** (`D`/`F`/`S` per row) from
+  the design were not built; the rows are pointer-driven.
+- **Panels with no chip row** cannot carry ⇱: NAVTEX and JTTY have no `&mut self`
+  in their header functions, and RF Paint's and the text modems' first chip row is
+  a *list* header rather than the panel's. They float with `Ctrl+Alt+F` or the
+  list. Giving them a chip means giving them a row, which is a height change on
+  F4NRM's panels.
+- **In Classic, a detached panadapter still carries its DISP chip**; the agreed
+  design says it should draw just the picture.
+- Declaring the switch that is holding a radio in the listening screen: the Source
+  fold says "listening screen" without naming which of `start_swl`,
+  `listen_tab_hides_tx` or the per-radio `hide_tx` is doing it.
 
 ## Not verifiable headlessly
 
 The screenshot harness runs with **embedded viewports**, so a *detached* window
 cannot be photographed by `--screenshot`; only the main window and the in-app
-floating panel can. Whoever picks this up should verify the detached states on
-the bench (the operator's Sway session) — and the harness could gain a
-`--screenshot` action that raises a detached module if that is worth the wiring.
+floating panel can (`floating_panel_preview`, `module_windows_preview`). The
+detached states are the operator's Sway session — where they have been used, and
+where the bar's drag and roll-up want an eye.
