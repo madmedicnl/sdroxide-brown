@@ -52,7 +52,8 @@ fn main() {
             // innocent.
             let wav = &args[2];
             let baud: f64 = args[3].parse().expect("baud");
-            selftest(wav, baud);
+            let carrier: f64 = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(1500.0);
+            selftest(wav, baud, carrier);
         }
         "split" => {
             let raw = &args[2];
@@ -268,7 +269,7 @@ fn decode_at(
 
 /// Decode the transmitter's own WAV, decimated 48 kHz → 12 kHz. Four samples to
 /// one is exact, so this is a fair test of the receiver and the harness.
-fn selftest(wav: &str, baud: f64) {
+fn selftest(wav: &str, baud: f64, carrier: f64) {
     let mut r = hound::WavReader::open(wav).expect("wav");
     let spec = r.spec();
     let x: Vec<f32> = r.samples::<i16>().map(|s| f32::from(s.unwrap()) / 32768.0).collect();
@@ -277,7 +278,7 @@ fn selftest(wav: &str, baud: f64) {
     // is not 12 000, and pretending it is smears a 31-baud message.
     let rate = f64::from(spec.sample_rate);
     let audio: Vec<f32> = x;
-    let mut rx = PskRx::new_baud(rate, 1500.0, baud);
+    let mut rx = PskRx::new_baud(rate, carrier, baud);
     let mut text = String::new();
     for block in audio.chunks(480) {
         text.push_str(&rx.process(block));
