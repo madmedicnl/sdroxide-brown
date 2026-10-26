@@ -2198,7 +2198,10 @@ impl SdroxideApp {
                     && !self.atsmini_active()
                     && !mode.holds_audio_centre(),
                 line_on_cursor: false,
+                // **The picture, not the dial**, for the two image modes; the
+                // tone pair for an audio front end; the dial everywhere else.
                 center_on_cursor: (audio_front_end && mode.holds_standard_tones())
+                    || Self::centres_on_picture(mode)
                     || sstv_picture
                     || mode.holds_audio_centre(),
             })
@@ -2227,6 +2230,18 @@ impl SdroxideApp {
             ism,
             mem,
         }
+    }
+
+    /// Whether **CTR centres the picture rather than the dial** in `mode`.
+    ///
+    /// The digital modes carry their information on a tone above the dial, and
+    /// centring the dial on an SDR puts that tone off to one side. For the image
+    /// modes that is not a convenience: the picture is the thing the operator is
+    /// looking at. SSTV has had this since the beginning; a fax had not, so CTR
+    /// on a weather chart centred the carrier and left 1900 Hz of the picture in
+    /// the margin (reported on #239).
+    fn centres_on_picture(mode: Mode) -> bool {
+        mode.is_sstv() || mode.is_wefax()
     }
 
     /// Draw the panadapter — spectrum, waterfall, level slider and the ATS
@@ -4961,6 +4976,18 @@ mod tests {
         assert_eq!(image_window_for(Mode::Sstv), ImageWindow::Sstv);
         assert_eq!(image_window_for(Mode::SstvFm), ImageWindow::Sstv);
         assert_eq!(image_window_for(Mode::Rifp), ImageWindow::Image);
+    }
+
+    /// **CTR centres the picture in the image modes and the dial elsewhere.**
+    /// A weather chart lives 1900 Hz above the carrier; centring the carrier
+    /// leaves the picture in one margin, which is what was reported on #239.
+    #[test]
+    fn ctr_centres_the_picture_in_the_image_modes() {
+        use sdroxide_types::Mode;
+        assert!(super::SdroxideApp::centres_on_picture(Mode::Sstv));
+        assert!(super::SdroxideApp::centres_on_picture(Mode::Wefax));
+        assert!(!super::SdroxideApp::centres_on_picture(Mode::Usb));
+        assert!(!super::SdroxideApp::centres_on_picture(Mode::Ft8));
     }
 
     /// **The round trip: pane, floating panel, window — every state has the chip

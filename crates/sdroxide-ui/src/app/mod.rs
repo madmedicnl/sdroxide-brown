@@ -3140,6 +3140,17 @@ impl SdroxideApp {
     ///
     /// No capabilities yet reads as "cannot", matching the rest of the window:
     /// the top bar leaves its PTT out until the engine has said what it has.
+    /// **Screenshot-only**: leave the view as the CTR chip and a narrow span
+    /// leave it, so a figure of a centred chart can be produced by a script
+    /// rather than by a hand on the mouse.
+    pub fn screenshot_centre(&mut self, span_hz: f64) {
+        self.view.center_on_vfo = true;
+        let f = self.state.active_freq_hz();
+        let half = (span_hz / 2.0).max(100.0);
+        self.view.view_lo_hz = f - half;
+        self.view.view_hi_hz = f + half;
+    }
+
     pub(in crate::app) fn tx_capable(&self) -> bool {
         !self.swl_mode() && self.caps.as_ref().is_some_and(|c| c.is_transmit_capable())
     }

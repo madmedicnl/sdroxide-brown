@@ -446,6 +446,12 @@ impl MultiApp {
     /// receive-only" nudge is a banner across the top of the panadapter: right
     /// for an operator with a signal generator, wrong in a manual's picture of
     /// the program. Screenshot-only — nothing in the program calls it.
+    /// Screenshot-only: the state the CTR chip and a narrow span leave the view
+    /// in, so a figure of a centred chart is reproducible.
+    pub fn screenshot_centre(&mut self, span_hz: f64) {
+        self.tabs[self.focused].app.screenshot_centre(span_hz);
+    }
+
     pub fn dismiss_notices(&mut self) {
         self.tabs[self.focused].app.dismiss_notices();
     }
