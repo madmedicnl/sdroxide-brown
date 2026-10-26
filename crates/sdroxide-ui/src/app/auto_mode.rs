@@ -119,16 +119,32 @@ impl SdroxideApp {
         }
         self.auto_resume_at = None;
 
-        // **The two roles, and the only thing that separates them.** Auto Rx
-        // listens and answers and never keys a CQ of its own; Auto CQ calls and
-        // works whoever answers, and does not go chasing somebody else's CQ —
-        // that is the other role's job, and they are switched rather than
-        // blended (issue #236).
-        // A station calling **us** takes the next contact, in both roles.
-        let caller = |me: &mut Self, my_call: &str, cmds: &mut Vec<Command>| -> bool {
-            let Some(t) = me.auto_caller(my_call) else { return false };
+        // **The decision is a pure function of the facts** (`auto::plan`), so
+        // what happens next can be read, and tested, without an engine in the
+        // room: a caller first, then — in the roles that answer them — a station
+        // calling CQ, and CQ ourselves only when neither exists.
+        let caller_target = self.auto_caller(&my_call);
+        let cq_target = self.auto_target(&my_call, &my_grid);
+        let facts = auto::AutoFacts {
+            caller: caller_target.is_some(),
+            cq_candidate: cq_target.is_some(),
+            cq_calls: cq_sent,
+            repeats: self.digi_cfg_edit.auto_cq_repeats,
+            then_listen: self.digi_cfg_edit.auto_cq_then_listen,
+            session_min: self.digi_cfg_edit.auto_session_min,
+            session_s: now - self.auto_armed_at,
+        };
+        let start = |me: &mut Self, t: auto::AutoTarget, cmds: &mut Vec<Command>| {
             me.auto_tried.insert(t.call.to_ascii_uppercase());
-            me.auto_note = format!("auto: answering {} (called us)", t.call);
+            // **A call is counted when it is made**, and the quota sets a delay
+            // rather than a permanent exclusion (`auto::after_call`), so a station
+            // that was silent earlier is a candidate again later.
+            let now_unix = crate::time::now_unix() as f64;
+            let key = t.call.to_ascii_uppercase();
+            let rec = me.auto_attempts.get(&key).copied().unwrap_or((0, 0.0));
+            me.auto_attempts.insert(key, auto::after_call(rec, me.digi_cfg_edit.auto_call_retries, now_unix));
+            let label = me.auto_role.map_or("auto", |r| r.label());
+            me.auto_note = format!("{label}: answering {}", t.call);
             cmds.push(Command::DigiStartQso {
                 from: t.call,
                 grid: t.grid,
@@ -136,75 +152,47 @@ impl SdroxideApp {
                 audio_hz: t.audio_hz,
                 wait_for_cq: false,
             });
-            true
         };
-        let answer = |me: &mut Self, cmds: &mut Vec<Command>| -> bool {
-            match me.auto_target(&my_call, &my_grid) {
-                Some(t) => {
-                    me.auto_tried.insert(t.call.to_ascii_uppercase());
-                    // The role *now*: an Auto CQ run that has reached its limit
-                    // switches to Rx and answers from there, and the note has to
-                    // say what the station is actually doing.
-                    let label = me.auto_role.map_or("auto", |r| r.label());
-                    me.auto_note = format!("{label}: answering {}", t.call);
-                    cmds.push(Command::DigiStartQso {
-                        from: t.call,
-                        grid: t.grid,
-                        snr: t.snr_db,
-                        audio_hz: t.audio_hz,
-                        wait_for_cq: false,
-                    });
-                    true
-                }
-                None => false,
+        match auto::plan(role, &facts) {
+            auto::AutoStep::AnswerCaller => match caller_target {
+                Some(t) => start(self, t, cmds),
+                None => self.auto_note = "auto: a caller went away".into(),
+            },
+            auto::AutoStep::AnswerCq => match cq_target {
+                Some(t) => start(self, t, cmds),
+                None => self.auto_note = "auto: nobody left to answer".into(),
+            },
+            auto::AutoStep::CallCq => {
+                self.auto_note = format!("{}: calling CQ (#{})", role.label(), cq_sent + 1);
+                cmds.push(Command::DigiCallCq);
             }
-        };
-        match role {
-            auto::AutoRole::Rx => {
-                // **Somebody calling us comes first**, ahead of any CQ on the
-                // band: a station addressing our callsign is the one contact
-                // that is already half made.
-                if !caller(self, &my_call, cmds) && !answer(self, cmds) {
-                    // Nothing worth answering: stay quiet and keep listening.
-                    // This is the difference from Auto CQ, and it must not look
-                    // like a stalled loop.
-                    self.auto_note = "auto rx: listening".into();
-                }
-            }
-            auto::AutoRole::Cq if caller(self, &my_call, cmds) => {
-                // **The pending caller is worked before another CQ goes out**,
-                // and it does not count against the run's call limit: the limit
-                // bounds the calling, and this is the call being answered.
-            }
-            auto::AutoRole::Cq => match auto::cq_limit_action(
-                cq_sent,
-                self.digi_cfg_edit.auto_cq_repeats,
-                self.digi_cfg_edit.auto_cq_then_listen,
-            ) {
-                auto::CqLimit::Calling => {
-                    self.auto_note = format!("auto cq: calling CQ (#{})", cq_sent + 1);
-                    cmds.push(Command::DigiCallCq);
-                }
-                auto::CqLimit::Listen => {
-                    // The run has made the calls the operator allowed. Hand over
-                    // to Auto Rx rather than going quiet: the station is still
-                    // watching, and a CQ that finally gets answered is picked up
-                    // by the listening half — but nothing is keyed unasked.
+            auto::AutoStep::Listen => {
+                // The run has made the calls the operator allowed. In Auto CQ
+                // that hands over to Auto Rx rather than going quiet — the
+                // station is still watching, and a CQ that finally gets answered
+                // is picked up by the listening half. In the other roles it is
+                // simply "nothing to do": answer what turns up, key nothing.
+                if role == auto::AutoRole::Cq {
                     let limit = self.digi_cfg_edit.auto_cq_repeats;
                     self.auto_role = Some(auto::AutoRole::Rx);
                     self.auto_cq = auto::CqCounter::default();
                     self.auto_note =
                         format!("auto cq: no answer after {limit} calls — listening (auto rx)");
-                    if !answer(self, cmds) {
-                        return;
+                } else {
+                    self.auto_note = format!("{}: listening", role.label());
+                }
+            }
+            auto::AutoStep::Stop(reason) => {
+                let limit = match reason {
+                    auto::StopReason::CqLimit => u32::from(self.digi_cfg_edit.auto_cq_repeats),
+                    auto::StopReason::Session => {
+                        u32::from(self.digi_cfg_edit.auto_session_min)
                     }
-                }
-                auto::CqLimit::Stop => {
-                    let limit = self.digi_cfg_edit.auto_cq_repeats;
-                    self.stop_auto(format!("auto cq stopped: no answer after {limit} calls"), cmds);
-                    return;
-                }
-            },
+                };
+                let sentence = reason.sentence(limit);
+                self.stop_auto(format!("{} stopped: {sentence}", role.label()), cmds);
+                return;
+            }
         }
         self.auto_cooldown_until = now + auto::AUTO_COOLDOWN_S;
     }
@@ -245,18 +233,31 @@ impl SdroxideApp {
             self.log_index_cache = Some((len, sdroxide_types::LogIndex::build(&self.qso_log)));
         }
         let ix = &self.log_index_cache.as_ref().expect("just filled").1;
-        if self.session_ignored.is_empty() {
-            return auto::pick_caller(
-                &self.digi_decodes,
-                my_call,
-                ix,
-                &self.auto_tried,
-                |_| false,
-            );
-        }
-        auto::pick_caller(&self.digi_decodes, my_call, ix, &self.auto_tried, |d| {
+        // **The two rules that make a queue a queue rather than a loop**: a
+        // station already called its budget of times is passed over, and one
+        // whose latest traffic is addressed to somebody else is left to finish
+        // — it becomes eligible again by itself once that traffic is old, which
+        // is the deferral, with `BUSY_DEFER_S` as the timeout.
+        let (budget, attempts, decodes) =
+            (self.digi_cfg_edit.auto_call_retries, self.auto_attempts.clone(), &self.digi_decodes);
+        let now = crate::time::now_unix();
+        let mine = my_call.to_string();
+        let now_f = now as f64;
+        let skip = |d: &sdroxide_types::Decode| -> bool {
+            if let Some(from) = d.from.as_deref()
+                && let Some(rec) = attempts.get(&from.to_ascii_uppercase())
+                && auto::retry_holds(*rec, budget, now_f)
+            {
+                return true;
+            }
+            if let Some(from) = d.from.as_deref()
+                && auto::looks_busy(decodes, from, &mine, now, auto::BUSY_DEFER_S as i64)
+            {
+                return true;
+            }
             crate::app::ignore::is_ignored(&self.session_ignored, d.from.as_deref())
-        })
+        };
+        auto::pick_caller(&self.digi_decodes, my_call, ix, &self.auto_tried, skip)
     }
 
     fn auto_target(&mut self, my_call: &str, my_grid: &str) -> Option<auto::AutoTarget> {
@@ -265,18 +266,30 @@ impl SdroxideApp {
             self.log_index_cache = Some((len, sdroxide_types::LogIndex::build(&self.qso_log)));
         }
         let ix = &self.log_index_cache.as_ref().expect("just filled").1;
-        if self.session_ignored.is_empty() {
-            return auto::pick_cq(
-                &self.digi_decodes,
-                ix,
-                my_call,
-                my_grid,
-                &self.auto_tried,
-                |_| false,
-            );
-        }
+        let budget = self.digi_cfg_edit.auto_call_retries;
+        let attempts = self.auto_attempts.clone();
+        let mine = my_call.to_string();
+        let now = crate::time::now_unix();
+        let decodes = &self.digi_decodes;
+        let now_f = now as f64;
+        let busy_or_exhausted = |d: &sdroxide_types::Decode| -> bool {
+            if let Some(from) = d.from.as_deref()
+                && let Some(rec) = attempts.get(&from.to_ascii_uppercase())
+                && auto::retry_holds(*rec, budget, now_f)
+            {
+                return true;
+            }
+            d.from.as_deref().is_some_and(|from| {
+                auto::looks_busy(decodes, from, &mine, now, auto::BUSY_DEFER_S as i64)
+            })
+        };
+        // The same two rules as a caller: a station already called its budget of
+        // times, or one whose latest traffic is with somebody else, is passed
+        // over — and becomes eligible again when that traffic goes stale.
+        let ignored = &self.session_ignored;
         auto::pick_cq(&self.digi_decodes, ix, my_call, my_grid, &self.auto_tried, |d| {
-            crate::app::ignore::is_ignored(&self.session_ignored, d.from.as_deref())
+            busy_or_exhausted(d)
+                || crate::app::ignore::is_ignored(ignored, d.from.as_deref())
         })
     }
 
@@ -319,9 +332,12 @@ impl SdroxideApp {
         self.auto_last_activity = now;
         self.auto_cooldown_until = 0.0;
         self.auto_resume_at = None;
+        self.auto_armed_at = now;
+        self.auto_attempts.clear();
         self.auto_note = match role {
             auto::AutoRole::Rx => "auto rx: listening".into(),
             auto::AutoRole::Cq => "auto cq: calling CQ".into(),
+            auto::AutoRole::Continuous => "auto cont: running".into(),
         };
         true
     }

@@ -797,40 +797,56 @@ impl SdroxideApp {
                 // wrong instrument for ending one deliberately; this is the knob
                 // WSJT-Z calls a repetition count, and it belongs here beside
                 // the other "how many times, then what" figures.
-                ui.label("AUTO CQ run");
+                // **One row for the whole unattended run**, because the operating
+                // panel is a column with no room to grow: how many CQ calls a run
+                // makes, whether it then listens or stops, how many times one
+                // station is tried, and how long the run may last at all.
+                ui.label("AUTO");
                 ui.horizontal(|ui| {
-                    let resp = ui
+                    changed |= ui
                         .add(
                             egui::DragValue::new(&mut cfg.auto_cq_repeats)
                                 .range(0..=100)
-                                .suffix(" calls"),
+                                .suffix(" cq"),
                         )
                         .on_hover_text(
-                            "How many CQ calls one AUTO CQ run makes before it ends. 0 is no \
-                             limit of its own: the transmit watchdog and the inactivity stop \
-                             still bound the run.",
-                        );
-                    changed |= resp.changed();
-                    ui.add_space(6.0);
-                    ui.add_enabled_ui(cfg.auto_cq_repeats > 0, |ui| {
-                        changed |= crate::chrome::checkbox(
-                            ui,
-                            &mut cfg.auto_cq_then_listen,
-                            "then listen",
-                        )
-                        .on_hover_text(
-                            "After those calls, switch AUTO CQ to AUTO RX and keep listening \
-                             rather than stopping altogether. Off, the run stops and the \
-                             station goes quiet.",
+                            "How many CQ calls one run makes before it ends. 0 is no limit of \
+                             its own: the transmit watchdog and the inactivity stop still \
+                             bound the run.",
                         )
                         .changed();
-                    });
+                    changed |= crate::chrome::checkbox(ui, &mut cfg.auto_cq_then_listen, "")
+                        .on_hover_text(
+                            "After those CQ calls, switch AUTO CQ to AUTO RX and keep listening \
+                             rather than stopping altogether. Off, the run stops.",
+                        )
+                        .changed();
+                    ui.add_space(6.0);
+                    changed |= ui
+                        .add(
+                            egui::DragValue::new(&mut cfg.auto_call_retries)
+                                .range(1..=5)
+                                .suffix(" tries"),
+                        )
+                        .on_hover_text(
+                            "How many times one station is called before the run gives up on \
+                             it and moves down the queue.",
+                        )
+                        .changed();
+                    ui.add_space(6.0);
+                    changed |= ui
+                        .add(
+                            egui::DragValue::new(&mut cfg.auto_session_min)
+                                .range(0..=sdroxide_types::auto::AUTO_SESSION_MAX_MIN)
+                                .suffix(" min"),
+                        )
+                        .on_hover_text(
+                            "How long an unattended run may last, whatever it is working on. 0 \
+                             is no limit of its own.",
+                        )
+                        .changed();
                 });
                 ui.end_row();
-                // Special operating activity (issue #223). Above the
-                // DXpedition roles because it changes what every
-                // message in the exchange says, where those change who
-                // sends them.
                 ui.label("Contest");
                 ui.horizontal(|ui| {
                     for m in sdroxide_types::ContestMode::ALL {

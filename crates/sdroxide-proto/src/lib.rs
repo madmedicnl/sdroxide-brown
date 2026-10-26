@@ -2133,8 +2133,16 @@ use sdroxide_types::{
 /// was in review; the later of the colliding branches moves, so this takes 254.
 /// `PROTO_VERSION` 252 → 254, `VERSION_BYTE` 0x48 → 0x4A. A downstream (fork)
 /// change.
-pub const PROTO_VERSION: u16 = 254;
-const VERSION_BYTE: u8 = 0x4A;
+/// v255: **the unattended run's own limits** —
+/// [`sdroxide_types::DigiConfig`] gains `auto_call_retries` and
+/// `auto_session_min` at its tail: how many times one station is called before
+/// the run passes it over, and how long the run may last at all. With the
+/// continuous role this makes the automatic operator a bounded one: a station
+/// that never answers stops costing slots, and a run that nobody stops stops
+/// itself (issue #251). Appended last, so the layout moves: `PROTO_VERSION`
+/// 254 → 255, `VERSION_BYTE` 0x4A → 0x4B. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 255;
+const VERSION_BYTE: u8 = 0x4B;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {

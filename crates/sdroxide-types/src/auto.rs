@@ -94,6 +94,14 @@ pub enum AutoRole {
     /// CQs — that is [`AutoRole::Rx`]'s job, and the two are switched rather
     /// than blended.
     Cq,
+    /// **Continuous operation**: the two roles in sequence, without a click
+    /// between contacts — finish the QSO, work whoever called us, then answer a
+    /// station calling CQ, and call CQ ourselves only when neither exists. Runs
+    /// until the operator stops it or a safety limit is reached.
+    ///
+    /// A third role rather than a change to the other two, because the operator
+    /// asked in as many words that their meaning not be altered quietly.
+    Continuous,
 }
 
 impl AutoRole {
@@ -102,8 +110,21 @@ impl AutoRole {
         match self {
             AutoRole::Rx => "AUTO RX",
             AutoRole::Cq => "AUTO CQ",
+            AutoRole::Continuous => "AUTO CONT",
         }
     }
+
+    /// The role one line up from this one, for a toggle that cycles.
+    pub fn next(self) -> AutoRole {
+        match self {
+            AutoRole::Rx => AutoRole::Cq,
+            AutoRole::Cq => AutoRole::Continuous,
+            AutoRole::Continuous => AutoRole::Rx,
+        }
+    }
+
+    /// Every role, in the order the chips are drawn.
+    pub const ALL: [AutoRole; 3] = [AutoRole::Rx, AutoRole::Cq, AutoRole::Continuous];
 }
 
 /// Counts the CQ calls of one run, from the engine's own transcript.
@@ -185,6 +206,148 @@ pub fn cq_limit_action(sent: u32, repeats: u16, then_listen: bool) -> CqLimit {
         CqLimit::Listen
     } else {
         CqLimit::Stop
+    }
+}
+
+/// **What the unattended run does next.** One decision, taken from the facts,
+/// so the scheduler itself has no branches a test cannot reach.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutoStep {
+    /// Work the station that is calling our callsign.
+    AnswerCaller,
+    /// Answer a station calling CQ (Rx and continuous only).
+    AnswerCq,
+    /// Call CQ.
+    CallCq,
+    /// Stay quiet and keep listening — the CQ run has used its calls and the
+    /// operator asked it to listen rather than stop.
+    Listen,
+    /// Disarm, with the reason.
+    Stop(StopReason),
+}
+
+/// Why a continuous run ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StopReason {
+    /// The CQ run reached its call limit and the operator asked it to stop.
+    CqLimit,
+    /// The overall session limit the operator set.
+    Session,
+}
+
+impl StopReason {
+    pub fn sentence(self, limit: u32) -> String {
+        match self {
+            StopReason::CqLimit => format!("no answer after {limit} CQ calls"),
+            StopReason::Session => format!("the {limit} minute session ended"),
+        }
+    }
+}
+
+/// The facts the decision is taken from — everything the scheduler knows, so the
+/// nine behaviours the operator listed can be tested as decisions rather than
+/// argued about from a log.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AutoFacts {
+    /// Somebody is calling our callsign and is eligible.
+    pub caller: bool,
+    /// A station calling CQ passed the operator's filters and the log's novelty
+    /// test.
+    pub cq_candidate: bool,
+    /// CQ calls this run has made.
+    pub cq_calls: u32,
+    /// The run's call limit, 0 for none of its own.
+    pub repeats: u16,
+    /// After the limit, listen rather than stop.
+    pub then_listen: bool,
+    /// The overall session limit in minutes, 0 for none, and how long the run
+    /// has been armed.
+    pub session_min: u16,
+    pub session_s: f64,
+}
+
+/// **The scheduler's whole policy.** Given the role and the facts, what happens
+/// next:
+///
+/// 1. A station calling us is worked — it is the contact already half made, and
+///    it takes precedence over everything, in every role.
+/// 2. Otherwise, in the roles that answer other people's CQs, an eligible CQ is
+///    answered.
+/// 3. Otherwise CQ is called, subject to the run's limit: listening or stopping
+///    when it is reached, as the operator chose.
+///
+/// The session limit is checked first, because a safety limit that can be
+/// overtaken by a contact is not a limit.
+pub fn plan(role: AutoRole, f: &AutoFacts) -> AutoStep {
+    let cap = f.session_min.min(AUTO_SESSION_MAX_MIN);
+    if cap > 0 && f.session_s >= f64::from(cap) * 60.0 {
+        return AutoStep::Stop(StopReason::Session);
+    }
+    if f.caller {
+        return AutoStep::AnswerCaller;
+    }
+    let answers_others = matches!(role, AutoRole::Rx | AutoRole::Continuous);
+    if answers_others && f.cq_candidate {
+        return AutoStep::AnswerCq;
+    }
+    // **`Auto Rx` never calls CQ** — that is the whole of what the role means,
+    // so a CQ limit has nothing to bound there and listening is the only step
+    // left. Its bounds are the session limit and the inactivity stop.
+    if role == AutoRole::Rx {
+        return AutoStep::Listen;
+    }
+    match cq_limit_action(f.cq_calls, f.repeats, f.then_listen) {
+        CqLimit::Calling => AutoStep::CallCq,
+        CqLimit::Listen => AutoStep::Listen,
+        CqLimit::Stop => AutoStep::Stop(StopReason::CqLimit),
+    }
+}
+
+/// **The longest an unattended run may be set to**, in minutes.
+///
+/// Twelve hours, and it is a hard ceiling rather than a default: the maintainer
+/// set it (2026-10-26) after discussion on the PR, and it is clamped here rather
+/// than trusted in the control, so a config that arrives with more — from an
+/// older build, from another client — stops at twelve.
+pub const AUTO_SESSION_MAX_MIN: u16 = 720;
+
+/// How long a station that used up its retries is left alone before it becomes
+/// eligible again, in seconds.
+///
+/// **A quota that never expires is a blacklist.** A station that did not answer
+/// twice at noon may be the only one on the band at half past: after this long the
+/// attempt count is cleared and it is a candidate again.
+pub const AUTO_RETRY_DELAY_S: f64 = 600.0;
+
+/// A station's record in the run's retry book: **(calls made, deferred until)**,
+/// where a zero `until` means "not deferred".
+pub type RetryRecord = (u8, f64);
+
+/// Whether a station's quota still holds it back.
+///
+/// Deferred means "used up the budget *and* the delay has not passed". Once the
+/// delay is over the station is a candidate again, which is what makes this a
+/// retry policy rather than a blacklist.
+pub fn retry_holds(record: RetryRecord, budget: u8, now: f64) -> bool {
+    let (calls, until) = record;
+    calls >= budget && until > 0.0 && now < until
+}
+
+/// The record after calling this station once.
+///
+/// A record whose delay has expired starts again from this call, so the count is
+/// never carried across the delay — a station that was silent ten minutes ago is
+/// not on its last chance now.
+pub fn after_call(record: RetryRecord, budget: u8, now: f64) -> RetryRecord {
+    let (calls, until) = record;
+    if until > 0.0 && now >= until {
+        return (1, 0.0);
+    }
+    let calls = calls.saturating_add(1);
+    if calls >= budget {
+        (calls, now + AUTO_RETRY_DELAY_S)
+    } else {
+        (calls, until)
     }
 }
 
@@ -349,6 +512,51 @@ pub fn pick_caller(
         snr_db: d.snr_db,
         audio_hz: d.audio_hz,
     })
+}
+
+/// How long a station that looks busy is left alone, in seconds.
+///
+/// Long enough for the exchange it is in to finish or move on — an FT8 contact
+/// is under two minutes — and short enough that the caller is not forgotten.
+pub const BUSY_DEFER_S: f64 = 150.0;
+
+/// When the decodes say a station is **already working somebody else**, and when
+/// they say nothing of the kind.
+///
+/// The distinction issue #236 asks for: a station that called us ten minutes ago
+/// is not a caller any more, and one that has since addressed another station is
+/// mid-exchange — calling it now would talk over a contact in progress, which is
+/// the fastest way to be the station everybody filters out.
+///
+/// `now` and `window_s` are **both in seconds** — `Decode::slot_utc` is Unix
+/// seconds and so is the caller's clock — and the last decode from `call` decides,
+/// because a station's latest message is where its exchange stands.
+pub fn looks_busy(decodes: &[Decode], call: &str, my_call: &str, now: i64, window_s: i64) -> bool {
+    let call = call.trim();
+    if call.is_empty() {
+        return false;
+    }
+    let newest = decodes
+        .iter()
+        .filter(|d| d.from.as_deref().is_some_and(|f| f.eq_ignore_ascii_case(call)))
+        .max_by_key(|d| d.slot_utc);
+    let Some(last) = newest else { return false };
+    // Old traffic says nothing about where the station is now.
+    // **Seconds, like both clocks.** This read `* 1000` once — a window of 150
+    // "seconds" that was really 150 000 of them, so no traffic was ever stale
+    // and every station that had worked somebody stayed permanently busy.
+    if now.saturating_sub(last.slot_utc) > window_s.max(0) {
+        return false;
+    }
+    // Addressing somebody other than us is the exchange; addressing us is our
+    // own call being answered.
+    let mine = my_call.trim();
+    match last.to.as_deref() {
+        Some(to) => {
+            !to.eq_ignore_ascii_case("CQ") && (mine.is_empty() || !to.eq_ignore_ascii_case(mine))
+        }
+        None => false,
+    }
 }
 
 /// Whether the licence gate lets this band be keyed, mirroring the engine's
@@ -630,5 +838,224 @@ mod tests {
         let d = [caller("IU5HIU", "19DCG373", -8, 10)];
         assert!(pick_caller(&d, "", &empty, &HashSet::new(), |_| false).is_none());
         assert!(pick_caller(&d, "   ", &empty, &HashSet::new(), |_| false).is_none());
+    }
+
+    // ── a station that is already busy ──
+
+    fn traffic(from: &str, to: &str, slot: i64) -> Decode {
+        Decode {
+            slot_utc: slot,
+            snr_db: -10,
+            dt: 0.0,
+            audio_hz: 1500.0,
+            message: format!("{to} {from} -10"),
+            to: Some(to.into()),
+            from: Some(from.into()),
+            grid: None,
+            is_cq: to == "CQ",
+            cq_to: None,
+            free_text: false,
+            rr73_to: None,
+        }
+    }
+
+    /// **A station addressing somebody else is mid-exchange**; one addressing us
+    /// is answering, and one whose last message is old tells us nothing.
+    #[test]
+    fn a_station_is_busy_when_its_latest_message_is_to_somebody_else() {
+        let now = 1_000_000;
+        // Fresh (five seconds ago), and addressed to another station: busy.
+        let d = [traffic("IU5HIU", "SP3JHZ", now - 5)];
+        assert!(looks_busy(&d, "IU5HIU", "19DCG373", now, 300));
+
+        // Addressed to us: that is our call being answered, not an exchange.
+        let d = [traffic("IU5HIU", "19DCG373", now - 5)];
+        assert!(!looks_busy(&d, "IU5HIU", "19DCG373", now, 300));
+
+        // Calling CQ: free to be answered.
+        let d = [traffic("IU5HIU", "CQ", now - 5)];
+        assert!(!looks_busy(&d, "IU5HIU", "19DCG373", now, 300));
+
+        // Old traffic says nothing about now.
+        let d = [traffic("IU5HIU", "SP3JHZ", now - 600)];
+        assert!(!looks_busy(&d, "IU5HIU", "19DCG373", now, 300));
+
+        // The *latest* message decides: it called us, then went back to a
+        // contact with somebody else.
+        let d = [traffic("IU5HIU", "19DCG373", now - 20), traffic("IU5HIU", "SP3JHZ", now - 5)];
+        assert!(looks_busy(&d, "IU5HIU", "19DCG373", now, 300));
+
+        // A station we have never heard is not busy — it may be calling us for
+        // the first time.
+        assert!(!looks_busy(&[], "IU5HIU", "19DCG373", now, 300));
+        assert!(!looks_busy(&[], "", "19DCG373", now, 300), "an empty call is not a station");
+    }
+
+    // ── the scheduler's policy, as the operator numbered it ──
+
+    fn facts() -> AutoFacts {
+        AutoFacts { repeats: 0, then_listen: true, ..Default::default() }
+    }
+
+    /// **1. A caller is worked in every role**, and it beats a CQ on the band and
+    /// the CQ run's own limit — the contact is already half made.
+    #[test]
+    fn a_caller_is_worked_before_anything_else_in_every_role() {
+        for role in AutoRole::ALL {
+            let f = AutoFacts { caller: true, cq_candidate: true, ..facts() };
+            assert_eq!(plan(role, &f), AutoStep::AnswerCaller, "{role:?}");
+            // Even at the CQ limit: the limit bounds the calling, not the
+            // answering.
+            let f =
+                AutoFacts { caller: true, cq_calls: 9, repeats: 3, then_listen: false, ..facts() };
+            assert_eq!(plan(role, &f), AutoStep::AnswerCaller, "{role:?}");
+        }
+    }
+
+    /// **2. AUTO RX answers others' CQs; AUTO CQ does not.** That separation is
+    /// the point of the two roles and must not be blurred by the third.
+    #[test]
+    fn only_the_roles_that_answer_others_take_a_cq() {
+        let f = AutoFacts { cq_candidate: true, ..facts() };
+        assert_eq!(plan(AutoRole::Rx, &f), AutoStep::AnswerCq);
+        assert_eq!(plan(AutoRole::Continuous, &f), AutoStep::AnswerCq);
+        assert_eq!(plan(AutoRole::Cq, &f), AutoStep::CallCq, "AUTO CQ took somebody else's CQ");
+    }
+
+    /// **3. With nobody to work, each role does its own thing**: RX listens,
+    /// CQ calls, continuous calls.
+    #[test]
+    fn an_empty_band_leaves_rx_listening_and_the_others_calling() {
+        let f = facts();
+        assert_eq!(plan(AutoRole::Rx, &f), AutoStep::Listen);
+        assert_eq!(plan(AutoRole::Cq, &f), AutoStep::CallCq);
+        assert_eq!(plan(AutoRole::Continuous, &f), AutoStep::CallCq);
+    }
+
+    /// **4. The CQ limit ends the run the way the operator chose**, in every
+    /// role, including continuous — a safety limit that continuous mode could
+    /// ignore would not be one.
+    #[test]
+    fn the_cq_limit_ends_or_quietens_every_role() {
+        let listen = AutoFacts { cq_calls: 5, repeats: 5, then_listen: true, ..facts() };
+        let stop = AutoFacts { cq_calls: 5, repeats: 5, then_listen: false, ..facts() };
+        for role in [AutoRole::Cq, AutoRole::Continuous] {
+            assert_eq!(plan(role, &listen), AutoStep::Listen, "{role:?}");
+            assert_eq!(plan(role, &stop), AutoStep::Stop(StopReason::CqLimit), "{role:?}");
+        }
+        // `Auto Rx` calls no CQ, so a call limit has nothing to bound there: it
+        // listens, and the session limit is what ends it.
+        assert_eq!(plan(AutoRole::Rx, &listen), AutoStep::Listen);
+        assert_eq!(plan(AutoRole::Rx, &stop), AutoStep::Listen);
+    }
+
+    /// **5. The session limit is a limit, not a hint**: it ends the run in every
+    /// role, and it is checked before a caller, so nothing can overtake it.
+    #[test]
+    fn the_session_limit_ends_the_run_before_a_caller_is_taken() {
+        let f = AutoFacts { caller: true, session_min: 30, session_s: 30.0 * 60.0, ..facts() };
+        for role in AutoRole::ALL {
+            assert_eq!(plan(role, &f), AutoStep::Stop(StopReason::Session), "{role:?}");
+        }
+        // One second short, and the caller is taken as usual.
+        let f =
+            AutoFacts { caller: true, session_min: 30, session_s: 30.0 * 60.0 - 1.0, ..facts() };
+        assert_eq!(plan(AutoRole::Continuous, &f), AutoStep::AnswerCaller);
+        // Zero means no limit.
+        let f = AutoFacts { session_min: 0, session_s: 9_999.0, ..facts() };
+        assert_eq!(plan(AutoRole::Continuous, &f), AutoStep::CallCq);
+    }
+
+    /// **Twelve hours is the ceiling, and it is enforced here**, not merely
+    /// offered by the control: a config from an older build that asks for more
+    /// stops at twelve.
+    #[test]
+    fn an_unattended_run_is_capped_at_twelve_hours() {
+        let over = AutoFacts { session_min: 1440, session_s: 13.0 * 3600.0, ..facts() };
+        assert_eq!(
+            plan(AutoRole::Continuous, &over),
+            AutoStep::Stop(StopReason::Session),
+            "a twenty-four-hour config ran past the twelve-hour ceiling"
+        );
+        // Two hours itself still runs to the last second.
+        let within = AutoFacts {
+            session_min: AUTO_SESSION_MAX_MIN,
+            session_s: f64::from(AUTO_SESSION_MAX_MIN) * 60.0 - 1.0,
+            ..facts()
+        };
+        assert_eq!(plan(AutoRole::Continuous, &within), AutoStep::CallCq);
+    }
+
+    /// The three roles are named, cycle in one order, and are all of `ALL`.
+    #[test]
+    fn the_roles_are_named_and_cycle() {
+        assert_eq!(AutoRole::ALL.map(|r| r.label()), ["AUTO RX", "AUTO CQ", "AUTO CONT"]);
+        assert_eq!(AutoRole::Rx.next(), AutoRole::Cq);
+        assert_eq!(AutoRole::Cq.next(), AutoRole::Continuous);
+        assert_eq!(AutoRole::Continuous.next(), AutoRole::Rx);
+    }
+
+    /// **Eleven metres runs the same auto mode.** The band's FT8 is the CB
+    /// dialect — free-text calls, no locator, a different dictionary — but it is
+    /// the same mode and the same sequencer, so the only gate is the licence
+    /// switch that opens 11 m transmit. Nothing here excludes the band, and this
+    /// says so before somebody adds a restriction that reads sensible and costs
+    /// the fork the band it is built for.
+    #[test]
+    fn auto_mode_runs_on_eleven_metres_once_its_transmitter_is_opened() {
+        // An opened 11 m: a watchdog and the licence switch, and nothing else.
+        assert!(auto_ready(Mode::Ft8, 6, band_may_transmit(Band::M11, true, true)));
+        // Not opened: the same refusal every other receive-only band gets, and it
+        // names the switch rather than saying "no".
+        let why = auto_block_reason(Mode::Ft8, 6, band_may_transmit(Band::M11, true, false))
+            .expect("an unopened 11 m is refused");
+        assert!(why.contains("11 m"), "{why}");
+        // And with the switch open, no block reason at all.
+        assert_eq!(auto_block_reason(Mode::Ft8, 6, true), None);
+
+        // A CB caller with no locator is a caller like any other: the queue on
+        // 11 m works off callsigns, which is all the band carries.
+        let empty = LogIndex::build(&[]);
+        let d = [Decode {
+            slot_utc: 10,
+            snr_db: -9,
+            dt: 0.0,
+            audio_hz: 1500.0,
+            message: "19DCG373 26AT715 -09".into(),
+            to: Some("19DCG373".into()),
+            from: Some("26AT715".into()),
+            grid: None,
+            is_cq: false,
+            cq_to: None,
+            free_text: false,
+            rr73_to: None,
+        }];
+        let t = pick_caller(&d, "19DCG373", &empty, &HashSet::new(), |_| false)
+            .expect("a CB station calling us is a caller");
+        assert_eq!(t.call, "26AT715");
+        assert!(t.grid.is_none(), "11 m carries no locator, and nothing should invent one");
+    }
+
+    /// **A used-up quota expires.** Two calls with a budget of two put the
+    /// station aside for the delay; after it, it is a candidate again with a
+    /// fresh count — a quota that never expires would be a blacklist.
+    #[test]
+    fn a_used_up_retry_quota_expires_after_the_delay() {
+        let now = 1_000.0;
+        let mut r: RetryRecord = (0, 0.0);
+        assert!(!retry_holds(r, 2, now), "a station never called is never held back");
+        r = after_call(r, 2, now);
+        assert_eq!(r, (1, 0.0), "one call, no delay yet");
+        assert!(!retry_holds(r, 2, now));
+        r = after_call(r, 2, now + 30.0);
+        assert_eq!(r.0, 2, "two calls");
+        assert!(r.1 > now, "the delay was set");
+        assert!(retry_holds(r, 2, now + 60.0), "held back during the delay");
+        let after = r.1 + 1.0;
+        assert!(!retry_holds(r, 2, after), "eligible again after it");
+
+        // The next call after the delay starts a fresh count, not the old one.
+        let again = after_call(r, 2, after);
+        assert_eq!(again, (1, 0.0), "the count did not restart");
     }
 }
