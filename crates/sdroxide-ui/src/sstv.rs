@@ -545,49 +545,6 @@ impl TextSink for RgbSink<'_> {
     }
 }
 
-/// A layer being built, four bytes to the pixel, ready to be turned and
-/// composited.
-pub(crate) struct RgbaSink {
-    pub buf: Vec<u8>,
-    pub w: usize,
-    pub h: usize,
-}
-
-impl RgbaSink {
-    pub(crate) fn new(w: usize, h: usize) -> RgbaSink {
-        RgbaSink { buf: vec![0; w * h * 4], w, h }
-    }
-}
-
-impl TextSink for RgbaSink {
-    /// Source-over, which is what makes an outline and an ink of the same
-    /// glyph stack without eating one another.
-    fn paint(&mut self, x: i32, y: i32, rgb: (u8, u8, u8), alpha: f32) {
-        if x < 0 || y < 0 || x >= self.w as i32 || y >= self.h as i32 {
-            return;
-        }
-        let a = alpha.clamp(0.0, 1.0);
-        if a <= 0.0 {
-            return;
-        }
-        let i = (y as usize * self.w + x as usize) * 4;
-        let dst_a = f32::from(self.buf[i + 3]) / 255.0;
-        let out_a = a + dst_a * (1.0 - a);
-        if out_a <= 0.0 {
-            return;
-        }
-        let mix = |s: u8, d: u8| {
-            ((f32::from(s) * a + f32::from(d) * dst_a * (1.0 - a)) / out_a)
-                .round()
-                .clamp(0.0, 255.0) as u8
-        };
-        self.buf[i] = mix(rgb.0, self.buf[i]);
-        self.buf[i + 1] = mix(rgb.1, self.buf[i + 1]);
-        self.buf[i + 2] = mix(rgb.2, self.buf[i + 2]);
-        self.buf[i + 3] = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
-    }
-}
-
 /// Print `text` into any sink, `x` being the caret and `baseline` the line the
 /// glyphs stand on. `span` is the run the gradient or rainbow sweeps across.
 pub(crate) fn draw_text_into<S: TextSink>(

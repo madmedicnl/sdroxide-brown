@@ -502,23 +502,6 @@ impl ImagePresetStore {
         gone
     }
 
-    /// What a preset **actually draws**: the station-wide overlay under the
-    /// preset's own document, or just its own when the overlay is switched off
-    /// for it.
-    ///
-    /// Composed here rather than in the panel so an engine-side reader (a later
-    /// server-side renderer, a test) gets the same answer as the client, and so
-    /// the rule "the overlay never replaces a preset's own layers" has one home.
-    pub fn composed_document(
-        &self,
-        slot: usize,
-        overlay: &sdroxide_types::Composer,
-    ) -> sdroxide_types::Composer {
-        let own = self.composers.get(slot).cloned().unwrap_or_default();
-        let on = self.overlays.get(slot).copied().unwrap_or(true);
-        if on && overlay.is_active() { own.over(overlay) } else { own }
-    }
-
     /// A slot's stored source and the fingerprint it had when it was read.
     pub fn source(&self, slot: usize) -> (u32, Vec<u8>) {
         self.slots.get(slot).map_or((0, Vec::new()), |s| (s.version, s.png.clone()))
@@ -983,17 +966,15 @@ mod tests {
         assert!(!store.set_composer(99, sdroxide_types::Composer::default()));
     }
 
-    /// **The overlay and a preset's own document compose; the switch per preset
-    /// decides whether it is there at all.**
+    /// **The overlay switch is per preset and never touches the document.**
+    ///
+    /// How the two compose is [`sdroxide_types::Composer::over`]'s rule, tested
+    /// there; what belongs to the store is the switch — on by default, off for one
+    /// preset without disturbing another, and never rewriting the preset's own
+    /// layers.
     #[test]
-    fn the_station_overlay_composes_under_a_presets_own_layers() {
+    fn the_overlay_switch_is_per_preset_and_leaves_the_document_alone() {
         let mut store = ImagePresetStore::detached();
-        let mut overlay = sdroxide_types::Composer::default();
-        overlay.layers.push(sdroxide_types::TextLayer {
-            text: "19DCG373".into(),
-            y: 0.1,
-            ..Default::default()
-        });
         let mut own = sdroxide_types::Composer::default();
         own.layers.push(sdroxide_types::TextLayer {
             text: "CQ CQ".into(),
@@ -1002,20 +983,12 @@ mod tests {
         });
         assert!(store.set_composer(1, own.clone()));
 
-        // On by default, and the overlay is drawn first.
-        let doc = store.composed_document(1, &overlay);
-        assert_eq!(doc.layers.len(), 2);
-        assert_eq!(doc.layers[0].text, "19DCG373");
-        assert_eq!(doc.layers[1].text, "CQ CQ");
-
-        // Switched off for this preset: its own layers survive untouched.
+        assert!(store.status().slot(1).apply_overlay, "the overlay is on by default");
         assert!(store.set_overlay(1, false));
-        assert!(!store.status().slot(1).apply_overlay);
-        assert_eq!(store.composed_document(1, &overlay), own);
-
-        // An empty station overlay is the default station and draws nothing.
-        assert!(store.set_overlay(1, true));
-        assert_eq!(store.composed_document(1, &sdroxide_types::Composer::default()), own);
+        assert!(!store.status().slot(1).apply_overlay, "off for this preset");
+        assert!(store.status().slot(0).apply_overlay, "and only this preset");
+        assert_eq!(store.status().slot(1).composer, own, "the switch rewrote the document");
+        assert!(!store.set_overlay(1, false), "setting it twice is not a change");
     }
 
     /// **Loading a layout writes only the document.** A template is text and
