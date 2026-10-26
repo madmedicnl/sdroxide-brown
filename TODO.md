@@ -18,6 +18,15 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **The picture composer's three features, and the continuous auto run** (issues
+   #237/#236/#251, F4NRM, 2026-10-25/26 — his area, all **PRs**) — the station
+   overlay, the layout library (save/load/rename/duplicate/forget) and the mosaic
+   of up to nine received pictures are in **#240** (wire 254); the AUTO CONT role
+   with retries, busy deferral and a session limit is **#253** (wire 255); the fax
+   CTR anchor is **#255**. Tracking: #248, #249, #250, #251. What is left in
+   those is what the tracking issues say and nothing more — new ideas wait for
+   their own discussion.
+
 0. **FT8 Auto Rx and Auto CQ are two roles, and a CQ run has a bound** (issue
    #236, F4NRM, 2026-10-25 — his area + a wire change → **PR**) — one AUTO chip
    did both jobs, so the operator could not say "only listen" or "only call".
@@ -183,6 +192,14 @@ time-sync · #355 spectrum smoothing · #594 UDP audio · #617 HFDL frequency ch
 reception log · #642 S-meter calibration.
 
 ---
+
+## Recently done
+
+- **2026-10-26** — scan: the voice gate gave the raised listen time back (issue
+  #254), `voice_dwell` a pure function with four cases tested. On `main`
+  (`3731da4d`).
+- **2026-10-26** — the notes now say how to read a machine-drafted review: short
+  answers, suggestions only, one bounded scope per item (AGENTS.md).
 
 ## Recently done
 

@@ -1140,6 +1140,11 @@ pub struct SdroxideApp {
     auto_attempts: std::collections::HashMap<String, sdroxide_types::auto::RetryRecord>,
     /// When the run was armed, for the session limit.
     auto_armed_at: f64,
+    /// The scan dwell the VOICE gate raised, so switching it off can give it
+    /// back (issue #254). Session-only: it describes a toggle's last press, not
+    /// a setting.
+    scan_voice_prev_dwell: Option<u32>,
+
     /// A DAB channel scan in progress: which Band III block it is sitting on,
     /// and when it arrived there. Session-only — a scan is an act, not a
     /// setting; what it *finds* goes in `state.dab.found` and is remembered.
@@ -2295,6 +2300,7 @@ impl SdroxideApp {
             auto_cq: sdroxide_types::auto::CqCounter::default(),
             auto_attempts: std::collections::HashMap::new(),
             auto_armed_at: 0.0,
+            scan_voice_prev_dwell: None,
             dab_scan: None,
             dab_vu: Default::default(),
             dab_vu_at: None,
