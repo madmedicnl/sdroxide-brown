@@ -82,6 +82,15 @@ PR; nothing of it is on `main` because a panel of F4NRM's and the wire both are.
 - Nothing merged: **his PR to merge, ours not to touch** (AGENTS).
 
 **Next.** Whatever the queue holds next; this item waits on F4NRM's review.
+## 2026-10-26 (#220 is F4NRM's, checked)
+
+**In plain words.** A question came up about PR #220 (the SESSION QSOs panel),
+and the answer is that it is entirely his work: both commits are his
+(`b8cd5cf2`, `1fb4621e`), he merged it himself on 2026-10-25, and
+`session_qsos.rs` has had no commit from us since. Recorded here so the question
+does not have to be asked twice.
+
+
 ## 2026-10-26 (evening: the review round, and the two-hour cap)
 
 **In plain words.** F4NRM reviewed everything that was waiting and merged five
