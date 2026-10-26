@@ -190,8 +190,23 @@ jobs:
           # what chooses. Putting the extras in unconditionally is the one
           # version of this that looks right and reverts the whole change: it
           # yields 14 jobs on a release tag.
+          # **One extra platform comes to every release: `linux-x86_64-compat`.**
+          # The AppImage is built from that job — a binary from Ubuntu 22.04
+          # rather than the runner's own image, which is what makes "one file,
+          # download and run" a promise on an older distribution too — and the
+          # AppImage step is keyed on that label. While the platform lived only
+          # in `extra_platforms`, a release never built it and the AppImage was
+          # never produced at all: issue #105 asked for one in October and every
+          # release since had none, because the job that makes it was not in the
+          # matrix.
+          #
+          # `cat` only: the AppImage is the standard build (a SoapySDR one would
+          # have to bundle the driver stack, which is the half-working bundle
+          # AppImages are notorious for), so a `soapy` compat job would be a
+          # second Linux build of something nothing ships.
           if [[ "$wanted" == "null" ]]; then
-            pool="$platforms"
+            pool=$(jq -cn --argjson platforms "$platforms" --argjson extra "$extra_platforms" \
+              '$platforms + ($extra | map(select(.label == "linux-x86_64-compat")))')
           else
             pool=$(jq -cn --argjson platforms "$platforms" --argjson extra "$extra_platforms" '$platforms + $extra')
           fi
@@ -202,6 +217,7 @@ jobs:
             '{include: [ $platforms[] as $p
                          | select($wanted == null or ($wanted | index($p.label)) != null)
                          | $variants[]
+                         | select(. != "soapy" or ($p.label | contains("compat") | not))
                          | $p + {variant: .} ]}')
           echo "combos=$combos" >> "$GITHUB_OUTPUT"
           echo "$combos" | jq .
