@@ -252,6 +252,13 @@ reception log · #642 S-meter calibration.
 
 ## Recently done
 
+- **2026-10-26** — AppImage for #105: the build step existed but its job
+  (`linux-x86_64-compat`) was not in a release matrix, so no AppImage was ever
+  produced. The compat job now comes to every release, `cat` only; a release
+  matrix is nine jobs. `08e2e125`.
+
+
+
 ### 2026-10-25
 - **STANAG 4285 decodes off the air** — the vendored GPL reference decoder
   (`vendor/s4285-ref`, driven from `crates/sdroxide-s4285`) runs beside our own
