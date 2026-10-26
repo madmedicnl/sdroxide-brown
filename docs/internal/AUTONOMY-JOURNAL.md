@@ -24,6 +24,36 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-26 (v2.1.2_brown is missing Windows — `M_PI` in the vendored decoder)
+
+**In plain words.** The full release published with **14 assets** — Linux (plain,
+SoapySDR and the 22.04 compat build with its AppImage), macOS on both arches, and
+the web client — but **no Windows build**. The cause is the vendored STANAG 4285
+decoder: its headers use `M_PI`, which the MinGW toolchain on the runner does not
+define. The same failure killed **v2.1.1.1** earlier today, so Windows has had no
+build since the s4285 decoder was vendored, and neither page says so.
+
+**Done.**
+- `crates/sdroxide-s4285/build.rs` passes `-DM_PI=3.14159265358979323846` when
+  `CARGO_CFG_TARGET_OS` is `windows`; `vendor/` untouched. Windows only, because
+  glibc already defines it and a second definition is a redefinition warning.
+- Verified as far as this machine can: `cargo check -p sdroxide-s4285` compiles
+  on Linux, and `g++ -std=c++17 -UM_PI -DM_PI=… -fsyntax-only src/shim.cc` — the
+  Windows shape, with the library's own `M_PI` removed and ours supplied —
+  compiles clean. **The Windows job itself is the proof**, and no Windows target
+  is installed here.
+
+**Not done / blocked.**
+- The recovery is the documented one: a **fourth-point tag `v2.1.2.1_brown`** on
+  the same crate version 2.1.2 — not a re-cut of this tag — and the operator has
+  not yet said whether the partial v2.1.2 page is deleted or left standing.
+- The WEFAX multi-page puzzle: his two recordings each hold **one** page (the
+  Drive file runs 42.7 s → 1121.6 s, 2153 lines, ended by its stop tone), so
+  neither can reproduce "only the first one or two of ten". A short audio clip
+  spanning a page boundary is what would settle it.
+
+---
+
 ## 2026-10-26 (v2.1.2_brown — the full release)
 
 **In plain words.** The windows work is merged and a **full release** is being cut
