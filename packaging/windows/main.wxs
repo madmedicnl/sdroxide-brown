@@ -37,7 +37,32 @@
                  one install overwrite the other's binary. -->
             <Directory Id="INSTALLFOLDER" Name="sdroxide-brown">
                 <Component Id="MainExe" Guid="DE7788FB-C6E5-47E2-87D8-F24D5E6ADBE5">
-                    <File Id="SdroxideExe" Source="$(var.BinDir)/sdroxide.exe" KeyPath="yes" />
+                    <!-- **The shortcuts live in the executable's own component**,
+                         so their KeyPath is the file they launch — a per-machine
+                         file in Program Files — and their directories are the
+                         machine-wide ones. They used to be components of their
+                         own keyed on an HKLM registry value inside the per-user
+                         `ProgramMenuFolder`/`DesktopFolder`, which is the mix
+                         Windows Installer's validation rejects (ICE38, ICE43,
+                         ICE57): a standard user who answers UAC with an
+                         administrator's credentials got a finished install and no
+                         shortcut anywhere they could see. WiX 5.0.2 began
+                         refusing it outright and Windows had no installer from
+                         v2.1.1.1 on. -->
+                    <File Id="SdroxideExe" Source="$(var.BinDir)/sdroxide.exe" KeyPath="yes">
+                        <Shortcut Id="AppShortcut"
+                                  Directory="CommonProgramsFolder"
+                                  Name="SDR Oxide Brown"
+                                  Description="SDR transceiver and shortwave-listening tool"
+                                  WorkingDirectory="INSTALLFOLDER"
+                                  Icon="SdroxideIcon" />
+                        <Shortcut Id="DesktopAppShortcut"
+                                  Directory="CommonDesktopFolder"
+                                  Name="SDR Oxide Brown"
+                                  Description="SDR transceiver and shortwave-listening tool"
+                                  WorkingDirectory="INSTALLFOLDER"
+                                  Icon="SdroxideIcon" />
+                    </File>
                 </Component>
                 <Component Id="MinGWLibgcc" Guid="BD91C960-622D-42C3-B20D-C29F8001F83B">
                     <File Id="MinGWLibgccDll" Source="$(var.BinDir)/libgcc_s_seh-1.dll" KeyPath="yes" />
@@ -96,42 +121,6 @@
             </Directory>
         </StandardDirectory>
 
-        <!-- **Per-machine key paths, deliberately.** These two components used to
-             be keyed on HKCU, inside a `Scope="perMachine"` package — the shape
-             that puts shortcuts into the profile of whoever *elevated*, not of
-             whoever is sitting in front of the machine: a standard user on a
-             Windows Pro box who answers the UAC prompt with an administrator's
-             credentials gets a finished install, an entry in Apps & features, and
-             no shortcut anywhere they can see. Windows Installer's own validation
-             flags the mix (ICE38/ICE57) for the same reason.
-
-             Keyed on HKLM the shortcuts belong to the machine: they appear for
-             every user, they are removed with the package, and elevation is what
-             already had to happen for Program Files and the system PATH above. -->
-        <StandardDirectory Id="ProgramMenuFolder">
-            <Component Id="StartMenuShortcut" Guid="F24E396A-6BBD-49A1-962F-DA256A4C48E7">
-                <Shortcut Id="AppShortcut"
-                          Name="SDR Oxide Brown"
-                          Description="SDR transceiver and shortwave-listening tool"
-                          Target="[INSTALLFOLDER]sdroxide.exe"
-                          WorkingDirectory="INSTALLFOLDER"
-                          Icon="SdroxideIcon" />
-                <RegistryValue Root="HKLM" Key="Software\sdroxide-brown" Name="Shortcut" Type="integer" Value="1" KeyPath="yes" />
-            </Component>
-        </StandardDirectory>
-
-        <StandardDirectory Id="DesktopFolder">
-            <Component Id="DesktopShortcut" Guid="707A5153-3F4A-490F-BFE7-8E4623C9B783">
-                <Shortcut Id="DesktopAppShortcut"
-                          Name="SDR Oxide Brown"
-                          Description="SDR transceiver and shortwave-listening tool"
-                          Target="[INSTALLFOLDER]sdroxide.exe"
-                          WorkingDirectory="INSTALLFOLDER"
-                          Icon="SdroxideIcon" />
-                <RegistryValue Root="HKLM" Key="Software\sdroxide-brown" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
-            </Component>
-        </StandardDirectory>
-
         <Feature Id="Main">
             <ComponentRef Id="MainExe" />
             <ComponentRef Id="MinGWLibgcc" />
@@ -143,8 +132,6 @@
             <ComponentRef Id="CmudictLicenseFile" />
             <ComponentRef Id="VoiceModel" />
             <ComponentRef Id="PathEnv" />
-            <ComponentRef Id="StartMenuShortcut" />
-            <ComponentRef Id="DesktopShortcut" />
         </Feature>
     </Package>
 </Wix>
