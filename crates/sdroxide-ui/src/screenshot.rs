@@ -24,6 +24,10 @@ pub enum ScreenshotAction {
     Wait(u32),
     /// Clear the notice banners (screenshot-only; see `MultiApp::dismiss_notices`).
     Dismiss,
+    /// **Centre the view on the dial with this span**, CTR on — the state the
+    /// CTR chip leaves, for a figure of a centred chart that can be reproduced
+    /// instead of clicked by hand.
+    Centre(f64),
     Capture,
 }
 
@@ -71,6 +75,12 @@ pub fn parse_actions(content: &str) -> Result<Vec<ScreenshotAction>, String> {
             }
             "dismiss" => {
                 actions.push(ScreenshotAction::Dismiss);
+            }
+            "ctr" => {
+                let hz: f64 = arg
+                    .parse()
+                    .map_err(|_| format!("line {}: 'ctr' needs a span in Hz", lineno + 1))?;
+                actions.push(ScreenshotAction::Centre(hz));
             }
             "capture" => {
                 actions.push(ScreenshotAction::Capture);
@@ -268,6 +278,11 @@ impl ScreenshotApp {
                 self.wait_until =
                     Some(std::time::Instant::now() + std::time::Duration::from_millis(u64::from(ms)));
                 self.action_index += 1;
+            }
+            ScreenshotAction::Centre(hz) => {
+                self.inner.screenshot_centre(hz);
+                self.action_index += 1;
+                self.wait_frames = 2;
             }
             ScreenshotAction::Dismiss => {
                 self.inner.dismiss_notices();
