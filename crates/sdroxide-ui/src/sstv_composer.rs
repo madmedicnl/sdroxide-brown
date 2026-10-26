@@ -80,6 +80,26 @@ pub(crate) fn draw_onto(doc: &Composer, img: &mut [u8], w: u16, h: u16) {
 /// pixels of one 320×256 picture — nothing against the engine's 1024 bound.
 pub(crate) const MOSAIC_SCALE: u16 = 2;
 
+/// The most pictures one mosaic holds — a 3 × 3 grid. Past that a cell is too
+/// small to carry a chart on a 320-pixel frame, which is the smallest SSTV line
+/// format.
+pub(crate) const MOSAIC_MAX: usize = 9;
+
+/// The grid a mosaic of `n` pictures is laid out in: `(columns, rows)`.
+///
+/// One fills the frame, two sit side by side, and the rest take the smallest
+/// square-ish grid that holds them — 3 and 4 as 2 × 2 (3 leaves a cell empty),
+/// 5 and 6 as 3 × 2, 7 to 9 as 3 × 3.
+pub(crate) fn grid_for(n: usize) -> (u16, u16) {
+    match n {
+        0 | 1 => (1, 1),
+        2 => (2, 1),
+        3 | 4 => (2, 2),
+        5 | 6 => (3, 2),
+        _ => (3, 3),
+    }
+}
+
 /// **A mosaic of received pictures**, composed to `(w, h)`.
 ///
 /// The layout is a grid decided by how many pictures there are: one fills the
@@ -97,18 +117,15 @@ pub(crate) fn mosaic(
     cells: &[(&[u8], u16, u16)],
 ) -> (Vec<u8>, u16, u16) {
     let mut img = vec![0u8; usize::from(w) * usize::from(h) * 3];
-    let n = cells.len().min(4);
+    let n = cells.len().min(MOSAIC_MAX);
     if n == 0 {
         return (img, w, h);
     }
-    // The grid: one cell fills the frame, two sit in a row, three and four make
-    // a square. Integer halving, so the four cells are exactly equal and the
-    // second pair starts where the first ends.
-    let (cols, rows) = match n {
-        1 => (1u16, 1u16),
-        2 => (2, 1),
-        _ => (2, 2),
-    };
+    // **The grid follows the count**, so a picture fills the frame, two sit in a
+    // row, four make a square, and five to nine use the smallest grid that holds
+    // them. The cells are cut from the frame by integer arithmetic, so a row of
+    // three is three equal cells and the next row starts where it ends.
+    let (cols, rows) = grid_for(n);
     let (w, h) = (w, h);
     for (i, (rgb, sw, sh)) in cells.iter().take(n).enumerate() {
         let (i, sw, sh) = (i as u16, *sw, *sh);
@@ -632,6 +649,45 @@ mod tests {
 
         let (img, w, _) = mosaic(320, 256, &[(&red, 32, 32), (&green, 32, 32), (&red, 32, 32)]);
         assert_eq!(pixel(&img, w, 240, 192), [0, 0, 0], "the empty quarter is not black");
+    }
+
+    /// **The grid follows the count**, up to nine cells, and every cell keeps
+    /// its own quarter of the frame.
+    #[test]
+    fn the_grid_follows_how_many_pictures_there_are() {
+        assert_eq!(grid_for(1), (1, 1));
+        assert_eq!(grid_for(2), (2, 1));
+        assert_eq!(grid_for(3), (2, 2));
+        assert_eq!(grid_for(4), (2, 2));
+        assert_eq!(grid_for(5), (3, 2));
+        assert_eq!(grid_for(6), (3, 2));
+        assert_eq!(grid_for(9), (3, 3));
+
+        // Nine pictures, one colour each, and each lands in its own cell.
+        let colours = [
+            [200, 0, 0],
+            [0, 200, 0],
+            [0, 0, 200],
+            [200, 200, 0],
+            [0, 200, 200],
+            [200, 0, 200],
+            [120, 120, 120],
+            [240, 240, 240],
+            [40, 80, 40],
+        ];
+        let cells: Vec<(Vec<u8>, u16, u16)> =
+            colours.iter().map(|c| (solid(32, 32, *c), 32u16, 32u16)).collect();
+        let refs: Vec<(&[u8], u16, u16)> =
+            cells.iter().map(|(v, w, h)| (v.as_slice(), *w, *h)).collect();
+        let (img, w, h) = mosaic(320, 256, &refs);
+        for (i, want) in colours.iter().enumerate() {
+            let (cx, cy) = (i % 3, i / 3);
+            let x = (320 / 3) * (cx as u16) + 40;
+            let y = (256 / 3) * (cy as u16) + 30;
+            assert_eq!(pixel(&img, w, x.min(w - 1), y.min(h - 1)), *want, "cell {i}");
+        }
+        // A tenth picture is not drawn anywhere: the cap is nine.
+        assert_eq!(grid_for(12), (3, 3));
     }
 
     /// No pictures is an empty frame, not a panic, and a zero-sized source is

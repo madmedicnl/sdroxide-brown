@@ -3041,13 +3041,53 @@ impl SdroxideApp {
                                 }
                                 ui.label(
                                     RichText::new(format!(
-                                        "Picked {} of 4, laid out in this order. Each picture \
-                                         keeps its shape; the gaps are black.",
-                                        self.sstv.mosaic_picks.len()
+                                        "Picked {} of {}, laid out in this order — the order \
+                                         is the grid position. Each picture keeps its shape; \
+                                         the gaps are black.",
+                                        self.sstv.mosaic_picks.len(),
+                                        crate::sstv_composer::MOSAIC_MAX
                                     ))
                                     .size(10.0)
                                     .weak(),
                                 );
+                                // **The order, and how to change it.** The grid follows
+                                // the count, and a picture's position in it is its
+                                // place in this list: two arrows per pick move it
+                                // between cells, which is the whole of what a drag
+                                // would do, done in a way that cannot drop a picture
+                                // somewhere unintended.
+                                let picks = self.sstv.mosaic_picks.clone();
+                                ui.horizontal_wrapped(|ui| {
+                                    for (i, name) in picks.iter().enumerate() {
+                                        ui.horizontal(|ui| {
+                                            ui.label(
+                                                RichText::new(format!("{}", i + 1))
+                                                    .size(10.0)
+                                                    .color(crate::theme::CYAN_DIM()),
+                                            );
+                                            if ui
+                                                .add_enabled(i > 0, egui::Button::new("◀").small())
+                                                .on_hover_text("Move this picture one cell earlier")
+                                                .clicked()
+                                            {
+                                                self.sstv.mosaic_picks.swap(i, i - 1);
+                                            }
+                                            if ui
+                                                .add_enabled(
+                                                    i + 1 < picks.len(),
+                                                    egui::Button::new("▶").small(),
+                                                )
+                                                .on_hover_text("Move this picture one cell later")
+                                                .clicked()
+                                            {
+                                                self.sstv.mosaic_picks.swap(i, i + 1);
+                                            }
+                                            if crate::chrome::chip(ui, true, name).clicked() {
+                                                self.sstv.mosaic_picks.retain(|n| n != name);
+                                            }
+                                        });
+                                    }
+                                });
                                 ui.horizontal_wrapped(|ui| {
                                     for name in &names {
                                         let picked = self.sstv.mosaic_picks.iter().any(|n| n == name);
@@ -3055,16 +3095,19 @@ impl SdroxideApp {
                                         if crate::chrome::chip(ui, picked, label).clicked() {
                                             if picked {
                                                 self.sstv.mosaic_picks.retain(|n| n != name);
-                                            } else if self.sstv.mosaic_picks.len() < 4 {
+                                            } else if self.sstv.mosaic_picks.len()
+                                                < crate::sstv_composer::MOSAIC_MAX
+                                            {
                                                 self.sstv.mosaic_picks.push(name.clone());
                                                 cmds.push(Command::ImageGet {
                                                     kind: ImageKind::Sstv,
                                                     name: name.clone(),
                                                 });
                                             } else {
-                                                self.sstv.mosaic_note = Some(
-                                                    "Four is the most a mosaic holds".into(),
-                                                );
+                                                self.sstv.mosaic_note = Some(format!(
+                                                    "{} is the most a mosaic holds",
+                                                    crate::sstv_composer::MOSAIC_MAX
+                                                ));
                                             }
                                         }
                                     }
