@@ -13,7 +13,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
-## [2.1.2_brown] - 2026-10-26
+## [2.1.2.1_brown] - 2026-10-26
 
 ### Added
 - **Windows that work on a tiling window manager** — a floating panel with a title bar of its own (roll up, out to a real window, close which docks), one dock glyph inside a panel's own window because a tiling WM draws no title bar, a **▣** beside the gear listing every module and where it is, and a panel window narrow enough for one pane drawing its own pane chips. `Ctrl+Alt+W` opens that list anywhere, `Ctrl+Alt+F` floats or docks the operating panel, `Ctrl+Alt+1…9` and `0` recall a saved workspace. — madmedicnl, PR #261
