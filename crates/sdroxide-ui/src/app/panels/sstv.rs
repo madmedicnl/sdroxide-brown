@@ -203,6 +203,9 @@ pub(in crate::app) struct SstvUi {
     pub(in crate::app) editing_overlay: bool,
     /// The name being typed for a new layout template.
     pub(in crate::app) template_name: String,
+    /// The saved layout being renamed, if any: the name field holds the new one
+    /// and saving renames rather than adding.
+    pub(in crate::app) template_renaming: Option<String>,
     /// The pictures picked for a mosaic, in the order they will be laid out, and
     /// their PNGs once fetched. At most four: four is the case this exists for.
     pub(in crate::app) mosaic_picks: Vec<String>,
@@ -269,6 +272,7 @@ impl Default for SstvUi {
             overlay: sdroxide_types::Composer::default(),
             editing_overlay: false,
             template_name: String::new(),
+            template_renaming: None,
             mosaic_picks: Vec::new(),
             mosaic_pngs: HashMap::new(),
             mosaic_note: None,
@@ -2919,16 +2923,32 @@ impl SdroxideApp {
                                 .inner
                                 .on_hover_text("Keep this layout under that name");
                             if save.clicked() {
+                                let new = sdroxide_types::LayoutTemplate::clean_name(
+                                    &self.sstv.template_name,
+                                );
+                                // **A rename is a save and a forget**, and both
+                                // are issued here so the library never holds the
+                                // old name beside the new one.
+                                if let Some(old) = self.sstv.template_renaming.take()
+                                    && old != new
+                                {
+                                    cmds.push(Command::ImageDeleteTemplate { name: old });
+                                    note = Some(format!("renamed to {new:?}"));
+                                } else {
+                                    note = Some(format!("saved as {new:?}"));
+                                }
                                 cmds.push(Command::ImageSaveTemplate {
-                                    name: sdroxide_types::LayoutTemplate::clean_name(
-                                        &self.sstv.template_name,
-                                    ),
+                                    name: new,
                                     composer: doc.clone(),
                                 });
-                                note = Some(format!(
-                                    "saved as {:?}",
-                                    self.sstv.template_name.trim()
-                                ));
+                                self.sstv.template_name.clear();
+                            }
+                            if self.sstv.template_renaming.is_some()
+                                && crate::chrome::chip(ui, false, "Cancel").clicked()
+                            {
+                                self.sstv.template_renaming = None;
+                                self.sstv.template_name.clear();
+                                note = Some("rename cancelled".into());
                             }
                         });
                         if self.sstv.presets.templates.is_empty() {
@@ -2948,6 +2968,37 @@ impl SdroxideApp {
                                     dirty = true;
                                     send_now = true;
                                     note = Some(format!("loaded {:?}", t.name));
+                                }
+                                if ui
+                                    .add(egui::Button::new("✎").small())
+                                    .on_hover_text(format!("Rename {:?}", t.name))
+                                    .clicked()
+                                {
+                                    // Into the name field, with the old name kept:
+                                    // Save then renames rather than duplicating.
+                                    self.sstv.template_name = t.name.clone();
+                                    self.sstv.template_renaming = Some(t.name.clone());
+                                    note = Some(format!("renaming {:?}", t.name));
+                                }
+                                if ui
+                                    .add(egui::Button::new("⧉").small())
+                                    .on_hover_text(format!("Duplicate {:?}", t.name))
+                                    .clicked()
+                                {
+                                    // A copy under a free name, so nothing is
+                                    // overwritten by a duplicate.
+                                    let base = format!("{} copy", t.name);
+                                    let mut name = base.clone();
+                                    let mut n = 2u32;
+                                    while self.sstv.presets.templates.iter().any(|x| x.name == name) {
+                                        name = format!("{base} {n}");
+                                        n += 1;
+                                    }
+                                    cmds.push(Command::ImageSaveTemplate {
+                                        name: sdroxide_types::LayoutTemplate::clean_name(&name),
+                                        composer: t.composer.clone(),
+                                    });
+                                    note = Some(format!("duplicated as {name:?}"));
                                 }
                                 if ui
                                     .add(egui::Button::new("✕").small())
@@ -3046,8 +3097,16 @@ impl SdroxideApp {
                                         }
                                         let refs: Vec<(&[u8], u16, u16)> =
                                             cells.iter().map(|(r, w, h)| (r.as_slice(), *w, *h)).collect();
-                                        let (rgb, w, h) =
-                                            crate::sstv_composer::mosaic(dims.0, dims.1, &refs);
+                                        // **Twice the frame**, so the four
+                                        // pictures keep the detail they have
+                                        // before the transmit path scales them
+                                        // down to the mode's size.
+                                        let scale = crate::sstv_composer::MOSAIC_SCALE;
+                                        let (rgb, w, h) = crate::sstv_composer::mosaic(
+                                            dims.0 * scale,
+                                            dims.1 * scale,
+                                            &refs,
+                                        );
                                         if let Some(png) = crate::sstv::encode_png(&rgb, w, h) {
                                             let slot = self.sstv.selected_slot;
                                             self.sstv.set_slot(slot, png, cmds);

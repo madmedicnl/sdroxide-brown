@@ -72,6 +72,14 @@ pub(crate) fn draw_onto(doc: &Composer, img: &mut [u8], w: u16, h: u16) {
     }
 }
 
+/// How much larger than the transmit frame a mosaic is composed.
+///
+/// The transmit path crops and scales to the mode's size anyway, so composing at
+/// the frame's own size throws away the detail the four pictures still had at the
+/// moment they were laid out. Twice the frame keeps it and costs four times the
+/// pixels of one 320×256 picture — nothing against the engine's 1024 bound.
+pub(crate) const MOSAIC_SCALE: u16 = 2;
+
 /// **A mosaic of received pictures**, composed to `(w, h)`.
 ///
 /// The layout is a grid decided by how many pictures there are: one fills the
@@ -587,6 +595,23 @@ mod tests {
         assert_eq!(pixel(&img, w, 160, 4), [0, 0, 0], "the top is not black: 4:1 was stretched");
         assert_eq!(pixel(&img, w, 160, 128), [200, 0, 0], "the strip is not where it should be");
         assert_eq!(pixel(&img, w, 160, 251), [0, 0, 0], "the bottom is not black");
+    }
+
+    /// **A mosaic composed larger keeps the detail** the transmit path would
+    /// otherwise throw away: the same layout at twice the frame has twice the
+    /// pixels per cell, and the received originals are still untouched.
+    #[test]
+    fn a_mosaic_at_twice_the_frame_keeps_more_of_the_pictures() {
+        let src = solid(64, 48, [200, 0, 0]);
+        let cells: Vec<(&[u8], u16, u16)> = vec![(&src, 64, 48)];
+        let (small, sw, _) = mosaic(320, 256, &cells);
+        let (big, bw, bh) = mosaic(320 * MOSAIC_SCALE, 256 * MOSAIC_SCALE, &cells);
+        assert_eq!((bw, bh), (640, 512));
+        assert_eq!(big.len(), small.len() * 4, "twice each side is four times the pixels");
+        // The picture is in the middle of both, and the big one has no black
+        // gap where the small one's rounding left one.
+        assert_eq!(pixel(&big, bw, 320, 256), [200, 0, 0]);
+        assert_eq!(pixel(&small, sw, 160, 128), [200, 0, 0]);
     }
 
     /// One picture fills the frame; two sit side by side; three leave the fourth
