@@ -96,6 +96,18 @@
             </Directory>
         </StandardDirectory>
 
+        <!-- **Per-machine key paths, deliberately.** These two components used to
+             be keyed on HKCU, inside a `Scope="perMachine"` package — the shape
+             that puts shortcuts into the profile of whoever *elevated*, not of
+             whoever is sitting in front of the machine: a standard user on a
+             Windows Pro box who answers the UAC prompt with an administrator's
+             credentials gets a finished install, an entry in Apps & features, and
+             no shortcut anywhere they can see. Windows Installer's own validation
+             flags the mix (ICE38/ICE57) for the same reason.
+
+             Keyed on HKLM the shortcuts belong to the machine: they appear for
+             every user, they are removed with the package, and elevation is what
+             already had to happen for Program Files and the system PATH above. -->
         <StandardDirectory Id="ProgramMenuFolder">
             <Component Id="StartMenuShortcut" Guid="F24E396A-6BBD-49A1-962F-DA256A4C48E7">
                 <Shortcut Id="AppShortcut"
@@ -104,7 +116,7 @@
                           Target="[INSTALLFOLDER]sdroxide.exe"
                           WorkingDirectory="INSTALLFOLDER"
                           Icon="SdroxideIcon" />
-                <RegistryValue Root="HKCU" Key="Software\sdroxide-brown" Name="Shortcut" Type="integer" Value="1" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="Software\sdroxide-brown" Name="Shortcut" Type="integer" Value="1" KeyPath="yes" />
             </Component>
         </StandardDirectory>
 
@@ -116,7 +128,7 @@
                           Target="[INSTALLFOLDER]sdroxide.exe"
                           WorkingDirectory="INSTALLFOLDER"
                           Icon="SdroxideIcon" />
-                <RegistryValue Root="HKCU" Key="Software\sdroxide-brown" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="Software\sdroxide-brown" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
             </Component>
         </StandardDirectory>
 

@@ -890,6 +890,13 @@ jobs:
             wix build packaging/windows/main.wxs -arch x64 \
               -d Version="$CARGO_VERSION" -d BinDir="$BIN_DIR" \
               -o "out/$PKG.msi"
+            # **Validate it, do not merely build it.** `wix build` compiles and
+            # links a package; it does not run the ICE checks, so a package that
+            # mixes per-machine scope with per-user registry key paths — how a
+            # shortcut ends up in the profile of whoever answered the UAC prompt
+            # instead of the person who will use the program — was published
+            # without a word. This is the check that says so.
+            wix msi validate "out/$PKG.msi"
             # Stable-named copies of the default build, so a page can link
             # "the Windows build" once instead of carrying a version in the
             # URL that has to be edited on every release. Only the default
