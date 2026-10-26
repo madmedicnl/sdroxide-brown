@@ -305,12 +305,11 @@ pub fn plan(role: AutoRole, f: &AutoFacts) -> AutoStep {
 
 /// **The longest an unattended run may be set to**, in minutes.
 ///
-/// Two hours, and it is a hard ceiling rather than a default: an unattended
-/// station left calling for longer than that is how contests get cheated, and
-/// the maintainer's instruction (2026-10-26) is that the program will not offer
-/// it. A config that arrives with more — from an older build, from another
-/// client — is clamped here rather than trusted.
-pub const AUTO_SESSION_MAX_MIN: u16 = 120;
+/// Twelve hours, and it is a hard ceiling rather than a default: the maintainer
+/// set it (2026-10-26) after discussion on the PR, and it is clamped here rather
+/// than trusted in the control, so a config that arrives with more — from an
+/// older build, from another client — stops at twelve.
+pub const AUTO_SESSION_MAX_MIN: u16 = 720;
 
 /// How long a station that used up its retries is left alone before it becomes
 /// eligible again, in seconds.
@@ -967,16 +966,16 @@ mod tests {
         assert_eq!(plan(AutoRole::Continuous, &f), AutoStep::CallCq);
     }
 
-    /// **Two hours is the ceiling, and it is enforced here**, not merely
-    /// offered by the control: a config from an older build that says four
-    /// hours stops at two, and the reason is not arithmetic.
+    /// **Twelve hours is the ceiling, and it is enforced here**, not merely
+    /// offered by the control: a config from an older build that asks for more
+    /// stops at twelve.
     #[test]
-    fn an_unattended_run_is_capped_at_two_hours() {
-        let over = AutoFacts { session_min: 240, session_s: 3.0 * 3600.0, ..facts() };
+    fn an_unattended_run_is_capped_at_twelve_hours() {
+        let over = AutoFacts { session_min: 1440, session_s: 13.0 * 3600.0, ..facts() };
         assert_eq!(
             plan(AutoRole::Continuous, &over),
             AutoStep::Stop(StopReason::Session),
-            "a four-hour config ran past the two-hour ceiling"
+            "a twenty-four-hour config ran past the twelve-hour ceiling"
         );
         // Two hours itself still runs to the last second.
         let within = AutoFacts {
