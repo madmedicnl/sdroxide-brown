@@ -1,5 +1,20 @@
 # Where we stopped — night of 26 October 2026
 
+> **Corrected 27 October, before anything was built on it.** Two things below are
+> no longer true. **(1) No re-release.** The operator has frozen the repository
+> until #263 is understood: no release, no tag, no PR merged, and the 2.1.2
+> download is withdrawn — the dangling `v2.1.2.2_brown` tag has been deleted, so
+> the newest download is the **v2.1.1.1 pre-release**. **(2) #234 is not the
+> suspect.** `git merge-base --is-ancestor 433a2d74 v2.1.1.1` is **true**: the
+> build F4NRM calls fine already contains the Airspy display-span change, and the
+> panadapter's own code (`widgets/`, `app/spectrum.rs`, `view.rs`) is byte-identical
+> between that build and `main`. A ten-configuration headless probe — real app,
+> real Shift+wheel, real 120-point drag — pans and zooms in every configuration
+> but the no-state one. So the diagnosis under "#263" below is a hypothesis that
+> the measurement does **not** support; the numbers are in
+> [`AUTONOMY-JOURNAL.md`](AUTONOMY-JOURNAL.md) under tonight's entry, and the live
+> question is the one asked of F4NRM there: does the wheel tune?
+
 Read this first. It is the state of play after a long session, written because the
 operator had to stop mid-thread. `AGENTS.md` is still the rules; this is the
 position.

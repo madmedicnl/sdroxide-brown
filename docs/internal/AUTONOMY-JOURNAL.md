@@ -24,6 +24,75 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-26 (the 2.1.2 download is withdrawn, and nothing lands until #263 is understood)
+
+**In plain words.** Nobody can download the 2.1.2 build any more, and the tag
+that could have published it has been deleted, so a re-run cannot republish it
+by accident. The version on offer is the one that works — v2.1.1.1, the
+pre-release from this morning. Nothing else is being merged while we work out
+what F4NRM is seeing, and every PR of ours stays where it is.
+
+**Done.**
+- Measured on origin: **no `v2.1.2.x` release page exists at all** — `gh release
+  list` shows v2.1.1.1 as the newest (pre-release) and v2.1.0.2_brown as
+  `Latest`. The two partial pages had already been deleted.
+- The **dangling tag `v2.1.2.2_brown`** (`9f2c4dac`, its Release run 40397491309
+  cancelled) was still on origin and is now deleted:
+  `git push origin :refs/tags/v2.1.2.2_brown` → `- [deleted] v2.1.2.2_brown`.
+  That tag was the only way the 2.1.2 build could still be published, by a
+  re-run.
+- Still open and untouched: **PR #258** (WEFAX centring), and every merged PR of
+  today stays merged — the operator does not believe `main` is buggy and did not
+  ask for a revert of the code.
+
+**What the investigation has ruled out, with numbers.**
+- v2.1.1.1 (the build that works, tagged 00:31 today) **contains #234**:
+  `git merge-base --is-ancestor 433a2d74 v2.1.1.1` is true. So the handover's
+  "today's Airspy display-span merge broke the panadapter" is wrong, and
+  reverting it would fix nothing.
+- **The panadapter's own code is byte-identical to v2.1.1.1**:
+  `git diff --stat v2.1.1.1..main -- crates/sdroxide-ui/src/widgets/ crates/sdroxide-ui/src/app/spectrum.rs crates/sdroxide-ui/src/view.rs` is empty. The state/caps wire types are untouched too (`types/state.rs`, `types/caps.rs`).
+- A headless probe drove the real app — capabilities, a snapshot, a frame, then a
+  real Shift+wheel and a 120-point left-drag on the panadapter found by its own
+  background colour — over ten configurations: 1.125 Msps SDR zoomed out and in,
+  HF+ 0.86 usable span, a 48 kHz state against a 1.1 MHz frame, an audio rig, a
+  CAT rig at 4.8 kHz, a wide lane over narrow I/Q, a bogus `usable_hz`, and no
+  state at all. **Pan and zoom worked in every one but the no-state case**
+  (zero-wide view). The probe was a throwaway and is **not in the tree**; a copy
+  is at `/tmp/opencode/probe_263_keep.rs`.
+- **Nothing on the radio side changed but two things** since v2.1.1.1:
+  **#240** (the composer's six `ImageSetComposer`/`Image…` command arms in
+  `engine.rs`, `image_store.rs`, wire 249→254) and **#253** (`DigiConfig` gains
+  `auto_call_retries`/`auto_session_min`, wire 255). `sdroxide-cat`,
+  `panadapter_source.rs`, `source.rs`, `device.rs`, `sdroxide-server`,
+  `sdroxide-web` and `src/` have **no changes at all** in that range.
+- The other four PRs after the tag are UI only: #254 (`scanner.rs`), #255
+  (`frame.rs`, the fax CTR anchor), #241 (`persist.rs`) and #261 (windows:
+  `frame`/`mod`/`top_bar`/`chrome`/`layout`/`multi`).
+
+**Not done / blocked.**
+- **#263 itself.** The one question out to F4NRM: *when he rolls the wheel over
+  the waterfall, does the frequency change?* It separates "the gesture never
+  reaches the widget" (a new overlay, which only #261 could have added) from "the
+  widget gets it and refuses". Reproducing it needs his screen or his console:
+  the client logs `panadapter view moved` with `dev_center`, `dev_span` and
+  `view_lo/hi` on every move, target `sdroxide::panadapter`.
+- **His SWR reading (3.5 against a tuner's 1.2) and FT8 not syncing after he
+  downgraded.** No code path here changed: the Kenwood SWR is the rig's own `RM`
+  meter bars read through a per-model curve chosen from its `ID;` reply, and that
+  file is untouched since before the build he calls fine. A downgrade reverting
+  the binary and leaving a fault means the fault is outside the binary — the
+  browser client Chrome caches (the server refuses a wire mismatch by name), the
+  station's own config files, or the audio/rig side.
+- **No release is to be cut** and no PR merged while this runs, on the operator's
+  instruction of tonight.
+
+**Next.** Get the server log from the moment his browser reconnects: it either
+names a protocol mismatch or shows the frames arriving. Then pick the half that
+is dead before touching code.
+
+---
+
 ## 2026-10-26 (v2.1.2_brown is missing Windows — `M_PI` in the vendored decoder)
 
 **In plain words.** The full release published with **14 assets** — Linux (plain,
