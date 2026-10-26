@@ -17,6 +17,18 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **Windows, for a tiling WM** (the operator, 2026-10-25/26 —
+   [`WINDOWS-HANDOVER.md`](docs/internal/WINDOWS-HANDOVER.md), branch
+   **`local/windows`, not pushed** and not to be pushed until he has clicked it)
+   — **the float has its own title bar now** (`151828df`): out · roll-up · close,
+   with close docking and roll-up turning the float into a bar. That pass also
+   **removed** the floating panel's chips row, the ▣ from every panel header and
+   the two-button chip machinery; the panel's OS window carries one dock glyph.
+   **To test**: drag by the bar, roll up/down, out to a window and back.
+   Open: panels with no header chip row (SSTV, WSPR, NAVTEX…) have no ⇱ float
+   chip, so they float with `Ctrl+Alt+F` or the list; the rest of step 5 (the band
+   popup's chips, the radio strip's WINDOWS menu) is untouched.
+
 0. **The picture composer's three features, and the continuous auto run** (issues
    #237/#236/#251, F4NRM, 2026-10-25/26 — his area, all **PRs**) — the station
    overlay, the layout library (save/load/rename/duplicate/forget) and the mosaic
@@ -252,6 +264,57 @@ reception log · #642 S-meter calibration.
 
 ## Recently done
 
+- **2026-10-26** — the float's **own title bar** (`151828df`, on `local/windows`,
+  not pushed): out to a window · roll up · close (which docks), with the mode name
+  on the left. Roll-up is the laptop answer — the float becomes a bar. And the
+  first subtraction of the thread: the floating panel's chips row is gone, the
+  panel's OS window carries one dock picture, and the ▣ is out of every panel
+  header (the list is the ▣ beside the gear and `Ctrl+Alt+W` again).
+- **2026-10-26** — the ▣'s list opens where it was clicked (`f52099af`): an aside
+  popup anchored to the chip. **Superseded** by `151828df`, which removed the
+  two-button chip and the popup with it.
+- **2026-10-26** — the Classic strip, and the ▣ where the panels are
+  (`7574093c`, on `local/windows`): in Classic the strip re-derived "is the column
+  here?" from the width left *after* the column took its share, so a Classic
+  window with a panel detached drew the **full strip under the frequency** beside
+  a column holding the same controls. One answer now, published where the column
+  is drawn, and a child window publishes `false` so the console keeps its
+  controls. The ▣ is now in every panel header that has a chip row (SSTV, the FT8
+  family, JS8, AtCHAT, packet, ADS-B) and in the floating/detached panel rows; the
+  panels with no chip row (WSPR, PI4, NAVTEX, FSQ, JTTY, CW, RADE, RF Paint, text
+  modems) need a row before they can carry it — **waiting on the operator**.
+- **2026-10-26** — windows, step 4 (`1dd73489`, `a8a2a842`, on `local/windows`):
+  **`Ctrl+Alt+W`** opens the module-windows list anywhere (it is a window of its
+  own now, so the key has somewhere to open it with every module docked), the
+  same chord closes it, **`Ctrl+Alt+F`** floats or docks the operating panel, and
+  **`Ctrl+Alt+1…9`** / **`0`** call back a saved workspace — an empty slot says so
+  on the banner. Applying a workspace docks the floating panel, because a
+  workspace stores windows and not floats. Not built: the list's filter box and
+  arrow-key navigation.
+- **2026-10-26** — windows, step 3 (`aa716e97`, on `local/windows`): a **▣**
+  beside the gear opens **MODULE WINDOWS** — one row per detachable module with
+  the three places it can be (here / floating over this window / its own
+  window), the one in force lit, a press to move it, and DOCK ALL / UNDOCK ALL.
+  The list is the recovery: a window left on another workspace is still a row.
+  Floating is the operating panel's only, and its slot is empty on the other
+  rows. The chip is on the strip **only while a module is out** — as a permanent
+  ninth chip it cost the widest 1600 pt strip a row. Preview:
+  `module_windows_preview`.
+- **2026-10-26** — windows, step 2 (`3a5b1d9e`, on `local/windows`): a panel
+  window under 600 pt wide draws its own **DECODES / QSO** row (no waterfall
+  tab — the picture is the main window's) and shows one pane at a time, so a
+  narrow window no longer cuts its QSO chips off at the edge. Its pane is the
+  window's own, swapped in around the draw; the floating panel gets the same and
+  stops growing to fit two columns. Widening past 600 brings both back. Looked
+  at both widths. Still owed in step 2: in Classic the detached panadapter
+  should draw no tools at all (its DISP chip remains).
+- **2026-10-26** — windows, step 1 of the handover (`196827a3`, on
+  `local/windows`): a detached window answers the layout questions for itself —
+  its own width earns the tier, it has no band column to dock, and its ids are
+  the focused radio's — and the main window's answers come back when its draw
+  ends. The band dock's room moved from an app field to a context register. New
+  `floating_panel_preview` tool; at 560 pt the FT8 panel still overflows, which
+  is step 2's pane tabs.
 - **2026-10-26** — AppImage for #105: the build step existed but its job
   (`linux-x86_64-compat`) was not in a release matrix, so no AppImage was ever
   produced. The compat job now comes to every release, `cat` only; a release

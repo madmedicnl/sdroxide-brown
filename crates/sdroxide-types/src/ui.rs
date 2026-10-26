@@ -690,6 +690,22 @@ impl DetachableModule {
         }
     }
 
+    /// The name this module's **window** carries on screen — SDRuno's names for
+    /// the two that have one, and the program's own for the rest. [`Self::label`]
+    /// is the settings page's word for it; this is the face of the program,
+    /// where SP1 and SP2 are what an SDRuno operator is looking for and
+    /// "Panadapter" is not.
+    pub fn window_name(self) -> &'static str {
+        match self {
+            DetachableModule::Panadapter => "SP1 — the spectrum",
+            DetachableModule::AuxPanadapter => "SP2 (AUX) — a second spectrum",
+            DetachableModule::Panel => "Operating panel",
+            DetachableModule::Controls => "RX control",
+            DetachableModule::BandMenu => "Band & mode",
+            DetachableModule::Rotor => "Antenna rotator",
+        }
+    }
+
     /// The window's **application id** — the handle a Wayland compositor rule
     /// matches on to float this window and pin it to a monitor. A public
     /// contract with the operator: change it and their rules stop matching.

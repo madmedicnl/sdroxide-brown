@@ -456,9 +456,15 @@ impl SdroxideApp {
     }
 }
 
-/// The full tab row for `mode`: its panes, then the waterfall.
-pub(in crate::app) fn panel_tabs(mode: Mode) -> impl Iterator<Item = &'static str> {
-    panel_panes(mode).iter().copied().chain(std::iter::once(TAB_WFALL))
+/// The full tab row for `mode`: its panes, then the waterfall — or the panes
+/// alone, for a **panel window**, which has no waterfall to give its last tab
+/// to (the picture is the main window's, and a tab that showed the two-column
+/// layout again would undo the reason the row exists).
+pub(in crate::app) fn panel_tabs(
+    mode: Mode,
+    waterfall: bool,
+) -> impl Iterator<Item = &'static str> {
+    panel_panes(mode).iter().copied().chain(std::iter::once(TAB_WFALL).filter(move |_| waterfall))
 }
 
 /// Index of the pane named `name`, for the panels that need to switch to one of
@@ -799,7 +805,11 @@ impl SdroxideApp {
     /// Wrapped, so a mode with more panes than the width holds takes a second
     /// row rather than losing the last one — which on most modes is the
     /// waterfall.
-    pub(in crate::app) fn digi_tabs(&mut self, ui: &mut egui::Ui, mode: Mode) {
+    /// The pane chips a narrow view switches between. `waterfall` is whether
+    /// this row has the main window's last tab — true where the picture is
+    /// below or beside it, false in a **panel window**, which draws the panel
+    /// and nothing else.
+    pub(in crate::app) fn digi_tabs(&mut self, ui: &mut egui::Ui, mode: Mode, waterfall: bool) {
         let selected = self.digi_pane(mode);
         // Pin the content to the width left *inside* the margins. A `Frame`
         // reports an outer rect of content-plus-margins, and a content row that
@@ -814,7 +824,7 @@ impl SdroxideApp {
             .show(ui, |ui| {
                 ui.set_max_width(inner_w);
                 ui.horizontal_wrapped(|ui| {
-                    for (i, label) in panel_tabs(mode).enumerate() {
+                    for (i, label) in panel_tabs(mode, waterfall).enumerate() {
                         if crate::chrome::chip(ui, selected == i, label).clicked() {
                             self.view.digi_pane = i;
                         }
@@ -1656,10 +1666,14 @@ mod tests {
         for mode in Mode::ALL {
             let panes = panel_panes(mode);
             assert!(!panes.is_empty(), "{mode:?} has no panes");
-            let tabs: Vec<_> = panel_tabs(mode).collect();
+            let tabs: Vec<_> = panel_tabs(mode, true).collect();
             assert_eq!(tabs.len(), panes.len() + 1, "{mode:?} tab count");
             assert_eq!(tabs.last().copied(), Some(TAB_WFALL), "{mode:?} waterfall is not last");
             assert!(!panes.contains(&TAB_WFALL), "{mode:?} names a pane after the waterfall tab");
+            // A **panel window** has no waterfall to show — the picture is the
+            // main window's — so its row is the mode's own panes and no more.
+            let window: Vec<_> = panel_tabs(mode, false).collect();
+            assert_eq!(window, panes, "{mode:?} window row");
         }
     }
 

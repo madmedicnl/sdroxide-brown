@@ -191,6 +191,12 @@ impl SdroxideApp {
             // setup dialog): the FSQ speed and the directed-message callsign.
             self.fsq_params_row(ui, cmds);
             crate::chrome::row_tail(ui, |ui| {
+                // **The pane's way out**, in the corner where every panel keeps
+                // it: one drawn glyph, the same picture the float's bar uses to
+                // come back.
+                if super::window_chip(ui) {
+                    self.float_operating_panel();
+                }
                 if transmitting {
                     ui.label(RichText::new("● TX").color(crate::theme::ALERT()).strong());
                 }

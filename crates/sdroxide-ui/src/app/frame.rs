@@ -543,6 +543,29 @@ fn detached_geometry(
     (size, pos)
 }
 
+/// Which saved workspace a `Ctrl+Alt+<digit>` calls back, or `None`.
+///
+/// The number row reads 1…9 and then 0 for the tenth, which is how SDRuno's
+/// workspaces are numbered and how a keyboard operator counts them. Pure, so
+/// the mapping is a thing a test can hold rather than something only a live
+/// keyboard shows.
+#[cfg(not(target_arch = "wasm32"))]
+fn workspace_slot(key: eframe::egui::Key) -> Option<usize> {
+    use eframe::egui::Key;
+    Some(match key {
+        Key::Num1 => 0,
+        Key::Num2 => 1,
+        Key::Num3 => 2,
+        Key::Num4 => 3,
+        Key::Num5 => 4,
+        Key::Num6 => 5,
+        Key::Num7 => 6,
+        Key::Num8 => 7,
+        Key::Num9 => 8,
+        Key::Num0 => 9,
+        _ => return None,
+    })
+}
 
 /// What a detached window left behind this frame.
 #[cfg(not(target_arch = "wasm32"))]
@@ -553,6 +576,69 @@ struct DetachedOutcome {
     /// Where the window ended up, for the settle-persist in
     /// [`SdroxideApp::handle_detached_outcome`].
     geometry: Option<sdroxide_types::DetachedWindow>,
+}
+
+/// Everything a **child window** needs to answer the layout questions for
+/// itself instead of for the main window — see
+/// [`crate::layout::ViewportScope`].
+///
+/// Three facts and no defaults: whose radio it is, which layout the operator
+/// asked for, and whether it is a window in its own right or a desk tool that
+/// stays desktop-shaped however tall it is made.
+#[derive(Clone, Copy)]
+struct ChildWindow {
+    /// The radio whose ids this window mints. The shell emits every detached
+    /// window for the **focused** radio after it has drawn whichever tabs are
+    /// on screen, so the salt left published on the context belongs to the last
+    /// tab drawn — another radio, in a split.
+    salt: u32,
+    /// The operator's layout override (Auto, or a tier said out loud), which
+    /// applies to every window.
+    mode: sdroxide_types::LayoutMode,
+    shape: crate::layout::WindowShape,
+}
+
+impl ChildWindow {
+    /// A window whose own width earns its tier — a spectrum, an operating
+    /// panel, a tool.
+    fn own(app: &SdroxideApp) -> Self {
+        Self {
+            salt: app.radio_id,
+            mode: app.ui_settings.layout,
+            shape: crate::layout::WindowShape::Own,
+        }
+    }
+
+    /// A desk tool, desktop-shaped whatever its height — the RX control
+    /// console, the band selector, the rotator.
+    fn desk(app: &SdroxideApp) -> Self {
+        Self {
+            salt: app.radio_id,
+            mode: app.ui_settings.layout,
+            shape: crate::layout::WindowShape::Desk,
+        }
+    }
+
+    /// An **operating panel**: one pane at a time when the window is too narrow
+    /// for two, with the window drawing the pane chips itself.
+    fn panes(app: &SdroxideApp) -> Self {
+        Self {
+            salt: app.radio_id,
+            mode: app.ui_settings.layout,
+            shape: crate::layout::WindowShape::Panes,
+        }
+    }
+
+    /// Publish this window's answers for as long as the guard lives.
+    fn scope(self, ui: &egui::Ui) -> crate::layout::ViewportScope {
+        crate::layout::ViewportScope::enter(
+            ui.ctx(),
+            ui.max_rect().size(),
+            self.mode,
+            self.shape,
+            self.salt,
+        )
+    }
 }
 
 /// Show a module's window and draw `draw` into it, returning how it closed.
@@ -571,11 +657,19 @@ struct DetachedOutcome {
 /// nothing; the caller has already given the space away, so the main window
 /// still lays out. eframe sets `embed_viewports` false on every supported
 /// native platform; the browser never reaches here.
+///
+/// While the draw runs, the window's **own** layout answers are published in
+/// place of the main window's ([`ChildWindow`], and
+/// [`crate::layout::ViewportScope`] behind it): a window is measured by its own
+/// width, it has no band column to dock, and its ids belong to the radio it
+/// shows. The guard is made inside the viewport and dropped at the end of the
+/// draw, so nothing of it outlives a frame.
 #[cfg(not(target_arch = "wasm32"))]
 fn detached_viewport(
     ctx: &egui::Context,
     spec: &DetachedWindowSpec,
     seed: Option<sdroxide_types::DetachedWindow>,
+    child: ChildWindow,
     draw: impl FnOnce(&mut egui::Ui),
 ) -> DetachedOutcome {
     if ctx.embed_viewports() {
@@ -603,7 +697,7 @@ fn detached_viewport(
     // `show_viewport_immediate` wants an `FnMut`; the draw is a one-shot, so it
     // rides an `Option` and is taken on the frame it is drawn (and dropped
     // un-called on a frame the window is only closing).
-    let mut draw = Some(draw);
+    let mut draw = Some((child, draw));
     ctx.show_viewport_immediate(vid, builder, |ui, _class| {
         let ictx = ui.ctx();
         // `content_rect` is the inner size as the toolkit reports it — the only
@@ -626,7 +720,13 @@ fn detached_viewport(
             ictx.request_repaint_of(egui::ViewportId::ROOT);
             return;
         }
-        if let Some(draw) = draw.take() {
+        if let Some((child, draw)) = draw.take() {
+            // **This window's** answers, not the main window's, for as long as
+            // the draw runs: its own width earns its tier, it has no band column
+            // to dock, and it mints its ids for the radio it belongs to. The
+            // guard puts every one of them back when it drops, so whatever the
+            // next window (or the main window) draws gets its own again.
+            let _scope = child.scope(ui);
             draw(ui);
         }
     });
@@ -695,7 +795,10 @@ impl eframe::App for SdroxideApp {
         crate::layout::set_tier(&ctx, tier);
         // Whether the band selector can dock beside the waterfall, from the
         // same column: the top bar's chip reads it before the column is drawn.
-        self.band_dock_room = super::top_bar::band_dock_room(tier, ui.max_rect().width());
+        crate::layout::set_band_dock_room(
+            &ctx,
+            super::top_bar::band_dock_room(tier, ui.max_rect().width()),
+        );
         // …and the two questions the tier does not answer, published the same
         // way and for the same reason — the operator's override lives in
         // settings the context cannot see. `Small screen` asked for on a tall
@@ -828,6 +931,85 @@ impl eframe::App for SdroxideApp {
             if ctx.input(|i| i.key_pressed(egui::Key::F1)) {
                 self.help.open = !self.help.open;
             }
+            // **The two window keys**, and the reason there are two rather than
+            // one per module: there are six modules and nobody remembers six.
+            // `Ctrl+Alt+W` opens the module-windows list — the only route that
+            // works with every window docked, which is what makes a window lost
+            // on another workspace recoverable on a keyboard-only desktop — and
+            // `Ctrl+Alt+F` floats the operating panel or docks it again. Both
+            // handled here so they work while a text field has focus, as F1
+            // does: a chord with Ctrl and Alt in it is not typing.
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                // Read from the **events**, not from the frame's modifier state:
+                // a chord pressed and released inside one frame still arrives as
+                // two events, and the frame's `modifiers` are whatever the
+                // pointer last said.
+                let (mut list, mut float) = (false, false);
+                let mut workspace: Option<usize> = None;
+                ctx.input(|i| {
+                    for event in &i.events {
+                        if let egui::Event::Key {
+                            key, pressed: true, modifiers, repeat: false, ..
+                        } = event
+                            && modifiers.ctrl
+                            && modifiers.alt
+                            && !modifiers.shift
+                        {
+                            match key {
+                                egui::Key::W => list = true,
+                                egui::Key::F => float = true,
+                                other => {
+                                    if let Some(slot) = workspace_slot(*other) {
+                                        workspace = Some(slot);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                if list {
+                    self.show_windows = !self.show_windows;
+                }
+                if float {
+                    use sdroxide_types::DetachableModule;
+                    let floating = matches!(
+                        self.module_window_state(DetachableModule::Panel),
+                        super::ModuleWindow::Floating
+                    );
+                    let next = if floating {
+                        super::ModuleWindow::Docked
+                    } else {
+                        super::ModuleWindow::Floating
+                    };
+                    self.set_module_window_state(DetachableModule::Panel, next);
+                }
+                if let Some(i) = workspace {
+                    // **A workspace on a key**, `Ctrl+Alt+1…9` and `0` for the
+                    // tenth — the operator's own words: *"you spend time setting
+                    // up your preferred view, save it, and call it back any
+                    // time"*. An empty slot says so instead of doing nothing:
+                    // a key that silently ignores a press is the one thing a
+                    // control must never do.
+                    match self.workspaces.get(i).cloned() {
+                        Some(ws) => {
+                            ws.apply(&mut self.ui_settings);
+                            // A workspace stores the module windows, not the
+                            // floating panel — `Workspace` is the furniture —
+                            // so the panel comes back to the pane with it
+                            // rather than floating over the arrangement that
+                            // asked for it docked.
+                            self.panel_floating = false;
+                            crate::app::persist::persist_ui_settings(&self.ui_settings);
+                        }
+                        None => self.show_notice(format!(
+                            "No workspace {} saved — save one in Settings › UI › Workspaces and \
+                             this key will call it back.",
+                            i + 1
+                        )),
+                    }
+                }
+            }
             // Nothing to see here.
             let armed = super::konami::armed(self.state.band);
             let konami = &mut self.konami;
@@ -872,6 +1054,22 @@ impl eframe::App for SdroxideApp {
         //
         // Left out entirely where there is no room, and the strip behaves as it
         // always has: the two arrangements are the same program.
+        //
+        // **One decision, published.** Whether the column is here is decided
+        // once, from the window's whole width, and put on the context for the
+        // strip to read — because the strip used to re-derive it from the width
+        // **left after the column took its share**, which came out "no room for
+        // a column" in a window that had just drawn one. The strip then drew
+        // every control again under the frequency, the fault in the operator's
+        // screenshot of Classic with the panadapter out.
+        #[cfg(not(target_arch = "wasm32"))]
+        let classic_here = self.ui_settings.classic_ui
+            && tier != crate::layout::Tier::Phone
+            && super::classic::classic_surface(tier, ui.available_width(), self.classic_collapsed)
+                != super::classic::ClassicSurface::None;
+        #[cfg(target_arch = "wasm32")]
+        let classic_here = false;
+        crate::layout::set_classic_column(&ctx, classic_here);
         #[cfg(not(target_arch = "wasm32"))]
         if self.ui_settings.classic_ui
             && tier != crate::layout::Tier::Phone
@@ -1331,7 +1529,7 @@ impl eframe::App for SdroxideApp {
             let phone = tier == crate::layout::Tier::Phone;
             let width = ui.available_width();
             if phone {
-                self.digi_tabs(ui, mode);
+                self.digi_tabs(ui, mode, true);
             }
             // The waterfall is the tab past the last of the mode's own panes.
             let on_waterfall =
@@ -1474,7 +1672,7 @@ impl eframe::App for SdroxideApp {
                     (ui.available_height(), 0.0, layers, false)
                 }
             } else if phone {
-                self.digi_tabs(ui, Mode::Cw);
+                self.digi_tabs(ui, Mode::Cw, true);
                 let on_wf =
                     self.digi_pane(Mode::Cw) == crate::app::panels::panel_panes(Mode::Cw).len();
                 let h = ui.available_height();
@@ -1802,6 +2000,11 @@ impl eframe::App for SdroxideApp {
         // it is one of them in everything but where its body comes from.
         if self.panel_floating {
             self.floating_panel_window(&ctx, &mut cmds, mode);
+        }
+        // **The module-windows list**, from the ▣ chip or `Ctrl+Alt+W`.
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.show_windows {
+            self.module_windows_window(&ctx);
         }
         self.recordings_window(&ctx, &mut cmds);
         self.poll_recording_jobs(&mut cmds);
@@ -2429,7 +2632,8 @@ impl SdroxideApp {
         let frame = self.frame.clone();
         let inputs = self.panadapter_inputs(now);
         let mut clicked_spot: Option<Spot> = None;
-        let outcome = detached_viewport(ctx, spec, seed, |ui| {
+        let child = ChildWindow::own(self);
+        let outcome = detached_viewport(ctx, spec, seed, child, |ui| {
             // The toolbar across the top, then the spectrum below it.
             // `panel_below` is false: the operating panel is not under this
             // window, so the band-plan strip may use the rest of the height.
@@ -2498,54 +2702,94 @@ impl SdroxideApp {
                 // `panel_window_wanted`, which is false otherwise.
                 let mode = self.state.rx[0].mode;
                 let mut dock = false;
-                let mut float = false;
-                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    // **Both ways back.** A window with no way home is a one-way
-                    // door; the operator asked for the round trip — pane, floating
-                    // panel, window — so every state carries the chips that leave
-                    // it. `In` is the arrow pointing *into* the main window, which
-                    // is what floating is; `Dock` is all the way back to the pane.
-                    let row = crate::chrome::chip_height(ui, None);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), row),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            float =
-                                crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::In)
-                                    .on_hover_text(
-                                        "FLOAT — bring this panel back into the main window as a \
-                                         floating panel, not into the pane",
-                                    )
-                                    .clicked();
-                            dock = crate::chrome::chip_window_icon(
-                                ui,
-                                crate::chrome::WindowIcon::Dock,
-                            )
-                            .on_hover_text("DOCK — put this panel back under the waterfall")
-                            .clicked();
-                        },
-                    );
-                    let h = ui.available_height();
-                    self.draw_operating_panel(ui, &mut cmds, mode, h);
+                // **This window's pane is its own.** Swapped in around the draw,
+                // the same bargain AUX SP strikes with its view: the panel
+                // window may sit on the decode list while the main window shows
+                // something else, and a write from inside — answering a call
+                // moves to the QSO pane — lands in the window being looked at.
+                // A stored index from another mode, or the waterfall tab the
+                // main window's phone row may have selected, is clamped to a
+                // real pane first: there is no picture here for that tab.
+                let panes = super::panels::panel_panes(mode).len();
+                self.panel_window_pane = self.panel_window_pane.min(panes.saturating_sub(1));
+                std::mem::swap(&mut self.view.digi_pane, &mut self.panel_window_pane);
+                let child = ChildWindow::panes(self);
+                let outcome = detached_viewport(ctx, &spec, seed, child, |ui| {
+                    // **The same title bar as the float, on the panel's own
+                    // background.** A tiling window manager draws no title bar,
+                    // so the window's content carries one: 14 pt, the panel's
+                    // name at 10 pt, and the one glyph a window of its own needs —
+                    // dock — at 12 pt. It used to be a bare chip row over the
+                    // window's default black, which read as two panels stacked.
+                    egui::Frame::new()
+                        .fill(crate::theme::PANEL())
+                        // Six rather than four: the bar's buttons are 14 pt in a
+                        // 16 pt row, so the frame's own margin is what stands
+                        // between them and the window's top edge.
+                        .inner_margin(egui::Margin::symmetric(6, 6))
+                        .show(ui, |ui| {
+                            ui.set_min_size(ui.available_size());
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(ui.available_width(), crate::chrome::BAR_H),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        RichText::new(mode.label())
+                                            .size(crate::chrome::BAR_FONT)
+                                            .color(crate::theme::CYAN()),
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            dock = crate::chrome::chip_window_icon_sized(
+                                                ui,
+                                                crate::chrome::WindowIcon::Dock,
+                                                egui::vec2(
+                                                    crate::chrome::BAR_CHIP,
+                                                    crate::chrome::BAR_CHIP,
+                                                ),
+                                            )
+                                            .on_hover_text(
+                                                "DOCK — put this panel back under the waterfall",
+                                            )
+                                            .clicked();
+                                        },
+                                    );
+                                },
+                            );
+                            ui.separator();
+                            // Narrow enough for one pane at a time: the chips that
+                            // reach the others are drawn **here**, because the main
+                            // window's copy of them is behind this window and its
+                            // waterfall tab has nothing to show in a panel window.
+                            if crate::layout::tier(ui.ctx()) == crate::layout::Tier::Phone {
+                                self.digi_tabs(ui, mode, false);
+                            }
+                            let h = ui.available_height();
+                            self.draw_operating_panel(ui, &mut cmds, mode, h);
+                        });
                 });
+                std::mem::swap(&mut self.view.digi_pane, &mut self.panel_window_pane);
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
-                if dock || float {
+                if dock {
                     self.ui_settings.set_detached(sdroxide_types::DetachableModule::Panel, false);
-                    self.panel_floating = float;
+                    self.panel_floating = false;
                     crate::app::persist::persist_ui_settings(&self.ui_settings);
                 }
                 self.dispatch_commands(cmds);
             }
             M::Controls => {
-                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    let ictx = ui.ctx().clone();
-                    let prev = crate::layout::tier(&ictx);
+                let child = ChildWindow::desk(self);
+                let outcome = detached_viewport(ctx, &spec, seed, child, |ui| {
                     // The console is **desktop-shaped whatever its own height**:
                     // the compact strips are for a phone, and a control window
                     // that flipped to one the moment it opened was the first
-                    // thing the operator noticed. Width still decides how the
-                    // strip's rows pack.
-                    crate::layout::set_tier(&ictx, crate::layout::Tier::Desktop);
+                    // thing the operator noticed. That is `ChildWindow::desk`,
+                    // which publishes the tier for this window alone and puts
+                    // the main window's back when the draw ends — the old way
+                    // saved and restored it by hand here, and left every other
+                    // answer (the tight flag, the dock's room, the salt) saying
+                    // what the main window had said.
                     egui::Frame::new()
                         .fill(crate::theme::BG_DEEP())
                         .inner_margin(egui::Margin::symmetric(8, 6))
@@ -2564,19 +2808,16 @@ impl SdroxideApp {
                             ui.separator();
                             self.console_band_area(ui, &mut cmds);
                         });
-                    crate::layout::set_tier(&ictx, prev);
                 });
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
                 self.dispatch_commands(cmds);
             }
             M::BandMenu => {
-                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    let ictx = ui.ctx().clone();
-                    let prev = crate::layout::tier(&ictx);
+                let child = ChildWindow::desk(self);
+                let outcome = detached_viewport(ctx, &spec, seed, child, |ui| {
                     // Desktop-shaped whatever its height, like the console: the
                     // window is a desktop surface, and the compact strips are
                     // for a phone.
-                    crate::layout::set_tier(&ictx, crate::layout::Tier::Desktop);
                     egui::Frame::new()
                         .fill(crate::theme::BG_DEEP())
                         .inner_margin(egui::Margin::symmetric(8, 6))
@@ -2623,19 +2864,16 @@ impl SdroxideApp {
                                     self.band_menu_body(ui, &mut cmds);
                                 });
                         });
-                    crate::layout::set_tier(&ictx, prev);
                 });
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
                 self.dispatch_commands(cmds);
             }
             M::Rotor => {
-                let outcome = detached_viewport(ctx, &spec, seed, |ui| {
-                    let ictx = ui.ctx().clone();
-                    let prev = crate::layout::tier(&ictx);
+                let child = ChildWindow::desk(self);
+                let outcome = detached_viewport(ctx, &spec, seed, child, |ui| {
                     // Desktop-shaped whatever its height, like the console and
                     // the band selector: this is a desk tool, and the compact
                     // strips are for a phone.
-                    crate::layout::set_tier(&ictx, crate::layout::Tier::Desktop);
                     egui::Frame::new()
                         .fill(crate::theme::BG_DEEP())
                         .inner_margin(egui::Margin::symmetric(8, 6))
@@ -2670,7 +2908,6 @@ impl SdroxideApp {
                             ui.separator();
                             self.rotor_body(ui, &mut cmds);
                         });
-                    crate::layout::set_tier(&ictx, prev);
                 });
                 self.handle_detached_outcome(ctx, module, &spec, outcome);
                 self.dispatch_commands(cmds);
@@ -2759,6 +2996,9 @@ impl SdroxideApp {
     /// in every mode and there is no table to keep in step.
     pub(in crate::app) fn float_operating_panel(&mut self) {
         self.panel_floating = true;
+        // Lifting the panel out is asking to *see* it: a float remembered as
+        // rolled up from last time would hand back a title bar and nothing else.
+        self.panel_rolled = false;
     }
 
     /// The operating pane as a **floating panel inside this window**.
@@ -2768,49 +3008,135 @@ impl SdroxideApp {
     /// which is what went wrong with the first attempt: it opened the mode's own
     /// tool window, and a mode without one (FT8 among them) got nothing at all.
     ///
-    /// The **dock chip** at its top right puts it back under the waterfall, and
-    /// closing it does the same: a panel is not a tool that can be shut, it is the
-    /// mode's control surface, and losing it would leave the mode unusable.
+    /// **Its title bar is ours**, and it carries the three things a window has:
+    /// roll up, out to a window of its own, and close — which here means *dock*,
+    /// because a panel is not a tool that can be shut, it is the mode's control
+    /// surface. egui draws no hook for extra title-bar buttons, so the bar is
+    /// drawn by us and `title_bar(false)` hands the movement to egui's
+    /// drag-anywhere fallback; the bar's own empty ground drags the window.
+    ///
+    /// **Out is a window of its own**, not a state: the operator's tiling window
+    /// manager has no title bar to put the control in, so every window carries
+    /// its own dock picture in its content — but the *float* needs no picture of
+    /// its own, because the title bar is exactly the thing the OS window will not
+    /// have.
     fn floating_panel_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>, mode: Mode) {
         let title = format!("{} — panel", mode.label());
         let mut open = true;
-        let mut dock = false;
+        // **No dud in the browser.** Detaching is native-only, so an out button
+        // there would dock the panel instead of giving it a window — a control
+        // doing the wrong thing, which is worse than one that is absent.
+        #[cfg(not(target_arch = "wasm32"))]
         let mut out = false;
+        #[cfg(target_arch = "wasm32")]
+        let out = false;
+        let mut rolled = self.panel_rolled;
+        // The floating panel is a panel window too, and gets the same bargain as
+        // the detached one: its own pane, swapped in around the draw, clamped to
+        // a real pane so the waterfall tab the main window may have selected
+        // cannot ask it for a picture it has not got.
+        let panes = super::panels::panel_panes(mode).len();
+        self.panel_window_pane = self.panel_window_pane.min(panes.saturating_sub(1));
+        std::mem::swap(&mut self.view.digi_pane, &mut self.panel_window_pane);
         egui::Window::new(title)
             .id(egui::Id::new("floating-operating-panel"))
+            .title_bar(false)
             .default_size([540.0, 440.0])
             .min_width(320.0)
-            .min_height(180.0)
+            .min_height(0.0)
             .max_size(ctx.content_rect().size() * 0.95)
             .resizable(true)
-            .collapsible(false)
-            .open(&mut open)
             .show(ctx, |ui| {
-                let row = crate::chrome::chip_height(ui, None);
+                // A floating panel is a window inside this one, and answers for
+                // its own size like any other — see `layout::ViewportScope`. It
+                // is where the fault showed first: at 540 pt it laid itself out
+                // desktop-wide, so its chip rows ran past its right edge.
+                let _scope = ChildWindow::panes(self).scope(ui);
+                // **The title bar: the name, then the three buttons**, drawn
+                // right to left so the order reads left-to-right as
+                // out · roll-up · close, which is what every desktop does. The
+                // title is a noun and the glyphs are verbs, which is the whole
+                // grammar this pass is about.
+                // **The bar's own numbers**: 14 pt tall, 12 pt buttons, 10 pt
+                // name — see `chrome::BAR_H`. It is a title bar, not a strip of
+                // controls, and a portrait of the window should be as quiet as
+                // the one on any other window.
+                let btn = egui::vec2(crate::chrome::BAR_CHIP, crate::chrome::BAR_CHIP);
                 ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), row),
-                    egui::Layout::right_to_left(egui::Align::Center),
+                    egui::vec2(ui.available_width(), crate::chrome::BAR_H),
+                    egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
-                        // **Both ways on from here.** Out to a real window — the
-                        // detachable module, which can go on another monitor — and
-                        // back into the pane. He missed the window chip in the
-                        // floating panel, and he is right: floating is one step, not
-                        // the last one.
-                        out = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
-                            .on_hover_text(
-                                "WINDOW — give this panel a window of its own, to put on \
-                                 another monitor",
+                        ui.label(
+                            RichText::new(mode.label())
+                                .size(crate::chrome::BAR_FONT)
+                                .color(crate::theme::CYAN()),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            // **One family, one size, one stroke.** All three are the
+                            // drawn window pictures, in chips of the same geometry —
+                            // a painted arrow beside a font `▾` and a font `×` was
+                            // three weights and three sizes on one row.
+                            if crate::chrome::chip_window_icon_sized(
+                                ui,
+                                crate::chrome::WindowIcon::Close,
+                                btn,
                             )
-                            .clicked();
-                        dock = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Dock)
                             .on_hover_text("DOCK — put this panel back under the waterfall")
-                            .clicked();
+                            .clicked()
+                            {
+                                open = false;
+                            }
+                            let roll_icon = if rolled {
+                                crate::chrome::WindowIcon::Unfold
+                            } else {
+                                crate::chrome::WindowIcon::Collapse
+                            };
+                            if crate::chrome::chip_window_icon_sized(ui, roll_icon, btn)
+                                .on_hover_text(if rolled {
+                                    "Unroll — show the panel again"
+                                } else {
+                                    "Roll up — leave the title bar and give the window back to the \
+                                 waterfall"
+                                })
+                                .clicked()
+                            {
+                                rolled = !rolled;
+                            }
+                            // **Out to a window of its own** — the one button a
+                            // floating window has that a docked panel does not,
+                            // and one a browser cannot honour: detaching is
+                            // native-only, so it is not drawn there rather than
+                            // drawn dead.
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                out = crate::chrome::chip_window_icon_sized(
+                                    ui,
+                                    crate::chrome::WindowIcon::Out,
+                                    btn,
+                                )
+                                .on_hover_text(
+                                    "WINDOW — give this panel a window of its own, to put on \
+                                     another monitor",
+                                )
+                                .clicked();
+                            }
+                        });
                     },
                 );
-                let h = ui.available_height();
-                self.draw_operating_panel(ui, cmds, mode, h);
+                ui.separator();
+                if !rolled {
+                    // One pane at a time in a narrow floating panel: the chips
+                    // that reach the others belong to the window that is in front.
+                    if crate::layout::tier(ui.ctx()) == crate::layout::Tier::Phone {
+                        self.digi_tabs(ui, mode, false);
+                    }
+                    let h = ui.available_height();
+                    self.draw_operating_panel(ui, cmds, mode, h);
+                }
             });
-        if dock || !open {
+        std::mem::swap(&mut self.view.digi_pane, &mut self.panel_window_pane);
+        self.panel_rolled = rolled;
+        if !open {
             self.panel_floating = false;
         }
         if out {
@@ -3026,7 +3352,8 @@ impl SdroxideApp {
     ) -> bool {
         let spec = tool_spec(id, title, default_size);
         let mut dock = false;
-        let outcome = detached_viewport(ctx, &spec, seed, |ui| {
+        let child = ChildWindow::own(self);
+        let outcome = detached_viewport(ctx, &spec, seed, child, |ui| {
             // A tool's own window gets the panel background the in-window one
             // has from its `egui::Window` frame — the module windows paint their
             // own, a tool body assumes one.
@@ -3122,26 +3449,27 @@ impl SdroxideApp {
         }
     }
 
-    /// **Classic UI** is in use *and* its column is drawn this frame — which the
-    /// strip has to know, because wherever the column is not drawn the strip
-    /// keeps its own controls. One place answers it so the two cannot disagree;
-    /// the column is native only, so the browser answers `false`.
-    pub(in crate::app) fn classic_column_this_frame(
-        &self,
-        tier: crate::layout::Tier,
-        window_w: f32,
-    ) -> bool {
+    /// **Classic UI** is in use *and* the column is drawn this frame — which the
+    /// strip has to know, because wherever the column is, the strip is the
+    /// readout and the meter and nothing else; the column carries every control.
+    /// One place answers it and that place is where the column is drawn: the
+    /// answer is **published** (see [`crate::layout::set_classic_column`]) rather
+    /// than re-derived here, because the strip sees the width left over *after*
+    /// the column took its share and would conclude that a window which has a
+    /// column has no room for one.
+    ///
+    /// A child window publishes `false` for its own draw, so the RX control
+    /// console — a strip in a window, with no column behind it — keeps its
+    /// controls. The column is native only, so the browser answers `false`.
+    pub(in crate::app) fn classic_column_this_frame(&self, ctx: &egui::Context) -> bool {
         #[cfg(target_arch = "wasm32")]
         {
-            let _ = (tier, window_w);
+            let _ = ctx;
             false
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            use super::classic::ClassicSurface;
-            self.ui_settings.classic_ui
-                && super::classic::classic_surface(tier, window_w, self.classic_collapsed)
-                    != ClassicSurface::None
+            self.ui_settings.classic_ui && crate::layout::classic_column(ctx)
         }
     }
 
@@ -4997,44 +5325,102 @@ mod tests {
         assert!(!super::SdroxideApp::centres_on_picture(Mode::Ft8));
     }
 
-    /// **The round trip: pane, floating panel, window — every state has the chip
-    /// that leaves it.** The operator asked for the window chip *in* the floating
-    /// panel ("I do miss the chip for making it a real window in that floating
-    /// panel"), and a window with no way home is a one-way door, so the panel's OS
-    /// window carries the dock chip.
+    /// **The round trip, in the window grammar.** No state is a one-way door:
+    /// the docked pane goes out to a float with its own chip, the float has a
+    /// title bar with roll-up, out to a window and close (which docks), and the
+    /// OS window — which on a tiling desktop has no title bar at all — carries
+    /// one dock picture in its own content.
+    ///
+    /// The float is deliberately **not** a button on the OS window any more: that
+    /// state was reached by a chip, then by a row of chips, and with the title bar
+    /// it is reached from the pane's own chip or the window list. One glyph per
+    /// window is the whole point of this pass.
     #[test]
     fn every_state_of_the_operating_pane_has_a_way_out_of_it() {
         let src = include_str!("frame.rs");
         let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
-        // The floating panel offers both.
+        // The float's title bar carries all three: roll up, out, close.
         assert!(
             code.contains("WINDOW — give this panel a window of its own"),
-            "the floating panel has no chip to make it a real window"
+            "the floating panel has no way out to a real window"
+        );
+        assert!(
+            code.contains("Roll up — leave the title bar"),
+            "the floating panel cannot be rolled up, so it costs the laptop its picture"
         );
         assert!(
             code.contains("DOCK — put this panel back under the waterfall"),
-            "the floating panel has no chip to put it back"
+            "the floating panel has no way back to the pane"
         );
-        // And the OS window has **both** ways home: FLOAT back into the main window
-        // as a floating panel, DOCK all the way to the pane.
+        // Its bar is ours, because egui has no hook for a fourth title-bar button.
+        assert!(
+            code.contains(".title_bar(false)"),
+            "the floating panel is back to egui's title bar, which cannot carry the out button"
+        );
+        // The OS window's one glyph, and the one state at a time.
         assert!(
             code.contains("set_detached(sdroxide_types::DetachableModule::Panel, false)"),
             "the panel's OS window cannot be brought back"
         );
         assert!(
-            code.contains("FLOAT — bring this panel back into the main window as a \\"),
-            "the panel's OS window cannot become a floating panel"
-        );
-        assert!(
-            code.contains("self.panel_floating = float;"),
-            "FLOAT from the window does not put the panel back in the main window"
-        );
-        // One state at a time: going out to a window drops the floating panel.
-        assert!(
             code.contains(
                 "self.panel_floating = false;\n            self.detach_operating_panel();"
             ),
             "floating and windowed can both be true, so the pane is drawn twice"
+        );
+        // And the docked pane's own way out to a float still exists in the
+        // panels that carry it.
+        assert!(
+            include_str!("panels/mod.rs").contains("FLOAT — lift this panel out"),
+            "no panel can float any more"
+        );
+    }
+
+    /// **A detached window answers the layout questions for itself.** No
+    /// headless test can open a second OS window — the harness runs embedded
+    /// viewports, where `detached_viewport` draws nothing at all — so the one
+    /// line that scopes the answers is pinned by reading it. Drop it and every
+    /// child window silently goes back to laying itself out from the main
+    /// window's geometry: a small panel sized as though it were desktop-wide,
+    /// its chips running past its right edge, and a split view drawing the
+    /// last tab's radio salt in the focused radio's windows.
+    #[test]
+    fn a_detached_window_scopes_the_layout_answers_to_itself() {
+        let src = include_str!("frame.rs");
+        let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
+        assert!(
+            code.contains("let _scope = child.scope(ui);"),
+            "the child viewport publishes the main window's answers again"
+        );
+        // …and the floating panel, which is a window inside this one and is
+        // where a desktop-wide chip row first ran past its own edge.
+        assert!(
+            code.contains("ChildWindow::panes(self).scope(ui)"),
+            "the floating panel lays itself out from the main window again"
+        );
+        // A panel window takes the one-pane arrangement when it is too narrow
+        // for two, and then *it* carries the chips that reach the other panes:
+        // the main window's row is behind it, and its waterfall tab has nothing
+        // to show in a panel window. Both the detached window and the floating
+        // one draw the row with no waterfall tab.
+        assert_eq!(
+            code.matches("self.digi_tabs(ui, mode, false);").count(),
+            2,
+            "a narrow panel window lost the chips that reach its other panes"
+        );
+        assert_eq!(
+            code.matches("self.digi_tabs(ui, mode, true);").count(),
+            1,
+            "the main window's row keeps the waterfall tab"
+        );
+        // Every module says which shape it is, and the type is what enforces
+        // that: `detached_viewport` takes a `ChildWindow`, so a call cannot be
+        // written without one. The two desks are the console, the band selector
+        // and the rotator.
+        assert_eq!(
+            code.matches("ChildWindow::desk(self)").count(),
+            3,
+            "a desk tool stopped saying so and will wear a compact strip"
         );
     }
 

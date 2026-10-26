@@ -77,6 +77,12 @@ impl SdroxideApp {
                 RichText::new("RECEPTIONS").size(9.5).strong().color(crate::theme::CYAN_DIM()),
             );
             crate::chrome::row_tail(ui, |ui| {
+                // **The pane's way out**, in the corner where every panel keeps
+                // it: one drawn glyph, the same picture the float's bar uses to
+                // come back.
+                if super::window_chip(ui) {
+                    self.float_operating_panel();
+                }
                 ui.label(
                     RichText::new(format!("{} rx", self.pi4_spots.len()))
                         .size(10.0)
