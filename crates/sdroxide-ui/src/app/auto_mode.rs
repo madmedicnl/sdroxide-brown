@@ -136,7 +136,13 @@ impl SdroxideApp {
         };
         let start = |me: &mut Self, t: auto::AutoTarget, cmds: &mut Vec<Command>| {
             me.auto_tried.insert(t.call.to_ascii_uppercase());
-            *me.auto_attempts.entry(t.call.to_ascii_uppercase()).or_insert(0) += 1;
+            // **A call is counted when it is made**, and the quota sets a delay
+            // rather than a permanent exclusion (`auto::after_call`), so a station
+            // that was silent earlier is a candidate again later.
+            let now_unix = crate::time::now_unix() as f64;
+            let key = t.call.to_ascii_uppercase();
+            let rec = me.auto_attempts.get(&key).copied().unwrap_or((0, 0.0));
+            me.auto_attempts.insert(key, auto::after_call(rec, me.digi_cfg_edit.auto_call_retries, now_unix));
             let label = me.auto_role.map_or("auto", |r| r.label());
             me.auto_note = format!("{label}: answering {}", t.call);
             cmds.push(Command::DigiStartQso {
@@ -236,9 +242,11 @@ impl SdroxideApp {
             (self.digi_cfg_edit.auto_call_retries, self.auto_attempts.clone(), &self.digi_decodes);
         let now = crate::time::now_unix();
         let mine = my_call.to_string();
+        let now_f = now as f64;
         let skip = |d: &sdroxide_types::Decode| -> bool {
             if let Some(from) = d.from.as_deref()
-                && attempts.get(&from.to_ascii_uppercase()).copied().unwrap_or(0) >= budget
+                && let Some(rec) = attempts.get(&from.to_ascii_uppercase())
+                && auto::retry_holds(*rec, budget, now_f)
             {
                 return true;
             }
@@ -263,9 +271,11 @@ impl SdroxideApp {
         let mine = my_call.to_string();
         let now = crate::time::now_unix();
         let decodes = &self.digi_decodes;
+        let now_f = now as f64;
         let busy_or_exhausted = |d: &sdroxide_types::Decode| -> bool {
             if let Some(from) = d.from.as_deref()
-                && attempts.get(&from.to_ascii_uppercase()).copied().unwrap_or(0) >= budget
+                && let Some(rec) = attempts.get(&from.to_ascii_uppercase())
+                && auto::retry_holds(*rec, budget, now_f)
             {
                 return true;
             }

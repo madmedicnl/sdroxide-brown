@@ -1137,7 +1137,7 @@ pub struct SdroxideApp {
     /// How many times each station has been called in this session, so a station
     /// that does not answer is passed over after the operator's retry budget
     /// rather than called into the void while others wait.
-    auto_attempts: std::collections::HashMap<String, u8>,
+    auto_attempts: std::collections::HashMap<String, sdroxide_types::auto::RetryRecord>,
     /// When the run was armed, for the session limit.
     auto_armed_at: f64,
     /// A DAB channel scan in progress: which Band III block it is sitting on,

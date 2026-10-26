@@ -302,6 +302,46 @@ pub fn plan(role: AutoRole, f: &AutoFacts) -> AutoStep {
     }
 }
 
+/// How long a station that used up its retries is left alone before it becomes
+/// eligible again, in seconds.
+///
+/// **A quota that never expires is a blacklist.** A station that did not answer
+/// twice at noon may be the only one on the band at half past: after this long the
+/// attempt count is cleared and it is a candidate again.
+pub const AUTO_RETRY_DELAY_S: f64 = 600.0;
+
+/// A station's record in the run's retry book: **(calls made, deferred until)**,
+/// where a zero `until` means "not deferred".
+pub type RetryRecord = (u8, f64);
+
+/// Whether a station's quota still holds it back.
+///
+/// Deferred means "used up the budget *and* the delay has not passed". Once the
+/// delay is over the station is a candidate again, which is what makes this a
+/// retry policy rather than a blacklist.
+pub fn retry_holds(record: RetryRecord, budget: u8, now: f64) -> bool {
+    let (calls, until) = record;
+    calls >= budget && until > 0.0 && now < until
+}
+
+/// The record after calling this station once.
+///
+/// A record whose delay has expired starts again from this call, so the count is
+/// never carried across the delay — a station that was silent ten minutes ago is
+/// not on its last chance now.
+pub fn after_call(record: RetryRecord, budget: u8, now: f64) -> RetryRecord {
+    let (calls, until) = record;
+    if until > 0.0 && now >= until {
+        return (1, 0.0);
+    }
+    let calls = calls.saturating_add(1);
+    if calls >= budget {
+        (calls, now + AUTO_RETRY_DELAY_S)
+    } else {
+        (calls, until)
+    }
+}
+
 /// The station auto mode has chosen to answer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AutoTarget {
@@ -479,9 +519,9 @@ pub const BUSY_DEFER_S: f64 = 150.0;
 /// mid-exchange — calling it now would talk over a contact in progress, which is
 /// the fastest way to be the station everybody filters out.
 ///
-/// `now` and `window_s` are the operator's clock and how far back to look; the
-/// last decode from `call` decides, because a station's latest message is where
-/// its exchange stands.
+/// `now` and `window_s` are **both in seconds** — `Decode::slot_utc` is Unix
+/// seconds and so is the caller's clock — and the last decode from `call` decides,
+/// because a station's latest message is where its exchange stands.
 pub fn looks_busy(decodes: &[Decode], call: &str, my_call: &str, now: i64, window_s: i64) -> bool {
     let call = call.trim();
     if call.is_empty() {
@@ -493,7 +533,10 @@ pub fn looks_busy(decodes: &[Decode], call: &str, my_call: &str, now: i64, windo
         .max_by_key(|d| d.slot_utc);
     let Some(last) = newest else { return false };
     // Old traffic says nothing about where the station is now.
-    if now.saturating_sub(last.slot_utc) > window_s.max(0) * 1000 {
+    // **Seconds, like both clocks.** This read `* 1000` once — a window of 150
+    // "seconds" that was really 150 000 of them, so no traffic was ever stale
+    // and every station that had worked somebody stayed permanently busy.
+    if now.saturating_sub(last.slot_utc) > window_s.max(0) {
         return false;
     }
     // Addressing somebody other than us is the exchange; addressing us is our
@@ -812,26 +855,25 @@ mod tests {
     #[test]
     fn a_station_is_busy_when_its_latest_message_is_to_somebody_else() {
         let now = 1_000_000;
-        // Fresh, and addressed to another station: busy.
-        let d = [traffic("IU5HIU", "SP3JHZ", now - 5_000)];
+        // Fresh (five seconds ago), and addressed to another station: busy.
+        let d = [traffic("IU5HIU", "SP3JHZ", now - 5)];
         assert!(looks_busy(&d, "IU5HIU", "19DCG373", now, 300));
 
         // Addressed to us: that is our call being answered, not an exchange.
-        let d = [traffic("IU5HIU", "19DCG373", now - 5_000)];
+        let d = [traffic("IU5HIU", "19DCG373", now - 5)];
         assert!(!looks_busy(&d, "IU5HIU", "19DCG373", now, 300));
 
         // Calling CQ: free to be answered.
-        let d = [traffic("IU5HIU", "CQ", now - 5_000)];
+        let d = [traffic("IU5HIU", "CQ", now - 5)];
         assert!(!looks_busy(&d, "IU5HIU", "19DCG373", now, 300));
 
         // Old traffic says nothing about now.
-        let d = [traffic("IU5HIU", "SP3JHZ", now - 600_000)];
+        let d = [traffic("IU5HIU", "SP3JHZ", now - 600)];
         assert!(!looks_busy(&d, "IU5HIU", "19DCG373", now, 300));
 
         // The *latest* message decides: it called us, then went back to a
         // contact with somebody else.
-        let d =
-            [traffic("IU5HIU", "19DCG373", now - 20_000), traffic("IU5HIU", "SP3JHZ", now - 5_000)];
+        let d = [traffic("IU5HIU", "19DCG373", now - 20), traffic("IU5HIU", "SP3JHZ", now - 5)];
         assert!(looks_busy(&d, "IU5HIU", "19DCG373", now, 300));
 
         // A station we have never heard is not busy — it may be calling us for
@@ -963,5 +1005,28 @@ mod tests {
             .expect("a CB station calling us is a caller");
         assert_eq!(t.call, "26AT715");
         assert!(t.grid.is_none(), "11 m carries no locator, and nothing should invent one");
+    }
+
+    /// **A used-up quota expires.** Two calls with a budget of two put the
+    /// station aside for the delay; after it, it is a candidate again with a
+    /// fresh count — a quota that never expires would be a blacklist.
+    #[test]
+    fn a_used_up_retry_quota_expires_after_the_delay() {
+        let now = 1_000.0;
+        let mut r: RetryRecord = (0, 0.0);
+        assert!(!retry_holds(r, 2, now), "a station never called is never held back");
+        r = after_call(r, 2, now);
+        assert_eq!(r, (1, 0.0), "one call, no delay yet");
+        assert!(!retry_holds(r, 2, now));
+        r = after_call(r, 2, now + 30.0);
+        assert_eq!(r.0, 2, "two calls");
+        assert!(r.1 > now, "the delay was set");
+        assert!(retry_holds(r, 2, now + 60.0), "held back during the delay");
+        let after = r.1 + 1.0;
+        assert!(!retry_holds(r, 2, after), "eligible again after it");
+
+        // The next call after the delay starts a fresh count, not the old one.
+        let again = after_call(r, 2, after);
+        assert_eq!(again, (1, 0.0), "the count did not restart");
     }
 }
