@@ -3,13 +3,12 @@
 What this fork is working on, kept here so it survives a session and is visible
 on the repo. Last updated **2026-10-25** by madmedicnl's agent.
 
-State: `main` at crate **2.1.0**, `PROTO_VERSION` **243** (`VERSION_BYTE`
-`0x3F`) — 242 was 8PSK and 243 voice hunting, both merged on 2026-10-24, and
-the aircraft online work (PR A and PR B) is merged and the hover card is next to
-be read. Latest release **v2.1.0.2_brown** (with **v2.1.0.2.1_brown** as the
-current pre-release), six open issues. The rules are
-in [`AGENTS.md`](AGENTS.md); the history is in
-[`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
+State: `main` at crate **2.1.0**, `PROTO_VERSION` **248** (`VERSION_BYTE`
+`0x44`) — 248 was the Airspy HF+'s display span, merged with PR #234, and the
+SSTV picture composer below is the uncommitted branch that takes **249**.
+Latest release **v2.1.0.2_brown** (with **v2.1.0.2.1_brown** as the current
+pre-release), six open issues. The rules are in [`AGENTS.md`](AGENTS.md); the
+history is in [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
 
 Items marked `#NNN` are **upstream** requests this fork may pick up; they are the
 maintainer's queue there, not a promise.
@@ -49,6 +48,29 @@ maintainer's queue there, not a promise.
    Two more findings to act on: the CTR anchor treats only SSTV as a picture
    mode, so a fax sits 1900 Hz off centre; and detaching is native-only, which
    is why the browser has no float arrow.
+0. **A multi-radio browser station exported a logbook of one QSO** (issue #236
+   comment, F4NRM, 2026-10-25) — the export itself is innocent. With more than
+   one radio the logbook is shared, so a logged contact re-reads it first; in a
+   browser there is no file to re-read, the reload answered "empty", and the log
+   was replaced by the one contact just logged. Fixed in
+   `crates/sdroxide-ui/src/app/{frame,persist}.rs` — `reload_qso_log` returns
+   `None` when there is no store and `after_shared_log` keeps the log in hand —
+   with a test that fails on the old behaviour, and pushed as a PR. Still open in
+   the same area: a browser tab that is not the station writer never persists
+   the logbook, which is the argument for putting the log on the wire the way
+   the picture document now is.
+
+0. **SSTV/RIFP picture composer: the document is on the wire** (#237, F4NRM,
+   2026-10-25, his area + a wire change → **PR, waiting for the operator's word**)
+   — the editor built earlier drew its layers from client memory, so a second
+   screen composed a different picture and a restart lost the layout. Each
+   transmit preset now carries its own `Composer` in `ImageSlotInfo.composer`,
+   set with `Command::ImageSetComposer` and persisted in `sstv_composers.json`
+   by the engine; the panel edits a claimed working copy and writes it when an
+   edit settles. `PROTO_VERSION` 249, `VERSION_BYTE` 0x45. Pushed as **PR #240**
+   (`fork/sstv-composer-wire`), waiting for F4NRM.
+
+
 
 0. **TCI receive audio: a server that carries baseband audio only gets silence**
    (#group, Rick Abshier KQ4Y, 2026-10-25) — reported against upstream 1.6.10, an
@@ -194,6 +216,25 @@ reception log · #642 S-meter calibration.
 ---
 
 ## Recently done
+
+- **2026-10-26** — WEFAX on the bench: 150 s each on 3855 kHz (gain 40) and
+  13 882.5 kHz (gain 20). A strong **carrier** on both, no modulated chart —
+  the panel stayed "listening", which is what the code is meant to do with a
+  standing carrier. Not a decoder fault; nothing scheduled was on the air at
+  10:40 UTC. 40 dB on the long wire showed broadband speckle; 20 dB was clean.
+
+
+
+- **2026-10-26** — the review round: F4NRM merged #242, #243, #245, #246, #255;
+  #240 (composer, wire 254) and #241 (logbook fix) are approved and closed,
+  waiting for a hand merge; #253 (AUTO CONT, wire 255) is open with the
+  **two-hour cap** at the maintainer's instruction. #244 and #254 fixed on `main`
+  and closed. Combined install 10:28, wire 256.
+- **2026-10-26** — the PSK air-loopback tool (`crates/sdroxide-dsp/examples/
+  psk_air_loopback.rs`): self-test 10/10, air path not yet, and the fault is the
+  tool's own audio recovery (proven with a synthetic capture).
+
+
 
 - **2026-10-26** — scan: the voice gate gave the raised listen time back (issue
   #254), `voice_dwell` a pure function with four cases tested. On `main`

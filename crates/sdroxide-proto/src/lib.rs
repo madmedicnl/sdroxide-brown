@@ -2108,6 +2108,31 @@ use sdroxide_types::{
 /// when it was opened; #245 and then #240 landed first, so the later of the
 /// colliding branches moves again — `PROTO_VERSION` 252 → 253,
 /// `VERSION_BYTE` 0x48 → 0x49. A downstream (fork) change.
+/// v252: **the picture composer's document** —
+/// [`sdroxide_types::ImageSlotInfo`] gains `composer` at its tail and
+/// [`sdroxide_types::Command`] gains `ImageSetComposer` last: each transmit
+/// preset now carries the layers drawn over its picture, so every client
+/// composes the same picture instead of one caption drawn where it likes.
+/// Appended last, and postcard is positional — so a v248 peer's payload does not
+/// decode and the version byte is what refuses it; `#[serde(default)]` covers the
+/// paths that read a bare value (a stored blob, a fixture). This branch took
+/// **249** when it was opened; #245 (the receive sensitivity controls) landed
+/// first and took 251, so the later of the two moved, as the register says it
+/// must. `PROTO_VERSION` 251 → 252, `VERSION_BYTE` 0x47 → 0x48. A downstream
+/// (fork) change.
+/// v254: **the composer's overlay, its template library and the mosaic's
+/// picture** — [`sdroxide_types::ImageSlotInfo`] gains `apply_overlay` at its
+/// tail, [`sdroxide_types::ImagePresets`] gains `templates`, and
+/// [`sdroxide_types::Command`] gains `ImageSetOverlay`, `ImageSaveTemplate` and
+/// `ImageDeleteTemplate` last. The station-wide overlay lets one layout identify
+/// every picture while each preset keeps its own layers under it; the templates
+/// are named layouts the operator saves and recalls, and they ride the presets
+/// so the console and a browser tab keep the same library.
+///
+/// **253 belongs to PR #242** (the Auto CQ split), which took it while this one
+/// was in review; the later of the colliding branches moves, so this takes 254.
+/// `PROTO_VERSION` 252 → 254, `VERSION_BYTE` 0x48 → 0x4A. A downstream (fork)
+/// change.
 /// v255: **the unattended run's own limits** —
 /// [`sdroxide_types::DigiConfig`] gains `auto_call_retries` and
 /// `auto_session_min` at its tail: how many times one station is called before
@@ -3106,9 +3131,43 @@ mod tests {
                         height: 768,
                         version: 0xdead_beef,
                         thumb: vec![0x89, 0x50, 0x4e, 0x47, 0x0d],
+                        // The composer's document: a turned line with a faded
+                        // band, which is the shape a misplaced field would
+                        // corrupt worst.
+                        apply_overlay: true,
+                        composer: sdroxide_types::Composer {
+                            layers: vec![sdroxide_types::TextLayer {
+                                text: "OE1TEST".into(),
+                                face: sdroxide_types::Face::Mono,
+                                px: 30,
+                                ink: [255, 255, 0],
+                                outline: Some([0, 0, 0]),
+                                x: 0.07,
+                                y: 0.5,
+                                vertical: true,
+                                band: Some(sdroxide_types::Strip {
+                                    thickness: 30,
+                                    fill: [0, 0, 120],
+                                    fill2: Some([0, 0, 20]),
+                                }),
+                                hidden: false,
+                            }],
+                        },
                     },
                     ImageSlotInfo::default(),
                 ],
+                templates: vec![sdroxide_types::LayoutTemplate {
+                    name: "CQ".into(),
+                    composer: sdroxide_types::Composer::seeded(
+                        "19DCG373",
+                        "",
+                        "CQ CQ",
+                        sdroxide_types::Face::Mono,
+                        26,
+                        None,
+                        320,
+                    ),
+                }],
             }),
             ServerMsg::ImageSlotSource {
                 slot: 3,
@@ -3160,6 +3219,37 @@ mod tests {
         let cmds = [
             ClientMsg::Command(Command::ImageSetSlot { slot: 2, bytes: vec![0xff, 0xd8, 0xff] }),
             ClientMsg::Command(Command::ImageSetMessage { slot: 2, message: "73".into() }),
+            ClientMsg::Command(Command::ImageSetComposer {
+                slot: 4,
+                composer: sdroxide_types::Composer {
+                    layers: vec![sdroxide_types::TextLayer {
+                        text: "PSE K".into(),
+                        x: 0.5,
+                        y: 0.8,
+                        ..sdroxide_types::TextLayer::default()
+                    }],
+                },
+            }),
+            // ...and an empty one, which is what "this preset uses the banner"
+            // looks like on the wire.
+            ClientMsg::Command(Command::ImageSetComposer {
+                slot: 0,
+                composer: sdroxide_types::Composer::default(),
+            }),
+            ClientMsg::Command(Command::ImageSetOverlay { slot: 3, on: false }),
+            ClientMsg::Command(Command::ImageSaveTemplate {
+                name: "Reply".into(),
+                composer: sdroxide_types::Composer::seeded(
+                    "",
+                    "",
+                    "PSE K",
+                    sdroxide_types::Face::Chakra,
+                    30,
+                    None,
+                    256,
+                ),
+            }),
+            ClientMsg::Command(Command::ImageDeleteTemplate { name: "Reply".into() }),
             ClientMsg::Command(Command::ImageGetSlot(4)),
             ClientMsg::Command(Command::ImageClearSlot(0)),
             ClientMsg::Command(Command::ImageList { kind: ImageKind::Wefax, offset: 0, count: 48 }),
