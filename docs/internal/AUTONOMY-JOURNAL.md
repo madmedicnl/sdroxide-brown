@@ -22,6 +22,42 @@ Each entry, in this order:
 ---
 
 
+---
+
+## 2026-10-26 (v2.1.2_brown — the full release)
+
+**In plain words.** The windows work is merged and a **full release** is being cut
+as **v2.1.2_brown**: one line per change in the notes with the author behind each,
+and a short note saying what the new window icons are and what the three keys do.
+The release workflow is running.
+
+**Done.**
+- **PR #261 merged** (`3ed50c4c`) — on the operator's explicit word ("merge it,
+  we're cutting a full release"), which overrides the rule that only F4NRM merges
+  our PRs. Recorded here because the rule is his and the exception should be
+  visible, not inferred.
+- `docs/internal/WINDOWS-HANDOVER.md` **rewritten** (`deef561b`) to describe what
+  merged, not the states we passed through: the grammar table, the bar's
+  constants, one drawn icon family, the browser having no `out`, the per-window
+  layout answers, the Classic answer, and a "still owed" list.
+- Release prep (`db3cbc4f`): crate **2.1.0 → 2.1.2**, `Cargo.lock` refreshed and
+  `cargo check --locked -p sdroxide-ui` passing; `Unreleased` rewritten as one line
+  per change with an author (`madmedicnl` / `F4NRM` / upstream pick), 26 lines
+  against the workflow's 60-line ceiling, closing with the icons-and-keys note.
+- Checks on the tagged tree: `cargo check --workspace --all-targets` compiles
+  (only warnings already on `main`, in crates this does not touch);
+  `cargo test --release --workspace` **294 suites, 0 failed**.
+- Tag **`v2.1.2_brown`** (annotated, "SDR Oxide Brown 2.1.2") on `db3cbc4f`,
+  pushed; release run **40380236447**, watched to its end.
+
+**Not done / blocked.**
+- Nothing from this release is installed locally: `~/.cargo/bin/sdroxide` is still
+  the 17:28 windows build on purpose (the operator is using it tonight).
+- **v2.1.1.1's own release run failed** (19m37s, 15:46 today) although its page has
+  11 assets — a job after the uploads, so the page is complete and the failure is
+  worth one line of reading before the next release.
+- **#258** (WEFAX centring) is still open with F4NRM — the only PR of ours there.
+
 ## 2026-10-26 (the panel window's bar takes the panel's background)
 
 **In plain words.** The panel's own OS window opened with a black strip and one

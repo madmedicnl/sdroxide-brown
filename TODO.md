@@ -1,13 +1,13 @@
 # TODO — SDR Oxide Brown
 
 What this fork is working on, kept here so it survives a session and is visible
-on the repo. Last updated **2026-10-25** by madmedicnl's agent.
+on the repo. Last updated **2026-10-26** by madmedicnl's agent.
 
-State: `main` at crate **2.1.0**, `PROTO_VERSION` **248** (`VERSION_BYTE`
-`0x44`) — 248 was the Airspy HF+'s display span, merged with PR #234, and the
-SSTV picture composer below is the uncommitted branch that takes **249**.
-Latest release **v2.1.0.2_brown** (with **v2.1.0.2.1_brown** as the current
-pre-release), six open issues. The rules are in [`AGENTS.md`](AGENTS.md); the
+State: `main` at crate **2.1.2**, `PROTO_VERSION` **255** (`VERSION_BYTE`
+`0x4B`) — 255 is the Auto run's ceiling, merged with PR #253. Latest release
+**v2.1.2_brown** (the full release, 2026-10-26); the windows work went in as
+**PR #261**. Ten open issues, and **#258** (WEFAX centring) is the one PR of ours
+with F4NRM. The rules are in [`AGENTS.md`](AGENTS.md); the
 history is in [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
 
 Items marked `#NNN` are **upstream** requests this fork may pick up; they are the
