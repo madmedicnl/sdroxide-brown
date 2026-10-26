@@ -837,7 +837,7 @@ impl SdroxideApp {
                     changed |= ui
                         .add(
                             egui::DragValue::new(&mut cfg.auto_session_min)
-                                .range(0..=240)
+                                .range(0..=sdroxide_types::auto::AUTO_SESSION_MAX_MIN)
                                 .suffix(" min"),
                         )
                         .on_hover_text(

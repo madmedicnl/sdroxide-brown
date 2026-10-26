@@ -279,7 +279,8 @@ pub struct AutoFacts {
 /// The session limit is checked first, because a safety limit that can be
 /// overtaken by a contact is not a limit.
 pub fn plan(role: AutoRole, f: &AutoFacts) -> AutoStep {
-    if f.session_min > 0 && f.session_s >= f64::from(f.session_min) * 60.0 {
+    let cap = f.session_min.min(AUTO_SESSION_MAX_MIN);
+    if cap > 0 && f.session_s >= f64::from(cap) * 60.0 {
         return AutoStep::Stop(StopReason::Session);
     }
     if f.caller {
@@ -301,6 +302,15 @@ pub fn plan(role: AutoRole, f: &AutoFacts) -> AutoStep {
         CqLimit::Stop => AutoStep::Stop(StopReason::CqLimit),
     }
 }
+
+/// **The longest an unattended run may be set to**, in minutes.
+///
+/// Two hours, and it is a hard ceiling rather than a default: an unattended
+/// station left calling for longer than that is how contests get cheated, and
+/// the maintainer's instruction (2026-10-26) is that the program will not offer
+/// it. A config that arrives with more — from an older build, from another
+/// client — is clamped here rather than trusted.
+pub const AUTO_SESSION_MAX_MIN: u16 = 120;
 
 /// How long a station that used up its retries is left alone before it becomes
 /// eligible again, in seconds.
@@ -955,6 +965,26 @@ mod tests {
         // Zero means no limit.
         let f = AutoFacts { session_min: 0, session_s: 9_999.0, ..facts() };
         assert_eq!(plan(AutoRole::Continuous, &f), AutoStep::CallCq);
+    }
+
+    /// **Two hours is the ceiling, and it is enforced here**, not merely
+    /// offered by the control: a config from an older build that says four
+    /// hours stops at two, and the reason is not arithmetic.
+    #[test]
+    fn an_unattended_run_is_capped_at_two_hours() {
+        let over = AutoFacts { session_min: 240, session_s: 3.0 * 3600.0, ..facts() };
+        assert_eq!(
+            plan(AutoRole::Continuous, &over),
+            AutoStep::Stop(StopReason::Session),
+            "a four-hour config ran past the two-hour ceiling"
+        );
+        // Two hours itself still runs to the last second.
+        let within = AutoFacts {
+            session_min: AUTO_SESSION_MAX_MIN,
+            session_s: f64::from(AUTO_SESSION_MAX_MIN) * 60.0 - 1.0,
+            ..facts()
+        };
+        assert_eq!(plan(AutoRole::Continuous, &within), AutoStep::CallCq);
     }
 
     /// The three roles are named, cycle in one order, and are all of `ALL`.
