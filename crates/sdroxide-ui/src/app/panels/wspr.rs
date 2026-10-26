@@ -206,6 +206,12 @@ impl SdroxideApp {
                 RichText::new("RECEPTIONS").size(9.5).strong().color(crate::theme::CYAN_DIM()),
             );
             crate::chrome::row_tail(ui, |ui| {
+                // **The pane's way out**, in the corner where every panel keeps
+                // it: one drawn glyph, the same picture the float's bar uses to
+                // come back.
+                if super::window_chip(ui) {
+                    self.float_operating_panel();
+                }
                 let heard_us = self.wspr_spots.iter().filter(|s| s.is_heard_by_other()).count();
                 let label = if heard_us > 0 {
                     format!("{} rx · {heard_us} heard us", self.wspr_spots.len() - heard_us)

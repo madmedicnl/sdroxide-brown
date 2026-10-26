@@ -685,7 +685,7 @@ impl SdroxideApp {
         // (and *persists* it) on a double click. An operator clearing a stuck
         // column would find the strip folded into another arrangement with
         // nothing on screen to say what did it.
-        let classic = self.classic_column_this_frame(tier, ui.available_width());
+        let classic = self.classic_column_this_frame(ui.ctx());
         if tier != crate::layout::Tier::Phone && !classic {
             let toggle = ui.interact(
                 ui.max_rect(),
@@ -822,7 +822,12 @@ impl SdroxideApp {
         }
         let w = self.display_rows_w(ui);
         boxes.push((Kind::Display, StripBox { w, flex: 1.0, max_w: w * CHIP_STRETCH_FACTOR }));
-        let w = system_rows_w(ui, self.ui_settings.simple_ui, self.swl_mode());
+        let w = system_rows_w(
+            ui,
+            self.ui_settings.simple_ui,
+            self.swl_mode(),
+            self.module_windows_chip_wanted(),
+        );
         boxes.push((Kind::System, StripBox { w, flex: 1.0, max_w: w * CHIP_STRETCH_FACTOR }));
 
         // A whole row is worth more than digit size: when the strip packs into
@@ -847,7 +852,7 @@ impl SdroxideApp {
         // Only where the column is actually drawn: the strip must keep its own
         // controls wherever it is not, or a window too narrow for the column
         // would lose them entirely.
-        if self.classic_column_this_frame(tier, avail) {
+        if self.classic_column_this_frame(ui.ctx()) {
             // The two things that belong beside the *picture*: the readout it is
             // tuned with and the meter it is judged by. The fold has moved to
             // the column itself — and to its rail when folded — so nothing here
@@ -1673,6 +1678,19 @@ impl SdroxideApp {
                         self.show_settings = !self.show_settings;
                         opened = true;
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        let resp = crate::chrome::chip(ui, self.show_windows, "▣").on_hover_text(
+                            "▣  Left: bring every module window home\nRight: the module windows \
+                             list",
+                        );
+                        if resp.clicked() {
+                            self.dock_all_windows();
+                        } else if resp.secondary_clicked() {
+                            self.show_windows = !self.show_windows;
+                            opened = true;
+                        }
+                    }
                     if crate::chrome::chip(ui, self.help.open, "?")
                         .on_hover_text("User manual (F1)")
                         .clicked()
@@ -1686,6 +1704,189 @@ impl SdroxideApp {
                 }
             });
         });
+    }
+
+    /// Whether the **▣** belongs on the System row this frame.
+    ///
+    /// While any module is out of this window — in its own OS window, or the
+    /// panel floating over it — and while its list is open. Not otherwise, and
+    /// the reason is measured: a chip is width, width is rows, and one more chip
+    /// here costs a 1600 pt strip a whole row of waterfall in the widest
+    /// arrangement (`the_cessb_rail_costs_the_desktop_strip_no_row`). A window
+    /// that is out is exactly when the list has something to say, so the chip
+    /// appears when it is needed and the ordinary arrangement pays nothing.
+    ///
+    /// The **first** window is sent out from Settings › UI › Detachable, or from
+    /// a panel's own window chip, where it already was.
+    pub(in crate::app) fn module_windows_chip_wanted(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            // A browser has one window with nothing to detach, so the chip is
+            // never on the row and the box is never measured with it.
+            let _ = self;
+            false
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.show_windows
+                || self.panel_floating
+                || sdroxide_types::DetachableModule::ALL
+                    .iter()
+                    .any(|m| self.ui_settings.is_detached(*m))
+        }
+    }
+
+    /// The **▣** chip's list, drawn as a window of its own — what the chip and
+    /// `Ctrl+Alt+W` both open.
+    ///
+    /// A window inside this one rather than a popup: a popup is anchored to the
+    /// chip that opened it, and the key has no chip to hang one on — with every
+    /// module docked there is no ▣ on the row at all. It is also the one surface
+    /// that has to be reachable when a module window has been lost, so it must
+    /// not be one itself.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(in crate::app) fn module_windows_window(&mut self, ctx: &egui::Context) {
+        let mut open = true;
+        egui::Window::new("Module windows")
+            .id(crate::layout::salted_id(ctx, "module-windows"))
+            .default_width(430.0)
+            .min_width(340.0)
+            .resizable(false)
+            .collapsible(false)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                self.module_windows_list(ui);
+            });
+        if !open {
+            self.show_windows = false;
+        }
+    }
+
+    /// **MODULE WINDOWS** — one row per detachable module, with the three places
+    /// it can be and the one it is in lit.
+    ///
+    /// The list is the **recovery**, and that is why it exists at all: a window
+    /// left on another workspace, or sitting behind the main window, is still a
+    /// row here, and "put it back in this window" does not depend on the window
+    /// being visible or on the operator finding its close box. A tiling window
+    /// manager draws no close box, which is what made a lost window a lost
+    /// control surface.
+    ///
+    /// Floating is the **operating panel's** own third state: a spectrum or a
+    /// console has one place in this window, and a floating copy would be two
+    /// places to change the same thing. Its row says so rather than offering a
+    /// press that would do nothing.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(in crate::app) fn module_windows_list(&mut self, ui: &mut egui::Ui) {
+        use super::ModuleWindow;
+        use sdroxide_types::DetachableModule as M;
+        const STATES: [ModuleWindow; 3] =
+            [ModuleWindow::Docked, ModuleWindow::Floating, ModuleWindow::OwnWindow];
+        let mode = self.state.rx[0].mode;
+        // A voice mode has no operating panel: its row would open nothing, so
+        // the row says that instead of two states that open an empty window.
+        let panel_possible = mode.has_bottom_panel() || mode == Mode::Cw;
+        let mut asked: Option<(M, ModuleWindow)> = None;
+        for m in M::ALL {
+            let now = self.module_window_state(m);
+            // Docked and in-its-own-window are always available for a module
+            // the mode has; floating only for the panel.
+            let can_be = |state: ModuleWindow| match state {
+                ModuleWindow::Floating => m == M::Panel && panel_possible,
+                _ => m != M::Panel || panel_possible,
+            };
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(m.window_name()).size(12.0));
+                // Right to left, and **reversed**: a `right_to_left` layout puts
+                // each chip drawn to the left of the last, so drawing them from
+                // the window end keeps the row reading *docked → floating → its
+                // own window* on every tier. A state selector whose order moved
+                // with the layout would be read wrong once and distrusted after.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    for state in STATES.into_iter().rev() {
+                        let (icon, tip) = match state {
+                            ModuleWindow::Docked => (
+                                crate::chrome::WindowIcon::Dock,
+                                format!("Put {} back in this window", m.window_name()),
+                            ),
+                            ModuleWindow::Floating => (
+                                crate::chrome::WindowIcon::In,
+                                if m != M::Panel {
+                                    "Floating is the operating panel's own state — a spectrum or \
+                                     a console has one place in this window"
+                                        .to_string()
+                                } else if panel_possible {
+                                    format!(
+                                        "Lift {} out of the pane and float it over this window",
+                                        m.window_name()
+                                    )
+                                } else {
+                                    format!(
+                                        "No operating panel in {} — this applies in a mode that \
+                                         has one",
+                                        mode.label()
+                                    )
+                                },
+                            ),
+                            ModuleWindow::OwnWindow => (
+                                crate::chrome::WindowIcon::Out,
+                                format!(
+                                    "Give {} a window of its own, on any monitor",
+                                    m.window_name()
+                                ),
+                            ),
+                        };
+                        let lit = now == state;
+                        if !can_be(state) {
+                            // A place this module cannot be. The slot is kept
+                            // empty rather than drawn dead, so the row still
+                            // reads docked → floating → its own window on every
+                            // line, and nothing here looks like a press.
+                            ui.add_space(crate::chrome::window_icon_width(ui));
+                            continue;
+                        }
+                        let tip =
+                            if lit { format!("{} is here now", m.window_name()) } else { tip };
+                        let resp =
+                            crate::chrome::chip_window_icon_lit(ui, icon, lit).on_hover_text(&tip);
+                        // A press on the state it is already in is a no-op
+                        // everywhere — the chip is lit and says "here now" — so
+                        // it is not offered as a request.
+                        if resp.clicked() && !lit {
+                            asked = Some((m, state));
+                        }
+                    }
+                });
+            });
+        }
+        if let Some((module, state)) = asked {
+            self.set_module_window_state(module, state);
+        }
+        // Both directions at once, each drawn only while it would do something.
+        let any_out = M::ALL.iter().any(|m| self.ui_settings.is_detached(*m));
+        let any_in = M::ALL.iter().any(|m| !self.ui_settings.is_detached(*m));
+        if any_out || any_in {
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                if any_out
+                    && crate::chrome::chip(ui, false, "DOCK ALL")
+                        .on_hover_text("Bring every module window back into this window")
+                        .clicked()
+                {
+                    self.dock_all_windows();
+                }
+                if any_in
+                    && crate::chrome::chip(ui, false, "UNDOCK ALL")
+                        .on_hover_text(
+                            "Put every module in a window of its own — this window is left as the \
+                             spectrum and the decoders",
+                        )
+                        .clicked()
+                {
+                    self.undock_all_windows();
+                }
+            });
+        }
     }
 
     /// PTT on a compact layout: pressed to talk, clicked to latch.
@@ -2762,8 +2963,10 @@ impl SdroxideApp {
         // Docking needs the waterfall to keep its share: a phone has none to
         // spare, and a window narrowed past the column's minimum does not
         // either. `band_dock_room` is the one place that decides, so the chip
-        // and the panel cannot disagree about whether there is room.
-        let can_dock = self.band_dock_room.is_some();
+        // and the panel cannot disagree about whether there is room — and it is
+        // asked of the **context**, because the answer belongs to the window
+        // being drawn and not to the app the main window drew.
+        let can_dock = crate::layout::band_dock_room(ui.ctx()).is_some();
         if self.band_docked && can_dock {
             if btn
                 .on_hover_text(if self.band_dock_visible {
@@ -2866,7 +3069,7 @@ impl SdroxideApp {
         if self.ui_settings.classic_ui {
             return;
         }
-        let Some(max_w) = self.band_dock_room else { return };
+        let Some(max_w) = crate::layout::band_dock_room(ui.ctx()) else { return };
         // The selector is in its own window: leave the column out, so there is
         // one selector on screen rather than two.
         if self.ui_settings.is_detached(sdroxide_types::DetachableModule::BandMenu) {
@@ -6759,6 +6962,24 @@ impl SdroxideApp {
         {
             self.show_public_sdrs = !self.show_public_sdrs;
         }
+        // **The ▣, beside the gear** — while it has something to say. Left brings
+        // every module window home (the recovery for a window left on another
+        // workspace or sitting behind this one); right opens the list of all of
+        // them. It has no window of its own, so the left press is the plurally
+        // useful one, and the chip is not drawn when nothing is out — a press
+        // that could only do nothing is not offered.
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.module_windows_chip_wanted() {
+            let resp = chip_stretched(ui, self.show_windows, SYSTEM_WINDOWS_CHIP, extra)
+                .on_hover_text(
+                    "▣  Left: bring every module window home\nRight: the module windows list",
+                );
+            if resp.clicked() {
+                self.dock_all_windows();
+            } else if resp.secondary_clicked() {
+                self.show_windows = !self.show_windows;
+            }
+        }
         if chip_stretched(ui, self.show_settings, settings, extra)
             .on_hover_text("Settings — device gains, antennas, audio devices")
             .clicked()
@@ -6793,7 +7014,7 @@ impl SdroxideApp {
         let inner = w - 2.0 * crate::chrome::MODULE_MARGIN_X;
         let simple = self.ui_settings.simple_ui;
         let top = system_top_row(simple, self.swl_mode());
-        let bottom = system_bottom_row(simple, self.swl_mode());
+        let bottom = system_bottom_row(simple, self.swl_mode(), self.module_windows_chip_wanted());
         let extra1 = ((inner - chip_row_w(ui, &top)) / top.len() as f32).max(0.0);
         let extra2 = ((inner - chip_row_w(ui, &bottom)) / bottom.len() as f32).max(0.0);
         crate::chrome::module_bare_h(ui, w, crate::chrome::MODULE_TALL_H, |ui| {
@@ -6913,8 +7134,18 @@ const SYSTEM_CHIPS_TOP: [&str; 6] = ["LOG", "SPOTS", "AWARDS", "BANDS", "SAT", L
 /// list is the width reservation and it is destructured exhaustively, so the
 /// label here and the label drawn have to be the same string; see
 /// [`SYSTEM_CHIPS_TOP`].
+///
+/// The **▣** is not in this list: it appears beside the gear only while a module
+/// is out of this window (see [`SdroxideApp::module_windows_chip_wanted`]), so
+/// [`system_bottom_row`] inserts it. A chip is width, and width on this strip is
+/// rows: one more chip here costs a 1600 pt window a whole row of waterfall in
+/// the widest arrangement (`the_cessb_rail_costs_the_desktop_strip_no_row`).
 const SYSTEM_CHIPS_BOTTOM: [&str; 8] =
     ["MAIL", "MEM", "SCAN", "EXTRAS", "GRID", "PUBLIC SDR", "⚙", "?"];
+
+/// The one glyph that opens the module-windows list, drawn between PUBLIC SDR and
+/// the gear while it has something to say. See [`SYSTEM_CHIPS_BOTTOM`].
+const SYSTEM_WINDOWS_CHIP: &str = "▣";
 
 /// Which log the main-screen LOG chip opens: the listener's reception log in
 /// SWL mode, the QSO logbook otherwise.
@@ -8063,9 +8294,9 @@ fn accent_chip_stretched(
 /// wider row plus the box's side margins. Measured against the live style
 /// rather than fixed, because a touched layout pads every chip out past its
 /// desktop width — see `the_condensed_system_box_fits_its_chips`.
-fn system_rows_w(ui: &egui::Ui, simple: bool, swl: bool) -> f32 {
+fn system_rows_w(ui: &egui::Ui, simple: bool, swl: bool, windows: bool) -> f32 {
     chip_row_w(ui, &system_top_row(simple, swl))
-        .max(chip_row_w(ui, &system_bottom_row(simple, swl)))
+        .max(chip_row_w(ui, &system_bottom_row(simple, swl, windows)))
         + 2.0 * crate::chrome::MODULE_MARGIN_X
         // **And the frame's own stroke**, because `module_bare_h` now pays it.
         // The two have to agree: the box reserves what the frame spends. When the
@@ -8128,18 +8359,24 @@ fn system_top_row(simple: bool, swl: bool) -> Vec<&'static str> {
 /// **Mirrored with `system_chips_bottom`**, which draws it; the two must agree
 /// or the box is reserved for a chip that is not there. GRID goes because a
 /// listener has no worked squares — see the drawing for the argument.
-fn system_bottom_row(simple: bool, swl: bool) -> Vec<&'static str> {
-    SYSTEM_CHIPS_BOTTOM
+///
+/// `windows` inserts the **▣** between PUBLIC SDR and the gear — native only,
+/// and only while a module is out of this window. See [`SYSTEM_CHIPS_BOTTOM`]
+/// for why it is conditional: a chip here is width, and width is rows.
+fn system_bottom_row(simple: bool, swl: bool, windows: bool) -> Vec<&'static str> {
+    let mut row: Vec<&'static str> = SYSTEM_CHIPS_BOTTOM
         .iter()
-        .enumerate()
-        .filter(|(i, _)| !(simple && !swl && *i == 0))
-        // GRID is index 4. Dropped in SWL mode on the operator's judgement: it
-        // counts worked and confirmed squares, which are QSOs, and a listener has
-        // none — the window stays reachable from the SYS menu for the listener
-        // who also runs FT8.
-        .filter(|(i, _)| !(swl && *i == 4))
-        .map(|(i, l)| if swl && i == 0 { "SIG ID" } else { *l })
-        .collect()
+        .filter(|l| !(simple && !swl && **l == "MAIL"))
+        // GRID goes in SWL mode: it counts worked and confirmed squares, which
+        // are QSOs, and a listener has none. The window stays reachable for the
+        // listener who also runs FT8, from the SYS menu itself.
+        .filter(|l| !(swl && **l == "GRID"))
+        .map(|l| if swl && *l == "MAIL" { "SIG ID" } else { *l })
+        .collect();
+    if windows && let Some(gear) = row.iter().position(|l| *l == "⚙") {
+        row.insert(gear, SYSTEM_WINDOWS_CHIP);
+    }
+    row
 }
 
 /// Why a band chip is greyed out, in the operator's terms.
@@ -10552,10 +10789,27 @@ mod tests {
     /// not use — award tracking, satellites, ISM and radio email — and keeps
     /// the rest, in order. Hiding only *reduces* the row widths, so it can only
     /// help the strip pack; this guards the set that goes.
+    ///
+    /// **The ▣ sits beside the gear and only while it is asked for.** The box is
+    /// measured from this row, so a chip drawn but not in the row overflows the
+    /// box, and one in the row but not drawn is width paid for nothing — the
+    /// fault issue #211 was.
     #[test]
     fn the_simple_interface_drops_the_advanced_system_chips() {
+        let plain = system_bottom_row(false, false, false);
+        let with = system_bottom_row(false, false, true);
+        assert_eq!(with.len(), plain.len() + 1, "one more chip on the row");
+        let gear = with.iter().position(|l| *l == "⚙").expect("the gear is on this row");
+        assert_eq!(with[gear - 1], SYSTEM_WINDOWS_CHIP, "not beside the gear");
+        // SWL mode rearranges this row and still keeps it in the same place.
+        let swl = system_bottom_row(false, true, true);
+        let gear = swl.iter().position(|l| *l == "⚙").expect("the gear is on the SWL row");
+        assert_eq!(swl[gear - 1], SYSTEM_WINDOWS_CHIP);
+        // …and the ordinary arrangement pays no width for it.
+        assert!(!plain.contains(&SYSTEM_WINDOWS_CHIP));
+
         assert_eq!(system_top_row(false, false), SYSTEM_CHIPS_TOP.to_vec());
-        assert_eq!(system_bottom_row(false, false), SYSTEM_CHIPS_BOTTOM.to_vec());
+        assert_eq!(plain, SYSTEM_CHIPS_BOTTOM.to_vec());
         assert_eq!(system_top_row(true, false), vec!["LOG", "SPOTS", "BANDS", "DISP"]);
         // SWL mode keeps the SPOTS chip (the receive-only networks are a
         // listener's tool) and drops only award tracking, the ham feed being
@@ -10579,7 +10833,7 @@ mod tests {
         // HFDL is a decode window, so it sits with the others in the bottom
         // row — where the simple interface keeps it, unlike radio email.
         assert_eq!(
-            system_bottom_row(true, false),
+            system_bottom_row(true, false, false),
             vec!["MEM", "SCAN", "EXTRAS", "GRID", "PUBLIC SDR", "⚙", "?"]
         );
         // SWL mode puts the signal guide in the MAIL slot, and keeps it even
@@ -10588,11 +10842,11 @@ mod tests {
         // has none — the operator's judgement, and the SYS menu still opens the
         // window for the listener who also runs FT8.
         assert_eq!(
-            system_bottom_row(false, true),
+            system_bottom_row(false, true, false),
             vec!["SIG ID", "MEM", "SCAN", "EXTRAS", "PUBLIC SDR", "⚙", "?"]
         );
         assert_eq!(
-            system_bottom_row(true, true),
+            system_bottom_row(true, true, false),
             vec!["SIG ID", "MEM", "SCAN", "EXTRAS", "PUBLIC SDR", "⚙", "?"]
         );
     }
@@ -10650,9 +10904,9 @@ mod tests {
         let mut out = None;
         ctx.run_ui(input, |ui| {
             let mut chips = Vec::new();
-            let width = system_rows_w(ui, simple, swl);
+            let width = system_rows_w(ui, simple, swl, false);
             let top = system_top_row(simple, swl);
-            let bottom = system_bottom_row(simple, swl);
+            let bottom = system_bottom_row(simple, swl, false);
             let room =
                 crate::chrome::module_bare_h(ui, width, crate::chrome::MODULE_TALL_H, |ui| {
                     // Read before the rows are drawn: egui grows a Ui's
@@ -11182,7 +11436,7 @@ mod tests {
         let tx = tx_rows_w_for(ui, mode.allows_voice_keyer(), side);
         let display = chip_row_w(ui, &DISPLAY_VIEW_CHIPS).max(chip_row_w(ui, &DISPLAY_TOOL_CHIPS))
             + 2.0 * crate::chrome::MODULE_MARGIN_X;
-        let system = system_rows_w(ui, false, swl);
+        let system = system_rows_w(ui, false, swl, false);
         vec![
             StripBox { w: freq_w, flex: 0.0, max_w: freq_w },
             StripBox { w: SMETER_W, flex: 3.0, max_w: f32::INFINITY },

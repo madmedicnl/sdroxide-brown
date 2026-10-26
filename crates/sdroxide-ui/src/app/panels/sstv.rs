@@ -969,6 +969,13 @@ impl SdroxideApp {
                                         cmds.push(Command::SstvSetMode(Some(m)));
                                     }
                                 }
+                                // **The pane's way out**, at the end of this
+                                // row: the one drawn glyph, the same picture the
+                                // float's bar uses to come back. This panel had no
+                                // way to float at all before it.
+                                if super::window_chip(ui) {
+                                    self.float_operating_panel();
+                                }
                             });
                             ui.add_space(5.0);
 

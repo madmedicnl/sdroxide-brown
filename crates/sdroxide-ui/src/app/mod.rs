@@ -208,6 +208,23 @@ pub fn set_open_settings_tab(key: &str) {
     }
 }
 
+/// Where one detachable module is — see [`SdroxideApp::module_window_state`].
+///
+/// Three states, though only the operating panel can be in all three: the
+/// others are docked or in a window of their own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ModuleWindow {
+    /// In its own place in this window — the pane under the waterfall, the
+    /// strip above it, the column beside it.
+    Docked,
+    /// Lifted out, but **inside this window**: an `egui::Window` the window
+    /// manager knows nothing about, so a tiling compositor cannot lose it.
+    Floating,
+    /// Its own OS window, with its own app-id — the one a window rule can pin
+    /// to a monitor.
+    OwnWindow,
+}
+
 pub struct SdroxideApp {
     ctrl: Box<dyn RadioController>,
     caps: Option<DeviceCaps>,
@@ -235,6 +252,25 @@ pub struct SdroxideApp {
     /// Session-only: where a panel sat is not worth a config field, and a station
     /// that starts with its panel loose is one nobody asked for.
     panel_floating: bool,
+    /// Which pane a **panel window** is showing, when it is narrow enough for
+    /// one pane at a time. The panel window is a surface of its own — the
+    /// operator may keep the decode list there and the picture in the main
+    /// window — so this is separate from [`ViewState::digi_pane`], and the two
+    /// are swapped around the window's draw the way the AUX spectrum's view is
+    /// (see `show_detached_module`). Always a real pane and never the waterfall
+    /// tab: a panel window has no picture to give that tab to.
+    panel_window_pane: usize,
+    /// Whether the **floating panel is rolled up** to its title bar.
+    ///
+    /// A float costs the waterfall its room, and on a laptop that is the whole
+    /// objection to floating: rolled up it is a bar, and the picture has the rest.
+    /// Session state, like the float itself.
+    panel_rolled: bool,
+    /// Whether the **MODULE WINDOWS** list is open in the SYS menu — the `▣`
+    /// chip beside the gear. Session state, like the menus it sits among: an
+    /// operator who opened it once does not want it open at every start.
+    #[cfg(not(target_arch = "wasm32"))]
+    show_windows: bool,
     memories: Vec<MemoryChannel>,
     mem_folders: Vec<MemoryFolder>,
     /// The scanner's settings, mirrored from the engine and edited in place —
@@ -787,11 +823,6 @@ pub struct SdroxideApp {
     /// console-only, because the keypad is the console's RX-control surface.
     #[cfg(not(target_arch = "wasm32"))]
     band_keypad: top_bar::BandKeypad,
-    /// How wide the docked column may be this frame, or `None` where it cannot
-    /// dock — see [`top_bar::band_dock_room`]. Settled at the top of the frame
-    /// from this app's own column, before the top bar draws the chip that
-    /// shows and hides it.
-    band_dock_room: Option<f32>,
     /// The layout in force last frame, so a change can re-apply the style
     /// metrics (chip padding, text sizes) exactly once instead of every frame.
     tier: crate::layout::Tier,
@@ -1954,6 +1985,10 @@ impl SdroxideApp {
             meters: None,
             sql_hold: None,
             panel_floating: false,
+            panel_window_pane: 0,
+            panel_rolled: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            show_windows: false,
             memories: Vec::new(),
             mem_folders: Vec::new(),
             scanner: sdroxide_types::ScannerConfig::default(),
@@ -2158,7 +2193,6 @@ impl SdroxideApp {
             band_dock_visible: false,
             #[cfg(not(target_arch = "wasm32"))]
             band_keypad: Default::default(),
-            band_dock_room: None,
             // Corrected on the first frame, once the viewport size is known.
             tier: crate::layout::Tier::Desktop,
             ptt: Default::default(),
@@ -2502,6 +2536,48 @@ impl SdroxideApp {
         on: bool,
     ) {
         self.ui_settings.set_detached(module, on);
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
+    }
+
+    /// Where one module is this frame: docked in its own place in this window,
+    /// floating **inside** this window, or out in a window of its own.
+    ///
+    /// Three states and not two because the operating panel has a third — the
+    /// operator asked for a floating panel long before the windows existed — and
+    /// a list that showed only "docked / in a window" would be a list that
+    /// cannot say where his panel is.
+    pub(crate) fn module_window_state(
+        &self,
+        module: sdroxide_types::DetachableModule,
+    ) -> ModuleWindow {
+        if module == sdroxide_types::DetachableModule::Panel && self.panel_floating {
+            ModuleWindow::Floating
+        } else if self.ui_settings.is_detached(module) {
+            ModuleWindow::OwnWindow
+        } else {
+            ModuleWindow::Docked
+        }
+    }
+
+    /// Put one module where the list asked for it.
+    ///
+    /// **Floating is the panel's own state** and nothing else's: a spectrum or a
+    /// console has one place in this window, and a floating copy of it would be
+    /// two places to change the same thing. So a request to float another module
+    /// is refused here rather than written — the list disables that icon and
+    /// says why.
+    pub(crate) fn set_module_window_state(
+        &mut self,
+        module: sdroxide_types::DetachableModule,
+        state: ModuleWindow,
+    ) {
+        if state == ModuleWindow::Floating && module != sdroxide_types::DetachableModule::Panel {
+            return;
+        }
+        self.ui_settings.set_detached(module, state == ModuleWindow::OwnWindow);
+        if module == sdroxide_types::DetachableModule::Panel {
+            self.panel_floating = state == ModuleWindow::Floating;
+        }
         crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
 
@@ -3995,6 +4071,295 @@ mod tests {
         }
     }
 
+    /// **Where a module is, and where the list puts it.** The three states are
+    /// the list's whole content, and the rule that keeps them honest is that
+    /// floating belongs to the operating panel: a spectrum or a console has one
+    /// place in this window, so asking for a floating one changes nothing rather
+    /// than drawing the same control twice.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_module_list_moves_a_module_and_reads_it_back() {
+        use crate::multi::frame_test_lock;
+        use sdroxide_types::DetachableModule as M;
+        let _guard = frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-modules-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+
+        // Everything starts where the program put it: docked.
+        for m in M::ALL {
+            assert_eq!(app.module_window_state(m), ModuleWindow::Docked, "{m:?}");
+        }
+        assert!(!app.module_windows_chip_wanted(), "nothing is out, so no chip");
+
+        // Out to a window, and the chip that recovers it appears.
+        app.set_module_window_state(M::Panadapter, ModuleWindow::OwnWindow);
+        assert_eq!(app.module_window_state(M::Panadapter), ModuleWindow::OwnWindow);
+        assert!(app.module_windows_chip_wanted(), "a window is out and unreachable otherwise");
+        // …and back.
+        app.set_module_window_state(M::Panadapter, ModuleWindow::Docked);
+        assert_eq!(app.module_window_state(M::Panadapter), ModuleWindow::Docked);
+        assert!(!app.module_windows_chip_wanted());
+
+        // The panel's third state. Floating is not "detached": the window is
+        // this one, and the pane has given up its room to it.
+        app.set_module_window_state(M::Panel, ModuleWindow::Floating);
+        assert_eq!(app.module_window_state(M::Panel), ModuleWindow::Floating);
+        assert!(!app.ui_settings.is_detached(M::Panel), "a floating panel is not a window");
+        assert!(app.module_windows_chip_wanted());
+        // Floating and own-window are one at a time.
+        app.set_module_window_state(M::Panel, ModuleWindow::OwnWindow);
+        assert_eq!(app.module_window_state(M::Panel), ModuleWindow::OwnWindow);
+        assert!(!app.panel_floating, "the panel cannot be in a window and floating at once");
+        app.set_module_window_state(M::Panel, ModuleWindow::Docked);
+        assert_eq!(app.module_window_state(M::Panel), ModuleWindow::Docked);
+
+        // Floating is refused for everything else — a spectrum has one place in
+        // this window, and a second copy would be two places to change one thing.
+        app.set_module_window_state(M::AuxPanadapter, ModuleWindow::Floating);
+        assert_eq!(app.module_window_state(M::AuxPanadapter), ModuleWindow::Docked);
+        assert!(!app.ui_settings.is_detached(M::AuxPanadapter));
+    }
+
+    /// **The two window keys.** `Ctrl+Alt+W` opens the module-windows list with
+    /// every module docked — the route that makes a lost window recoverable on a
+    /// keyboard-only desktop — and `Ctrl+Alt+F` floats the operating panel or
+    /// docks it again. Both are read where F1 is, so a text field never eats
+    /// them.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_window_keys_work_with_every_window_docked() {
+        use crate::multi::frame_test_lock;
+        let _guard = frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-winkeys-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        let chord = |key| {
+            // Press **and release**, as a keyboard sends them: egui marks a
+            // second press of a key that never went up as a repeat, and a held
+            // chord must not toggle a window on every repeat.
+            let modifiers = egui::Modifiers { ctrl: true, alt: true, ..Default::default() };
+            [
+                egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                },
+                egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers,
+                },
+            ]
+        };
+        let frame = |app: &mut SdroxideApp, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1600.0, 1000.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let _ = crate::test_support::run_frame(&ctx, input, |ui| {
+                app.ui(ui, &mut eframe::Frame::_new_kittest());
+            });
+        };
+        // Nothing is out, so there is no ▣ on the row — and the key still works.
+        assert!(!app.module_windows_chip_wanted());
+        frame(&mut app, chord(egui::Key::W).to_vec());
+        assert!(app.show_windows, "Ctrl+Alt+W did not open the list");
+        assert!(app.module_windows_chip_wanted(), "…and the chip appears with it");
+        frame(&mut app, Vec::new());
+        assert!(app.show_windows, "the list closed itself without a key");
+        frame(&mut app, chord(egui::Key::W).to_vec());
+        assert!(!app.show_windows, "the same key closes it");
+
+        // The panel: float it, then the same key docks it again.
+        frame(&mut app, chord(egui::Key::F).to_vec());
+        assert!(app.panel_floating, "Ctrl+Alt+F did not float the panel");
+        frame(&mut app, chord(egui::Key::F).to_vec());
+        assert!(!app.panel_floating, "the same key did not dock it");
+        // A chord with a bare letter is not it — plain typing must not move
+        // windows about.
+        frame(&mut app, vec![egui::Event::Text("w".into())]);
+        assert!(!app.show_windows);
+
+        // **Workspaces on the number row.** Save an arrangement with the
+        // spectrum out, dock everything, then call it back with `Ctrl+Alt+1`.
+        use sdroxide_types::DetachableModule as M;
+        app.set_module_window_state(M::Panadapter, ModuleWindow::OwnWindow);
+        let ws = sdroxide_types::Workspace::capture("listening", &app.ui_settings);
+        app.workspaces = vec![ws];
+        app.set_module_window_state(M::Panadapter, ModuleWindow::Docked);
+        assert!(!app.ui_settings.is_detached(M::Panadapter));
+        frame(&mut app, chord(egui::Key::Num1).to_vec());
+        assert!(
+            app.ui_settings.is_detached(M::Panadapter),
+            "Ctrl+Alt+1 did not call the saved workspace back"
+        );
+        // An empty slot is not silence: it says so on the banner.
+        frame(&mut app, chord(egui::Key::Num3).to_vec());
+        assert!(
+            app.radio_notice.as_deref().is_some_and(|t| t.contains("workspace 3")),
+            "an empty workspace key did nothing and said nothing: {:?}",
+            app.radio_notice
+        );
+    }
+
+    /// A **panel window** as a picture to look at, with the module list beside
+    /// it — the two halves of the windows work in one image.
+    ///
+    /// ```sh
+    /// cargo test -p sdroxide-ui --release --lib module_windows_preview -- --ignored --nocapture
+    /// ```
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    #[ignore = "writes a picture to look at; not an assertion"]
+    fn module_windows_preview() {
+        use crate::multi::frame_test_lock;
+        use sdroxide_types::DetachableModule as M;
+        let _guard = frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-modlist-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        // The list is drawn inside a menu, so dress the context the way the app
+        // does before it draws one: the theme, and the desktop tier the SYS menu
+        // is written for (a compact tier left-aligns these rows by design).
+        crate::theme::apply(&ctx);
+        crate::layout::set_tier(&ctx, crate::layout::Tier::Desktop);
+        crate::theme::apply_metrics(&ctx, crate::layout::Tier::Desktop);
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        // A plausible arrangement: the spectrum and the band selector out on
+        // their own monitors, the panel floating here, the rest in.
+        app.ui_settings.set_detached(M::Panadapter, true);
+        app.ui_settings.set_detached(M::BandMenu, true);
+        app.panel_floating = true;
+        app.show_windows = true;
+        let (w, h) = (520.0_f32, 420.0_f32);
+        let mut tex = crate::test_raster::Textures::default();
+        let mut last = None;
+        for i in 0..4 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
+                time: Some(10.0 + i as f64 / 30.0),
+                ..Default::default()
+            };
+            let mut full = ctx.run_ui(input, |ui| {
+                egui::Frame::new()
+                    .fill(crate::theme::BG_DEEP())
+                    .inner_margin(egui::Margin::symmetric(12, 10))
+                    .show(ui, |ui| {
+                        ui.set_width(w - 32.0);
+                        app.module_windows_list(ui);
+                    });
+            });
+            tex.apply(&full.textures_delta);
+            full.textures_delta.clear();
+            last = Some(full);
+        }
+        let img = crate::test_raster::rasterize(
+            &ctx,
+            last.unwrap(),
+            &tex,
+            egui::vec2(w, h),
+            crate::theme::BG_DEEP(),
+        );
+        let out = std::env::var("MODLIST_PREVIEW").unwrap_or_else(|_| {
+            format!("{}/../../target/module_windows.png", env!("CARGO_MANIFEST_DIR"))
+        });
+        img.save(&out).expect("write the preview");
+        println!("wrote {out}");
+    }
+
+    /// **One answer decides the strip, and it is published where the column is
+    /// drawn.** The operator's screenshot: Classic with the panadapter in a
+    /// window of its own, and the *whole* strip of controls under the frequency
+    /// beside a column holding the same controls. The strip re-derived "am I in
+    /// Classic?" from the width left **after the column took its share**, so a
+    /// window that had just drawn a column measured as one with no room for one.
+    ///
+    /// And a **child window never has the column**, so the RX control console —
+    /// a strip in a window, with no column behind it — keeps every control.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_classic_window_publishes_one_answer_for_the_strip() {
+        use crate::multi::frame_test_lock;
+        let _guard = frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-classic-one-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.ui_settings.classic_ui = true;
+        let frame = |app: &mut SdroxideApp, w: f32| {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(w, 1000.0),
+                )),
+                ..Default::default()
+            };
+            let _ = crate::test_support::run_frame(&ctx, input, |ui| {
+                app.ui(ui, &mut eframe::Frame::_new_kittest());
+            });
+        };
+
+        // Wide enough for the column: it is drawn here, and the strip is told so.
+        frame(&mut app, 1600.0);
+        assert!(crate::layout::classic_column(&ctx), "the column was not published");
+        assert!(
+            app.classic_column_this_frame(&ctx),
+            "Classic with the column in this window must keep the strip minimal"
+        );
+
+        // A child window has no column of its own — the console keeps its
+        // controls, whatever the main window says.
+        {
+            let _scope = crate::layout::ViewportScope::enter(
+                &ctx,
+                egui::vec2(1280.0, 640.0),
+                sdroxide_types::LayoutMode::Auto,
+                crate::layout::WindowShape::Desk,
+                0,
+            );
+            assert!(
+                !app.classic_column_this_frame(&ctx),
+                "the console drew a readout-only strip with no column behind it"
+            );
+        }
+        assert!(crate::layout::classic_column(&ctx), "the main window's answer came back");
+
+        // Too narrow for a column: nothing was drawn, so the strip keeps its own
+        // controls — the two arrangements are the same program. Below 592 pt
+        // (`CLASSIC_PANADAPTER_MIN_W` + `CLASSIC_MIN_W`) there is no column.
+        frame(&mut app, 560.0);
+        assert!(!crate::layout::classic_column(&ctx));
+        assert!(!app.classic_column_this_frame(&ctx));
+
+        // Classic off: never, on any width.
+        app.ui_settings.classic_ui = false;
+        frame(&mut app, 1600.0);
+        assert!(!app.classic_column_this_frame(&ctx));
+    }
+
     /// **The LISTEN tab hides the transmit controls; it never grants them.**
     ///
     /// Issue #146 asks for the band/mode tabs to carry the listener's screen, and
@@ -4308,7 +4673,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        let dock_room = app.band_dock_room;
+        let dock_room = crate::layout::band_dock_room(&ctx);
         // The dock is the ink column hugging the window's right edge; the top
         // bar spans the full width but starts at 0, so the half-width floor
         // tells the two apart.
@@ -4549,6 +4914,71 @@ mod tests {
         let (r, _) = open_rect(Some(saved));
         assert!((r.min.x - 200.0).abs() < 2.0 && (r.min.y - 300.0).abs() < 2.0, "place: {r:?}");
         assert!((r.width() - 720.0).abs() < 2.0, "size: {r:?}");
+    }
+
+    /// Render the **operating panel as a floating window** to a PNG to look at.
+    ///
+    /// The floating panel is the only child window the headless harness can
+    /// photograph — a detached OS window cannot, because the harness runs
+    /// embedded viewports (`layout::ViewportScope`) — and it is where a chip row
+    /// first ran past its own edge: at 540 pt it used to lay itself out from the
+    /// main window's desktop geometry. `FLOAT_MODE` picks the mode (default
+    /// FT8), `FLOAT_W`/`FLOAT_H` the window (default 1600×1000) and
+    /// `FLOAT_PANEL_W` the panel's own width (default 540, the window's
+    /// opening size); writes `target/floating_panel.png` or `$FLOAT_PREVIEW`.
+    ///
+    /// ```sh
+    /// FLOAT_PANEL_W=400 cargo test -p sdroxide-ui --release --lib floating_panel_preview -- --ignored --nocapture
+    /// ```
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    #[ignore = "writes a picture to look at; not an assertion"]
+    fn floating_panel_preview() {
+        use crate::multi::frame_test_lock;
+        let _guard = frame_test_lock();
+        let dir =
+            std::env::temp_dir().join(format!("sdroxide-float-preview-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let env_f32 =
+            |k: &str, d: f32| std::env::var(k).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
+        let (w, h) = (env_f32("FLOAT_W", 1600.0), env_f32("FLOAT_H", 1000.0));
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.state.rx[0].mode = sdroxide_types::Mode::Ft8;
+        app.panel_floating = true;
+        // The panel's own width is its opened size (540 pt), clamped to 95 % of
+        // whatever window it is in: `FLOAT_W` smaller than that is how a narrow
+        // panel is photographed.
+        let mut tex = crate::test_raster::Textures::default();
+        let mut last = None;
+        for i in 0..4 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
+                time: Some(10.0 + i as f64 / 30.0),
+                ..Default::default()
+            };
+            let mut full = ctx.run_ui(input, |ui| {
+                app.ui(ui, &mut eframe::Frame::_new_kittest());
+            });
+            tex.apply(&full.textures_delta);
+            full.textures_delta.clear();
+            last = Some(full);
+        }
+        let img = crate::test_raster::rasterize(
+            &ctx,
+            last.unwrap(),
+            &tex,
+            egui::vec2(w, h),
+            crate::theme::BG_DEEP(),
+        );
+        let out = std::env::var("FLOAT_PREVIEW").unwrap_or_else(|_| {
+            format!("{}/../../target/floating_panel.png", env!("CARGO_MANIFEST_DIR"))
+        });
+        img.save(&out).expect("write the preview");
+        println!("wrote {out} (window {w}×{h})");
     }
 
     /// Render the top bar, with the EXTRAS window open or closed, to a PNG to

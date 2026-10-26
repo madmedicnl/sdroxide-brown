@@ -48,6 +48,11 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
 - **The detachable window set** — the SDRuno-shaped windows F4NRM is taking
   further: SP1/AUX SP, the band window, the tool windows with remembered
   geometry, workspaces, Settings, and the decoders as they become detachable.
+- **A child window answers for itself** (`196827a3`, on `local/windows`, not
+  pushed): the frame publishes the layout answers once and every window read the
+  main window's copy; a guard now scopes the tier, the tight and short flags,
+  the band dock's room and the radio salt to the window being drawn and puts the
+  main window's back afterwards. A window's tier comes from its own width.
 - **ADS-B** map with baked-in airports and navaids, three styles, hover names and
   double-click tuning; grey line, meteor calendar, IBP beacons, Kp history, local
   solar time, SIG ID.
@@ -74,6 +79,14 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
   offline-by-default rule.
 
 ## Open (In Progress)
+
+- **Windows, for a tiling WM** (the operator, 2026-10-25/26) —
+  [`WINDOWS-HANDOVER.md`](WINDOWS-HANDOVER.md), branch `local/windows`, **not
+  pushed by design**. Steps 1–4 are done, `7574093c` fixed the Classic strip and
+  put the ▣ in every panel header that has a chip row. **Waiting on one answer**:
+  the panels with no chip row (WSPR, PI4, NAVTEX, FSQ, JTTY, CW, RADE, RF Paint,
+  the text modems) need a row before they can carry the ▣ — add the row, or leave
+  them to the keys? Step 5 (delete the old chips) has not started.
 
 - **Aircraft online info.** PR A (the optional server relay, off by default) and
   PR B (the clients and their badges) are merged. The hover card over an aircraft

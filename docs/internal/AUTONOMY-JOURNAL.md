@@ -22,6 +22,577 @@ Each entry, in this order:
 ---
 
 
+## 2026-10-26 (the panel window's bar takes the panel's background)
+
+**In plain words.** The panel's own OS window opened with a black strip and one
+full-size chip above the panel, so it read as a second panel pasted on top. It
+now wears the same title bar as the float — 14 pt, the panel's name at 10 pt, the
+dock glyph at 12 pt on the right — drawn on the panel's own background, with the
+whole window filled in that colour so no black shows around it.
+
+**Done.**
+- Commit **`3431aae9`** on `local/windows`, not pushed.
+- `frame.rs`, the panel's detached window: an `egui::Frame` filled with
+  `theme::PANEL()` (the same colour egui's `window_fill` uses, so the float and the
+  window match), 4 pt margin, the bar from `chrome::{BAR_H, BAR_CHIP, BAR_FONT}`,
+  a separator, then the panel.
+- Gate 0 errors, cargo test --release -p sdroxide-ui --lib 1283 passed / 0 failed,
+  wasm32 clean, rustfmt clean.
+- **Not seen**: a detached OS window cannot be photographed headlessly (embedded
+  viewports), so this one is his eye on the real window; the float's bar — same
+  three constants — is the render at `/tmp/opencode/float-bar14.png`.
+
+
+
+**In plain words.** The floating panel's title bar is now 14 pt tall with 12 pt
+square buttons and a 10 pt name — the operator's numbers, and "width relative to
+the height" is exactly how they are drawn: the picture is a fraction of whatever
+box it gets. At 12 pt the three buttons are still readable as shapes but they are
+a small mouse target; the three constants are in one place if he wants them
+larger.
+
+**Done.**
+- Commit **`e3742eef`** on `local/windows`, not pushed.
+- `chrome::{BAR_H, BAR_CHIP, BAR_FONT}` = 14 / 12 / 10, and
+  `chip_window_icon_sized` for the exact box (fixed 2 pt inset instead of the
+  theme's chip padding, which is sized for buttons and would have left an 8 pt
+  chip with a 6 pt picture).
+- Gate 0 errors, cargo test --release -p sdroxide-ui --lib 1283 passed / 0 failed,
+  wasm32 clean, rustfmt clean.
+- Seen: `/tmp/opencode/float-bar14.png`.
+
+
+
+**In plain words.** The three buttons in the new title bar were three different
+weights — a painted arrow next to a font ▾ and a font × — and he saw it at once.
+They are now one drawn family, same chip, same stroke, same size: out, roll-up,
+close, and the dock picture the panel window uses, all from one painter. And the
+"lift the pane out" chip now reaches the panels that never had it — WSPR, PI4,
+NAVTEX, FSQ, JTTY, RADE and SSTV — so it sits in the same corner on every panel
+that has a header row.
+
+**Done.**
+- Commit **`0b8bd86c`** on `local/windows`, not pushed.
+- `WindowIcon::{Collapse, Unfold, Close}` drawn in `paint_window_icon` at the
+  same 1.3 stroke and the same fractions of the box as `Out`/`In`/`Dock`; the
+  float's title bar draws *only* painted glyphs now, no font characters.
+- `window_chip` (the pane's way out) added to the header row of WSPR, PI4,
+  NAVTEX, FSQ, JTTY, RADE and SSTV.
+- **Not done, and why**: NAVTEX's and JTTY's header functions have no `&mut self`,
+  so the chip cannot call `float_operating_panel()` from there — those two stay
+  on `Ctrl+Alt+F` and the list, and the chip edits were backed out rather than
+  plumbed through a signature. RF Paint and the text modems were left alone for
+  the same reason: their first `row_tail` is not a header row, and guessing would
+  have put a window button in a list.
+- Numbers: `cargo check --workspace --all-targets` **0 errors**; `cargo test
+  --release -p sdroxide-ui --lib` **1283 passed, 0 failed, 10 ignored**; wasm32
+  clean; `rustfmt --check` clean on every file touched.
+- **Seen**: `floating_panel_preview` at 540 (`/tmp/opencode/float-icons2.png`).
+
+**Next.** Whatever he says after looking at the bar: the drag feel, roll-up
+height, and whether the two `&mut self`-less headers are worth a signature change.
+
+
+
+**In plain words.** The floating panel now has its **own title bar** with the
+three things a window has: out to a window of its own, roll up, and close — and
+close still docks it, because the panel is the control surface, not a tool. Roll
+up is the answer to floating on a laptop: the panel becomes its title bar and the
+waterfall gets the rest of the screen. This is the first change in the whole
+windows thread that *removes* more than it adds: the floating panel's chips row
+is gone, the panel's OS window carries one dock picture instead of a row of chips,
+and the ▣ is out of every panel header — the list is one place again, the ▣ beside
+the gear and `Ctrl+Alt+W`.
+
+**Done.**
+- Commit **`151828df`** on `local/windows`. Not pushed: he tests first.
+- `frame.rs`: the floating panel is `.title_bar(false)` with our own bar — mode
+  name (a noun) left, then `WindowIcon::Out`, roll-up and `×` right, in that order.
+  egui has no hook for a fourth title-bar button (`title_ui` is private and draws
+  only collapse, title and close), which is why the bar is ours; with no title bar
+  egui falls back to dragging from anywhere, so the bar's ground and the body's
+  empty space move the window and controls keep their own drags.
+- `panel_rolled` (session state): the body is not drawn when rolled, `min_height`
+  is 0 so the window really does become a bar, and `float_operating_panel()`
+  unrolls — a float remembered rolled up would hand back a title bar and nothing.
+- **Removed**: the floating panel's chips row, `panels::panel_has_windows_chip`
+  and its mode table and test, the ▣ in the six panel headers, packet's
+  `windows_list` plumbing, `WindowsChip` / `module_windows_chip` /
+  `SdroxideApp::windows_chip` / `panel_windows_chip`, and `chrome::aside_popup`
+  with its open/close pair (the `popup_body` `aside` flag went with them).
+- The panel's **OS window** row is now one glyph — the dock picture — in its own
+  content, because a tiling WM draws no title bar to hold it. Floating from a
+  window is two steps now (dock, then float) or the list's middle icon.
+- `Ctrl+Alt+F` **stays**: panels with no header chip row (SSTV, WSPR, NAVTEX, PI4,
+  FSQ, JTTY, CW, RADE, RF Paint, the text modems) have no other way to float.
+- Numbers: `cargo check --workspace --all-targets` **0 errors** (the same two
+  pre-existing warnings); `cargo test --release -p sdroxide-ui --lib` **1283
+  passed, 0 failed, 10 ignored**; wasm32 clean; `rustfmt --check` clean on every
+  file touched.
+- **Seen, not assumed**: `floating_panel_preview` renders the new bar — FT8 left,
+  out · roll-up · close right, panel beneath (`/tmp/opencode/float-titlebar.png`).
+- Test rewritten: `every_state_of_the_operating_pane_has_a_way_out_of_it` now
+  pins the window grammar — the float's bar carries all three, the bar is ours,
+  close docks, out detaches, and a panel can still float from its own header.
+
+**Not done / blocked.**
+- **Dragging by the bar** relies on egui's drag-anywhere fallback; it needs his
+  hand on it (a drag on a label may go to the window rather than to nothing).
+- The panels **without** a header chip row still have no ⇱ float chip: SSTV floats
+  with `Ctrl+Alt+F` or the list, not from its own header. Giving every panel that
+  chip means a row on the panels that have none, which is his call.
+- Step 5 of the handover (deleting the remaining float/dock chips) is now most of
+  the way done by this commit; what is left is the band popup's chips and the
+  radio strip's WINDOWS menu.
+
+
+
+**In plain words.** Right click on the ▣ did nothing visible because the list it
+opened was drawn in the **main window** — and he was looking at a panel in a
+window of its own. The list is now an ordinary menu next to the chip he clicked,
+in the same window, closing when he clicks elsewhere. And the chips row above a
+detached panel window is gone where the panel's own header now carries the ▣:
+that row was the way home, the header has it, so the height goes back to the
+decoder — which is what he meant by "safe to remove the top row".
+
+**Done.**
+- Commit **`f52099af`** on `local/windows`.
+- `chrome.rs`: `aside_popup` / `open_aside_popup` / `close_aside_popup` — the
+  menu chrome with `Popup::from_response` instead of the toggle form, so one
+  button opens it and the other does the docking. `popup_body` takes an `aside`
+  flag; the three existing menu popups pass `false` and are unchanged.
+- `frame.rs`: the list is drawn **anchored to the chip**, inside whatever window
+  the chip is in (`self.windows_chip`); the separate list *window* is now only
+  what `Ctrl+Alt+W` opens, because with every module docked there is no chip to
+  hang a popup on. `panel_windows_chip(ui, mode)` is the one call a panel header
+  makes: it knows whether the panel is in a window, so left docks *that* panel
+  and otherwise docks every window home — and where nothing is out, the left
+  press opens the list, so it is never a press that can only do nothing.
+- `panels::panel_has_windows_chip(mode)` — the panels that draw the ▣ in their own
+  header (FT8/FT4/FT2, JS8, AtCHAT, ADS-B, SSTV/RIFP). The detached panel window
+  and the floating panel skip their chips row for exactly those; the rest keep it,
+  because without it a window has no way home on a desktop with no title bars.
+  Packet keeps the row: its header has no `SdroxideApp`, so its ▣ reports the
+  click out like its `detach` and cannot open a popup where it stands.
+- Numbers: `cargo check --workspace --all-targets` **0 errors**; `cargo test
+  --release -p sdroxide-ui --lib` **1285 passed, 0 failed, 10 ignored**; wasm32
+  clean (the first run caught `panel_has_windows_chip` in the floating panel,
+  which exists in the browser too); `rustfmt --check` clean on every file touched
+  (frame.rs and packet.rs were rustfmt-clean before this, so the run touched only
+  these hunks).
+- Test: `every_panel_with_a_chip_row_actually_draws_it` reads the five panel files
+  and pins the mode list in both directions.
+
+**Not done / blocked.**
+- The panels with **no chip row at all** (WSPR, PI4, NAVTEX, FSQ, JTTY, CW, RADE,
+  RF Paint, the text modems) still have nowhere for the ▣ — that is the operator's
+  call, since it means giving each panel a row.
+- Step 5 (deleting the old float/dock chips) and the list's filter/arrow keys are
+  untouched.
+
+
+
+**In plain words.** The ▣ is now the window's own button, the way he asked:
+**left click brings the window back** and **right click opens the list**. In a
+window it docks that window; from a docked panel's header or the strip, where
+there is no window of its own, the left press brings every window home — the
+recovery you actually want when they are scattered — and the chip is not shown
+when nothing is out, so a press can never do nothing. The hover names both
+buttons, because a chip with a second button nobody knows about is not a control.
+
+**Done.**
+- Commit **`a9d47d20`** on `local/windows`.
+- `panels::module_windows_chip(ui, dock)` returns `WindowsChip { Dock, List,
+  None }`; `SdroxideApp::windows_chip(ui, dock)` is the one place both actions are
+  applied, so the panel headers (SSTV, FT8 family, JS8, AtCHAT, packet, ADS-B),
+  the floating panel, the detached panel window and the System row cannot drift.
+  Packet's header has no `self`, so it reports both through out-parameters the way
+  its `detach` already did.
+- Numbers: `cargo check --workspace --all-targets` **0 errors**; `cargo test
+  --release -p sdroxide-ui --lib` **1284 passed, 0 failed, 10 ignored**;
+  wasm32 clean; `rustfmt --check` clean on every file touched.
+- Test: `the_module_chip_docks_on_the_left_and_lists_on_the_right` draws the chip
+  in one frame to learn its rect, then sends a real press-and-release on it —
+  primary gives `Dock`, secondary gives `List`. It fails on the old chip, which
+  reported a single `bool` for a left click and nothing for a right one.
+
+**Not done / blocked.**
+- The same as the entry below: panels with **no chip row** (WSPR, PI4, NAVTEX,
+  FSQ, JTTY, CW, RADE, RF Paint, the text modems) still have nowhere for the ▣ —
+  it needs a row of chips on those panels, which is the operator's call.
+- Step 5 (deleting the old float/dock chips, now that the ▣ does the docking) is
+  untouched, and so is the list's filter box / arrow-key navigation.
+
+
+
+## 2026-10-26 (the title bar at 14 pt)
+
+**Done.** Commit `e3742eef`: `chrome::{BAR_H, BAR_CHIP, BAR_FONT}` = 14 / 12 / 10
+and `chip_window_icon_sized` for the exact box.
+
+## 2026-10-26 (one drawn icon family, and the float chip on more panels)
+
+**Done.** Commit `0b8bd86c`: `WindowIcon::{Collapse, Unfold, Close}` painted at the
+same 1.3 stroke as the rest, so every window button is one family; and
+`window_chip` added to WSPR, PI4, NAVTEX, FSQ, JTTY, RADE and SSTV's headers
+(NAVTEX and JTTY could not take it — their header is a free function with no
+`&mut self` — and RF Paint's first chip row is a list, so it was left alone).
+
+## 2026-10-26 (the float's title bar carries the window button)
+
+**Done.** Commit `151828df`: the floating panel is `.title_bar(false)` with our own
+bar — mode name left, out · roll-up · close right — `panel_rolled` for the roll-up,
+and the chips row, the mode table, the ▣ in panel headers and the two-button chip
+machinery all removed.
+
+## 2026-10-26 (the ▣'s list opens where it was clicked)
+
+**Done.** Commit `f52099af`: the list became an aside popup anchored to the chip
+(right click) instead of a window drawn by the main frame — which on a tiling
+desktop was a window he could not see. The chips row above a panel window was
+skipped for panels that carried the ▣ in their own header
+(`panel_has_windows_chip`), **both of which this session has since undone** in
+favour of the float's title bar (`151828df`): the popup, the two-button chip and
+the mode table are gone, and the OS window carries one dock glyph.
+
+## 2026-10-26 (the ▣: left docks, right lists)
+
+**In plain words.** The ▣ is now the window's own button, the way he asked:
+**left click brings the window back** and **right click opens the list**. In a
+window it docks that window; from a docked panel's header or the strip, where
+there is no window of its own, the left press brings every window home.
+
+**Done.**
+- Commit **`a9d47d20`** on `local/windows`.
+- `panels::module_windows_chip(ui, dock)` returns `WindowsChip { Dock, List,
+  None }`; `SdroxideApp::windows_chip(ui, dock)` is the one place both actions are
+  applied, so the panel headers (SSTV, FT8 family, JS8, AtCHAT, packet, ADS-B),
+  the floating panel, the detached panel window and the System row cannot drift.
+  Packet's header has no `self`, so it reports both through out-parameters the way
+  its `detach` already did.
+- Numbers: `cargo check --workspace --all-targets` **0 errors**; `cargo test
+  --release -p sdroxide-ui --lib` **1284 passed, 0 failed, 10 ignored**;
+  wasm32 clean; `rustfmt --check` clean on every file touched.
+- Test: `the_module_chip_docks_on_the_left_and_lists_on_the_right` draws the chip
+  in one frame to learn its rect, then sends a real press-and-release on it —
+  primary gives `Dock`, secondary gives `List`.
+
+**Not done / blocked.** Panels with no chip row of their own still have nowhere
+for the ▣ (the operator's call), step 5 is untouched, and so is the list's filter
+box / arrow-key navigation.
+
+## 2026-10-26 (the Classic strip, and the ▣ where the panels are)
+
+**In plain words.** Two faults from his screenshot. In Classic UI with the
+spectrum pulled out into its own window, the main window drew the **whole** strip
+of controls under the frequency even though the column beside it already held
+every one of them — the strip was measuring "is there a column?" from the width
+left *after* the column had taken its share, so it concluded there was no room
+for one. Now the answer is decided once, where the column is drawn, and the strip
+reads it, so Classic is Classic: readout and meter over the picture, every
+control in the column. The second is that the ▣ was only where a gear is, so a
+panel like SSTV — which has no gear — had no route to it; it is now in every
+panel header that has a chip row, and in the floating and detached panel windows.
+
+**Done.**
+- Item: the Classic half of handover step 2, and the operator's report that the
+  ▣ "is not in every panel because if a panel has no gear it does not show".
+  Commit **`7574093c`** on `local/windows`.
+- `layout.rs`: `set_classic_column` / `classic_column` — the answer published
+  once, plus the guard (`ViewportScope`) carrying it so a child window publishes
+  `false` for its own draw and puts the main window's back on drop.
+- `frame.rs`: `classic_here` computed from the window's **whole** width where the
+  column is decided, published there, and used for the column and rail draws.
+  `classic_column_this_frame(ctx)` now reads the register instead of re-deriving
+  it from the width left over; the console window (a `WindowShape::Desk` scope)
+  gets `false`, so it keeps every control.
+- `panels::module_windows_chip` — the ▣ for a panel's own header, drawn in SSTV,
+  the FT8 family, JS8, AtCHAT, packet and ADS-B, and in the chips rows of the
+  floating panel and the detached panel window. Packet's header has no `self`, so
+  it reports the click through a `windows_list` out-parameter like its `detach`.
+- Numbers: `cargo check --workspace --all-targets` **0 errors**; `cargo test
+  --release -p sdroxide-ui --lib` **1283 passed, 0 failed, 10 ignored**;
+  `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui` clean
+  (**the panel chips are native-only and cfg'd at every call site** — the first
+  wasm run caught three call sites where they were not); `rustfmt --check` clean
+  on every file touched.
+- Test: `a_classic_window_publishes_one_answer_for_the_strip` replaces the one
+  that pinned the old two-argument answer — frames at 1600 (column drawn,
+  published true), at 560 (no room, false), a `WindowShape::Desk` scope inside a
+  true answer (the console keeps its controls), and Classic off.
+
+**Not done / blocked.**
+- The panels whose header has **no chip row at all** — WSPR, PI4, NAVTEX, FSQ,
+  JTTY, CW, RADE, RF Paint, the text modems — have nowhere for the ▣ to go
+  without giving each one a row of chips, which is a height change in F4NRM's
+  panels rather than a chip. `Ctrl+Alt+W` reaches the list from those, and the
+  strip carries the ▣ whenever a module is out. **This wants the operator's
+  word**: a row on those panels, or the keys for them.
+- Step 5 (deleting the old chips) is still untouched, and the list's filter box /
+  arrow-key navigation with it.
+
+**Next.** Either the sweep above or step 5, whichever the operator picks.
+
+
+
+## 2026-10-26 (windows: the two keys, and workspaces on the number row)
+
+**In plain words.** The windows work now has keys, which is what makes it usable
+on a keyboard-only desktop. `Ctrl+Alt+W` opens the list of all your windows
+anywhere — including when every window is docked, which is exactly when the ▣
+chip is not on the strip — and `Ctrl+Alt+F` lifts the operating panel out to
+float over the main window or puts it back. `Ctrl+Alt+1` to nine and `Ctrl+Alt+0`
+call back the arrangements you saved in Settings, so "my listening layout" is one
+press away; an empty slot puts a line on the banner instead of doing nothing
+quietly. Nothing is pushed; the build is installed for you to try.
+
+**Done.**
+- Item: step 4 of [`WINDOWS-HANDOVER.md`](WINDOWS-HANDOVER.md). Commits
+  **`1dd73489`** (the keys, and the list as a window) and **`a8a2a842`**
+  (workspaces), on `local/windows`.
+- `frame.rs`: both chords are read where F1 is, so a text field never eats them,
+  and from the **events** rather than the frame's modifier state — a chord
+  pressed and released inside one frame still arrives, and `repeat: false` means
+  a held key cannot flicker a window. `workspace_slot` maps 1…9 then 0 as a pure
+  function, so the numbering is a test.
+- The list moved out of the SYS menu into a window of its own
+  (`module_windows_window`): a popup is anchored to the chip that opened it and
+  the key has no chip to hang one on. It reuses `module_windows_list` unchanged,
+  is salted per radio like every other fixed id, and closes with its own close
+  box. The ▣ chip and `Ctrl+Alt+W` open the same window.
+- Applying a workspace docks the floating panel: `Workspace` stores module
+  windows, not the floating panel, so the panel comes back to the pane with the
+  arrangement that asked for it docked rather than floating over it as the one
+  module the workspace did not mention.
+- An empty workspace slot raises a notice naming it ("No workspace 3 saved — save
+  one in Settings › UI › Workspaces…"), because a key that ignores a press is
+  the one thing a control must never do.
+- Numbers: `cargo check --workspace --all-targets` **0 errors** (the same two
+  pre-existing warnings, untouched files); `cargo test --release -p sdroxide-ui
+  --lib` **1283 passed, 0 failed, 10 ignored**; wasm32 check clean;
+  `rustfmt --check` clean on every file touched. The key test drives real
+  press/release events through whole frames — which is how it found that a press
+  with no release arrives as a repeat, and that a synthetic keyboard has to send
+  both.
+
+- Nothing pushed; built and installed for him to click through
+  (`~/.cargo/bin/sdroxide`, 14:30, `--version` says `SDR Oxide Brown 2.1.0_brown`,
+  from `a8a2a842`).
+- The design's remaining half of step 4: a **filter box and arrow-key
+  navigation** inside the list (`D`/`F`/`S` per row). The rows are pointer-driven
+  for now; the list is reachable and complete without it, and the operator's own
+  complaint was about chips, not about typing into a list.
+- Step **5** — deleting the old entry points (the float/dock chips, the panel
+  header's window chip, the radio strip's WINDOWS menu) — is untouched: with the
+  keys in place it is now safe to do, but it is a separate item and it touches
+  the chips F4NRM's own PRs use.
+- The detached windows still cannot be photographed headlessly; the keys were
+  verified through frames, the windows still want the bench.
+
+**Next.** Step 5, or the step-2 leftover in Classic (a detached panadapter should
+draw just the picture, without its DISP chip) — the second is one small change
+and wants the operator's eye on whether the window then looks bare.
+
+
+
+## 2026-10-26 (windows: one icon, one list)
+
+**In plain words.** There is now a single place that answers "which of my windows
+are out, and how do I get one back": a small ▣ beside the gear in the System
+menu opens a list of every window the program can pull out — the spectrum, the
+second spectrum, the operating panel, the RX control, the band selector, the
+rotator — with the three places each can be (here, floating over this window, or
+its own window), the one it is in lit, and a press to move it. Because the list
+is a list, a window you left on another workspace is still a row you can bring
+home, which is the whole point on a tiling window manager that draws no close
+box. Floating is offered only for the operating panel, because that is the only
+thing with a second place to put it; the other rows leave that slot empty.
+
+**Done.**
+- Item: step 3 of [`WINDOWS-HANDOVER.md`](WINDOWS-HANDOVER.md) — "one icon, one
+  list". Commit **`aa716e97`** on `local/windows`.
+- `crates/sdroxide-ui/src/app/mod.rs`: `ModuleWindow { Docked, Floating,
+  OwnWindow }` with `module_window_state` / `set_module_window_state` — the one
+  place the state is read and written, so the list and (later) the keys cannot
+  drift. Floating is refused for anything but the panel, and setting one state
+  clears the others (a panel cannot be in a window and floating at once).
+- `crates/sdroxide-ui/src/app/top_bar.rs`: the `▣` chip in the System row,
+  immediately before the gear, drawing `module_windows_list` — a row per module
+  (name from `DetachableModule::window_name`), three icon chips right-aligned and
+  reversed so the row reads *docked → floating → its own window* on every tier,
+  the current state lit, an **empty slot** where a module cannot go, and DOCK ALL
+  / UNDOCK ALL under them. Drawn at the end of both menus that carry the chip
+  (the System box and the phone's ☰).
+- `crates/sdroxide-ui/src/chrome.rs`: `chip_window_icon_lit` (the icon chip with
+  a lit state), `window_icon_width` (so an empty slot is exactly a chip's width),
+  and disabled icon chips no longer look pressable.
+- `crates/sdroxide-types/src/ui.rs`: `DetachableModule::window_name`, moved up
+  from `multi.rs` so the list and the radio strip's WINDOWS menu name a module
+  the same way (SP1 / SP2 / RX control).
+- **The chip costs the strip nothing**: it is on the row only while a module is
+  out of this window (or the list is open). Measured, not assumed — as a
+  permanent ninth chip it took the widest 1600 pt arrangement from two rows to
+  three, which `the_cessb_rail_costs_the_desktop_strip_no_row` caught, and a row
+  costs the waterfall a module height (issue #294's rule). The first window goes
+  out from Settings › UI › Detachable or a panel's own chip.
+- Numbers: `cargo check --workspace --all-targets` **0 errors** (the same two
+  pre-existing warnings, in files this does not touch); `cargo test --release -p
+  sdroxide-ui --lib` **1282 passed, 0 failed, 10 ignored** (two new tests:
+  `the_module_list_moves_a_module_and_reads_it_back` and the ▣-beside-the-gear
+  half of `the_simple_interface_drops_the_advanced_system_chips`);
+  `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui` clean;
+  `rustfmt --check` clean on every file touched.
+- **Looked at rather than assumed**: `module_windows_preview` (new ignored tool,
+  `MODLIST_PREVIEW` for the path) renders the list with the spectrum and band
+  selector out and the panel floating: `/tmp/opencode/modlist4.png`. Two things
+  it caught that reading would not: the icons were invisible until the context
+  was dressed with the theme, and the rows read in the wrong order until the
+  chips were drawn right-to-left in reverse.
+
+**Not done / blocked.**
+- The old entry points are still there — the panel window's float/dock chips, the
+  band popup's, the radio strip's WINDOWS menu, the Settings page. Deleting them
+  is step **5**; the list has to be proven first, and deleting the panel chips
+  without a key (step 4) would leave a floating panel with one way home.
+- The keys (`Ctrl+Alt+W` / `Ctrl+Alt+F`) and the list's filter box are step **4**.
+  Nothing here shows a key it does not have — a control must not point at a
+  binding that does not exist yet.
+- Still not verifiable headlessly: the detached windows themselves.
+
+**Next.** Step 4: `Ctrl+Alt+W` opens the list anywhere (which is what makes it
+reachable with every window docked, and the real recovery on a keyboard-only
+WM), `Ctrl+Alt+F` toggles the panel's float, and workspaces get `Ctrl+Alt+1…9`.
+
+
+
+## 2026-10-26 (windows: a narrow panel window keeps its own pane tabs)
+
+**In plain words.** A panel pulled out into its own window, and made narrow —
+which is what his tiling window manager does — now shows one panel at a time
+with its own DECODES / QSO chips at the top, instead of squeezing two columns
+in and cutting the right-hand one off at the window's edge. The chips belong to
+that window, so it can sit on the decode list while the main window shows the
+waterfall, and tapping REPLY in it moves *it* to the QSO pane. Widening it past
+600 points brings the two columns back. The floating panel behaves the same way
+and stops at its own 540-point width instead of growing to fit two columns.
+
+**Done.**
+- Item: step 2 of [`WINDOWS-HANDOVER.md`](WINDOWS-HANDOVER.md) — the half that
+  the 560 pt measurement from the previous entry decided. Commit **`3a5b1d9e`**
+  on `local/windows`.
+- `layout.rs`: `WindowShape::Panes` — the one shape that lifts
+  `tier_for_window`'s Tablet floor, because the window draws the tab row that
+  makes one pane at a time reachable. Under 600 pt it is the phone design; from
+  600 to 1400 a tablet with both columns; over that a desktop.
+- `panels/mod.rs`: `panel_tabs(mode, waterfall)` and
+  `digi_tabs(ui, mode, waterfall)`. A panel window passes `false`: its picture
+  is the main window's, and a waterfall tab in it would select the two-column
+  layout and undo the row. The main window passes `true` exactly as before.
+  `every_mode_has_at_least_one_pane_and_a_waterfall_after_it` now checks both
+  rows for every mode.
+- `frame.rs`: the panel window and the floating panel draw `digi_tabs` when the
+  published tier is Phone, above the panel body. `SdroxideApp::panel_window_pane`
+  is the window's own pane, **swapped in** around the draw (the AUX SP pattern),
+  so the main window and the window each keep their own, and a write from inside
+  (answering a call switches to QSO) lands where the operator is looking. It is
+  clamped to a real pane before the swap: a stale index from another mode, or
+  the main window's waterfall tab, cannot ask a panel window for a picture.
+- Numbers: `cargo check --workspace --all-targets` — **0 errors**, the same two
+  pre-existing warnings in files this does not touch. `cargo test --release -p
+  sdroxide-ui --lib` **1281 passed, 0 failed, 9 ignored** (one new test,
+  `a_panel_window_that_draws_its_own_tabs_may_be_one_pane_at_a_time`).
+  `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui` clean.
+  `rustfmt --check` clean on every file touched.
+- **Looked at rather than assumed** (`floating_panel_preview`):
+  `/tmp/opencode/float-560-after.png` — one pane, DECODES / QSO chips, nothing
+  past the window edge; `/tmp/opencode/float-wide-after.png` — the same one-pane
+  panel at its 540 pt default in a 1600 pt window. Before the change, at 560 pt
+  the two columns drew the QSO chips off the edge.
+
+**Not done / blocked.**
+- Still the detached OS window itself: the harness runs embedded viewports, so
+  `--screenshot` cannot photograph it. This wants the operator's session, and
+  the preview above is the floating panel, which draws the same body.
+- One line of step 2 remains: **"in Classic they draw just the picture"** — the
+  detached panadapter window still carries its DISP layer chip. It is the
+  column's job in Classic and the chip should go, but whether the window looks
+  bare without it is a judgement to make with his screen in front of us, so it
+  was left alone rather than guessed.
+- Nothing pushed; built and installed for him to click through
+  (`~/.cargo/bin/sdroxide`, 14:14, `--version` says `SDR Oxide Brown 2.1.0_brown`).
+
+**Next.** Handover step 3: the `▣` list that replaces the float/dock chips and
+the radiotab windows button, with the three-state rows and the "bring it back"
+row that makes a lost window recoverable.
+
+## 2026-10-26 (windows: a child window answers for itself)
+
+**In plain words.** A window that has been pulled out of the main one now lays
+itself out from its own size instead of pretending it is still the big window.
+That was the fault behind the photograph of chips running off the right edge: a
+520 pt panel was drawing the arrangement meant for a 1920 pt screen. The radio
+whose window it is also stops depending on which tab happened to be drawn last,
+which mattered once there were two radios on screen. Nothing of this is on
+`main` — it is on `local/windows`, where the operator asked for the window work
+to be built and tested before it goes anywhere.
+
+**Done.**
+- Item: step 1 of [`WINDOWS-HANDOVER.md`](WINDOWS-HANDOVER.md) — "scope the
+  state per viewport". Commit **`196827a3`** on `local/windows`.
+- `crates/sdroxide-ui/src/layout.rs`: `ViewportScope` takes the frame's five
+  published answers (tier, tight, short-tablet, the band dock's room, the radio
+  salt), publishes the child window's, and puts the main window's back on `Drop`
+  (it holds a cloned `Context`, which is a handle, so `Drop` needs no argument).
+  `WindowShape::{Own, Desk}`; `tier_for_window` decides a window's tier from its
+  **width only**, floored at `Tablet`; `tight_for_tier`/`short_tablet_for_tier`
+  are the tier-already-decided forms of the two existing rules.
+- The band dock's room is a **register** now (`layout::set_band_dock_room` /
+  `band_dock_room`) instead of a field on the app: it was the one answer that
+  could not be scoped by a guard, and it was also the one that let a control
+  window's band chip hide a column in the main window.
+- `crates/sdroxide-ui/src/app/frame.rs`: `detached_viewport` takes a
+  `ChildWindow` and publishes the guard inside the viewport, so every module,
+  every tool window and the floating panel go through one place. The three
+  hand-written `set_tier`/restore dances (console, band selector, rotator) are
+  gone, replaced by `ChildWindow::desk`.
+- Numbers: `cargo check --workspace --all-targets` — compiles, **two warnings,
+  both in files this does not touch** (`spectrum.rs:146` unused `mut`,
+  `sstv_composer.rs:411` unused `release`; they are at `67a71118`). `cargo test
+  --release -p sdroxide-ui --lib` **1280 passed, 0 failed, 9 ignored**.
+  `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui` clean
+  (280 warnings, as before). `rustfmt --check` clean on all four files touched.
+- New tests: `a_child_window_is_measured_by_its_width_not_its_height`,
+  `a_child_window_answers_for_itself_and_the_main_windows_answers_come_back`,
+  `a_desk_window_stays_desktop_shaped_however_small_it_is_made`, and
+  `a_detached_window_scopes_the_layout_answers_to_itself` (a source pin: no
+  headless test can open a second OS window, so the one line that scopes the
+  answers is read rather than run).
+- **Looked at, not assumed**: new ignored tool `floating_panel_preview`
+  (`cargo test -p sdroxide-ui --release --lib floating_panel_preview -- --ignored
+  --nocapture`, `FLOAT_W`/`FLOAT_H`/`$FLOAT_PREVIEW`) renders the operating
+  panel as a floating window. At 1600×1000 it is a legible 660 pt panel; at
+  560×760 the QSO area's chips run past the panel's right edge.
+
+**Not done / blocked.**
+- The detached windows themselves **cannot be opened headlessly** — the
+  screenshot harness runs embedded viewports, where `detached_viewport` draws
+  nothing — so the guard, the policy and the call sites are tested and the
+  windows themselves want the operator's Sway session. This is the handover's
+  own caveat, not a new one.
+- The 560 pt measurement above is a **real remaining fault**: a narrow panel
+  window keeps its two columns because the phone arrangement (one pane at a
+  time) needs the pane tab row, and that row is drawn by the main window. So
+  step 2 of the handover — a child window is self-contained — is what fixes it,
+  and the finding is written on `tier_for_window` so the next session starts
+  from the picture rather than the guess.
+- Nothing is pushed: `local/windows` is the branch the operator asked for. Built
+  and installed for him to click through (`~/.cargo/bin/sdroxide`, 13:40,
+  `--version` says `SDR Oxide Brown 2.1.0_brown`).
+
+**Next.** Handover step 2: the detached panadapter and panel windows draw the
+picture/panel and the way home, never a second strip — and the panel window
+carries its own pane tabs when it is too narrow for two columns.
+
 ## 2026-10-25 (SSTV picture editor: the document on the wire, PR for F4NRM)
 
 **In plain words.** The SSTV transmit side now has a real editor: a window over
