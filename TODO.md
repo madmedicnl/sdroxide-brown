@@ -215,7 +215,15 @@ reception log · #642 S-meter calibration.
 
 ---
 
-## Recently done
+## Now
+
+0. **WEFAX detection still wrong: "the receiver is triggered without a signal"**
+   (issue #91, F4NRM, 2026-10-26) — after the sensitivity restore (#245) and the
+   band-table fix he reports detection and reception still wrong and false
+   triggering. **Blocked on one recording** (frequency, UTC, audio or IQ) to
+   reproduce; asked for exactly that on the issue. Not a guess to be made.
+
+
 
 - **2026-10-26** — WEFAX on the bench: 150 s each on 3855 kHz (gain 40) and
   13 882.5 kHz (gain 20). A strong **carrier** on both, no modulated chart —
