@@ -22,6 +22,41 @@ Each entry, in this order:
 ---
 
 
+## 2026-10-26 (composer features, the continuous auto run, and two bug fixes)
+
+**In plain words.** The picture editor grew the three things F4NRM asked for — a
+station overlay drawn under every slot, a library of named layouts, and a mosaic
+of up to nine received pictures — and the unattended FT8 run gained a continuous
+role with a retry budget and a session limit. Three reports are fixed on `main`:
+the satellite window's TUNE followed VFO A instead of the one selected (#244),
+the scan's voice gate left the listen time raised when switched off (#254), and
+the fax CTR anchor centred the carrier rather than the chart (#255, open).
+
+**Done.**
+- **PRs open**: #240 composer (overlay, layouts, mosaic — wire 254), #241 the
+  logbook fix, #253 AUTO CONT (wire 255), #255 CTR centring.
+- **Merged at the operator's word**: #242 (Auto Rx/Auto CQ), #243 (receive-only
+  transmitter guard), #245 (sensitivity restored), #246 (four red tests repaired).
+- **On `main` directly, wire-neutral**: #244 (`tune_commands`, test fails on the
+  old code) and #254 (`voice_dwell`, four cases pinned).
+- **Tracking issues** #248–#252; #252 is the central-logbook design and asks the
+  operator two questions.
+- Commands: gate silent throughout; `sdroxide-ui --lib` 1256→1275 by branch,
+  `sdroxide-types` 808, `sdroxide-radio image_store` 14, wasm check silent.
+  Installed 22:31, 23:04, 00:36, 01:01, 07:01, 07:19 — the last with wire 256.
+- Looked at rather than assumed: the editor in slot and overlay modes, twelve
+  layers in the list, and a four-picture mosaic with the overlay on and off
+  (`docs/images/sstv/`).
+
+**Not done / blocked.**
+- #240 waits on his approval; #241 he asked to leave open; the durable logbook
+  (#252) waits on the operator's two answers.
+- The nine demonstrations in #251 are decisions and are tested as such, except
+  the three that need a band with real callers.
+
+**Next.** The SWL side of the mode programme: STANAG 4285's payload, then the
+half-done list in `MODE-PROGRESS.md`.
+
 ## 2026-10-25 (STANAG 4285: what the capture says, and what is left)
 
 **In plain words.** The coded payload still does not read, but the fog is gone:

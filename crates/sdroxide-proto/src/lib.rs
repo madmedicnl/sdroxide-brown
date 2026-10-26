@@ -2099,8 +2099,17 @@ use sdroxide_types::{
 /// be rebuilt together: `PROTO_VERSION` 250 → 251, `VERSION_BYTE` 0x46 → 0x47.
 /// (250 is PR #242's, 249 PR #240's — neither is merged here, so this branch
 /// would move again if they land first.) A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 251;
-const VERSION_BYTE: u8 = 0x47;
+/// v253: **the Auto CQ run's own bound** — [`sdroxide_types::DigiConfig`] gains
+/// `auto_cq_repeats` and `auto_cq_then_listen` at its tail, so an unattended CQ
+/// run can end after a set number of calls instead of only on the watchdog's
+/// clock (issue #236). Appended last, and postcard is positional — a v248 peer's
+/// payload does not decode and the version byte is what refuses it;
+/// `#[serde(default)]` covers a stored config loading. This branch took **250**
+/// when it was opened; #245 and then #240 landed first, so the later of the
+/// colliding branches moves again — `PROTO_VERSION` 252 → 253,
+/// `VERSION_BYTE` 0x48 → 0x49. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 253;
+const VERSION_BYTE: u8 = 0x49;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {

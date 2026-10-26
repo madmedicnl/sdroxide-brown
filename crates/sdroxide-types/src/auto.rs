@@ -15,7 +15,7 @@
 use std::collections::HashSet;
 
 use crate::awards::LogIndex;
-use crate::digi::{Decode, cq_is_for_us};
+use crate::digi::{cq_is_for_us, Decode, QsoStep, TranscriptLine};
 use crate::{Band, Mode};
 
 /// How long the app may go without a single input event before auto mode
@@ -78,6 +78,115 @@ pub fn auto_idle_stop_s(minutes: u32, long: bool) -> Option<f64> {
 /// status that reflects it arrives a frame or two later. Without it, the idle
 /// status still showing would each frame queue another CQ.
 pub const AUTO_COOLDOWN_S: f64 = 3.0;
+
+/// **Which unattended role the station is running.**
+///
+/// One toggle used to do both: answer a CQ when one was heard and call CQ when
+/// none was. That is a sensible default and a poor instrument — the operator
+/// could not say "call CQ and work whoever answers, and do not go chasing
+/// somebody else's CQ", nor "listen only and never key a CQ" — which is what
+/// WSJT-Z's Auto CQ and Auto Rx are, and what issue #236 asked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutoRole {
+    /// Answer stations calling CQ. **Never** calls CQ itself.
+    Rx,
+    /// Call CQ and work whoever answers it. Does not answer other stations'
+    /// CQs — that is [`AutoRole::Rx`]'s job, and the two are switched rather
+    /// than blended.
+    Cq,
+}
+
+impl AutoRole {
+    /// The word on the toggle.
+    pub fn label(self) -> &'static str {
+        match self {
+            AutoRole::Rx => "AUTO RX",
+            AutoRole::Cq => "AUTO CQ",
+        }
+    }
+}
+
+/// Counts the CQ calls of one run, from the engine's own transcript.
+///
+/// The engine knows when a burst goes out; this reads the record of it rather
+/// than counting commands, because the sequencer repeats the CQ by itself and
+/// one `DigiCallCq` can become many transmissions. Nothing here is persisted:
+/// it describes a run, and a run does not survive the process.
+#[derive(Debug, Clone, Default)]
+pub struct CqCounter {
+    seen: usize,
+    sent: u32,
+}
+
+impl CqCounter {
+    /// Fold in the transcript's latest state and answer how many CQ calls this
+    /// run has made.
+    ///
+    /// The count restarts whenever the sequencer is not calling CQ: a step of
+    /// `TxGrid` or beyond means somebody answered, and a run that produced a
+    /// contact has done its job. It also survives the transcript being cleared
+    /// (`call_cq` starts a new exchange log), which is the one thing an
+    /// index-into-the-list counter gets wrong.
+    pub fn observe(&mut self, step: QsoStep, transcript: &[TranscriptLine]) -> u32 {
+        if step != QsoStep::CallingCq {
+            *self = CqCounter::default();
+            return 0;
+        }
+        if transcript.len() < self.seen {
+            // The log was cleared under us: start again from the top of it.
+            self.seen = 0;
+        }
+        for line in &transcript[self.seen..] {
+            if line.tx && line.text.trim_start().starts_with("CQ ") {
+                self.sent += 1;
+            }
+        }
+        self.seen = transcript.len();
+        self.sent
+    }
+
+    pub fn sent(&self) -> u32 {
+        self.sent
+    }
+}
+
+/// What an Auto CQ run does when its CQ calls reach the operator's limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CqLimit {
+    /// Keep calling; the limit has not been reached (or is switched off).
+    Calling,
+    /// Switch to [`AutoRole::Rx`] — call no more, but keep listening and answer.
+    Listen,
+    /// Disarm auto mode entirely.
+    Stop,
+}
+
+impl CqLimit {
+    pub fn what(self) -> &'static str {
+        match self {
+            CqLimit::Calling => "calling CQ",
+            CqLimit::Listen => "listening",
+            CqLimit::Stop => "stopped",
+        }
+    }
+}
+
+/// **The bound on an Auto CQ run.** `repeats` is the number of CQ calls one run
+/// may make; 0 means no bound of its own, and the transmit watchdog and the
+/// inactivity stop still apply. `then_listen` decides which way it ends.
+///
+/// A CQ run that nobody answers is the expected state, so this is the one
+/// figure that can end it deliberately rather than by the watchdog's clock —
+/// which is exactly what WSJT-Z's repetition count is for.
+pub fn cq_limit_action(sent: u32, repeats: u16, then_listen: bool) -> CqLimit {
+    if repeats == 0 || sent < u32::from(repeats) {
+        CqLimit::Calling
+    } else if then_listen {
+        CqLimit::Listen
+    } else {
+        CqLimit::Stop
+    }
+}
 
 /// The station auto mode has chosen to answer.
 #[derive(Debug, Clone, PartialEq)]
@@ -184,6 +293,64 @@ pub fn pick_cq(
     })
 }
 
+/// **A station calling *us*** — the pending-caller queue's source.
+///
+/// Distinct from [`pick_cq`], and the distinction is the whole of Auto CQ: that
+/// one answers a station calling CQ, which is Auto Rx's job, while this is
+/// somebody addressing our callsign — the message that arrives while we are
+/// already working somebody else, which the panel shows as "also calling: …"
+/// and which used to need the operator's hand on REPLY.
+///
+/// Kept pure for the same reason as the rest of this file: the choice of who to
+/// work next is a decision, and the engine's sequencing is the side effect.
+pub fn pick_caller(
+    decodes: &[Decode],
+    my_call: &str,
+    log: &LogIndex,
+    tried: &HashSet<String>,
+    skip: impl Fn(&Decode) -> bool,
+) -> Option<AutoTarget> {
+    let mine = my_call.trim().to_ascii_uppercase();
+    if mine.is_empty() {
+        return None;
+    }
+    let mut best: Option<&Decode> = None;
+    for d in decodes {
+        if skip(d) {
+            continue;
+        }
+        let Some(to) = d.to.as_deref() else { continue };
+        if !to.eq_ignore_ascii_case(&mine) {
+            continue;
+        }
+        // A message *from* ourselves can only be our own transmission echoed
+        // back by a receiver, or a station that has our callsign in the `from`
+        // field by mistake. Either way there is nobody to work.
+        let Some(from) = d.from.as_deref().filter(|c| !c.is_empty()) else { continue };
+        if from.eq_ignore_ascii_case(&mine) {
+            continue;
+        }
+        let key = from.to_ascii_uppercase();
+        if tried.contains(&key) {
+            continue;
+        }
+        // Nobody is worked twice in a session, the rule Auto Rx already keeps.
+        if !log.novelty(&key, d.grid.as_deref(), "").new_call {
+            continue;
+        }
+        match best {
+            Some(b) if (d.snr_db, d.slot_utc) <= (b.snr_db, b.slot_utc) => {}
+            _ => best = Some(d),
+        }
+    }
+    best.map(|d| AutoTarget {
+        call: d.from.clone().unwrap_or_default(),
+        grid: d.grid.clone(),
+        snr_db: d.snr_db,
+        audio_hz: d.audio_hz,
+    })
+}
+
 /// Whether the licence gate lets this band be keyed, mirroring the engine's
 /// own key-down test: every amateur allocation always, and 11 m when the
 /// operator has opened it. The broadcast services and general coverage never.
@@ -237,10 +404,8 @@ mod tests {
     #[test]
     fn never_answers_a_call_already_in_the_log() {
         let d = [cq("19LR121", 20, 1)];
-        assert!(
-            pick_cq(&d, &log_with(&["19LR121"]), "26AT715", "", &HashSet::new(), |_| false)
-                .is_none()
-        );
+        assert!(pick_cq(&d, &log_with(&["19LR121"]), "26AT715", "", &HashSet::new(), |_| false)
+            .is_none());
     }
 
     #[test]
@@ -329,5 +494,141 @@ mod tests {
         }
         assert_eq!(auto_idle_stop_s(AUTO_IDLE_STOP_NEVER, true), None, "DISABLE never stops");
         assert_eq!(AUTO_IDLE_STOP_LONG_CHOICES[0], (AUTO_IDLE_STOP_S / 60.0) as u32);
+    }
+
+    // ── the Auto CQ run's own bound (issue #236) ──
+
+    fn sent_line(text: &str) -> TranscriptLine {
+        TranscriptLine::sent(text)
+    }
+
+    /// **A CQ run is counted from what actually went out**, not from the
+    /// commands: the sequencer repeats the CQ by itself, so one `DigiCallCq` is
+    /// many transmissions and a count of presses would never reach any limit.
+    #[test]
+    fn a_cq_run_is_counted_from_the_transcript() {
+        let mut c = CqCounter::default();
+        let log = vec![sent_line("CQ OE1TEST JN88")];
+        assert_eq!(c.observe(QsoStep::CallingCq, &log), 1);
+        let log = vec![
+            sent_line("CQ OE1TEST JN88"),
+            sent_line("CQ OE1TEST JN88"),
+            sent_line("CQ OE1TEST JN88"),
+        ];
+        assert_eq!(c.observe(QsoStep::CallingCq, &log), 3);
+        // Nothing new, nothing counted.
+        assert_eq!(c.observe(QsoStep::CallingCq, &log), 3);
+        // A line that is not a CQ is not a CQ call — the report to a station
+        // that answered, for instance.
+        let log = vec![
+            sent_line("CQ OE1TEST JN88"),
+            sent_line("CQ OE1TEST JN88"),
+            sent_line("CQ OE1TEST JN88"),
+            sent_line("OE1TEST DL1ABC -12"),
+        ];
+        assert_eq!(c.observe(QsoStep::CallingCq, &log), 3);
+    }
+
+    /// Somebody answering ends the run: the next CQ run starts from zero, or a
+    /// station that works a dozen contacts would be cut off at the dozenth.
+    #[test]
+    fn a_contact_restarts_the_count_and_a_cleared_transcript_does_not_confuse_it() {
+        let mut c = CqCounter::default();
+        let log = vec![sent_line("CQ OE1TEST JN88")];
+        assert_eq!(c.observe(QsoStep::CallingCq, &log), 1);
+        // They came back: the sequencer is past CallingCq.
+        assert_eq!(c.observe(QsoStep::TxReport, &log), 0);
+        // The engine clears the exchange log when a run starts (`call_cq`), so
+        // the index has to survive a shorter transcript than it last saw.
+        let fresh = vec![sent_line("CQ OE1TEST JN88")];
+        assert_eq!(c.observe(QsoStep::CallingCq, &fresh), 1);
+        let fresh = vec![sent_line("CQ OE1TEST JN88"), sent_line("CQ OE1TEST JN88")];
+        assert_eq!(c.observe(QsoStep::CallingCq, &fresh), 2);
+    }
+
+    /// **The limit either ends the run or turns it into listening.** Zero is no
+    /// limit of its own — the watchdog and the inactivity stop still bound it.
+    #[test]
+    fn the_cq_limit_ends_the_run_or_turns_it_into_listening() {
+        assert_eq!(cq_limit_action(9, 0, true), CqLimit::Calling, "0 is no limit");
+        assert_eq!(cq_limit_action(2, 3, false), CqLimit::Calling);
+        assert_eq!(cq_limit_action(3, 3, false), CqLimit::Stop);
+        assert_eq!(cq_limit_action(4, 3, false), CqLimit::Stop);
+        assert_eq!(cq_limit_action(3, 3, true), CqLimit::Listen);
+        // A limit of one is honoured: one call, then whatever the operator asked.
+        assert_eq!(cq_limit_action(1, 1, true), CqLimit::Listen);
+        assert_eq!(cq_limit_action(0, 1, false), CqLimit::Calling);
+    }
+
+    /// The two roles are named so the toggle can say which one is running.
+    #[test]
+    fn the_roles_say_which_one_is_armed() {
+        assert_eq!(AutoRole::Rx.label(), "AUTO RX");
+        assert_eq!(AutoRole::Cq.label(), "AUTO CQ");
+        assert_ne!(AutoRole::Rx, AutoRole::Cq);
+    }
+
+    // ── the pending caller (Auto CQ's queue) ──
+
+    fn caller(from: &str, to: &str, snr: i16, slot: i64) -> Decode {
+        Decode {
+            slot_utc: slot,
+            snr_db: snr,
+            dt: 0.0,
+            audio_hz: 1500.0,
+            message: format!("{to} {from} -{snr}"),
+            to: Some(to.into()),
+            from: Some(from.into()),
+            grid: None,
+            is_cq: false,
+            cq_to: None,
+            free_text: false,
+            rr73_to: None,
+        }
+    }
+
+    /// **A station calling *us*** is the one the queue is for, and nobody else
+    /// is: an unrelated CQ belongs to Auto Rx, and our own echo belongs to
+    /// nobody.
+    #[test]
+    fn only_a_station_addressing_our_callsign_is_a_pending_caller() {
+        let empty = LogIndex::build(&[]);
+        let none = HashSet::new();
+        let d = [
+            caller("IU5HIU", "19DCG373", -8, 10),
+            // Somebody calling CQ in general — not ours to take in Auto CQ.
+            Decode { is_cq: true, ..caller("SP3JHZ", "CQ", -3, 12) },
+            // Our own transmission, echoed back by a receiver.
+            caller("19DCG373", "SP3JHZ", -1, 14),
+            // Addressed to another station.
+            caller("DL1ABC", "F4NRM", -2, 16),
+        ];
+        let t = pick_caller(&d, "19DCG373", &empty, &none, |_| false).expect("IU5HIU is calling");
+        assert_eq!(t.call, "IU5HIU");
+    }
+
+    /// The strongest caller wins, so the queue starts with the contact most
+    /// likely to complete; and a station already tried this session is not in
+    /// it again.
+    #[test]
+    fn the_queue_takes_the_strongest_caller_once() {
+        let empty = LogIndex::build(&[]);
+        let d = [caller("WEAK", "19DCG373", -18, 10), caller("LOUD", "19DCG373", -2, 12)];
+        let t = pick_caller(&d, "19DCG373", &empty, &HashSet::new(), |_| false).unwrap();
+        assert_eq!(t.call, "LOUD");
+        let mut tried = HashSet::new();
+        tried.insert("LOUD".to_string());
+        let t = pick_caller(&d, "19DCG373", &empty, &tried, |_| false).unwrap();
+        assert_eq!(t.call, "WEAK", "a station already tried is passed over");
+    }
+
+    /// An empty callsign is a station that has not been configured yet, and it
+    /// must not turn every decode into a caller.
+    #[test]
+    fn an_unconfigured_callsign_has_no_callers() {
+        let empty = LogIndex::build(&[]);
+        let d = [caller("IU5HIU", "19DCG373", -8, 10)];
+        assert!(pick_caller(&d, "", &empty, &HashSet::new(), |_| false).is_none());
+        assert!(pick_caller(&d, "   ", &empty, &HashSet::new(), |_| false).is_none());
     }
 }

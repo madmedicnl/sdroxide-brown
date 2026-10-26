@@ -792,6 +792,41 @@ impl SdroxideApp {
                     ))
                     .changed();
                 ui.end_row();
+                // **AUTO CQ's own bound** (issue #236). A CQ run that nobody
+                // answers is the expected state, so the watchdog's clock is the
+                // wrong instrument for ending one deliberately; this is the knob
+                // WSJT-Z calls a repetition count, and it belongs here beside
+                // the other "how many times, then what" figures.
+                ui.label("AUTO CQ run");
+                ui.horizontal(|ui| {
+                    let resp = ui
+                        .add(
+                            egui::DragValue::new(&mut cfg.auto_cq_repeats)
+                                .range(0..=100)
+                                .suffix(" calls"),
+                        )
+                        .on_hover_text(
+                            "How many CQ calls one AUTO CQ run makes before it ends. 0 is no \
+                             limit of its own: the transmit watchdog and the inactivity stop \
+                             still bound the run.",
+                        );
+                    changed |= resp.changed();
+                    ui.add_space(6.0);
+                    ui.add_enabled_ui(cfg.auto_cq_repeats > 0, |ui| {
+                        changed |= crate::chrome::checkbox(
+                            ui,
+                            &mut cfg.auto_cq_then_listen,
+                            "then listen",
+                        )
+                        .on_hover_text(
+                            "After those calls, switch AUTO CQ to AUTO RX and keep listening \
+                             rather than stopping altogether. Off, the run stops and the \
+                             station goes quiet.",
+                        )
+                        .changed();
+                    });
+                });
+                ui.end_row();
                 // Special operating activity (issue #223). Above the
                 // DXpedition roles because it changes what every
                 // message in the exchange says, where those change who

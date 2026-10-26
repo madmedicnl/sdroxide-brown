@@ -1128,8 +1128,17 @@ pub struct SdroxideApp {
     // and the clocks it is run against. Deliberately session-only, never
     // persisted: a restart must not bring up a transmitting radio nobody asked
     // for.
-    /// Whether auto mode is armed.
-    auto_mode: bool,
+    /// **Which unattended role is armed**, or `None`. One toggle used to do
+    /// both jobs; the operator could not say "only listen" or "only call", which
+    /// is what issue #236 asked for.
+    auto_role: Option<sdroxide_types::auto::AutoRole>,
+    /// The Auto CQ run's CQ count, read from the engine's exchange log.
+    auto_cq: sdroxide_types::auto::CqCounter,
+    /// The scan dwell the VOICE gate raised, so switching it off can give it
+    /// back (issue #254). Session-only: it describes a toggle's last press, not
+    /// a setting.
+    scan_voice_prev_dwell: Option<u32>,
+
     /// A DAB channel scan in progress: which Band III block it is sitting on,
     /// and when it arrived there. Session-only — a scan is an act, not a
     /// setting; what it *finds* goes in `state.dab.found` and is remembered.
@@ -1801,6 +1810,12 @@ fn coded_weather_lines(text: &str) -> impl Iterator<Item = &str> {
     text.split(['\r', '\n']).map(str::trim).filter(|l| l.len() >= 20)
 }
 
+/// The pure half of [`SdroxideApp::tx_chrome_ok`], so the rule can be tested
+/// without a radio, a mode or a window.
+pub(in crate::app) fn tx_chrome_ok(tx_capable: bool, mode: sdroxide_types::Mode) -> bool {
+    tx_capable && !mode.is_rx_only()
+}
+
 impl SdroxideApp {
     /// Offer any new RTTY text lines to the coded-weather parser.
     ///
@@ -2275,7 +2290,9 @@ impl SdroxideApp {
             cw_key_error: None,
             digi_tx_hz_edit: String::new(),
             digi_preview: None,
-            auto_mode: false,
+            auto_role: None,
+            auto_cq: sdroxide_types::auto::CqCounter::default(),
+            scan_voice_prev_dwell: None,
             dab_scan: None,
             dab_vu: Default::default(),
             dab_vu_at: None,
@@ -3127,6 +3144,20 @@ impl SdroxideApp {
         !self.swl_mode() && self.caps.as_ref().is_some_and(|c| c.is_transmit_capable())
     }
 
+    /// Whether the **station chrome** may offer a transmitter on this screen.
+    ///
+    /// Two separate questions, and both have to be asked. A radio that cannot
+    /// transmit (an SDR dongle, a public SDR, the ATS Mini) has no business
+    /// showing a PTT. So has a **mode that is receive-only by design**, whatever
+    /// the radio can do — WEFAX, NAVTEX, DSC, ADS-B, ACARS and the rest. The
+    /// strip asked only the first, so tuning to a weather fax put a PTT, a Drive
+    /// slider and a Tune chip on the screen on a broadcast frequency: a
+    /// transmitter that could be keyed with nothing to modulate, on a channel
+    /// where keying it is not allowed (issue #239).
+    pub(in crate::app) fn tx_chrome_ok(&self) -> bool {
+        tx_chrome_ok(self.tx_capable(), self.state.rx[0].mode)
+    }
+
     /// The CW tone being copied, in Hz — the cursor the CW panel moves and the
     /// pitch the engine keeps the passband centred on.
     ///
@@ -3221,6 +3252,44 @@ mod aircraft_watch_frame_tests;
 mod touch_lock_tests;
 #[cfg(test)]
 mod tests {
+
+    /// **A receive-only mode shows no transmitter**, whatever the radio can do.
+    ///
+    /// This is issue #239: tuned to a weather fax on 3855 kHz — a broadcast
+    /// frequency where keying is not allowed — the strip still offered a PTT, a
+    /// Drive slider and a Tune chip, because the gate asked only "can this radio
+    /// transmit?" and never "does this mode transmit at all?". The operator was
+    /// one click from keying a transmitter with nothing to modulate, on a
+    /// channel where the answer to that is never.
+    #[test]
+    fn a_receive_only_mode_has_no_transmitter_in_the_chrome() {
+        use sdroxide_types::Mode;
+        for mode in [Mode::Wefax, Mode::Navtex, Mode::Dsc, Mode::Adsb, Mode::Acars] {
+            assert!(mode.is_rx_only(), "{mode:?} is not receive-only after all");
+            assert!(!tx_chrome_ok(true, mode), "{mode:?} would show a PTT");
+        }
+        assert!(tx_chrome_ok(true, Mode::Ft8), "a transmitting mode keeps its PTT");
+        assert!(tx_chrome_ok(true, Mode::Usb));
+        assert!(!tx_chrome_ok(false, Mode::Usb), "a receive-only radio has none either");
+    }
+
+    /// **The strip must ask the mode-aware question, not the radio one.**
+    ///
+    /// A scan rather than a behaviour test because the fault was not in a
+    /// function but in nine call sites that each asked the wrong half of the
+    /// question: one of them coming back is enough to put a PTT on a fax
+    /// channel again, and no unit test would notice.
+    #[test]
+    fn the_station_chrome_never_asks_the_mode_blind_question() {
+        for file in ["top_bar.rs", "classic.rs"] {
+            let path = format!("{}/src/app/{file}", env!("CARGO_MANIFEST_DIR"));
+            let src = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+            assert!(
+                !src.contains("self.tx_capable()"),
+                "{file} gates transmitter chrome on the radio alone — use tx_chrome_ok()"
+            );
+        }
+    }
 
     /// Coded weather arrives as RTTY text, so it is found by reading the text
     /// the decoder already produces — and only in whole lines.

@@ -18,6 +18,37 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **The picture composer's three features, and the continuous auto run** (issues
+   #237/#236/#251, F4NRM, 2026-10-25/26 — his area, all **PRs**) — the station
+   overlay, the layout library (save/load/rename/duplicate/forget) and the mosaic
+   of up to nine received pictures are in **#240** (wire 254); the AUTO CONT role
+   with retries, busy deferral and a session limit is **#253** (wire 255); the fax
+   CTR anchor is **#255**. Tracking: #248, #249, #250, #251. What is left in
+   those is what the tracking issues say and nothing more — new ideas wait for
+   their own discussion.
+
+0. **FT8 Auto Rx and Auto CQ are two roles, and a CQ run has a bound** (issue
+   #236, F4NRM, 2026-10-25 — his area + a wire change → **PR**) — one AUTO chip
+   did both jobs, so the operator could not say "only listen" or "only call".
+   Now `AUTO RX` answers a CQ and never calls one, `AUTO CQ` calls and works
+   whoever answers and never chases another station's CQ, and an Auto CQ run has
+   `DigiConfig::auto_cq_repeats` calls before it switches to Auto Rx or stops
+   (0 = no limit of its own). The count is read from the engine's exchange log,
+   because the sequencer repeats the CQ by itself. `PROTO_VERSION` 250 (249 is
+   PR #240's). Tests in `sdroxide_types::auto`. Not done: band rotation, which
+   moves the dial unattended and needs its own decision.
+0. **A receive-only mode showed a transmitter in the strip** (issue #239, F4NRM,
+   2026-10-25) — the top strip asked `tx_capable()` ("can this radio transmit?")
+   and not "does this mode transmit at all?", so WEFAX, NAVTEX, DSC, ADS-B,
+   ACARS, VDL2 and AIS inherited the transceiver's PTT/Drive/Tune/XIT/DUPLEX. On
+   3855 kHz that is a key-down with nothing to modulate on a broadcast
+   frequency. Fixed with `tx_chrome_ok()` and a scan test; **PR #243**. The rest
+   of his list is his WEFAX PR #164, **reverted on 2026-10-25 13:28**
+   (`5e87cd34`) — the sensitivity/"false signal detector" and the automatic
+   phasing calibration — which is the operator's decision to restore or explain.
+   Two more findings to act on: the CTR anchor treats only SSTV as a picture
+   mode, so a fax sits 1900 Hz off centre; and detaching is native-only, which
+   is why the browser has no float arrow.
 0. **A multi-radio browser station exported a logbook of one QSO** (issue #236
    comment, F4NRM, 2026-10-25) — the export itself is innocent. With more than
    one radio the logbook is shared, so a logged contact re-reads it first; in a
@@ -172,6 +203,14 @@ time-sync · #355 spectrum smoothing · #594 UDP audio · #617 HFDL frequency ch
 reception log · #642 S-meter calibration.
 
 ---
+
+## Recently done
+
+- **2026-10-26** — scan: the voice gate gave the raised listen time back (issue
+  #254), `voice_dwell` a pure function with four cases tested. On `main`
+  (`3731da4d`).
+- **2026-10-26** — the notes now say how to read a machine-drafted review: short
+  answers, suggestions only, one bounded scope per item (AGENTS.md).
 
 ## Recently done
 
