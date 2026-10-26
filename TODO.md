@@ -69,6 +69,7 @@ maintainer's queue there, not a promise.
    edit settles. `PROTO_VERSION` 249, `VERSION_BYTE` 0x45. Pushed as **PR #240**
    (`fork/sstv-composer-wire`), waiting for F4NRM.
 
+
 0. **TCI receive audio: a server that carries baseband audio only gets silence**
    (#group, Rick Abshier KQ4Y, 2026-10-25) — reported against upstream 1.6.10, an
    Icom 7300 MK2 through Remote Ham Radio's TCI platform with LocalMate: TCI CAT
