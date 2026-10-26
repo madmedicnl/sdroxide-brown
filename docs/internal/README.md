@@ -12,6 +12,7 @@ queue is [`../../TODO.md`](../../TODO.md).
 
 | file | what it is |
 | --- | --- |
+| [`HANDOVER-NOW.md`](HANDOVER-NOW.md) | **Where the last session stopped** — state, the aborted release, #263's specified fix, the WEFAX ask. Read this first after a break. |
 | `SESSIONS.md` | The agent notes as they accumulated (2026-09-25 … 10-24): the record of why. |
 | `AUTONOMY-JOURNAL.md` | The running record of unattended work: one entry per item, newest first. |
 | `MODE-PHASE-4-PROMPT.md` | The live brief for the mode work: finish the modes, give them a voice. |

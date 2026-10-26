@@ -17,6 +17,11 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **Read `docs/internal/HANDOVER-NOW.md` first** (written 2026-10-26 night): the
+   release is aborted and removed, #263's fix is specified but not started, and
+   the WEFAX multi-page puzzle is unreproduced. It carries the state, the three
+   next actions and the traps.
+
 0. **Windows, for a tiling WM** (the operator, 2026-10-25/26 —
    [`WINDOWS-HANDOVER.md`](docs/internal/WINDOWS-HANDOVER.md), branch
    **`local/windows`, not pushed** and not to be pushed until he has clicked it)
