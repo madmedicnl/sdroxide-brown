@@ -44,9 +44,11 @@ build since the s4285 decoder was vendored, and neither page says so.
   is installed here.
 
 **Not done / blocked.**
-- The recovery is the documented one: a **fourth-point tag `v2.1.2.1_brown`** on
-  the same crate version 2.1.2 — not a re-cut of this tag — and the operator has
-  not yet said whether the partial v2.1.2 page is deleted or left standing.
+- Recovery, on the operator's word: the partial **`v2.1.2_brown` release and its
+  tag are deleted** (`gh release delete --cleanup-tag`, "it's too confusing"),
+  the changelog heading moved to `## [2.1.2.1_brown]` (`9eb58559`) so the
+  workflow reads the same notes, and **`v2.1.2.1_brown`** is tagged on it — the
+  fourth-point tag the rule asks for, on crate version 2.1.2.
 - The WEFAX multi-page puzzle: his two recordings each hold **one** page (the
   Drive file runs 42.7 s → 1121.6 s, 2153 lines, ended by its stop tone), so
   neither can reproduce "only the first one or two of ten". A short audio clip
