@@ -30,6 +30,11 @@
         <Icon Id="SdroxideIcon" SourceFile="packaging/windows/sdroxide-brown.ico" />
         <Property Id="ARPPRODUCTICON" Value="SdroxideIcon" />
         <Property Id="ARPURLINFOABOUT" Value="https://github.com/madmedicnl/sdroxide-brown" />
+        <!-- The shortcuts are authored advertised (so they may use the file as
+             their KeyPath and pass ICE43); this converts them to ordinary
+             non-advertised .lnk files at install, so clicking one launches the
+             program instead of running an MSI self-repair check. -->
+        <Property Id="DISABLEADVTSHORTCUTS" Value="1" />
 
         <StandardDirectory Id="ProgramFiles64Folder">
             <!-- Its own folder, not upstream's: the executable is `sdroxide.exe`
@@ -39,29 +44,30 @@
                 <Component Id="MainExe" Guid="DE7788FB-C6E5-47E2-87D8-F24D5E6ADBE5">
                     <!-- **The shortcuts live in the executable's own component**,
                          so their KeyPath is the file they launch — a per-machine
-                         file in Program Files — and their directories are the
-                         machine-wide ones. They used to be components of their
-                         own keyed on an HKLM registry value inside the per-user
-                         `ProgramMenuFolder`/`DesktopFolder`, which is the mix
-                         Windows Installer's validation rejects (ICE38, ICE43,
-                         ICE57): a standard user who answers UAC with an
-                         administrator's credentials got a finished install and no
-                         shortcut anywhere they could see. WiX 5.0.2 began
-                         refusing it outright and Windows had no installer from
-                         v2.1.1.1 on. -->
+                         file in Program Files. A *non-advertised* shortcut must
+                         instead be keyed on an HKCU registry value (ICE43),
+                         which in a machine-wide install leaves a per-user orphan
+                         key behind; an *advertised* shortcut may use the file as
+                         its KeyPath, and `DISABLEADVTSHORTCUTS` turns it into a
+                         regular shortcut at install. The directories are
+                         `ProgramMenuFolder`/`DesktopFolder` — the WiX directory
+                         IDs, not the `CommonProgramsFolder`/`CommonDesktopFolder`
+                         property names WiX 5.0.2 refuses at the link step — and
+                         in this per-machine install they resolve to the all-users
+                         folders. -->
                     <File Id="SdroxideExe" Source="$(var.BinDir)/sdroxide.exe" KeyPath="yes">
                         <Shortcut Id="AppShortcut"
-                                  Directory="CommonProgramsFolder"
+                                  Directory="ProgramMenuFolder"
                                   Name="SDR Oxide Brown"
                                   Description="SDR transceiver and shortwave-listening tool"
                                   WorkingDirectory="INSTALLFOLDER"
-                                  Icon="SdroxideIcon" />
+                                  Advertise="yes" />
                         <Shortcut Id="DesktopAppShortcut"
-                                  Directory="CommonDesktopFolder"
+                                  Directory="DesktopFolder"
                                   Name="SDR Oxide Brown"
                                   Description="SDR transceiver and shortwave-listening tool"
                                   WorkingDirectory="INSTALLFOLDER"
-                                  Icon="SdroxideIcon" />
+                                  Advertise="yes" />
                     </File>
                 </Component>
                 <Component Id="MinGWLibgcc" Guid="BD91C960-622D-42C3-B20D-C29F8001F83B">

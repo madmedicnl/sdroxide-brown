@@ -168,14 +168,14 @@ pub(in crate::app) fn lines(card: &AircraftCard, now: i64) -> Vec<Line> {
             "Altitude",
             &card.altitude_ft,
             now,
-            |v| format!("{v} ft"),
+            |v| sdroxide_types::AirUnits::current().altitude(*v),
             "not heard yet — ADS-B carries it",
         ),
         line(
             "Speed",
             &card.ground_speed_kt,
             now,
-            |v| format!("{v:.0} kt"),
+            |v| sdroxide_types::AirUnits::current().speed(*v),
             "not heard yet — ADS-B carries it",
         ),
         line(

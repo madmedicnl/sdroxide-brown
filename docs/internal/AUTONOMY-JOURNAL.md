@@ -21,6 +21,111 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-27 (the 2.2.0 release — Windows MSI and the MinGW C++ runtime)
+
+**In plain words.** The 2.2.0 release is cut as `v2.2.0.2_brown` with the
+AppImage, the Windows MSI, and — for the first time — the Apple Silicon Mac
+builds. The Windows installer was broken in three layers and each fix exposed
+the next; all three are fixed and the MSI now builds and passes WiX validation.
+I also opened PR #284 so the Windows build links its C++ runtime statically
+instead of shipping a 2.6 MB DLL — the check that was meant to guarantee this
+had a broken grep and never fired.
+
+**Done.**
+
+- Bumped the crate 2.1.2 → 2.2.0 (Cargo.toml + Cargo.lock), wrote the changelog
+  entry. Gate green: `cargo check --workspace --all-targets` silent,
+  `cargo test --release --workspace` 294 suites / 0 failures,
+  `cargo check --locked` clean.
+- Tag `v2.2.0_brown` → MSI job failed `WIX0094` (the shortcut directories used
+  `CommonProgramsFolder`/`CommonDesktopFolder`, which are the resolved *property*
+  names, not WiX directory IDs). Fixed to `ProgramMenuFolder`/`DesktopFolder`.
+- Re-tagged `v2.2.0.1_brown` → `ICE50` (the non-advertised shortcut + file key
+  path became an advertised shortcut, and its `.ico` then mismatched the `.exe`).
+  Fixed: advertised + `DISABLEADVTSHORTCUTS=1`, dropped the shortcut `Icon`
+  (the exe has no embedded icon; Add/Remove Programs keeps the Brown one).
+- Re-tagged `v2.2.0.2_brown` → **success**, 20 assets: AppImage, Windows MSI
+  (version 2.2.0), macOS aarch64 + x86_64, Linux, Windows zip/soapy, web client.
+  Deleted the two partial release pages (`v2.2.0_brown`, `v2.2.0.1_brown`).
+- PR #284 (`fix/windows-mingw-static-libstdcxx`): the DLL-import check's grep
+  spelled `+` as `\+` and never matched on the MSYS2 grep, so it passed while
+  `libstdc++-6.dll` was still imported (confirmed via `objdump` on the
+  v2.2.0.2 build). Fixed to `libstdc[+][+]`, and gave `sdroxide-olivia` and
+  `sdroxide-s4285` the same `static:-bundle=stdc++`/`winpthread` treatment
+  `sdroxide-drm` already had — those two compile C++ but left `cc`'s default
+  `-lstdc++`.
+- PR #285 (`fix/windows-exe-icon`): embed the Brown icon into `sdroxide.exe` so
+  the advertised Start Menu / desktop shortcuts show it. winres 0.1 failed —
+  MSYS2's `windres` mangles backslash paths (`D:asdroxide-brown...`); switched
+  to a direct `windres` invocation with forward-slash paths and a one-line
+  `resource.rc`. Verified by a `windows-msi.yml` dispatch: MSI built + uploaded.
+
+**Not done / blocked.**
+
+- PR #284 needs the Windows CI to prove the static link actually holds; no
+  MinGW toolchain here so it could not be tested locally. `cargo check` passes
+  (windows-gnu branch skipped on Linux) and the grep is verified on Linux.
+
+**Next.**
+
+- Review/merge PR #284 (static C++ runtime) and PR #285 (exe icon).
+
+---
+
+## 2026-10-27 (the Aircraft window, from the operator's five screenshots)
+
+**In plain words.** Ten pull requests are open, none merged. They fix what the
+screenshots showed: the French word "indisponible" still in six strings (my
+earlier audit said there was one; that was wrong), distances and speeds in
+metric or miles, the same fact repeated on every line of the card, columns that
+printed over each other, three buttons for the map style instead of one that
+cycled, a box for an airport, mode buttons that did nothing on the wrong band,
+VDL2 and ACARS views that were a sentence, a button column cut off at the
+window's smallest size, and a switch for the online photo
+lookup that an operator can press. Nothing was seen in a picture and the
+switch and the mode buttons were never tried against a real radio or a real
+online answer; those are the first things to look at. Next: the narrow-window check, and whatever the review of these says.
+
+**Done** (PR, base, what it carries):
+- #266 `claude/aircraft-a-english-translate`, main — "online unavailable", the
+  guard list extended, `translate="no"` on the web page.
+- #267 `claude/aircraft-i-units`, main — aviation, metric, imperial.
+- #268 `claude/aircraft-c-duplicates`, on #267 — radio badge and shared note once.
+- #269 `claude/aircraft-d-columns`, on #268 — columns from the right, no overprint.
+- #270 `claude/aircraft-e-style-buttons`, main — Radar, Terrain, Chart side by side.
+- #271 `claude/aircraft-j-airport-card`, on #267 — airport card and pinned box.
+- #272 `claude/aircraft-g-mode-buttons`, main — `SetModeListen`, HFDL enabled.
+- #273 `claude/aircraft-h-views`, on #272 — VDL2 and ACARS views.
+- #276 `claude/aircraft-f-narrow`, on #273 — the button column scrolls at
+  560 x 320; seen in a rendered picture before and after (ignored preview test
+  `aircraft_window_preview`).
+- #274 `claude/aircraft-b-photo-switch`, main — `GET/POST /aircraft-online`,
+  no `PROTO_VERSION` change (still 255 / 0x4B).
+- Numbers: `cargo test --release -p sdroxide-ui` 1283 to 1288 passed per branch,
+  native `--all-targets` without errors, wasm release check finished, rustfmt
+  clean on what was touched. Tests were red before the fix where a fix existed
+  (guard words, web page, columns overprint, hover card units); the others are
+  new behaviour with their own tests.
+
+**Not done / blocked.**
+- Lot F was done with a rendered picture, but only at the smallest size and with
+  stand-in data (the map showed no aircraft); not run in a real window.
+- The radio and server crates do not build as-is in this sandbox (the RADE
+  crate downloads opus, which is blocked). With a temporary stub of that crate
+  (never committed) both were built and tested: `-p sdroxide-server` 80 unit and
+  the integration tests green (#274), and a new engine test on the airband
+  `SetMode` refused / `SetModeListen` taken (#272). Nothing on a real radio, and
+  no real adsbdb/Planespotters answer.
+- Only lot F was looked at in a rendered picture; the other lots were not, and
+  the Chart style's colours are unchanged.
+- #271 now also closes its box with Esc.
+- `AGENTS.md` still says the relay is switched only by the environment variable.
+- main carries "frozen until #263"; I opened PRs on the operator's explicit
+  order and merged nothing.
+
+**Next.** Read the review of the ten.
+
+---
 
 ---
 
@@ -2968,3 +3073,34 @@ summary without having to ask for it.
 **Next.** The live queue is unchanged: the mode work, STANAG 4285 first —
 [`MODE-PHASE-4-PROMPT.md`](MODE-PHASE-4-PROMPT.md) and
 [`MODE-PROGRESS.md`](MODE-PROGRESS.md).
+
+---
+
+## 2026-10-27 (the DigiConfig wire fields are re-appended at the true tail)
+
+**In plain words.** The five fields the composer and the auto run added to the
+station's digital config — banner-bottom, banner text size, the station overlay,
+auto-call retries and the auto session limit — were dropped into the *middle* of
+that struct even though every one of their notes said "appended last". They now
+sit at the real end, so the note and the code agree. It's a wire change, so the
+wire number moved to 256.
+
+**Done.**
+- Branch `local/digiconfig-append-tail` (off `main`), commit `55e09550`.
+- Moved `sstv_banner_bottom`, `sstv_banner_text_pct`, `station_overlay`,
+  `auto_call_retries`, `auto_session_min` to after `wefax_rx_auto` in
+  `DigiConfig` (`crates/sdroxide-types/src/digi.rs`), so `sstv_rx_sensitivity` /
+  `sstv_rx_auto` / `wefax_rx_sensitivity` / `wefax_rx_auto` no longer shift down
+  in the positional postcard layout.
+- Bumped the wire: `PROTO_VERSION` 255 → 256, `VERSION_BYTE` 0x4B → 0x4C, with a
+  v256 register entry in `crates/sdroxide-proto/src/lib.rs`.
+- Green: `cargo test -p sdroxide-proto --lib roundtrip` (14/14), `cargo test -p
+  sdroxide-types --lib` (815/815), `cargo check --workspace --all-targets`
+  (silent apart from pre-existing warnings), and
+  `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui`.
+
+**Not done / blocked.** It is a wire change, so it waits for the freeze to lift
+and goes up as a PR (never straight to `main`). Not pushed.
+
+**Next.** When the freeze lifts, push the branch and open the PR; F4NRM reviews
+it like any wire change.

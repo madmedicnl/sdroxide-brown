@@ -10,6 +10,24 @@ use sdroxide_types::Command;
 
 use crate::app::SdroxideApp;
 
+/// How far off 1900 Hz the subcarrier may be before the panel offers to centre
+/// it. The same figure the readout turns yellow at.
+pub(in crate::app) const CENTRE_THRESHOLD_HZ: f64 = 120.0;
+
+/// **The dial that puts the subcarrier back on 1900 Hz.**
+///
+/// The published frequency is the carrier, the dial sits 1.9 kHz below it, and
+/// the decoder measures the subcarrier in audio: `audio = 1900 + (actual_carrier
+/// − dial)`. So when the audio reads 1900 + `off`, the true carrier is `off` hertz
+/// above where the dial thinks it is, and moving the dial by that same `off`
+/// puts the measurement back where it belongs.
+///
+/// Pure, so the arithmetic can be tested without a receiver: a chart is not
+/// something to be wrong about by a sign on the air.
+pub(in crate::app) fn centred_dial_hz(dial_hz: f64, subcarrier_hz: f64) -> f64 {
+    dial_hz + (subcarrier_hz - 1900.0)
+}
+
 impl SdroxideApp {
     /// The RF Paint (Spectrum Painting) operating panel: a text-paint area and an
     /// image-paint area side by side, each with a scrolling preview waterfall and
@@ -122,6 +140,29 @@ impl SdroxideApp {
                  1500 Hz black to 2300 Hz white, and a receiver a few hundred hertz off clips \
                  the picture to solid black or solid white.",
             );
+            // **A way to act on that number.** The readout turns yellow when the
+            // offset is too large, and until now it could only tell the operator
+            // that the picture would be blank: 480 Hz off is invisible to the ear
+            // on a fax (there is no pitch to judge) and fatal to the chart, which
+            // arrives as a white page with grey speckle. One press moves the dial
+            // by exactly what the decoder is measuring, so the subcarrier lands
+            // back on 1900 Hz.
+            if off.abs() > CENTRE_THRESHOLD_HZ as f32
+                && crate::chrome::chip(ui, false, "CENTRE")
+                    .on_hover_text(format!(
+                        "Nudge the dial {} Hz so the subcarrier sits on 1900 Hz again — the \
+                         receiver is {} Hz off, which is what turns the chart into a white \
+                         page.",
+                        if off > 0.0 { "+" } else { "" },
+                        format_args!("{off:.0}"),
+                    ))
+                    .clicked()
+            {
+                cmds.push(Command::SetVfo {
+                    vfo: self.state.active_vfo,
+                    hz: centred_dial_hz(self.state.active_freq_hz(), f64::from(st.subcarrier_hz)),
+                });
+            }
             self.digi_squelch_slider(ui, cmds);
 
             // Receive sensitivity. Not a volume: a fax is frequency modulated,
@@ -927,5 +968,29 @@ impl SdroxideApp {
             self.wefax.full_gone = false;
             self.wefax.confirm_delete = None;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{centred_dial_hz, CENTRE_THRESHOLD_HZ};
+
+    /// **The dial that puts the subcarrier back on 1900 Hz.**
+    ///
+    /// The audio reads `1900 + (actual carrier − dial)`, so a reading of
+    /// 1900 + 482 means the true carrier is 482 Hz above the dial, and the dial
+    /// moves by the same amount. Sign matters more than anything else here: a
+    /// chart is not something to be wrong about by a direction on the air.
+    #[test]
+    fn a_detuned_chart_can_be_centred_by_the_offset_it_reports() {
+        // A carrier 482 Hz high: dial up by 482.
+        assert_eq!(centred_dial_hz(13_880_600.0, 2382.0), 13_881_082.0);
+        // A carrier 300 Hz low: dial down by 300.
+        assert_eq!(centred_dial_hz(13_880_600.0, 1600.0), 13_880_300.0);
+        // Already centred: nothing moves.
+        assert_eq!(centred_dial_hz(13_880_600.0, 1900.0), 13_880_600.0);
+        // The threshold is the readout's own yellow: inside it, no offer.
+        assert!(120.0 <= CENTRE_THRESHOLD_HZ);
+        assert!(CENTRE_THRESHOLD_HZ <= 200.0, "a chart this far off is already unreadable");
     }
 }

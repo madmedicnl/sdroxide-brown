@@ -80,6 +80,9 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
 
 ## Open (In Progress)
 
+- **Aircraft window clean-up** (the operator, 2026-10-27) — ten PRs open,
+  #266–#274 and #276, none merged; see the journal entry of that date. Waiting on review
+  and on a look at the screen.
 - **Windows, for a tiling WM** (the operator, 2026-10-25/26) —
   [`WINDOWS-HANDOVER.md`](WINDOWS-HANDOVER.md), branch `local/windows`, **not
   pushed by design**. Steps 1–4 are done, `7574093c` fixed the Classic strip and

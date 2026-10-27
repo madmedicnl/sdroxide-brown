@@ -62,6 +62,19 @@ impl SdroxideApp {
         ui.add_space(3.0);
 
         let avail_h = (content_bottom - ui.cursor().top()).max(80.0);
+        self.vdl2_columns(ui, &st, now, avail_h);
+    }
+
+    /// The message log beside the station list: the VDL2 panel's body without
+    /// its header, drawn by the panel under the waterfall and by the Aircraft
+    /// window's VDL2 view.
+    pub(in crate::app) fn vdl2_columns(
+        &mut self,
+        ui: &mut egui::Ui,
+        st: &Vdl2Status,
+        now: i64,
+        avail_h: f32,
+    ) {
         let pane = self.phone_pane(ui, self.state.rx[0].mode);
         let full_w = ui.available_width();
 
@@ -79,14 +92,14 @@ impl SdroxideApp {
                         avail_h,
                     ),
                     egui::Layout::top_down(egui::Align::Min),
-                    |ui| self.vdl2_messages(ui, &st, avail_h),
+                    |ui| self.vdl2_messages(ui, st, avail_h),
                 );
             }
             if pane.is_none() {
                 ui.separator();
             }
             if pane.is_none_or(|p| p == 1) {
-                ui.vertical(|ui| self.vdl2_stations(ui, &st, now, avail_h));
+                ui.vertical(|ui| self.vdl2_stations(ui, st, now, avail_h));
             }
         });
     }

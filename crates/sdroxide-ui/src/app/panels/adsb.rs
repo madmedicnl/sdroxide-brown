@@ -45,19 +45,6 @@ pub(in crate::app) enum AdsbSort {
     Signal,
 }
 
-/// Below this the two signal columns come off the table. A row that has run out
-/// of room prints its columns on top of each other, which is worse than not
-/// printing them.
-const NARROW_W: f32 = 330.0;
-
-/// Above this there is room for the signal column too.
-///
-/// It is the sort key with no other home — every other one names a column the
-/// table already had — so it is drawn wherever it fits rather than left
-/// unreachable, and the divider beside the list is draggable for the widths
-/// where it does not.
-const WIDE_W: f32 = 430.0;
-
 impl SdroxideApp {
     pub(in crate::app) fn adsb_panel(
         &mut self,
@@ -337,13 +324,16 @@ impl SdroxideApp {
 
                 let mut rows: Vec<(&str, String)> = Vec::new();
                 if let Some(ft) = a.altitude_ft {
-                    rows.push(("altitude", format!("{ft} ft barometric")));
+                    rows.push((
+                        "altitude",
+                        format!("{} barometric", sdroxide_types::AirUnits::current().altitude(ft)),
+                    ));
                 }
                 if let Some(ft) = a.gnss_altitude_ft {
-                    rows.push(("GNSS altitude", format!("{ft} ft")));
+                    rows.push(("GNSS altitude", sdroxide_types::AirUnits::current().altitude(ft)));
                 }
                 if let Some(kt) = a.ground_speed_kt {
-                    rows.push(("ground speed", format!("{kt:.0} kt")));
+                    rows.push(("ground speed", sdroxide_types::AirUnits::current().speed(kt)));
                 }
                 if let Some(t) = a.track_deg {
                     rows.push(("track", format!("{t:.0}°")));
@@ -352,7 +342,10 @@ impl SdroxideApp {
                     rows.push(("turning", format!("{:.1}°/s", a.turn_rate_deg_s)));
                 }
                 if let Some(v) = a.vertical_rate_fpm {
-                    rows.push(("vertical rate", format!("{v:+} ft/min")));
+                    rows.push((
+                        "vertical rate",
+                        sdroxide_types::AirUnits::current().vertical_rate(v),
+                    ));
                 }
                 if a.squawk.is_some() {
                     rows.push(("squawk", a.fmt_squawk()));
@@ -360,7 +353,10 @@ impl SdroxideApp {
                 if let (Some((hlat, hlon)), Some((lat, lon))) = (home, a.lat.zip(a.lon)) {
                     let km = sdroxide_types::distance_km((hlat, hlon), (lat, lon));
                     let bear = sdroxide_types::bearing_deg((hlat, hlon), (lat, lon));
-                    rows.push(("range", format!("{km:.0} km at {bear:.0}°")));
+                    rows.push((
+                        "range",
+                        format!("{}  {bear:.0}°", sdroxide_types::AirUnits::current().distance(km)),
+                    ));
                 }
                 if let Some((lat, lon)) = a.lat.zip(a.lon) {
                     rows.push(("position", format!("{lat:.4}, {lon:.4}")));
@@ -374,7 +370,11 @@ impl SdroxideApp {
                     |ui| {
                         for (k, v) in rows {
                             ui.label(RichText::new(k).size(10.0).weak());
-                            ui.label(RichText::new(v).monospace().size(10.5));
+                            // Wrapped, never cut: "37000 ft barometric" ran out of
+                            // room beside its label and ended in an ellipsis.
+                            ui.add(
+                                egui::Label::new(RichText::new(v).monospace().size(10.5)).wrap(),
+                            );
                             ui.end_row();
                         }
                     },
@@ -563,11 +563,45 @@ impl SdroxideApp {
         self.show_adsb_setup = open;
     }
 
+    /// The three unit sets side by side: the operator picks the one that suits
+    /// them and the active one stays lit.
+    pub(in crate::app) fn air_units_picker(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            for u in sdroxide_types::AirUnits::ALL {
+                let on = self.ui_settings.air_units == u;
+                if crate::chrome::chip(ui, on, RichText::new(u.label().to_uppercase()).size(9.5))
+                    .on_hover_text(u.describe())
+                    .clicked()
+                    && !on
+                {
+                    self.ui_settings.air_units = u;
+                    u.set_current();
+                    crate::app::persist::persist_ui_settings(&self.ui_settings);
+                }
+            }
+        });
+    }
+
     /// The ADS-B setup's body, split out so the shell can draw it in a window of
     /// its own.
     fn adsb_setup_body(&mut self, ui: &mut egui::Ui, cfg: &mut sdroxide_types::AdsbSettings) {
         crate::chrome::window_body_bg(ui);
         egui::Grid::new("adsb-cfg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
+            ui.label("Units");
+            self.air_units_picker(ui);
+            ui.end_row();
+            ui.label("");
+            ui.label(
+                RichText::new(
+                    "How altitude, speed, climb rate and distance are written in the \
+                     aircraft views. The decoder and the exports are not affected.",
+                )
+                .size(10.0)
+                .weak(),
+            );
+            ui.end_row();
+
             ui.label("Drop from map after");
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut cfg.drop_map_s).range(2..=600).suffix(" s"));
@@ -657,6 +691,7 @@ fn adsb_head_row(ui: &mut egui::Ui, have_home: bool, sort: &mut AdsbSort, desc: 
     const L: egui::Align2 = egui::Align2::LEFT_CENTER;
     const R: egui::Align2 = egui::Align2::RIGHT_CENTER;
     let cols = columns(ui.available_width(), have_home);
+    let units = sdroxide_types::AirUnits::current();
     crate::app::panels::widgets::sort_head_row(
         ui,
         &[
@@ -664,13 +699,13 @@ fn adsb_head_row(ui: &mut egui::Ui, have_home: bool, sort: &mut AdsbSort, desc: 
             // The address is the callsign column's fallback, not an order
             // anybody wants a sky in.
             (cols.icao, L, "ICAO", None),
-            (cols.alt, R, "ALT", Some(AdsbSort::Altitude)),
-            (cols.spd, R, "GS", Some(AdsbSort::Speed)),
-            (cols.sig, R, "SIG", Some(AdsbSort::Signal)),
+            (cols.alt, R, units.altitude_head(), Some(AdsbSort::Altitude)),
+            (cols.spd, R, units.speed_head(), Some(AdsbSort::Speed)),
             (cols.trk, R, "TRK", None),
-            (cols.vs, R, "V/S", None),
+            (cols.vs, R, units.vertical_head(), None),
             (cols.sqk, R, "SQK", None),
-            (cols.range, R, "KM", Some(AdsbSort::Range)),
+            (cols.sig, R, "SIG", Some(AdsbSort::Signal)),
+            (cols.range, R, units.distance_head(), Some(AdsbSort::Range)),
             (cols.age, R, "AGE", Some(AdsbSort::Heard)),
         ],
         sort,
@@ -692,24 +727,57 @@ struct Cols {
     age: f32,
 }
 
+/// The right edge of the fixed left-hand group (callsign, address, altitude and
+/// speed) plus a little air. Everything to its right is the tail, which is laid
+/// out from the right edge and loses columns, least wanted first, rather than
+/// printing over the speed.
+const TAIL_START: f32 = 200.0;
+
 /// Where each column sits, given the width available.
 ///
-/// Fixed offsets rather than a layout, so the table reads down as well as
-/// across; the trailing columns drop out below [`NARROW_W`] rather than
-/// overprinting each other. `f32::NAN` means "not drawn".
+/// The left group is fixed so the table reads down as well as across. The tail
+/// reads TRK, V/S, SQK, SIG, then the range and the age at the right edge;
+/// when it does not fit, the columns come off in the order SIG, SQK, V/S, range,
+/// TRK, age — the signal strength is the least asked for, the age the most.
+/// `f32::NAN` means "not drawn".
 fn columns(w: f32, have_home: bool) -> Cols {
-    let age = w - 4.0;
-    let narrow = w < NARROW_W;
-    let range = if have_home && !narrow { age - 34.0 } else { f32::NAN };
-    let after_range = if range.is_nan() { age - 34.0 } else { range - 40.0 };
-    let sqk = if narrow { f32::NAN } else { after_range };
-    let vs = if narrow { f32::NAN } else { sqk - 40.0 };
-    let trk = if vs.is_nan() { after_range } else { vs - 44.0 };
-    // The last column to appear and the first to go: it is the only one whose
-    // heading has to clear the fixed left-hand group, and at [`WIDE_W`] it
-    // just does — with or without a range column between it and the edge.
-    let sig = if w < WIDE_W { f32::NAN } else { trk - 34.0 };
-    Cols { call: 5.0, icao: 62.0, alt: 158.0, spd: 196.0, sig, trk, vs, sqk, range, age }
+    // Left to right, with the room each takes (its widest text and the gap).
+    const TAIL: [(usize, f32); 6] =
+        [(0, 24.0), (1, 36.0), (2, 30.0), (3, 30.0), (4, 36.0), (5, 30.0)];
+    // Indices: 0 trk, 1 vs, 2 sqk, 3 sig, 4 range, 5 age.
+    const GOES: [usize; 6] = [3, 2, 1, 4, 0, 5];
+    let edge = w - 4.0;
+    let mut present = [true; 6];
+    present[4] = have_home;
+    let room = |present: &[bool; 6]| -> f32 {
+        TAIL.iter().filter(|(i, _)| present[*i]).map(|(_, slot)| slot).sum()
+    };
+    for drop in GOES {
+        if edge - room(&present) + 6.0 >= TAIL_START {
+            break;
+        }
+        present[drop] = false;
+    }
+    let mut x = [f32::NAN; 6];
+    let mut at = edge;
+    for (i, slot) in TAIL.iter().rev() {
+        if present[*i] {
+            x[*i] = at;
+            at -= slot;
+        }
+    }
+    Cols {
+        call: 5.0,
+        icao: 62.0,
+        alt: 158.0,
+        spd: 196.0,
+        trk: x[0],
+        vs: x[1],
+        sqk: x[2],
+        sig: x[3],
+        range: x[4],
+        age: x[5],
+    }
 }
 
 /// One row of the aircraft table. Returns true if it was clicked.
@@ -791,7 +859,10 @@ fn adsb_row(
     put(
         cols.vs,
         egui::Align2::RIGHT_CENTER,
-        a.vertical_rate_fpm.filter(|v| v.abs() >= 64).map(|v| format!("{v:+}")).unwrap_or_default(),
+        a.vertical_rate_fpm
+            .filter(|v| v.abs() >= 64)
+            .map(|v| sdroxide_types::AirUnits::current().vertical_rate_bare(v))
+            .unwrap_or_default(),
         small.clone(),
         dim,
     );
@@ -800,7 +871,11 @@ fn adsb_row(
         put(
             cols.range,
             egui::Align2::RIGHT_CENTER,
-            format!("{:.0}", sdroxide_types::distance_km(h, (lat, lon))),
+            format!(
+                "{:.0}",
+                sdroxide_types::AirUnits::current()
+                    .distance_value(sdroxide_types::distance_km(h, (lat, lon)))
+            ),
             small.clone(),
             dim,
         );
@@ -945,30 +1020,72 @@ mod tests {
         assert_eq!(count(4_500_000), "4.5M");
     }
 
-    /// The columns must not overlap at any width the panel can be dragged to,
-    /// and the trailing ones drop out rather than printing on top of each other.
+    /// Every column, at the widest thing it can hold, against every other one:
+    /// no two may touch at any width the panel can be dragged to, and nothing may
+    /// run off either edge. The earlier version of this test only looked at the
+    /// right-hand five, which is how GS and TRK came to print over each other.
     #[test]
-    fn the_columns_never_overprint_however_narrow_the_panel_gets() {
+    fn no_two_columns_ever_overprint_at_any_width() {
         let mut w = 200.0f32;
         while w < 900.0 {
             for have_home in [true, false] {
                 let c = columns(w, have_home);
-                let mut xs: Vec<f32> = [c.trk, c.vs, c.sqk, c.range, c.age]
-                    .into_iter()
-                    .filter(|x| !x.is_nan())
-                    .collect();
-                xs.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                for pair in xs.windows(2) {
+                // (name, anchor, widest text in points, right-aligned)
+                let mut spans: Vec<(&str, f32, f32)> = Vec::new();
+                let mut add = |name, x: f32, width: f32, right: bool| {
+                    if !x.is_nan() {
+                        spans.push(if right { (name, x - width, x) } else { (name, x, x + width) });
+                    }
+                };
+                add("call", c.call, 52.0, false);
+                add("icao", c.icao, 36.0, false);
+                add("alt", c.alt, 33.0, true);
+                add("spd", c.spd, 25.0, true);
+                add("trk", c.trk, 18.0, true);
+                add("vs", c.vs, 30.0, true);
+                add("sqk", c.sqk, 24.0, true);
+                add("sig", c.sig, 24.0, true);
+                add("range", c.range, 30.0, true);
+                add("age", c.age, 24.0, true);
+                spans.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                for pair in spans.windows(2) {
                     assert!(
-                        pair[1] - pair[0] >= 28.0,
-                        "columns {pair:?} collide at width {w} (home={have_home})"
+                        pair[1].1 - pair[0].2 >= 1.0,
+                        "{} and {} collide at width {w} (home={have_home}): {pair:?}",
+                        pair[0].0,
+                        pair[1].0
                     );
                 }
-                if w < NARROW_W {
-                    assert!(c.sqk.is_nan() && c.vs.is_nan(), "narrow panels drop the tail");
+                for (name, l, r) in &spans {
+                    assert!(*l >= 0.0 && *r <= w, "{name} leaves the row at width {w}");
                 }
             }
-            w += 7.0;
+            w += 3.0;
         }
+    }
+
+    /// Reading left to right the table is CALL ICAO ALT GS TRK V/S SQK SIG, then
+    /// range and age: the signal strength is the least wanted, so it is the
+    /// first to go and sits next to the range it belongs with.
+    #[test]
+    fn the_columns_keep_their_order_and_the_signal_goes_first() {
+        let c = columns(900.0, true);
+        let order = [c.call, c.icao, c.alt, c.spd, c.trk, c.vs, c.sqk, c.sig, c.range, c.age];
+        assert!(order.iter().all(|x| !x.is_nan()), "{order:?}");
+        assert!(order.windows(2).all(|p| p[0] < p[1]), "{order:?}");
+        let mut w = 900.0f32;
+        let mut gone = Vec::new();
+        while w > 200.0 {
+            let c = columns(w, true);
+            for (n, x) in
+                [("sig", c.sig), ("sqk", c.sqk), ("vs", c.vs), ("range", c.range), ("trk", c.trk)]
+            {
+                if x.is_nan() && !gone.contains(&n) {
+                    gone.push(n);
+                }
+            }
+            w -= 3.0;
+        }
+        assert_eq!(gone, ["sig", "sqk", "vs", "range", "trk"]);
     }
 }

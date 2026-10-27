@@ -779,6 +779,9 @@ impl eframe::App for SdroxideApp {
         // Which radio the ids minted below belong to. Split view draws several
         // apps per frame; each declares itself before it draws anything.
         crate::layout::set_radio_salt(&ctx, self.radio_id);
+        // The aircraft views write their numbers in this set; read once here so
+        // a formatter several calls down needs no argument.
+        self.ui_settings.air_units.set_current();
         // The screen wake lock is re-asked for every frame it is wanted and
         // missing: the browser takes it back whenever the page is hidden.
         crate::wake_lock::keep_awake(self.ui_settings.keep_screen_on, now);

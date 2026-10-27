@@ -27,9 +27,9 @@ use super::aircraft_history::{self, HistoryOffer, HistoryState};
 use super::aircraft_online::{self, Badge, Provenance, ThumbStatus};
 use super::aircraft_search;
 use super::aircraft_share;
-use sdroxide_aircraft_history::export::Format;
 use super::aircraft_stats::{self, SortBy, Stats};
 use super::aircraft_watch::{self, WatchState};
+use sdroxide_aircraft_history::export::Format;
 
 /// The opening size of the window and its floor.
 const AIRCRAFT_SIZE: [f32; 2] = [920.0, 560.0];
@@ -66,6 +66,49 @@ const MODES: &[AirMode] = &[
     },
 ];
 
+/// Where ACARS is put when the dial is nowhere near the airband: a widely used
+/// channel. (VDL2 and ADS-B are retuned by the engine itself.)
+const ACARS_DEFAULT_HZ: f64 = 131_725_000.0;
+const AIRBAND_HZ: std::ops::RangeInclusive<f64> = 118_000_000.0..=137_000_000.0;
+
+/// What a click on a mode button sends.
+///
+/// **`SetModeListen`, not `SetMode`.** The engine refuses `SetMode` for a mode
+/// the current band does not carry, and the band table lists HFDL only on
+/// shortwave, VDL2 and ACARS only on the airband, and ADS-B on none of the
+/// service bands: on the airband the ADS-B and HFDL buttons did nothing but put
+/// a notice in the top bar. These buttons are the aviation tools and have to
+/// work wherever the radio is, which is what the listener path is for.
+///
+/// HFDL's decoder only runs when it is enabled, so the button enables it and
+/// brings the dial to its channel. ACARS takes the dial to a channel only when
+/// it is not already in the airband, so a frequency the operator chose is never
+/// moved; VDL2 and ADS-B are retuned by the engine on the mode change.
+fn mode_commands(
+    mode: Mode,
+    hfdl: &sdroxide_types::HfdlSettings,
+    vfo: sdroxide_types::Vfo,
+    dial_hz: f64,
+) -> Vec<Command> {
+    let mut out = vec![Command::SetModeListen { rx: RxId::Main, mode }];
+    match mode {
+        Mode::Hfdl => {
+            if !hfdl.enabled {
+                out.push(Command::SetHfdlConfig(sdroxide_types::HfdlSettings {
+                    enabled: true,
+                    ..*hfdl
+                }));
+            }
+            out.push(Command::SetVfo { vfo, hz: hfdl.frequency_hz });
+        }
+        Mode::Acars if !AIRBAND_HZ.contains(&dial_hz) => {
+            out.push(Command::SetVfo { vfo, hz: ACARS_DEFAULT_HZ });
+        }
+        _ => {}
+    }
+    out
+}
+
 const COLUMN_W: f32 = 104.0;
 const BUTTON_H: f32 = 30.0;
 const LIST_W: f32 = 230.0;
@@ -89,13 +132,23 @@ fn chip(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
 /// The badge in front of a line: green for the radio, blue for the relay, and
 /// nothing for a gap, whose "—" says it.
 pub(in crate::app) fn badge_chip(ui: &mut egui::Ui, badge: Badge) {
-    match badge {
-        Badge::Radio => chip(ui, "radio", RADIO_GREEN),
-        Badge::Online => chip(ui, "online", ONLINE_BLUE),
-        Badge::History => chip(ui, "history", HISTORY_VIOLET),
-        Badge::Missing => {
+    match badge_look(badge) {
+        Some((text, color)) => chip(ui, text, color),
+        None => {
             ui.label("");
         }
+    }
+}
+
+/// What a badge shows. The radio's is not drawn: the card's header already says
+/// where the data comes from as a whole, and a green "radio" on every line
+/// repeated it ten times. Only the lines that are *not* from the radio are
+/// marked, which makes the mark mean something.
+pub(in crate::app) fn badge_look(badge: Badge) -> Option<(&'static str, egui::Color32)> {
+    match badge {
+        Badge::Radio | Badge::Missing => None,
+        Badge::Online => Some(("online", ONLINE_BLUE)),
+        Badge::History => Some(("history", HISTORY_VIOLET)),
     }
 }
 
@@ -300,105 +353,118 @@ impl super::SdroxideApp {
                 egui::vec2(COLUMN_W, h),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    crate::chrome::menu_caption(ui, "Aviation");
-                    for m in MODES {
-                        let b = crate::chrome::chip_sized(
-                            ui,
-                            mode_chip_lit(
-                                m.mode,
-                                shown,
-                                self.aircraft_cards
-                                    || self.aircraft_watch_view
-                                    || self.aircraft_stats_view,
-                            ),
-                            m.label,
-                            egui::vec2(COLUMN_W - 8.0, BUTTON_H),
-                        )
-                        .on_hover_text(m.hover);
-                        if b.clicked() {
-                            self.aircraft_view = m.mode;
-                            self.aircraft_cards = false;
-                            self.aircraft_watch_view = false;
-                            self.aircraft_stats_view = false;
-                            cmds.push(Command::SetMode { rx: RxId::Main, mode: m.mode });
-                        }
-                    }
-                    ui.add_space(6.0);
-                    let n = self.aircraft_registry.len() + self.aircraft_registry.fallback_len();
-                    let b = crate::chrome::chip_sized(
-                        ui,
-                        self.aircraft_cards,
-                        format!("Cards {n}"),
-                        egui::vec2(COLUMN_W - 8.0, BUTTON_H),
-                    )
-                    .on_hover_text(
-                        "Every aircraft heard on ADS-B, VDL2, HFDL and ACARS, one card each — \
-                         kept for ten minutes, whichever mode the radio is on now",
-                    );
-                    if b.clicked() {
-                        self.aircraft_cards = !self.aircraft_cards;
-                        self.aircraft_watch_view = false;
-                        self.aircraft_stats_view = false;
-                    }
-                    let unseen = self.aircraft_tracker.unseen();
-                    let n = self.aircraft_online.watch.list().len();
-                    let b = crate::chrome::chip_sized(
-                        ui,
-                        self.aircraft_watch_view,
-                        format!("Watch {n}{}", aircraft_watch::chip_suffix(unseen)),
-                        egui::vec2(COLUMN_W - 8.0, BUTTON_H),
-                    )
-                    .on_hover_text(
-                        "Aircraft you asked to be told about, by callsign or registration — \
-                         the list is kept by the station, and an alert is shown when one comes \
-                         on the air",
-                    );
-                    if b.clicked() {
-                        self.aircraft_watch_view = !self.aircraft_watch_view;
-                        self.aircraft_cards = false;
-                    }
-                    let b = crate::chrome::chip_sized(
-                        ui,
-                        self.aircraft_stats_view,
-                        "Stats",
-                        egui::vec2(COLUMN_W - 8.0, BUTTON_H),
-                    )
-                    .on_hover_text(
-                        "The most common categories, airlines, models, operators and routes \
-                         among the aircraft this station knows — counted from the radio first, \
-                         with the relay's cards as a complement",
-                    );
-                    if b.clicked() {
-                        self.aircraft_stats_view = !self.aircraft_stats_view;
-                        self.aircraft_cards = false;
-                    }
-                    ui.add_space(6.0);
-                    crate::chrome::menu_caption(ui, "Export");
-                    for (format, hover) in [
-                        (
-                            Format::Csv,
-                            "Save the aircraft as a CSV table for a spreadsheet: the station\u{2019}s \
-                             last 24 hours if it keeps a history, else what is heard now. No \
-                             positions.",
-                        ),
-                        (
-                            Format::Json,
-                            "Save the aircraft as JSON: the station\u{2019}s last 24 hours if it \
-                             keeps a history, else what is heard now. No positions.",
-                        ),
-                    ] {
-                        let label = format.ext().to_ascii_uppercase();
-                        let b = crate::chrome::chip_sized(
-                            ui,
-                            self.aircraft_online.export.busy(),
-                            label,
-                            egui::vec2(COLUMN_W - 8.0, BUTTON_H),
-                        )
-                        .on_hover_text(hover);
-                        if b.clicked() {
-                            self.aircraft_online.export.start(format);
-                        }
-                    }
+                    // The column is taller than the window's smallest size (four
+                    // modes, three views and the export pair at 30 pt each), so it
+                    // scrolls rather than cutting the export buttons off.
+                    egui::ScrollArea::vertical()
+                        .id_salt("aircraft_modes")
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            crate::chrome::menu_caption(ui, "Aviation");
+                            for m in MODES {
+                                let b = crate::chrome::chip_sized(
+                                    ui,
+                                    mode_chip_lit(
+                                        m.mode,
+                                        shown,
+                                        self.aircraft_cards
+                                            || self.aircraft_watch_view
+                                            || self.aircraft_stats_view,
+                                    ),
+                                    m.label,
+                                    egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                                )
+                                .on_hover_text(m.hover);
+                                if b.clicked() {
+                                    self.aircraft_view = m.mode;
+                                    self.aircraft_cards = false;
+                                    self.aircraft_watch_view = false;
+                                    self.aircraft_stats_view = false;
+                                    cmds.extend(mode_commands(
+                                        m.mode,
+                                        &self.state.hfdl,
+                                        self.state.active_vfo,
+                                        self.state.active_freq_hz(),
+                                    ));
+                                }
+                            }
+                            ui.add_space(6.0);
+                            let n = self.aircraft_registry.len() + self.aircraft_registry.fallback_len();
+                            let b = crate::chrome::chip_sized(
+                                ui,
+                                self.aircraft_cards,
+                                format!("Cards {n}"),
+                                egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                            )
+                            .on_hover_text(
+                                "Every aircraft heard on ADS-B, VDL2, HFDL and ACARS, one card each — \
+                                 kept for ten minutes, whichever mode the radio is on now",
+                            );
+                            if b.clicked() {
+                                self.aircraft_cards = !self.aircraft_cards;
+                                self.aircraft_watch_view = false;
+                                self.aircraft_stats_view = false;
+                            }
+                            let unseen = self.aircraft_tracker.unseen();
+                            let n = self.aircraft_online.watch.list().len();
+                            let b = crate::chrome::chip_sized(
+                                ui,
+                                self.aircraft_watch_view,
+                                format!("Watch {n}{}", aircraft_watch::chip_suffix(unseen)),
+                                egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                            )
+                            .on_hover_text(
+                                "Aircraft you asked to be told about, by callsign or registration — \
+                                 the list is kept by the station, and an alert is shown when one comes \
+                                 on the air",
+                            );
+                            if b.clicked() {
+                                self.aircraft_watch_view = !self.aircraft_watch_view;
+                                self.aircraft_cards = false;
+                            }
+                            let b = crate::chrome::chip_sized(
+                                ui,
+                                self.aircraft_stats_view,
+                                "Stats",
+                                egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                            )
+                            .on_hover_text(
+                                "The most common categories, airlines, models, operators and routes \
+                                 among the aircraft this station knows — counted from the radio first, \
+                                 with the relay's cards as a complement",
+                            );
+                            if b.clicked() {
+                                self.aircraft_stats_view = !self.aircraft_stats_view;
+                                self.aircraft_cards = false;
+                            }
+                            ui.add_space(6.0);
+                            crate::chrome::menu_caption(ui, "Export");
+                            for (format, hover) in [
+                                (
+                                    Format::Csv,
+                                    "Save the aircraft as a CSV table for a spreadsheet: the station\u{2019}s \
+                                     last 24 hours if it keeps a history, else what is heard now. No \
+                                     positions.",
+                                ),
+                                (
+                                    Format::Json,
+                                    "Save the aircraft as JSON: the station\u{2019}s last 24 hours if it \
+                                     keeps a history, else what is heard now. No positions.",
+                                ),
+                            ] {
+                                let label = format.ext().to_ascii_uppercase();
+                                let b = crate::chrome::chip_sized(
+                                    ui,
+                                    self.aircraft_online.export.busy(),
+                                    label,
+                                    egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                                )
+                                .on_hover_text(hover);
+                                if b.clicked() {
+                                    self.aircraft_online.export.start(format);
+                                }
+                            }
+                        });
                 },
             );
             ui.vertical(|ui| {
@@ -448,6 +514,7 @@ impl super::SdroxideApp {
         let peer = self.ctrl.peer_url();
         self.aircraft_online.poll(ctx, now);
         self.aircraft_online.ask_watch(ctx, peer.as_deref(), now);
+        self.aircraft_online.ask_switch(ctx, peer.as_deref());
         // Until the station has said what the list is there is nothing to watch.
         if !matches!(self.aircraft_online.watch.state(), WatchState::Ready) {
             return;
@@ -783,6 +850,7 @@ impl super::SdroxideApp {
                     }
                     ui.add_space(6.0);
                     rows_grid(ui, "aircraft_card_fields", card_rows);
+                    self.online_switch_row(ui, &state);
                     if let Some(i) = icao.filter(|i| self.aircraft_online.history.on() == Some(*i))
                     {
                         ui.add_space(6.0);
@@ -815,6 +883,47 @@ impl super::SdroxideApp {
         if picked.is_some() {
             self.aircraft_card_sel = picked;
         }
+    }
+
+    /// The switch for the station's online lookup, drawn under the card's lines.
+    ///
+    /// Off is the default, because it makes the station reach out to adsbdb and
+    /// Planespotters; and an operator cannot be expected to set an environment
+    /// variable on the station, so the window offers the switch itself. The
+    /// station keeps the choice across restarts.
+    fn online_switch_row(&mut self, ui: &mut egui::Ui, state: &aircraft_online::OnlineState) {
+        use aircraft_online::{OnlineState, Reason};
+        let on = match state {
+            OnlineState::Unavailable(Reason::Disabled) => false,
+            OnlineState::Ready(_) => true,
+            _ => return,
+        };
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if self.aircraft_online.switch_asking {
+                ui.label(RichText::new("asking the station…").size(10.5).weak());
+            } else if !on {
+                let b = ui.button("Turn on online lookup").on_hover_text(
+                    "Photos, type, operator and route come from adsbdb and Planespotters. \
+                     Your station asks them for you, and only when this is on; it keeps \
+                     your choice. Nothing else leaves the station.",
+                );
+                if b.clicked() {
+                    self.aircraft_online.want_switch(true);
+                }
+            } else if ui
+                .small_button("Turn off online lookup")
+                .on_hover_text("Stop the station asking adsbdb and Planespotters.")
+                .clicked()
+            {
+                self.aircraft_online.want_switch(false);
+            }
+            if let Some(why) = self.aircraft_online.switch_note {
+                ui.label(
+                    RichText::new(format!("Not changed: {why}.")).size(10.5).color(WATCH_AMBER),
+                );
+            }
+        });
     }
 
     /// The photo, its credit and the link to its page. The credit and the link
@@ -872,18 +981,29 @@ impl super::SdroxideApp {
                     ui.label(RichText::new("No ADS-B heard yet.").weak());
                 }
             },
-            Mode::Hfdl => self.hfdl_map_pane(ui, now, map_h),
+            Mode::Hfdl => {
+                if !self.state.hfdl.enabled {
+                    ui.label(
+                        RichText::new("The HFDL decoder is off — press HFDL to switch it on.")
+                            .size(11.0)
+                            .color(crate::theme::YELLOW()),
+                    );
+                }
+                self.hfdl_map_pane(ui, now, map_h)
+            }
+            // VDL2 and ACARS carry a position only now and then, so what the
+            // window shows for them is what they actually hear: the messages and
+            // the stations (VDL2), the message log (ACARS). An aircraft that is
+            // also heard on ADS-B shows on the ADS-B map.
+            Mode::Vdl2 => match self.vdl2_status.as_deref().cloned() {
+                Some(st) => self.vdl2_columns(ui, &st, now, map_h),
+                None => {
+                    ui.label(RichText::new("Starting the VDL2 decoder…").weak());
+                }
+            },
+            Mode::Acars => self.acars_panel(ui, cmds, map_h),
             _ => {
-                ui.add_space(6.0);
-                ui.label(
-                    RichText::new(format!(
-                        "{label} has no map of its own: it carries a position only now and then. \
-                         The messages are in the panel under the waterfall, and an aircraft heard \
-                         here that also sends ADS-B shows on the ADS-B map."
-                    ))
-                    .size(11.5)
-                    .color(crate::theme::gray(160)),
-                );
+                ui.label(RichText::new(format!("{label} has no view here.")).weak());
             }
         }
     }
@@ -891,7 +1011,77 @@ impl super::SdroxideApp {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_lines_that_are_not_from_the_radio_wear_a_badge() {
+        assert!(super::badge_look(Badge::Radio).is_none());
+        assert!(super::badge_look(Badge::Missing).is_none());
+        assert_eq!(super::badge_look(Badge::Online).map(|b| b.0), Some("online"));
+        assert_eq!(super::badge_look(Badge::History).map(|b| b.0), Some("history"));
+    }
+
     use super::*;
+
+    /// At the window's smallest size (560 x 320) the column of buttons is taller
+    /// than the window, and the export buttons were cut off with no way to them.
+    #[test]
+    fn the_button_column_scrolls_so_a_small_window_does_not_cut_it_off() {
+        let src = include_str!("aircraft.rs");
+        let body = &src[..src.find("#[cfg(test)]").unwrap()];
+        assert!(body.contains("id_salt(\"aircraft_modes\")"));
+    }
+
+    /// The operator's screenshot: VDL2 selected and the right-hand side empty bar
+    /// a sentence. Every mode button now has a view that shows what it hears.
+    #[test]
+    fn no_aviation_button_is_left_with_an_empty_map() {
+        let src = include_str!("aircraft.rs");
+        let body = &src[..src.find("#[cfg(test)]").unwrap()];
+        assert!(!body.contains("has no map of its own"), "the placeholder is back");
+        for arm in ["Mode::Adsb =>", "Mode::Hfdl =>", "Mode::Vdl2 =>", "Mode::Acars =>"] {
+            assert!(body.contains(arm), "aircraft_map has no view for {arm}");
+        }
+    }
+
+    #[test]
+    fn an_aviation_button_never_sends_the_band_checked_set_mode() {
+        let hfdl = sdroxide_types::HfdlSettings::default();
+        for m in MODES {
+            let cmds = mode_commands(m.mode, &hfdl, sdroxide_types::Vfo::A, 7_000_000.0);
+            assert!(
+                matches!(cmds[0], Command::SetModeListen { mode, .. } if mode == m.mode),
+                "{:?}: {cmds:?}",
+                m.mode
+            );
+            assert!(!cmds.iter().any(|c| matches!(c, Command::SetMode { .. })), "{cmds:?}");
+        }
+    }
+
+    #[test]
+    fn the_hfdl_button_switches_the_decoder_on_and_goes_to_its_channel() {
+        let off = sdroxide_types::HfdlSettings { enabled: false, frequency_hz: 8_912_000.0 };
+        let cmds = mode_commands(Mode::Hfdl, &off, sdroxide_types::Vfo::A, 145_000_000.0);
+        assert!(
+            cmds.iter().any(|c| matches!(c, Command::SetHfdlConfig(h) if h.enabled)),
+            "{cmds:?}"
+        );
+        assert!(cmds.iter().any(|c| matches!(c, Command::SetVfo { hz, .. } if *hz == 8_912_000.0)));
+        let on = sdroxide_types::HfdlSettings { enabled: true, ..off };
+        let cmds = mode_commands(Mode::Hfdl, &on, sdroxide_types::Vfo::A, 8_912_000.0);
+        assert!(!cmds.iter().any(|c| matches!(c, Command::SetHfdlConfig(_))));
+    }
+
+    #[test]
+    fn acars_leaves_a_dial_that_is_already_in_the_airband() {
+        let hfdl = sdroxide_types::HfdlSettings::default();
+        let moved = mode_commands(Mode::Acars, &hfdl, sdroxide_types::Vfo::A, 7_000_000.0);
+        assert!(
+            moved
+                .iter()
+                .any(|c| matches!(c, Command::SetVfo { hz, .. } if *hz == ACARS_DEFAULT_HZ))
+        );
+        let kept = mode_commands(Mode::Acars, &hfdl, sdroxide_types::Vfo::A, 131_550_000.0);
+        assert_eq!(kept.len(), 1, "{kept:?}");
+    }
 
     #[test]
     fn every_button_is_a_mode_the_band_menu_can_set() {

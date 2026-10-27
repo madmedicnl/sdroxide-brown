@@ -25,7 +25,7 @@ use eframe::egui;
 use super::aircraft_export::ExportStore;
 use super::aircraft_history::{self, HistoryStore};
 use super::aircraft_online::{
-    Answer, OnlineStore, ThumbStatus, Want, classify, info_url, thumb_fetchable,
+    self, Answer, OnlineStore, ThumbStatus, Want, classify, info_url, thumb_fetchable,
 };
 use super::aircraft_stats::{self, StatsStore};
 use super::aircraft_watch::{self, WatchStore};
@@ -43,6 +43,8 @@ const MAX_WATCH_BYTES: u64 = 16 * 1024;
 /// The most bytes read of the station's list of everything it kept: up to 4000
 /// aircraft, a few hundred bytes each.
 const MAX_STATS_BYTES: u64 = 4 * 1024 * 1024;
+/// The most bytes read of the answer to the relay switch: two booleans.
+const MAX_SWITCH_BYTES: u64 = 1024;
 /// The most bytes read of a thumbnail. They are a few tens of kilobytes.
 const MAX_THUMB_BYTES: u64 = 2 * 1024 * 1024;
 /// Widest or tallest a thumbnail may decode to.
@@ -56,6 +58,7 @@ enum Msg {
     Export { status: Option<u16>, body: String },
     Watch { status: Option<u16>, body: String },
     Stats { status: Option<u16>, body: String },
+    Switch { status: Option<u16>, body: String },
     Thumb { url: String, bytes: Option<Vec<u8>> },
 }
 
@@ -76,6 +79,12 @@ pub(in crate::app) struct OnlineClient {
     pub watch: WatchStore,
     /// The station's list of every aircraft it kept, for the statistics view.
     pub stats: StatsStore,
+    /// A request to switch the station's online relay, waiting to be sent.
+    switch_wanted: Option<bool>,
+    /// A request is out and its answer not yet in.
+    pub switch_asking: bool,
+    /// Why the last request to switch did not work, if it did not.
+    pub switch_note: Option<&'static str>,
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
     thumbs: Vec<Thumb>,
@@ -90,6 +99,9 @@ impl Default for OnlineClient {
             export: ExportStore::default(),
             watch: WatchStore::default(),
             stats: StatsStore::default(),
+            switch_wanted: None,
+            switch_asking: false,
+            switch_note: None,
             tx,
             rx,
             thumbs: Vec::new(),
@@ -133,6 +145,19 @@ impl OnlineClient {
                 }
                 Msg::Watch { status, body } => {
                     self.watch.deliver(aircraft_watch::classify(status, &body), now);
+                }
+                Msg::Switch { status, body } => {
+                    self.switch_asking = false;
+                    match aircraft_online::classify_switch(status, &body) {
+                        aircraft_online::SwitchAnswer::On => {
+                            self.switch_note = None;
+                            self.store.unblock();
+                        }
+                        aircraft_online::SwitchAnswer::Off => self.switch_note = None,
+                        aircraft_online::SwitchAnswer::Refused(why) => {
+                            self.switch_note = Some(why);
+                        }
+                    }
                 }
                 Msg::Stats { status, body } => {
                     self.stats.deliver(aircraft_stats::classify(status, &body), now);
@@ -220,6 +245,26 @@ impl OnlineClient {
         send_info(url, station, Kind::Watch, post, self.tx.clone(), ctx.clone());
     }
 
+    /// Ask to switch the station's online relay on or off; the request goes
+    /// out on the next [`Self::ask_switch`].
+    pub(in crate::app) fn want_switch(&mut self, on: bool) {
+        self.switch_wanted = Some(on);
+        self.switch_note = None;
+    }
+
+    /// Send the switch request if one was asked for. Without a station there is
+    /// nobody to switch, and the note says so.
+    pub(in crate::app) fn ask_switch(&mut self, ctx: &egui::Context, peer: Option<&str>) {
+        let Some(on) = self.switch_wanted.take() else { return };
+        let Some(url) = peer.and_then(|p| aircraft_online::switch_url(p, on)) else {
+            self.switch_note = Some("there is no station to switch");
+            return;
+        };
+        let station = peer.map(crate::login::station_key).unwrap_or_default();
+        self.switch_asking = true;
+        send_info(url, station, Kind::Switch, Some(String::new()), self.tx.clone(), ctx.clone());
+    }
+
     /// Fetch the station's list for the statistics view, if the store says one
     /// is due. Closed, or without a station, nothing is sent.
     pub(in crate::app) fn ask_stats(&mut self, ctx: &egui::Context, peer: Option<&str>, now: i64) {
@@ -302,6 +347,7 @@ enum Kind {
     Export,
     Watch,
     Stats,
+    Switch,
 }
 
 impl Kind {
@@ -312,6 +358,7 @@ impl Kind {
             Kind::Export => MAX_EXPORT_BYTES,
             Kind::Watch => MAX_WATCH_BYTES,
             Kind::Stats => MAX_STATS_BYTES,
+            Kind::Switch => MAX_SWITCH_BYTES,
         }
     }
 
@@ -322,6 +369,7 @@ impl Kind {
             Kind::Export => Msg::Export { status, body },
             Kind::Watch => Msg::Watch { status, body },
             Kind::Stats => Msg::Stats { status, body },
+            Kind::Switch => Msg::Switch { status, body },
         }
     }
 }
@@ -345,7 +393,10 @@ fn get_info(
             req.call().ok()?
         }
         Some(body) => {
-            let mut req = agent.post(url).header("content-type", "application/json");
+            let mut req = agent
+                .post(url)
+                .header("content-type", "application/json")
+                .header("x-sdroxide", "1");
             if let Some(c) = cookie {
                 req = req.header("Cookie", c);
             }
@@ -434,6 +485,7 @@ async fn fetch(url: &str, info: bool, post: Option<&str>) -> Option<web_sys::Res
             init.set_method("POST");
             let headers = web_sys::Headers::new().ok()?;
             headers.set("content-type", "application/json").ok()?;
+            headers.set("x-sdroxide", "1").ok()?;
             init.set_headers(&headers);
             init.set_body(&wasm_bindgen::JsValue::from_str(body));
         }

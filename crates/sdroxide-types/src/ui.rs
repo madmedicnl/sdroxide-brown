@@ -1274,6 +1274,11 @@ pub struct UiSettings {
     /// data in `sdroxide-ui`'s `basemap` — but the choice is.
     #[serde(default)]
     pub survey_map_style: MapStyle,
+    /// **Units for the aircraft views** — aviation (feet, knots, km), metric
+    /// (metres, km/h, m/s, km) or imperial (feet, mph, miles). Presentation
+    /// only; the decoder and the wire stay in feet and knots.
+    #[serde(default)]
+    pub air_units: crate::AirUnits,
     /// **Classic UI** — every control in one column down the left, the way
     /// SDR++ and SDR++Brown lay theirs out, with each group a section that
     /// folds away.
@@ -1688,6 +1693,7 @@ impl Default for UiSettings {
             broadcast_scope: BroadcastScope::default(),
             broadcast_labels_all: false,
             survey_map_style: MapStyle::default(),
+            air_units: crate::AirUnits::default(),
             classic_ui: false,
             classic_sections: String::new(),
             tool_windows_open: 0,

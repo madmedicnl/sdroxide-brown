@@ -60,12 +60,12 @@ impl Reason {
     pub(in crate::app) fn note(self) -> Option<&'static str> {
         match self {
             Reason::Disabled => {
-                Some("online indisponible — the station has not switched the relay on")
+                Some("online unavailable — the station has not switched the relay on")
             }
             Reason::NoStation => {
-                Some("online indisponible — no station to ask; the radio data is all there is")
+                Some("online unavailable — no station to ask; the radio data is all there is")
             }
-            Reason::Unauthorized => Some("online indisponible — not signed in to the station"),
+            Reason::Unauthorized => Some("online unavailable — not signed in to the station"),
             Reason::Offline | Reason::Busy | Reason::Unknown => None,
         }
     }
@@ -165,6 +165,47 @@ pub(in crate::app) fn info_url(peer_url: &str, want: &Want) -> Option<String> {
     Some(url)
 }
 
+/// Where the switch request goes: `POST {station}/aircraft-online?on=1|0`.
+pub(in crate::app) fn switch_url(peer_url: &str, on: bool) -> Option<String> {
+    let base = crate::login::http_base(&crate::login::station_key(peer_url))?;
+    Some(format!("{base}/aircraft-online?on={}", u8::from(on)))
+}
+
+/// What the station answered to a request to switch the relay.
+#[derive(Debug, Clone, PartialEq)]
+pub(in crate::app) enum SwitchAnswer {
+    /// The relay is on now.
+    On,
+    /// The relay is off now.
+    Off,
+    /// It did not change, and the sentence says why.
+    Refused(&'static str),
+}
+
+/// Read the reply to a switch request.
+pub(in crate::app) fn classify_switch(http_status: Option<u16>, body: &str) -> SwitchAnswer {
+    match http_status {
+        None => SwitchAnswer::Refused("the station did not answer"),
+        Some(401) => SwitchAnswer::Refused("not signed in to the station"),
+        Some(403) => SwitchAnswer::Refused("the station refused the request"),
+        Some(200) => {
+            #[derive(serde::Deserialize)]
+            struct Reply {
+                enabled: bool,
+            }
+            match serde_json::from_str::<Reply>(body) {
+                Ok(r) if r.enabled => SwitchAnswer::On,
+                Ok(_) => SwitchAnswer::Off,
+                Err(_) => {
+                    SwitchAnswer::Refused("the station does not offer this switch (too old?)")
+                }
+            }
+        }
+        Some(404) => SwitchAnswer::Refused("the station does not offer this switch (too old?)"),
+        Some(_) => SwitchAnswer::Refused("the station could not change it"),
+    }
+}
+
 struct Entry {
     state: OnlineState,
     /// When a failure may be asked again; `None` is not this session.
@@ -189,6 +230,14 @@ pub(in crate::app) struct OnlineStore {
 }
 
 impl OnlineStore {
+    /// Forget that the station said no: the relay has just been switched on,
+    /// so every card may ask again. Cards that did get an answer keep it.
+    pub(in crate::app) fn unblock(&mut self) {
+        self.blocked = None;
+        self.in_flight = None;
+        self.entries.retain(|_, e| matches!(e.state, OnlineState::Ready(_)));
+    }
+
     #[cfg(test)]
     pub(in crate::app) fn len(&self) -> usize {
         self.entries.len()
@@ -487,6 +536,56 @@ pub(in crate::app) fn photo_view(state: &OnlineState, thumb: ThumbStatus) -> Opt
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_switch_request_names_the_station_and_the_state_wanted() {
+        assert_eq!(
+            switch_url("wss://shack.example/sdr/ws/2", true).as_deref(),
+            Some("https://shack.example/sdr/aircraft-online?on=1")
+        );
+        assert_eq!(
+            switch_url("ws://shack.test:4950/ws", false).as_deref(),
+            Some("http://shack.test:4950/aircraft-online?on=0")
+        );
+        assert_eq!(switch_url("not an address", true), None);
+    }
+
+    #[test]
+    fn a_reply_to_the_switch_is_read_and_a_refusal_says_why() {
+        assert_eq!(
+            classify_switch(Some(200), r#"{"enabled":true,"forced":false}"#),
+            SwitchAnswer::On
+        );
+        assert_eq!(
+            classify_switch(Some(200), r#"{"enabled":false,"forced":false}"#),
+            SwitchAnswer::Off
+        );
+        for (status, body) in [
+            (None, ""),
+            (Some(401), ""),
+            (Some(403), ""),
+            (Some(404), ""),
+            (Some(200), "<html>"),
+            (Some(500), ""),
+        ] {
+            assert!(
+                matches!(classify_switch(status, body), SwitchAnswer::Refused(_)),
+                "{status:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn switching_the_relay_on_lets_every_card_ask_again_and_keeps_the_answers_it_has() {
+        let mut s = OnlineStore::default();
+        let w = |icao| Want { icao, callsign: None, registration: None };
+        assert!(s.next_request(Some(&w(1)), true, 0).is_some());
+        s.deliver(1, Answer::Unavailable(Reason::Disabled), 1);
+        assert_eq!(s.state_for(2, true), &OnlineState::Unavailable(Reason::Disabled));
+        assert!(s.next_request(Some(&w(2)), true, 2).is_none(), "blocked while the relay is off");
+        s.unblock();
+        assert_eq!(s.state_for(2, true), &OnlineState::Idle);
+        assert!(s.next_request(Some(&w(2)), true, 3).is_some(), "asks again after the switch");
+    }
     use super::super::aircraft_card::lines;
     use super::super::aircraft_registry::{Source, Stamped};
     use super::*;
@@ -695,8 +794,8 @@ mod tests {
 
     #[test]
     fn only_a_switched_off_relay_or_a_missing_station_says_so_on_the_card() {
-        assert!(Reason::Disabled.note().unwrap().contains("online indisponible"));
-        assert!(Reason::NoStation.note().unwrap().contains("online indisponible"));
+        assert!(Reason::Disabled.note().unwrap().contains("online unavailable"));
+        assert!(Reason::NoStation.note().unwrap().contains("online unavailable"));
         assert!(Reason::Unauthorized.note().is_some());
         for quiet in [Reason::Offline, Reason::Busy, Reason::Unknown] {
             assert_eq!(quiet.note(), None, "{quiet:?}");
@@ -704,7 +803,7 @@ mod tests {
         let all = rows(&heard(), &OnlineState::Unavailable(Reason::Disabled), NOW);
         let r = all.last().unwrap();
         assert_eq!((r.label, r.value.as_str(), r.badge), ("Online", "—", Badge::Missing));
-        assert!(r.note.contains("online indisponible"), "{}", r.note);
+        assert!(r.note.contains("online unavailable"), "{}", r.note);
         let quiet = rows(&heard(), &OnlineState::Unavailable(Reason::Busy), NOW);
         assert_eq!(quiet.len(), lines(&heard(), NOW).len());
     }
