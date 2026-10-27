@@ -255,6 +255,40 @@ pub(in crate::app) fn save_rx_chip_for(ui: &mut egui::Ui, status: Option<&DigiSt
     }
 }
 
+/// What each style looks like, for its button's tooltip.
+fn map_style_hover(style: sdroxide_types::MapStyle) -> &'static str {
+    match style {
+        sdroxide_types::MapStyle::Radar => {
+            "Radar — the dark ground, land filled. What an air picture is read against"
+        }
+        sdroxide_types::MapStyle::Terrain => {
+            "Terrain — land lifted and warmed so it reads as ground, borders dimmed"
+        }
+        sdroxide_types::MapStyle::Chart => {
+            "Chart — pale land, picked-out borders and a graticule, the aeronautical look"
+        }
+    }
+}
+
+/// The three style buttons, the current one lit, each with its response.
+fn map_style_buttons(
+    ui: &mut egui::Ui,
+    current: sdroxide_types::MapStyle,
+) -> Vec<(sdroxide_types::MapStyle, egui::Response)> {
+    sdroxide_types::MapStyle::ALL
+        .into_iter()
+        .map(|style| {
+            let r = crate::chrome::chip(
+                ui,
+                style == current,
+                RichText::new(style.label().to_uppercase()).size(9.5),
+            )
+            .on_hover_text(map_style_hover(style));
+            (style, r)
+        })
+        .collect()
+}
+
 impl SdroxideApp {
     /// Fold everything this frame knows into the propagation field, and hand
     /// back the texture the map should paint under itself.
@@ -344,29 +378,21 @@ impl SdroxideApp {
         }
     }
 
-    /// The **map style** chip: the ground the survey maps are painted on.
-    ///
-    /// Three states, so it cycles rather than opening a picker — the same
-    /// judgement as the RX strip's NR chip in reverse: that one had sixteen and
-    /// needed a menu, this has three and needs a click.
+    /// The **map style** buttons: the ground the survey maps are painted on,
+    /// one button per style side by side — Radar, Terrain, Chart — with the
+    /// active one lit. The operator picks the one that suits them; nothing
+    /// cycles.
     pub(in crate::app) fn map_style_chip(&mut self, ui: &mut egui::Ui) {
-        let style = self.ui_settings.survey_map_style;
-        let hover = format!(
-            "The ground under the picture: {}. Click for the next one.",
-            match style {
-                sdroxide_types::MapStyle::Radar =>
-                    "Radar — the dark ground, land filled. What an air picture is read against",
-                sdroxide_types::MapStyle::Terrain =>
-                    "Terrain — land lifted and warmed so it reads as ground, borders dimmed",
-                sdroxide_types::MapStyle::Chart =>
-                    "Chart — pale land, picked-out borders and a graticule, the aeronautical look",
-            }
-        );
-        if crate::chrome::chip(ui, false, RichText::new(style.label().to_uppercase()).size(9.5))
-            .on_hover_text(hover)
-            .clicked()
-        {
-            self.ui_settings.survey_map_style = style.next();
+        let current = self.ui_settings.survey_map_style;
+        let mut picked = None;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            picked = map_style_buttons(ui, current)
+                .into_iter()
+                .find_map(|(s, r)| r.clicked().then_some(s));
+        });
+        if let Some(style) = picked.filter(|s| *s != current) {
+            self.ui_settings.survey_map_style = style;
             crate::app::persist::persist_ui_settings(&self.ui_settings);
         }
     }
@@ -1576,6 +1602,61 @@ impl SdroxideApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One frame of the three style buttons; returns each button's rect and
+    /// the style clicked, if any.
+    fn style_frame(
+        ctx: &egui::Context,
+        current: sdroxide_types::MapStyle,
+        events: Vec<egui::Event>,
+    ) -> (Vec<egui::Rect>, Option<sdroxide_types::MapStyle>) {
+        let mut rects = Vec::new();
+        let mut clicked = None;
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(400.0, 100.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(raw, |ui| {
+            ui.horizontal(|ui| {
+                for (s, r) in map_style_buttons(ui, current) {
+                    rects.push(r.rect);
+                    if r.clicked() {
+                        clicked = Some(s);
+                    }
+                }
+            });
+        });
+        (rects, clicked)
+    }
+
+    /// The request: no button that cycles — each style has its own, side by
+    /// side, and a click on one picks exactly that one.
+    #[test]
+    fn each_map_style_has_its_own_button_beside_the_others() {
+        use sdroxide_types::MapStyle;
+        let ctx = egui::Context::default();
+        let (rects, _) = style_frame(&ctx, MapStyle::Radar, vec![]);
+        assert_eq!(rects.len(), 3);
+        assert!(rects.windows(2).all(|p| p[0].right() <= p[1].left() + 0.5), "{rects:?}");
+        assert!(rects.windows(2).all(|p| (p[0].center().y - p[1].center().y).abs() < 1.0));
+        for (i, want) in MapStyle::ALL.into_iter().enumerate() {
+            let at = rects[i].center();
+            let press = |pressed| egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            };
+            style_frame(&ctx, MapStyle::Radar, vec![egui::Event::PointerMoved(at)]);
+            style_frame(&ctx, MapStyle::Radar, vec![egui::Event::PointerMoved(at), press(true)]);
+            let (_, clicked) = style_frame(&ctx, MapStyle::Radar, vec![press(false)]);
+            assert_eq!(clicked, Some(want), "button {i}");
+        }
+    }
 
     /// The header rows that carry SAVE, on the narrowest phones in their
     /// widest state — a busy channel, bad frames, a repaired/lost count — stay
