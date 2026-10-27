@@ -18,11 +18,20 @@ maintainer's queue there, not a promise.
 
 ## Now
 
-0. **CW transmit over TCI keys up but sends nothing** (reporter, 2026-10-27) —
-   the transmitter switches into TX and the sidetone is heard, but no RF goes
-   out: PTT works and the CW keying (carrier on/off) does not reach the radio.
-   The reporter is asking RHR to check their end, so this waits on that answer
-   before digging into the CW-over-TCI keying path here.
+0. **Web client: the sound lags the waterfall and the lag grows** (operator,
+   2026-10-27 — branch **ix/web-audio-playout**, PR **#286**, based on 5cbce00d).
+   Playing received audio immediately on arrival in RemoteController (without
+   waiting for render frames) prevents progressive latency/stutters and keeps
+   audio playing in background tabs; frame-gate feeding remains preserved.
+
+0. **CW/TCO and the flood buffer** (issue #254, F4NRM, 2026-10-27 — his
+   area) — three things fixed or tracked. The effect of a weak signal on
+   slow_loggers was a hidden bug: CW keying at timing-critical instant is
+   logged via the telemetry/log queue, so the key shuts down for logging while
+   being timed-critical — not only slow but dangerous. Fixed with keying paths
+   that take care not to put keying tasks out of the direct class of the logging
+   queue, preventing
+ origin/main
 
 0. **Read `docs/internal/HANDOVER-NOW.md` first** (written 2026-10-26 night): the
    release is aborted and removed, #263's fix is specified but not started, and

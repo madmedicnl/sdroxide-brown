@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>sdroxide worklet invariants</title>
+<script>
+    // The worklet file is a classic script that expects the audio-thread globals.
+    // They are stubbed here so the *real* file can be loaded and driven on the
+    // page's thread, deterministically: no AudioContext, no audio thread, no
+    // timing. What is asserted is its internal state after each call.
+    window.sampleRate = 48000;
+    window.__processors = {};
+    window.AudioWorkletProcessor = class {
+        constructor() {
+            this.port = { postMessage: function () {}, onmessage: null };
+        }
+    };
+    window.registerProcessor = function (name, cls) {
+        window.__processors[name] = cls;
+    };
+    (function () {
+        function report(line) {
+            try { fetch("/result?line=" + encodeURIComponent(line)); } catch (e) {}
+        }
+        window.__report = report;
+        window.addEventListener("error", (e) =>
+            report("FAIL script error: " + (e.message || e.error))
+        );
+        report("note page loading " + location.href);
+    })();
+</script>
+<script src="pcm_worklet.js"></script>
+<script src="worklet_tests.js"></script>
+</head>
+<body></body>
+</html>
