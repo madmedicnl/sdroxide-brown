@@ -4867,6 +4867,91 @@ mod tests {
         img.save(&out).expect("write the preview");
         println!("wrote {out}");
     }
+    /// Renders the AIRCRAFT window at a chosen size to a PNG, for looking at.
+    /// `AIRCRAFT_W`/`AIRCRAFT_H` set the window (default: its 560x320 minimum),
+    /// `AIRCRAFT_VIEW` is `map`, `cards`, `vdl2` or `acars`.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    #[ignore = "writes a picture to look at; not an assertion"]
+    fn aircraft_window_preview() {
+        use crate::multi::frame_test_lock;
+        use sdroxide_types::{AdsbAircraft, AdsbStatus, DetachedWindow, Mode};
+        let _guard = frame_test_lock();
+        let dir =
+            std::env::temp_dir().join(format!("sdroxide-aircraft-preview-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let num =
+            |var: &str, d: f32| std::env::var(var).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
+        let (ww, wh) = (num("AIRCRAFT_W", 560.0), num("AIRCRAFT_H", 320.0));
+        let view = std::env::var("AIRCRAFT_VIEW").unwrap_or_else(|_| "map".into());
+
+        let ctx = egui::Context::default();
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.show_aircraft = true;
+        app.ui_settings.aircraft_window =
+            Some(DetachedWindow { size: [ww, wh], pos: Some([8.0, 8.0]) });
+        app.state.rx[0].mode = Mode::Adsb;
+        app.aircraft_view = match view.as_str() {
+            "vdl2" => Mode::Vdl2,
+            "acars" => Mode::Acars,
+            _ => Mode::Adsb,
+        };
+        app.state.rx[0].mode = app.aircraft_view;
+        app.aircraft_cards = view == "cards";
+        let mut list = Vec::new();
+        for (i, (call, lat, lon, alt)) in [
+            ("KLM1234", 52.3, 4.8, 35_000),
+            ("DLH9AB", 52.6, 5.4, 12_000),
+            ("RYR55", 51.9, 4.2, 28_000),
+            ("EZY8812", 52.0, 6.0, 4_500),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut a = AdsbAircraft::new(0x484000 + i as u32, 1_000);
+            a.callsign = call.into();
+            a.lat = Some(lat);
+            a.lon = Some(lon);
+            a.altitude_ft = Some(alt);
+            a.ground_speed_kt = Some(380.0 + 20.0 * i as f32);
+            a.last_pos_at = 1_000;
+            list.push(a);
+        }
+        app.adsb_status = Some(Box::new(AdsbStatus { aircraft: list, ..AdsbStatus::default() }));
+
+        let (w, h) = (ww + 40.0, wh + 90.0);
+        let mut tex = crate::test_raster::Textures::default();
+        let mut last = None;
+        for i in 0..4 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
+                time: Some(10.0 + i as f64 / 30.0),
+                ..Default::default()
+            };
+            let mut full = ctx.run_ui(input, |ui| {
+                app.ui(ui, &mut eframe::Frame::_new_kittest());
+            });
+            tex.apply(&full.textures_delta);
+            full.textures_delta.clear();
+            last = Some(full);
+        }
+        let img = crate::test_raster::rasterize(
+            &ctx,
+            last.unwrap(),
+            &tex,
+            egui::vec2(w, h),
+            crate::theme::BG_DEEP(),
+        );
+        let out = std::env::var("AIRCRAFT_PREVIEW").unwrap_or_else(|_| {
+            format!("{}/../../target/aircraft_preview.png", env!("CARGO_MANIFEST_DIR"))
+        });
+        img.save(&out).expect("write the preview");
+        println!("wrote {out}");
+    }
+
     /// The EXTRAS window opens under the top bar at the right of the frame, and
     /// a window that was moved and resized comes back at that place and size —
     /// also from a fresh app built on the saved settings, which is what a new
