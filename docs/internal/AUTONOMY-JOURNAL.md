@@ -51,18 +51,21 @@ covered by a test that fails with the old number and passes with the new.
   (48000 Hz)`) and pass with it.
 - Gate `cargo check --workspace --all-targets` finished (pre-existing warnings
   in ui/digi/dsp only; `sdroxide-radio` clean).
+- Live check on the bench RSP1: asked 3 Msps, the device reports
+  `3 000 000 Hz` and keeps the default `usable_frac = 1.0`, so the post-swap
+  usable span is the whole 3 MHz — not the 48 kHz the stale stand-in left.
 
 **Not done / blocked.**
 
-- Not tested on a live SDRplay link (no radio on the bench during this fix) —
-  the operator's next run with the RSP1 is the on-air confirmation.
+- The end-to-end GUI confirmation (unlink → relaunch → link → zoom out) still
+  needs the operator's hand, since that is an interactive run.
 - #239 orientation (the 180°-flipped WEEFAX picture) is still open.
 - #257 (NAVTEX) still waits on F4NRM's sample.
 
 **Next.**
 
-- Push and let the operator re-run the unlink → link → zoom-out sequence to
-  confirm; then #239 orientation.
+- The operator re-runs the unlink → link → zoom-out sequence to confirm the
+  snap is gone; then #239 orientation.
 
 ---
 
