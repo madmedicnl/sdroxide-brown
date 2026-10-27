@@ -21,6 +21,39 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-27 (the CRT starts in SWL mode and needs two switch flips)
+
+**In plain words.** A transceiver that came up in SWL mode needed the SWL switch
+toggled twice to get its transmit controls back — once to clear the seed, once
+to undo the first toggle. The switch now reads as "on" when the radio is
+actually in SWL mode, so one toggle turns it off. Both SWL switches (Radio tab
+and UI tab) share the one state.
+
+**Done.**
+
+- Confirmed the cause in the operator's own config: `config.toml` has
+  `start_swl = true`, which seeds `swl_start` on *every* radio at startup, while
+  the CRT (radio 1) has `hide_tx = false`. The per-radio switch showed only
+  `hide_tx`, so it looked off while `swl_start` held SWL mode on.
+- `fix(ui): the SWL switch clears the start-in-SWL seed in one toggle`
+  (`cb069dd4`) — a `swl_hide` state seeded from `swl_start || hide_tx`, bound to
+  both switches, and `clear_swl_seed(hide_changed, swl_start, swl_hide)` clears
+  the seed on a single off-toggle even when `hide_tx` never changed.
+- Test `turning_the_swl_switch_off_clears_the_seed_in_one_toggle`. Gate + wasm
+  check clean.
+
+**Not done / blocked.**
+
+- Not tested live (a restart that comes back up in SWL mode) — the unit test
+  pins the decision, but the operator's next launch is the confirmation.
+
+**Next.**
+
+- The #239 orientation question is still the open one; otherwise pick up the
+  queue.
+
+---
+
 ## 2026-10-27 (#239 orientation — a ROTATE 180° chip as the in-between step)
 
 **In plain words.** A manual half-turn is now in the WEFAX panel: a "ROTATE
