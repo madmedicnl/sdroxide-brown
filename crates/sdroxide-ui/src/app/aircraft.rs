@@ -27,9 +27,9 @@ use super::aircraft_history::{self, HistoryOffer, HistoryState};
 use super::aircraft_online::{self, Badge, Provenance, ThumbStatus};
 use super::aircraft_search;
 use super::aircraft_share;
-use sdroxide_aircraft_history::export::Format;
 use super::aircraft_stats::{self, SortBy, Stats};
 use super::aircraft_watch::{self, WatchState};
+use sdroxide_aircraft_history::export::Format;
 
 /// The opening size of the window and its floor.
 const AIRCRAFT_SIZE: [f32; 2] = [920.0, 560.0];
@@ -89,13 +89,23 @@ fn chip(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
 /// The badge in front of a line: green for the radio, blue for the relay, and
 /// nothing for a gap, whose "—" says it.
 pub(in crate::app) fn badge_chip(ui: &mut egui::Ui, badge: Badge) {
-    match badge {
-        Badge::Radio => chip(ui, "radio", RADIO_GREEN),
-        Badge::Online => chip(ui, "online", ONLINE_BLUE),
-        Badge::History => chip(ui, "history", HISTORY_VIOLET),
-        Badge::Missing => {
+    match badge_look(badge) {
+        Some((text, color)) => chip(ui, text, color),
+        None => {
             ui.label("");
         }
+    }
+}
+
+/// What a badge shows. The radio's is not drawn: the card's header already says
+/// where the data comes from as a whole, and a green "radio" on every line
+/// repeated it ten times. Only the lines that are *not* from the radio are
+/// marked, which makes the mark mean something.
+pub(in crate::app) fn badge_look(badge: Badge) -> Option<(&'static str, egui::Color32)> {
+    match badge {
+        Badge::Radio | Badge::Missing => None,
+        Badge::Online => Some(("online", ONLINE_BLUE)),
+        Badge::History => Some(("history", HISTORY_VIOLET)),
     }
 }
 
@@ -891,6 +901,14 @@ impl super::SdroxideApp {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_lines_that_are_not_from_the_radio_wear_a_badge() {
+        assert!(super::badge_look(Badge::Radio).is_none());
+        assert!(super::badge_look(Badge::Missing).is_none());
+        assert_eq!(super::badge_look(Badge::Online).map(|b| b.0), Some("online"));
+        assert_eq!(super::badge_look(Badge::History).map(|b| b.0), Some("history"));
+    }
+
     use super::*;
 
     #[test]

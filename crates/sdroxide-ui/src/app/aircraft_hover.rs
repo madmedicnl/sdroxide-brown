@@ -58,10 +58,31 @@ pub(in crate::app) struct HoverCard {
     pub title: String,
     pub provenance: Provenance,
     pub lines: Vec<Row>,
+    /// The note most lines shared ("ADS-B, 4s ago"), said once in the header
+    /// and cleared from the lines that carried it. A line whose own note
+    /// differs (an older position, a figure from the history) keeps it.
+    pub common_note: Option<String>,
     pub photo: Option<HoverPhoto>,
     /// One grey line, only when the operator could do something about the
     /// missing online half.
     pub footer: Option<&'static str>,
+}
+
+/// Lift the note that two or more lines share into one, and clear it from
+/// them: the same "ADS-B, 4s ago" down every row said nothing after the first.
+pub(in crate::app) fn lift_common_note(lines: &mut [Row]) -> Option<String> {
+    let mut best: Option<(&str, usize)> = None;
+    for r in lines.iter().filter(|r| !r.note.is_empty()) {
+        let n = lines.iter().filter(|o| o.note == r.note).count();
+        if best.is_none_or(|(_, b)| n > b) {
+            best = Some((&r.note, n));
+        }
+    }
+    let common = best.filter(|&(_, n)| n >= 2)?.0.to_string();
+    for r in lines.iter_mut().filter(|r| r.note == common) {
+        r.note.clear();
+    }
+    Some(common)
 }
 
 /// `s` cut to `max` characters, with an ellipsis where it was cut.
@@ -167,7 +188,9 @@ pub(in crate::app) fn hover_card(
         r.note = clip(&r.note, MAX_CHARS);
     }
 
+    let common_note = lift_common_note(&mut lines);
     HoverCard {
+        common_note,
         title: clip(&aircraft_card::title(&CardKey::Icao(icao), card), MAX_CHARS),
         provenance: aircraft_online::provenance(card, state),
         lines,
@@ -216,6 +239,9 @@ fn draw_inner(
         ui.horizontal(|ui| {
             ui.label(RichText::new(&card.title).strong().size(13.0));
             provenance_chip(ui, card.provenance);
+            if let Some(n) = &card.common_note {
+                ui.label(RichText::new(n).size(9.5).color(crate::theme::gray(130)));
+            }
             if let Some(out) = pin.as_deref_mut() {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let r = ui.small_button("✕").on_hover_text("Close (Esc)");
@@ -537,8 +563,10 @@ mod tests {
         }
         assert_eq!(row(&c, "ICAO").value, "4840D6");
         assert_eq!(row(&c, "Altitude").value, "35000 ft");
-        assert!(row(&c, "Altitude").note.starts_with("ADS-B"), "{:?}", row(&c, "Altitude"));
-        assert!(row(&c, "Altitude").note.contains("12"), "{:?}", row(&c, "Altitude"));
+        // The ADS-B source and age are said once, in the header, not per line.
+        let common = c.common_note.as_deref().unwrap_or_default();
+        assert!(common.starts_with("ADS-B") && common.contains("12"), "{common}");
+        assert_eq!(row(&c, "Altitude").note, "");
         assert!(row(&c, "Registration").note.starts_with("VDL2"), "{:?}", row(&c, "Registration"));
     }
 
@@ -632,6 +660,30 @@ mod tests {
             assert_eq!(c.footer, None, "{st:?}");
         }
         assert!(!radio.lines.is_empty());
+    }
+
+    #[test]
+    fn a_note_every_line_repeats_is_said_once_in_the_header() {
+        let c = hover_card(
+            &live(),
+            Some(&heard()),
+            &OnlineState::Idle,
+            ThumbStatus::NotTried,
+            Some(HOME),
+            NOW,
+        );
+        let common = c.common_note.clone().expect("lines share the age note");
+        assert!(common.starts_with("ADS-B"), "{common}");
+        assert!(c.lines.iter().all(|r| r.note != common), "still repeated: {:?}", c.lines);
+        // A line with its own note keeps it.
+        assert_eq!(row(&c, "Range").note, "from your station");
+    }
+
+    #[test]
+    fn two_lines_with_different_notes_share_nothing() {
+        let mut rows = vec![extra("A", "1".into(), "x".into()), extra("B", "2".into(), "y".into())];
+        assert_eq!(lift_common_note(&mut rows), None);
+        assert_eq!(rows[0].note, "x");
     }
 
     #[test]

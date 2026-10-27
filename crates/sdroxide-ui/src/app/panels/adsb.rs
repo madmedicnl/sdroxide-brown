@@ -369,7 +369,7 @@ impl SdroxideApp {
                     rows.push((
                         "range",
                         format!(
-                            "{} at {bear:.0}°",
+                            "{}  {bear:.0}°",
                             sdroxide_types::AirUnits::current().distance(km)
                         ),
                     ));
