@@ -21,6 +21,41 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-27 (#239 orientation — a ROTATE 180° chip as the in-between step)
+
+**In plain words.** A manual half-turn is now in the WEFAX panel: a "ROTATE
+180°" chip that flips a chart that arrived upside-down. It only acts once the
+chart is complete — while lines are still arriving it is greyed out, because
+turning the half already on screen while the rest keeps appending would scramble
+the picture. The automatic orientation detection is still open; this is the
+hold-over so an upside-down chart is not stuck upside-down.
+
+**Done.**
+
+- `feat(wefax): a ROTATE 180° chip …` (`83e12b96`) — `WefaxUi::rotate_live`
+  reverses the row-major buffer (rows bottom-to-top + pixels right-to-left =
+  the half-turn), and the panel chip is gated with `add_enabled_ui` to
+  `has_live() && !receiving`.
+- Tests `the_half_turn_reverses_rows_and_pixels_together` (two turns return to
+  the start) and `the_half_turn_of_nothing_is_a_no_op`. `cargo test --release
+  -p sdroxide-ui --lib wefax::` 16/16; gate + wasm check clean.
+
+**Not done / blocked.**
+
+- The automatic orientation detection (the real #239 ask) is still open. The
+  decoder has no signal cue for up/down — WEFAX is vertically symmetric — so a
+  detector would have to read the picture content (text/title position), and I
+  cannot view images with this model to verify one. One question out to the
+  operator: was the observed flip upside-down or a negative (white-on-dark)?
+- #257 (NAVTEX) still waits on F4NRM's sample.
+
+**Next.**
+
+- Answer the operator's upside-down-vs-negative question, then build the
+  automatic detector; meanwhile #257 when F4NRM's sample arrives.
+
+---
+
 ## 2026-10-27 (#263 zoom — the 48 kHz snap is a stale usable span)
 
 **In plain words.** The zoom-freeze is fixed. When a radio is switched off it
