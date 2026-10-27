@@ -5,10 +5,9 @@
 # "libgcc_s_seh-1.dll not found" — or, for the C++ half of the same problem,
 # "libstdc++-6.dll not found" — the moment they double-click sdroxide.exe.
 #
-# So link the compiler runtime in. The C++ side (libstdc++/winpthread) is
-# handled in each C++ crate's build.rs (sdroxide-drm, sdroxide-olivia,
-# sdroxide-s4285); this covers libgcc, which rustc leaves to the gcc driver's
-# own defaults.
+# So link the compiler runtime in. The C++ side is handled where the only C++
+# in the tree is built (crates/sdroxide-drm/build.rs); this covers libgcc,
+# which rustc leaves to the gcc driver's own defaults.
 #
 # Note that a RUSTFLAGS environment variable, if one is ever set, replaces this
 # wholesale rather than adding to it — CI deliberately sets none.
