@@ -1102,6 +1102,14 @@ impl SdroxideApp {
         // a zoomed-out KiwiSDR session came back up at 12 kHz.
         let (out_center, out_span) = self.zoom_out_window();
         if self.caps.is_some() && out_span > 0.0 && self.view.span() > out_span {
+            tracing::debug!(
+                target: "sdroxide::panadapter",
+                view_span = self.view.span(),
+                out_span,
+                sample_rate = self.state.sample_rate,
+                usable_hz = self.state.usable_hz,
+                "narrowing a restored view to the front end's window",
+            );
             self.view.fit(out_center, out_span);
         }
         // What has to stay on screen is what is being listened to, not the
