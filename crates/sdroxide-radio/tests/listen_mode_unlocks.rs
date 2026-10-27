@@ -106,3 +106,17 @@ fn the_listen_command_puts_the_mode_on_the_band_anyway() {
     let m = mode_after(100_000_000.0, Command::SetModeListen { rx: RxId::Main, mode: Mode::Am });
     assert_eq!(m, Mode::Am, "SetModeListen must bypass the band rule");
 }
+
+/// The Aircraft window's buttons. The airband carries AM, VDL2 and ACARS in the
+/// band table, so ADS-B and HFDL are the pairs `SetMode` refuses there — which
+/// is why those buttons did nothing but raise a notice. The listener's command
+/// puts either on the airband.
+#[test]
+fn the_aviation_modes_can_be_put_on_the_airband_by_the_listen_command() {
+    for mode in [Mode::Adsb, Mode::Hfdl] {
+        let refused = mode_after(125_000_000.0, Command::SetMode { rx: RxId::Main, mode });
+        assert_ne!(refused, mode, "{mode:?}: SetMode should be refused on the airband");
+        let ok = mode_after(125_000_000.0, Command::SetModeListen { rx: RxId::Main, mode });
+        assert_eq!(ok, mode, "{mode:?}: SetModeListen must take it");
+    }
+}
