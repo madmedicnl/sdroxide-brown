@@ -49,8 +49,9 @@ const MAX_SWITCH_BYTES: u64 = 1024;
 const MAX_THUMB_BYTES: u64 = 2 * 1024 * 1024;
 /// Widest or tallest a thumbnail may decode to.
 const MAX_THUMB_SIDE: u32 = 2048;
-/// Thumbnails kept at once: the open card's, and a few it was just on.
-const KEEP_THUMBS: usize = 8;
+/// Thumbnails kept at once: the open card's and no other. The station holds
+/// one picture too, and both let it go when the card is closed.
+const KEEP_THUMBS: usize = 1;
 
 enum Msg {
     Info { icao: u32, status: Option<u16>, body: String },
@@ -88,6 +89,8 @@ pub(in crate::app) struct OnlineClient {
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
     thumbs: Vec<Thumb>,
+    /// The frame in which a card last asked for its thumbnail.
+    thumb_wanted: Option<u64>,
 }
 
 impl Default for OnlineClient {
@@ -105,6 +108,7 @@ impl Default for OnlineClient {
             tx,
             rx,
             thumbs: Vec::new(),
+            thumb_wanted: None,
         }
     }
 }
@@ -306,11 +310,28 @@ impl OnlineClient {
 
     /// Start loading this thumbnail if it has not been tried and is an address
     /// Planespotters hands out.
-    pub(in crate::app) fn want_thumb(&mut self, ctx: &egui::Context, url: &str) {
-        if !thumb_fetchable(url) || self.thumbs.iter().any(|t| t.url == url) {
+    ///
+    /// `icao` is the aircraft the card is for: in the browser the picture comes
+    /// from the station (`peer`), which asks Planespotters for the address it
+    /// itself gave, because Planespotters' host sends no CORS header and the
+    /// browser would not let the pixels be read. Asking again every frame the
+    /// card is drawn is what keeps the picture; see [`Self::release_thumbs`].
+    pub(in crate::app) fn want_thumb(
+        &mut self,
+        ctx: &egui::Context,
+        peer: Option<&str>,
+        icao: u32,
+        url: &str,
+    ) {
+        if !thumb_fetchable(url) {
             return;
         }
-        if self.thumbs.len() >= KEEP_THUMBS {
+        self.thumb_wanted = Some(ctx.cumulative_pass_nr());
+        if self.thumbs.iter().any(|t| t.url == url) {
+            return;
+        }
+        // Only one at a time: the card that is open is the only one.
+        while self.thumbs.len() >= KEEP_THUMBS {
             self.thumbs.remove(0);
         }
         self.thumbs.push(Thumb {
@@ -318,7 +339,28 @@ impl OnlineClient {
             status: ThumbStatus::Loading,
             texture: None,
         });
-        send_thumb(url.to_string(), self.tx.clone(), ctx.clone());
+        let via = peer.and_then(|p| aircraft_online::photo_url(p, icao));
+        send_thumb(url.to_string(), via, self.tx.clone(), ctx.clone());
+    }
+
+    /// Once a frame: when no card has asked for the thumbnail for two frames,
+    /// the card is closed — destroy the picture here and tell the station to
+    /// drop its own. A station that never hears (tab closed, line cut) drops it
+    /// itself after a minute.
+    pub(in crate::app) fn release_thumbs(&mut self, ctx: &egui::Context, peer: Option<&str>) {
+        if self.thumbs.is_empty() {
+            return;
+        }
+        if aircraft_online::thumb_unwanted(self.thumb_wanted, ctx.cumulative_pass_nr()) {
+            self.thumbs.clear();
+            self.thumb_wanted = None;
+            if let Some(url) = peer.and_then(aircraft_online::photo_release_url) {
+                send_release(url);
+            }
+        } else {
+            // A closed card draws nothing more, so something must look again.
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        }
     }
 }
 
@@ -456,8 +498,13 @@ fn send_info(
     });
 }
 
+/// The native program fetches the picture itself (no CORS to meet), so there is
+/// nothing held at the station to let go.
 #[cfg(not(target_arch = "wasm32"))]
-fn send_thumb(url: String, tx: Sender<Msg>, ctx: egui::Context) {
+fn send_release(_url: String) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn send_thumb(url: String, _via: Option<String>, tx: Sender<Msg>, ctx: egui::Context) {
     std::thread::spawn(move || {
         let bytes =
             agent().get(&url).call().ok().filter(|r| r.status().as_u16() == 200).and_then(
@@ -530,11 +577,32 @@ fn send_info(
     });
 }
 
+/// Let the station's picture go. `keepalive` lets it finish even if the page is
+/// going away; the answer is not read.
 #[cfg(target_arch = "wasm32")]
-fn send_thumb(url: String, tx: Sender<Msg>, ctx: egui::Context) {
+fn send_release(url: String) {
+    wasm_bindgen_futures::spawn_local(async move {
+        let Some(window) = web_sys::window() else { return };
+        let init = web_sys::RequestInit::new();
+        init.set_method("DELETE");
+        init.set_mode(web_sys::RequestMode::SameOrigin);
+        let Ok(headers) = web_sys::Headers::new() else { return };
+        let _ = headers.set("x-sdroxide", "1");
+        init.set_headers(&headers);
+        let _ = js_sys::Reflect::set(&init, &"keepalive".into(), &true.into());
+        if let Ok(request) = web_sys::Request::new_with_str_and_init(&url, &init) {
+            let _ = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await;
+        }
+    });
+}
+
+/// The browser asks the station for the picture, same-origin with its cookie:
+/// Planespotters' own host would not let the page read it. No station, no picture.
+#[cfg(target_arch = "wasm32")]
+fn send_thumb(url: String, via: Option<String>, tx: Sender<Msg>, ctx: egui::Context) {
     wasm_bindgen_futures::spawn_local(async move {
         let bytes = async {
-            let r = fetch(&url, false, None).await?;
+            let r = fetch(via.as_deref()?, true, None).await?;
             if r.status() != 200 {
                 return None;
             }
@@ -579,21 +647,64 @@ mod tests {
         let ctx = egui::Context::default();
         let mut c = OnlineClient::default();
         let url = "https://t.plnspttrs.net/a_t.jpg";
-        c.want_thumb(&ctx, url);
+        c.want_thumb(&ctx, None, 7, url);
         assert_eq!(c.thumb_status(url), ThumbStatus::Loading);
         c.tx.send(Msg::Thumb { url: url.into(), bytes: Some(b"nope".to_vec()) }).unwrap();
         c.poll(&ctx, 0);
         assert_eq!(c.thumb_status(url), ThumbStatus::Failed);
-        c.want_thumb(&ctx, url);
+        c.want_thumb(&ctx, None, 7, url);
         assert_eq!(c.thumb_status(url), ThumbStatus::Failed, "not retried");
         assert!(c.thumb_texture(url).is_none());
+    }
+
+    fn frame(ctx: &egui::Context) {
+        ctx.begin_pass(egui::RawInput::default());
+        ctx.end_pass().drop_without_applying_deltas();
+    }
+
+    #[test]
+    fn closing_the_card_destroys_the_thumbnail_and_only_the_closing_does() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        let url = "https://t.plnspttrs.net/a_t.jpg";
+        frame(&ctx);
+        c.want_thumb(&ctx, None, 7, url);
+        c.tx.send(Msg::Thumb { url: url.into(), bytes: Some(png(4, 3)) }).unwrap();
+        c.poll(&ctx, 0);
+        assert!(c.thumb_texture(url).is_some());
+        // The card is open: it asks every frame, and the picture stays.
+        for _ in 0..5 {
+            c.release_thumbs(&ctx, Some("ws://shack.test:4950/ws"));
+            c.want_thumb(&ctx, None, 7, url);
+            frame(&ctx);
+            assert!(c.thumb_texture(url).is_some(), "an open card keeps its picture");
+        }
+        // The card is closed: nothing asks, and it goes within two frames.
+        c.release_thumbs(&ctx, Some("ws://shack.test:4950/ws"));
+        frame(&ctx);
+        c.release_thumbs(&ctx, Some("ws://shack.test:4950/ws"));
+        frame(&ctx);
+        c.release_thumbs(&ctx, Some("ws://shack.test:4950/ws"));
+        assert!(c.thumb_texture(url).is_none(), "the picture is destroyed");
+        assert_eq!(c.thumb_status(url), ThumbStatus::NotTried);
+    }
+
+    #[test]
+    fn only_one_thumbnail_is_kept_and_the_next_replaces_it() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        let (a, b) = ("https://t.plnspttrs.net/a_t.jpg", "https://t.plnspttrs.net/b_t.jpg");
+        c.want_thumb(&ctx, None, 1, a);
+        c.want_thumb(&ctx, None, 2, b);
+        assert_eq!(c.thumb_status(a), ThumbStatus::NotTried, "the first is gone");
+        assert_eq!(c.thumb_status(b), ThumbStatus::Loading);
     }
 
     #[test]
     fn a_thumbnail_address_that_is_not_planespotters_is_never_requested() {
         let ctx = egui::Context::default();
         let mut c = OnlineClient::default();
-        c.want_thumb(&ctx, "https://evil.example/a.jpg");
+        c.want_thumb(&ctx, None, 7, "https://evil.example/a.jpg");
         assert_eq!(c.thumb_status("https://evil.example/a.jpg"), ThumbStatus::NotTried);
     }
 

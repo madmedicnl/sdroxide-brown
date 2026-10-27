@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use crate::model::{ADSBDB_BASE, PLANESPOTTERS_BASE};
-use crate::{Reply, Request, Upstream, reply_for, user_agent};
+use crate::model::{ADSBDB_BASE, MAX_IMAGE, PLANESPOTTERS_BASE};
+use crate::{Image, Reply, Request, Upstream, image_ok, reply_for, user_agent};
 
 /// A reply bigger than this is not read: both services answer in a few hundred
 /// bytes, and a body past this is not theirs.
@@ -66,6 +66,23 @@ impl Upstream for HttpUpstream {
             Err(_) => (0, String::new()),
         };
         reply_for(req, status, &body)
+    }
+
+    /// A plain GET of the picture, nothing of the client sent along. The caller
+    /// has already checked the address; the type and size are checked here too
+    /// so a body is never read past [`MAX_IMAGE`].
+    fn image(&self, url: &str) -> Option<Image> {
+        let mut resp = self.agent.get(url).call().ok()?;
+        if resp.status().as_u16() != 200 {
+            return None;
+        }
+        let content_type =
+            resp.headers().get("content-type").and_then(|v| v.to_str().ok())?.to_string();
+        if !image_ok(&content_type, 1) {
+            return None;
+        }
+        let bytes = resp.body_mut().with_config().limit(MAX_IMAGE as u64).read_to_vec().ok()?;
+        image_ok(&content_type, bytes.len()).then_some(Image { content_type, bytes })
     }
 }
 
@@ -141,6 +158,36 @@ mod tests {
         let (base, _) = serve_once("200 OK", huge);
         let up = HttpUpstream::with_bases(&base, "http://127.0.0.1:1");
         assert_eq!(up.fetch(&adsb()), Reply::Adsbdb(Lookup::Failed));
+    }
+
+    #[test]
+    fn a_picture_comes_back_with_its_type_and_a_page_in_its_place_does_not() {
+        let up = HttpUpstream::with_bases("http://127.0.0.1:1", "http://127.0.0.1:1");
+        let serve = |ct: &str, body: &[u8]| {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let url = format!("http://{}/a.jpg", listener.local_addr().unwrap());
+            let (ct, body) = (ct.to_string(), body.to_vec());
+            std::thread::spawn(move || {
+                let (mut sock, _) = listener.accept().unwrap();
+                let mut buf = [0u8; 4096];
+                let _ = sock.read(&mut buf);
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: {ct}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = sock.write_all(head.as_bytes());
+                let _ = sock.write_all(&body);
+            });
+            url
+        };
+        let got = up.image(&serve("image/jpeg", b"\xff\xd8jpeg")).unwrap();
+        assert_eq!(
+            (got.content_type.as_str(), got.bytes.as_slice()),
+            ("image/jpeg", &b"\xff\xd8jpeg"[..])
+        );
+        assert!(up.image(&serve("text/html", b"<html>")).is_none());
+        let big = vec![0u8; MAX_IMAGE + 1];
+        assert!(up.image(&serve("image/png", &big)).is_none());
     }
 
     #[test]

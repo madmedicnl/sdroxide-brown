@@ -171,6 +171,26 @@ pub(in crate::app) fn switch_url(peer_url: &str, on: bool) -> Option<String> {
     Some(format!("{base}/aircraft-online?on={}", u8::from(on)))
 }
 
+/// Where the station hands over the open card's thumbnail:
+/// `GET {station}/aircraft-photo/{icao}`. The aircraft, never the picture's address.
+pub(in crate::app) fn photo_url(peer_url: &str, icao: u32) -> Option<String> {
+    let base = crate::login::http_base(&crate::login::station_key(peer_url))?;
+    Some(format!("{base}/aircraft-photo/{}", super::aircraft_card::icao_hex(icao)))
+}
+
+/// Where the card being closed lets the thumbnail go: `DELETE {station}/aircraft-photo`.
+pub(in crate::app) fn photo_release_url(peer_url: &str) -> Option<String> {
+    let base = crate::login::http_base(&crate::login::station_key(peer_url))?;
+    Some(format!("{base}/aircraft-photo"))
+}
+
+/// Whether the thumbnail held is for a card that is no longer open: nothing has
+/// asked for it in the frame before this one or the one before that. The card
+/// that is open asks every frame it is drawn.
+pub(in crate::app) fn thumb_unwanted(last_wanted: Option<u64>, frame: u64) -> bool {
+    last_wanted.is_none_or(|w| frame > w + 1)
+}
+
 /// What the station answered to a request to switch the relay.
 #[derive(Debug, Clone, PartialEq)]
 pub(in crate::app) enum SwitchAnswer {
@@ -536,6 +556,29 @@ pub(in crate::app) fn photo_view(state: &OnlineState, thumb: ThumbStatus) -> Opt
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_photo_is_asked_by_aircraft_and_released_by_one_address() {
+        assert_eq!(
+            super::photo_url("wss://shack.example/sdr/ws/2", 0x4ca1fa).as_deref(),
+            Some("https://shack.example/sdr/aircraft-photo/4CA1FA")
+        );
+        assert_eq!(
+            super::photo_release_url("ws://shack.test:4950/ws").as_deref(),
+            Some("http://shack.test:4950/aircraft-photo")
+        );
+        assert_eq!(super::photo_url("not an address", 1), None);
+        assert_eq!(super::photo_release_url("not an address"), None);
+    }
+
+    #[test]
+    fn a_thumbnail_nobody_has_asked_for_lately_is_let_go() {
+        use super::thumb_unwanted;
+        assert!(!thumb_unwanted(Some(10), 10), "asked this frame");
+        assert!(!thumb_unwanted(Some(10), 11), "asked last frame");
+        assert!(thumb_unwanted(Some(10), 12), "the card is gone");
+        assert!(thumb_unwanted(None, 3), "never asked, nothing to keep");
+    }
+
     #[test]
     fn the_switch_request_names_the_station_and_the_state_wanted() {
         assert_eq!(

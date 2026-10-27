@@ -708,6 +708,8 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         .route("/radios", get(radios_route))
         .route("/solar-ws", get(solar::ws_route))
         .route("/aircraft-info/{icao}", get(aircraft::info_route))
+        .route("/aircraft-photo/{icao}", get(aircraft::photo_route))
+        .route("/aircraft-photo", axum::routing::delete(aircraft::photo_release))
         .route("/aircraft-online", get(aircraft::switch_get).post(aircraft::switch_post))
         .route("/aircraft-history", get(history::list_route))
         .route("/aircraft-history/{icao}", get(history::one_route))
@@ -744,17 +746,13 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
 /// and nowhere else.
 fn is_root_route(path: &str) -> bool {
     match path {
-        "/ws"
-        | "/solar-ws"
-        | "/radios"
-        | "/aircraft-history"
-        | "/aircraft-export"
-        | "/aircraft-online"
-        | "/aircraft-watch" => true,
+        "/ws" | "/solar-ws" | "/radios" | "/aircraft-history" | "/aircraft-export"
+        | "/aircraft-online" | "/aircraft-photo" | "/aircraft-watch" => true,
         // Whatever follows is the question, and a bad one is the endpoint's to
         // refuse with a 400, not the static handler's to answer with a page.
         _ if path
             .strip_prefix("/aircraft-info/")
+            .or_else(|| path.strip_prefix("/aircraft-photo/"))
             .or_else(|| path.strip_prefix("/aircraft-history/"))
             .is_some_and(|q| !q.is_empty() && !q.contains('/')) =>
         {
@@ -1597,6 +1595,21 @@ mod proxy_prefix_tests {
         assert_eq!(strip_proxy_prefix("/sdroxide/ws/latest"), Some("/latest".to_string()));
         // …and the real one still resolves through a prefix that is itself /ws.
         assert_eq!(strip_proxy_prefix("/ws/ws/3"), Some("/ws/3".to_string()));
+    }
+
+    /// The picture of the open card is an endpoint too, behind any prefix.
+    #[test]
+    fn the_aircraft_photo_survives_a_proxy_prefix() {
+        assert_eq!(strip_proxy_prefix("/aircraft-photo/484006"), None);
+        assert_eq!(strip_proxy_prefix("/aircraft-photo"), None);
+        assert_eq!(
+            strip_proxy_prefix("/sdroxide/aircraft-photo/484006"),
+            Some("/aircraft-photo/484006".to_string())
+        );
+        assert_eq!(
+            strip_proxy_prefix("/shack/sdr/aircraft-photo"),
+            Some("/aircraft-photo".to_string())
+        );
     }
 
     /// `/aircraft-info/` names a question and only one: nothing under it, and

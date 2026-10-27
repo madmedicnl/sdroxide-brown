@@ -11,7 +11,10 @@
 //!   or a registration that has been cleaned first;
 //! * answers are kept as JSON for at most 24 h (Planespotters' own limit),
 //!   a failure for five minutes, and a photo is never fetched or kept — only
-//!   the address Planespotters gave for it, unchanged, and the credit.
+//!   the address Planespotters gave for it, unchanged, and the credit. The one
+//!   exception, on the operator's instruction of 2026-10-27, is [`Relay::image`]:
+//!   a browser cannot read the picture itself (the host sends no CORS header),
+//!   so the station hands it over once, from memory, for the open card only.
 //!
 //! The [`Relay`] is what a station runs so that its clients do not each reach
 //! the internet themselves: one question out per key however many clients ask,
@@ -27,8 +30,8 @@ pub mod fetch;
 
 pub use cache::{BACKOFF_S, MAX_ENTRIES, OnlineCache, TTL_S};
 pub use model::{
-    Adsbdb, AircraftInfo, Airport, Lookup, Photo, Reply, Request, Route, clean_callsign,
-    clean_registration, user_agent,
+    Adsbdb, AircraftInfo, Airport, Image, Lookup, MAX_IMAGE, Photo, Reply, Request, Route,
+    clean_callsign, clean_registration, image_ok, thumb_url_ok, user_agent,
 };
 pub use parse::{parse_adsbdb, parse_photo, reply_for};
 pub use relay::{FORMAT_VERSION, Info, Relay, Status, Upstream};
