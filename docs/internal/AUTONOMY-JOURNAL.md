@@ -21,6 +21,51 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-27 (#263 zoom — the 48 kHz snap is a stale usable span)
+
+**In plain words.** The zoom-freeze is fixed. When a radio is switched off it
+runs on a 48 kHz placeholder, and linking the real SDR was carrying that
+placeholder's "usable span" over into the new radio — so the panadapter thought
+it could only show 48 kHz and snapped back to that on every zoom-out. A swap now
+recomputes the span from the device actually in use. The fix is engine-side and
+covered by a test that fails with the old number and passes with the new.
+
+**Done.**
+
+- Reproduced the trigger from the operator's log and drdatapi's tuner clue: a
+  radio switched off at exit (`NullSource`, 48 kHz) leaves `usable_hz` at
+  48 kHz, and `Engine::adopt_source` set `sample_rate`/`decimation` but left
+  `usable_hz` to ride over from `..self.state.clone()`. Linking the 3 Msps RSP1
+  kept `usable_hz` at 48 kHz, so `display_span` came up at 48 kHz and the view
+  narrowed back to it.
+- `fix(radio): recompute the usable span when a front end is swapped`
+  (`c2889ac6`) — `adopt_source` now sets `state.usable_hz = self.usable_span_hz()`
+  after the swap, the same as `set_decimation`. Covers the operator "link" and
+  every reconnect path (`reopen_source` and `poll_reconnect` both call
+  `adopt_source`).
+- Test `crates/sdroxide-radio/tests/source_swap.rs`:
+  `a_swap_recomputes_the_usable_span_instead_of_carrying_the_stand_in_s` — starts
+  a 48 kHz stand-in, links a 3 Msps source with `usable_frac = 0.86`, asserts
+  the usable span becomes 2 580 000 Hz. Verified to fail with the fix removed
+  (`usable span follows the new source (2580000 Hz), not the stale stand-in
+  (48000 Hz)`) and pass with it.
+- Gate `cargo check --workspace --all-targets` finished (pre-existing warnings
+  in ui/digi/dsp only; `sdroxide-radio` clean).
+
+**Not done / blocked.**
+
+- Not tested on a live SDRplay link (no radio on the bench during this fix) —
+  the operator's next run with the RSP1 is the on-air confirmation.
+- #239 orientation (the 180°-flipped WEEFAX picture) is still open.
+- #257 (NAVTEX) still waits on F4NRM's sample.
+
+**Next.**
+
+- Push and let the operator re-run the unlink → link → zoom-out sequence to
+  confirm; then #239 orientation.
+
+---
+
 ## 2026-10-27 (public SDR, the wire guard, and the CW report)
 
 **In plain words.** The public SDR list was listing receivers as online that had
