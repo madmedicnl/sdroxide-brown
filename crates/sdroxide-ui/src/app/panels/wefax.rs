@@ -322,6 +322,28 @@ impl SdroxideApp {
                 }
             }
 
+            // Half-turn the chart being held, for one that arrived upside-down.
+            // The in-between answer until the receiver detects the orientation
+            // itself. Gated to a *held* chart: a picture that is still arriving
+            // is a row at a time, and turning the half already on screen while
+            // the rest keeps appending would scramble it (issue #239).
+            let held = self.wefax.has_live() && !st.receiving;
+            ui.add_enabled_ui(held, |ui| {
+                if crate::chrome::chip(ui, false, "ROTATE 180°")
+                    .on_hover_text(if held {
+                        "Rotate the chart on screen 180° — for a picture that has arrived \
+                         upside down. Turns the picture you see; save it afterwards to keep \
+                         the turn."
+                    } else {
+                        "Rotate the chart on screen 180°. Available once the chart is complete \
+                         — turning a picture that is still arriving would scramble it."
+                    })
+                    .clicked()
+                {
+                    self.wefax.rotate_live();
+                }
+            });
+
             // Vertical stretch. A chart comes out the wrong shape when the line
             // rate is not what the station is actually sending — 90 taken for
             // 120 makes it a third too tall — and this pulls it back while the
