@@ -55,17 +55,23 @@ covered by a test that fails with the old number and passes with the new.
   `3 000 000 Hz` and keeps the default `usable_frac = 1.0`, so the post-swap
   usable span is the whole 3 MHz — not the 48 kHz the stale stand-in left.
 
+**Confirmed.**
+
+- The operator re-ran the exact sequence (unlink → exit → relaunch → link →
+  zoom out) on the fixed build. The 48 kHz snap is gone: after linking the
+  RSP1 the view fits to 3 MHz, zooms in to ~647 kHz and back out to ~2 MHz with
+  `clamped=false` throughout, and no `span_before=48000` entry appears anywhere
+  (the old log had one after every link). `dev_span` stays `3000000`.
+
 **Not done / blocked.**
 
-- The end-to-end GUI confirmation (unlink → relaunch → link → zoom out) still
-  needs the operator's hand, since that is an interactive run.
 - #239 orientation (the 180°-flipped WEEFAX picture) is still open.
 - #257 (NAVTEX) still waits on F4NRM's sample.
 
 **Next.**
 
-- The operator re-runs the unlink → link → zoom-out sequence to confirm the
-  snap is gone; then #239 orientation.
+- Close the loop on #263 (reply once the fix is in a build), then #239
+  orientation.
 
 ---
 
