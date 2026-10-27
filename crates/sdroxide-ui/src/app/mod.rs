@@ -6778,6 +6778,7 @@ mod tests {
                         ui,
                         &mut cfg,
                         None,
+                        &mut false,
                         None,
                         &action,
                         None,

@@ -34,6 +34,7 @@ pub(in crate::app) fn settings_ui_tab(
     ui: &mut egui::Ui,
     cfg: &mut sdroxide_types::UiSettings,
     radio: Option<&mut sdroxide_types::RadioConfig>,
+    swl_hide: &mut bool,
     cloud_march: Option<&mut bool>,
     profile_action: &std::cell::Cell<Option<ProfileAction>>,
     profile_from: Option<&Option<String>>,
@@ -757,7 +758,12 @@ pub(in crate::app) fn settings_ui_tab(
                  The hardware can still transmit; this only hides the controls. `--swl` \
                  forces it on for every radio for the run.\n\nTakes effect on Apply.",
             );
-            crate::chrome::checkbox(ui, &mut radio.hide_tx, "hide all transmit controls");
+            // The checkbox reflects the whole per-radio SWL state (the
+            // start-in-SWL seed *or* `hide_tx`), so a session that came up in
+            // SWL mode reads as "on" and one toggle turns it off, not two.
+            if crate::chrome::checkbox(ui, swl_hide, "hide all transmit controls").changed() {
+                radio.hide_tx = *swl_hide;
+            }
             ui.end_row();
         }
 
