@@ -634,7 +634,12 @@ impl SdroxideApp {
             (SpotKind::Rbn, "RBN"),
         ];
         ui.horizontal(|ui| {
-            for (i, (kind, label)) in labels.iter().enumerate() {
+            for (kind, label) in labels.iter() {
+                // The toggle lives on the kind's own flag (`SpotKind::index`),
+                // not on the row: the labels skip HeardMe, which owns a flag but
+                // no chip, so a row number would land the wrong toggle — the RBN
+                // chip was flipping the HeardMe flag and leaving RBN itself stuck.
+                let i = kind.index();
                 // SWL mode has no POTA / SOTA feed to show, so it shows no chip
                 // for one. The DX cluster is a listening feed and is shown in
                 // both modes, so its chip stays (F4NRM).

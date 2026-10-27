@@ -55,6 +55,18 @@ pub(in crate::app) fn rbn_block(
     });
 }
 
+/// The DX cluster's own status line on the Spots tab: whether the link the
+/// operator configured is delivering spots. Same shape as the FreeDV Reporter's
+/// line on its own tab, with the "DX" the operator asked to put in front of the
+/// station.
+pub(in crate::app) fn dx_cluster_status(ui: &mut egui::Ui, status: &Option<String>) {
+    if let Some(s) = status
+        && let Some(body) = s.strip_prefix("Cluster:")
+    {
+        ui.label(RichText::new(format!("DX — {}", body.trim_start())).weak());
+    }
+}
+
 /// The operator's own **Wavelog**: address, key, certificate pin, station
 /// location, and the two things that make it a logbook rather than a box that
 /// takes uploads — a download, and a test that says what the server answered.

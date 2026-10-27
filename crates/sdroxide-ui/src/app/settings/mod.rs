@@ -38,8 +38,8 @@ use self::alerts::alerts_settings;
 use self::controls::settings_controls_tab;
 use self::general::{cb_plan_combo, region_combo, remote_access_settings, signed_in_station};
 use self::net::{
-    broadcast_stations_settings, net_heading, net_row, net_secret, operator_identity_note,
-    rbn_block, settings_freedv_tab, wavelog_section,
+    broadcast_stations_settings, dx_cluster_status, net_heading, net_row, net_secret,
+    operator_identity_note, rbn_block, settings_freedv_tab, wavelog_section,
 };
 use self::profiles::settings_profiles_tab;
 use self::radio::{
@@ -3892,6 +3892,12 @@ impl SdroxideApp {
                             .desired_width(220.0),
                     );
                 });
+
+                // The status line is shared by every network feed, so only show
+                // it here when it is actually ours. The DX cluster gets the same
+                // treatment the RBN reader gets, with the "DX" in front of the
+                // station.
+                dx_cluster_status(ui, &self.net_status);
 
                 rbn_block(ui, "Reverse Beacon Network 1", &mut io.net_edit.rbn, io.rbn_cmds);
                 rbn_block(ui, "Reverse Beacon Network 2", &mut io.net_edit.rbn2, io.rbn2_cmds);
