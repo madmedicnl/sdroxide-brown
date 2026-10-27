@@ -21,6 +21,54 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-27 (public SDR, the wire guard, and the CW report)
+
+**In plain words.** The public SDR list was listing receivers as online that had
+gone down, so a connect that timed out looked like a dead program. A receiver
+whose connect fails this session is now greyed out with "could not connect"
+instead of being offered again. I also added a test that pins the wire layout of
+the three config structs, so the mid-struct field mistake that needed
+`PROTO_VERSION 255 → 256` cannot happen again without a failing test. And I
+cleared a textures-delta panic that made one aircraft map-style test red on
+`main`.
+
+**Done.**
+
+- Confirmed the public-SDR connect code is not the fault: the sdroxide connect
+  path (both `probe` and `connect_wideband`) reaches the one live SpyServer
+  (`101.58.3.220:5555`) and reads its device info; 7 of 8 directory "online"
+  servers time out — the directory is stale. Replied to #264 asking for a PWA
+  hard-reload, and to #282/#280 (fixed in 2.2.0).
+- `feat(public-sdr): grey out a receiver whose connect failed this session`
+  (`9fe6bf65`) — `dead_public_sdrs` + `last_public_sdr_try` in the app state,
+  the "Interface change failed" notice charges the last-tried address, and the
+  row greys out. Test `a_failed_interface_change_marks_the_receiver_just_tried_dead`.
+- `test(proto): pin the wire layout …` (`5e2059e7`) — serializes
+  `DigiConfig`/`RadioConfig`/`NetworkConfig` defaults and pins length + FNV-1a,
+  so any layout change is a failing test. Gate silent, wasm build clean, ui +
+  proto suites green.
+- `test(ui): clear the textures delta in the map-style frame test` (`e57a4541`)
+  — the aircraft map-style buttons draw an icon, so `run_ui` leaves a
+  `TexturesDelta`; dropping without `drop_without_applying_deltas` panicked.
+  Rebased on F4NRM's #286 (web-audio playout) merge.
+
+**Not done / blocked.**
+
+- #239 (WEEFAX): the decoder works on F4NRM's recording (one clean 2150-line
+  chart at every sensitivity, no false trigger on the ~2326 Hz carrier). The
+  ask is automatic tilt/orientation correction — a feature, not a regression.
+- #257 (NAVTEX): sensitivity scales the sync thresholds but is a no-op at Auto;
+  needs the sample F4NRM said is "in the PRs" (not found yet).
+- #263 (zoom): the TUNE correlation is indirect (`tx.tune` never writes the
+  span); needs a bench.
+
+**Next.**
+
+- #263 on the bench (RSP1/CRT): reproduce the TUNE-at-exit zoom state.
+- Find the #257 sample; ask F4NRM where exactly it is.
+
+---
+
 ## 2026-10-27 (the 2.2.0 release — Windows MSI and the MinGW C++ runtime)
 
 **In plain words.** The 2.2.0 release is cut as `v2.2.0.2_brown` with the
