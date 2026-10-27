@@ -70,7 +70,8 @@ covered by a test that fails with the old number and passes with the new.
 
 **Next.**
 
-- Close the loop on #263 (reply once the fix is in a build), then #239
+- #263 is closed out: the fix is on `main`, confirmed live by the operator, and
+  the reply is posted (thanking drdatapi for the tuner clue). Next: #239
   orientation.
 
 ---
