@@ -205,6 +205,12 @@ edition.workspace = true
 license.workspace = true
 description = "PowerSDR/Thetis-style SDR transceiver with a native GUI, a browser-served web UI, and FT8/FT4 digital modes"
 
+[build-dependencies]
+# The Windows exe's icon resource: the Start Menu / desktop shortcuts are
+# advertised, so they take their icon from the executable rather than a .ico,
+# and this is what puts the Brown icon in the exe. A no-op on other targets.
+winres = "0.1"
+
 [dependencies]
 sdroxide-types.workspace = true
 sdroxide-version.workspace = true
