@@ -214,6 +214,9 @@ panel** with the Detachable settings page, the **decoded-text UDP feed**, the
   (dipole, monopole over perfect ground, delta loop, Yagi). Next would be the
   source-between-terminals junction, real Fresnel ground and lumped loads. See
   `docs/antenna-tool-ideas.md`. **Do not delete this branch on a tidy-up.**
+  Operator reference for it (2026-10-27):
+  https://github.com/Charan-N15/ADS-B-3D-Antenna-Range-Visualizer — a 3D
+  antenna radiation/range visualizer to draw on when we get back to it.
 - **#657 OpenStreetMap background** — parked after scoping: the maps are already
   baked 8192×4096, our projection is equirectangular where OSM is Web Mercator,
   and a fetch stack is the wrong trade (and forbidden: no paid or keyed service,
@@ -223,6 +226,15 @@ panel** with the Detachable settings page, the **decoded-text UDP feed**, the
   `sdroxide-qo100`; what is left is per-mission field layouts, each needing a
   published table and a real capture. See `docs/skyroof-notes.md`.
 - **FT4 console, SSDV across passes, Codec2 playback** — ideas, not scoped.
+
+- **ADS-B data layer + feeder upload** (operator's idea, 2026-10-27) — not
+  scoped. Two halves: a toggleable **layer** on the aircraft map from
+  https://adsb.lol/ to compare against the station's own reception, and an
+  **upload** in the upload settings to feed https://adsb.im/home. Both are
+  "reaches out" extras (off until asked), and the account/key question is open:
+  adsb.im in particular wants a feeder identity — the house rule is no paid
+  service, no API key, no account, so that has to be settled before either is
+  built.
 
 ## Backlog — upstream requests this fork may pick up
 
