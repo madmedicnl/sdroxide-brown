@@ -147,7 +147,8 @@ pub(in crate::app) fn hover_card(
     if let (Some(h), Some((lat, lon))) = (home, live.lat.zip(live.lon)) {
         let km = sdroxide_types::distance_km(h, (lat, lon));
         let bear = sdroxide_types::bearing_deg(h, (lat, lon));
-        lines.push(extra("Range", format!("{km:.0} km  {bear:.0}°"), "from your station".into()));
+        let range = format!("{}  {bear:.0}°", sdroxide_types::AirUnits::current().distance(km));
+        lines.push(extra("Range", range, "from your station".into()));
     }
     if let Some(vr) = live.vertical_rate_fpm.filter(|v| v.abs() > 100) {
         lines.push(extra(
