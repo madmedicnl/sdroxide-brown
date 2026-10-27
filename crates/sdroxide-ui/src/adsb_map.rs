@@ -467,6 +467,11 @@ pub fn airport_pin_after_click(
     airport_hit
 }
 
+/// The airport pin after a key press: Esc closes it, as it does the aircraft's.
+pub fn airport_pin_after_key(pinned: Option<usize>, esc: bool) -> Option<usize> {
+    if esc { None } else { pinned }
+}
+
 /// What a hovered airport says: the abbreviation first, because that is what
 /// the operator asked for and what a chart writes, then the name.
 fn airport_hover_text(a: &crate::airdata::Airport) -> String {
@@ -971,6 +976,10 @@ pub fn show(
     // The pin follows the click on an aircraft only; the click on empty map that
     // clears `selected` leaves it where it is.
     state.pinned = pin_after_click(state.pinned, hover.map(|i| live[i].icao), resp.clicked());
+    // Esc closes the box while the pointer is over the map, so it does not fight
+    // a text field elsewhere that is using the key.
+    let esc = resp.hovered() && ui.input(|i| i.key_pressed(eframe::egui::Key::Escape));
+    state.airport_pin = airport_pin_after_key(state.airport_pin, esc);
     state.airport_pin = airport_pin_after_click(
         state.airport_pin,
         hover.is_some(),
@@ -1093,6 +1102,13 @@ mod tests {
         // Empty map closes it; no click changes nothing.
         assert_eq!(airport_pin_after_click(Some(7), false, None, true), None);
         assert_eq!(airport_pin_after_click(Some(7), false, None, false), Some(7));
+    }
+
+    #[test]
+    fn escape_closes_the_airport_box() {
+        assert_eq!(airport_pin_after_key(Some(3), true), None);
+        assert_eq!(airport_pin_after_key(Some(3), false), Some(3));
+        assert_eq!(airport_pin_after_key(None, true), None);
     }
 
     #[test]
