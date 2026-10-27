@@ -13,9 +13,10 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
-## [2.1.2.2_brown] - 2026-10-26
+## [2.2.0_brown] - 2026-10-27
 
 ### Added
+- **The Aircraft window's full cockpit** — an airport card that stays open on a click, one button per map style, aviation, metric or imperial units, VDL2 and ACARS views, the online-lookup switch, and Esc to close. — madmedicnl, PR #266–#276
 - **Windows that work on a tiling window manager** — a floating panel with a title bar of its own (roll up, out to a real window, close which docks), one dock glyph inside a panel's own window because a tiling WM draws no title bar, a **▣** beside the gear listing every module and where it is, and a panel window narrow enough for one pane drawing its own pane chips. `Ctrl+Alt+W` opens that list anywhere, `Ctrl+Alt+F` floats or docks the operating panel, `Ctrl+Alt+1…9` and `0` recall a saved workspace. — madmedicnl, PR #261
 - **Auto Rx and Auto CQ as two roles** — one answers a station calling CQ and never calls one, the other calls CQ and works whoever answers; an Auto CQ run has a call count, then switches to Auto Rx or stops. — F4NRM, #253
 - **An unattended run has a ceiling** — twelve hours, then it stops, so a station cannot be left calling into the night. — F4NRM
@@ -26,6 +27,8 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 - **JTTY brought up to the reference's own standard** — upstream's six follow-ups taken whole: the 1500 Hz centre, four-letter words, the reference waveform timing, one line per message, and the transmit panic. — upstream picks, madmedicnl
 
 ### Fixed
+- **The wire layout** — five settings fields were inserted mid-struct instead of at the end, shifting every field after them. They're back at the tail, wire 256. — madmedicnl, PR #277
+- **The web client's cache** — fixed-name files are served no-store and the fingerprinted bundle immutable, so an update always loads the new client and never mixes old and new files. — madmedicnl, PR #278
 - **A receive-only mode can no longer key the transmitter** — a weather fax on 3855 kHz still offered a PTT, and every route into it could key. The chrome hides them, the engine refuses, and switching in unkeys. — madmedicnl, issue #239 (F4NRM)
 - **The logbook is no longer wiped to one contact** — in a browser there was no store to re-read and the answer "empty" replaced the log. — madmedicnl, issue #236 (F4NRM)
 - **WEFAX: one press centres a detuned chart** — and a chart that is off by a few hundred Hz is no longer a blank page. — madmedicnl, #258
