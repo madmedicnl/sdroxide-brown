@@ -373,7 +373,10 @@ pub fn show(
         if let Some((hlat, hlon)) = home {
             let km = sdroxide_types::distance_km((hlat, hlon), (a.lat, a.lon));
             let bear = sdroxide_types::bearing_deg((hlat, hlon), (a.lat, a.lon));
-            tip.push_str(&format!("\n{km:.0} km   {bear:.0}°"));
+            tip.push_str(&format!(
+                "\n{}   {bear:.0}°",
+                sdroxide_types::AirUnits::current().distance(km)
+            ));
         }
         resp.clone().on_hover_text(tip);
         if resp.clicked() {

@@ -512,14 +512,19 @@ fn tooltip_text(a: &AdsbAircraft, home: Option<(f64, f64)>) -> String {
     if let Some(cat) = &a.category {
         tip.push_str(&format!("\n{cat}"));
     }
-    tip.push_str(&format!("\n{} ft   {} kt", a.altitude_ft.unwrap_or(0), a.fmt_speed()));
+    let u = sdroxide_types::AirUnits::current();
+    tip.push_str(&format!(
+        "\n{}   {}",
+        u.altitude(a.altitude_ft.unwrap_or(0)),
+        a.ground_speed_kt.map(|k| u.speed(k)).unwrap_or_else(|| "--- kt".into())
+    ));
     if let Some(vr) = a.vertical_rate_fpm.filter(|v| v.abs() > 100) {
-        tip.push_str(&format!("\n{vr:+} ft/min"));
+        tip.push_str(&format!("\n{}", u.vertical_rate(vr)));
     }
     if let (Some(h), Some((lat, lon))) = (home, a.lat.zip(a.lon)) {
         let km = sdroxide_types::distance_km(h, (lat, lon));
         let bear = sdroxide_types::bearing_deg(h, (lat, lon));
-        tip.push_str(&format!("\n{km:.0} km   {bear:.0}°"));
+        tip.push_str(&format!("\n{}   {bear:.0}°", u.distance(km)));
     }
     if let Some(e) = &a.emergency {
         tip.push_str(&format!("\n{e}"));

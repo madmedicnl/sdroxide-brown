@@ -337,13 +337,16 @@ impl SdroxideApp {
 
                 let mut rows: Vec<(&str, String)> = Vec::new();
                 if let Some(ft) = a.altitude_ft {
-                    rows.push(("altitude", format!("{ft} ft barometric")));
+                    rows.push((
+                        "altitude",
+                        format!("{} barometric", sdroxide_types::AirUnits::current().altitude(ft)),
+                    ));
                 }
                 if let Some(ft) = a.gnss_altitude_ft {
-                    rows.push(("GNSS altitude", format!("{ft} ft")));
+                    rows.push(("GNSS altitude", sdroxide_types::AirUnits::current().altitude(ft)));
                 }
                 if let Some(kt) = a.ground_speed_kt {
-                    rows.push(("ground speed", format!("{kt:.0} kt")));
+                    rows.push(("ground speed", sdroxide_types::AirUnits::current().speed(kt)));
                 }
                 if let Some(t) = a.track_deg {
                     rows.push(("track", format!("{t:.0}°")));
@@ -352,7 +355,10 @@ impl SdroxideApp {
                     rows.push(("turning", format!("{:.1}°/s", a.turn_rate_deg_s)));
                 }
                 if let Some(v) = a.vertical_rate_fpm {
-                    rows.push(("vertical rate", format!("{v:+} ft/min")));
+                    rows.push((
+                        "vertical rate",
+                        sdroxide_types::AirUnits::current().vertical_rate(v),
+                    ));
                 }
                 if a.squawk.is_some() {
                     rows.push(("squawk", a.fmt_squawk()));
@@ -360,7 +366,13 @@ impl SdroxideApp {
                 if let (Some((hlat, hlon)), Some((lat, lon))) = (home, a.lat.zip(a.lon)) {
                     let km = sdroxide_types::distance_km((hlat, hlon), (lat, lon));
                     let bear = sdroxide_types::bearing_deg((hlat, hlon), (lat, lon));
-                    rows.push(("range", format!("{km:.0} km at {bear:.0}°")));
+                    rows.push((
+                        "range",
+                        format!(
+                            "{} at {bear:.0}°",
+                            sdroxide_types::AirUnits::current().distance(km)
+                        ),
+                    ));
                 }
                 if let Some((lat, lon)) = a.lat.zip(a.lon) {
                     rows.push(("position", format!("{lat:.4}, {lon:.4}")));
@@ -563,11 +575,45 @@ impl SdroxideApp {
         self.show_adsb_setup = open;
     }
 
+    /// The three unit sets side by side: the operator picks the one that suits
+    /// them and the active one stays lit.
+    pub(in crate::app) fn air_units_picker(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            for u in sdroxide_types::AirUnits::ALL {
+                let on = self.ui_settings.air_units == u;
+                if crate::chrome::chip(ui, on, RichText::new(u.label().to_uppercase()).size(9.5))
+                    .on_hover_text(u.describe())
+                    .clicked()
+                    && !on
+                {
+                    self.ui_settings.air_units = u;
+                    u.set_current();
+                    crate::app::persist::persist_ui_settings(&self.ui_settings);
+                }
+            }
+        });
+    }
+
     /// The ADS-B setup's body, split out so the shell can draw it in a window of
     /// its own.
     fn adsb_setup_body(&mut self, ui: &mut egui::Ui, cfg: &mut sdroxide_types::AdsbSettings) {
         crate::chrome::window_body_bg(ui);
         egui::Grid::new("adsb-cfg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
+            ui.label("Units");
+            self.air_units_picker(ui);
+            ui.end_row();
+            ui.label("");
+            ui.label(
+                RichText::new(
+                    "How altitude, speed, climb rate and distance are written in the \
+                     aircraft views. The decoder and the exports are not affected.",
+                )
+                .size(10.0)
+                .weak(),
+            );
+            ui.end_row();
+
             ui.label("Drop from map after");
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut cfg.drop_map_s).range(2..=600).suffix(" s"));
@@ -657,6 +703,7 @@ fn adsb_head_row(ui: &mut egui::Ui, have_home: bool, sort: &mut AdsbSort, desc: 
     const L: egui::Align2 = egui::Align2::LEFT_CENTER;
     const R: egui::Align2 = egui::Align2::RIGHT_CENTER;
     let cols = columns(ui.available_width(), have_home);
+    let units = sdroxide_types::AirUnits::current();
     crate::app::panels::widgets::sort_head_row(
         ui,
         &[
@@ -664,13 +711,13 @@ fn adsb_head_row(ui: &mut egui::Ui, have_home: bool, sort: &mut AdsbSort, desc: 
             // The address is the callsign column's fallback, not an order
             // anybody wants a sky in.
             (cols.icao, L, "ICAO", None),
-            (cols.alt, R, "ALT", Some(AdsbSort::Altitude)),
-            (cols.spd, R, "GS", Some(AdsbSort::Speed)),
+            (cols.alt, R, units.altitude_head(), Some(AdsbSort::Altitude)),
+            (cols.spd, R, units.speed_head(), Some(AdsbSort::Speed)),
             (cols.sig, R, "SIG", Some(AdsbSort::Signal)),
             (cols.trk, R, "TRK", None),
-            (cols.vs, R, "V/S", None),
+            (cols.vs, R, units.vertical_head(), None),
             (cols.sqk, R, "SQK", None),
-            (cols.range, R, "KM", Some(AdsbSort::Range)),
+            (cols.range, R, units.distance_head(), Some(AdsbSort::Range)),
             (cols.age, R, "AGE", Some(AdsbSort::Heard)),
         ],
         sort,
@@ -791,7 +838,10 @@ fn adsb_row(
     put(
         cols.vs,
         egui::Align2::RIGHT_CENTER,
-        a.vertical_rate_fpm.filter(|v| v.abs() >= 64).map(|v| format!("{v:+}")).unwrap_or_default(),
+        a.vertical_rate_fpm
+            .filter(|v| v.abs() >= 64)
+            .map(|v| sdroxide_types::AirUnits::current().vertical_rate_bare(v))
+            .unwrap_or_default(),
         small.clone(),
         dim,
     );
@@ -800,7 +850,11 @@ fn adsb_row(
         put(
             cols.range,
             egui::Align2::RIGHT_CENTER,
-            format!("{:.0}", sdroxide_types::distance_km(h, (lat, lon))),
+            format!(
+                "{:.0}",
+                sdroxide_types::AirUnits::current()
+                    .distance_value(sdroxide_types::distance_km(h, (lat, lon)))
+            ),
             small.clone(),
             dim,
         );

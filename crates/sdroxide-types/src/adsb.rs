@@ -231,21 +231,35 @@ impl AdsbAircraft {
 
     /// Altitude the way a controller's data block writes it: flight level above
     /// the transition altitude, hundreds of feet below it, `GND` on the ground.
+    /// In [`AirUnits::Metric`] it is metres to the nearest ten, since a flight
+    /// level is a feet idea.
     pub fn fmt_altitude(&self) -> String {
         if self.on_ground {
             return "GND".to_string();
         }
+        let units = AirUnits::current();
         match self.altitude_ft {
+            Some(ft) if units == AirUnits::Metric => {
+                format!("{}", ((f64::from(ft) * FT_M / 10.0).round() as i32) * 10)
+            }
             Some(ft) if ft >= 18_000 => format!("F{:03}", (ft as f64 / 100.0).round() as i32),
             Some(ft) => format!("{:03}", (ft as f64 / 100.0).round() as i32),
             None => "---".to_string(),
         }
     }
 
-    /// Ground speed as a three-digit knot figure, or dashes.
+    /// Ground speed as a three-digit figure in the chosen unit, or dashes.
     pub fn fmt_speed(&self) -> String {
         match self.ground_speed_kt {
-            Some(kt) => format!("{:03}", kt.round().max(0.0) as i32),
+            Some(kt) => {
+                let kt = f64::from(kt);
+                let v = match AirUnits::current() {
+                    AirUnits::Aviation => kt,
+                    AirUnits::Metric => kt * KT_KMH,
+                    AirUnits::Imperial => kt * KT_MPH,
+                };
+                format!("{:03}", v.round().max(0.0) as i32)
+            }
             None => "---".to_string(),
         }
     }
@@ -432,5 +446,192 @@ mod tests {
         assert!(s.drop_list_s >= s.drop_map_s);
         let s = AdsbSettings { history_points: 60_000, ..AdsbSettings::default() }.sane();
         assert_eq!(s.history_points, ADSB_TRACK_MAX as u16);
+    }
+}
+
+const FT_M: f64 = 0.3048;
+const KT_KMH: f64 = 1.852;
+const KT_MPH: f64 = 1.150_779;
+const KM_MI: f64 = 0.621_371;
+const FPM_MS: f64 = 0.005_08;
+
+/// Which family of units the aircraft views write numbers in. Presentation
+/// only: the decoder and the wire stay in feet and knots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum AirUnits {
+    /// Feet, knots, feet per minute and kilometres: what the views drew before
+    /// there was a choice, and what a controller's data block uses.
+    #[default]
+    Aviation,
+    /// Metres, km/h, m/s and kilometres.
+    Metric,
+    /// Feet, mph, feet per minute and miles.
+    Imperial,
+}
+
+thread_local! {
+    static CURRENT: std::cell::Cell<AirUnits> = const { std::cell::Cell::new(AirUnits::Aviation) };
+}
+
+impl AirUnits {
+    pub const ALL: [AirUnits; 3] = [AirUnits::Aviation, AirUnits::Metric, AirUnits::Imperial];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            AirUnits::Aviation => "Aviation",
+            AirUnits::Metric => "Metric",
+            AirUnits::Imperial => "Imperial",
+        }
+    }
+
+    /// What the set is made of, for the button's tooltip.
+    pub fn describe(self) -> &'static str {
+        match self {
+            AirUnits::Aviation => "feet, knots, feet/min, km",
+            AirUnits::Metric => "metres, km/h, m/s, km",
+            AirUnits::Imperial => "feet, mph, feet/min, miles",
+        }
+    }
+
+    /// The set the views are drawing in right now. The app sets it once a frame
+    /// from its settings, so a formatter several calls deep needs no argument.
+    /// Per thread, so tests that pick a set cannot disturb each other.
+    pub fn current() -> AirUnits {
+        CURRENT.with(|c| c.get())
+    }
+
+    pub fn set_current(self) {
+        CURRENT.with(|c| c.set(self));
+    }
+
+    /// `35000 ft` / `10668 m`.
+    pub fn altitude(self, ft: i32) -> String {
+        match self {
+            AirUnits::Metric => format!("{} m", (f64::from(ft) * FT_M).round() as i32),
+            _ => format!("{ft} ft"),
+        }
+    }
+
+    /// `450 kt` / `833 km/h` / `518 mph`.
+    pub fn speed(self, kt: f32) -> String {
+        let kt = f64::from(kt);
+        match self {
+            AirUnits::Aviation => format!("{kt:.0} kt"),
+            AirUnits::Metric => format!("{:.0} km/h", kt * KT_KMH),
+            AirUnits::Imperial => format!("{:.0} mph", kt * KT_MPH),
+        }
+    }
+
+    /// `+1800 ft/min` / `+9.1 m/s`, always signed.
+    pub fn vertical_rate(self, fpm: i32) -> String {
+        match self {
+            AirUnits::Metric => format!("{:+.1} m/s", f64::from(fpm) * FPM_MS),
+            _ => format!("{fpm:+} ft/min"),
+        }
+    }
+
+    /// The list column's vertical rate, unit left to the heading.
+    pub fn vertical_rate_bare(self, fpm: i32) -> String {
+        match self {
+            AirUnits::Metric => format!("{:+.1}", f64::from(fpm) * FPM_MS),
+            _ => format!("{fpm:+}"),
+        }
+    }
+
+    /// `24 km` / `15 mi`.
+    pub fn distance(self, km: f64) -> String {
+        match self {
+            AirUnits::Imperial => format!("{:.0} mi", km * KM_MI),
+            _ => format!("{km:.0} km"),
+        }
+    }
+
+    /// A distance in the set's own unit, for a column that carries the unit in
+    /// its heading.
+    pub fn distance_value(self, km: f64) -> f64 {
+        match self {
+            AirUnits::Imperial => km * KM_MI,
+            _ => km,
+        }
+    }
+
+    pub fn distance_head(self) -> &'static str {
+        match self {
+            AirUnits::Imperial => "MI",
+            _ => "KM",
+        }
+    }
+
+    pub fn speed_head(self) -> &'static str {
+        match self {
+            AirUnits::Aviation => "GS",
+            AirUnits::Metric => "KMH",
+            AirUnits::Imperial => "MPH",
+        }
+    }
+
+    pub fn altitude_head(self) -> &'static str {
+        match self {
+            AirUnits::Metric => "ALT m",
+            _ => "ALT",
+        }
+    }
+
+    pub fn vertical_head(self) -> &'static str {
+        match self {
+            AirUnits::Metric => "m/s",
+            _ => "V/S",
+        }
+    }
+}
+
+#[cfg(test)]
+mod air_units_tests {
+    use super::*;
+
+    #[test]
+    fn each_set_writes_the_same_flight_in_its_own_units() {
+        assert_eq!(AirUnits::Aviation.altitude(35_000), "35000 ft");
+        assert_eq!(AirUnits::Metric.altitude(35_000), "10668 m");
+        assert_eq!(AirUnits::Imperial.altitude(35_000), "35000 ft");
+        assert_eq!(AirUnits::Aviation.speed(450.0), "450 kt");
+        assert_eq!(AirUnits::Metric.speed(450.0), "833 km/h");
+        assert_eq!(AirUnits::Imperial.speed(450.0), "518 mph");
+        assert_eq!(AirUnits::Aviation.vertical_rate(1800), "+1800 ft/min");
+        assert_eq!(AirUnits::Metric.vertical_rate(-1800), "-9.1 m/s");
+        assert_eq!(AirUnits::Aviation.distance(100.0), "100 km");
+        assert_eq!(AirUnits::Metric.distance(100.0), "100 km");
+        assert_eq!(AirUnits::Imperial.distance(100.0), "62 mi");
+    }
+
+    #[test]
+    fn the_list_columns_follow_the_current_set() {
+        let mut a = AdsbAircraft::new(1, 0);
+        a.altitude_ft = Some(35_000);
+        a.ground_speed_kt = Some(450.0);
+        AirUnits::Aviation.set_current();
+        assert_eq!((a.fmt_altitude().as_str(), a.fmt_speed().as_str()), ("F350", "450"));
+        AirUnits::Metric.set_current();
+        assert_eq!((a.fmt_altitude().as_str(), a.fmt_speed().as_str()), ("10670", "833"));
+        AirUnits::Imperial.set_current();
+        assert_eq!((a.fmt_altitude().as_str(), a.fmt_speed().as_str()), ("F350", "518"));
+        AirUnits::Aviation.set_current();
+    }
+
+    #[test]
+    fn the_ground_and_the_unknown_are_not_converted() {
+        AirUnits::Metric.set_current();
+        let mut g = AdsbAircraft::new(1, 0);
+        assert_eq!(g.fmt_altitude(), "---");
+        assert_eq!(g.fmt_speed(), "---");
+        g.on_ground = true;
+        assert_eq!(g.fmt_altitude(), "GND");
+        AirUnits::Aviation.set_current();
+    }
+
+    #[test]
+    fn the_default_is_what_the_views_drew_before_there_was_a_choice() {
+        assert_eq!(AirUnits::default(), AirUnits::Aviation);
+        assert_eq!(AirUnits::current(), AirUnits::Aviation);
     }
 }
