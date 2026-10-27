@@ -212,10 +212,17 @@ style preferences.
 - **The aircraft online relay is the station's, never the client's.** adsbdb and
   Planespotters are asked by the server only, through `GET /aircraft-info/{icao}`,
   and only when `SDROXIDE_AIRCRAFT_ONLINE` is `1`/`true`/`yes`/`on` (off by
-  default; no key, no account). The JSON is cached 24 h; a Planespotters image is
-  **never fetched, stored or re-hosted** by the server — return its URL unchanged
-  with the credit and the link. A new server route must also be added to
-  `is_root_route`, or a reverse proxy's prefix is not stripped.
+  default; no key, no account). The JSON is cached 24 h. A Planespotters image is
+  never stored or re-hosted — with **one exception**, the operator's instruction of
+  2026-10-27: a browser cannot read `t.plnspttrs.net` (no CORS header), so
+  `GET /aircraft-photo/{icao}` hands the one thumbnail of the open card over from
+  **memory only**: one image at a time (the next replaces it), the address taken
+  from the relay's own answer and never from a client, `t.plnspttrs.net` over
+  https only, JPEG/PNG up to 2 MB, `Cache-Control: no-store`, nothing on disk,
+  destroyed when the card closes (`DELETE /aircraft-photo`) and after 60 s at the
+  latest. The credit and the Planespotters link stay on the card with or without
+  the image. A new server route must also be added to `is_root_route`, or a
+  reverse proxy's prefix is not stripped.
 - **Do not touch `vendor/`** except to update a submodule, and **native-only
   crates** (drm, nrsc5, faad2, the USB drivers, hpsdr) must never become
   dependencies of a wasm-targeted crate.

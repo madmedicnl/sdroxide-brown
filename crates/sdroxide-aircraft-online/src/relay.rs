@@ -22,7 +22,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::cache::OnlineCache;
 use crate::model::{
-    AircraftInfo, Lookup, Photo, Reply, Request, Route, clean_callsign, clean_registration,
+    AircraftInfo, Image, Lookup, Photo, Reply, Request, Route, clean_callsign, clean_registration,
+    image_ok, thumb_url_ok,
 };
 
 /// The version of [`Info`]'s shape. Bump on any change a client cannot ignore.
@@ -88,6 +89,13 @@ impl Info {
 /// Whatever actually sends a [`Request`] and brings back a [`Reply`].
 pub trait Upstream: Send + Sync {
     fn fetch(&self, req: &Request) -> Reply;
+
+    /// The picture at `url`, or `None` for any failure. Only ever called with
+    /// an address [`thumb_url_ok`] accepted. A stand-in that has no pictures
+    /// need not say so.
+    fn image(&self, _url: &str) -> Option<Image> {
+        None
+    }
 }
 
 struct RateLimit {
@@ -169,6 +177,16 @@ impl<U: Upstream> Relay<U> {
             done: Condvar::new(),
             wait: WAIT,
         }
+    }
+
+    /// The thumbnail at `url`, if it is a Planespotters picture address, comes
+    /// back a JPEG or PNG and is not too big. Blocking, and not cached here: the
+    /// caller keeps it in memory for as long as one card is open and no longer.
+    pub fn image(&self, url: &str) -> Option<Image> {
+        if !thumb_url_ok(url) {
+            return None;
+        }
+        self.upstream.image(url).filter(|i| image_ok(&i.content_type, i.bytes.len()))
     }
 
     /// How long a client waits for a question already out. For tests.
@@ -333,6 +351,31 @@ mod tests {
             self.calls.lock().unwrap().push(req.clone());
             std::thread::sleep(self.delay);
             (self.reply)(req)
+        }
+    }
+
+    #[test]
+    fn a_picture_is_fetched_only_from_the_photo_host_and_only_if_it_is_one() {
+        struct Pics;
+        impl Upstream for Pics {
+            fn fetch(&self, _: &Request) -> Reply {
+                Reply::Photo(Lookup::Failed)
+            }
+            fn image(&self, url: &str) -> Option<Image> {
+                let content_type = if url.ends_with("page") { "text/html" } else { "image/jpeg" };
+                Some(Image { content_type: content_type.into(), bytes: vec![1, 2, 3] })
+            }
+        }
+        let r = Relay::new(Pics, 10, OnlineCache::default());
+        assert!(r.image("https://t.plnspttrs.net/a.jpg").is_some());
+        assert!(r.image("https://t.plnspttrs.net/page").is_none(), "not a picture");
+        for bad in [
+            "http://t.plnspttrs.net/a.jpg",
+            "https://cdn.plnspttrs.net/a.jpg",
+            "https://evil.example/a.jpg",
+            "https://t.plnspttrs.net@evil.example/a.jpg",
+        ] {
+            assert!(r.image(bad).is_none(), "{bad}");
         }
     }
 

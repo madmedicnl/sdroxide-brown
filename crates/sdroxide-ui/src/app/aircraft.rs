@@ -515,6 +515,8 @@ impl super::SdroxideApp {
         self.aircraft_online.poll(ctx, now);
         self.aircraft_online.ask_watch(ctx, peer.as_deref(), now);
         self.aircraft_online.ask_switch(ctx, peer.as_deref());
+        // The picture of a card that is closed goes with it.
+        self.aircraft_online.release_thumbs(ctx, peer.as_deref());
         // Until the station has said what the list is there is nothing to watch.
         if !matches!(self.aircraft_online.watch.state(), WatchState::Ready) {
             return;
@@ -765,7 +767,9 @@ impl super::SdroxideApp {
             }
         }
         if let Some(p) = photo.as_ref().filter(|p| p.show_image) {
-            self.aircraft_online.want_thumb(&ctx, &p.thumb_url);
+            if let Some(w) = want.as_ref() {
+                self.aircraft_online.want_thumb(&ctx, peer.as_deref(), w.icao, &p.thumb_url);
+            }
             // Now that it has been asked for, what became of it decides whether
             // the picture is drawn or only its credit and link.
             let status = self.aircraft_online.thumb_status(&p.thumb_url);

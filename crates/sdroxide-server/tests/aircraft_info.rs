@@ -157,3 +157,61 @@ async fn an_open_station_refuses_a_bad_question_with_400() {
         assert!(answer.contains("\"status\":\"invalid\""), "{path}: {answer}");
     }
 }
+
+/// A bare HTTP request of any method, handing back the whole answer.
+async fn send(port: u16, method: &str, path: &str, extra: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut sock = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.expect("connect");
+    let req = format!(
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n{extra}Content-Length: 0\r\nConnection: close\r\n\r\n"
+    );
+    sock.write_all(req.as_bytes()).await.expect("write");
+    let mut body = String::new();
+    tokio::time::timeout(Duration::from_secs(5), sock.read_to_string(&mut body))
+        .await
+        .expect("timeout reading the answer")
+        .expect("read");
+    body
+}
+
+const PORT_PHOTO_SHUT: u16 = 39484;
+const PORT_PHOTO_PASSWORD: u16 = 39485;
+const PORT_PHOTO_OPEN: u16 = 39486;
+
+/// The picture of the open card follows the relay's switch, through a prefix too.
+#[tokio::test]
+async fn the_photo_is_shut_while_the_relay_is_off() {
+    spawn_station(PORT_PHOTO_SHUT, false, false).await;
+    for path in ["/aircraft-photo/484006", "/sdroxide/aircraft-photo/484006"] {
+        let answer = get(PORT_PHOTO_SHUT, path, None).await;
+        assert!(answer.starts_with("HTTP/1.1 503"), "{path}: {answer}");
+        assert!(answer.to_ascii_lowercase().contains("cache-control: no-store"), "{answer}");
+    }
+}
+
+/// Same door as the sockets, for the picture and for letting it go.
+#[tokio::test]
+async fn the_photo_and_its_release_want_the_cookie() {
+    spawn_station(PORT_PHOTO_PASSWORD, true, true).await;
+    let without = get(PORT_PHOTO_PASSWORD, "/aircraft-photo/484006", None).await;
+    assert!(without.starts_with("HTTP/1.1 401"), "{without}");
+    let release = send(PORT_PHOTO_PASSWORD, "DELETE", "/aircraft-photo", "x-sdroxide: 1\r\n").await;
+    assert!(release.starts_with("HTTP/1.1 401"), "{release}");
+}
+
+/// An aircraft the relay never named a photo for is not fetched from anywhere:
+/// the client gives an address of an aircraft, never of a picture. And a release
+/// needs the custom header a stray page cannot send.
+#[tokio::test]
+async fn nothing_is_fetched_for_an_aircraft_nobody_asked_about_and_a_release_needs_the_header() {
+    spawn_station(PORT_PHOTO_OPEN, false, true).await;
+    let answer = get(PORT_PHOTO_OPEN, "/aircraft-photo/484006", None).await;
+    assert!(answer.starts_with("HTTP/1.1 404"), "{answer}");
+    let bad =
+        get(PORT_PHOTO_OPEN, "/aircraft-photo/zz?url=https://t.plnspttrs.net/x.jpg", None).await;
+    assert!(bad.starts_with("HTTP/1.1 400"), "{bad}");
+    let bare = send(PORT_PHOTO_OPEN, "DELETE", "/aircraft-photo", "").await;
+    assert!(bare.starts_with("HTTP/1.1 403"), "{bare}");
+    let ok = send(PORT_PHOTO_OPEN, "DELETE", "/aircraft-photo", "x-sdroxide: 1\r\n").await;
+    assert!(ok.starts_with("HTTP/1.1 204"), "{ok}");
+}

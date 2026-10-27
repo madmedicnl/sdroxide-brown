@@ -113,7 +113,7 @@ impl SdroxideApp {
         let state = self.aircraft_online.store.state_for(icao, has_station).clone();
         self.adsb_map.lookup = lookup_after(self.adsb_map.lookup, Some(pinned), &state);
         if let Some(url) = thumb_wish(self.adsb_map.lookup, Some(pinned), &state) {
-            self.aircraft_online.want_thumb(&ctx, &url);
+            self.aircraft_online.want_thumb(&ctx, peer.as_deref(), icao, &url);
         }
         let offer = aircraft_hover::lookup_offer(
             &state,
