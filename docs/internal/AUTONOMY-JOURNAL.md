@@ -21,6 +21,60 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-27 (the Aircraft window, from the operator's five screenshots)
+
+**In plain words.** Ten pull requests are open, none merged. They fix what the
+screenshots showed: the French word "indisponible" still in six strings (my
+earlier audit said there was one; that was wrong), distances and speeds in
+metric or miles, the same fact repeated on every line of the card, columns that
+printed over each other, three buttons for the map style instead of one that
+cycled, a box for an airport, mode buttons that did nothing on the wrong band,
+VDL2 and ACARS views that were a sentence, a button column cut off at the
+window's smallest size, and a switch for the online photo
+lookup that an operator can press. Nothing was seen in a picture and the
+switch and the mode buttons were never tried against a real radio or a real
+online answer; those are the first things to look at. Next: the narrow-window check, and whatever the review of these says.
+
+**Done** (PR, base, what it carries):
+- #266 `claude/aircraft-a-english-translate`, main — "online unavailable", the
+  guard list extended, `translate="no"` on the web page.
+- #267 `claude/aircraft-i-units`, main — aviation, metric, imperial.
+- #268 `claude/aircraft-c-duplicates`, on #267 — radio badge and shared note once.
+- #269 `claude/aircraft-d-columns`, on #268 — columns from the right, no overprint.
+- #270 `claude/aircraft-e-style-buttons`, main — Radar, Terrain, Chart side by side.
+- #271 `claude/aircraft-j-airport-card`, on #267 — airport card and pinned box.
+- #272 `claude/aircraft-g-mode-buttons`, main — `SetModeListen`, HFDL enabled.
+- #273 `claude/aircraft-h-views`, on #272 — VDL2 and ACARS views.
+- #276 `claude/aircraft-f-narrow`, on #273 — the button column scrolls at
+  560 x 320; seen in a rendered picture before and after (ignored preview test
+  `aircraft_window_preview`).
+- #274 `claude/aircraft-b-photo-switch`, main — `GET/POST /aircraft-online`,
+  no `PROTO_VERSION` change (still 255 / 0x4B).
+- Numbers: `cargo test --release -p sdroxide-ui` 1283 to 1288 passed per branch,
+  native `--all-targets` without errors, wasm release check finished, rustfmt
+  clean on what was touched. Tests were red before the fix where a fix existed
+  (guard words, web page, columns overprint, hover card units); the others are
+  new behaviour with their own tests.
+
+**Not done / blocked.**
+- Lot F was done with a rendered picture, but only at the smallest size and with
+  stand-in data (the map showed no aircraft); not run in a real window.
+- The radio and server crates do not build as-is in this sandbox (the RADE
+  crate downloads opus, which is blocked). With a temporary stub of that crate
+  (never committed) both were built and tested: `-p sdroxide-server` 80 unit and
+  the integration tests green (#274), and a new engine test on the airband
+  `SetMode` refused / `SetModeListen` taken (#272). Nothing on a real radio, and
+  no real adsbdb/Planespotters answer.
+- Only lot F was looked at in a rendered picture; the other lots were not, and
+  the Chart style's colours are unchanged.
+- #271 now also closes its box with Esc.
+- `AGENTS.md` still says the relay is switched only by the environment variable.
+- main carries "frozen until #263"; I opened PRs on the operator's explicit
+  order and merged nothing.
+
+**Next.** Read the review of the ten.
+
+---
 
 ---
 

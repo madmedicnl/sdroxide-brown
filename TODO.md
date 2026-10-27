@@ -283,6 +283,12 @@ reception log · #642 S-meter calibration.
 
 ## Recently done
 
+- **2026-10-27** — the Aircraft window clean-up: ten PRs open, none merged
+  (#266 English and no browser translation, #267 units, #268 duplicates, #269
+  columns, #270 map-style buttons, #271 airport card, #272 mode buttons, #273
+  VDL2/ACARS views, #274 online-lookup switch, #276 button column scrolls at the
+  smallest size). Not yet seen in a picture; #274 and
+  #272 were tested with a stubbed RADE crate, not on a radio. Waiting on review.
 - **2026-10-26** — the float's **own title bar** (`151828df`, on `local/windows`,
   not pushed): out to a window · roll up · close (which docks), with the mode name
   on the left. Roll-up is the laptop answer — the float becomes a bar. And the
