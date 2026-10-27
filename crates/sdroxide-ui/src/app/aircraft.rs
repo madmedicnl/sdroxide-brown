@@ -66,6 +66,49 @@ const MODES: &[AirMode] = &[
     },
 ];
 
+/// Where ACARS is put when the dial is nowhere near the airband: a widely used
+/// channel. (VDL2 and ADS-B are retuned by the engine itself.)
+const ACARS_DEFAULT_HZ: f64 = 131_725_000.0;
+const AIRBAND_HZ: std::ops::RangeInclusive<f64> = 118_000_000.0..=137_000_000.0;
+
+/// What a click on a mode button sends.
+///
+/// **`SetModeListen`, not `SetMode`.** The engine refuses `SetMode` for a mode
+/// the current band does not carry, and the band table lists HFDL only on
+/// shortwave, VDL2 and ACARS only on the airband, and ADS-B on none of the
+/// service bands: on the airband the ADS-B and HFDL buttons did nothing but put
+/// a notice in the top bar. These buttons are the aviation tools and have to
+/// work wherever the radio is, which is what the listener path is for.
+///
+/// HFDL's decoder only runs when it is enabled, so the button enables it and
+/// brings the dial to its channel. ACARS takes the dial to a channel only when
+/// it is not already in the airband, so a frequency the operator chose is never
+/// moved; VDL2 and ADS-B are retuned by the engine on the mode change.
+fn mode_commands(
+    mode: Mode,
+    hfdl: &sdroxide_types::HfdlSettings,
+    vfo: sdroxide_types::Vfo,
+    dial_hz: f64,
+) -> Vec<Command> {
+    let mut out = vec![Command::SetModeListen { rx: RxId::Main, mode }];
+    match mode {
+        Mode::Hfdl => {
+            if !hfdl.enabled {
+                out.push(Command::SetHfdlConfig(sdroxide_types::HfdlSettings {
+                    enabled: true,
+                    ..*hfdl
+                }));
+            }
+            out.push(Command::SetVfo { vfo, hz: hfdl.frequency_hz });
+        }
+        Mode::Acars if !AIRBAND_HZ.contains(&dial_hz) => {
+            out.push(Command::SetVfo { vfo, hz: ACARS_DEFAULT_HZ });
+        }
+        _ => {}
+    }
+    out
+}
+
 const COLUMN_W: f32 = 104.0;
 const BUTTON_H: f32 = 30.0;
 const LIST_W: f32 = 230.0;
@@ -330,7 +373,12 @@ impl super::SdroxideApp {
                             self.aircraft_cards = false;
                             self.aircraft_watch_view = false;
                             self.aircraft_stats_view = false;
-                            cmds.push(Command::SetMode { rx: RxId::Main, mode: m.mode });
+                            cmds.extend(mode_commands(
+                                m.mode,
+                                &self.state.hfdl,
+                                self.state.active_vfo,
+                                self.state.active_freq_hz(),
+                            ));
                         }
                     }
                     ui.add_space(6.0);
@@ -910,6 +958,47 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn an_aviation_button_never_sends_the_band_checked_set_mode() {
+        let hfdl = sdroxide_types::HfdlSettings::default();
+        for m in MODES {
+            let cmds = mode_commands(m.mode, &hfdl, sdroxide_types::Vfo::A, 7_000_000.0);
+            assert!(
+                matches!(cmds[0], Command::SetModeListen { mode, .. } if mode == m.mode),
+                "{:?}: {cmds:?}",
+                m.mode
+            );
+            assert!(!cmds.iter().any(|c| matches!(c, Command::SetMode { .. })), "{cmds:?}");
+        }
+    }
+
+    #[test]
+    fn the_hfdl_button_switches_the_decoder_on_and_goes_to_its_channel() {
+        let off = sdroxide_types::HfdlSettings { enabled: false, frequency_hz: 8_912_000.0 };
+        let cmds = mode_commands(Mode::Hfdl, &off, sdroxide_types::Vfo::A, 145_000_000.0);
+        assert!(
+            cmds.iter().any(|c| matches!(c, Command::SetHfdlConfig(h) if h.enabled)),
+            "{cmds:?}"
+        );
+        assert!(cmds.iter().any(|c| matches!(c, Command::SetVfo { hz, .. } if *hz == 8_912_000.0)));
+        let on = sdroxide_types::HfdlSettings { enabled: true, ..off };
+        let cmds = mode_commands(Mode::Hfdl, &on, sdroxide_types::Vfo::A, 8_912_000.0);
+        assert!(!cmds.iter().any(|c| matches!(c, Command::SetHfdlConfig(_))));
+    }
+
+    #[test]
+    fn acars_leaves_a_dial_that_is_already_in_the_airband() {
+        let hfdl = sdroxide_types::HfdlSettings::default();
+        let moved = mode_commands(Mode::Acars, &hfdl, sdroxide_types::Vfo::A, 7_000_000.0);
+        assert!(
+            moved
+                .iter()
+                .any(|c| matches!(c, Command::SetVfo { hz, .. } if *hz == ACARS_DEFAULT_HZ))
+        );
+        let kept = mode_commands(Mode::Acars, &hfdl, sdroxide_types::Vfo::A, 131_550_000.0);
+        assert_eq!(kept.len(), 1, "{kept:?}");
+    }
 
     #[test]
     fn every_button_is_a_mode_the_band_menu_can_set() {
