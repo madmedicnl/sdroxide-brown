@@ -27,9 +27,9 @@ use super::aircraft_history::{self, HistoryOffer, HistoryState};
 use super::aircraft_online::{self, Badge, Provenance, ThumbStatus};
 use super::aircraft_search;
 use super::aircraft_share;
-use sdroxide_aircraft_history::export::Format;
 use super::aircraft_stats::{self, SortBy, Stats};
 use super::aircraft_watch::{self, WatchState};
+use sdroxide_aircraft_history::export::Format;
 
 /// The opening size of the window and its floor.
 const AIRCRAFT_SIZE: [f32; 2] = [920.0, 560.0];
@@ -448,6 +448,7 @@ impl super::SdroxideApp {
         let peer = self.ctrl.peer_url();
         self.aircraft_online.poll(ctx, now);
         self.aircraft_online.ask_watch(ctx, peer.as_deref(), now);
+        self.aircraft_online.ask_switch(ctx, peer.as_deref());
         // Until the station has said what the list is there is nothing to watch.
         if !matches!(self.aircraft_online.watch.state(), WatchState::Ready) {
             return;
@@ -783,6 +784,7 @@ impl super::SdroxideApp {
                     }
                     ui.add_space(6.0);
                     rows_grid(ui, "aircraft_card_fields", card_rows);
+                    self.online_switch_row(ui, &state);
                     if let Some(i) = icao.filter(|i| self.aircraft_online.history.on() == Some(*i))
                     {
                         ui.add_space(6.0);
@@ -815,6 +817,47 @@ impl super::SdroxideApp {
         if picked.is_some() {
             self.aircraft_card_sel = picked;
         }
+    }
+
+    /// The switch for the station's online lookup, drawn under the card's lines.
+    ///
+    /// Off is the default, because it makes the station reach out to adsbdb and
+    /// Planespotters; and an operator cannot be expected to set an environment
+    /// variable on the station, so the window offers the switch itself. The
+    /// station keeps the choice across restarts.
+    fn online_switch_row(&mut self, ui: &mut egui::Ui, state: &aircraft_online::OnlineState) {
+        use aircraft_online::{OnlineState, Reason};
+        let on = match state {
+            OnlineState::Unavailable(Reason::Disabled) => false,
+            OnlineState::Ready(_) => true,
+            _ => return,
+        };
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if self.aircraft_online.switch_asking {
+                ui.label(RichText::new("asking the station…").size(10.5).weak());
+            } else if !on {
+                let b = ui.button("Turn on online lookup").on_hover_text(
+                    "Photos, type, operator and route come from adsbdb and Planespotters. \
+                     Your station asks them for you, and only when this is on; it keeps \
+                     your choice. Nothing else leaves the station.",
+                );
+                if b.clicked() {
+                    self.aircraft_online.want_switch(true);
+                }
+            } else if ui
+                .small_button("Turn off online lookup")
+                .on_hover_text("Stop the station asking adsbdb and Planespotters.")
+                .clicked()
+            {
+                self.aircraft_online.want_switch(false);
+            }
+            if let Some(why) = self.aircraft_online.switch_note {
+                ui.label(
+                    RichText::new(format!("Not changed: {why}.")).size(10.5).color(WATCH_AMBER),
+                );
+            }
+        });
     }
 
     /// The photo, its credit and the link to its page. The credit and the link

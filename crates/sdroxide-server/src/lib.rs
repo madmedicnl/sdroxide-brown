@@ -708,6 +708,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         .route("/radios", get(radios_route))
         .route("/solar-ws", get(solar::ws_route))
         .route("/aircraft-info/{icao}", get(aircraft::info_route))
+        .route("/aircraft-online", get(aircraft::switch_get).post(aircraft::switch_post))
         .route("/aircraft-history", get(history::list_route))
         .route("/aircraft-history/{icao}", get(history::one_route))
         .route("/aircraft-export", get(history::export_route))
@@ -748,6 +749,7 @@ fn is_root_route(path: &str) -> bool {
         | "/radios"
         | "/aircraft-history"
         | "/aircraft-export"
+        | "/aircraft-online"
         | "/aircraft-watch" => true,
         // Whatever follows is the question, and a bad one is the endpoint's to
         // refuse with a 400, not the static handler's to answer with a page.

@@ -19,6 +19,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
@@ -103,11 +104,25 @@ pub(crate) fn http_status(s: Status) -> StatusCode {
     }
 }
 
+/// The file whose presence in the config directory means the operator switched
+/// the relay on from the AIRCRAFT window. Presence only; there is nothing in it.
+pub(crate) const SWITCH_FILE: &str = "aircraft-online.on";
+
+/// The header a switch request must carry. A page on another site cannot add a
+/// custom header to a request without the station's say-so (a preflight), so
+/// this keeps a stray link or form from flipping the relay.
+pub(crate) const SWITCH_HEADER: &str = "x-sdroxide";
+
 /// The relay and the file its cache lives in.
 pub(crate) struct AircraftHub<U = HttpUpstream> {
-    pub enabled: bool,
+    /// Whether the relay answers. Starts from the environment variable or the
+    /// switch file, and the AIRCRAFT window can change it while running.
+    enabled: AtomicBool,
+    /// The environment variable is on, which no window can undo.
+    forced: bool,
     relay: Relay<U>,
     file: Option<PathBuf>,
+    switch_file: Option<PathBuf>,
 }
 
 fn now_unix() -> i64 {
@@ -119,19 +134,22 @@ fn now_unix() -> i64 {
 impl AircraftHub<HttpUpstream> {
     /// The station's relay. When it is off nothing is read, nothing is
     /// written and no connection is ever made.
-    pub(crate) fn start(enabled: bool) -> AircraftHub {
-        let file = enabled
-            .then(|| sdroxide_config::config_dir().ok().map(|d| d.join("aircraft-online.json")))
-            .flatten();
+    pub(crate) fn start(forced: bool) -> AircraftHub {
+        let dir = sdroxide_config::config_dir().ok();
+        let switch_file = dir.as_ref().map(|d| d.join(SWITCH_FILE));
+        let enabled = forced || switch_file.as_ref().is_some_and(|f| f.exists());
+        let file = enabled.then(|| dir.as_ref().map(|d| d.join("aircraft-online.json"))).flatten();
         let cache = file
             .as_ref()
             .and_then(|f| std::fs::read_to_string(f).ok())
             .map(|text| OnlineCache::from_json(&text, now_unix()))
             .unwrap_or_default();
         AircraftHub {
-            enabled,
+            enabled: AtomicBool::new(enabled),
+            forced,
             relay: Relay::new(HttpUpstream::new(), MAX_QUESTIONS_PER_MINUTE, cache),
             file,
+            switch_file,
         }
     }
 }
@@ -140,10 +158,34 @@ impl<U: Upstream> AircraftHub<U> {
     #[cfg(test)]
     pub(crate) fn with(enabled: bool, upstream: U, max_per_minute: usize) -> AircraftHub<U> {
         AircraftHub {
-            enabled,
+            enabled: AtomicBool::new(enabled),
+            forced: false,
             relay: Relay::new(upstream, max_per_minute, OnlineCache::default()),
             file: None,
+            switch_file: None,
         }
+    }
+
+    pub(crate) fn enabled(&self) -> bool {
+        self.enabled.load(Ordering::Relaxed)
+    }
+
+    /// Switch the relay on or off from a client, and remember the choice in the
+    /// config directory so a restart keeps it. The environment variable wins
+    /// over a request to turn it off: it is the operator's, set on the machine.
+    /// Returns what the relay is now.
+    pub(crate) fn set_enabled(&self, on: bool) -> bool {
+        let on = on || self.forced;
+        if let Some(f) = &self.switch_file {
+            if on && !self.forced {
+                // A switch that cannot be remembered still works until restart.
+                let _ = std::fs::write(f, b"");
+            } else if !on {
+                let _ = std::fs::remove_file(f);
+            }
+        }
+        self.enabled.store(on, Ordering::Relaxed);
+        on
     }
 
     /// Ask, and write the cache out if a minute has passed with something new
@@ -184,7 +226,7 @@ pub(crate) async fn info_route(
     // for it here, and the cookie it handed out at sign-in is what answers.
     let needed = station.auth.required().is_some();
     let signed = crate::session_cookie::from_headers(&headers, &station.auth).is_some();
-    match judge(hub.enabled, needed, signed, &icao, &query) {
+    match judge(hub.enabled(), needed, signed, &icao, &query) {
         Verdict::Reject(status) => json(http_status(status), &Info::bare(status)),
         Verdict::Run { icao, callsign, registration } => {
             let info = tokio::task::spawn_blocking(move || {
@@ -198,9 +240,73 @@ pub(crate) async fn info_route(
     }
 }
 
+/// What `/aircraft-online` says: whether the relay is on, and whether the
+/// station's environment variable holds it on.
+#[derive(serde::Serialize)]
+struct Switch {
+    enabled: bool,
+    forced: bool,
+}
+
+fn switch_json(status: StatusCode, hub: &AircraftHub) -> Response {
+    let body = Switch { enabled: hub.enabled(), forced: hub.forced };
+    (
+        status,
+        [(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")],
+        serde_json::to_string(&body).unwrap_or_default(),
+    )
+        .into_response()
+}
+
+/// What a request to the switch is answered with before it is allowed to do
+/// anything: the sign-in first, then (for a change) the custom header.
+pub(crate) fn switch_refusal(
+    sign_in_needed: bool,
+    signed_in: bool,
+    changing: bool,
+    has_header: bool,
+) -> Option<StatusCode> {
+    if sign_in_needed && !signed_in {
+        return Some(StatusCode::UNAUTHORIZED);
+    }
+    (changing && !has_header).then_some(StatusCode::FORBIDDEN)
+}
+
+/// `GET /aircraft-online`: is the relay on.
+pub(crate) async fn switch_get(
+    State(station): State<Arc<Station>>,
+    headers: HeaderMap,
+) -> Response {
+    let needed = station.auth.required().is_some();
+    let signed = crate::session_cookie::from_headers(&headers, &station.auth).is_some();
+    if let Some(code) = switch_refusal(needed, signed, false, false) {
+        return code.into_response();
+    }
+    switch_json(StatusCode::OK, &station.aircraft)
+}
+
+/// `POST /aircraft-online?on=1|0`: switch the relay on or off. Same sign-in as
+/// the sockets, plus the custom header (see [`SWITCH_HEADER`]).
+pub(crate) async fn switch_post(
+    State(station): State<Arc<Station>>,
+    Query(query): Query<HashMap<String, String>>,
+    headers: HeaderMap,
+) -> Response {
+    let needed = station.auth.required().is_some();
+    let signed = crate::session_cookie::from_headers(&headers, &station.auth).is_some();
+    if let Some(code) = switch_refusal(needed, signed, true, headers.contains_key(SWITCH_HEADER)) {
+        return code.into_response();
+    }
+    let Some(on) = query.get("on").map(|v| enabled_by(Some(v.as_str()))) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    station.aircraft.set_enabled(on);
+    switch_json(StatusCode::OK, &station.aircraft)
+}
+
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::AtomicUsize;
 
     use sdroxide_aircraft_online::{Lookup, Reply, Request, parse_adsbdb};
 
@@ -208,6 +314,50 @@ mod tests {
 
     fn q(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn a_change_needs_the_sign_in_and_the_custom_header() {
+        // Sign-in first.
+        assert_eq!(switch_refusal(true, false, true, true), Some(StatusCode::UNAUTHORIZED));
+        assert_eq!(switch_refusal(true, false, false, false), Some(StatusCode::UNAUTHORIZED));
+        // A read needs no header; a change does.
+        assert_eq!(switch_refusal(false, false, false, false), None);
+        assert_eq!(switch_refusal(false, false, true, false), Some(StatusCode::FORBIDDEN));
+        assert_eq!(switch_refusal(true, true, true, true), None);
+    }
+
+    #[test]
+    fn a_client_can_switch_the_relay_on_and_off_unless_the_environment_holds_it() {
+        let hub = AircraftHub::with(false, Counting(Arc::new(AtomicUsize::new(0))), 10);
+        assert!(!hub.enabled());
+        assert!(hub.set_enabled(true) && hub.enabled());
+        assert!(!hub.set_enabled(false) && !hub.enabled());
+        let forced = AircraftHub {
+            forced: true,
+            ..AircraftHub::with(true, Counting(Arc::new(AtomicUsize::new(0))), 10)
+        };
+        assert!(forced.set_enabled(false), "the environment variable wins");
+        assert!(forced.enabled());
+    }
+
+    #[test]
+    fn the_choice_is_remembered_in_a_file_and_the_route_turns_a_question_away_while_off() {
+        let dir =
+            std::env::temp_dir().join(format!("sdroxide-aircraft-switch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join(SWITCH_FILE);
+        let mut hub = AircraftHub::with(false, Counting(Arc::new(AtomicUsize::new(0))), 10);
+        hub.switch_file = Some(file.clone());
+        hub.set_enabled(true);
+        assert!(file.exists(), "on is written down");
+        hub.set_enabled(false);
+        assert!(!file.exists(), "off is written down too");
+        assert_eq!(
+            judge(hub.enabled(), false, false, "484006", &q(&[])),
+            Verdict::Reject(Status::Disabled)
+        );
     }
 
     #[test]
