@@ -54,9 +54,11 @@ cleared a textures-delta panic that made one aircraft map-style test red on
 
 **Not done / blocked.**
 
-- #239 (WEEFAX): the decoder works on F4NRM's recording (one clean 2150-line
-  chart at every sensitivity, no false trigger on the ~2326 Hz carrier). The
-  ask is automatic tilt/orientation correction — a feature, not a regression.
+- #239 (WEEFAX): **auto-tilt done** (`61526907`) — the receiver measures the
+  phasing pulse's drift across the phasing signal (spanning the lock) and trims
+  `slant_ppm` once, above a 25 ppm floor. The decoder works on F4NRM's recording
+  (one clean 2150-line chart, no false trigger on the carrier). **Orientation**
+  (a 180°-flipped picture) is the remaining half of his ask, not built yet.
 - #257 (NAVTEX): sensitivity scales the sync thresholds but is a no-op at Auto;
   needs the sample F4NRM said is "in the PRs" (asked him where exactly).
 - #263 (zoom): the reporter's log shows the view snapping to 48 kHz on his
@@ -69,9 +71,9 @@ cleared a textures-delta panic that made one aircraft map-style test red on
 
 **Next.**
 
+- #239: the orientation half (detect + flip a 180°-rotated picture).
 - #263: wait for the next run (or reproduce on the RSP1) to see which number is
   48 kHz, then fix.
-- #239: start the auto-tilt/orientation feature.
 - #257: act on F4NRM's sample when it arrives.
 
 ---
