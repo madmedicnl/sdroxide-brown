@@ -61,14 +61,12 @@
                                   Name="SDR Oxide Brown"
                                   Description="SDR transceiver and shortwave-listening tool"
                                   WorkingDirectory="INSTALLFOLDER"
-                                  Icon="SdroxideIcon"
                                   Advertise="yes" />
                         <Shortcut Id="DesktopAppShortcut"
                                   Directory="DesktopFolder"
                                   Name="SDR Oxide Brown"
                                   Description="SDR transceiver and shortwave-listening tool"
                                   WorkingDirectory="INSTALLFOLDER"
-                                  Icon="SdroxideIcon"
                                   Advertise="yes" />
                     </File>
                 </Component>

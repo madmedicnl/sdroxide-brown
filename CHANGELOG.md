@@ -13,7 +13,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
-## [2.2.0.1_brown] - 2026-10-27
+## [2.2.0.2_brown] - 2026-10-27
 
 ### Added
 - **The Aircraft window's full cockpit** — an airport card that stays open on a click, one button per map style, aviation, metric or imperial units, VDL2 and ACARS views, the online-lookup switch, and Esc to close. — madmedicnl, PR #266–#276
