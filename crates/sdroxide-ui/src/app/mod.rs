@@ -1860,6 +1860,18 @@ pub(in crate::app) fn tx_chrome_ok(tx_capable: bool, mode: sdroxide_types::Mode)
     tx_capable && !mode.is_rx_only()
 }
 
+/// Whether the listener's "start in SWL mode" seed must be dropped now that the
+/// front end has said it can transmit. A transceiver does not come up in SWL
+/// mode from that preference — it is for receive-only radios — but `--swl`
+/// still forces it, so a forced run keeps the seed.
+pub(in crate::app) fn drop_swl_seed_for_transmitter(
+    swl_start: bool,
+    forced: bool,
+    transmit_capable: bool,
+) -> bool {
+    swl_start && !forced && transmit_capable
+}
+
 impl SdroxideApp {
     /// Offer any new RTTY text lines to the coded-weather parser.
     ///
@@ -3422,6 +3434,21 @@ mod tests {
     use super::*;
     use eframe::App;
     use sdroxide_types::{Command, RadioEvent, Spot, SpotKind};
+
+    /// A transceiver must not come up in SWL mode from the listener's
+    /// "start in SWL mode" preference — that seed is for receive-only radios —
+    /// but `--swl` still forces it.
+    #[test]
+    fn a_transmitter_drops_the_start_in_swl_seed_but_not_a_forced_run() {
+        // Seed on, not forced, front end can transmit → drop the seed.
+        assert!(drop_swl_seed_for_transmitter(true, false, true));
+        // Receive-only: keep the seed.
+        assert!(!drop_swl_seed_for_transmitter(true, false, false));
+        // Forced by --swl: keep it even on a transmitter.
+        assert!(!drop_swl_seed_for_transmitter(true, true, true));
+        // No seed to drop.
+        assert!(!drop_swl_seed_for_transmitter(false, false, true));
+    }
 
     /// Press a chip drawn inside a `Ui` that is enabled or not, and report
     /// whether the press reached it. Two passes: the first tells egui where the

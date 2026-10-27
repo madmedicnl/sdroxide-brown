@@ -3735,7 +3735,20 @@ impl SdroxideApp {
                             "new front end — refitting the panadapter window"
                         );
                     }
+                    // A transceiver does not start in SWL mode from the
+                    // listener's "start in SWL mode" preference — that seed is
+                    // for receive-only radios. Once the front end has said it
+                    // can transmit, drop the seed (unless `--swl` forced it)
+                    // so the LISTEN/OPERATE tab is what decides the controls.
+                    let transmit_capable = c.is_transmit_capable();
                     self.caps = Some(c);
+                    if super::drop_swl_seed_for_transmitter(
+                        self.swl_start,
+                        sdroxide_types::force_swl(),
+                        transmit_capable,
+                    ) {
+                        self.swl_start = false;
+                    }
                     // A session the far end accepted: whatever the link was
                     // doing, it is doing it again, so the next drop starts its
                     // backoff from the bottom rather than from wherever the
