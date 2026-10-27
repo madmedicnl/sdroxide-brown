@@ -90,6 +90,10 @@ pub struct AdsbMapState {
     pub pin_bounds: Option<Rect>,
     /// How big the pinned card was last frame, so it can be placed to fit.
     pub pin_size: Option<Vec2>,
+    /// The airport whose box is open on the map, by index into
+    /// [`crate::airdata::airports`]. Set by a click on an airport (an aircraft
+    /// under the pointer wins), cleared by a click on empty map or Esc.
+    pub airport_pin: Option<usize>,
     /// The aircraft the operator pressed "Look up online" for: its thumbnail is
     /// loaded once the answer is in. `None` until that button is pressed.
     pub lookup: Option<u32>,
@@ -255,9 +259,9 @@ fn draw_nav_layer(
     // Only what is *drawn* can be hovered — see the note on the filter above.
     // A name for something invisible would be a map that answers questions
     // about things that are not on it.
-    let mut hit: Option<(f32, Pos2, String, Option<u32>)> = None;
+    let mut hit: Option<(f32, Pos2, String, Option<u32>, Option<usize>)> = None;
 
-    for a in crate::airdata::airports() {
+    for (ai, a) in crate::airdata::airports().iter().enumerate() {
         if (!a.large && !zoom.medium_airports) || !in_view(a.lat, a.lon) {
             continue;
         }
@@ -267,7 +271,7 @@ fn draw_nav_layer(
             if a.large {
                 p.circle_filled(c, 1.2, alpha(map.city_label, 200.0));
             }
-            if zoom.airport_labels && a.large {
+            if zoom.airport_labels && (a.large || zoom.medium_labels) {
                 let name = if a.iata.is_empty() { a.ident.as_str() } else { a.iata.as_str() };
                 p.text(
                     c + vec2(5.0, 3.0),
@@ -280,16 +284,21 @@ fn draw_nav_layer(
         }
         if let Some(m) = pointer {
             let d = c.distance(m);
-            if d <= NAV_HIT_RADIUS && hit.as_ref().is_none_or(|(best, _, _, _)| d < *best) {
+            if d <= NAV_HIT_RADIUS && hit.as_ref().is_none_or(|(best, ..)| d < *best) {
                 // An airport carries no frequency in the source table: what is
                 // tuned is the *aid* — a VOR or an NDB — which is the row below.
-                hit = Some((d, c, airport_hover_text(a), None));
+                hit = Some((d, c, airport_hover_text(a), None, Some(ai)));
             }
         }
     }
 
     if !zoom.navaids {
-        return hit.map(|(_, at, text, freq_khz)| NavHover { at, text, freq_khz });
+        return hit.map(|(_, at, text, freq_khz, airport)| NavHover {
+            at,
+            text,
+            freq_khz,
+            airport,
+        });
     }
     for n in crate::airdata::navaids() {
         if !in_view(n.lat, n.lon) {
@@ -313,8 +322,14 @@ fn draw_nav_layer(
         }
         if let Some(m) = pointer {
             let d = c.distance(m);
-            if d <= NAV_HIT_RADIUS && hit.as_ref().is_none_or(|(best, _, _, _)| d < *best) {
-                hit = Some((d, c, navaid_hover_text(n), (n.freq_khz != 0).then_some(n.freq_khz)));
+            if d <= NAV_HIT_RADIUS && hit.as_ref().is_none_or(|(best, ..)| d < *best) {
+                hit = Some((
+                    d,
+                    c,
+                    navaid_hover_text(n),
+                    (n.freq_khz != 0).then_some(n.freq_khz),
+                    None,
+                ));
             }
         }
         if let Some(p) = p
@@ -330,7 +345,7 @@ fn draw_nav_layer(
             );
         }
     }
-    hit.map(|(_, at, text, freq_khz)| NavHover { at, text, freq_khz })
+    hit.map(|(_, at, text, freq_khz, airport)| NavHover { at, text, freq_khz, airport })
 }
 
 /// Where a coordinate lands on the map, for a view and a rect. One function:
@@ -394,6 +409,69 @@ fn draw_hover_label(p: &Painter, rect: Rect, map: &theme::MapPalette, hover: &Na
     p.circle_stroke(hover.at, 4.5, Stroke::new(1.3, alpha(map.city_label, 220.0)));
 }
 
+/// How far from an airport an aircraft counts as "near" it, km.
+const AIRPORT_NEAR_KM: f64 = 25.0;
+
+/// The airport's card: codes, name, the height of the field in the chosen
+/// units, how far and which way it is from the station, and how many of the
+/// aircraft on the map are near it. The data holds no runways or tower
+/// frequencies, so none are claimed.
+fn airport_card_text(
+    a: &crate::airdata::Airport,
+    home: Option<(f64, f64)>,
+    live: &[&AdsbAircraft],
+) -> String {
+    let units = sdroxide_types::AirUnits::current();
+    let codes = match (a.iata.is_empty(), a.icao.is_empty() || a.icao == a.ident) {
+        (true, true) => a.ident.clone(),
+        (true, false) => format!("{} / {}", a.ident, a.icao),
+        (false, true) => format!("{} / {}", a.iata, a.ident),
+        (false, false) => format!("{} / {} / {}", a.iata, a.icao, a.ident),
+    };
+    let mut text = format!(
+        "{codes}\n{}\n{} airport · field {}",
+        a.name,
+        if a.large { "large" } else { "medium" },
+        units.altitude(i32::from(a.elev_ft))
+    );
+    if let Some(h) = home {
+        let km = sdroxide_types::distance_km(h, (a.lat, a.lon));
+        let bear = sdroxide_types::bearing_deg(h, (a.lat, a.lon));
+        text.push_str(&format!("\n{}  {bear:.0}° from your station", units.distance(km)));
+    }
+    let near = live
+        .iter()
+        .filter_map(|ac| ac.lat.zip(ac.lon))
+        .filter(|&(la, lo)| {
+            sdroxide_types::distance_km((a.lat, a.lon), (la, lo)) <= AIRPORT_NEAR_KM
+        })
+        .count();
+    if near > 0 {
+        text.push_str(&format!("\n{near} aircraft within {}", units.distance(AIRPORT_NEAR_KM)));
+    }
+    text
+}
+
+/// The airport pin after a click this frame: an aircraft under the pointer
+/// leaves it alone (the click belongs to the aircraft), an airport takes it,
+/// empty map closes it.
+pub fn airport_pin_after_click(
+    pinned: Option<usize>,
+    aircraft_hit: bool,
+    airport_hit: Option<usize>,
+    clicked: bool,
+) -> Option<usize> {
+    if !clicked || aircraft_hit {
+        return pinned;
+    }
+    airport_hit
+}
+
+/// The airport pin after a key press: Esc closes it, as it does the aircraft's.
+pub fn airport_pin_after_key(pinned: Option<usize>, esc: bool) -> Option<usize> {
+    if esc { None } else { pinned }
+}
+
 /// What a hovered airport says: the abbreviation first, because that is what
 /// the operator asked for and what a chart writes, then the name.
 fn airport_hover_text(a: &crate::airdata::Airport) -> String {
@@ -427,6 +505,8 @@ struct NavHover {
     at: Pos2,
     text: String,
     freq_khz: Option<u32>,
+    /// Set when the thing under the pointer is an airport.
+    airport: Option<usize>,
 }
 
 /// **Where a double-clicked station goes: the *other* dial, always.**
@@ -485,6 +565,9 @@ const NAV_HIT_RADIUS: f32 = 9.0;
 struct NavZoom {
     medium_airports: bool,
     airport_labels: bool,
+    /// Medium airports get their code written too, once the view is a region
+    /// rather than a country.
+    medium_labels: bool,
     navaids: bool,
     navaid_labels: bool,
 }
@@ -493,6 +576,7 @@ fn nav_zoom(lon_span: f64) -> NavZoom {
     NavZoom {
         medium_airports: lon_span <= 40.0,
         airport_labels: lon_span <= 12.0,
+        medium_labels: lon_span <= 4.0,
         // Below this a station is a place rather than a speck — and it is also
         // the zoom at which the medium-wave beacons become a listening list
         // rather than decoration.
@@ -670,7 +754,7 @@ pub fn show(
     }
 
     // ── airports and navaids, at the very bottom ──
-    let nav_hover = draw_nav_layer(
+    let mut nav_hover = draw_nav_layer(
         Some(&p),
         map,
         state.layers,
@@ -681,6 +765,13 @@ pub fn show(
         &project,
         pointer,
     );
+
+    // An airport says more than its name: the card text replaces the one line.
+    if let Some(h) = nav_hover.as_mut()
+        && let Some(a) = h.airport.and_then(|i| crate::airdata::airports().get(i))
+    {
+        h.text = airport_card_text(a, home, &live);
+    }
 
     // **A double-click on a station tunes it.** The map is where the stations
     // are *seen*; without this the operator reads a frequency off the hover text
@@ -840,7 +931,24 @@ pub fn show(
     // over it would be answering a different question than the one being asked.
     if hover.is_none() {
         if let Some(h) = &nav_hover {
-            draw_hover_label(&p, rect, map, h);
+            // Not over the airport whose box is already open: it would say the
+            // same thing twice.
+            if h.airport.is_none() || h.airport != state.airport_pin {
+                draw_hover_label(&p, rect, map, h);
+            }
+        }
+    }
+    // The open airport box stays where its airport is, until a click elsewhere.
+    if let Some(a) = state.airport_pin.and_then(|i| crate::airdata::airports().get(i)) {
+        let at = project(a.lat, a.lon);
+        if rect.contains(at) {
+            let pinned = NavHover {
+                at,
+                text: format!("{}\nclick the map to close", airport_card_text(a, home, &live)),
+                freq_khz: None,
+                airport: state.airport_pin,
+            };
+            draw_hover_label(&p, rect, map, &pinned);
         }
     }
 
@@ -868,6 +976,16 @@ pub fn show(
     // The pin follows the click on an aircraft only; the click on empty map that
     // clears `selected` leaves it where it is.
     state.pinned = pin_after_click(state.pinned, hover.map(|i| live[i].icao), resp.clicked());
+    // Esc closes the box while the pointer is over the map, so it does not fight
+    // a text field elsewhere that is using the key.
+    let esc = resp.hovered() && ui.input(|i| i.key_pressed(eframe::egui::Key::Escape));
+    state.airport_pin = airport_pin_after_key(state.airport_pin, esc);
+    state.airport_pin = airport_pin_after_click(
+        state.airport_pin,
+        hover.is_some(),
+        nav_hover.as_ref().and_then(|h| h.airport),
+        resp.clicked(),
+    );
     state.pin_bounds = Some(rect);
     state.pin_anchor = state
         .pinned
@@ -973,6 +1091,67 @@ pub fn pin_placement(anchor: Pos2, size: Vec2, bounds: Rect) -> Pos2 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_click_on_an_airport_opens_its_box_and_the_map_closes_it() {
+        // An airport under the pointer takes the pin.
+        assert_eq!(airport_pin_after_click(None, false, Some(7), true), Some(7));
+        // Another airport moves it.
+        assert_eq!(airport_pin_after_click(Some(7), false, Some(9), true), Some(9));
+        // An aircraft under the pointer keeps the click for itself.
+        assert_eq!(airport_pin_after_click(Some(7), true, Some(9), true), Some(7));
+        // Empty map closes it; no click changes nothing.
+        assert_eq!(airport_pin_after_click(Some(7), false, None, true), None);
+        assert_eq!(airport_pin_after_click(Some(7), false, None, false), Some(7));
+    }
+
+    #[test]
+    fn escape_closes_the_airport_box() {
+        assert_eq!(airport_pin_after_key(Some(3), true), None);
+        assert_eq!(airport_pin_after_key(Some(3), false), Some(3));
+        assert_eq!(airport_pin_after_key(None, true), None);
+    }
+
+    #[test]
+    fn the_airport_card_says_codes_name_field_distance_and_traffic() {
+        let a = crate::airdata::Airport {
+            ident: "EHAM".into(),
+            name: "Amsterdam Airport Schiphol".into(),
+            iata: "AMS".into(),
+            icao: "EHAM".into(),
+            large: true,
+            lat: 52.31,
+            lon: 4.76,
+            elev_ft: -11,
+        };
+        let mut near = AdsbAircraft::new(1, 0);
+        near.lat = Some(52.4);
+        near.lon = Some(4.8);
+        let mut far = AdsbAircraft::new(2, 0);
+        far.lat = Some(48.0);
+        far.lon = Some(2.0);
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let t = airport_card_text(&a, Some((52.0, 5.0)), &[&near, &far]);
+        let lines: Vec<&str> = t.lines().collect();
+        assert_eq!(lines[0], "AMS / EHAM");
+        assert_eq!(lines[1], "Amsterdam Airport Schiphol");
+        assert_eq!(lines[2], "large airport · field -11 ft");
+        assert!(lines[3].ends_with("° from your station"), "{t}");
+        assert_eq!(lines[4], "1 aircraft within 25 km", "{t}");
+        // No home, nobody near: only the first three lines.
+        let bare = airport_card_text(&a, None, &[&far]);
+        assert_eq!(bare.lines().count(), 3, "{bare}");
+        sdroxide_types::AirUnits::Metric.set_current();
+        assert!(airport_card_text(&a, None, &[]).contains("field -3 m"));
+        sdroxide_types::AirUnits::Aviation.set_current();
+    }
+
+    #[test]
+    fn medium_airports_are_named_only_once_the_view_is_a_region() {
+        assert!(!nav_zoom(10.0).medium_labels && nav_zoom(10.0).airport_labels);
+        assert!(nav_zoom(4.0).medium_labels);
+        assert!(nav_zoom(1.0).medium_labels);
+    }
+
     use super::*;
 
     // ── the pinned card ───────────────────────────────────────────────────
