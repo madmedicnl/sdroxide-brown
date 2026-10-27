@@ -17963,6 +17963,12 @@ impl Engine {
         }
         state.band = Band::containing(state.active_freq_hz());
         self.state = state;
+        // `sample_rate` and `decimation` above are the new front end's, but the
+        // `usable_hz` that rode over from `..self.state.clone()` still belongs
+        // to the old one. Swapping a switched-off stand-in (48 kHz) for a
+        // 3 Msps SDR left it at 48 kHz, so the display span came up at 48 kHz
+        // and the zoom kept snapping back to it (issue #263).
+        self.state.usable_hz = self.usable_span_hz();
         // The frequency a refused tune goes back to belongs to the front end
         // that is on the air now: the old one's dial may be nowhere this one can
         // go, and `keep_vfo_in_span` below is about to judge exactly that.
