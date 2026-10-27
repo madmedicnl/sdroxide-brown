@@ -3369,6 +3369,40 @@ mod tests {
         }
     }
 
+    /// postcard is positional: a field inserted mid-struct shifts every byte
+    /// after it and silently breaks every peer on the older layout — exactly
+    /// the DigiConfig mistake of `PROTO_VERSION 255 → 256`. Pin the serialized
+    /// form of the three structs that ride the wire whole, so such a change is
+    /// a failing test (and therefore a conscious bump), not a mystery.
+    #[test]
+    fn the_wire_layout_of_the_config_structs_is_pinned() {
+        fn fnv1a(bytes: &[u8]) -> u64 {
+            let mut h = 0xcbf2_9ce4_8422_2325u64;
+            for &b in bytes {
+                h = (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3);
+            }
+            h
+        }
+        let digi = postcard::to_allocvec(&sdroxide_types::DigiConfig::default()).unwrap();
+        let radio = postcard::to_allocvec(&sdroxide_types::RadioConfig::default()).unwrap();
+        let net = postcard::to_allocvec(&sdroxide_types::NetworkConfig::default()).unwrap();
+        assert_eq!(
+            (digi.len(), fnv1a(&digi)),
+            (477, 2_903_949_547_993_043_639),
+            "DigiConfig's wire layout shifted — append fields, never insert them"
+        );
+        assert_eq!(
+            (radio.len(), fnv1a(&radio)),
+            (887, 11_921_450_238_979_962_418),
+            "RadioConfig's wire layout shifted — append fields, never insert them"
+        );
+        assert_eq!(
+            (net.len(), fnv1a(&net)),
+            (314, 15_307_633_050_357_107_781),
+            "NetworkConfig's wire layout shifted — append fields, never insert them"
+        );
+    }
+
     /// The station configuration, both ways.
     ///
     /// Worth its own test because `SatConfig` reaches types that were only ever
