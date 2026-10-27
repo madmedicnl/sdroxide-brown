@@ -54,21 +54,21 @@ had a broken grep and never fired.
   `sdroxide-s4285` the same `static:-bundle=stdc++`/`winpthread` treatment
   `sdroxide-drm` already had — those two compile C++ but left `cc`'s default
   `-lstdc++`.
+- PR #285 (`fix/windows-exe-icon`): embed the Brown icon into `sdroxide.exe` so
+  the advertised Start Menu / desktop shortcuts show it. winres 0.1 failed —
+  MSYS2's `windres` mangles backslash paths (`D:asdroxide-brown...`); switched
+  to a direct `windres` invocation with forward-slash paths and a one-line
+  `resource.rc`. Verified by a `windows-msi.yml` dispatch: MSI built + uploaded.
 
 **Not done / blocked.**
 
 - PR #284 needs the Windows CI to prove the static link actually holds; no
   MinGW toolchain here so it could not be tested locally. `cargo check` passes
   (windows-gnu branch skipped on Linux) and the grep is verified on Linux.
-- The Start Menu / desktop shortcut icon is generic — the Brown `.ico` can't be
-  used by an advertised shortcut unless it is embedded into `sdroxide.exe`
-  (winres), which the exe does not do today.
 
 **Next.**
 
-- Review/merge PR #284.
-- If the Brown shortcut icon is wanted, embed `sdroxide-brown.ico` into the exe
-  with `winres` and put the `Icon` back on the shortcuts.
+- Review/merge PR #284 (static C++ runtime) and PR #285 (exe icon).
 
 ---
 
