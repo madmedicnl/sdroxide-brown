@@ -21,6 +21,57 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-27 (the 2.2.0 release — Windows MSI and the MinGW C++ runtime)
+
+**In plain words.** The 2.2.0 release is cut as `v2.2.0.2_brown` with the
+AppImage, the Windows MSI, and — for the first time — the Apple Silicon Mac
+builds. The Windows installer was broken in three layers and each fix exposed
+the next; all three are fixed and the MSI now builds and passes WiX validation.
+I also opened PR #284 so the Windows build links its C++ runtime statically
+instead of shipping a 2.6 MB DLL — the check that was meant to guarantee this
+had a broken grep and never fired.
+
+**Done.**
+
+- Bumped the crate 2.1.2 → 2.2.0 (Cargo.toml + Cargo.lock), wrote the changelog
+  entry. Gate green: `cargo check --workspace --all-targets` silent,
+  `cargo test --release --workspace` 294 suites / 0 failures,
+  `cargo check --locked` clean.
+- Tag `v2.2.0_brown` → MSI job failed `WIX0094` (the shortcut directories used
+  `CommonProgramsFolder`/`CommonDesktopFolder`, which are the resolved *property*
+  names, not WiX directory IDs). Fixed to `ProgramMenuFolder`/`DesktopFolder`.
+- Re-tagged `v2.2.0.1_brown` → `ICE50` (the non-advertised shortcut + file key
+  path became an advertised shortcut, and its `.ico` then mismatched the `.exe`).
+  Fixed: advertised + `DISABLEADVTSHORTCUTS=1`, dropped the shortcut `Icon`
+  (the exe has no embedded icon; Add/Remove Programs keeps the Brown one).
+- Re-tagged `v2.2.0.2_brown` → **success**, 20 assets: AppImage, Windows MSI
+  (version 2.2.0), macOS aarch64 + x86_64, Linux, Windows zip/soapy, web client.
+  Deleted the two partial release pages (`v2.2.0_brown`, `v2.2.0.1_brown`).
+- PR #284 (`fix/windows-mingw-static-libstdcxx`): the DLL-import check's grep
+  spelled `+` as `\+` and never matched on the MSYS2 grep, so it passed while
+  `libstdc++-6.dll` was still imported (confirmed via `objdump` on the
+  v2.2.0.2 build). Fixed to `libstdc[+][+]`, and gave `sdroxide-olivia` and
+  `sdroxide-s4285` the same `static:-bundle=stdc++`/`winpthread` treatment
+  `sdroxide-drm` already had — those two compile C++ but left `cc`'s default
+  `-lstdc++`.
+
+**Not done / blocked.**
+
+- PR #284 needs the Windows CI to prove the static link actually holds; no
+  MinGW toolchain here so it could not be tested locally. `cargo check` passes
+  (windows-gnu branch skipped on Linux) and the grep is verified on Linux.
+- The Start Menu / desktop shortcut icon is generic — the Brown `.ico` can't be
+  used by an advertised shortcut unless it is embedded into `sdroxide.exe`
+  (winres), which the exe does not do today.
+
+**Next.**
+
+- Review/merge PR #284.
+- If the Brown shortcut icon is wanted, embed `sdroxide-brown.ico` into the exe
+  with `winres` and put the `Icon` back on the shortcuts.
+
+---
+
 ## 2026-10-27 (the Aircraft window, from the operator's five screenshots)
 
 **In plain words.** Ten pull requests are open, none merged. They fix what the
