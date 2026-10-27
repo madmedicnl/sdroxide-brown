@@ -60,12 +60,12 @@ impl Reason {
     pub(in crate::app) fn note(self) -> Option<&'static str> {
         match self {
             Reason::Disabled => {
-                Some("online indisponible — the station has not switched the relay on")
+                Some("online unavailable — the station has not switched the relay on")
             }
             Reason::NoStation => {
-                Some("online indisponible — no station to ask; the radio data is all there is")
+                Some("online unavailable — no station to ask; the radio data is all there is")
             }
-            Reason::Unauthorized => Some("online indisponible — not signed in to the station"),
+            Reason::Unauthorized => Some("online unavailable — not signed in to the station"),
             Reason::Offline | Reason::Busy | Reason::Unknown => None,
         }
     }
@@ -695,8 +695,8 @@ mod tests {
 
     #[test]
     fn only_a_switched_off_relay_or_a_missing_station_says_so_on_the_card() {
-        assert!(Reason::Disabled.note().unwrap().contains("online indisponible"));
-        assert!(Reason::NoStation.note().unwrap().contains("online indisponible"));
+        assert!(Reason::Disabled.note().unwrap().contains("online unavailable"));
+        assert!(Reason::NoStation.note().unwrap().contains("online unavailable"));
         assert!(Reason::Unauthorized.note().is_some());
         for quiet in [Reason::Offline, Reason::Busy, Reason::Unknown] {
             assert_eq!(quiet.note(), None, "{quiet:?}");
@@ -704,7 +704,7 @@ mod tests {
         let all = rows(&heard(), &OnlineState::Unavailable(Reason::Disabled), NOW);
         let r = all.last().unwrap();
         assert_eq!((r.label, r.value.as_str(), r.badge), ("Online", "—", Badge::Missing));
-        assert!(r.note.contains("online indisponible"), "{}", r.note);
+        assert!(r.note.contains("online unavailable"), "{}", r.note);
         let quiet = rows(&heard(), &OnlineState::Unavailable(Reason::Busy), NOW);
         assert_eq!(quiet.len(), lines(&heard(), NOW).len());
     }

@@ -93,13 +93,13 @@ pub(in crate::app) fn hover_photo(state: &OnlineState, thumb: ThumbStatus) -> Op
 pub(in crate::app) fn footer(state: &OnlineState) -> Option<&'static str> {
     match state {
         OnlineState::Unavailable(Reason::Disabled) => {
-            Some("online indisponible — relay off on the station")
+            Some("online unavailable — relay off on the station")
         }
         OnlineState::Unavailable(Reason::NoStation) => {
-            Some("online indisponible — no station to ask")
+            Some("online unavailable — no station to ask")
         }
         OnlineState::Unavailable(Reason::Unauthorized) => {
-            Some("online indisponible — not signed in")
+            Some("online unavailable — not signed in")
         }
         _ => None,
     }
@@ -705,7 +705,7 @@ mod tests {
     fn only_a_switched_off_relay_or_a_missing_station_says_so_in_the_footer() {
         for r in [Reason::Disabled, Reason::NoStation, Reason::Unauthorized] {
             let c = card_with(Some(&heard()), &OnlineState::Unavailable(r), ThumbStatus::NotTried);
-            assert!(c.footer.is_some_and(|f| f.contains("online indisponible")), "{r:?}");
+            assert!(c.footer.is_some_and(|f| f.contains("online unavailable")), "{r:?}");
             assert!(c.footer.is_some_and(|f| f.chars().count() <= 60), "{r:?}");
         }
         for st in [
