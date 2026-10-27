@@ -3978,6 +3978,11 @@ impl SdroxideApp {
                     if self.focused {
                         self.speech.announcer.on_notice(n.as_deref(), now);
                     }
+                    charge_failed_public_sdr(
+                        n.as_deref(),
+                        &mut self.last_public_sdr_try,
+                        &mut self.dead_public_sdrs,
+                    );
                     self.radio_notice = n;
                 }
                 // The ATS Mini's memory table, answered to a `memories-dump`.
@@ -6490,6 +6495,61 @@ pub const TW_SCHEDULE: u64 = 1 << 46;
 pub const TW_PLAYBACK: u64 = 1 << 47;
 pub const TW_PUBLICSDR: u64 = 1 << 48;
 pub const TW_AIRCRAFT: u64 = 1 << 49;
+
+/// Charge a failed interface change to the public-SDR receiver just tried, so
+/// its row reads "could not connect" instead of being offered again. The
+/// engine's own reopen error begins with "Interface change failed". Returns
+/// whether a receiver was marked.
+fn charge_failed_public_sdr(
+    notice: Option<&str>,
+    last_try: &mut Option<String>,
+    dead: &mut std::collections::HashSet<String>,
+) -> bool {
+    let failed = notice.is_some_and(|why| why.starts_with("Interface change failed"));
+    if !failed {
+        return false;
+    }
+    let Some(addr) = last_try.take() else {
+        return false;
+    };
+    dead.insert(addr);
+    true
+}
+
+#[cfg(test)]
+mod public_sdr_dead_tests {
+    use super::charge_failed_public_sdr;
+
+    #[test]
+    fn a_failed_interface_change_marks_the_receiver_just_tried_dead() {
+        let mut last = Some("1.2.3.4:5555".to_string());
+        let mut dead = std::collections::HashSet::new();
+        assert!(charge_failed_public_sdr(
+            Some("Interface change failed: connection timed out"),
+            &mut last,
+            &mut dead,
+        ));
+        assert!(dead.contains("1.2.3.4:5555"));
+        assert!(last.is_none(), "the charge consumes the last-tried address");
+    }
+
+    #[test]
+    fn an_ordinary_notice_does_not_mark_a_receiver_dead() {
+        let mut last = Some("1.2.3.4:5555".to_string());
+        let mut dead = std::collections::HashSet::new();
+        assert!(!charge_failed_public_sdr(Some("some other notice"), &mut last, &mut dead));
+        assert!(dead.is_empty());
+        assert!(last.is_some());
+    }
+
+    #[test]
+    fn a_failure_without_a_previous_pick_marks_nothing() {
+        let mut last = None;
+        let mut dead = std::collections::HashSet::new();
+        assert!(!charge_failed_public_sdr(Some("Interface change failed: timeout"), &mut last, &mut dead));
+        assert!(dead.is_empty());
+    }
+}
 
 #[cfg(test)]
 mod detached_geometry_tests {
