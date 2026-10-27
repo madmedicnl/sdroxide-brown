@@ -2141,8 +2141,20 @@ use sdroxide_types::{
 /// that never answers stops costing slots, and a run that nobody stops stops
 /// itself (issue #251). Appended last, so the layout moves: `PROTO_VERSION`
 /// 254 → 255, `VERSION_BYTE` 0x4A → 0x4B. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 255;
-const VERSION_BYTE: u8 = 0x4B;
+/// v256: **the composer and auto fields are re-appended at the true tail.**
+///
+/// v252/v254/v255 each said "appended last" for the fields they added to
+/// [`sdroxide_types::DigiConfig`] — `sstv_banner_bottom`,
+/// `sstv_banner_text_pct`, `station_overlay`, `auto_call_retries`,
+/// `auto_session_min` — but they were actually inserted *before* the existing
+/// `sstv_rx_sensitivity`/`sstv_rx_auto`/`wefax_rx_sensitivity`/`wefax_rx_auto`,
+/// so the sensitivity fields moved down in the positional postcard layout for
+/// no reason and the register entries no longer described the struct. They now
+/// sit after `wefax_rx_auto`, where the entries always claimed they were; the
+/// wire layout moves again, so the version does too. `PROTO_VERSION` 255 → 256,
+/// `VERSION_BYTE` 0x4B → 0x4C. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 256;
+const VERSION_BYTE: u8 = 0x4C;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
