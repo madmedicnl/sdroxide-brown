@@ -231,10 +231,11 @@ panel** with the Detachable settings page, the **decoded-text UDP feed**, the
   scoped. Two halves: a toggleable **layer** on the aircraft map from
   https://adsb.lol/ to compare against the station's own reception, and an
   **upload** in the upload settings to feed https://adsb.im/home. Both are
-  "reaches out" extras (off until asked), and the account/key question is open:
-  adsb.im in particular wants a feeder identity — the house rule is no paid
-  service, no API key, no account, so that has to be settled before either is
-  built.
+  "reaches out" extras (off until asked). **Account exception, decided by the
+  operator 2026-10-27:** users may enter their own adsb.im feeder key in the
+  upload settings — many SWL listeners run ADS-B, so this one is allowed a
+  user-supplied key. Still no paid service and no key *we* ship or pay for; it
+  rides the same user-entered-credentials pattern as the existing log uploads.
 
 ## Backlog — upstream requests this fork may pick up
 
