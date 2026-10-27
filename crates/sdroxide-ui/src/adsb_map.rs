@@ -90,6 +90,10 @@ pub struct AdsbMapState {
     pub pin_bounds: Option<Rect>,
     /// How big the pinned card was last frame, so it can be placed to fit.
     pub pin_size: Option<Vec2>,
+    /// The map that owns the pinned card, and the frame it last drew. The AIRCRAFT
+    /// window and the ADS-B panel share this state and can both be open: only the
+    /// map that was clicked draws the card, or one aircraft shows two.
+    pub pin_owner: Option<(eframe::egui::Id, u64)>,
     /// The airport whose box is open on the map, by index into
     /// [`crate::airdata::airports`]. Set by a click on an airport (an aircraft
     /// under the pointer wins), cleared by a click on empty map or Esc.
@@ -638,6 +642,8 @@ pub fn show(
     state.pinned = pin_keep(state.pinned, aircraft, now, cfg.drop_map_s);
     state.pin_anchor = None;
     state.pin_bounds = None;
+    let frame = ui.ctx().cumulative_frame_nr();
+    state.pin_owner = pin_owner_after(state.pin_owner, ui.id(), frame, false);
     let avail_w = ui.available_width();
     if avail_w < MIN_HEIGHT {
         return None;
@@ -976,6 +982,9 @@ pub fn show(
     // The pin follows the click on an aircraft only; the click on empty map that
     // clears `selected` leaves it where it is.
     state.pinned = pin_after_click(state.pinned, hover.map(|i| live[i].icao), resp.clicked());
+    if hover.is_some() && resp.clicked() {
+        state.pin_owner = pin_owner_after(state.pin_owner, ui.id(), frame, true);
+    }
     // Esc closes the box while the pointer is over the map, so it does not fight
     // a text field elsewhere that is using the key.
     let esc = resp.hovered() && ui.input(|i| i.key_pressed(eframe::egui::Key::Escape));
@@ -1023,6 +1032,27 @@ pub fn pin_after_click(pinned: Option<u32>, hit: Option<u32>, clicked: bool) -> 
         (true, Some(icao)) => Some(icao),
         _ => pinned,
     }
+}
+
+/// Which map owns the pinned card. A click on an aircraft hands it to the map
+/// clicked; otherwise the owner keeps it while it is still being drawn, and a
+/// map takes it over once the owner has stopped (its window was closed).
+pub fn pin_owner_after(
+    owner: Option<(eframe::egui::Id, u64)>,
+    me: eframe::egui::Id,
+    frame: u64,
+    clicked_aircraft: bool,
+) -> Option<(eframe::egui::Id, u64)> {
+    match owner {
+        Some((id, _)) if id == me => Some((me, frame)),
+        Some((_, seen)) if !clicked_aircraft && frame <= seen + 2 => owner,
+        _ => Some((me, frame)),
+    }
+}
+
+/// Whether this map draws the pinned card.
+pub fn owns_pin(owner: Option<(eframe::egui::Id, u64)>, me: eframe::egui::Id) -> bool {
+    owner.is_none_or(|(id, _)| id == me)
 }
 
 /// The pin after its close button.
@@ -1687,6 +1717,110 @@ mod tests {
             Some(2),
             "with the search on 2, the click lands on 2 and not on the one over it"
         );
+    }
+
+    /// Where a target sits on the map `map_frame` draws, once it is drawn.
+    fn click_at(
+        ctx: &eframe::egui::Context,
+        st: &mut AdsbMapState,
+        list: &[AdsbAircraft],
+        c: Pos2,
+    ) {
+        use eframe::egui::{Event, PointerButton};
+        let button = |pressed| Event::PointerButton {
+            pos: c,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: eframe::egui::Modifiers::NONE,
+        };
+        map_frame(ctx, st, list, vec![Event::PointerMoved(c)]);
+        map_frame(ctx, st, list, vec![Event::PointerMoved(c), button(true), button(false)]);
+        map_frame(ctx, st, list, vec![Event::PointerMoved(c)]);
+    }
+
+    #[test]
+    fn a_second_click_on_another_aircraft_moves_the_pin() {
+        let list = [at(1, 52.0, 4.0), at(2, 52.0, 6.0)];
+        let mut st = AdsbMapState::default();
+        let ctx = eframe::egui::Context::default();
+        map_frame(&ctx, &mut st, &list, vec![]);
+        let bounds = st.pin_bounds.expect("the map was drawn");
+        let (clat, clon, span) = (st.view.clat, st.view.clon, st.view.lon_span);
+        let aspect = (bounds.height() / bounds.width()) as f64;
+        let at_pos = |a: &AdsbAircraft| {
+            project_at(bounds, clat, clon, span, span * aspect, a.lat.unwrap(), a.lon.unwrap())
+        };
+        click_at(&ctx, &mut st, &list, at_pos(&list[0]));
+        assert_eq!(st.pinned, Some(1), "the first click pins the first");
+        click_at(&ctx, &mut st, &list, at_pos(&list[1]));
+        assert_eq!(st.pinned, Some(2), "the second click pins the second, not the first");
+    }
+
+    #[test]
+    fn the_click_that_pins_draws_no_hover_card_for_it() {
+        let list = [at(1, 52.0, 4.0)];
+        let mut st = AdsbMapState::default();
+        let ctx = eframe::egui::Context::default();
+        map_frame(&ctx, &mut st, &list, vec![]);
+        let bounds = st.pin_bounds.expect("the map was drawn");
+        let c = bounds.center();
+        let cards = std::cell::Cell::new(0);
+        let card = |_: &mut eframe::egui::Ui, _: &AdsbAircraft| cards.set(cards.get() + 1);
+        use eframe::egui::{Event, PointerButton};
+        let button = |pressed| Event::PointerButton {
+            pos: c,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: eframe::egui::Modifiers::NONE,
+        };
+        let mut frame = |events: Vec<Event>| {
+            let mut raw = eframe::egui::RawInput::default();
+            raw.screen_rect = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0)));
+            raw.events = events;
+            let _ = crate::test_support::run_frame(&ctx, raw, |ui| {
+                show(
+                    ui,
+                    &mut st,
+                    &list,
+                    None,
+                    1_000,
+                    AdsbSettings::default(),
+                    None,
+                    sdroxide_types::MapStyle::Radar,
+                    400.0,
+                    Vfo::A,
+                    Some(&card),
+                );
+            });
+        };
+        frame(vec![Event::PointerMoved(c)]);
+        for _ in 0..3 {
+            frame(vec![Event::PointerMoved(c)]);
+        }
+        let before = cards.get();
+        frame(vec![Event::PointerMoved(c), button(true), button(false)]);
+        assert_eq!(cards.get(), before, "the frame that pins it draws no tooltip for it");
+    }
+
+    #[test]
+    fn two_maps_never_draw_the_same_pinned_card_twice() {
+        use eframe::egui::Id;
+        let (a, b) = (Id::new("window"), Id::new("panel"));
+        // The window draws first and is clicked: it owns the card.
+        let mut o = pin_owner_after(None, a, 10, true);
+        // Both draw on the next frames; the panel does not take it.
+        o = pin_owner_after(o, a, 11, false);
+        o = pin_owner_after(o, b, 11, false);
+        assert!(owns_pin(o, a) && !owns_pin(o, b));
+        // A click in the panel hands it over.
+        o = pin_owner_after(o, b, 12, true);
+        assert!(owns_pin(o, b) && !owns_pin(o, a));
+        // The owner's window closes: the other takes over after a few frames.
+        let mut o = Some((a, 20));
+        for f in 21..26 {
+            o = pin_owner_after(o, b, f, false);
+        }
+        assert!(owns_pin(o, b), "the owner stopped drawing, so the card is not lost");
     }
 
     #[test]
