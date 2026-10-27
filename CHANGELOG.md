@@ -13,7 +13,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
-## [2.2.0_brown] - 2026-10-27
+## [2.2.0.1_brown] - 2026-10-27
 
 ### Added
 - **The Aircraft window's full cockpit** — an airport card that stays open on a click, one button per map style, aviation, metric or imperial units, VDL2 and ACARS views, the online-lookup switch, and Esc to close. — madmedicnl, PR #266–#276
@@ -27,6 +27,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 - **JTTY brought up to the reference's own standard** — upstream's six follow-ups taken whole: the 1500 Hz centre, four-letter words, the reference waveform timing, one line per message, and the transmit panic. — upstream picks, madmedicnl
 
 ### Fixed
+- **The Windows installer is back** — the Start Menu and desktop shortcuts pointed at property names instead of WiX directory IDs and were authored non-advertised with a file key path, so WiX 5.0.2 refused to build an MSI at all; they are now advertised in the executable's component and turned into ordinary shortcuts at install. — madmedicnl
 - **The wire layout** — five settings fields were inserted mid-struct instead of at the end, shifting every field after them. They're back at the tail, wire 256. — madmedicnl, PR #277
 - **The web client's cache** — fixed-name files are served no-store and the fingerprinted bundle immutable, so an update always loads the new client and never mixes old and new files. — madmedicnl, PR #278
 - **A receive-only mode can no longer key the transmitter** — a weather fax on 3855 kHz still offered a PTT, and every route into it could key. The chrome hides them, the engine refuses, and switching in unkeys. — madmedicnl, issue #239 (F4NRM)
