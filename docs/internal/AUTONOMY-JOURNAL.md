@@ -58,14 +58,21 @@ cleared a textures-delta panic that made one aircraft map-style test red on
   chart at every sensitivity, no false trigger on the ~2326 Hz carrier). The
   ask is automatic tilt/orientation correction — a feature, not a regression.
 - #257 (NAVTEX): sensitivity scales the sync thresholds but is a no-op at Auto;
-  needs the sample F4NRM said is "in the PRs" (not found yet).
-- #263 (zoom): the TUNE correlation is indirect (`tx.tune` never writes the
-  span); needs a bench.
+  needs the sample F4NRM said is "in the PRs" (asked him where exactly).
+- #263 (zoom): the reporter's log shows the view snapping to 48 kHz on his
+  SDRplay (2 Msps, `audio_mode=false`) after every zoom-out, so pan/zoom is
+  frozen. The widget's own clamp uses `state.sample_rate` (2 MHz), so the snap
+  comes from the app side — most likely `recenter_if_tuned_away` narrowing to
+  `zoom_out_window()`'s span. The exact number isn't in the log, so a debug line
+  (`9c72b485`) now prints `out_span`/`sample_rate`/`usable_hz` when a restored
+  view is narrowed; the reporter's next run names it.
 
 **Next.**
 
-- #263 on the bench (RSP1/CRT): reproduce the TUNE-at-exit zoom state.
-- Find the #257 sample; ask F4NRM where exactly it is.
+- #263: wait for the next run (or reproduce on the RSP1) to see which number is
+  48 kHz, then fix.
+- #239: start the auto-tilt/orientation feature.
+- #257: act on F4NRM's sample when it arrives.
 
 ---
 
