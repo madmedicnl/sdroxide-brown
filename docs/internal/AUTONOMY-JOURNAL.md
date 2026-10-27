@@ -21,6 +21,33 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-28 (#265 — the range notices are logged, not shown)
+
+**In plain words.** The "would not open on X, so it opened on Y" and "the dial
+moved to Y" notices fire while the receiver is settling and the dial still holds
+the previous frequency, which is noise. They are now logged only — the dial
+still moves on screen — while a frequency the operator asks for and the rig
+refuses is still said out loud.
+
+**Done.**
+
+- `fix(radio): log the startup/swap range notices instead of showing them`
+  (`bd1f41df`) — `note_opened_elsewhere` and the `adopt_source` "dial moved"
+  notice now `warn!` only (the `RadioEvent::Notice` sends are gone). The
+  operator-tune refusal (`tune_refused`) keeps its notice.
+
+**Not done / blocked.**
+
+- The ADS-B→VDL2-on-Pluto landing on 2.941 MHz (an HFDL channel) is the same
+  shape but a different fault — the mode switch picking an HFDL frequency. Still
+  open, noted in TODO.
+
+**Next.**
+
+- The #239 orientation question is still the open one.
+
+---
+
 ## 2026-10-28 (the SWL fix, corrected — the seed must not touch a transceiver)
 
 **In plain words.** The earlier switch fix was the wrong layer. The real cause is
