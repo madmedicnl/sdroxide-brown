@@ -920,18 +920,29 @@ impl super::SdroxideApp {
                     ui.label(RichText::new("No ADS-B heard yet.").weak());
                 }
             },
-            Mode::Hfdl => self.hfdl_map_pane(ui, now, map_h),
+            Mode::Hfdl => {
+                if !self.state.hfdl.enabled {
+                    ui.label(
+                        RichText::new("The HFDL decoder is off — press HFDL to switch it on.")
+                            .size(11.0)
+                            .color(crate::theme::YELLOW()),
+                    );
+                }
+                self.hfdl_map_pane(ui, now, map_h)
+            }
+            // VDL2 and ACARS carry a position only now and then, so what the
+            // window shows for them is what they actually hear: the messages and
+            // the stations (VDL2), the message log (ACARS). An aircraft that is
+            // also heard on ADS-B shows on the ADS-B map.
+            Mode::Vdl2 => match self.vdl2_status.as_deref().cloned() {
+                Some(st) => self.vdl2_columns(ui, &st, now, map_h),
+                None => {
+                    ui.label(RichText::new("Starting the VDL2 decoder…").weak());
+                }
+            },
+            Mode::Acars => self.acars_panel(ui, cmds, map_h),
             _ => {
-                ui.add_space(6.0);
-                ui.label(
-                    RichText::new(format!(
-                        "{label} has no map of its own: it carries a position only now and then. \
-                         The messages are in the panel under the waterfall, and an aircraft heard \
-                         here that also sends ADS-B shows on the ADS-B map."
-                    ))
-                    .size(11.5)
-                    .color(crate::theme::gray(160)),
-                );
+                ui.label(RichText::new(format!("{label} has no view here.")).weak());
             }
         }
     }
@@ -940,6 +951,18 @@ impl super::SdroxideApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The operator's screenshot: VDL2 selected and the right-hand side empty bar
+    /// a sentence. Every mode button now has a view that shows what it hears.
+    #[test]
+    fn no_aviation_button_is_left_with_an_empty_map() {
+        let src = include_str!("aircraft.rs");
+        let body = &src[..src.find("#[cfg(test)]").unwrap()];
+        assert!(!body.contains("has no map of its own"), "the placeholder is back");
+        for arm in ["Mode::Adsb =>", "Mode::Hfdl =>", "Mode::Vdl2 =>", "Mode::Acars =>"] {
+            assert!(body.contains(arm), "aircraft_map has no view for {arm}");
+        }
+    }
 
     #[test]
     fn an_aviation_button_never_sends_the_band_checked_set_mode() {
