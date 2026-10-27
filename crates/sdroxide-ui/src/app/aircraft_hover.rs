@@ -150,7 +150,11 @@ pub(in crate::app) fn hover_card(
         lines.push(extra("Range", format!("{km:.0} km  {bear:.0}°"), "from your station".into()));
     }
     if let Some(vr) = live.vertical_rate_fpm.filter(|v| v.abs() > 100) {
-        lines.push(extra("Vertical", format!("{vr:+} ft/min"), age.clone()));
+        lines.push(extra(
+            "Vertical",
+            sdroxide_types::AirUnits::current().vertical_rate(vr),
+            age.clone(),
+        ));
     }
     if let Some(e) = &live.emergency {
         lines.push(extra("Emergency", e.clone(), age));
@@ -627,6 +631,31 @@ mod tests {
             assert_eq!(c.footer, None, "{st:?}");
         }
         assert!(!radio.lines.is_empty());
+    }
+
+    #[test]
+    fn the_card_writes_range_and_climb_in_the_chosen_units() {
+        let km = sdroxide_types::distance_km(HOME, (52.3, 4.8));
+        let bear = sdroxide_types::bearing_deg(HOME, (52.3, 4.8));
+        let card = || {
+            hover_card(
+                &live(),
+                Some(&heard()),
+                &OnlineState::Idle,
+                ThumbStatus::NotTried,
+                Some(HOME),
+                NOW,
+            )
+        };
+        sdroxide_types::AirUnits::Metric.set_current();
+        let c = card();
+        assert_eq!(row(&c, "Range").value, format!("{km:.0} km  {bear:.0}°"));
+        assert_eq!(row(&c, "Vertical").value, "+9.1 m/s");
+        sdroxide_types::AirUnits::Imperial.set_current();
+        let c = card();
+        assert_eq!(row(&c, "Range").value, format!("{:.0} mi  {bear:.0}°", km * 0.621_371));
+        assert_eq!(row(&c, "Vertical").value, "+1800 ft/min");
+        sdroxide_types::AirUnits::Aviation.set_current();
     }
 
     #[test]
