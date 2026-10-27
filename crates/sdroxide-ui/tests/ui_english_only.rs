@@ -6,7 +6,18 @@
 use std::path::{Path, PathBuf};
 
 const ACCENTED: &str = "àâçéèêëîïôûùüÿœÀÂÇÉÈÊËÎÏÔÛÙÜŒ";
-const FOREIGN: &[&str] = &["copié", "enregistrer", "annuler", "fenêtre", "paramètres", "kopiëren"];
+const FOREIGN: &[&str] = &[
+    "copié",
+    "enregistrer",
+    "annuler",
+    "fenêtre",
+    "paramètres",
+    "kopiëren",
+    "indisponible",
+    "chargement",
+    "aucun ",
+    "introuvable",
+];
 
 fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
     for e in std::fs::read_dir(dir).unwrap().flatten() {
@@ -77,4 +88,14 @@ fn no_foreign_text_in_ui_strings() {
         }
     }
     assert!(bad.is_empty(), "non-English UI text:\n{}", bad.join("\n"));
+}
+
+/// A browser that translates the page by itself turns fixed English labels
+/// into a mix of two languages, so the page must opt out.
+#[test]
+fn the_web_page_declares_english_and_opts_out_of_translation() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../sdroxide-web/index.html");
+    let html = std::fs::read_to_string(&path).expect("read index.html");
+    assert!(html.contains("<html lang=\"en\" translate=\"no\">"), "html element");
+    assert!(html.contains("name=\"google\" content=\"notranslate\""), "notranslate meta");
 }
