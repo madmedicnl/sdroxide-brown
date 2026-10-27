@@ -1,7 +1,7 @@
 # TODO — SDR Oxide Brown
 
 What this fork is working on, kept here so it survives a session and is visible
-on the repo. Last updated **2026-10-26** by madmedicnl's agent.
+on the repo. Last updated **2026-10-27** by madmedicnl's agent.
 
 State: `main` at crate **2.1.2**, `PROTO_VERSION` **255** (`VERSION_BYTE`
 `0x4B`) — 255 is the Auto run's ceiling, merged with PR #253. **No 2.1.2 release
@@ -18,6 +18,16 @@ maintainer's queue there, not a promise.
 ---
 
 ## Now
+
+0. **Web client: the sound lags the waterfall and the lag grows** (operator,
+   2026-10-27 — branch **`fix/web-audio-playout`**, local, based on `5cbce00d`).
+   Measured on the shipped worklet with the new `tools/web-audio-latency`: the
+   playback queue settles at its 250 ms ceiling (229 ms at 48 kHz) and never
+   comes back down, a 44.1 kHz context plays the 48 kHz stream at **919.8 Hz**,
+   an oversized block is cut out whole, and the drop loop can drive its own
+   counter negative. Lot 0 (the harness and that reference) is done; the reader
+   fix is Lot A and the receive path — which only plays when a frame runs, so a
+   hidden tab is silent — is Lot B. Neither is started.
 
 0. ⛔ **Frozen: nothing merges and no release is cut until #263 is understood**
    (the operator, 2026-10-26 night). The 2.1.2 download is withdrawn — no release
