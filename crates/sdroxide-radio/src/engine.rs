@@ -17638,15 +17638,16 @@ impl Engine {
     /// nobody chose is how someone ends up chasing a signal that is not there.
     /// One line, and the number on screen is never a surprise.
     fn note_opened_elsewhere(&self, asked_hz: f64, at_hz: f64) {
-        let msg = format!(
+        // Logged, not shown: this fires while the receiver is settling and the
+        // dial still holds the previous frequency, which is noise to most
+        // operators (issue #265). The dial on screen still moves to where the
+        // hardware actually is, so the number is never a surprise.
+        warn!(
             "This radio would not open on {:.6} MHz, which it cannot reach, so it opened on \
-             {:.6} MHz — the last frequency it tuned. Put a frequency it can tune in the \
-             start-frequency field to stop this.",
+             {:.6} MHz — the last frequency it tuned.",
             asked_hz / 1e6,
             at_hz / 1e6,
         );
-        warn!("{msg}");
-        let _ = self.event_tx.send(RadioEvent::Notice(Some(msg)));
     }
 
     /// Rebuild the IQ front-end at runtime (backend / CAT audio / HPSDR-TCI
@@ -17947,8 +17948,10 @@ impl Engine {
         // ends put us here by answering with the frequency they were handed
         // rather than the one they clamped to, and a converter switched on
         // under a running radio moves the whole range at once.
-        let mut moved = None;
         if let Some(hz) = nearest_rx_hz(&self.caps, state.active_freq_hz()) {
+            // Logged, not shown: the dial is being brought into the new front
+            // end's range automatically, which is not a refusal the operator
+            // asked about (issue #265).
             let why = format!(
                 "{:.6} MHz is outside this radio's receive range ({}) — the dial moved to \
                  {:.6} MHz",
@@ -17957,7 +17960,6 @@ impl Engine {
                 hz / 1e6,
             );
             warn!("{why}");
-            moved = Some(why);
             state.vfo_a_hz = hz;
             state.vfo_b_hz = hz;
         }
@@ -18059,7 +18061,6 @@ impl Engine {
         // Surface any open warning (radio audio unavailable, …) and any config
         // file reset to defaults by the reload, or clear a stale notice.
         let mut notes: Vec<String> = self.source.open_status().into_iter().collect();
-        notes.extend(moved);
         notes.extend(sdroxide_config::take_load_alerts());
         let _ =
             self.event_tx.send(RadioEvent::Notice((!notes.is_empty()).then(|| notes.join("\n"))));
