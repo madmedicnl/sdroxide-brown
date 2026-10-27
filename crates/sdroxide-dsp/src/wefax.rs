@@ -539,6 +539,14 @@ pub struct WefaxRx {
     /// Sample-clock trim in parts per million. Positive stretches the line,
     /// which corrects an image slanting to the left.
     slant_ppm: f64,
+    /// Auto-slant: the pulse position and phasing-line index the drift is
+    /// measured from. A pulse a few lines later that has moved names the slant,
+    /// and the trim is corrected once rather than per line. `None` while the
+    /// phasing signal has not shown a clear pulse yet.
+    slant_anchor: Option<(f64, u32)>,
+    /// Phasing lines seen so far, to index [`Self::slant_anchor`] without
+    /// trusting `phase_samples` (the line length changes as the trim does).
+    phasing_lines: u32,
 
     phase: Phase,
     /// Demodulated brightness of the line being built, one entry per input
@@ -767,6 +775,15 @@ const PHASING_SIGNAL_S: f64 = 30.0;
 /// length rejects it. That is [`phasing_skew_strict`]'s job; this only keeps a
 /// passing shape from cutting the page on a line or two of it.
 const REPHASE_LINES: u32 = 8;
+/// Phasing lines the auto-slant measures the drift over. Twenty is ten seconds
+/// at 120 LPM, well inside the thirty-second phasing signal, and long enough
+/// that a few parts-per-million of line-clock error move the pulse several
+/// samples — which is what makes the slant measurable at all.
+const SLANT_PROBE_LINES: u32 = 20;
+/// The smallest drift the auto-slant will act on, in parts per million. Below
+/// this the picture's own edge-wander swamps the measurement, and "correcting"
+/// it would only add a wobble the operator never asked for.
+const SLANT_MIN_PPM: f64 = 25.0;
 /// How far two phasing lines' pulses may sit apart, as a fraction of a line,
 /// and still be read as the same phasing signal. The line clock drifts by parts
 /// per million between lines, so a real signal's pulse barely moves; what this
@@ -797,6 +814,8 @@ impl WefaxRx {
             auto_start: true,
             auto_stop: true,
             slant_ppm: 0.0,
+            slant_anchor: None,
+            phasing_lines: 0,
             phase: Phase::Idle,
             line_buf: Vec::new(),
             line_start: 0.0,
@@ -1008,6 +1027,8 @@ impl WefaxRx {
         self.line_start = self.sample_idx as f64;
         self.line_no = 0;
         self.phase_samples = 0;
+        self.slant_anchor = None;
+        self.phasing_lines = 0;
         self.auto_begun = auto;
         self.phasing_stack.reset();
         self.lock_lines = LOCK_LINES;
@@ -1322,6 +1343,38 @@ impl WefaxRx {
     /// signal is still running. [`PHASING_SIGNAL_S`] is the standard's own
     /// number, and it costs nothing real: the next chart's phasing is minutes
     /// away, never seconds.
+    /// Measure the line clock's drift over the phasing signal and correct the
+    /// slant once, from the pulse's movement across [`SLANT_PROBE_LINES`] lines.
+    ///
+    /// The pulse sits at the same place in every phasing line; if the line clock
+    /// is a little long or short it walks a few samples per line, and that walk
+    /// *is* the slant. Measured rather than per line so a weak line's edge-wander
+    /// does not turn into a wobble, and only when the drift is large enough to
+    /// mean something ([`SLANT_MIN_PPM`]).
+    fn probe_slant(&mut self, line: &[f32]) {
+        let Some(pos) = phasing_skew_strict(line) else { return };
+        self.phasing_lines += 1;
+        let pos = pos as f64;
+        let i = self.phasing_lines;
+        let Some((p0, i0)) = self.slant_anchor else {
+            self.slant_anchor = Some((pos, i));
+            return;
+        };
+        let di = (i - i0) as f64;
+        if di < f64::from(SLANT_PROBE_LINES) {
+            return;
+        }
+        // Pulse movement in samples per line, as a fraction of the nominal
+        // line: a clock that is too long walks the pulse backwards, and that is
+        // exactly the amount the trim must come down by.
+        let nominal = self.rate * self.lpm.line_secs();
+        let ppm = (pos - p0) / di / nominal * 1e6;
+        if ppm.abs() >= SLANT_MIN_PPM {
+            self.slant_ppm += ppm;
+        }
+        self.slant_anchor = None;
+    }
+
     fn note_phasing_line(&mut self, line: &[f32]) -> bool {
         // The strict test: mid-picture, a line that is merely "mostly black
         // with a white patch" is a chart's own graphic, not a phasing pulse.
@@ -1422,11 +1475,17 @@ impl WefaxRx {
         match self.phase {
             Phase::Phasing => {
                 self.phase_samples += line.len() as u64;
+                self.probe_slant(&line);
                 if let Some((mean, _)) = self.phasing_stack.push(&line, self.lock_lines as usize) {
                     // The pulse sits at the *end* of a phasing line, so the
                     // picture starts just after it.
                     self.calibrate(&line, &line_hz);
                     self.line_start += f64::from(mean);
+                    // The line clock has just been re-aligned to the pulse, so
+                    // the pulse position's baseline moved: the auto-slant's
+                    // anchor has to restart from here.
+                    self.slant_anchor = None;
+                    self.phasing_lines = 0;
                     self.phasing_stack.reset();
                     self.phase = Phase::Image;
                     if self.start_pending {
@@ -1452,6 +1511,10 @@ impl WefaxRx {
                 }
             }
             Phase::Image => {
+                // The phasing signal continues past the lock; the auto-slant
+                // keeps measuring its drift on the lines that still carry the
+                // pulse (and a chart line simply fails the strict pulse test).
+                self.probe_slant(&line);
                 // The other half of the same rule: the start signal is five
                 // seconds long and a fade can swallow it whole, while the
                 // phasing signal that follows it runs for thirty. A run of
@@ -1769,6 +1832,21 @@ mod tests {
         modulate(&levels)
     }
 
+    /// Phasing lines cut on a clock that is `slant_ppm` per-mille long: the
+    /// pulse sits at the end of each of *these* lines, so against the nominal
+    /// line clock it walks right by that fraction of a line per line.
+    fn phasing_slanted(lpm: Lpm, count: usize, slant_ppm: f64) -> Vec<f32> {
+        let per = (RATE * lpm.line_secs()) as usize;
+        let slanted = (per as f64 * (1.0 + slant_ppm * 1e-6)).round() as usize;
+        let pulse = (slanted as f64 * 0.05) as usize;
+        let mut levels = Vec::new();
+        for _ in 0..count {
+            levels.extend(std::iter::repeat_n(0.0f32, slanted - pulse));
+            levels.extend(std::iter::repeat_n(1.0f32, pulse));
+        }
+        modulate(&levels)
+    }
+
     /// A picture whose every line is a horizontal ramp black → white, which is
     /// the pattern that makes a misalignment obvious: a correctly phased decode
     /// is monotonic across the row and a wrapped one has a cliff in it.
@@ -1824,6 +1902,26 @@ mod tests {
             rx.process(chunk, &mut out);
         }
         out
+    }
+
+    /// The auto-slant measures the pulse's walk over the phasing signal and
+    /// trims the line clock to match, so a chart comes out square without the
+    /// operator reaching for the slant setting.
+    #[test]
+    fn the_auto_slant_trims_the_line_clock_to_the_signal() {
+        // A clock 1000 ppm long walks the pulse right by a per-mille of a line
+        // each line; the receiver must stretch its own clock to follow.
+        for slant in [300.0f64, 1000.0, -400.0] {
+            let mut rx = WefaxRx::new(RATE);
+            rx.start_manual(&mut Vec::new());
+            let _ = drain(&mut rx, &phasing_slanted(Lpm::L120, 40, slant));
+            assert!(
+                (rx.slant_ppm() as f64 - slant).abs() < 80.0,
+                "slant {} ppm was left at {}",
+                slant,
+                rx.slant_ppm()
+            );
+        }
     }
 
     #[test]
