@@ -81,6 +81,11 @@ impl SdroxideApp {
             return;
         };
         let Some(a) = aircraft.iter().find(|a| a.icao == pinned) else { return };
+        // Another map (the ADS-B panel under the AIRCRAFT window) shares this
+        // pin: only the map that was clicked draws its card.
+        if !adsb_map::owns_pin(self.adsb_map.pin_owner, ui.id()) {
+            return;
+        }
         let ctx = ui.ctx().clone();
 
         // Esc closes it, unless a text field has the keyboard.
