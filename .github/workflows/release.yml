@@ -573,7 +573,7 @@ jobs:
           BIN="target/$CARGO_BUILD_TARGET/release/sdroxide.exe"
           objdump -p "$BIN" | grep -i "DLL Name:" | sort -u
           if objdump -p "$BIN" \
-               | grep -Eiq "DLL Name:[[:space:]]*(libstdc[+][+]|libgcc_s|libwinpthread)"; then
+               | grep -Eiq "DLL Name:[[:space:]]*(libstdc\+\+|libgcc_s|libwinpthread)"; then
             echo "::error::sdroxide.exe still needs a MinGW runtime DLL beside it"
             exit 1
           fi
