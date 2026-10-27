@@ -470,11 +470,9 @@ F4NRM's sessions, and a PR is how a number is claimed without colliding.
 
 State at 2026-10-25, and the thing to re-measure rather than trust:
 
-- `main` at crate **2.1.0**, `PROTO_VERSION` **247** (`VERSION_BYTE` `0x43`) —
-  244 was the NAVTEX sensitivity control and 245–247 its three reverts, all
-  merged 2026-10-25. **PR #234 carries 248** for the Airspy HF+'s display span
-  and is not merged, so no number is claimed here. Latest release
-  **v2.1.0.2_brown** (latest) and **v2.1.0.2.1_brown** (pre-release). The
+- `main` at crate **2.2.0**, `PROTO_VERSION` **256** (`VERSION_BYTE` `0x4C`) —
+  256 was the DigiConfig field-order fix (the sensitivity fields back at the
+  tail), merged 2026-10-27. Latest release **v2.2.0.2_brown** (latest). The
   2.1.0 release was the big mode release: THOR, MFSK, Contestia, MT63, DominoEX,
   the coded PSK banks, DTMF and STANAG 4285, with Wavelog, the Aoki schedule,
   SSTV FTP upload, the FDM-DUO's power steps and per-memory colours. Since then:
@@ -488,16 +486,14 @@ State at 2026-10-25, and the thing to re-measure rather than trust:
   **vendor a mode when the port and the bench have both been exhausted**. The
   measurements are in [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md), and
   the mode table at the end of the brief is the deliverable.
-- **Open issues** (6, re-measured 2026-10-25): #132 and #133 the Brick2 frequency
-  and LSB-as-USB reports ([`BRICK2-HANDOVER.md`](docs/internal/BRICK2-HANDOVER.md)
-  — the code half is merged, the radio half needs a Brick2), #153 Pluto socket
-  stalls (asks for the diagnostic report), #146 hiding the transmit controls by
-  band/mode (F4NRM deferred it: the out-of-band risk is too high for now),
-  #91 WEEFAX pages breaking after a few (F4NRM's, needs a ten-page test), #105
-  AppImage (planned for a stable release). #162 (NAVTEX 518 vs 516.6) was closed
-  on 2026-10-25 as answered — the preset applies the shift, and the rest was a
-  second by #218. **Open PRs: #234**, ours, the Airspy HF+ display span (and its
-  colour fit), waiting for F4NRM. #226 (floating panel) was merged by him.
+- **Open issues** (17, re-measured 2026-10-27): the live bug reports are #239
+  (WEEFAX), #257 (NAVTEX regression), #259 (APRS), #260 (Chrome web-audio delay),
+  #262 (SSTV editor freeze), #263 (zoom) and #264 (Public SDR); #280/#282 (the
+  old 2.1.0 installer's missing DLL) are fixed by the 2.2.0 release and await the
+  reporters' confirmation; the rest are enhancements (#249, #251, #252, #256)
+  and questions (#105 AppImage, #132 frequency display, #281, #283). **Open PRs:
+  #284** (static-link the MinGW C++ runtime in every C++ crate) and **#285**
+  (embed the Brown icon in the exe), both ours, waiting for F4NRM.
 - **Live handovers**: ALE (built, **never decoded a real burst** — the manual
   §3.29 asks for a recording, and that is the only thing missing), STANAG 4285
   (**decodes**: the vendored GPL reference decoder in `vendor/s4285-ref`, driven

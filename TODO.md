@@ -1,16 +1,15 @@
 # TODO — SDR Oxide Brown
 
 What this fork is working on, kept here so it survives a session and is visible
-on the repo. Last updated **2026-10-26** by madmedicnl's agent.
+on the repo. Last updated **2026-10-27** by madmedicnl's agent.
 
-State: `main` at crate **2.1.2**, `PROTO_VERSION` **255** (`VERSION_BYTE`
-`0x4B`) — 255 is the Auto run's ceiling, merged with PR #253. **No 2.1.2 release
-exists**: both pages were deleted and, tonight, so was the dangling
-`v2.1.2.2_brown` tag — the newest download is the **v2.1.1.1 pre-release**, the
-build F4NRM says works. The windows work went in as
-**PR #261**. Ten open issues, and **#258** (WEFAX centring) is the one PR of ours
-with F4NRM. The rules are in [`AGENTS.md`](AGENTS.md); the
-history is in [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
+State: `main` at crate **2.2.0**, `PROTO_VERSION` **256** (`VERSION_BYTE`
+`0x4C`) — 256 is the DigiConfig field-order fix. Latest release
+**v2.2.0.2_brown** (full: AppImage, Windows MSI 2.2.0, Apple Silicon + Intel
+Mac). Two PRs of ours open: **#284** (static-link the MinGW C++ runtime in every
+C++ crate) and **#285** (embed the Brown icon in the exe). The rules are in
+[`AGENTS.md`](AGENTS.md); the history is in
+[`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
 
 Items marked `#NNN` are **upstream** requests this fork may pick up; they are the
 maintainer's queue there, not a promise.
@@ -19,17 +18,11 @@ maintainer's queue there, not a promise.
 
 ## Now
 
-0. ⛔ **Frozen: nothing merges and no release is cut until #263 is understood**
-   (the operator, 2026-10-26 night). The 2.1.2 download is withdrawn — no release
-   page existed, and the dangling `v2.1.2.2_brown` tag is deleted so a re-run
-   cannot publish it; the newest download is v2.1.1.1. Every PR of ours stays as
-   it is (open: **#258**), and new work is a local branch until the operator
-   says otherwise. What the investigation has ruled out, with numbers, is in
-   [`AUTONOMY-JOURNAL.md`](docs/internal/AUTONOMY-JOURNAL.md) under tonight's
-   entry: **v2.1.1.1 already contains #234**, the panadapter's own code is
-   byte-identical to it, a ten-configuration headless probe pans and zooms in all
-   of them, and no radio-side file changed but #240's composer commands and
-   #253's `DigiConfig` fields.
+0. **CW transmit over TCI keys up but sends nothing** (reporter, 2026-10-27) —
+   the transmitter switches into TX and the sidetone is heard, but no RF goes
+   out: PTT works and the CW keying (carrier on/off) does not reach the radio.
+   The reporter is asking RHR to check their end, so this waits on that answer
+   before digging into the CW-over-TCI keying path here.
 
 0. **Read `docs/internal/HANDOVER-NOW.md` first** (written 2026-10-26 night): the
    release is aborted and removed, #263's fix is specified but not started, and
