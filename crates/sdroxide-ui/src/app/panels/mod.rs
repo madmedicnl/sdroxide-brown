@@ -1620,7 +1620,7 @@ mod tests {
             events,
             ..Default::default()
         };
-        let _ = ctx.run_ui(raw, |ui| {
+        ctx.run_ui(raw, |ui| {
             ui.horizontal(|ui| {
                 for (s, r) in map_style_buttons(ui, current) {
                     rects.push(r.rect);
@@ -1629,7 +1629,8 @@ mod tests {
                     }
                 }
             });
-        });
+        })
+        .drop_without_applying_deltas();
         (rects, clicked)
     }
 
