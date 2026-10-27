@@ -145,7 +145,8 @@ style preferences.
   run past 60 lines. The README front page is an elevator ride. A reply to a
   user is **prose**, not a document: no headings, no bulleted essays, no bold on
   every other phrase. Polite, personal, direct. The *why* belongs in the commit
-  message, where a reader who wants it will look.
+  message, where a reader who wants it will look. Issue replies are the same,
+  short and plain with short paragraphs — no walls of text.
 - **Ask a reporter one thing, not three.** A report is usually enough to work
   from; ask the question that decides the fix and leave the rest until it is
   answered.
