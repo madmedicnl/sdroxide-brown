@@ -18,6 +18,15 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **#265 "outside receive range" notice is noise** (operator, 2026-10-28) — the
+   message is useful but most users don't need it, and it mostly fires because
+   the receiver isn't ready (startup/mode-switch while the dial still holds a
+   stale frequency outside the new receiver's range), not a real refusal. The
+   ADS-B→VDL2-on-Pluto case landing on 2.941 MHz (an HFDL channel) is the same
+   shape. Direction: suppress/demote the notice during the not-ready state, and
+   check whether VDL2 is picking an HFDL frequency. Wording fix is already on
+   `main`.
+
 0. **Web client: the sound lags the waterfall and the lag grows** (operator,
    2026-10-27 — branch **ix/web-audio-playout**, PR **#286**, based on 5cbce00d).
    Playing received audio immediately on arrival in RemoteController (without
