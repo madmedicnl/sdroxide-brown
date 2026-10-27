@@ -31,9 +31,9 @@ printed over each other, three buttons for the map style instead of one that
 cycled, a box for an airport, mode buttons that did nothing on the wrong band,
 VDL2 and ACARS views that were a sentence, a button column cut off at the
 window's smallest size, and a switch for the online photo
-lookup that an operator can press. Nothing was seen in a picture and the server
-half of the switch has never compiled here; those are the first things to look
-at. Next: the narrow-window check, and whatever the review of these says.
+lookup that an operator can press. Nothing was seen in a picture and the
+switch and the mode buttons were never tried against a real radio or a real
+online answer; those are the first things to look at. Next: the narrow-window check, and whatever the review of these says.
 
 **Done** (PR, base, what it carries):
 - #266 `claude/aircraft-a-english-translate`, main — "online unavailable", the
@@ -59,11 +59,15 @@ at. Next: the narrow-window check, and whatever the review of these says.
 **Not done / blocked.**
 - Lot F was done with a rendered picture, but only at the smallest size and with
   stand-in data (the map showed no aircraft); not run in a real window.
-- The radio and server crates do not build in this sandbox (opus download is
-  blocked), so no engine test and no server test was run; #274's CI is the first
-  compile of its server code, and #272 has no engine test.
+- The radio and server crates do not build as-is in this sandbox (the RADE
+  crate downloads opus, which is blocked). With a temporary stub of that crate
+  (never committed) both were built and tested: `-p sdroxide-server` 80 unit and
+  the integration tests green (#274), and a new engine test on the airband
+  `SetMode` refused / `SetModeListen` taken (#272). Nothing on a real radio, and
+  no real adsbdb/Planespotters answer.
 - Only lot F was looked at in a rendered picture; the other lots were not, and
   the Chart style's colours are unchanged.
+- #271 now also closes its box with Esc.
 - `AGENTS.md` still says the relay is switched only by the environment variable.
 - main carries "frozen until #263"; I opened PRs on the operator's explicit
   order and merged nothing.
