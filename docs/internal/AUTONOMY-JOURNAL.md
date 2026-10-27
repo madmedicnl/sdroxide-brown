@@ -38,9 +38,10 @@ refuses is still said out loud.
 
 **Not done / blocked.**
 
-- The ADS-B→VDL2-on-Pluto landing on 2.941 MHz (an HFDL channel) is the same
-  shape but a different fault — the mode switch picking an HFDL frequency. Still
-  open, noted in TODO.
+- Corrected after the operator's note: the ADS-B→VDL2-on-Pluto landing on
+  2.941 MHz is **not** a mode fault — the dial simply sits on the old mode's
+  frequency for a moment during a switch, which is when the notice caught it.
+  The demotion above is the whole fix.
 
 **Next.**
 
