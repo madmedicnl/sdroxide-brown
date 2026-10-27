@@ -343,110 +343,118 @@ impl super::SdroxideApp {
                 egui::vec2(COLUMN_W, h),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    crate::chrome::menu_caption(ui, "Aviation");
-                    for m in MODES {
-                        let b = crate::chrome::chip_sized(
-                            ui,
-                            mode_chip_lit(
-                                m.mode,
-                                shown,
-                                self.aircraft_cards
-                                    || self.aircraft_watch_view
-                                    || self.aircraft_stats_view,
-                            ),
-                            m.label,
-                            egui::vec2(COLUMN_W - 8.0, BUTTON_H),
-                        )
-                        .on_hover_text(m.hover);
-                        if b.clicked() {
-                            self.aircraft_view = m.mode;
-                            self.aircraft_cards = false;
-                            self.aircraft_watch_view = false;
-                            self.aircraft_stats_view = false;
-                            cmds.extend(mode_commands(
-                                m.mode,
-                                &self.state.hfdl,
-                                self.state.active_vfo,
-                                self.state.active_freq_hz(),
-                            ));
-                        }
-                    }
-                    ui.add_space(6.0);
-                    let n = self.aircraft_registry.len() + self.aircraft_registry.fallback_len();
-                    let b = crate::chrome::chip_sized(
-                        ui,
-                        self.aircraft_cards,
-                        format!("Cards {n}"),
-                        egui::vec2(COLUMN_W - 8.0, BUTTON_H),
-                    )
-                    .on_hover_text(
-                        "Every aircraft heard on ADS-B, VDL2, HFDL and ACARS, one card each — \
-                         kept for ten minutes, whichever mode the radio is on now",
-                    );
-                    if b.clicked() {
-                        self.aircraft_cards = !self.aircraft_cards;
-                        self.aircraft_watch_view = false;
-                        self.aircraft_stats_view = false;
-                    }
-                    let unseen = self.aircraft_tracker.unseen();
-                    let n = self.aircraft_online.watch.list().len();
-                    let b = crate::chrome::chip_sized(
-                        ui,
-                        self.aircraft_watch_view,
-                        format!("Watch {n}{}", aircraft_watch::chip_suffix(unseen)),
-                        egui::vec2(COLUMN_W - 8.0, BUTTON_H),
-                    )
-                    .on_hover_text(
-                        "Aircraft you asked to be told about, by callsign or registration — \
-                         the list is kept by the station, and an alert is shown when one comes \
-                         on the air",
-                    );
-                    if b.clicked() {
-                        self.aircraft_watch_view = !self.aircraft_watch_view;
-                        self.aircraft_cards = false;
-                    }
-                    let b = crate::chrome::chip_sized(
-                        ui,
-                        self.aircraft_stats_view,
-                        "Stats",
-                        egui::vec2(COLUMN_W - 8.0, BUTTON_H),
-                    )
-                    .on_hover_text(
-                        "The most common categories, airlines, models, operators and routes \
-                         among the aircraft this station knows — counted from the radio first, \
-                         with the relay's cards as a complement",
-                    );
-                    if b.clicked() {
-                        self.aircraft_stats_view = !self.aircraft_stats_view;
-                        self.aircraft_cards = false;
-                    }
-                    ui.add_space(6.0);
-                    crate::chrome::menu_caption(ui, "Export");
-                    for (format, hover) in [
-                        (
-                            Format::Csv,
-                            "Save the aircraft as a CSV table for a spreadsheet: the station\u{2019}s \
-                             last 24 hours if it keeps a history, else what is heard now. No \
-                             positions.",
-                        ),
-                        (
-                            Format::Json,
-                            "Save the aircraft as JSON: the station\u{2019}s last 24 hours if it \
-                             keeps a history, else what is heard now. No positions.",
-                        ),
-                    ] {
-                        let label = format.ext().to_ascii_uppercase();
-                        let b = crate::chrome::chip_sized(
-                            ui,
-                            self.aircraft_online.export.busy(),
-                            label,
-                            egui::vec2(COLUMN_W - 8.0, BUTTON_H),
-                        )
-                        .on_hover_text(hover);
-                        if b.clicked() {
-                            self.aircraft_online.export.start(format);
-                        }
-                    }
+                    // The column is taller than the window's smallest size (four
+                    // modes, three views and the export pair at 30 pt each), so it
+                    // scrolls rather than cutting the export buttons off.
+                    egui::ScrollArea::vertical()
+                        .id_salt("aircraft_modes")
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            crate::chrome::menu_caption(ui, "Aviation");
+                            for m in MODES {
+                                let b = crate::chrome::chip_sized(
+                                    ui,
+                                    mode_chip_lit(
+                                        m.mode,
+                                        shown,
+                                        self.aircraft_cards
+                                            || self.aircraft_watch_view
+                                            || self.aircraft_stats_view,
+                                    ),
+                                    m.label,
+                                    egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                                )
+                                .on_hover_text(m.hover);
+                                if b.clicked() {
+                                    self.aircraft_view = m.mode;
+                                    self.aircraft_cards = false;
+                                    self.aircraft_watch_view = false;
+                                    self.aircraft_stats_view = false;
+                                    cmds.extend(mode_commands(
+                                        m.mode,
+                                        &self.state.hfdl,
+                                        self.state.active_vfo,
+                                        self.state.active_freq_hz(),
+                                    ));
+                                }
+                            }
+                            ui.add_space(6.0);
+                            let n = self.aircraft_registry.len() + self.aircraft_registry.fallback_len();
+                            let b = crate::chrome::chip_sized(
+                                ui,
+                                self.aircraft_cards,
+                                format!("Cards {n}"),
+                                egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                            )
+                            .on_hover_text(
+                                "Every aircraft heard on ADS-B, VDL2, HFDL and ACARS, one card each — \
+                                 kept for ten minutes, whichever mode the radio is on now",
+                            );
+                            if b.clicked() {
+                                self.aircraft_cards = !self.aircraft_cards;
+                                self.aircraft_watch_view = false;
+                                self.aircraft_stats_view = false;
+                            }
+                            let unseen = self.aircraft_tracker.unseen();
+                            let n = self.aircraft_online.watch.list().len();
+                            let b = crate::chrome::chip_sized(
+                                ui,
+                                self.aircraft_watch_view,
+                                format!("Watch {n}{}", aircraft_watch::chip_suffix(unseen)),
+                                egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                            )
+                            .on_hover_text(
+                                "Aircraft you asked to be told about, by callsign or registration — \
+                                 the list is kept by the station, and an alert is shown when one comes \
+                                 on the air",
+                            );
+                            if b.clicked() {
+                                self.aircraft_watch_view = !self.aircraft_watch_view;
+                                self.aircraft_cards = false;
+                            }
+                            let b = crate::chrome::chip_sized(
+                                ui,
+                                self.aircraft_stats_view,
+                                "Stats",
+                                egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                            )
+                            .on_hover_text(
+                                "The most common categories, airlines, models, operators and routes \
+                                 among the aircraft this station knows — counted from the radio first, \
+                                 with the relay's cards as a complement",
+                            );
+                            if b.clicked() {
+                                self.aircraft_stats_view = !self.aircraft_stats_view;
+                                self.aircraft_cards = false;
+                            }
+                            ui.add_space(6.0);
+                            crate::chrome::menu_caption(ui, "Export");
+                            for (format, hover) in [
+                                (
+                                    Format::Csv,
+                                    "Save the aircraft as a CSV table for a spreadsheet: the station\u{2019}s \
+                                     last 24 hours if it keeps a history, else what is heard now. No \
+                                     positions.",
+                                ),
+                                (
+                                    Format::Json,
+                                    "Save the aircraft as JSON: the station\u{2019}s last 24 hours if it \
+                                     keeps a history, else what is heard now. No positions.",
+                                ),
+                            ] {
+                                let label = format.ext().to_ascii_uppercase();
+                                let b = crate::chrome::chip_sized(
+                                    ui,
+                                    self.aircraft_online.export.busy(),
+                                    label,
+                                    egui::vec2(COLUMN_W - 8.0, BUTTON_H),
+                                )
+                                .on_hover_text(hover);
+                                if b.clicked() {
+                                    self.aircraft_online.export.start(format);
+                                }
+                            }
+                        });
                 },
             );
             ui.vertical(|ui| {
@@ -951,6 +959,15 @@ impl super::SdroxideApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// At the window's smallest size (560 x 320) the column of buttons is taller
+    /// than the window, and the export buttons were cut off with no way to them.
+    #[test]
+    fn the_button_column_scrolls_so_a_small_window_does_not_cut_it_off() {
+        let src = include_str!("aircraft.rs");
+        let body = &src[..src.find("#[cfg(test)]").unwrap()];
+        assert!(body.contains("id_salt(\"aircraft_modes\")"));
+    }
 
     /// The operator's screenshot: VDL2 selected and the right-hand side empty bar
     /// a sentence. Every mode button now has a view that shows what it hears.
