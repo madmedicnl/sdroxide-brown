@@ -2968,3 +2968,34 @@ summary without having to ask for it.
 **Next.** The live queue is unchanged: the mode work, STANAG 4285 first —
 [`MODE-PHASE-4-PROMPT.md`](MODE-PHASE-4-PROMPT.md) and
 [`MODE-PROGRESS.md`](MODE-PROGRESS.md).
+
+---
+
+## 2026-10-27 (the DigiConfig wire fields are re-appended at the true tail)
+
+**In plain words.** The five fields the composer and the auto run added to the
+station's digital config — banner-bottom, banner text size, the station overlay,
+auto-call retries and the auto session limit — were dropped into the *middle* of
+that struct even though every one of their notes said "appended last". They now
+sit at the real end, so the note and the code agree. It's a wire change, so the
+wire number moved to 256.
+
+**Done.**
+- Branch `local/digiconfig-append-tail` (off `main`), commit `55e09550`.
+- Moved `sstv_banner_bottom`, `sstv_banner_text_pct`, `station_overlay`,
+  `auto_call_retries`, `auto_session_min` to after `wefax_rx_auto` in
+  `DigiConfig` (`crates/sdroxide-types/src/digi.rs`), so `sstv_rx_sensitivity` /
+  `sstv_rx_auto` / `wefax_rx_sensitivity` / `wefax_rx_auto` no longer shift down
+  in the positional postcard layout.
+- Bumped the wire: `PROTO_VERSION` 255 → 256, `VERSION_BYTE` 0x4B → 0x4C, with a
+  v256 register entry in `crates/sdroxide-proto/src/lib.rs`.
+- Green: `cargo test -p sdroxide-proto --lib roundtrip` (14/14), `cargo test -p
+  sdroxide-types --lib` (815/815), `cargo check --workspace --all-targets`
+  (silent apart from pre-existing warnings), and
+  `cargo check --release --target wasm32-unknown-unknown -p sdroxide-ui`.
+
+**Not done / blocked.** It is a wire change, so it waits for the freeze to lift
+and goes up as a PR (never straight to `main`). Not pushed.
+
+**Next.** When the freeze lifts, push the branch and open the PR; F4NRM reviews
+it like any wire change.
