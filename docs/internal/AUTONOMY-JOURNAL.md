@@ -23,13 +23,14 @@ Each entry, in this order:
 
 ## 2026-10-27 (the Aircraft window, from the operator's five screenshots)
 
-**In plain words.** Nine pull requests are open, none merged. They fix what the
+**In plain words.** Ten pull requests are open, none merged. They fix what the
 screenshots showed: the French word "indisponible" still in six strings (my
 earlier audit said there was one; that was wrong), distances and speeds in
 metric or miles, the same fact repeated on every line of the card, columns that
 printed over each other, three buttons for the map style instead of one that
 cycled, a box for an airport, mode buttons that did nothing on the wrong band,
-VDL2 and ACARS views that were a sentence, and a switch for the online photo
+VDL2 and ACARS views that were a sentence, a button column cut off at the
+window's smallest size, and a switch for the online photo
 lookup that an operator can press. Nothing was seen in a picture and the server
 half of the switch has never compiled here; those are the first things to look
 at. Next: the narrow-window check, and whatever the review of these says.
@@ -44,6 +45,9 @@ at. Next: the narrow-window check, and whatever the review of these says.
 - #271 `claude/aircraft-j-airport-card`, on #267 — airport card and pinned box.
 - #272 `claude/aircraft-g-mode-buttons`, main — `SetModeListen`, HFDL enabled.
 - #273 `claude/aircraft-h-views`, on #272 — VDL2 and ACARS views.
+- #276 `claude/aircraft-f-narrow`, on #273 — the button column scrolls at
+  560 x 320; seen in a rendered picture before and after (ignored preview test
+  `aircraft_window_preview`).
 - #274 `claude/aircraft-b-photo-switch`, main — `GET/POST /aircraft-online`,
   no `PROTO_VERSION` change (still 255 / 0x4B).
 - Numbers: `cargo test --release -p sdroxide-ui` 1283 to 1288 passed per branch,
@@ -53,17 +57,18 @@ at. Next: the narrow-window check, and whatever the review of these says.
   new behaviour with their own tests.
 
 **Not done / blocked.**
-- Lot F (the window at its smallest size) not started: it needs a picture.
+- Lot F was done with a rendered picture, but only at the smallest size and with
+  stand-in data (the map showed no aircraft); not run in a real window.
 - The radio and server crates do not build in this sandbox (opus download is
   blocked), so no engine test and no server test was run; #274's CI is the first
   compile of its server code, and #272 has no engine test.
-- Nothing was looked at in a rendered picture; the Chart style's colours are
-  unchanged.
+- Only lot F was looked at in a rendered picture; the other lots were not, and
+  the Chart style's colours are unchanged.
 - `AGENTS.md` still says the relay is switched only by the environment variable.
 - main carries "frozen until #263"; I opened PRs on the operator's explicit
   order and merged nothing.
 
-**Next.** Read the review of the nine, then F.
+**Next.** Read the review of the ten.
 
 ---
 
