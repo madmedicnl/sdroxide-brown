@@ -21,6 +21,40 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-28 (the SWL fix, corrected — the seed must not touch a transceiver)
+
+**In plain words.** The earlier switch fix was the wrong layer. The real cause is
+the global "start in SWL mode" preference seeding SWL mode on every radio — so a
+transceiver came up in SWL mode and the LISTEN/OPERATE tab did nothing until the
+seed was cleared by hand. Now a transceiver drops that seed as soon as its front
+end reports it can transmit, so it comes up with its transmit controls and the
+tab works. `--swl` still forces SWL mode.
+
+**Done.**
+
+- Operator's report: on OPERATE, the SWL switch unchecked, LISTEN↔OPERATE did
+  nothing; toggling the switch in settings fixed it. Confirmed the cause:
+  `start_swl = true` seeds `swl_start` on every radio, and `swl_mode()` ORs it in
+  ahead of the tab.
+- `fix(ui): a transceiver does not start in SWL mode …` (`d8b7513c`) — the
+  `Capabilities` handler drops `swl_start` once the front end is
+  transmit-capable, unless `--swl` forced it. Helper
+  `drop_swl_seed_for_transmitter` + test
+  `a_transmitter_drops_the_start_in_swl_seed_but_not_a_forced_run`.
+- Kept the earlier `cb069dd4` switch fix (the checkbox now shows the whole SWL
+  state), which is still right for receive-only radios.
+
+**Not done / blocked.**
+
+- Not tested live — the operator's next launch against their own config is the
+  confirmation.
+
+**Next.**
+
+- The #239 orientation question is still the open one.
+
+---
+
 ## 2026-10-27 (the CRT starts in SWL mode and needs two switch flips)
 
 **In plain words.** A transceiver that came up in SWL mode needed the SWL switch
