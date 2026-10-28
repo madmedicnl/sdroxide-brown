@@ -40,17 +40,17 @@ colours come from `theme.rs`, so the panel follows the theme in force.
 
 | # | step | done when |
 | --- | --- | --- |
-| 0 | bookkeeping: `TODO.md`, the board, this file | committed |
-| 1 | audio levels: the engine sends L/R level and ~48 bands of the main receiver at ~30 Hz; wire bump | round-trip test, shown to fail without the fix |
-| 2 | skeleton: `panels/radio_classic.rs`, `TW_RADIO_CLASSIC` (1 << 50), state in `UiSettings` (serde default), an EXTRAS chip in a free slot | the chip opens an empty panel |
-| 3 | docking in the voice branch of `frame.rs` (handle, 46 %), digital modes and CW unchanged | a test of the split, the DAB and CW layouts untouched |
-| 4 | left column | a click on a MEM retunes everything |
-| 5 | middle column | the VU follows the audio |
-| 6 | right column (VFO gestures, RDS block, bars) | the gestures work, RDS chips hide when not sent |
-| 7 | detachable: a line and a switch in Settings → Tool windows, remembered geometry | it detaches and docks back |
-| 8 | render the real panel to a PNG (an ignored test, like `dab_panel_preview`) and compare with the previews, both themes | looked at, not just measured |
-| 9 | gate: `cargo check --workspace --all-targets` silent, tests of the touched crates, `rustfmt` on what is touched, the wasm check if it can be run, the journal | all green, or the blocker said |
-| 10 | the PR on `f4nrm/determined-dirac-yyf856`, not merged by us | open |
+| 0 | bookkeeping: `TODO.md`, the board, this file | committed — **done** |
+| 1 | audio levels: the engine sends L/R level and ~48 bands of the main receiver at ~30 Hz; wire bump | round-trip test, shown to fail without the fix — **done** (`2aa127c`) |
+| 2 | skeleton: `panels/radio_classic.rs`, `TW_RADIO_CLASSIC` (1 << 50), state in `UiSettings` (serde default), an EXTRAS chip in a free slot | the chip opens an empty panel — **done** (`320e245`) |
+| 3 | docking in the voice branch of `frame.rs` (handle, 46 %), digital modes and CW unchanged | a test of the split, the DAB and CW layouts untouched — **done** (`320e245`) |
+| 4 | left column | a click on a MEM retunes everything — **done** (`320e245`) |
+| 5 | middle column | the VU follows the audio — **done** (`320e245`) |
+| 6 | right column (VFO gestures, RDS block, bars) | the gestures work, RDS chips hide when not sent — **done** (`320e245`) |
+| 7 | detachable: a line and a switch in Settings → Tool windows, remembered geometry | it detaches and docks back — **done** (`320e245`) |
+| 8 | render the real panel to a PNG (an ignored test, like `dab_panel_preview`) and compare with the previews, both themes | looked at, not just measured — **done** (`320e245`) |
+| 9 | gate: `cargo check --workspace --all-targets` silent, tests of the touched crates, `rustfmt` on what is touched, the wasm check if it can be run, the journal | all green, or the blocker said — **done**, see the journal |
+| 10 | the PR on `f4nrm/determined-dirac-yyf856`, not merged by us | open — **done**; not merged by us |
 
 ## Rules that apply
 

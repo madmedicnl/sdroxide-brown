@@ -21,6 +21,70 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-28 (Radio Classic — the panel, and the audio level it needs)
+
+**In plain words.** EXTRAS now has a RADIO chip that opens a classic-radio face
+under the waterfall, the way DAB does: bands, memories and a schedule of what is
+on the air on the left; the mode, a small spectrum, the S-meter and the stereo VU
+in the middle; clocks, a big interactive frequency, the station's RDS name,
+RadioText and the RDS chips on the right. It follows the theme, and Settings →
+Detachable has a line and a switch to put it in a window. It is not merged and
+should not be: the VU and the bars needed one new message from the station, which
+is a wire change (256 → 257), so it is a PR. Not yet seen with a real station's
+audio and RDS, and the click paths (the EXTRAS chip, a schedule row) are untested
+here.
+
+**Done.**
+
+- `2aa127c` — the audio level on the wire: `ServerMsg::AudioLevel` appended last,
+  `PROTO_VERSION` 256 → 257, `VERSION_BYTE` 0x4C → 0x4D, register line, postcard
+  round trip, and `the_audio_level_message_is_appended_last` — **shown to fail**
+  with the variant moved above `DabSlide` (`AudioLevel must directly follow
+  DabSlide`) and to pass with it back. The engine measures where the sound is
+  handed to the mixer (`AudioMeter` in `sdroxide-dsp`: mean power over 33 ms, 48
+  log bands from a 1024-point FFT; silence is sent once, not streamed); the
+  meter, the bands and the byte mapping have their own tests in their crates.
+- `320e245` — the panel (`panels/radio_classic.rs`), `TW_RADIO_CLASSIC` (bit 50),
+  `UiSettings::radio_classic_on`, the EXTRAS chip, the docking in the voice branch
+  of `frame.rs` (digital modes, DAB and CW untouched), the Detachable line.
+  Where a mode's panel owns the slot, or on a phone, it opens as a window instead.
+- Rendered the real panel to a PNG in Classic and Amber Phosphor, in FM and in AM
+  (`radio_classic_preview`, ignored) and looked at all of them. That found the
+  mini waterfall empty (the docked layout holds the spectrum frame out of the app
+  while it draws, so the panel is handed it) and two glyphs drawn as boxes.
+- Found by reading rather than by a test: `Instant::now()` panics in the browser
+  build, which is the main client, so the level is stamped with the wall clock.
+
+**Numbers.** `cargo check --workspace --all-targets`: builds, **11 warnings, all
+in files this branch does not touch** (navtex, text_modem, tci, server aircraft,
+ui spectrum and sstv_composer, stanag4285) — the gate is not silent on `main`
+either; not fixed here. `cargo test --release -p sdroxide-ui`: 1329 passed, 0
+failed. `-p sdroxide-types -p sdroxide-proto`: 820 and 20 passed. `-p sdroxide-dsp
+--lib audio_bands`: 6 passed. `cargo check --release --target
+wasm32-unknown-unknown -p sdroxide-ui`: clean. `rustfmt --check` clean on every
+file touched except two hunks that were already unformatted on `main`
+(`engine.rs` ~18624, `frame.rs` ~6629).
+
+**Not done / blocked.**
+
+- Not run against a real station: the level, the bars and the RDS block have only
+  been fed synthetic data. The first look at a real FM station is the bench's.
+- The sandbox cannot fetch `github.com/xiph/opus` by archive, so `sdroxide-rade`
+  was built with `OPUS_URL` pointing at a clone of the pinned commit; nothing in
+  the tree changed for it. `sdroxide-radio`'s test binaries were not run (the
+  engine change is five lines of glue, compiled).
+- Every client is now sent about 30 small messages a second (about 100 bytes
+  each) whether or not the panel is open. If that matters on a poor link, the
+  next step is a `Command` that asks for the level — which is a second wire
+  change, so not done unasked.
+- The memory list shows the first four memories only; a longer list wants a
+  scrolling row. SCHEDULE shows at most 14 stations, the strongest on the air now
+  on the dial's band.
+
+**Next.** The PR waits for F4NRM's review; the next item in `TODO.md`.
+
+---
+
 ## 2026-10-28 (#265 — the range notices are logged, not shown)
 
 **In plain words.** The "would not open on X, so it opened on Y" and "the dial

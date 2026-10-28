@@ -18,6 +18,7 @@ or connects to a remote sdroxide server.
 2. [Basic operation](#2-basic-operation)
     - [2.20 HD Radio (NRSC-5)](#220-hd-radio-nrsc-5)
     - [2.22 QO-100 beacon plugin](#222-qo-100-beacon-plugin)
+    - [2.23 Radio Classic](#223-radio-classic)
 3. [Digital modes (FT8, FT4, FT2, JT65, JT9, FST4, MSK144, FSK441, Q65, UVPACKET, JTTY, PSK31, RTTY, Olivia, Contestia, MT63, ARDOP, THOR, MFSK, FSQ, Hellschreiber, SSTV, RIFP, weather fax, JS8, RF Paint, WSPR, PI4, packet, APRS, ADS-B, NAVTEX, DSC, ACARS, VDL2, AIS, HFDL, AtCHAT NET)](#3-digital-modes)
     - [3.17 AtCHAT NET](#317-atchat-net)
     - [3.18 ACARS](#318-acars-airline-datalink-on-airband)
@@ -3628,6 +3629,41 @@ The plugin runs on the machine the radio is on. Its readout is not sent to
 remote or browser clients yet, so on those the window opens, the strip draws
 from the shared spectrum, and the status line says the readout is local to the
 receiving station.
+
+---
+
+### 2.23 Radio Classic
+
+A classic-radio face for listening to broadcasts, with the FM radio (WFM and
+RDS) as the first thing it does well. **EXTRAS → RADIO** switches it on; the
+same chip switches it off.
+
+It sits under the waterfall in the same place, and at the same size, as the DAB
+panel, and the handle between the two is dragged the same way. Where a mode has
+a panel of its own under the waterfall (the digital modes, DAB, CW), or on a
+phone, there is no room, so Radio Classic opens as a window instead. **Settings →
+Detachable → RADIO CLASSIC** puts it in a window whenever you like; closing the
+window docks it again.
+
+- **Left.** *Bands* picks a group — BROADCAST, HAM, AIR, MARINE or CB — and the
+  rows below it tune: LW, MW EU and US, FM 87.5–108 and FM ext 64–87.5, and the
+  shortwave broadcast bands 120 to 11. *Mode* is WFM, FM, AM, USB, LSB or CW.
+  *Mem · Schedule* recalls a memory (band, mode, frequency and filter at once);
+  **SCHEDULE** lists the broadcasts on the air now on the band the dial is in,
+  and a click tunes to one.
+- **Middle.** The mode, a small spectrum and waterfall around the dial, the
+  S-meter (red above S9) with its level, BW, STEP, AGC and SQL, and the stereo VU,
+  which is also the volume control (drag, wheel or arrow keys, as in DAB).
+- **Right.** Local and UTC clocks, and the frequency in the same readout as the
+  top bar (wheel on a digit, click the upper or lower half of a digit to step it,
+  right-click to zero it, double-click to type). Under it, on FM, the station's
+  RDS name, the RadioText (scrolling when it is long), and a chip for each of
+  PTY, PI, TP, TA, MUSIC or SPEECH, AF and the station's clock — only those the
+  station actually sends. Off FM, the name is that of the memory or the schedule
+  entry the dial is on. The bars at the foot follow the sound.
+
+The colours are the theme's. The VU and the bars need the station to be version
+257 or newer, because the level of the audio comes from it.
 
 ---
 
