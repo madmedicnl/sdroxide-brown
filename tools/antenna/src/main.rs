@@ -127,9 +127,8 @@ fn presets(mhz: f64, freq_hz: f64) {
 fn solve(mhz: f64, freq_hz: f64) {
     use ant::solver::{SolverConfig, analyze, front_to_back_db, max_gain, swr};
     println!("# feed impedance, SWR (50 ohm), gain and front-to-back at {mhz} MHz");
-    println!(
-        "# a feed on a straight-through node only; a feed at a bend is refused, not guessed\n"
-    );
+    println!("# a bend feed (the inverted-V apex) splits into two terminals and solves;\n");
+    println!("# a feed at a three-or-more-way junction (the ground plane) is still refused\n");
     for a in ant::presets::catalog(freq_hz) {
         match analyze(&a, &SolverConfig::default()) {
             Ok(sol) => {

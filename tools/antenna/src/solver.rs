@@ -31,11 +31,11 @@
 //! A free end (one incident segment) carries no current and is not an unknown
 //! unless it is fed.
 //!
-//! **A feed must sit on a straight-through segment** (or a segment ending at a
-//! free end). Feeding a bend or a multi-way junction needs a
-//! **source-between-terminals** model — the two wires are the source's two
-//! terminals, not one shared node — which is not built yet, so such a design is
-//! **refused, not solved wrong** (the inverted-V apex and the ground-plane star).
+//! **A feed on a straight-through segment** (or a segment ending at a free end)
+//! is a delta gap over that segment. A feed at a **non-collinear junction** (the
+//! inverted-V apex) splits the node into the two wires' terminals and puts the
+//! source **between** them with opposite polarity. A feed at a **multi-way
+//! junction** (the ground-plane star) is still refused, not solved wrong.
 //!
 //! **Ground** is free space (no image) or a **perfect** ground, added by image
 //! theory: every source segment is mirrored through `z = 0` with its current
@@ -57,8 +57,8 @@
 //!
 //! A shape whose wires *meet* solves too (the delta loop gives a plausible
 //! 107 − j70 Ω), but there is no reference value here to pin it — treat unfed
-//! junctions as plausible, not proven; and a feed *at* a non-collinear junction
-//! is refused outright (see below).
+//! junctions as plausible, not proven. A feed *at* a non-collinear junction
+//! splits the node into the two terminals and solves (the inverted-V, ~40–50 Ω).
 
 use num_complex::Complex64;
 use std::f64::consts::PI;
@@ -248,7 +248,7 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     if a.sources.is_empty() {
         return Err("the design has no source".into());
     }
-    let m = build_mesh(a, cfg);
+    let mut m = build_mesh(a, cfg);
     if m.segs.is_empty() {
         return Err("the design has no wires".into());
     }
@@ -272,35 +272,58 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     let si = (base + src.at.offset as isize).clamp(0, nseg as isize - 1) as usize;
     let (feed_a, feed_b) = (m.segs[m.wire_segs[fw][si]].a, m.segs[m.wire_segs[fw][si]].b);
 
-    // Refuse a feed at a bend or a multi-way junction. The shared-node junction
-    // basis is fine for a *collinear* through-connection, but a non-collinear
-    // one (the inverted-V apex, the ground-plane star) is not modelled
-    // correctly yet — it would answer ~6 Ω for a ~50 Ω antenna — so refuse.
+    // A feed at a non-collinear junction (the inverted-V apex) needs a
+    // **source-between-terminals** model: the two wires are the source's two
+    // terminals, not one shared node. Split the junction so the feed segment's
+    // end and the other wire's end are two separate unknowns, and put the
+    // delta-gap source between them. A collinear through-connection and a free
+    // end keep the plain delta-gap-over-a-segment feed.
+    let feed_seg = m.wire_segs[fw][si];
+    // (junction node, the node the "other" wire moved to).
+    let mut split: Option<(usize, usize)> = None;
     for node in [feed_a, feed_b] {
         let inc = &m.incident[node];
-        let bad = match inc.len() {
-            0 | 1 => false,
+        match inc.len() {
             2 => {
                 let (s0, s1) = (inc[0], inc[1]);
-                dot(m.segs[s0].dir, m.segs[s1].dir).abs() < 0.9999
+                if dot(m.segs[s0].dir, m.segs[s1].dir).abs() < 0.9999 {
+                    let other = if s0 == feed_seg { s1 } else { s0 };
+                    let j2 = m.node_pts.len();
+                    m.node_pts.push(m.node_pts[node]);
+                    m.incident.push(Vec::new());
+                    if m.segs[other].a == node {
+                        m.segs[other].a = j2;
+                    } else {
+                        m.segs[other].b = j2;
+                    }
+                    m.incident[node].retain(|&s| s != other);
+                    m.incident[j2].push(other);
+                    split = Some((node, j2));
+                }
             }
-            _ => true,
-        };
-        if bad {
-            return Err(
-                "the feed sits at a bend or junction — a non-collinear wire junction is not \
-                 modelled correctly yet, so this shape cannot be solved"
-                    .into(),
-            );
+            n if n >= 3 => {
+                return Err(
+                    "the feed sits at a multi-way junction (three or more wires), which is not \
+                     modelled yet — feed a two-wire bend or a straight segment"
+                        .into(),
+                );
+            }
+            _ => {}
         }
     }
 
     // Unknowns: every node with two or more segments (a bend, junction or
-    // through-connection), plus both nodes of the feed segment.
+    // through-connection), plus the source terminals. For a straight feed those
+    // are the two nodes of the feed segment; for a split junction they are the
+    // junction node and the wire moved off it.
     let mut unknowns: Vec<usize> = Vec::new();
     let mut index = vec![None; m.node_pts.len()];
+    let (term_a, term_b) = match split {
+        Some((node, j2)) => (node, j2),
+        None => (feed_a, feed_b),
+    };
     for (node, slot) in index.iter_mut().enumerate() {
-        if m.incident[node].len() >= 2 || node == feed_a || node == feed_b {
+        if m.incident[node].len() >= 2 || node == term_a || node == term_b {
             *slot = Some(unknowns.len());
             unknowns.push(node);
         }
@@ -309,8 +332,8 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
         return Err("no node to solve for".into());
     }
     let (ia, ib) = (
-        index[feed_a].expect("the feed node was added"),
-        index[feed_b].expect("the feed node was added"),
+        index[term_a].expect("the source terminal was added"),
+        index[term_b].expect("the source terminal was added"),
     );
 
     let k = 2.0 * PI * a.freq_hz / C;
@@ -357,12 +380,24 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
 
     let mut rhs = vec![Complex64::new(0.0, 0.0); nu];
     let half_v = Complex64::new(src.volts / 2.0, 0.0);
+    // A segment gap excites both terminals in phase (the impressed field is
+    // uniform over the segment); a split junction is a gap *between* the two
+    // wires, so the two terminals are driven with opposite polarity.
     rhs[ia] += half_v;
-    rhs[ib] += half_v;
+    if split.is_some() {
+        rhs[ib] -= half_v;
+    } else {
+        rhs[ib] += half_v;
+    }
 
     let currents = solve_complex(&mut z, &rhs).ok_or("the interaction matrix is singular")?;
-    // The current at the feed is the segment's midpoint value.
-    let i_feed = 0.5 * (currents[ia] + currents[ib]);
+    // The source current. A segment feed reads the midpoint of its two node
+    // currents; a split junction reads the current at the junction terminal —
+    // the wire moved off the junction carries the same current, opposite sign.
+    let i_feed = match split {
+        Some(_) => currents[ia],
+        None => 0.5 * (currents[ia] + currents[ib]),
+    };
     if i_feed.norm() == 0.0 {
         return Err("the feed current came out zero".into());
     }
@@ -740,24 +775,24 @@ mod tests {
         assert!((z.re - 73.0).abs() < 8.0, "resonant resistance {:.1} Ω should be ~73", z.re);
     }
 
-    /// Wires that meet share a node, so a junction solves. The delta loop — fed
-    /// on a straight-through node (the middle of the bottom side) — gives a
-    /// finite, physical impedance. A feed where wires meet at an *angle* (the
-    /// inverted-V apex, the ground plane base) is a different model and is
-    /// refused, not solved wrong.
+    /// Wires that meet share a node, so an *unfed* junction solves. A feed at a
+    /// non-collinear junction (the inverted-V apex) splits the node into the two
+    /// wires' terminals and solves too — ~40–50 Ω, the classic inverted-V
+    /// figure — while a feed at a three-or-more-way junction (the ground plane
+    /// base) is still refused, not solved wrong.
     #[test]
-    fn junctions_solve_and_a_bend_feed_is_refused() {
+    fn junctions_solve_and_a_bend_feed_solves() {
         let loopa = crate::presets::delta_loop(28_500_000.0, 10.0);
         let sol = analyze(&loopa, &SolverConfig::default()).expect("delta loop should solve");
         assert!(sol.zin.re.is_finite() && sol.zin.re > 0.0, "R = {:.1}", sol.zin.re);
 
-        for a in [
-            crate::presets::inverted_v(28_500_000.0, 10.0),
-            crate::presets::ground_plane(28_500_000.0),
-        ] {
-            let err = analyze(&a, &SolverConfig::default()).unwrap_err();
-            assert!(err.contains("bend"), "{}: {err}", a.name);
-        }
+        let v = analyze(&crate::presets::inverted_v(28_500_000.0, 10.0), &SolverConfig::default())
+            .expect("the inverted-V should solve");
+        assert!((25.0..80.0).contains(&v.zin.re), "inverted-V R = {:.1} Ω, want ~50", v.zin.re);
+
+        let err = analyze(&crate::presets::ground_plane(28_500_000.0), &SolverConfig::default())
+            .unwrap_err();
+        assert!(err.contains("multi-way"), "ground plane: {err}");
     }
 
     /// A quarter-wave monopole over a **perfect** ground is half a dipole: the

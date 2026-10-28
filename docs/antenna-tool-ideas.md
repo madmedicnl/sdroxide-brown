@@ -319,14 +319,14 @@ was the hard part and is handled.*
 - [x] The feed is a delta gap over a **segment** (MMANA's `w#c`/`w#b`/`w#e`
       name a segment), which is correct for a straight feed and for a
       *collinear* through-connection.
-- [ ] **Non-collinear junction/model.** A feed at a bend or multi-way junction is
-      **refused** — the shared-node junction basis gets it wrong (it answers
-      ~6 Ω for a ~50 Ω inverted-V, and fine segmentation does not change it, so
-      it is the basis, not the quadrature). Feeding there needs a
-      **source-between-terminals** model (the two wires are the source's two
-      terminals, not one shared node). Unfed junctions (the delta loop's corners)
-      give a plausible ~107 Ω, but **no reference value here pins them** — treat
-      them as plausible, not proven. The next solver item, and a genuine project.
+- [x] **Non-collinear junction (two-wire bend).** The feed splits the junction
+      node into the two wires' terminals and puts the source **between** them
+      with opposite polarity — the inverted-V now solves to ~40 Ω (against the
+      ~50 Ω classic figure; the `K = 0.95` length is not quite resonant for a
+      bent leg). A feed at a **three-or-more-way** junction (the ground-plane
+      base) is still refused. Unfed junctions (the delta loop's corners) give a
+      plausible ~107 Ω, but **no reference value here pins them** — treat them as
+      plausible, not proven.
 - [ ] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — the model holds
       them; the solver does not yet apply them.
 - [x] **Ground — free space and perfect (image method).** Validated: a

@@ -21,9 +21,9 @@ The **tool layer** (milestone A) — no method-of-moments engine yet:
 - `presets.rs` — the CB/SWL shape presets (dipole, inverted-V, stick, ground
   plane, delta loop, Yagi), built from the same lengths as the calculator.
 - `solver.rs` — the method-of-moments solver (triangular/rooftop basis, Galerkin,
-  reduced kernel), validated against the textbook dipole values for
-  **junction-free** shapes; shapes whose wires meet are refused until junction
-  handling lands.
+  reduced kernel), validated against the textbook dipole values. Junctions
+  solve: an unfed junction shares a node, and a feed at a non-collinear bend
+  (the inverted-V apex) splits into the two wires' terminals.
 
 ```
 cargo run -- 27.265                              # dimensions table
@@ -36,9 +36,10 @@ cargo test
 
 ## What comes next
 
-Junction handling (delta loop, inverted-V, ground plane), lumped loads, ground
-models, the frequency sweep and far-field gain/F-B, then the 2D polar plots.
-See the ideas doc for the formulas and the phasing.
+Lumped loads, the Fresnel (real) ground model, and the multi-way-junction feed
+(the ground plane), then the 2D polar plots. The frequency sweep, far-field
+gain/F-B and the bend feed are done. See the ideas doc for the formulas and the
+phasing.
 
 ## Note on the shortening factor
 
