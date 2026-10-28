@@ -48,6 +48,7 @@ pub(in crate::app) mod drm;
 pub(in crate::app) mod duo_power;
 pub(in crate::app) mod enigma;
 pub(in crate::app) mod extras;
+pub(in crate::app) mod antenna;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
 pub(in crate::app) mod hd;
@@ -602,6 +603,10 @@ pub struct SdroxideApp {
     /// Where the top bar ends — the top of the spectrum frame below it.
     top_bar_bottom: f32,
     extras_was_open: bool,
+    /// The ANTENNA calculator window — see [`antenna`] — and the frequency it is
+    /// working at (MHz).
+    show_antenna: bool,
+    antenna_freq_mhz: f64,
     /// The AIRCRAFT window — see [`aircraft`] — and which opening of it this is.
     show_aircraft: bool,
     aircraft_epoch: u32,
@@ -2137,6 +2142,8 @@ impl SdroxideApp {
             extras_epoch: 0,
             top_bar_bottom: 0.0,
             extras_was_open: false,
+            show_antenna: false,
+            antenna_freq_mhz: 27.265,
             show_aircraft: false,
             aircraft_epoch: 0,
             aircraft_was_open: false,

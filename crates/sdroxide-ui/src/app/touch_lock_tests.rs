@@ -337,3 +337,42 @@ fn a_tap_on_aircraft_in_extras_leaves_the_window_open() {
         "the open state was not kept for the next start"
     );
 }
+
+/// EXTRAS then ANTENNA, by real taps: the calculator window opens and renders
+/// the shapes.
+#[test]
+fn a_tap_on_antenna_in_extras_opens_the_calculator() {
+    let _guard = crate::multi::frame_test_lock();
+    let dir =
+        std::env::temp_dir().join(format!("sdroxide-antenna-opens-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+    let size = egui::vec2(1600.0, 900.0);
+    let sent = Rc::new(RefCell::new(Vec::new()));
+    let ctx = egui::Context::default();
+    let app = SdroxideApp::new_tab(&ctx, None, None, Box::new(Sent(sent.clone())), 0, true);
+    let mut rig = Rig { ctx: ctx.clone(), app, sent, t: 0.0, size };
+    for _ in 0..3 {
+        rig.frame(Vec::new(), 0.05).drop_without_applying_deltas();
+    }
+    let out = rig.frame(Vec::new(), 0.05);
+    let extras = find_text(&out.shapes, "EXTRAS").expect("an EXTRAS chip");
+    out.drop_without_applying_deltas();
+    rig.tap(extras);
+    for _ in 0..3 {
+        rig.frame(Vec::new(), 0.05).drop_without_applying_deltas();
+    }
+    let out = rig.frame(Vec::new(), 0.05);
+    let ant = find_text(&out.shapes, "ANTENNA").expect("an ANTENNA chip in EXTRAS");
+    out.drop_without_applying_deltas();
+    rig.tap(ant);
+    for _ in 0..3 {
+        rig.frame(Vec::new(), 0.05).drop_without_applying_deltas();
+    }
+    assert!(rig.app.show_antenna, "the ANTENNA window did not open");
+    let out = rig.frame(Vec::new(), 0.05);
+    find_text(&out.shapes, "Half-wave dipole").expect("the dipole row rendered");
+    out.drop_without_applying_deltas();
+}

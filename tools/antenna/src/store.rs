@@ -1,9 +1,8 @@
 //! `antennas.json` — the saved designs, in the operator's own config directory.
 //!
 //! One file, like `memories.json`, holding a list of [`Antenna`]. Native-only
-//! and fork-only; the browser build has no use for it.
-
-use std::path::Path;
+//! and fork-only; the browser build has no use for it (the fs half is gated off
+//! on wasm32 so the crate stays a wasm-safe dependency).
 
 use crate::model::Antenna;
 
@@ -22,12 +21,14 @@ pub fn from_json(text: &str) -> Result<Vec<Antenna>, String> {
     Ok(list)
 }
 
-pub fn save(path: &Path, antennas: &[Antenna]) -> Result<(), String> {
+#[cfg(not(target_arch = "wasm32"))]
+pub fn save(path: &std::path::Path, antennas: &[Antenna]) -> Result<(), String> {
     let text = to_json(antennas)?;
     std::fs::write(path, text).map_err(|e| e.to_string())
 }
 
-pub fn load(path: &Path) -> Result<Vec<Antenna>, String> {
+#[cfg(not(target_arch = "wasm32"))]
+pub fn load(path: &std::path::Path) -> Result<Vec<Antenna>, String> {
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     from_json(&text)
 }

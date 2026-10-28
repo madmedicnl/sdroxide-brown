@@ -2045,6 +2045,7 @@ impl eframe::App for SdroxideApp {
         self.poll_playback_list(&mut cmds);
         self.playback_window(&ctx, &mut cmds);
         self.extras_window(&ctx, &mut cmds);
+        self.antenna_window(&ctx);
         self.aircraft_watch_tick(&ctx);
         self.aircraft_window(&ctx, &mut cmds);
         self.help.ui(&ctx);

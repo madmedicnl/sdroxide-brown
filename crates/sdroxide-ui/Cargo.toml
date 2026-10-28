@@ -9,6 +9,10 @@ sdroxide-types.workspace = true
 # own, so it is wasm-safe and belongs on the always-built path, not the native
 # block below.
 sdroxide-enigma = { path = "../sdroxide-enigma" }
+# The antenna utility: closed-form dimensions and the MoM solver, for the
+# "how long is my dipole" calculator in the EXTRAS launcher. Pure Rust
+# (num-complex, serde), so it builds for wasm32 as well.
+antenna-model = { path = "../../tools/antenna" }
 # The build stamp, for the three places that say which build this is: the
 # About box, the "you are running X" line on the update banner, and the
 # crash report the graphics-driver panic hook writes.

@@ -295,6 +295,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "antenna-model"
+version = "0.1.0"
+dependencies = [
+ "num-complex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5897,6 +5906,7 @@ name = "sdroxide-ui"
 version = "2.2.0"
 dependencies = [
  "ab_glyph",
+ "antenna-model",
  "bytemuck",
  "chrono",
  "eframe",

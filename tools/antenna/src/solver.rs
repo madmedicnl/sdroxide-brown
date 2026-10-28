@@ -561,7 +561,7 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
         len: s.len,
         current,
     };
-    let mut segments: Vec<FarSeg> =
+    let segments: Vec<FarSeg> =
         m.segs.iter().map(|s| far_seg(s, 0.5 * (node_current[s.a] + node_current[s.b]))).collect();
     // The image segments carry the *same* current; the far field applies the
     // reflection coefficient per direction (and per observation angle for a

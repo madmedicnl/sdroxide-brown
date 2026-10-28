@@ -220,9 +220,22 @@ impl super::SdroxideApp {
                 }
                 crate::app::persist::persist_ui_settings(&self.ui_settings);
             }
+            let ant = crate::chrome::chip_sized(
+                ui,
+                self.show_antenna,
+                "ANTENNA",
+                egui::vec2(SLOT_W, SLOT_H),
+            )
+            .on_hover_text(
+                "ANTENNA — cutting lengths and SWR for a dipole, vertical, ground plane, \
+                 loop or Yagi",
+            );
+            if ant.clicked() {
+                self.show_antenna = !self.show_antenna;
+            }
             // The other slots are kept: the panel is sized for them, so a
             // receiver added here does not widen the window.
-            for _ in 3..EXTRAS_SLOTS {
+            for _ in 4..EXTRAS_SLOTS {
                 let (rect, _) =
                     ui.allocate_exact_size(egui::vec2(SLOT_W, SLOT_H), egui::Sense::hover());
                 ui.painter().rect_stroke(

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "tools/antenna"]
 default-members = [".", "crates/sdroxide-types", "crates/sdroxide-proto", "crates/sdroxide-dsp", "crates/sdroxide-radio", "crates/sdroxide-config"]
 # The vendored crates are reached through `[patch.crates-io]`, not as members:
 # they are upstream's code under upstream's licences, not ours to lint or
