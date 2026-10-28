@@ -282,7 +282,7 @@ impl super::SdroxideApp {
             return;
         }
         self.antenna_poll();
-        let show = self.tool_window(ctx, "antenna", "ANTENNA", [420.0, 720.0], true, |me, ui| {
+        let show = self.tool_window(ctx, "antenna", "ANTENNA", [560.0, 720.0], true, |me, ui| {
             me.antenna_body(ui);
         });
         self.show_antenna = show;
