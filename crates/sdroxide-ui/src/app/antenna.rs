@@ -130,6 +130,7 @@ fn surface_plot(
     yaw: &mut f32,
     pitch: &mut f32,
     height_m: f64,
+    wires: &[([f64; 3], [f64; 3])],
 ) {
     // Scale the antenna height into the normalised pattern space so the ground
     // plane (z = 0) stays put and the antenna lifts off it.
@@ -181,6 +182,16 @@ fn surface_plot(
         ring.push(first);
     }
     painter.add(egui::Shape::line(ring, ground_stroke));
+
+    // Draw the antenna wires in alarm red.
+    let wire_stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 40, 40));
+    for w in wires {
+        let a = [w.0[0], w.0[1], w.0[2] + height_scaled as f64];
+        let b = [w.1[0], w.1[1], w.1[2] + height_scaled as f64];
+        let pa = proj(a);
+        let pb = proj(b);
+        painter.line_segment([pa, pb], wire_stroke);
+    }
     // Axis lines
     for i in 0..4 {
         let ang = (i as f32) * std::f32::consts::PI / 2.0;
@@ -490,6 +501,11 @@ impl super::SdroxideApp {
                     if let Some((verts, nt, np)) =
                         self.antenna_surfaces.get(self.antenna_pattern_sel)
                     {
+                        let w = self
+                            .antenna_wires
+                            .get(self.antenna_pattern_sel)
+                            .cloned()
+                            .unwrap_or_default();
                         surface_plot(
                             ui,
                             verts,
@@ -498,6 +514,7 @@ impl super::SdroxideApp {
                             &mut self.antenna_yaw,
                             &mut self.antenna_pitch,
                             self.antenna_height_m,
+                            &w,
                         );
                     }
                 });
@@ -601,6 +618,7 @@ impl super::SdroxideApp {
         let mut rows = Vec::new();
         let mut patterns = Vec::new();
         let mut surfaces = Vec::new();
+        let mut wires_list = Vec::new();
         let z0 = self.antenna_z0;
         let height = self.antenna_height_m;
         let presets = [
@@ -622,6 +640,7 @@ impl super::SdroxideApp {
                 ];
                 patterns.push((name.clone(), cuts));
                 surfaces.push(pattern_surface(&sol, 37, 48));
+                wires_list.push(a.wires.iter().map(|w| (w.from, w.to)).collect());
                 rows.push(SolvedRow {
                     name,
                     r: sol.zin.re,
@@ -651,6 +670,7 @@ impl super::SdroxideApp {
                 ];
                 patterns.push((name.clone(), cuts));
                 surfaces.push(pattern_surface(&sol, 37, 48));
+                wires_list.push(stacked.wires.iter().map(|w| (w.from, w.to)).collect());
                 rows.push(SolvedRow {
                     name,
                     r: sol.zin.re,
@@ -664,6 +684,7 @@ impl super::SdroxideApp {
         self.antenna_solved = Some(rows);
         self.antenna_patterns = patterns;
         self.antenna_surfaces = surfaces;
+        self.antenna_wires = wires_list;
         self.antenna_pattern_sel =
             self.antenna_pattern_sel.min(self.antenna_patterns.len().saturating_sub(1));
     }
