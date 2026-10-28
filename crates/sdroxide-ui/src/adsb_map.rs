@@ -887,14 +887,24 @@ pub fn show(
     }
 
     // ── overlay aircraft (adsb.lol) ──
-    // Drawn as orange circles so they are distinguishable from local targets.
+    // Drawn as circles: green if also received locally, orange if only in the
+    // database. This makes it visible which aircraft the receiver is missing.
     for o in overlay {
         let c = project(o.lat, o.lon);
         if !rect.contains(c) {
             continue;
         }
-        p.circle_filled(c, 3.0, eframe::egui::Color32::from_rgb(255, 165, 0));
-        p.circle_stroke(c, 5.0, eframe::egui::Stroke::new(1.0, eframe::egui::Color32::from_rgb(255, 165, 0)));
+        // Check if this overlay aircraft is also locally received.
+        let local = u32::from_str_radix(&o.hex, 16).ok()
+            .map(|h| aircraft.iter().any(|a| a.icao == h))
+            .unwrap_or(false);
+        let color = if local {
+            eframe::egui::Color32::from_rgb(80, 220, 80)
+        } else {
+            eframe::egui::Color32::from_rgb(255, 165, 0)
+        };
+        p.circle_filled(c, 3.0, color);
+        p.circle_stroke(c, 5.0, eframe::egui::Stroke::new(1.0, color));
     }
 
     // ── the data blocks ──
