@@ -918,9 +918,23 @@ pub fn show(
         } else {
             eframe::egui::Color32::from_rgb(255, 165, 0)
         };
-        let r = if overlay_hover == Some(i) { 4.5 } else { 3.0 };
-        p.circle_filled(c, r, color);
-        p.circle_stroke(c, r + 2.0, eframe::egui::Stroke::new(1.0, color));
+        let r = if overlay_hover == Some(i) { 6.0 } else { 4.5 };
+        // Draw a small airplane shape rotated by track.
+        let track = o.track_deg.unwrap_or(0.0).to_radians() as f32;
+        let (s, co) = (track.sin(), track.cos());
+        // Simple airplane: nose forward, wings back.
+        let pts = [
+            c + eframe::egui::vec2(0.0 * co - (-r) * s, 0.0 * s + (-r) * co),        // nose
+            c + eframe::egui::vec2((-r * 0.4) * co - (r * 0.6) * s, (-r * 0.4) * s + (r * 0.6) * co),  // left wing
+            c + eframe::egui::vec2((-r * 0.15) * co - (r * 0.3) * s, (-r * 0.15) * s + (r * 0.3) * co), // tail left
+            c + eframe::egui::vec2((-r * 0.15) * co - (-r * 0.3) * s, (-r * 0.15) * s + (-r * 0.3) * co), // tail right
+            c + eframe::egui::vec2((-r * 0.4) * co - (-r * 0.6) * s, (-r * 0.4) * s + (-r * 0.6) * co), // right wing
+        ];
+        p.add(eframe::egui::Shape::convex_polygon(
+            pts.to_vec(),
+            color,
+            eframe::egui::Stroke::NONE,
+        ));
     }
     // Tooltip for hovered overlay aircraft.
     if let Some(i) = overlay_hover {
