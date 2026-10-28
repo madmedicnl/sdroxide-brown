@@ -5,6 +5,7 @@
 
 use eframe::egui;
 
+use antenna_model::obstacle::{Obstacle, attenuation_db};
 use antenna_model::optimize::Objective;
 
 /// One preset's solved impedance and gain.
@@ -177,6 +178,54 @@ impl super::SdroxideApp {
                     });
                     y = w.from[1];
                 }
+            }
+
+            // Obstacles: a coarse, labelled attenuation model (vegetation and
+            // knife-edge), not a terrain solver.
+            ui.separator();
+            crate::chrome::menu_caption(ui, "Obstacles (approximate)");
+            let mut obstacles: Vec<Obstacle> = Vec::new();
+            ui.horizontal(|ui| {
+                let mut on = self.antenna_trees.is_some();
+                if ui.checkbox(&mut on, "Trees").changed() {
+                    self.antenna_trees = if on { Some((0.0, 40.0, true)) } else { None };
+                }
+                if let Some((az, depth, leaf)) = &mut self.antenna_trees {
+                    ui.add(egui::DragValue::new(az).speed(1.0).range(0.0..=359.0).prefix("az "));
+                    ui.add(egui::DragValue::new(depth).speed(1.0).range(0.0..=400.0).prefix("depth "));
+                    ui.checkbox(leaf, "in leaf");
+                }
+            });
+            if let Some((az, depth, leaf)) = self.antenna_trees {
+                obstacles.push(Obstacle::Vegetation {
+                    az_deg: az,
+                    width_deg: 30.0,
+                    distance_m: 30.0,
+                    depth_m: depth,
+                    in_leaf: leaf,
+                });
+            }
+            ui.horizontal(|ui| {
+                let mut on = self.antenna_ridge.is_some();
+                if ui.checkbox(&mut on, "Ridge").changed() {
+                    self.antenna_ridge = if on { Some((0.0, 50.0)) } else { None };
+                }
+                if let Some((az, height)) = &mut self.antenna_ridge {
+                    ui.add(egui::DragValue::new(az).speed(1.0).range(0.0..=359.0).prefix("az "));
+                    ui.add(egui::DragValue::new(height).speed(1.0).range(0.0..=500.0).prefix("height "));
+                }
+            });
+            if let Some((az, height)) = self.antenna_ridge {
+                obstacles.push(Obstacle::KnifeEdge {
+                    az_deg: az,
+                    width_deg: 15.0,
+                    distance_m: 100.0,
+                    height_m: height,
+                });
+            }
+            if !obstacles.is_empty() {
+                let att = attenuation_db(&obstacles, 0.0, self.antenna_freq_mhz * 1e6);
+                ui.label(format!("attenuation on the 0° bearing: {att:.1} dB"));
             }
         });
     }

@@ -365,7 +365,10 @@ was the hard part and is handled.*
       still milestone E.
 
 **D — Advanced (only once A–C are honest)**
-- [ ] Optimizer over chosen variables (jX / SWR / gain / F-B / elevation).
+- [x] Optimizer over chosen variables — a coordinate-descent hill-climb over a
+      3-element Yagi's element lengths and gaps against SWR / gain / F-B / jX.
+      Runs on the dense solver (the coarse one misleads the far field) on a
+      background thread; the browser falls back to the calculator only.
 - [ ] Obstacle attenuation overlay — vegetation + knife-edge, **labelled an
       approximation** (decision 1).
 - [ ] Stacking and wire scaling (MMANA's Make stack / Wire scale).

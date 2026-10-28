@@ -614,6 +614,10 @@ pub struct SdroxideApp {
     /// [`antenna`]. Memory only.
     antenna_objective: antenna_model::optimize::Objective,
     antenna_optimized: Option<(antenna_model::model::Antenna, f64)>,
+    /// The coarse obstacle overlay: an optional stand of trees (azimuth, depth,
+    /// in-leaf) and a knife-edge ridge (azimuth, height) — see [`antenna`].
+    antenna_trees: Option<(f64, f64, bool)>,
+    antenna_ridge: Option<(f64, f64)>,
     /// A Yagi optimization running on a background thread, and its result
     /// channel. Native-only — the browser has no threads and just skips the
     /// optimizer.
@@ -2162,6 +2166,8 @@ impl SdroxideApp {
             antenna_solved: None,
             antenna_objective: antenna_model::optimize::Objective::Gain,
             antenna_optimized: None,
+            antenna_trees: None,
+            antenna_ridge: None,
             #[cfg(not(target_arch = "wasm32"))]
             antenna_optimizing: false,
             #[cfg(not(target_arch = "wasm32"))]
