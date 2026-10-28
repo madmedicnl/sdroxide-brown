@@ -307,6 +307,11 @@ fn a_long_station_name_keeps_its_size_and_the_bracket_goes_small_under_it() {
         .find(|(t, _)| t.starts_with("(Sint-Pieters"))
         .expect("the bracket is not drawn on its own");
     assert!(!main.0.contains("SINT"), "the bracket is still in the big name");
+    // The header above the waterfall draws the name in capitals: without the bracket.
+    assert!(
+        !all.iter().any(|(t, _)| t.contains("SINT")),
+        "the bracket is also in the header above the waterfall"
+    );
     assert!(note.1.top() >= main.1.bottom() - 1.0, "the bracket is not under the name");
     assert!(note.1.height() < main.1.height() * 0.7, "the bracket is not in small type");
     for (what, r) in [("name", main.1), ("bracket", note.1)] {

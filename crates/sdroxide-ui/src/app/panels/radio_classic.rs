@@ -770,10 +770,10 @@ impl SdroxideApp {
         p.rect_stroke(head, 6.0, Stroke::new(1.0, ink.line), StrokeKind::Inside);
         let range = self.rc_range(hz);
         if let Some(n) = name {
-            // One line, cut with an ellipsis before the band's range.
+            // The name proper, without its bracket, on one line.
             let room = head.width() - 20.0 - if range.is_some() { 96.0 } else { 0.0 };
             let mut job = egui::text::LayoutJob::single_section(
-                n.to_uppercase(),
+                split_name(n).0.to_uppercase(),
                 egui::TextFormat::simple(FontId::proportional(14.0), ink.amber),
             );
             job.wrap = egui::text::TextWrapping {
