@@ -1332,14 +1332,30 @@ impl SdroxideApp {
             ink.dim,
         );
 
-        // Row 3: the station name, on two lines when it is longer than the
-        // column (a Belgian "Klara (Sint-Pieters-Leeuw Nahe Brüssel)" is).
+        // Row 3: the station name at its size; what it carries in brackets
+        // ("Belgien Klara (Sint-Pieters-Leeuw Nahe Brüssel)") goes under it in
+        // the small type of the RadioText line, in the same colour. A name
+        // that is still too long for the column wraps onto a second line.
         let name_y = hint_y + 18.0;
         let name_size = (h * 0.1).clamp(20.0, 40.0);
-        let shown = name.map(str::to_uppercase).unwrap_or_else(|| "—".into());
-        let galley = ui.painter().layout_job(name_job(&shown, name_size, inner.width(), ink.amber));
-        let name_h = galley.size().y;
+        let (main, note) = split_name(name.unwrap_or("—"));
+        let galley = ui
+            .painter()
+            .layout_job(name_job(&main.to_uppercase(), name_size, inner.width(), ink.amber));
+        let mut name_h = galley.size().y;
         ui.painter().galley(Pos2::new(inner.center().x, name_y), galley, ink.amber);
+        if let Some(note) = note {
+            let mut job = egui::text::LayoutJob::single_section(
+                note.to_string(),
+                egui::TextFormat::simple(FontId::proportional(15.0), ink.amber),
+            );
+            job.wrap.max_width = inner.width();
+            job.wrap.max_rows = 1;
+            job.halign = Align::Center;
+            let galley = ui.painter().layout_job(job);
+            ui.painter().galley(Pos2::new(inner.center().x, name_y + name_h + 2.0), galley.clone(), ink.amber);
+            name_h += galley.size().y + 2.0;
+        }
 
         // Row 4: RadioText.
         let rt_rect = Rect::from_min_size(
@@ -1600,6 +1616,16 @@ fn pill_rect(
     r
 }
 
+/// A station name split into the name proper and what it carries in brackets:
+/// `"Belgien Klara (Sint-Pieters-Leeuw)"` is `("Belgien Klara", Some("(Sint-Pieters-Leeuw)"))`.
+/// Without a bracket after a first word the name is all main.
+fn split_name(name: &str) -> (&str, Option<&str>) {
+    match name.find(" (") {
+        Some(i) if i > 0 => (name[..i].trim_end(), Some(name[i..].trim())),
+        _ => (name, None),
+    }
+}
+
 /// The big station name: letter-spaced, centred on its anchor and wrapped to
 /// two lines of at most `width`, with an ellipsis if it is longer still.
 fn name_job(text: &str, size: f32, width: f32, colour: Color32) -> egui::text::LayoutJob {
@@ -1658,6 +1684,16 @@ fn marquee(ui: &egui::Ui, rect: Rect, text: &str, ink: &Ink) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_name_splits_at_its_bracket() {
+        assert_eq!(
+            split_name("Belgien Klara (Sint-Pieters-Leeuw Nahe Brüssel)"),
+            ("Belgien Klara", Some("(Sint-Pieters-Leeuw Nahe Brüssel)"))
+        );
+        assert_eq!(split_name("EUROPE 1"), ("EUROPE 1", None));
+        assert_eq!(split_name("(x)"), ("(x)", None));
+    }
     use RadioClassicPlace::*;
 
     #[test]

@@ -259,10 +259,10 @@ fn the_big_frequency_is_centred_in_its_column() {
     assert!(off.abs() <= 1.5, "the frequency is {off} px off the column's centre {column}");
 }
 
-/// A station name longer than the column goes on two lines, inside the column
-/// and centred on it, instead of running out under the neighbouring panel.
+/// A station name longer than the column keeps its size on one line, and what it carries in
+/// brackets goes under it in small type, centred on the column.
 #[test]
-fn a_long_station_name_wraps_onto_two_lines_inside_the_column() {
+fn a_long_station_name_keeps_its_size_and_the_bracket_goes_small_under_it() {
     let _guard = crate::multi::frame_test_lock();
     let (ctx, mut app) = app(Mode::Wfm);
     app.ui_settings.radio_classic_on = true;
@@ -287,25 +287,31 @@ fn a_long_station_name_wraps_onto_two_lines_inside_the_column() {
         .find(|(t, _)| t.starts_with("wheel on a digit"))
         .map(|(_, r)| r)
         .expect("no hint line");
-    let mut found = None;
-    fn walk(s: &egui::Shape, out: &mut Vec<(std::sync::Arc<egui::Galley>, egui::Pos2)>) {
+    let mut all = Vec::new();
+    fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
         match s {
-            egui::Shape::Text(t) => out.push((t.galley.clone(), t.pos)),
+            egui::Shape::Text(t) => {
+                out.push((t.galley.text().to_string(), t.galley.rect.translate(t.pos.to_vec2())))
+            }
             egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
             _ => {}
         }
     }
-    let mut all = Vec::new();
     shapes.iter().for_each(|c| walk(&c.shape, &mut all));
-    for (g, pos) in all {
-        if g.text().contains("BELGIEN") && g.size().y > 30.0 {
-            found = Some((g.rows.len(), g.rect.translate(pos.to_vec2())));
-        }
+    let main = all
+        .iter()
+        .find(|(t, r)| t.starts_with("BELGIEN") && r.height() > 25.0)
+        .expect("the big name is not drawn");
+    let note = all
+        .iter()
+        .find(|(t, _)| t.starts_with("(Sint-Pieters"))
+        .expect("the bracket is not drawn on its own");
+    assert!(!main.0.contains("SINT"), "the bracket is still in the big name");
+    assert!(note.1.top() >= main.1.bottom() - 1.0, "the bracket is not under the name");
+    assert!(note.1.height() < main.1.height() * 0.7, "the bracket is not in small type");
+    for (what, r) in [("name", main.1), ("bracket", note.1)] {
+        assert!((r.center().x - hint.center().x).abs() <= 1.5, "the {what} is off the centre");
     }
-    let (rows, rect) = found.expect("the big station name is not drawn");
-    assert_eq!(rows, 2, "the name is on {rows} line(s)");
-    assert!(rect.width() <= 1600.0 * 0.62, "the name is {} px wide", rect.width());
-    assert!((rect.center().x - hint.center().x).abs() <= 1.5, "the name is off the column's centre");
 }
 
 /// The Wideband row of the band menu, drawn on its own.

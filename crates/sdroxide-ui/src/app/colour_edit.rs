@@ -36,8 +36,8 @@ pub(in crate::app) fn colour_edit(ui: &mut egui::Ui, col: &mut [u8; 3]) -> bool 
     if swatch.clicked() {
         ui.data_mut(|d| d.insert_temp(id, true));
     }
-    let open = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false)
-        && egui::Popup::is_any_open(ui.ctx());
+    let open =
+        ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false) && egui::Popup::is_any_open(ui.ctx());
     if !open {
         ui.data_mut(|d| d.remove::<bool>(id));
     }
@@ -87,7 +87,10 @@ mod tests {
 
     fn frame(ctx: &egui::Context, t: f64, col: &mut [u8; 3], events: Vec<egui::Event>) -> bool {
         let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 300.0))),
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(400.0, 300.0),
+            )),
             time: Some(t),
             events,
             ..Default::default()
