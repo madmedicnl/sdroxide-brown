@@ -610,6 +610,18 @@ pub struct SdroxideApp {
     /// The MoM solve of the presets at `antenna_freq_mhz`, once asked for — see
     /// [`antenna`]. Memory only.
     antenna_solved: Option<Vec<antenna::SolvedRow>>,
+    /// The optimizer's objective, and the last Yagi optimization once run — see
+    /// [`antenna`]. Memory only.
+    antenna_objective: antenna_model::optimize::Objective,
+    antenna_optimized: Option<(antenna_model::model::Antenna, f64)>,
+    /// A Yagi optimization running on a background thread, and its result
+    /// channel. Native-only — the browser has no threads and just skips the
+    /// optimizer.
+    #[cfg(not(target_arch = "wasm32"))]
+    antenna_optimizing: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    antenna_optimize_rx:
+        Option<std::sync::mpsc::Receiver<Option<(antenna_model::model::Antenna, f64)>>>,
     /// The AIRCRAFT window — see [`aircraft`] — and which opening of it this is.
     show_aircraft: bool,
     aircraft_epoch: u32,
@@ -2148,6 +2160,12 @@ impl SdroxideApp {
             show_antenna: false,
             antenna_freq_mhz: 27.265,
             antenna_solved: None,
+            antenna_objective: antenna_model::optimize::Objective::Gain,
+            antenna_optimized: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            antenna_optimizing: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            antenna_optimize_rx: None,
             show_aircraft: false,
             aircraft_epoch: 0,
             aircraft_was_open: false,

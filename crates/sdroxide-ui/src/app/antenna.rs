@@ -1,9 +1,11 @@
 //! The antenna calculator — a frequency in, dimensions and SWR out — for the
 //! shapes the closed-form calculator knows (dipole, inverted-V, vertical,
-//! ground plane, loop, Yagi), plus an on-demand method-of-moments solve of the
-//! presets for the real impedance and gain. It lives in the EXTRAS launcher.
+//! ground plane, loop, Yagi), an on-demand method-of-moments solve of the
+//! presets, and a Yagi optimizer. It lives in the EXTRAS launcher.
 
 use eframe::egui;
+
+use antenna_model::optimize::Objective;
 
 /// One preset's solved impedance and gain.
 pub(in crate::app) struct SolvedRow {
@@ -14,15 +16,38 @@ pub(in crate::app) struct SolvedRow {
     pub(in crate::app) gain: f64,
 }
 
+/// The optimizer's objective rendered for a person.
+fn objective_value(obj: Objective, score: f64) -> String {
+    match obj {
+        Objective::Gain => format!("{:.1} dBi", -score),
+        Objective::Swr => format!("{:.2}:1", score),
+        Objective::Fb => format!("{:.1} dB", -score),
+        Objective::Jx => format!("{:.1} Ω", score),
+    }
+}
+
 impl super::SdroxideApp {
     pub(in crate::app) fn antenna_window(&mut self, ctx: &egui::Context) {
         if !self.show_antenna {
             return;
         }
-        let show = self.tool_window(ctx, "antenna", "ANTENNA", [420.0, 680.0], true, |me, ui| {
+        self.antenna_poll();
+        let show = self.tool_window(ctx, "antenna", "ANTENNA", [420.0, 720.0], true, |me, ui| {
             me.antenna_body(ui);
         });
         self.show_antenna = show;
+    }
+
+    /// Collect a background-thread optimization that has finished.
+    fn antenna_poll(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(rx) = &self.antenna_optimize_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.antenna_optimized = result;
+                self.antenna_optimize_rx = None;
+                self.antenna_optimizing = false;
+            }
+        }
     }
 
     fn antenna_body(&mut self, ui: &mut egui::Ui) {
@@ -37,8 +62,9 @@ impl super::SdroxideApp {
                 .changed()
             {
                 self.antenna_freq_mhz = mhz;
-                // A new frequency invalidates the earlier solve.
+                // A new frequency invalidates the earlier solve and optimization.
                 self.antenna_solved = None;
+                self.antenna_optimized = None;
             }
             ui.label("MHz");
         });
@@ -53,6 +79,33 @@ impl super::SdroxideApp {
                 .clicked()
             {
                 self.antenna_solve();
+            }
+
+            ui.horizontal(|ui| {
+                ui.label("Optimize Yagi for");
+                for obj in Objective::ALL {
+                    let sel = self.antenna_objective == obj;
+                    if ui.selectable_label(sel, obj.label()).clicked() {
+                        self.antenna_objective = obj;
+                    }
+                }
+            });
+            #[cfg(not(target_arch = "wasm32"))]
+            let optimizing = self.antenna_optimizing;
+            #[cfg(target_arch = "wasm32")]
+            let optimizing = false;
+            if optimizing {
+                ui.label(egui::RichText::new("Optimizing…").italics());
+            } else if ui
+                .button("Optimize Yagi")
+                .on_hover_text(
+                    "Tune the Yagi's element lengths and gaps against the chosen \
+                     objective. A local hill-climb on a background thread; the \
+                     window stays usable while it runs.",
+                )
+                .clicked()
+            {
+                self.antenna_optimize();
             }
             ui.separator();
 
@@ -96,6 +149,35 @@ impl super::SdroxideApp {
                     ui.add_space(4.0);
                 }
             }
+
+            if let Some((a, score)) = &self.antenna_optimized {
+                ui.separator();
+                crate::chrome::menu_caption(ui, "Optimized Yagi");
+                ui.label(format!(
+                    "{}: {}",
+                    self.antenna_objective.label(),
+                    objective_value(self.antenna_objective, *score)
+                ));
+                let mut y = 0.0_f64;
+                for (i, w) in a.wires.iter().enumerate() {
+                    let len = (w.to[0] - w.from[0]).abs();
+                    let gap = if i == 0 { 0.0 } else { w.from[1] - y };
+                    let label = match i {
+                        0 => "reflector".to_string(),
+                        1 => "driven".to_string(),
+                        n => format!("director {}", n - 1),
+                    };
+                    ui.horizontal(|ui| {
+                        ui.label(label);
+                        ui.add_space(8.0);
+                        ui.monospace(format!("{len:.2} m"));
+                        if i > 0 {
+                            ui.monospace(egui::RichText::new(format!("  gap {gap:.2} m")).weak());
+                        }
+                    });
+                    y = w.from[1];
+                }
+            }
         });
     }
 
@@ -118,5 +200,33 @@ impl super::SdroxideApp {
             }
         }
         self.antenna_solved = Some(rows);
+    }
+
+    /// Optimize the 3-element Yagi against the chosen objective, at the dense
+    /// solver setting (the coarse one misleads the far field into spurious
+    /// optima). Native runs it on a background thread; the browser has no
+    /// threads and runs it inline.
+    fn antenna_optimize(&mut self) {
+        use antenna_model::optimize::optimize_yagi;
+        use antenna_model::solver::SolverConfig;
+        let freq_hz = self.antenna_freq_mhz * 1e6;
+        let obj = self.antenna_objective;
+        let cfg = SolverConfig { segs_per_wavelength: 80.0 };
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let result =
+                    optimize_yagi(freq_hz, antenna_model::presets::DEFAULT_HEIGHT_M, 3, obj, &cfg);
+                let _ = tx.send(result);
+            });
+            self.antenna_optimizing = true;
+            self.antenna_optimize_rx = Some(rx);
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.antenna_optimized =
+                optimize_yagi(freq_hz, antenna_model::presets::DEFAULT_HEIGHT_M, 3, obj, &cfg);
+        }
     }
 }

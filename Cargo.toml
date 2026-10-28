@@ -57,6 +57,11 @@ license = "GPL-3.0-or-later"
 [profile.dev.package."*"]
 opt-level = 2
 
+# The antenna MoM solver is an integrate-and-solve; unoptimized a few-second
+# optimization becomes a minute under `cargo test`, so keep it fast there too.
+[profile.test.package.antenna-model]
+opt-level = 2
+
 [profile.dev.package.sdroxide-dsp]
 opt-level = 2
 

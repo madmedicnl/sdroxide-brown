@@ -14,6 +14,7 @@
 pub mod expr;
 pub mod maa;
 pub mod model;
+pub mod optimize;
 pub mod presets;
 pub mod solver;
 pub mod store;
