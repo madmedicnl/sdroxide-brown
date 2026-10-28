@@ -193,7 +193,7 @@ pub(in crate::app) struct SstvUi {
     pub(in crate::app) composer_sent: crate::sstv_composer::Edit,
     /// When the document last changed, so a pause — the end of typing, a drag
     /// that ended without a release — settles it to the engine.
-    pub(in crate::app) composer_since: Option<std::time::Instant>,
+    pub(in crate::app) composer_since: Option<f64>,
     /// The station-wide overlay as the panel last saw it in the operator's
     /// config, so a change made in the editor (or on another screen) recomposes
     /// the preview.
@@ -1731,8 +1731,15 @@ impl SdroxideApp {
         // write waits for the hand to stop; a drag's own release settles it
         // sooner, and this is the backstop for an edit that ended some other way
         // (typing, a pointer that left the window).
-        const SETTLE: std::time::Duration = std::time::Duration::from_millis(700);
-        if self.sstv.composer_open && self.sstv.composer_since.is_some_and(|t| t.elapsed() >= SETTLE)
+        // `Instant` is not available on wasm32 — `now()` panics there and the
+        // browser editor froze (#262/#297). The wall clock in `crate::time`
+        // works on both targets; a 700 ms debounce needs no monotonicity.
+        const SETTLE_SECS: f64 = 0.7;
+        if self.sstv.composer_open
+            && self
+                .sstv
+                .composer_since
+                .is_some_and(|t| crate::time::now_unix_f64() - t >= SETTLE_SECS)
         {
             self.composer_flush(cmds);
         }
@@ -3285,7 +3292,7 @@ impl SdroxideApp {
         if dirty {
             self.sstv.composer_dirty = true;
             self.sstv.preview_dirty = true;
-            self.sstv.composer_since = Some(std::time::Instant::now());
+            self.sstv.composer_since = Some(crate::time::now_unix_f64());
         }
         if send_now {
             // The document must be in the engine before the picture that used
