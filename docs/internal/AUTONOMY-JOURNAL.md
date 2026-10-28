@@ -21,6 +21,39 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-28 (#257 NAVTEX — guard set up, waiting on the capture)
+
+**In plain words.** Started the NAVTEX work. The only recent change to the decoder
+is the receive-sensitivity control, which is an exact no-op at Auto, so the
+garbage F4NRM saw is on a real on-air signal that synthetic noise/carrier can't
+reproduce. A background guard is now watching 518 kHz and will capture the next
+transmission for us.
+
+**Done.**
+
+- Investigated: the NAVTEX change since the working 10-23 build is `c9364531`
+  (sensitivity control). It scales `sync_score`/`loss_limit`/`disagree_limit` via
+  `sens_k = 1 + 0.12·s`, no-op at Auto. The committed recordings (SITOR-B,
+  Bermuda 48k) still decode; pure noise, a carrier, and noise+faint-carrier at
+  0 and +5 all stay un-synced. So the regression needs a real capture.
+- `tools/navtex-guard` (`1d8b3875`) — opens the RSP1 at 516.29 kHz, watches the
+  1710 Hz carrier with a single-bin DFT, warms up to the noise floor, then
+  streams raw CF32 to disk for 15 min when the carrier rises 8× above it.
+  Running in the background (PID 16481) writing `/home/druid/navtex_518khz.bin`.
+
+**Not done / blocked.**
+
+- Waiting on the next 518 kHz transmission (~1 h from 08:00 UTC). Once captured:
+  USB-demodulate the CF32 to 48 kHz audio, run it through `NavtexRx`, and see
+  whether the garbage is the sensitivity slider or a false-sync regression. Fix
+  goes up as a PR (NAVTEX is F4NRM's).
+
+**Next.**
+
+- When the capture lands, demod + reproduce + fix as a PR.
+
+---
+
 ## 2026-10-28 (morning triage — issues and replies)
 
 **In plain words.** Checked the queue and the issue replies while the operator
