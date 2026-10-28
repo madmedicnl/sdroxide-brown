@@ -324,12 +324,15 @@ was the hard part and is handled.*
       with opposite polarity — the inverted-V now solves to ~40 Ω (against the
       ~50 Ω classic figure; the `K = 0.95` length is not quite resonant for a
       bent leg).
-- [x] **Multi-way junction (the ground-plane base).** The feed splits the node
-      into the feed wire and everything else, so the source sits between the
-      radiator and the radials — the ground plane solves to ~35 Ω (the ~36 Ω
-      classic figure). Unfed junctions (the delta loop's corners) give a
-      plausible ~107 Ω, but **no reference value here pins them** — treat them as
-      plausible, not proven.
+- [x] **Multi-way junction (the ground-plane base).** A 1-to-N delta-gap source
+      at the star has no consistent voltage split (source voltage, source power
+      and no common mode cannot all hold for N > 1), so a direct junction feed is
+      unsolved. The ground-plane preset sidesteps it with a short feed gap — a
+      `0.004λ` wire with the source as a segment gap on it — and converges to
+      ~23 Ω, the published value for a vertical over four horizontal radials.
+      Unfed junctions (the delta loop's corners) give a plausible ~107 Ω, but
+      **no reference value here pins them** — treat them as plausible, not
+      proven.
 - [x] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — all seven MMANA
       load types, added to the matrix at the segment midpoint (`Z_L/4` per tent
       pair). Pinned by a 100 Ω series resistor lifting the input resistance.

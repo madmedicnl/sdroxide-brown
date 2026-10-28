@@ -135,9 +135,8 @@ fn presets(mhz: f64, freq_hz: f64) {
 fn solve(mhz: f64, freq_hz: f64) {
     use ant::solver::{SolverConfig, analyze, front_to_back_db, max_gain, swr};
     println!("# feed impedance, SWR (50 ohm), gain and front-to-back at {mhz} MHz");
-    println!(
-        "# a bend or star feed (the inverted-V apex, the ground-plane base) splits and solves\n"
-    );
+    println!("# a bend feed (the inverted-V apex) splits and solves; the ground plane\n");
+    println!("# models its feed as a short gap segment instead of a junction\n");
     for a in ant::presets::catalog(freq_hz) {
         match analyze(&a, &SolverConfig::default()) {
             Ok(sol) => {

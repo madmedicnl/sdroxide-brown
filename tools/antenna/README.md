@@ -38,9 +38,10 @@ cargo test
 
 ## What comes next
 
-The 2D polar plots. The frequency sweep, far-field gain/F-B, the bend and
-star feeds (inverted-V, ground plane), lumped loads and the Fresnel (real)
-ground are done. See the ideas doc for the formulas and the phasing.
+The 2D polar plots. The frequency sweep, far-field gain/F-B, the bend feed
+(inverted-V), the ground-plane feed (a short gap segment), lumped loads and
+the Fresnel (real) ground are done. See the ideas doc for the formulas and the
+phasing.
 
 ## Note on the shortening factor
 

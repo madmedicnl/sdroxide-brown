@@ -35,8 +35,9 @@
 //! is a delta gap over that segment. A feed at a **non-collinear junction** (the
 //! inverted-V apex) splits the node into the two wires' terminals and puts the
 //! source **between** them with opposite polarity. A feed at a **multi-way
-//! junction** (the ground-plane base) splits the node into the feed wire and
-//! everything else, so the source sits between the radiator and the radials.
+//! junction** (three or more wires) is *not* solved: a 1-to-N delta gap has no
+//! consistent voltage split, so the ground-plane preset instead models its feed
+//! as a short gap segment with the source on it.
 //!
 //! **Ground** is free space (no image) or a **perfect** ground, added by image
 //! theory: every source segment is mirrored through `z = 0` with its current
@@ -1044,8 +1045,10 @@ mod tests {
     /// Wires that meet share a node, so an *unfed* junction solves. A feed at a
     /// non-collinear junction (the inverted-V apex) splits the node into the two
     /// wires' terminals and solves too — ~40–50 Ω, the classic inverted-V
-    /// figure — and a feed at a three-or-more-way junction (the ground plane
-    /// base) splits into the feed wire and everything else, ~36 Ω.
+    /// figure. A feed at a three-or-more-way junction is left alone (a 1-to-N
+    /// delta gap has no consistent voltage split); the ground-plane preset
+    /// avoids it with a short feed segment, landing at ~23 Ω, the classic
+    /// horizontal-radial figure.
     #[test]
     fn junctions_solve_and_a_bend_feed_solves() {
         let loopa = crate::presets::delta_loop(28_500_000.0, 10.0);
@@ -1058,7 +1061,7 @@ mod tests {
 
         let gp = analyze(&crate::presets::ground_plane(28_500_000.0), &SolverConfig::default())
             .expect("the ground plane should solve");
-        assert!((20.0..60.0).contains(&gp.zin.re), "ground plane R = {:.1} Ω, want ~36", gp.zin.re);
+        assert!((18.0..45.0).contains(&gp.zin.re), "ground plane R = {:.1} Ω, want ~23", gp.zin.re);
     }
 
     /// A lumped series resistor in the middle of a dipole adds its resistance to

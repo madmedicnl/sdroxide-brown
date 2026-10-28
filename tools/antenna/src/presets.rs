@@ -91,12 +91,29 @@ pub fn ground_plane(freq_hz: f64) -> Antenna {
     let lam = wavelength_m(freq_hz);
     let rad = K * lam / 4.0;
     let radial = lam / 4.0;
-    let mut wires = vec![Wire {
-        from: [0.0, 0.0, 0.0],
-        to: [0.0, 0.0, rad],
-        radius_m: WIRE_RADIUS_M,
-        seg: Seg::AutoTaper,
-    }];
+    // The feed is a short physical gap (the height of a chassis-mount coax
+    // connector) modelled as its own wire, with the source as an ordinary
+    // segment gap on it. A delta-gap source placed *at* the five-way junction
+    // is ill-conditioned (a 1-to-N gap has no consistent voltage split), so the
+    // source sits on a real segment instead.
+    let gap = 0.004 * lam;
+    let mut wires = vec![
+        // the radiator, raised off the feed point by the gap
+        Wire {
+            from: [0.0, 0.0, gap],
+            to: [0.0, 0.0, rad],
+            radius_m: WIRE_RADIUS_M,
+            seg: Seg::AutoTaper,
+        },
+        // the feed segment across the gap (odd count so the middle segment is
+        // interior, clear of both junctions)
+        Wire {
+            from: [0.0, 0.0, 0.0],
+            to: [0.0, 0.0, gap],
+            radius_m: WIRE_RADIUS_M,
+            seg: Seg::Fixed(3),
+        },
+    ];
     let dirs = [[1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0]];
     for d in dirs {
         wires.push(Wire {
@@ -111,7 +128,7 @@ pub fn ground_plane(freq_hz: f64) -> Antenna {
         freq_hz,
         wires,
         sources: vec![Source {
-            at: WirePoint { wire: 1, at: Pos::Begin, offset: 0 },
+            at: WirePoint { wire: 2, at: Pos::Center, offset: 0 },
             phase_deg: 0.0,
             volts: 1.0,
         }],
