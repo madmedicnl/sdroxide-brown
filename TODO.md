@@ -1,13 +1,13 @@
 # TODO — SDR Oxide Brown
 
 What this fork is working on, kept here so it survives a session and is visible
-on the repo. Last updated **2026-10-27** by madmedicnl's agent.
+on the repo. Last updated **2026-10-28** by madmedicnl's agent.
 
-State: `main` at crate **2.2.0**, `PROTO_VERSION` **256** (`VERSION_BYTE`
-`0x4C`) — 256 is the DigiConfig field-order fix. Latest release
-**v2.2.0.2_brown** (full: AppImage, Windows MSI 2.2.0, Apple Silicon + Intel
-Mac). No PRs of ours open — #284 and #285 were merged; F4NRM has #293 open. The
-rules are in
+State: `main` at crate **2.2.0**, `PROTO_VERSION` **257** (`VERSION_BYTE`
+`0x4D`) — 257 is the Radio Classic audio level. Latest release
+**v2.2.0.3_brown**. Our PRs open: **#295** (WEFAX negative auto-correct) and
+**#298** (NAVTEX false-sync fix); F4NRM's **#293** (Radio Classic) is merged.
+The rules are in
 [`AGENTS.md`](AGENTS.md); the history is in
 [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
 
@@ -94,7 +94,10 @@ maintainer's queue there, not a promise.
    phasing calibration — which is the operator's decision to restore or explain.
    Two more findings to act on: the CTR anchor treats only SSTV as a picture
    mode, so a fax sits 1900 Hz off centre; and detaching is native-only, which
-   is why the browser has no float arrow.
+   is why the browser has no float arrow. **Auto-orientation (negative): PR #295** —
+   a chart received on the wrong sideband is detected from the phasing signal and
+   inverted automatically; manual ROTATE 180° stays for a genuinely rotated source.
+   No wire change, tests pass.
 0. **A multi-radio browser station exported a logbook of one QSO** (issue #236
    comment, F4NRM, 2026-10-25) — the export itself is innocent. With more than
    one radio the logbook is shared, so a logged contact re-reads it first; in a
@@ -312,6 +315,9 @@ reception log · #642 S-meter calibration.
 
 ## Recently done
 
+- **2026-10-28** — WEFAX negative auto-correct (PR **#295**) and NAVTEX false-sync
+  fix (PR **#298**), both rebased onto current `main` after #293 merged. WEFAX
+  and NAVTEX are F4NRM's, so both go up as PRs and are not merged by us.
 - **2026-10-27** — the Aircraft window clean-up: ten PRs open, none merged
   (#266 English and no browser translation, #267 units, #268 duplicates, #269
   columns, #270 map-style buttons, #271 airport card, #272 mode buttons, #273

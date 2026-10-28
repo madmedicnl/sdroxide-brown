@@ -87,14 +87,71 @@ file touched except two hunks that were already unformatted on `main`
 
 ---
 
-## 2026-10-28 (HF+ skirt — view held inside the usable span)
+## 2026-10-28 (#239 WEFAX — auto-correct a chart received negative)
 
-**In plain words.** Fixed the Airspy HF+ Discovery waterfall skirt that Graeme
-reported on the 2.2.0.2 build. The radio shows 768 kHz but only about 660 kHz of
-it is real band; the rest is filter roll-off. The window could pan or zoom into
-that dead edge and draw it as signal, and the skirt came back whenever the dial
-moved. The view is now held inside the usable 660 kHz, so it stays gone while
-tuning. Graeme can re-check on the next build.
+**In plain words.** Fixed the remaining part of F4NRM's WEFAX report: a chart
+that arrives negative (black and white swapped) because the receiver is on the
+wrong sideband is now fixed automatically. The decoder spots it from the
+phasing signal at lock time and flips the pixels so the chart comes out the
+right way round. The manual ROTATE 180° button stays for a genuinely rotated
+source. It's opened as a PR for F4NRM to read, since WEFAX is on his list.
+
+**Done.**
+
+- The phasing pulse is found in either polarity, and the page's polarity is
+  recorded at lock (start tone + phasing, or phasing alone). The emitted
+  pixels are inverted when negative. Lock, auto-slant and mid-picture rephase
+  all use the settled polarity so a normal chart can't be misread.
+- Branch `wefax-negative-autocorrect`, commit `590b4a2a` (rebased onto current
+  `main` after #293 merged), PR
+  [#295](https://github.com/madmedicnl/sdroxide-brown/pull/295) opened against
+  `main`.
+- `cargo test -p sdroxide-dsp --lib` — 511 passed, 0 failed (3 new tests:
+  negative phasing detection/flagging, negative signal corrected via start+phasing,
+  negative phasing-signal-only start corrected). Test verified to fail on unfixed
+  code, then restored. `cargo check --workspace --all-targets` silent.
+
+**Not done / blocked.** Needs a real on-air negative capture to confirm, and
+PR needs F4NRM's review/merge. No wire change.
+
+**Next.** Look at the next item in the queue — #239 is the main one addressed;
+issue #91 (triggering without signal) remains blocked on a recording.
+
+---
+
+## 2026-10-28 (#257 NAVTEX — no more false sync on noise)
+
+**In plain words.** Stopped the NAVTEX decoder from claiming SYNC on noise. The
+sensitivity scaling that landed after F4NRM's working build made positive
+sensitivity too permissive, so the bit-phase lock could grab a random noise
+signal and print garbage while reporting SYNC. The lock now needs stronger
+agreement at non-negative sensitivity, while sensitivity 0 behaves exactly as
+before, so the reference recordings still decode. Up as a PR for F4NRM to read,
+since NAVTEX is on his list.
+
+**Done.**
+
+- The BitPhase sync / loss / disagree thresholds are tightened for non-negative
+  sensitivity; sensitivity 0 is bit-identical to the pre-regression build.
+- Branch `navtex-false-sync-fix`, commit `5aac9587` (rebased onto current `main`
+  after #293 merged), PR
+  [#298](https://github.com/madmedicnl/sdroxide-brown/pull/298) opened against
+  `main`.
+- F4NRM's own capture from #257 added as a fixture
+  (`tests/testdata/navtex/F4NRM-2026-10-22-001113-48k.wav` + `.txt`), and the
+  false sync reproduced on noise before the fix.
+- `cargo test -p sdroxide-dsp --lib` and `-p sdroxide-digi --lib` pass;
+  `navtex_reference` (ignored) passes; `cargo check --workspace --all-targets`
+  silent.
+
+**Not done / blocked.** PR needs F4NRM's review/merge. A real on-air check on
+the band is the bench's, to confirm no true signal is now missed.
+
+**Next.** The queue in `TODO.md` — #294 rustls, then the 2.2.0 regressions.
+
+---
+
+## 2026-10-28 (HF+ skirt — view held inside the usable span)
 
 **Done.**
 
