@@ -8,7 +8,7 @@
 //!
 //! | column | content |
 //! | --- | --- |
-//! | left | bands, modes, MEM and SCHEDULE |
+//! | left | bands, modes, MEM and PROGRAMS |
 //! | middle | the mode, a mini spectrum, the S-meter, BW/STEP/AGC/SQL, the VU |
 //! | right | clocks, the VFO, the station name, RadioText, RDS chips, audio bars |
 //!
@@ -282,7 +282,6 @@ pub(in crate::app) struct State {
     peaks: Vec<f32>,
     wf: VecDeque<Vec<u8>>,
     wf_seq: Option<u32>,
-    pub schedule_open: bool,
     /// When `WantAudioLevel` was last sent (wall clock), so it is renewed about
     /// once a second while the panel is on screen.
     lease_at: f64,
@@ -302,7 +301,6 @@ impl Default for State {
             peaks: vec![0.0; AUDIO_BANDS],
             wf: VecDeque::new(),
             wf_seq: None,
-            schedule_open: false,
             lease_at: 0.0,
             frame: None,
         }
@@ -495,15 +493,14 @@ impl SdroxideApp {
             });
 
             ui.add_space(gap);
-            crate::chrome::menu_caption(ui, "Mem · Schedule");
+            crate::chrome::menu_caption(ui, "Mem · Programs");
             self.rc_memories(ui, cmds, hz, mode);
         });
     }
 
-    /// The memory buttons and the SCHEDULE popup.
+    /// The memory buttons and the PROGRAMS chip.
     fn rc_memories(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>, hz: f64, mode: Mode) {
         let rounded = hz.round() as i64;
-        let mut button = None;
         ui.horizontal_wrapped(|ui| {
             for m in self.memories.iter().take(4) {
                 let lit = m.mode == mode && m.freq_hz.round() as i64 == rounded;
@@ -522,84 +519,14 @@ impl SdroxideApp {
                         .color(theme::gray(130)),
                 );
             }
-            let r = crate::chrome::chip(ui, self.radio_classic.schedule_open, "PROGRAMS")
-                .on_hover_text("Broadcasts on the air now, on this band");
-            if r.clicked() {
-                self.radio_classic.schedule_open = !self.radio_classic.schedule_open;
+            // The same window the top bar opens, with its stations to pick from.
+            if crate::chrome::chip(ui, self.schedule.show, "PROGRAMS")
+                .on_hover_text("Broadcast schedule — what is on, when and where")
+                .clicked()
+            {
+                self.schedule.show = !self.schedule.show;
             }
-            button = Some(r.rect);
         });
-        if self.radio_classic.schedule_open
-            && let Some(at) = button
-        {
-            self.rc_schedule_popup(ui.ctx(), at, cmds, hz);
-        }
-    }
-
-    /// The SCHEDULE list: the broadcasts on the air now on the band the dial
-    /// is in (every band, when the dial is outside the broadcast bands).
-    fn rc_schedule_popup(
-        &mut self,
-        ctx: &egui::Context,
-        anchor: Rect,
-        cmds: &mut Vec<Command>,
-        hz: f64,
-    ) {
-        let now = crate::time::now_unix();
-        let band = broadcast::metre_band(hz / 1e3);
-        let mut rows: Vec<&sdroxide_types::BroadcastStation> = self
-            .broadcast
-            .iter()
-            .filter(|s| {
-                s.on_air_at(now)
-                    && band.is_none_or(|b| broadcast::metre_band(s.freq_khz) == Some(b))
-            })
-            .collect();
-        rows.sort_by(|a, b| b.power_kw.unwrap_or(0.0).total_cmp(&a.power_kw.unwrap_or(0.0)));
-        rows.truncate(14);
-        rows.sort_by(|a, b| a.freq_khz.total_cmp(&b.freq_khz));
-        let mut pick = None;
-        let mut close = false;
-        egui::Area::new(egui::Id::new("radio-classic-schedule"))
-            .order(egui::Order::Foreground)
-            .fixed_pos(Pos2::new(anchor.left(), (anchor.top() - 4.0).max(0.0)))
-            .pivot(Align2::LEFT_BOTTOM)
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_min_width(320.0);
-                    ui.horizontal(|ui| {
-                        let head = match band {
-                            Some(b) => format!("ON THE AIR NOW · {b}"),
-                            None => "ON THE AIR NOW".to_string(),
-                        };
-                        crate::chrome::menu_caption(ui, &head);
-                        if ui.small_button("✕").clicked() {
-                            close = true;
-                        }
-                    });
-                    if rows.is_empty() {
-                        ui.label(
-                            RichText::new("nothing listed on air here at this hour")
-                                .size(11.0)
-                                .color(theme::gray(130)),
-                        );
-                    }
-                    for s in &rows {
-                        let label = format!("{:>8.0} kHz  {}  {}", s.freq_khz, s.name, s.lang);
-                        if ui.selectable_label(false, label).clicked() {
-                            pick = Some((*s).clone());
-                        }
-                    }
-                });
-            });
-        if let Some(s) = pick {
-            cmds.push(Command::SetVfo { vfo: self.state.active_vfo, hz: s.freq_hz() });
-            cmds.push(Command::SetMode { rx: RxId::Main, mode: s.mode() });
-            self.radio_classic.schedule_open = false;
-        }
-        if close {
-            self.radio_classic.schedule_open = false;
-        }
     }
 
     // ─────────────────────────────────────────────────────────── middle column

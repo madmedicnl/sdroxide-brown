@@ -141,3 +141,71 @@ fn the_panel_asks_for_the_audio_level_only_while_it_is_open() {
     run(&ctx, &mut app);
     assert_eq!(wants(&sent), 1, "five frames in well under a second: one lease");
 }
+
+/// Where a label was drawn, as the middle of its text.
+fn centre_of(shapes: &[egui::epaint::ClippedShape], what: &str) -> Option<egui::Pos2> {
+    fn walk(s: &egui::Shape, what: &str) -> Option<egui::Pos2> {
+        match s {
+            egui::Shape::Text(t) if t.galley.text() == what => {
+                Some(t.pos + t.galley.size() / 2.0)
+            }
+            egui::Shape::Vec(v) => v.iter().find_map(|s| walk(s, what)),
+            _ => None,
+        }
+    }
+    shapes.iter().find_map(|c| walk(&c.shape, what))
+}
+
+fn one_frame(
+    ctx: &egui::Context,
+    app: &mut SdroxideApp,
+    time: f64,
+    events: Vec<egui::Event>,
+) -> Vec<egui::epaint::ClippedShape> {
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0))),
+        time: Some(time),
+        events,
+        ..Default::default()
+    };
+    let mut out = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
+    out.textures_delta.clear();
+    out.shapes
+}
+
+/// Settle the layout, then click the middle of the first label that reads
+/// `what`; returns false when no such label is on screen.
+fn click(ctx: &egui::Context, app: &mut SdroxideApp, what: &str) -> bool {
+    run(ctx, app);
+    let shapes = one_frame(ctx, app, 1.0, vec![]);
+    let Some(at) = centre_of(&shapes, what) else { return false };
+    let button = egui::PointerButton::Primary;
+    let mods = egui::Modifiers::NONE;
+    one_frame(ctx, app, 1.1, vec![egui::Event::PointerMoved(at)]);
+    one_frame(
+        ctx,
+        app,
+        1.2,
+        vec![egui::Event::PointerButton { pos: at, button, pressed: true, modifiers: mods }],
+    );
+    one_frame(
+        ctx,
+        app,
+        1.3,
+        vec![egui::Event::PointerButton { pos: at, button, pressed: false, modifiers: mods }],
+    );
+    one_frame(ctx, app, 1.4, vec![]);
+    true
+}
+
+/// PROGRAMS opens the PROGRAMS window — the one the top bar opens — not a
+/// little list of its own.
+#[test]
+fn the_programs_chip_opens_the_programs_window() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app) = app(Mode::Wfm);
+    app.ui_settings.radio_classic_on = true;
+    assert!(!app.schedule.show);
+    assert!(click(&ctx, &mut app, "PROGRAMS"), "no PROGRAMS chip on the panel");
+    assert!(app.schedule.show, "the click did not open the PROGRAMS window");
+}
