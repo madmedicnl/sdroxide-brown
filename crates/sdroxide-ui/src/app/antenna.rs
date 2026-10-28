@@ -452,7 +452,22 @@ impl super::SdroxideApp {
                     });
                 self.antenna_pattern_sel = sel;
                 ui.horizontal(|ui| {
-                    if let Some((name, cut)) = self.antenna_patterns.get(self.antenna_pattern_sel) {
+                    ui.label("View:");
+                    egui::ComboBox::from_id_salt("antenna-view")
+                        .selected_text(match self.antenna_pattern_view {
+                            1 => "Front",
+                            2 => "Side",
+                            _ => "Top",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.antenna_pattern_view, 0, "Top");
+                            ui.selectable_value(&mut self.antenna_pattern_view, 1, "Front");
+                            ui.selectable_value(&mut self.antenna_pattern_view, 2, "Side");
+                        });
+                });
+                ui.horizontal(|ui| {
+                    if let Some((name, cuts)) = self.antenna_patterns.get(self.antenna_pattern_sel) {
+                        let cut = &cuts[self.antenna_pattern_view.min(2)];
                         pattern_plot(ui, name, cut);
                     }
                     if let Some((verts, nt, np)) =
@@ -583,7 +598,12 @@ impl super::SdroxideApp {
             if let Ok(sol) = analyze(&a, &SolverConfig::default()) {
                 let (g, th, _) = max_gain(&sol);
                 let name = a.name.clone();
-                patterns.push((name.clone(), cut(&sol, true, 90.0, 5.0)));
+                let cuts = [
+                    cut(&sol, true, 90.0, 5.0),
+                    cut(&sol, false, 0.0, 5.0),
+                    cut(&sol, false, 90.0, 5.0),
+                ];
+                patterns.push((name.clone(), cuts));
                 surfaces.push(pattern_surface(&sol, 37, 48));
                 rows.push(SolvedRow {
                     name,
@@ -607,7 +627,12 @@ impl super::SdroxideApp {
             if let Ok(sol) = analyze(&stacked, &SolverConfig::default()) {
                 let (g, th, _) = max_gain(&sol);
                 let name = format!("Yagi ×{}", self.antenna_stack);
-                patterns.push((name.clone(), cut(&sol, true, 90.0, 5.0)));
+                let cuts = [
+                    cut(&sol, true, 90.0, 5.0),
+                    cut(&sol, false, 0.0, 5.0),
+                    cut(&sol, false, 90.0, 5.0),
+                ];
+                patterns.push((name.clone(), cuts));
                 surfaces.push(pattern_surface(&sol, 37, 48));
                 rows.push(SolvedRow {
                     name,
