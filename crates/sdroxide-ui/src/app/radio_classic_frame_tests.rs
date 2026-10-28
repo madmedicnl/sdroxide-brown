@@ -259,6 +259,66 @@ fn the_big_frequency_is_centred_in_its_column() {
     assert!(off.abs() <= 1.5, "the frequency is {off} px off the column's centre {column}");
 }
 
+/// A station name longer than the column keeps its size on one line, and what it carries in
+/// brackets goes under it in small type, centred on the column.
+#[test]
+fn a_long_station_name_keeps_its_size_and_the_bracket_goes_small_under_it() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app) = app(Mode::Wfm);
+    app.ui_settings.radio_classic_on = true;
+    app.state.vfo_a_hz = 89_500_000.0;
+    app.memories = vec![sdroxide_types::MemoryChannel {
+        id: 1040,
+        name: "Belgien Klara (Sint-Pieters-Leeuw Nahe Brüssel)".into(),
+        freq_hz: 89_500_000.0,
+        mode: Mode::Wfm,
+        filter_lo: -96_000.0,
+        filter_hi: 96_000.0,
+        folder: None,
+        rtty: None,
+        repeater: None,
+        antenna: None,
+        color: None,
+    }];
+    run(&ctx, &mut app);
+    let shapes = one_frame(&ctx, &mut app, 2.0, vec![]);
+    let hint = text_rects(&shapes)
+        .into_iter()
+        .find(|(t, _)| t.starts_with("wheel on a digit"))
+        .map(|(_, r)| r)
+        .expect("no hint line");
+    let mut all = Vec::new();
+    fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => {
+                out.push((t.galley.text().to_string(), t.galley.rect.translate(t.pos.to_vec2())))
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    shapes.iter().for_each(|c| walk(&c.shape, &mut all));
+    let main = all
+        .iter()
+        .find(|(t, r)| t.starts_with("BELGIEN") && r.height() > 25.0)
+        .expect("the big name is not drawn");
+    let note = all
+        .iter()
+        .find(|(t, _)| t.starts_with("(Sint-Pieters"))
+        .expect("the bracket is not drawn on its own");
+    assert!(!main.0.contains("SINT"), "the bracket is still in the big name");
+    // The header above the waterfall draws the name in capitals: without the bracket.
+    assert!(
+        !all.iter().any(|(t, _)| t.contains("SINT")),
+        "the bracket is also in the header above the waterfall"
+    );
+    assert!(note.1.top() >= main.1.bottom() - 1.0, "the bracket is not under the name");
+    assert!(note.1.height() < main.1.height() * 0.7, "the bracket is not in small type");
+    for (what, r) in [("name", main.1), ("bracket", note.1)] {
+        assert!((r.center().x - hint.center().x).abs() <= 1.5, "the {what} is off the centre");
+    }
+}
+
 /// The Wideband row of the band menu, drawn on its own.
 fn wideband_row(
     app: &mut SdroxideApp,

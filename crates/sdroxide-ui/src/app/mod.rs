@@ -62,6 +62,7 @@ pub(in crate::app) mod logbook;
 pub(in crate::app) mod morse;
 pub(in crate::app) mod net;
 pub(in crate::app) mod panels;
+mod colour_edit;
 pub(crate) mod persist;
 pub(in crate::app) mod playback;
 pub(in crate::app) mod publicsdr;
@@ -5019,7 +5020,7 @@ mod tests {
         app.memories = vec![
             MemoryChannel {
                 id: 3,
-                name: "M3".into(),
+                name: std::env::var("RC_NAME").unwrap_or_else(|_| "M3".into()),
                 freq_hz: 105_500_000.0,
                 mode: Mode::Wfm,
                 filter_lo: -96_000.0,
@@ -5062,7 +5063,7 @@ mod tests {
                 sync: true,
                 pi: Some(0xF201),
                 pty: Some(10),
-                ps: Some("EUROPE 1".into()),
+                ps: std::env::var("RC_PS").map(Some).unwrap_or_else(|_| Some("EUROPE 1".into())),
                 radiotext: Some(
                     "Europe 1 · Laurent Ruquier — « Les Grosses Têtes » · 105.5 FM".into(),
                 ),
