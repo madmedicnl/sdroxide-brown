@@ -609,6 +609,12 @@ impl SdroxideApp {
         ] {
             *open = false;
         }
+        // The broadcast stereo decode, which only WFM has and which the
+        // operator may have switched off in some other mode.
+        if mode == Mode::Wfm && !self.state.rx[0].wfm_stereo {
+            self.state.rx[0].wfm_stereo = true;
+            cmds.push(Command::SetWfmStereo { rx: RxId::Main, on: true });
+        }
         // And the dial: the frequency first, as the band buttons do.
         let vfo = self.state.active_vfo;
         cmds.push(Command::SetVfo { vfo, hz });
@@ -1168,7 +1174,14 @@ impl SdroxideApp {
             .as_ref()
             .filter(|(at, _)| wall - *at < f64::from(LEVEL_FRESH_S))
             .map(|(_, l)| l);
-        self.radio_classic.vu.step(fresh.map(|l| l.rms_db), dt);
+        // A real stereo broadcast is shown as it is. Everything else is one
+        // signal in two ears, and its meter is given a false stereo — the
+        // picture only, the sound is not touched.
+        let (hz, mode) = (self.state.active_freq_hz(), self.state.rx[0].mode);
+        let real = stereo_chip(hz, mode, self.meters.is_some_and(|m| m.stereo)) == Some(true)
+            || self.state.sub_rx_enabled;
+        let rms = fresh.map(|l| if real { l.rms_db } else { false_stereo(l.rms_db, &l.bands) });
+        self.radio_classic.vu.step(rms, dt);
         let st = &mut self.radio_classic;
         for i in 0..AUDIO_BANDS {
             let target = fresh.and_then(|l| l.bands.get(i)).map_or(0.0, |b| byte_to_unit(*b));
@@ -1214,9 +1227,12 @@ impl SdroxideApp {
         let tag_rect =
             p.text(inner.left_top(), Align2::LEFT_TOP, tag, FontId::proportional(24.0), ink.amber);
         let mut x = tag_rect.right() + 12.0;
-        let stereo = mode == Mode::Wfm && self.meters.is_some_and(|m| m.stereo);
-        if stereo {
-            x = pill(p, Pos2::new(x, inner.top() + 3.0), "STEREO", ink.strong, ink.line) + 8.0;
+        if let Some(lit) = stereo_chip(hz, mode, self.meters.is_some_and(|m| m.stereo)) {
+            let at = Pos2::new(x, inner.top() + 3.0);
+            let r = stereo_pill(p, at, lit, ink);
+            ui.interact(r, ui.id().with("radio-classic-stereo"), egui::Sense::hover())
+                .on_hover_text(stereo_note(&self.state.rx[0], lit));
+            x = r.right() + 8.0;
         }
         let memory = self
             .memories
@@ -1414,6 +1430,64 @@ impl SdroxideApp {
     }
 }
 
+/// The STEREO chip: `Some(lit)` on the FM broadcast band (64–108 MHz in WFM),
+/// where a station may send stereo, lit while the 19 kHz pilot is locked; `None`
+/// everywhere else, which is mono.
+fn stereo_chip(hz: f64, mode: Mode, locked: bool) -> Option<bool> {
+    (mode == Mode::Wfm && (64e6..=108e6).contains(&hz)).then_some(locked)
+}
+
+/// What the STEREO chip says on hover, and — dark — why it is dark.
+fn stereo_note(rx: &sdroxide_types::RxState, lit: bool) -> String {
+    if lit {
+        "Stereo — the 19 kHz pilot is locked".into()
+    } else if !rx.wfm_stereo {
+        "Mono — the broadcast stereo decode is switched off (ST in the top bar)".into()
+    } else if rx.noise_reduction.is_on() {
+        "Mono — noise reduction is on, and stereo yields to it".into()
+    } else {
+        "Mono — no 19 kHz pilot: the station sends mono, or the signal is too weak".into()
+    }
+}
+
+/// A false stereo for the meter of a mono signal: the two needles read the
+/// even and the odd bands of the same sound, so they move a little apart as the
+/// spectrum does, while together they keep the level the single ear measured.
+/// The spread is held to ±2 dB. With no bands (the station sent only the
+/// level) there is nothing to part them by, and they stay equal.
+fn false_stereo(rms_db: [f32; 2], bands: &[u8]) -> [f32; 2] {
+    const SPREAD_DB: f32 = 2.0;
+    let power = |parity: usize| -> f32 {
+        bands
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| i % 2 == parity)
+            .map(|(_, b)| 10f32.powf((f32::from(*b) / 255.0 * 80.0 - 80.0) / 10.0))
+            .sum()
+    };
+    let (even, odd) = (power(0), power(1));
+    let total = even + odd;
+    if total <= 0.0 {
+        return rms_db;
+    }
+    // Each ear's share of the pair, 1.0 being an equal one.
+    let side =
+        |share: f32| (10.0 * (2.0 * share / total).max(1e-6).log10()).clamp(-SPREAD_DB, SPREAD_DB);
+    let (l, r) = (side(even), side(odd));
+    // Held to ±2 dB each, the pair would be a little louder than the single ear
+    // was: put the difference back so the level stays what was measured.
+    let mean = 10.0 * ((10f32.powf(l / 10.0) + 10f32.powf(r / 10.0)) / 2.0).log10();
+    [rms_db[0] + l - mean, rms_db[1] + r - mean]
+}
+
+/// The STEREO pill: filled and bright while the pilot is locked, an empty dim
+/// outline otherwise. Returns where it was drawn.
+fn stereo_pill(p: &egui::Painter, at: Pos2, lit: bool, ink: &Ink) -> Rect {
+    let (text, edge, fill) =
+        if lit { (ink.ground, ink.accent, Some(ink.accent)) } else { (ink.dim, ink.line, None) };
+    pill_rect(p, at, "STEREO", text, edge, fill)
+}
+
 /// `w` points wide, in the middle of `outer` (all of it when it is wider).
 fn centred_in(outer: Rect, w: f32) -> Rect {
     let w = w.min(outer.width());
@@ -1500,11 +1574,26 @@ fn mode_tag(mode: Mode) -> String {
 
 /// A small outlined label; returns the x it ends at.
 fn pill(p: &egui::Painter, at: Pos2, text: &str, ink: Color32, edge: Color32) -> f32 {
+    pill_rect(p, at, text, ink, edge, None).right()
+}
+
+/// [`pill`], optionally filled, and returning the rectangle it took.
+fn pill_rect(
+    p: &egui::Painter,
+    at: Pos2,
+    text: &str,
+    ink: Color32,
+    edge: Color32,
+    fill: Option<Color32>,
+) -> Rect {
     let galley = p.layout_no_wrap(text.to_string(), FontId::proportional(11.5), ink);
     let r = Rect::from_min_size(at, galley.size() + vec2(16.0, 8.0));
+    if let Some(fill) = fill {
+        p.rect_filled(r, r.height() / 2.0, fill);
+    }
     p.rect_stroke(r, r.height() / 2.0, Stroke::new(1.0, edge), StrokeKind::Inside);
     p.galley(Pos2::new(r.left() + 8.0, r.top() + 4.0), galley, ink);
-    r.right()
+    r
 }
 
 /// RadioText in its box, scrolling when it is longer than the box.
@@ -1714,6 +1803,42 @@ mod tests {
         assert_eq!(sql_wheel(up, -1), SQUELCH_OPEN_DB);
         assert_eq!(sql_wheel(SQUELCH_OPEN_DB, -1), SQUELCH_OPEN_DB);
         assert_eq!(sql_wheel(-1.0, 5), SQUELCH_CLOSED_DB);
+    }
+
+    #[test]
+    fn the_stereo_chip_exists_only_on_the_fm_band_and_is_lit_by_the_pilot() {
+        assert_eq!(stereo_chip(98e6, Mode::Wfm, true), Some(true));
+        assert_eq!(stereo_chip(98e6, Mode::Wfm, false), Some(false));
+        assert_eq!(stereo_chip(64e6, Mode::Wfm, true), Some(true));
+        assert_eq!(stereo_chip(108e6, Mode::Wfm, true), Some(true));
+        assert_eq!(stereo_chip(150e6, Mode::Wfm, true), None);
+        assert_eq!(stereo_chip(63.9e6, Mode::Wfm, true), None);
+        assert_eq!(stereo_chip(98e6, Mode::Nfm, true), None);
+    }
+
+    #[test]
+    fn a_dark_stereo_chip_says_why() {
+        let mut rx = sdroxide_types::RxState::with_mode(Mode::Wfm);
+        assert!(stereo_note(&rx, false).contains("no 19 kHz pilot"));
+        rx.noise_reduction = sdroxide_types::NrLevel::Medium;
+        assert!(stereo_note(&rx, false).contains("noise reduction"));
+        rx.wfm_stereo = false;
+        assert!(stereo_note(&rx, false).contains("switched off"));
+        assert!(stereo_note(&rx, true).starts_with("Stereo"));
+    }
+
+    #[test]
+    fn a_false_stereo_parts_the_needles_a_little_and_keeps_the_level() {
+        let bands: Vec<u8> = (0..AUDIO_BANDS).map(|i| if i % 2 == 0 { 220 } else { 140 }).collect();
+        let [l, r] = false_stereo([-20.0, -20.0], &bands);
+        assert!(l > r, "the louder bands are the left ear: {l} {r}");
+        assert!((l - r).abs() <= 4.0 + 1e-3, "spread held to ±2 dB: {l} {r}");
+        // Together they stay where the single ear measured.
+        let mean = 10.0 * ((10f32.powf(l / 10.0) + 10f32.powf(r / 10.0)) / 2.0).log10();
+        assert!((mean + 20.0).abs() < 0.01, "{mean}");
+        // Nothing to part them by: equal, as they were.
+        assert_eq!(false_stereo([-20.0, -20.0], &[]), [-20.0, -20.0]);
+        assert_eq!(false_stereo([-20.0, -20.0], &[0; AUDIO_BANDS]), [-20.0, -20.0]);
     }
 
     #[test]

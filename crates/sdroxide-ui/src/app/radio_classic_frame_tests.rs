@@ -543,3 +543,106 @@ fn choosing_another_mode_switches_radio_off() {
     }
     assert!(!app.radio_classic_active(), "RADIO stayed on over FT8");
 }
+
+fn fm_meters(stereo: bool) -> sdroxide_types::Meters {
+    sdroxide_types::Meters {
+        s_dbm: -67.0,
+        pa_temp_c: None,
+        adc_peak_dbfs: -30.0,
+        adc_clip: 0.0,
+        adc_overload: None,
+        tx: None,
+        stereo,
+        tone: None,
+        passband_dbfs: -40.0,
+        puresignal: None,
+    }
+}
+
+/// Two ears that read the same, over a spectrum with more in the odd bands.
+fn level(db: f32) -> sdroxide_types::AudioLevel {
+    sdroxide_types::AudioLevel {
+        rms_db: [db, db],
+        bands: (0..sdroxide_types::AUDIO_BANDS)
+            .map(|i| if i % 2 == 0 { 200 } else { 120 })
+            .collect(),
+    }
+}
+
+/// Run frames with that level playing, and return the two needles.
+fn needles(app: &mut SdroxideApp, ctx: &egui::Context) -> [f32; 2] {
+    for i in 0..40 {
+        app.audio_level = Some((crate::time::now_unix_f64(), level(-20.0)));
+        one_frame(ctx, app, 30.0 + f64::from(i) * 0.033, vec![]);
+    }
+    app.radio_classic.vu.level
+}
+
+/// 64–108 MHz in WFM has a STEREO chip that is there whether or not the pilot
+/// is locked, and says which.
+#[test]
+fn the_stereo_chip_is_on_the_fm_band_and_lit_only_with_a_pilot() {
+    let _guard = crate::multi::frame_test_lock();
+    for (stereo, hz, mode, shown) in [
+        (false, 98e6, Mode::Wfm, true),
+        (true, 98e6, Mode::Wfm, true),
+        (true, 70e6, Mode::Wfm, true),
+        (true, 150e6, Mode::Wfm, false),
+        (true, 98e6, Mode::Am, false),
+    ] {
+        let (ctx, mut app, _sent) = recorded(mode);
+        app.state.vfo_a_hz = hz;
+        app.meters = Some(fm_meters(stereo));
+        let text = run(&ctx, &mut app);
+        assert_eq!(
+            count(&text, "STEREO") == 1,
+            shown,
+            "{mode:?} {} MHz pilot={stereo}: {text:?}",
+            hz / 1e6
+        );
+    }
+}
+
+/// Anything that is not a locked FM stereo broadcast is mono, and its two
+/// needles are a false stereo — different, though the sound is the same.
+#[test]
+fn a_mono_signal_gets_a_false_stereo_vu() {
+    let _guard = crate::multi::frame_test_lock();
+    for (mode, hz, stereo) in [(Mode::Am, 7e6, false), (Mode::Wfm, 98e6, false)] {
+        let (ctx, mut app, _sent) = recorded(mode);
+        app.state.vfo_a_hz = hz;
+        app.meters = Some(fm_meters(stereo));
+        let [l, r] = needles(&mut app, &ctx);
+        assert!((l - r).abs() > 0.5, "{mode:?} {hz}: the needles agree: {l} {r}");
+    }
+}
+
+/// A real stereo broadcast is shown as it is: two equal ears stay equal.
+#[test]
+fn a_real_stereo_signal_is_not_touched() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, _sent) = recorded(Mode::Wfm);
+    app.state.vfo_a_hz = 98e6;
+    app.meters = Some(fm_meters(true));
+    let [l, r] = needles(&mut app, &ctx);
+    assert!((l - r).abs() < 0.01, "a locked pilot was given a false stereo: {l} {r}");
+}
+
+/// Switching RADIO on in WFM puts the broadcast stereo decode back on if it
+/// had been switched off.
+#[test]
+fn switching_radio_on_allows_the_wfm_stereo_decode() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, sent) = off_in(Mode::Usb);
+    app.state.rx[0].wfm_stereo = false;
+    app.toggle_radio_classic();
+    run(&ctx, &mut app);
+    assert!(
+        sent.lock().unwrap().iter().any(|c| matches!(
+            c,
+            sdroxide_types::Command::SetWfmStereo { rx: sdroxide_types::RxId::Main, on: true }
+        )),
+        "{:?}",
+        sent.lock().unwrap()
+    );
+}
