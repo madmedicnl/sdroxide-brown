@@ -1311,6 +1311,9 @@ pub struct SdroxideApp {
     /// [`crate::app::panels::wspr::WSPR_SPOT_ROWS`]; the propagation store keeps
     /// the long view, this is only what the panel lists.
     wspr_spots: Vec<sdroxide_types::WsprSpot>,
+    /// Sort order for the WSPR reception list: 0 = newest first (default),
+    /// 1 = by distance, 2 = by country of the station/reporter.
+    wspr_sort: u8,
     /// PI4 receptions, newest first — what this station decoded. Capped at
     /// [`crate::app::panels::pi4::PI4_SPOT_ROWS`]. No propagation-store
     /// counterpart, unlike `wspr_spots`: a PI4 message carries no grid
@@ -2448,7 +2451,7 @@ impl SdroxideApp {
             prop_heat: Default::default(),
             night_shade: Default::default(),
             wspr_spots: Vec::new(),
-            pi4_spots: Vec::new(),
+            wspr_sort: 0,            pi4_spots: Vec::new(),
             digi_hover_ll: None,
             digi_free_text: String::new(),
             flags: Default::default(),

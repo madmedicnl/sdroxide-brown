@@ -942,6 +942,11 @@ pub fn show(
     if let Some(c) = preview {
         contacts.push(c);
     }
+    for s in reporters {
+        if let Some(c) = s.loc {
+            contacts.push(c);
+        }
+    }
     let (t_clat, t_clon, t_span) = target_view(home, &contacts, aspect);
     if !view.initialized {
         view.clat = t_clat;
@@ -1109,6 +1114,20 @@ pub fn show(
                 if s.mode.trim().is_empty() { String::new() } else { format!("{} · ", s.mode) },
                 s.snr_db.map(|d| format!("{d:+} dB")).unwrap_or_else(|| "no SNR".into()),
             ));
+        }
+        // Draw the liaison (path) from home to each reporter that heard us,
+        // so the reach of the beacon is visible on the map.
+        if let Some(hll) = home {
+            for s in reporters {
+                let Some((rlat, rlon)) = s.loc else { continue };
+                if (rlat - hll.0).abs() < 1e-9 && (rlon - hll.1).abs() < 1e-9 {
+                    continue;
+                }
+                for (lat, lon) in great_circle_points(hll, (rlat, rlon), DECODE_PATH_POINTS) {
+                    let c = project(lat, lon);
+                    p.circle_filled(c, dot_r.max(1.0), alpha(ink, 90.0));
+                }
+            }
         }
     }
 
