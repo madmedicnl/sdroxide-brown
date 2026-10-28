@@ -3828,6 +3828,7 @@ impl SdroxideApp {
                     ("MEMORIES", crate::app::frame::TW_MEMORIES),
                     ("EXTRAS", crate::app::frame::TW_EXTRAS),
                     ("AIRCRAFT", crate::app::frame::TW_AIRCRAFT),
+                    ("RADIO CLASSIC", crate::app::frame::TW_RADIO_CLASSIC),
                     ("RDS", crate::app::frame::TW_RDS),
                     ("DRM", crate::app::frame::TW_DRM),
                     ("HD RADIO", crate::app::frame::TW_HD_RADIO),

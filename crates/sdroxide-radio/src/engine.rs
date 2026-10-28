@@ -6575,7 +6575,9 @@ impl Engine {
         }
         let (speaker, speaker_right): (&[f32], Option<&[f32]>) =
             if self.replay.on() { (&self.replay_buf, None) } else { (&self.main_play, right) };
-        if let Some(level) = self.audio_meter.feed(speaker, speaker_right, self.audio_out_rate, Instant::now()) {
+        if let Some(level) =
+            self.audio_meter.feed(speaker, speaker_right, self.audio_out_rate, Instant::now())
+        {
             let _ = self.event_tx.send(RadioEvent::AudioLevel(Box::new(level)));
         }
         if let Some(mixer) = self.mixer.as_mut() {

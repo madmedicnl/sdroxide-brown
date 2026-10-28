@@ -697,6 +697,11 @@ pub struct SdroxideApp {
     show_wefax: bool,
     show_sstv: bool,
     show_dab: bool,
+    /// Radio Classic detached into a window (the Detachable page's switch).
+    /// Docked, it has no flag of its own: `UiSettings::radio_classic_on`.
+    show_radio_classic: bool,
+    /// Radio Classic's own state: the band group, the VU and bars, the mini waterfall.
+    radio_classic: panels::radio_classic::State,
     show_js8: bool,
     show_acars: bool,
     show_hfdl: bool,
@@ -1196,9 +1201,9 @@ pub struct SdroxideApp {
     dab_hidden: Vec<(String, String)>,
     /// The last slideshow picture the station sent, ready to draw.
     dab_slide: Option<egui::TextureHandle>,
-    /// The main receiver's speaker-feed level, as last sent, with the time it
-    /// arrived. The Radio Classic panel's VU and bars; `None` until the first.
-    audio_level: Option<(std::time::Instant, sdroxide_types::AudioLevel)>,
+    /// The main receiver's speaker-feed level, as last sent, with the wall-clock
+    /// second it arrived (`Instant` panics in the browser build). The Radio Classic panel's VU and bars; `None` until the first.
+    audio_level: Option<(f64, sdroxide_types::AudioLevel)>,
     /// The station's logo, as the station broadcasts it.
     dab_logo: Option<egui::TextureHandle>,
     /// The station list shows each station's programme type.
@@ -2249,6 +2254,8 @@ impl SdroxideApp {
             show_wefax: false,
             show_sstv: false,
             show_dab: false,
+            show_radio_classic: false,
+            radio_classic: Default::default(),
             show_js8: false,
             show_acars: false,
             show_hfdl: false,
@@ -3368,6 +3375,8 @@ impl SdroxideApp {
 mod aircraft_export_frame_tests;
 #[cfg(test)]
 mod aircraft_watch_frame_tests;
+#[cfg(test)]
+mod radio_classic_frame_tests;
 #[cfg(test)]
 mod touch_lock_tests;
 #[cfg(test)]
@@ -4903,6 +4912,173 @@ mod tests {
         );
         let out = std::env::var("DAB_PREVIEW").unwrap_or_else(|_| {
             format!("{}/../../target/dab_preview.png", env!("CARGO_MANIFEST_DIR"))
+        });
+        img.save(&out).expect("write the preview");
+        println!("wrote {out}");
+    }
+    /// Renders the real Radio Classic panel, docked under a waterfall, to a PNG.
+    ///
+    /// ```sh
+    /// RC_THEME=AmberPhosphor cargo test -p sdroxide-ui --release --lib \
+    ///     radio_classic_preview -- --ignored --nocapture
+    /// ```
+    /// `RC_W`/`RC_H` size the screen (default 1920x1080), `RC_MODE` is `fm`
+    /// (default) or `am`, `RC_OUT` the file.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    #[ignore = "writes a picture to look at; not an assertion"]
+    fn radio_classic_preview() {
+        use crate::multi::frame_test_lock;
+        use sdroxide_types::{
+            AUDIO_BANDS, AudioLevel, MemoryChannel, Meters, Mode, RdsClock, RdsData, SpectrumFrame,
+            band_to_byte,
+        };
+        let _guard = frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-rc-preview-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let num =
+            |var: &str, d: f32| std::env::var(var).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
+        let (w, h) = (num("RC_W", 1920.0), num("RC_H", 1080.0));
+        let theme = std::env::var("RC_THEME").ok().and_then(|name| {
+            sdroxide_types::UiTheme::ALL.iter().find(|t| format!("{t:?}") == name).copied()
+        });
+        let fm = std::env::var("RC_MODE").map_or(true, |m| m != "am");
+
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        if let Some(t) = theme {
+            app.ui_settings.theme = t;
+        }
+        app.ui_settings.radio_classic_on = true;
+        let hz = if fm { 105_500_000.0 } else { 6_185_000.0 };
+        app.state.vfo_a_hz = hz;
+        app.state.rx[0].mode = if fm { Mode::Wfm } else { Mode::Am };
+        app.state.rx[0].volume = 0.6;
+        app.memories = vec![
+            MemoryChannel {
+                id: 3,
+                name: "M3".into(),
+                freq_hz: 105_500_000.0,
+                mode: Mode::Wfm,
+                filter_lo: -96_000.0,
+                filter_hi: 96_000.0,
+                folder: None,
+                rtty: None,
+                repeater: None,
+                antenna: None,
+                color: None,
+            },
+            MemoryChannel {
+                id: 1,
+                name: "M1".into(),
+                freq_hz: 6_185_000.0,
+                mode: Mode::Am,
+                filter_lo: -4500.0,
+                filter_hi: 4500.0,
+                folder: None,
+                rtty: None,
+                repeater: None,
+                antenna: None,
+                color: None,
+            },
+        ];
+        app.meters = Some(Meters {
+            s_dbm: -67.0,
+            pa_temp_c: None,
+            adc_peak_dbfs: -30.0,
+            adc_clip: 0.0,
+            adc_overload: None,
+            tx: None,
+            stereo: fm,
+            tone: None,
+            passband_dbfs: -40.0,
+            puresignal: None,
+        });
+        if fm {
+            app.rds = Some(RdsData {
+                sync: true,
+                pi: Some(0xF201),
+                pty: Some(10),
+                ps: Some("EUROPE 1".into()),
+                radiotext: Some(
+                    "Europe 1 · Laurent Ruquier — « Les Grosses Têtes » · 105.5 FM".into(),
+                ),
+                tp: true,
+                music: Some(true),
+                af: vec![88_200_000, 91_400_000, 99_700_000],
+                clock: Some(RdsClock {
+                    year: 2026,
+                    month: 10,
+                    day: 28,
+                    hour: 14,
+                    minute: 32,
+                    offset_half_hours: 4,
+                }),
+                ..Default::default()
+            });
+        }
+        // A spectrum with a station at the dial, and a music-like set of bars.
+        let n = 1024usize;
+        let bins: Vec<u8> = (0..n)
+            .map(|i| {
+                let x = (i as f32 - n as f32 / 2.0) / 12.0;
+                (60.0 + 150.0 * (-x * x).exp() + 14.0 * ((i * 37 % 11) as f32 / 11.0)) as u8
+            })
+            .collect();
+        app.frame = Some(std::sync::Arc::new(SpectrumFrame {
+            seq: 1,
+            center_hz: hz,
+            span_hz: 2_400_000.0,
+            db_floor: -120.0,
+            db_ceil: -20.0,
+            bins,
+            rows: Vec::new(),
+            rows_clocked: false,
+        }));
+        let bands: Vec<u8> = (0..AUDIO_BANDS)
+            .map(|i| {
+                let t = i as f32 / AUDIO_BANDS as f32;
+                let db = -8.0 - 55.0 * t.powf(1.3) - 6.0 * ((i * 7 % 5) as f32);
+                band_to_byte(db)
+            })
+            .collect();
+        app.audio_level =
+            Some((crate::time::now_unix_f64(), AudioLevel { rms_db: [-14.0, -17.0], bands }));
+
+        let mut tex = crate::test_raster::Textures::default();
+        let mut last = None;
+        for i in 0..40 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
+                time: Some(10.0 + i as f64 / 30.0),
+                ..Default::default()
+            };
+            // Keep the level fresh and the waterfall moving, as the station would.
+            if let Some((at, _)) = app.audio_level.as_mut() {
+                *at = crate::time::now_unix_f64();
+            }
+            if let Some(f) = app.frame.as_mut() {
+                std::sync::Arc::make_mut(f).seq += 1;
+            }
+            let mut full = ctx.run_ui(input, |ui| {
+                app.ui(ui, &mut eframe::Frame::_new_kittest());
+            });
+            tex.apply(&full.textures_delta);
+            full.textures_delta.clear();
+            last = Some(full);
+        }
+        let img = crate::test_raster::rasterize(
+            &ctx,
+            last.unwrap(),
+            &tex,
+            egui::vec2(w, h),
+            crate::theme::BG_DEEP(),
+        );
+        let out = std::env::var("RC_OUT").unwrap_or_else(|_| {
+            format!("{}/../../target/radio_classic_preview.png", env!("CARGO_MANIFEST_DIR"))
         });
         img.save(&out).expect("write the preview");
         println!("wrote {out}");
