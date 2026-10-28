@@ -173,6 +173,23 @@ impl super::SdroxideApp {
         }
     }
 
+    /// Whether RADIO CLASSIC is on, docked or in its window.
+    pub(in crate::app) fn radio_classic_active(&self) -> bool {
+        self.ui_settings.radio_classic_on || self.show_radio_classic
+    }
+
+    /// The RADIO chips' switch — EXTRAS' and the Wideband row's are this one.
+    pub(in crate::app) fn toggle_radio_classic(&mut self) {
+        if self.radio_classic_active() {
+            self.ui_settings.radio_classic_on = false;
+            self.show_radio_classic = false;
+            self.ui_settings.tool_windows_open &= !super::frame::TW_RADIO_CLASSIC;
+        } else {
+            self.ui_settings.radio_classic_on = true;
+        }
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
+    }
+
     fn extras_body(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
         crate::chrome::window_body_bg(ui);
         crate::chrome::menu_caption(ui, "Receivers");
@@ -203,7 +220,7 @@ impl super::SdroxideApp {
             if air.clicked() {
                 self.show_aircraft = !self.show_aircraft;
             }
-            let rc_active = self.ui_settings.radio_classic_on || self.show_radio_classic;
+            let rc_active = self.radio_classic_active();
             let rc = crate::chrome::chip_sized(ui, rc_active, "RADIO", egui::vec2(SLOT_W, SLOT_H))
                 .on_hover_text(
                     "RADIO CLASSIC — a classic radio face for broadcast listening: bands, \
@@ -211,14 +228,7 @@ impl super::SdroxideApp {
                  in the voice modes; Settings → Detachable puts it in a window",
                 );
             if rc.clicked() {
-                if rc_active {
-                    self.ui_settings.radio_classic_on = false;
-                    self.show_radio_classic = false;
-                    self.ui_settings.tool_windows_open &= !super::frame::TW_RADIO_CLASSIC;
-                } else {
-                    self.ui_settings.radio_classic_on = true;
-                }
-                crate::app::persist::persist_ui_settings(&self.ui_settings);
+                self.toggle_radio_classic();
             }
             let ant = crate::chrome::chip_sized(
                 ui,

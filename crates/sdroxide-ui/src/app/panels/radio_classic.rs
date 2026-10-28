@@ -8,7 +8,7 @@
 //!
 //! | column | content |
 //! | --- | --- |
-//! | left | bands, modes, MEM and SCHEDULE |
+//! | left | bands, modes, MEM and PROGRAMS |
 //! | middle | the mode, a mini spectrum, the S-meter, BW/STEP/AGC/SQL, the VU |
 //! | right | clocks, the VFO, the station name, RadioText, RDS chips, audio bars |
 //!
@@ -18,7 +18,8 @@ use std::collections::VecDeque;
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Stroke, StrokeKind, vec2};
 use sdroxide_types::{
-    AUDIO_BANDS, Band, Command, Mode, RdsData, RxId, broadcast, byte_to_unit, pty_name,
+    AUDIO_BANDS, AgcMode, Band, Command, Mode, RdsData, RxId, SQUELCH_CLOSED_DB, SQUELCH_OPEN_DB,
+    broadcast, byte_to_unit, pty_name,
 };
 
 use crate::app::SdroxideApp;
@@ -267,11 +268,30 @@ fn s_reading(s_dbm: f32) -> String {
     }
 }
 
+/// Where Radio Classic tunes the very first time, in WFM.
+const FIRST_HZ: f64 = 100e6;
+/// After it takes the receiver, how long the station's state is not believed
+/// over the panel's own: a message sent before the commands were applied can
+/// still be on its way.
+const ENTER_GRACE_S: f64 = 1.5;
+/// The frequency it listens on is written to disk at most this often.
+const SAVE_EVERY_S: f64 = 2.0;
+
+/// Whether `mode` is one Radio Classic listens in. Anything else — a digital
+/// mode, DAB, ADS-B — is another receiver's job.
+fn is_radio_mode(mode: Mode) -> bool {
+    MODES.iter().any(|(_, m)| *m == mode)
+        || matches!(mode, Mode::Sam | Mode::Cquam | Mode::Dsb | Mode::Isb)
+}
+
 /// How long ago a reading may be and still count as the sound that is playing.
 const LEVEL_FRESH_S: f32 = 0.4;
 /// Rows kept by the mini waterfall, and the bins in each.
-const WF_ROWS: usize = 40;
+const WF_ROWS: usize = 400;
 const WF_BINS: usize = 96;
+/// One spectrum frame in this many becomes a row: the scope runs at half the
+/// speed it did, and ten times the rows make the picture finer, not faster.
+const WF_EVERY: u32 = 2;
 
 /// The panel's own state: what has to live between frames.
 pub(in crate::app) struct State {
@@ -280,9 +300,24 @@ pub(in crate::app) struct State {
     vu_at: Option<f64>,
     bars: Vec<f32>,
     peaks: Vec<f32>,
-    wf: VecDeque<Vec<u8>>,
+    pub(in crate::app) wf: VecDeque<Vec<u8>>,
     wf_seq: Option<u32>,
-    pub schedule_open: bool,
+    /// Spectrum frames seen, to keep one in [`WF_EVERY`].
+    wf_tick: u32,
+    /// The waterfall as a picture, and what it was drawn for: its height in
+    /// pixels and the three colours it is made from.
+    wf_tex: Option<egui::TextureHandle>,
+    wf_drawn: Option<(usize, [Color32; 3])>,
+    wf_dirty: bool,
+    /// The squelch threshold to put back when SQL is clicked open again.
+    sql_last: f32,
+    /// Whether the panel was on the last frame (`None` before the first one,
+    /// so an app that starts with it on is not "switching it on").
+    on_seen: Option<bool>,
+    /// When it last took the receiver, on the UI clock.
+    entered_at: f64,
+    /// When the last frequency was last written to disk.
+    saved_at: f64,
     /// When `WantAudioLevel` was last sent (wall clock), so it is renewed about
     /// once a second while the panel is on screen.
     lease_at: f64,
@@ -302,10 +337,69 @@ impl Default for State {
             peaks: vec![0.0; AUDIO_BANDS],
             wf: VecDeque::new(),
             wf_seq: None,
-            schedule_open: false,
+            wf_tick: 0,
+            wf_tex: None,
+            wf_drawn: None,
+            wf_dirty: false,
+            sql_last: -70.0,
+            on_seen: None,
+            entered_at: f64::NEG_INFINITY,
+            saved_at: f64::NEG_INFINITY,
             lease_at: 0.0,
             frame: None,
         }
+    }
+}
+
+impl State {
+    /// Take a new spectrum row: one in [`WF_EVERY`] is kept, newest first, up to
+    /// [`WF_ROWS`]. Returns whether the picture changed.
+    fn wf_push(&mut self, row: Vec<u8>) -> bool {
+        let keep = self.wf_tick.is_multiple_of(WF_EVERY);
+        self.wf_tick = self.wf_tick.wrapping_add(1);
+        if keep {
+            self.wf.push_front(row);
+            self.wf.truncate(WF_ROWS);
+        }
+        keep
+    }
+}
+
+/// The colour of a waterfall cell for a level `0.0..=1.0`.
+fn wf_colour(t: f32, ink: &[Color32; 3]) -> Color32 {
+    let [ground, accent, strong] = *ink;
+    if t < 0.8 { mix(ground, accent, t / 0.8) } else { mix(accent, strong, (t - 0.8) * 5.0) }
+}
+
+/// The waterfall as an image `out_h` pixels tall: the [`WF_ROWS`] rows are
+/// averaged down to the pixels they land on (a row per pixel would shimmer),
+/// newest at the top, and the part not filled yet is the ground.
+fn wf_image(rows: &VecDeque<Vec<u8>>, out_h: usize, ink: &[Color32; 3]) -> egui::ColorImage {
+    let out_h = out_h.clamp(1, WF_ROWS);
+    let mut pixels = Vec::with_capacity(WF_BINS * out_h);
+    for y in 0..out_h {
+        let from = y * WF_ROWS / out_h;
+        let to = ((y + 1) * WF_ROWS / out_h).max(from + 1);
+        let mut sum = [0u32; WF_BINS];
+        let mut n = 0u32;
+        for row in (from..to).filter_map(|r| rows.get(r)) {
+            for (acc, v) in sum.iter_mut().zip(row) {
+                *acc += u32::from(*v);
+            }
+            n += 1;
+        }
+        for acc in sum {
+            pixels.push(if n == 0 {
+                ink[0]
+            } else {
+                wf_colour(acc as f32 / (n as f32 * 255.0), ink)
+            });
+        }
+    }
+    egui::ColorImage {
+        size: [WF_BINS, out_h],
+        source_size: vec2(WF_BINS as f32, out_h as f32),
+        pixels,
     }
 }
 
@@ -416,6 +510,124 @@ impl SdroxideApp {
         crate::repaint::after_ms(ui.ctx(), if moving { 33 } else { 250 });
     }
 
+    // ───────────────────────────────────────────────── the receiver is its own
+
+    /// Radio Classic's hold on the receiver, once a frame.
+    ///
+    /// Switched on, it takes everything: [`Self::radio_classic_enter`]. While it
+    /// is on, the frequency and mode it ends up on are what it comes back to,
+    /// and another mode (or a second receiver, or a scan) taking the receiver
+    /// hands it back — RADIO goes off.
+    pub(in crate::app) fn radio_classic_tick(&mut self, now: f64, cmds: &mut Vec<Command>) {
+        let on = self.radio_classic_active();
+        match self.radio_classic.on_seen.replace(on) {
+            Some(false) if on => self.radio_classic_enter(now, cmds),
+            Some(true) if !on => crate::app::persist::persist_ui_settings(&self.ui_settings),
+            _ => {}
+        }
+        if !on || now - self.radio_classic.entered_at < ENTER_GRACE_S {
+            return;
+        }
+        let mode = self.state.rx[0].mode;
+        if !is_radio_mode(mode) || self.state.sub_rx_enabled || self.state.scan.running {
+            self.ui_settings.radio_classic_on = false;
+            self.show_radio_classic = false;
+            self.ui_settings.tool_windows_open &= !crate::app::frame::TW_RADIO_CLASSIC;
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+            return;
+        }
+        let hz = self.state.active_freq_hz();
+        let ui = &mut self.ui_settings;
+        if ui.radio_classic_last_hz != hz || ui.radio_classic_last_mode != Some(mode) {
+            ui.radio_classic_last_hz = hz;
+            ui.radio_classic_last_mode = Some(mode);
+            if now - self.radio_classic.saved_at >= SAVE_EVERY_S {
+                self.radio_classic.saved_at = now;
+                crate::app::persist::persist_ui_settings(&self.ui_settings);
+            }
+        }
+    }
+
+    /// Radio Classic has just been switched on: every other mode is quit, its
+    /// window shut, and the dial goes to Radio Classic's frequency at once — the
+    /// last one it listened on, or 100 MHz in WFM the first time.
+    fn radio_classic_enter(&mut self, now: f64, cmds: &mut Vec<Command>) {
+        self.radio_classic.entered_at = now;
+        let (hz, mode) = match self.ui_settings.radio_classic_last_hz {
+            hz if hz > 0.0 => (
+                hz,
+                self.ui_settings
+                    .radio_classic_last_mode
+                    .filter(|m| is_radio_mode(*m))
+                    .unwrap_or(Mode::Wfm),
+            ),
+            _ => (FIRST_HZ, Mode::Wfm),
+        };
+        // The other flows: the second receiver, the scan, the ISM decoder.
+        if self.state.sub_rx_enabled {
+            self.state.sub_rx_enabled = false;
+            cmds.push(Command::SetSubRx(false));
+        }
+        if self.state.scan.running {
+            self.state.scan.running = false;
+            cmds.push(Command::SetScanning(false));
+        }
+        if self.state.ism.any_enabled() {
+            self.state.ism.enabled = false;
+            cmds.push(Command::SetIsmConfig(self.state.ism));
+        }
+        // The windows of the modes and decoders that were in use.
+        for open in [
+            &mut self.show_sstv,
+            &mut self.show_dab,
+            &mut self.show_aircraft,
+            &mut self.show_ism,
+            &mut self.show_adsb,
+            &mut self.show_ais,
+            &mut self.show_acars,
+            &mut self.show_hfdl,
+            &mut self.show_vdl2,
+            &mut self.show_navtex,
+            &mut self.show_dsc,
+            &mut self.show_aprs,
+            &mut self.show_wefax,
+            &mut self.show_js8,
+            &mut self.show_fsq,
+            &mut self.show_hell,
+            &mut self.show_packet,
+            &mut self.show_wspr,
+            &mut self.show_pi4,
+            &mut self.show_text,
+            &mut self.show_uvpacket,
+            &mut self.show_jtty,
+            &mut self.show_ale,
+            &mut self.show_rf_paint,
+            &mut self.show_image,
+            &mut self.show_drm,
+            &mut self.show_hd,
+            &mut self.show_scanner,
+        ] {
+            *open = false;
+        }
+        // The broadcast stereo decode, which only WFM has and which the
+        // operator may have switched off in some other mode.
+        if mode == Mode::Wfm && !self.state.rx[0].wfm_stereo {
+            self.state.rx[0].wfm_stereo = true;
+            cmds.push(Command::SetWfmStereo { rx: RxId::Main, on: true });
+        }
+        // And the dial: the frequency first, as the band buttons do.
+        let vfo = self.state.active_vfo;
+        cmds.push(Command::SetVfo { vfo, hz });
+        cmds.push(Command::SetMode { rx: RxId::Main, mode });
+        // Echoed now, so nothing of the old mode is drawn while the station
+        // answers.
+        self.state.rx[0].mode = mode;
+        match vfo {
+            sdroxide_types::Vfo::A => self.state.vfo_a_hz = hz,
+            sdroxide_types::Vfo::B => self.state.vfo_b_hz = hz,
+        }
+    }
+
     /// The name on the big line, from what is known about the dial.
     fn rc_name(&self, hz: f64, mode: Mode, now: i64) -> Option<String> {
         let rounded = hz.round() as i64;
@@ -495,15 +707,14 @@ impl SdroxideApp {
             });
 
             ui.add_space(gap);
-            crate::chrome::menu_caption(ui, "Mem · Schedule");
+            crate::chrome::menu_caption(ui, "Mem · Programs");
             self.rc_memories(ui, cmds, hz, mode);
         });
     }
 
-    /// The memory buttons and the SCHEDULE popup.
+    /// The memory buttons and the PROGRAMS chip.
     fn rc_memories(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>, hz: f64, mode: Mode) {
         let rounded = hz.round() as i64;
-        let mut button = None;
         ui.horizontal_wrapped(|ui| {
             for m in self.memories.iter().take(4) {
                 let lit = m.mode == mode && m.freq_hz.round() as i64 == rounded;
@@ -522,84 +733,14 @@ impl SdroxideApp {
                         .color(theme::gray(130)),
                 );
             }
-            let r = crate::chrome::chip(ui, self.radio_classic.schedule_open, "PROGRAMS")
-                .on_hover_text("Broadcasts on the air now, on this band");
-            if r.clicked() {
-                self.radio_classic.schedule_open = !self.radio_classic.schedule_open;
+            // The same window the top bar opens, with its stations to pick from.
+            if crate::chrome::chip(ui, self.schedule.show, "PROGRAMS")
+                .on_hover_text("Broadcast schedule — what is on, when and where")
+                .clicked()
+            {
+                self.schedule.show = !self.schedule.show;
             }
-            button = Some(r.rect);
         });
-        if self.radio_classic.schedule_open
-            && let Some(at) = button
-        {
-            self.rc_schedule_popup(ui.ctx(), at, cmds, hz);
-        }
-    }
-
-    /// The SCHEDULE list: the broadcasts on the air now on the band the dial
-    /// is in (every band, when the dial is outside the broadcast bands).
-    fn rc_schedule_popup(
-        &mut self,
-        ctx: &egui::Context,
-        anchor: Rect,
-        cmds: &mut Vec<Command>,
-        hz: f64,
-    ) {
-        let now = crate::time::now_unix();
-        let band = broadcast::metre_band(hz / 1e3);
-        let mut rows: Vec<&sdroxide_types::BroadcastStation> = self
-            .broadcast
-            .iter()
-            .filter(|s| {
-                s.on_air_at(now)
-                    && band.is_none_or(|b| broadcast::metre_band(s.freq_khz) == Some(b))
-            })
-            .collect();
-        rows.sort_by(|a, b| b.power_kw.unwrap_or(0.0).total_cmp(&a.power_kw.unwrap_or(0.0)));
-        rows.truncate(14);
-        rows.sort_by(|a, b| a.freq_khz.total_cmp(&b.freq_khz));
-        let mut pick = None;
-        let mut close = false;
-        egui::Area::new(egui::Id::new("radio-classic-schedule"))
-            .order(egui::Order::Foreground)
-            .fixed_pos(Pos2::new(anchor.left(), (anchor.top() - 4.0).max(0.0)))
-            .pivot(Align2::LEFT_BOTTOM)
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_min_width(320.0);
-                    ui.horizontal(|ui| {
-                        let head = match band {
-                            Some(b) => format!("ON THE AIR NOW · {b}"),
-                            None => "ON THE AIR NOW".to_string(),
-                        };
-                        crate::chrome::menu_caption(ui, &head);
-                        if ui.small_button("✕").clicked() {
-                            close = true;
-                        }
-                    });
-                    if rows.is_empty() {
-                        ui.label(
-                            RichText::new("nothing listed on air here at this hour")
-                                .size(11.0)
-                                .color(theme::gray(130)),
-                        );
-                    }
-                    for s in &rows {
-                        let label = format!("{:>8.0} kHz  {}  {}", s.freq_khz, s.name, s.lang);
-                        if ui.selectable_label(false, label).clicked() {
-                            pick = Some((*s).clone());
-                        }
-                    }
-                });
-            });
-        if let Some(s) = pick {
-            cmds.push(Command::SetVfo { vfo: self.state.active_vfo, hz: s.freq_hz() });
-            cmds.push(Command::SetMode { rx: RxId::Main, mode: s.mode() });
-            self.radio_classic.schedule_open = false;
-        }
-        if close {
-            self.radio_classic.schedule_open = false;
-        }
     }
 
     // ─────────────────────────────────────────────────────────── middle column
@@ -684,9 +825,43 @@ impl SdroxideApp {
         }
         self.rc_smeter(ui, meter, ink);
 
-        let rx = &self.state.rx[0];
+        self.rc_boxes(ui, boxes, cmds, ink, mode);
+
+        // The VU: the volume control too, as in the DAB panel.
+        self.rc_vu_step(ui);
+        ui.scope_builder(egui::UiBuilder::new().max_rect(vu_rect), |ui| {
+            let out = vu_meter::stereo(
+                ui,
+                &self.radio_classic.vu,
+                vu_rect.size(),
+                true,
+                Some(self.state.rx[0].volume),
+            );
+            self.dab_vu_volume(ui, cmds, out);
+        });
+    }
+
+    /// The boxes at the foot, BW · STEP · AGC · SQL — each one acts.
+    ///
+    /// Click takes the next setting, right-click the previous one, and the wheel
+    /// over a box moves it a notch; every route is the one the top bar uses
+    /// (`set_rx_filter`, `SetAgc`, `SetSquelch`, the tuning step).
+    fn rc_boxes(
+        &mut self,
+        ui: &mut egui::Ui,
+        boxes: Rect,
+        cmds: &mut Vec<Command>,
+        ink: &Ink,
+        mode: Mode,
+    ) {
+        let rx = self.state.rx[0];
         let bw = (rx.filter_hi - rx.filter_lo).abs();
-        let items = [
+        let open = rx.squelch_db <= SQUELCH_OPEN_DB + 0.5;
+        if !open {
+            self.radio_classic.sql_last = rx.squelch_db;
+        }
+        let presets = mode.filter_presets();
+        let items: [(&str, String, String); 4] = [
             (
                 "BW",
                 if bw >= 1000.0 {
@@ -694,26 +869,60 @@ impl SdroxideApp {
                 } else {
                     format!("{bw:.0} Hz")
                 },
+                if presets.is_empty() {
+                    "BW — this mode has one fixed passband".to_string()
+                } else {
+                    "BW — click: next filter · right-click: previous · wheel: step".to_string()
+                },
             ),
-            ("STEP", format!("{:.0}", self.ui_settings.tune_step_hz)),
-            ("AGC", rx.agc.label().to_uppercase()),
+            (
+                "STEP",
+                format!("{:.0}", self.ui_settings.tune_step_hz),
+                "STEP — click: next tuning step · right-click: previous · wheel: step".to_string(),
+            ),
+            (
+                "AGC",
+                rx.agc.label().to_uppercase(),
+                "AGC — click: next speed · right-click: previous · wheel: step".to_string(),
+            ),
             (
                 "SQL",
-                if rx.squelch_db <= sdroxide_types::SQUELCH_OPEN_DB + 0.5 {
-                    "OPEN".to_string()
-                } else {
-                    format!("{:.0} dB", rx.squelch_db)
-                },
+                if open { "OPEN".to_string() } else { format!("{:.0} dB", rx.squelch_db) },
+                "SQL — click: open / back to the last threshold · wheel: raise or lower the gate"
+                    .to_string(),
             ),
         ];
         let cell_w = (boxes.width() - 3.0 * 6.0) / 4.0;
-        for (i, (cap, val)) in items.iter().enumerate() {
+        // (clicks forward, clicks back, wheel notches) of each box this frame.
+        let mut acts = [(false, false, 0i32); 4];
+        for (i, (cap, val, hint)) in items.iter().enumerate() {
             let r = Rect::from_min_size(
                 boxes.min + vec2(i as f32 * (cell_w + 6.0), 0.0),
-                vec2(cell_w, boxes_h),
+                vec2(cell_w, boxes.height()),
             );
+            let resp = ui
+                .interact(r, ui.id().with(("radio-classic-box", *cap)), egui::Sense::click())
+                .on_hover_text(hint.as_str());
+            // One notch per wheel event, whatever the smoothing makes of it.
+            let notches = if resp.hovered() {
+                ui.input(|i| {
+                    i.events
+                        .iter()
+                        .map(|e| match e {
+                            egui::Event::MouseWheel { delta, .. } if delta.y != 0.0 => {
+                                delta.y.signum() as i32
+                            }
+                            _ => 0,
+                        })
+                        .sum()
+                })
+            } else {
+                0
+            };
+            acts[i] = (resp.clicked(), resp.secondary_clicked(), notches);
             let p = ui.painter();
-            p.rect_stroke(r, 3.0, Stroke::new(1.0, ink.line), StrokeKind::Inside);
+            let edge = if resp.hovered() { ink.accent } else { ink.line };
+            p.rect_stroke(r, 3.0, Stroke::new(1.0, edge), StrokeKind::Inside);
             p.text(
                 r.left_top() + vec2(5.0, 3.0),
                 Align2::LEFT_TOP,
@@ -730,18 +939,43 @@ impl SdroxideApp {
             );
         }
 
-        // The VU: the volume control too, as in the DAB panel.
-        self.rc_vu_step(ui);
-        ui.scope_builder(egui::UiBuilder::new().max_rect(vu_rect), |ui| {
-            let out = vu_meter::stereo(
-                ui,
-                &self.radio_classic.vu,
-                vu_rect.size(),
-                true,
-                Some(self.state.rx[0].volume),
-            );
-            self.dab_vu_volume(ui, cmds, out);
-        });
+        // BW: the mode's own filter presets.
+        let (fwd, back, wheel) = acts[0];
+        if let Some(dir) = direction(fwd, back, wheel)
+            && let Some(i) = next_preset(presets, mode, rx.filter_lo, rx.filter_hi, dir > 0)
+        {
+            let (_, lo, hi) = presets[i];
+            let (lo, hi) = crate::app::top_bar::preset_edges(mode, lo, hi, self.cw_pitch_hz());
+            self.set_rx_filter(lo, hi, cmds);
+        }
+        // STEP.
+        let (fwd, back, wheel) = acts[1];
+        if let Some(dir) = direction(fwd, back, wheel) {
+            self.ui_settings.tune_step_hz = next_step(self.ui_settings.tune_step_hz, dir > 0);
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+        }
+        // AGC.
+        let (fwd, back, wheel) = acts[2];
+        if let Some(dir) = direction(fwd, back, wheel) {
+            let agc = next_agc(rx.agc, dir > 0);
+            self.state.rx[0].agc = agc; // optimistic echo
+            cmds.push(Command::SetAgc { rx: RxId::Main, agc });
+        }
+        // SQL: a click holds the gate open or puts the last threshold back; the
+        // wheel moves it.
+        let (fwd, back, wheel) = acts[3];
+        let db = if fwd || back {
+            Some(if open { self.radio_classic.sql_last } else { SQUELCH_OPEN_DB })
+        } else if wheel != 0 {
+            Some(sql_wheel(rx.squelch_db, wheel))
+        } else {
+            None
+        };
+        if let Some(db) = db {
+            self.sql_hold = None;
+            self.state.rx[0].squelch_db = db; // optimistic echo
+            cmds.push(Command::SetSquelch { rx: RxId::Main, db });
+        }
     }
 
     /// The range of the band the dial sits in, in MHz, for the header.
@@ -782,9 +1016,9 @@ impl SdroxideApp {
                     if at < 0.0 || at >= n as f64 { 0 } else { frame.bins[at as usize] }
                 })
                 .collect();
-            let wf = &mut self.radio_classic.wf;
-            wf.push_front(row);
-            wf.truncate(WF_ROWS);
+            if self.radio_classic.wf_push(row) {
+                self.radio_classic.wf_dirty = true;
+            }
         }
         let p = ui.painter_at(rect);
         p.rect_filled(rect, 4.0, ink.ground);
@@ -806,28 +1040,35 @@ impl SdroxideApp {
                 .collect();
             p.add(egui::Shape::line(pts, Stroke::new(1.2, ink.accent)));
         }
-        let rows = self.radio_classic.wf.len().max(1);
-        let cell_h = wf_rect.height() / WF_ROWS as f32;
-        let cell_w = wf_rect.width() / WF_BINS as f32;
-        for (r, row) in self.radio_classic.wf.iter().enumerate() {
-            for (i, v) in row.iter().enumerate() {
-                let t = f32::from(*v) / 255.0;
-                let c = if t < 0.8 {
-                    mix(ink.ground, ink.accent, t / 0.8)
-                } else {
-                    mix(ink.accent, ink.strong, (t - 0.8) * 5.0)
-                };
-                let cell = Rect::from_min_size(
-                    Pos2::new(
-                        wf_rect.left() + i as f32 * cell_w,
-                        wf_rect.top() + r as f32 * cell_h,
-                    ),
-                    vec2(cell_w + 0.5, cell_h + 0.5),
-                );
-                p.rect_filled(cell, 0.0, c);
+        // The cascade is one picture, rebuilt only when a row came in or the
+        // size or the colours changed — not 96 × 400 rectangles every frame.
+        let ppp = ui.ctx().pixels_per_point();
+        let out_h = ((wf_rect.height() * ppp).round() as usize).clamp(1, WF_ROWS);
+        let colours = [ink.ground, ink.accent, ink.strong];
+        let st = &mut self.radio_classic;
+        if st.wf_tex.is_none() || st.wf_drawn != Some((out_h, colours)) || st.wf_dirty {
+            let image = wf_image(&st.wf, out_h, &colours);
+            match st.wf_tex.as_mut() {
+                Some(tex) => tex.set(image, egui::TextureOptions::LINEAR),
+                None => {
+                    st.wf_tex = Some(ui.ctx().load_texture(
+                        "radio-classic-waterfall",
+                        image,
+                        egui::TextureOptions::LINEAR,
+                    ));
+                }
             }
+            st.wf_drawn = Some((out_h, colours));
+            st.wf_dirty = false;
         }
-        let _ = rows;
+        if let Some(tex) = &st.wf_tex {
+            p.image(
+                tex.id(),
+                wf_rect,
+                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                Color32::WHITE,
+            );
+        }
         // The dial's own mark, at the centre.
         let x = rect.center().x;
         p.line_segment(
@@ -933,7 +1174,14 @@ impl SdroxideApp {
             .as_ref()
             .filter(|(at, _)| wall - *at < f64::from(LEVEL_FRESH_S))
             .map(|(_, l)| l);
-        self.radio_classic.vu.step(fresh.map(|l| l.rms_db), dt);
+        // A real stereo broadcast is shown as it is. Everything else is one
+        // signal in two ears, and its meter is given a false stereo — the
+        // picture only, the sound is not touched.
+        let (hz, mode) = (self.state.active_freq_hz(), self.state.rx[0].mode);
+        let real = stereo_chip(hz, mode, self.meters.is_some_and(|m| m.stereo)) == Some(true)
+            || self.state.sub_rx_enabled;
+        let rms = fresh.map(|l| if real { l.rms_db } else { false_stereo(l.rms_db, &l.bands) });
+        self.radio_classic.vu.step(rms, dt);
         let st = &mut self.radio_classic;
         for i in 0..AUDIO_BANDS {
             let target = fresh.and_then(|l| l.bands.get(i)).map_or(0.0, |b| byte_to_unit(*b));
@@ -979,9 +1227,12 @@ impl SdroxideApp {
         let tag_rect =
             p.text(inner.left_top(), Align2::LEFT_TOP, tag, FontId::proportional(24.0), ink.amber);
         let mut x = tag_rect.right() + 12.0;
-        let stereo = mode == Mode::Wfm && self.meters.is_some_and(|m| m.stereo);
-        if stereo {
-            x = pill(p, Pos2::new(x, inner.top() + 3.0), "STEREO", ink.strong, ink.line) + 8.0;
+        if let Some(lit) = stereo_chip(hz, mode, self.meters.is_some_and(|m| m.stereo)) {
+            let at = Pos2::new(x, inner.top() + 3.0);
+            let r = stereo_pill(p, at, lit, ink);
+            ui.interact(r, ui.id().with("radio-classic-stereo"), egui::Sense::hover())
+                .on_hover_text(stereo_note(&self.state.rx[0], lit));
+            x = r.right() + 8.0;
         }
         let memory = self
             .memories
@@ -1034,8 +1285,16 @@ impl SdroxideApp {
         let wheel = self.input.cfg.wheel;
         let active = self.state.active_vfo;
         let mut new_hz = None;
-        ui.scope_builder(egui::UiBuilder::new().max_rect(vfo_rect), |ui| {
-            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+        // The readout is as wide as its digits and sits at the left of whatever
+        // room it is given, so it is placed by the width it had last frame.
+        let width_id = crate::layout::salted_id(ui.ctx(), "radio-classic-freq-width");
+        let known = ui.data(|d| d.get_temp::<f32>(width_id));
+        let dial_rect = match known {
+            Some(w) => centred_in(vfo_rect, w),
+            None => vfo_rect,
+        };
+        let used = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(dial_rect), |ui| {
                 new_hz = crate::widgets::freq_display::show(
                     ui,
                     crate::layout::salted_id(ui.ctx(), "radio-classic-freq"),
@@ -1045,8 +1304,14 @@ impl SdroxideApp {
                     Some(ink.amber),
                     9,
                 );
-            });
-        });
+            })
+            .response
+            .rect
+            .width();
+        if known.is_none_or(|w| (w - used).abs() > 0.5) {
+            ui.data_mut(|d| d.insert_temp(width_id, used));
+            ui.ctx().request_repaint();
+        }
         if let Some(hz) = new_hz {
             cmds.push(Command::SetVfo { vfo: active, hz });
         }
@@ -1165,6 +1430,140 @@ impl SdroxideApp {
     }
 }
 
+/// The STEREO chip: `Some(lit)` on the FM broadcast band (64–108 MHz in WFM),
+/// where a station may send stereo, lit while the 19 kHz pilot is locked; `None`
+/// everywhere else, which is mono.
+fn stereo_chip(hz: f64, mode: Mode, locked: bool) -> Option<bool> {
+    (mode == Mode::Wfm && (64e6..=108e6).contains(&hz)).then_some(locked)
+}
+
+/// What the STEREO chip says on hover, and — dark — why it is dark.
+fn stereo_note(rx: &sdroxide_types::RxState, lit: bool) -> String {
+    if lit {
+        "Stereo — the 19 kHz pilot is locked".into()
+    } else if !rx.wfm_stereo {
+        "Mono — the broadcast stereo decode is switched off (ST in the top bar)".into()
+    } else if rx.noise_reduction.is_on() {
+        "Mono — noise reduction is on, and stereo yields to it".into()
+    } else {
+        "Mono — no 19 kHz pilot: the station sends mono, or the signal is too weak".into()
+    }
+}
+
+/// A false stereo for the meter of a mono signal: the two needles read the
+/// even and the odd bands of the same sound, so they move a little apart as the
+/// spectrum does, while together they keep the level the single ear measured.
+/// The spread is held to ±2 dB. With no bands (the station sent only the
+/// level) there is nothing to part them by, and they stay equal.
+fn false_stereo(rms_db: [f32; 2], bands: &[u8]) -> [f32; 2] {
+    const SPREAD_DB: f32 = 2.0;
+    let power = |parity: usize| -> f32 {
+        bands
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| i % 2 == parity)
+            .map(|(_, b)| 10f32.powf((f32::from(*b) / 255.0 * 80.0 - 80.0) / 10.0))
+            .sum()
+    };
+    let (even, odd) = (power(0), power(1));
+    let total = even + odd;
+    if total <= 0.0 {
+        return rms_db;
+    }
+    // Each ear's share of the pair, 1.0 being an equal one.
+    let side =
+        |share: f32| (10.0 * (2.0 * share / total).max(1e-6).log10()).clamp(-SPREAD_DB, SPREAD_DB);
+    let (l, r) = (side(even), side(odd));
+    // Held to ±2 dB each, the pair would be a little louder than the single ear
+    // was: put the difference back so the level stays what was measured.
+    let mean = 10.0 * ((10f32.powf(l / 10.0) + 10f32.powf(r / 10.0)) / 2.0).log10();
+    [rms_db[0] + l - mean, rms_db[1] + r - mean]
+}
+
+/// The STEREO pill: filled and bright while the pilot is locked, an empty dim
+/// outline otherwise. Returns where it was drawn.
+fn stereo_pill(p: &egui::Painter, at: Pos2, lit: bool, ink: &Ink) -> Rect {
+    let (text, edge, fill) =
+        if lit { (ink.ground, ink.accent, Some(ink.accent)) } else { (ink.dim, ink.line, None) };
+    pill_rect(p, at, "STEREO", text, edge, fill)
+}
+
+/// `w` points wide, in the middle of `outer` (all of it when it is wider).
+fn centred_in(outer: Rect, w: f32) -> Rect {
+    let w = w.min(outer.width());
+    Rect::from_min_size(Pos2::new(outer.center().x - w / 2.0, outer.top()), vec2(w, outer.height()))
+}
+
+/// Which way a box was asked to move: `+1` forward (a click, wheel up), `-1`
+/// back (a right-click, wheel down), `None` when it was left alone.
+fn direction(click: bool, secondary: bool, wheel: i32) -> Option<i32> {
+    if click {
+        Some(1)
+    } else if secondary {
+        Some(-1)
+    } else if wheel != 0 {
+        Some(wheel.signum())
+    } else {
+        None
+    }
+}
+
+/// The index, in the mode's presets, of the filter to switch to. The current
+/// width is matched to a preset's (the CW presets move with the pitch, their
+/// widths do not); when it is on none, the nearest one is the starting point.
+fn next_preset(
+    presets: &[(&str, f32, f32)],
+    _mode: Mode,
+    lo: f32,
+    hi: f32,
+    forward: bool,
+) -> Option<usize> {
+    if presets.is_empty() {
+        return None;
+    }
+    let width = (hi - lo).abs();
+    let at = presets
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            ((a.2 - a.1).abs() - width).abs().total_cmp(&((b.2 - b.1).abs() - width).abs())
+        })
+        .map_or(0, |(i, _)| i);
+    let n = presets.len();
+    Some(if forward { (at + 1) % n } else { (at + n - 1) % n })
+}
+
+/// The tuning step after (or before) `hz` in the list the top bar cycles.
+fn next_step(hz: f64, forward: bool) -> f64 {
+    let steps = sdroxide_types::UiSettings::TUNE_STEPS_HZ;
+    let n = steps.len();
+    let at = steps.iter().position(|s| (s - hz).abs() < 0.5);
+    let i = match (at, forward) {
+        (Some(i), true) => (i + 1) % n,
+        (Some(i), false) => (i + n - 1) % n,
+        (None, true) => 0,
+        (None, false) => n - 1,
+    };
+    steps[i]
+}
+
+/// The AGC speed after (or before) `agc`: Off → Slow → Med → Fast.
+fn next_agc(agc: AgcMode, forward: bool) -> AgcMode {
+    let all = AgcMode::ALL;
+    let at = all.iter().position(|a| *a == agc).unwrap_or(0);
+    all[if forward { (at + 1) % all.len() } else { (at + all.len() - 1) % all.len() }]
+}
+
+/// One wheel notch on the squelch: 3 dB a notch, `up` raising the gate. From
+/// open the first notch up lands at -110 dBFS, and the way down ends open.
+fn sql_wheel(db: f32, notches: i32) -> f32 {
+    const STEP_DB: f32 = 3.0;
+    const FIRST_DB: f32 = -110.0;
+    let from = if db <= SQUELCH_OPEN_DB + 0.5 { FIRST_DB - STEP_DB } else { db };
+    let to = from + STEP_DB * notches as f32;
+    if to < FIRST_DB - 0.5 { SQUELCH_OPEN_DB } else { to.min(SQUELCH_CLOSED_DB) }
+}
+
 /// A short mode tag for the right column's corner.
 fn mode_tag(mode: Mode) -> String {
     MODES
@@ -1175,11 +1574,26 @@ fn mode_tag(mode: Mode) -> String {
 
 /// A small outlined label; returns the x it ends at.
 fn pill(p: &egui::Painter, at: Pos2, text: &str, ink: Color32, edge: Color32) -> f32 {
+    pill_rect(p, at, text, ink, edge, None).right()
+}
+
+/// [`pill`], optionally filled, and returning the rectangle it took.
+fn pill_rect(
+    p: &egui::Painter,
+    at: Pos2,
+    text: &str,
+    ink: Color32,
+    edge: Color32,
+    fill: Option<Color32>,
+) -> Rect {
     let galley = p.layout_no_wrap(text.to_string(), FontId::proportional(11.5), ink);
     let r = Rect::from_min_size(at, galley.size() + vec2(16.0, 8.0));
+    if let Some(fill) = fill {
+        p.rect_filled(r, r.height() / 2.0, fill);
+    }
     p.rect_stroke(r, r.height() / 2.0, Stroke::new(1.0, edge), StrokeKind::Inside);
     p.galley(Pos2::new(r.left() + 8.0, r.top() + 4.0), galley, ink);
-    r.right()
+    r
 }
 
 /// RadioText in its box, scrolling when it is longer than the box.
@@ -1313,6 +1727,118 @@ mod tests {
             let rows = group_rows(g);
             assert!(!rows.is_empty() && rows.iter().all(|(_, r)| !r.is_empty()), "{g:?}");
         }
+    }
+
+    #[test]
+    fn a_readout_is_placed_in_the_middle_of_its_room() {
+        let room = Rect::from_min_size(Pos2::new(100.0, 10.0), vec2(400.0, 50.0));
+        let r = centred_in(room, 200.0);
+        assert!((r.center().x - room.center().x).abs() < 0.01 && r.width() == 200.0);
+        assert_eq!(centred_in(room, 900.0), room, "wider than the room: the room");
+    }
+
+    #[test]
+    fn the_waterfall_keeps_one_row_in_two_up_to_four_hundred() {
+        let mut st = State::default();
+        for i in 0..20u8 {
+            st.wf_push(vec![i; WF_BINS]);
+        }
+        assert_eq!(st.wf.len(), 10);
+        // Newest first: the last kept frame is the 19th (index 18).
+        assert_eq!(st.wf.front().map(|r| r[0]), Some(18));
+        for _ in 0..2000 {
+            st.wf_push(vec![0; WF_BINS]);
+        }
+        assert_eq!(st.wf.len(), WF_ROWS);
+        assert_eq!(WF_ROWS, 400);
+    }
+
+    #[test]
+    fn the_waterfall_picture_averages_rows_to_the_pixels_it_lands_on() {
+        let ink = [Color32::BLACK, Color32::from_rgb(0, 100, 200), Color32::WHITE];
+        let mut rows = VecDeque::new();
+        // Two bright rows on top of two dark ones, nothing below.
+        for v in [255u8, 255, 0, 0] {
+            rows.push_back(vec![v; WF_BINS]);
+        }
+        let img = wf_image(&rows, 100, &ink);
+        assert_eq!(img.size, [WF_BINS, 100]);
+        // 400 rows over 100 pixels: four rows a pixel, so the first pixel row
+        // holds all four, half of them bright.
+        let first = img.pixels[0];
+        assert!(first != Color32::BLACK && first != Color32::WHITE, "{first:?}");
+        // Below the filled part it is the ground.
+        assert_eq!(img.pixels[WF_BINS * 50], Color32::BLACK);
+    }
+
+    #[test]
+    fn the_boxes_step_through_their_settings_both_ways() {
+        // Filters: the mode's presets, wrapping at both ends.
+        let usb = Mode::Usb.filter_presets();
+        assert_eq!(next_preset(usb, Mode::Usb, 200.0, 2600.0, true), Some(2));
+        assert_eq!(next_preset(usb, Mode::Usb, 200.0, 2600.0, false), Some(0));
+        assert_eq!(next_preset(usb, Mode::Usb, 100.0, 3400.0, true), Some(0));
+        assert_eq!(next_preset(Mode::Wfm.filter_presets(), Mode::Wfm, 0.0, 1.0, true), None);
+        // The tuning step goes round the top bar's list.
+        let steps = sdroxide_types::UiSettings::TUNE_STEPS_HZ;
+        assert_eq!(next_step(steps[0], true), steps[1]);
+        assert_eq!(next_step(steps[0], false), steps[steps.len() - 1]);
+        // AGC: Off → Slow → Med → Fast → Off.
+        assert_eq!(next_agc(AgcMode::Med, true), AgcMode::Fast);
+        assert_eq!(next_agc(AgcMode::Off, false), AgcMode::Fast);
+        assert_eq!(next_agc(AgcMode::Fast, true), AgcMode::Off);
+        // Click forward, right-click back, wheel by its sign.
+        assert_eq!(direction(true, false, 0), Some(1));
+        assert_eq!(direction(false, true, 3), Some(-1));
+        assert_eq!(direction(false, false, -2), Some(-1));
+        assert_eq!(direction(false, false, 0), None);
+    }
+
+    #[test]
+    fn the_squelch_wheel_runs_from_open_up_to_closed_and_back() {
+        let up = sql_wheel(SQUELCH_OPEN_DB, 1);
+        assert_eq!(up, -110.0);
+        assert_eq!(sql_wheel(up, 1), -107.0);
+        // One notch down from the first threshold is open again.
+        assert_eq!(sql_wheel(up, -1), SQUELCH_OPEN_DB);
+        assert_eq!(sql_wheel(SQUELCH_OPEN_DB, -1), SQUELCH_OPEN_DB);
+        assert_eq!(sql_wheel(-1.0, 5), SQUELCH_CLOSED_DB);
+    }
+
+    #[test]
+    fn the_stereo_chip_exists_only_on_the_fm_band_and_is_lit_by_the_pilot() {
+        assert_eq!(stereo_chip(98e6, Mode::Wfm, true), Some(true));
+        assert_eq!(stereo_chip(98e6, Mode::Wfm, false), Some(false));
+        assert_eq!(stereo_chip(64e6, Mode::Wfm, true), Some(true));
+        assert_eq!(stereo_chip(108e6, Mode::Wfm, true), Some(true));
+        assert_eq!(stereo_chip(150e6, Mode::Wfm, true), None);
+        assert_eq!(stereo_chip(63.9e6, Mode::Wfm, true), None);
+        assert_eq!(stereo_chip(98e6, Mode::Nfm, true), None);
+    }
+
+    #[test]
+    fn a_dark_stereo_chip_says_why() {
+        let mut rx = sdroxide_types::RxState::with_mode(Mode::Wfm);
+        assert!(stereo_note(&rx, false).contains("no 19 kHz pilot"));
+        rx.noise_reduction = sdroxide_types::NrLevel::Medium;
+        assert!(stereo_note(&rx, false).contains("noise reduction"));
+        rx.wfm_stereo = false;
+        assert!(stereo_note(&rx, false).contains("switched off"));
+        assert!(stereo_note(&rx, true).starts_with("Stereo"));
+    }
+
+    #[test]
+    fn a_false_stereo_parts_the_needles_a_little_and_keeps_the_level() {
+        let bands: Vec<u8> = (0..AUDIO_BANDS).map(|i| if i % 2 == 0 { 220 } else { 140 }).collect();
+        let [l, r] = false_stereo([-20.0, -20.0], &bands);
+        assert!(l > r, "the louder bands are the left ear: {l} {r}");
+        assert!((l - r).abs() <= 4.0 + 1e-3, "spread held to ±2 dB: {l} {r}");
+        // Together they stay where the single ear measured.
+        let mean = 10.0 * ((10f32.powf(l / 10.0) + 10f32.powf(r / 10.0)) / 2.0).log10();
+        assert!((mean + 20.0).abs() < 0.01, "{mean}");
+        // Nothing to part them by: equal, as they were.
+        assert_eq!(false_stereo([-20.0, -20.0], &[]), [-20.0, -20.0]);
+        assert_eq!(false_stereo([-20.0, -20.0], &[0; AUDIO_BANDS]), [-20.0, -20.0]);
     }
 
     #[test]
