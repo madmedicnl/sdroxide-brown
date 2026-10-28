@@ -43,7 +43,8 @@ re-measured.
 **Not done / blocked.**
 
 - #239 orientation — still waiting on the upside-down-vs-negative answer.
-- #257 — waiting on a real NAVTEX recording.
+- #257 — the operator will find or capture a NAVTEX recording himself (the
+  reply to F4NRM was edited to say so, rather than ask for another).
 - #264 — waiting on F4NRM's PWA hard-reload result.
 - #259/#262 — F4NRM's area, no new reports.
 
