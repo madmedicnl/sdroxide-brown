@@ -1308,7 +1308,7 @@ const SSTV_VIEW_SPAN_HZ: f64 = 3000.0;
 ///
 /// A free function for the reason the tree's other decisions are: the app is not
 /// needed to answer it, so the answer can be pinned without standing one up.
-fn display_span(rate: f64, usable: f64) -> f64 {
+pub(crate) fn display_span(rate: f64, usable: f64) -> f64 {
     if usable > 0.0 && usable < rate { usable } else { rate }
 }
 

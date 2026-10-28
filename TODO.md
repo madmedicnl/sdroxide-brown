@@ -6,8 +6,8 @@ on the repo. Last updated **2026-10-27** by madmedicnl's agent.
 State: `main` at crate **2.2.0**, `PROTO_VERSION` **256** (`VERSION_BYTE`
 `0x4C`) — 256 is the DigiConfig field-order fix. Latest release
 **v2.2.0.2_brown** (full: AppImage, Windows MSI 2.2.0, Apple Silicon + Intel
-Mac). No PRs of ours open — **#284** (static MinGW C++ runtime) and **#285**
-(Brown exe icon) were both merged. The rules are in
+Mac). No PRs of ours open — #284 and #285 were merged; F4NRM has #293 open. The
+rules are in
 [`AGENTS.md`](AGENTS.md); the history is in
 [`docs/internal/SESSIONS.md`](docs/internal/SESSIONS.md).
 

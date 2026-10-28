@@ -308,8 +308,9 @@ a word instead of a conversation.
 `PROTO_VERSION` and `VERSION_BYTE` live in `crates/sdroxide-proto/src/lib.rs`,
 which is the **only** register that is kept current — one entry per bump, each
 naming both numbers (`239 → 240`, `VERSION_BYTE 0x3B → 0x3C`). Current on
-`main`: **243 / `0x3F`** — 242 was 8PSK and 243 voice hunting, both merged
-2026-10-24. No numbers are claimed in an open PR.
+`main`: **256 / `0x4C`** — 256 was the DigiConfig field-order fix (the
+sensitivity fields back at the tail), merged 2026-10-27. No numbers are claimed
+in an open PR (F4NRM's #293 asks for 257 / `0x4D`).
 
 - **Append last, always.** A variant inserted mid-enum shifts every discriminant
   below it; a field inserted mid-struct shifts every field below it on a struct
@@ -493,17 +494,15 @@ State at 2026-10-25, and the thing to re-measure rather than trust:
   **vendor a mode when the port and the bench have both been exhausted**. The
   measurements are in [`MODE-PROGRESS.md`](docs/internal/MODE-PROGRESS.md), and
   the mode table at the end of the brief is the deliverable.
-- **Open issues** (18, re-measured 2026-10-27): the live bug reports are #239
-  (WEEFAX), #257 (NAVTEX regression), #259 (APRS), #260 (Chrome web-audio delay),
-  #262 (SSTV editor freeze), #263 (zoom), #264 (Public SDR) and #265 (the
-  confusing "outside receive range" notice — the wording fix is on `main`, not
-  yet in a build; F4NRM added a follow-up about the dial landing on 2.941 MHz
-  across an ADS-B→VDL2 switch on the Pluto, not yet answered); #280/#282 (the
-  old 2.1.0 installer's missing DLL) are fixed by the 2.2.0 release and await the
+- **Open issues** (17, re-measured 2026-10-28): the live bug reports are #239
+  (WEEFAX), #257 (NAVTEX regression), #259 (APRS), #262 (SSTV editor freeze),
+  #263 (zoom), #264 (Public SDR) and #265 (the "outside receive range" notice —
+  fixed on `main`, logged instead of shown, reply posted); #280/#282 (the old
+  2.1.0 installer's missing DLL) are fixed by the 2.2.0 release and await the
   reporters' confirmation; the rest are enhancements (#249, #251, #252, #256)
-  and questions (#105 AppImage, #132 frequency display, #281, #283). **Open PRs:
-  none** — #284 (static MinGW C++ runtime) and #285 (Brown exe icon) were both
-  merged.
+  and questions (#105 AppImage, #132 frequency display, #281, #283). #260
+  (Chrome web-audio delay) is closed. **Open PRs: #293** (F4NRM's Radio Classic
+  panel, wire 257/`0x4D`), not ours to merge.
 - **Live handovers**: ALE (built, **never decoded a real burst** — the manual
   §3.29 asks for a recording, and that is the only thing missing), STANAG 4285
   (**decodes**: the vendored GPL reference decoder in `vendor/s4285-ref`, driven

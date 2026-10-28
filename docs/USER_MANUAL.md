@@ -16166,8 +16166,28 @@ this size usable: the three schedules below hold around 8,000 transmissions
 between them, of which some hundreds are on the air at any moment. Each carries a UTC window and, where the broadcast
 does not run daily, a day mask; the list is re-filtered against the clock every
 minute. Entries with no window — the longwave transmitters, the standard-time
-stations, the round-the-clock private shortwave stations — are always shown. Turn
-the whole category off with the **BC** button in the SPOTS window.
+stations, the round-the-clock private shortwave stations — are always shown.
+
+The **BC** chip in the SPOTS window turns the whole category on and off. It is a
+filter like the DX, POTA and SOTA chips beside it, and it is the same switch
+everywhere: with **BC** off a broadcaster disappears from the spots list, from
+the waterfall and from the map at once, because those are one set of stations
+seen three ways rather than three features. Its position is remembered with the
+rest of your display settings ([§13](#13-configuration-files)). It applies to the
+labelling only — it never stops the receiver, and a broadcast station is never
+logged, because there is no callsign to log.
+
+How much of the band is *named* is a second chip, on the right of the search row
+in the same window, and the two are independent of each other. **BC TUNED** — the
+default — names only the station under the dial. **BC ALL** names every station
+the schedule has on air now, wherever it sits, which is what you want while
+browsing a band and what makes a crowded one unreadable. **Ctrl+B** flips between
+the two from anywhere — it is the *Broadcast labels (tuned / whole band)* action
+in Settings → Controls ([§6.4](#64-controls-keyboard-mouse-and-midi)), so it can
+be rebound — and the chip is the same setting in a second home, beside
+**Waterfall labels → Tuned only / The whole band** on Settings → UI
+([§6.3](#63-ui-display-preferences-and-voice-announcements)). All three write one
+preference.
 
 A band is still busy at prime time (the 31 m band carries 50–95 transmissions at
 midday UTC), so zoom in or use **IN VIEW** when the labels crowd each other —
@@ -16180,12 +16200,13 @@ labelled with the station and site, exactly as a QSO or a weather-fax chart is.
 That turns "a signal on 15400" into "this came 8,000 km from Ascension Island".
 It needs your grid set on the **General** tab, and the **QSO** layer on.
 
-**Only the station you are actually tuned to is named.** A crowded band carries
-dozens of schedules at once, and labelling all of them buries the one under the
-dial. So the waterfall names the station on your frequency and nothing else; the
-rest — country, city, transmitter coordinates — is in the SCHEDULE window. If
-two broadcasters genuinely share a carrier, both are named, because those are two
-facts about what is on air and hiding one would be a lie.
+**Only the station you are actually tuned to is named**, unless **BC ALL** is on.
+A crowded band carries dozens of schedules at once, and labelling all of them
+buries the one under the dial. So by default the waterfall names the station on
+your frequency and nothing else; the rest — country, city, transmitter
+coordinates — is in the SCHEDULE window. If two broadcasters genuinely share a
+carrier, both are named, because those are two facts about what is on air and
+hiding one would be a lie.
 
 The path to a station is drawn with **its own twilight**: each dot along it is lit
 or dim according to whether that point is in daylight, so you can see *which half*
@@ -16949,6 +16970,16 @@ sdroxide stores its settings under the per-user config directory:
 > contents are *copied* into the `…-brown` directory, the original is left
 > exactly where it was, and the old build keeps working. You should not have to
 > do anything.
+
+That copy happens **once**, and only while this build's directory does not exist.
+From then on each build reads and writes its own files, so a setting you change
+in one is not carried into the other — not the spot filters, not the zoom, not
+the band plan. If a setting really does follow you from one build to the other,
+something has made the two share a directory: `SDROXIDE_CONFIG_DIR` names the
+directory outright ([§9.5](#95-removing-an-installation-completely)), so two
+installations given the same value *are* one installation as far as the settings
+are concerned. That is a useful way to run a second profile on purpose, and it is
+the only way the two builds can affect each other.
 
 ### Moving settings to another installation
 

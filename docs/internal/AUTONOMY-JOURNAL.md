@@ -85,6 +85,102 @@ file touched except two hunks that were already unformatted on `main`
 
 ---
 
+## 2026-10-28 (HF+ skirt — view held inside the usable span)
+
+**In plain words.** Fixed the Airspy HF+ Discovery waterfall skirt that Graeme
+reported on the 2.2.0.2 build. The radio shows 768 kHz but only about 660 kHz of
+it is real band; the rest is filter roll-off. The window could pan or zoom into
+that dead edge and draw it as signal, and the skirt came back whenever the dial
+moved. The view is now held inside the usable 660 kHz, so it stays gone while
+tuning. Graeme can re-check on the next build.
+
+**Done.**
+
+- The panadapter widget read the raw sample rate (768 kHz) as the span it fits,
+  zooms and pans within, so the skirt returned on tune. It now reads
+  `display_span(sample_rate, usable_hz)` — the same number the app's own span
+  already used — while the raw rate stays as the sub-receiver's DDC bound, where
+  the skirt is still inside the stream.
+- Commits `d07ffea6` (the fix) and the navtex-guard `.gitignore` (build artifacts).
+- Gate `cargo check --workspace --all-targets` silent; wasm check green;
+  `spectrum_view` tests 50 passed; `display_span` test passes.
+
+**Not done / blocked.** The wiring is inside the egui widget and is not
+unit-tested — verified by the gate and by Graeme's on-air report on the next
+build. Mid-item the working tree was switched to `fork/antenna-tool` and my
+uncommitted fix was stashed as "stash before antenna tool"; I re-applied and
+committed it on `main`.
+
+**Next.** Await Graeme's re-check. The NAVTEX 518 kHz capture is still pending.
+
+---
+
+## 2026-10-28 (#257 NAVTEX — guard set up, waiting on the capture)
+
+**In plain words.** Started the NAVTEX work. The only recent change to the decoder
+is the receive-sensitivity control, which is an exact no-op at Auto, so the
+garbage F4NRM saw is on a real on-air signal that synthetic noise/carrier can't
+reproduce. A background guard is now watching 518 kHz and will capture the next
+transmission for us.
+
+**Done.**
+
+- Investigated: the NAVTEX change since the working 10-23 build is `c9364531`
+  (sensitivity control). It scales `sync_score`/`loss_limit`/`disagree_limit` via
+  `sens_k = 1 + 0.12·s`, no-op at Auto. The committed recordings (SITOR-B,
+  Bermuda 48k) still decode; pure noise, a carrier, and noise+faint-carrier at
+  0 and +5 all stay un-synced. So the regression needs a real capture.
+- `tools/navtex-guard` (`1d8b3875`) — opens the RSP1 at 516.29 kHz, watches the
+  1710 Hz carrier with a single-bin DFT, warms up to the noise floor, then
+  streams raw CF32 to disk for 15 min when the carrier rises 8× above it.
+  Running in the background (PID 16481) writing `/home/druid/navtex_518khz.bin`.
+
+**Not done / blocked.**
+
+- Waiting on the next 518 kHz transmission (~1 h from 08:00 UTC). Once captured:
+  USB-demodulate the CF32 to 48 kHz audio, run it through `NavtexRx`, and see
+  whether the garbage is the sensitivity slider or a false-sync regression. Fix
+  goes up as a PR (NAVTEX is F4NRM's).
+
+**Next.**
+
+- When the capture lands, demod + reproduce + fix as a PR.
+
+---
+
+## 2026-10-28 (morning triage — issues and replies)
+
+**In plain words.** Checked the queue and the issue replies while the operator
+was away. Nothing needs a code change today: every fixable report is waiting on
+a recording, a specific radio, or F4NRM. Two replies went out — one asking for
+the right NAVTEX recording (the link was the WEFAX one), one thanking the
+installer reporter for confirming and noting the icon fix — and the counts were
+re-measured.
+
+**Done.**
+
+- Re-measured: **17 open issues** (was 18 — #260 Chrome web-audio closed),
+  **2 open PRs, both F4NRM's** (#292 re-applies the MinGW static-link, #293
+  Radio Classic panel, wire 257/0x4D). Fixed the stale wire register in
+  `AGENTS.md` (243/0x3F → 256/0x4C). Commits `ac4f4f04`.
+- Replied to #257 (F4NRM's "sample in the PRs" link is the DWD 3855 WEFAX
+  recording, not a NAVTEX capture — asked for the right one) and #280 (the
+  reporter confirmed the MSI runs; noted the desktop icon is embedded now).
+
+**Not done / blocked.**
+
+- #239 orientation — still waiting on the upside-down-vs-negative answer.
+- #257 — the operator will find or capture a NAVTEX recording himself (the
+  reply to F4NRM was edited to say so, rather than ask for another).
+- #264 — waiting on F4NRM's PWA hard-reload result.
+- #259/#262 — F4NRM's area, no new reports.
+
+**Next.**
+
+- Nothing in the queue that can move without a recording or F4NRM.
+
+---
+
 ## 2026-10-28 (#265 — the range notices are logged, not shown)
 
 **In plain words.** The "would not open on X, so it opened on Y" and "the dial
