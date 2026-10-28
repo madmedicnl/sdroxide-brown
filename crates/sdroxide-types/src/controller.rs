@@ -486,6 +486,10 @@ pub enum RadioEvent {
     /// How a received-picture FTP upload, or a test of the settings, went.
     /// Appended last, for the usual reason.
     PictureUpload(crate::PictureUploadStatus),
+    /// The level of the main receiver's audio, about thirty times a second
+    /// while a speaker feed exists. The engine's, so it rides
+    /// `ServerMsg::AudioLevel`. Appended last.
+    AudioLevel(Box<crate::AudioLevel>),
 }
 
 /// Snapshot of the frontend's switchable sound devices (native clients).

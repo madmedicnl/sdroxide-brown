@@ -2153,8 +2153,13 @@ use sdroxide_types::{
 /// sit after `wefax_rx_auto`, where the entries always claimed they were; the
 /// wire layout moves again, so the version does too. `PROTO_VERSION` 255 → 256,
 /// `VERSION_BYTE` 0x4B → 0x4C. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 256;
-const VERSION_BYTE: u8 = 0x4C;
+/// v257: **the main receiver's audio level.** `ServerMsg` gains
+/// `AudioLevel(Box<AudioLevel>)` last: the speaker feed's left/right level and
+/// 48 spectrum bars, about thirty times a second, for the Radio Classic panel's
+/// VU and bars. Until now only the DAB status carried a level. `PROTO_VERSION`
+/// 256 → 257, `VERSION_BYTE` 0x4C → 0x4D. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 257;
+const VERSION_BYTE: u8 = 0x4D;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -2711,6 +2716,12 @@ pub enum ServerMsg {
     ///
     /// Appended last, for the usual reason.
     DabSlide(Box<sdroxide_types::DabSlide>),
+
+    /// `RadioEvent::AudioLevel`: the level and the bars of the main receiver's
+    /// speaker feed, about thirty times a second.
+    ///
+    /// Appended last, for the usual reason.
+    AudioLevel(Box<sdroxide_types::AudioLevel>),
 }
 
 /// What [`ServerMsg::ClientSettings`] carries.
@@ -2995,6 +3006,11 @@ mod tests {
             data: vec![0xFF, 0xD8, 0xFF, 0xE0, 0, 16],
         }));
         assert_eq!(decode::<ServerMsg>(&encode(&slide).unwrap()).unwrap(), slide);
+        let level = ServerMsg::AudioLevel(Box::new(sdroxide_types::AudioLevel {
+            rms_db: [-14.5, -17.0],
+            bands: (0..sdroxide_types::AUDIO_BANDS as u8).map(|i| i * 5).collect(),
+        }));
+        assert_eq!(decode::<ServerMsg>(&encode(&level).unwrap()).unwrap(), level);
 
         // The CW paddle contacts, and both closed at once — the case that
         // matters, since it is the one where two contacts share an element.
@@ -3367,6 +3383,25 @@ mod tests {
             let back: ServerMsg = decode(&bytes).unwrap();
             assert_eq!(&back, m);
         }
+    }
+
+    /// `AudioLevel` rides after `DabSlide`, the variant that was last before it:
+    /// the index postcard writes is the variant's position, so a variant slipped
+    /// in above shifts it and every client on the older number reads the wrong
+    /// message.
+    #[test]
+    fn the_audio_level_message_is_appended_last() {
+        let slide = ServerMsg::DabSlide(Box::new(sdroxide_types::DabSlide {
+            service_id: String::new(),
+            content_type: String::new(),
+            name: None,
+            data: Vec::new(),
+        }));
+        let level = ServerMsg::AudioLevel(Box::new(sdroxide_types::AudioLevel::silent()));
+        // Byte 0 is `VERSION_BYTE`; byte 1 is the variant index (< 128 here).
+        let (a, b) = (encode(&slide).unwrap()[1], encode(&level).unwrap()[1]);
+        assert_eq!(b, a + 1, "AudioLevel must directly follow DabSlide");
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (257, 0x4D));
     }
 
     /// postcard is positional: a field inserted mid-struct shifts every byte

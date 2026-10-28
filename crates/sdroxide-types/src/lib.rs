@@ -12,6 +12,7 @@ mod aprs;
 mod atchat;
 pub mod atsmini;
 mod audio;
+mod audio_level;
 pub mod auto;
 mod awards;
 mod band;
@@ -160,6 +161,10 @@ pub use contacts::FsqContact;
 pub use contest::{
     ContestId, ContestScore, ContestSession, ContestSpec, Exchange, Multiplier, cabrillo_contest,
     cabrillo_mode, rate, score, to_cabrillo, wpx_prefix,
+};
+pub use audio_level::{
+    AUDIO_BAND_FLOOR_DB, AUDIO_BANDS, AUDIO_BANDS_HI_HZ, AUDIO_BANDS_LO_HZ, AudioLevel, band_to_byte,
+    byte_to_unit,
 };
 pub use controller::{AudioDevices, PeerRadio, RadioController, RadioEvent};
 pub use dab::{

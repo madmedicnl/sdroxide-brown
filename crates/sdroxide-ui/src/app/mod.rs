@@ -1196,6 +1196,9 @@ pub struct SdroxideApp {
     dab_hidden: Vec<(String, String)>,
     /// The last slideshow picture the station sent, ready to draw.
     dab_slide: Option<egui::TextureHandle>,
+    /// The main receiver's speaker-feed level, as last sent, with the time it
+    /// arrived. The Radio Classic panel's VU and bars; `None` until the first.
+    audio_level: Option<(std::time::Instant, sdroxide_types::AudioLevel)>,
     /// The station's logo, as the station broadcasts it.
     dab_logo: Option<egui::TextureHandle>,
     /// The station list shows each station's programme type.
@@ -2361,6 +2364,7 @@ impl SdroxideApp {
             dab_vu_at: None,
             dab_hidden: Vec::new(),
             dab_slide: None,
+            audio_level: None,
             dab_logo: None,
             dab_show_pty: false,
             auto_last_activity: 0.0,

@@ -4325,6 +4325,7 @@ impl SdroxideApp {
                         self.slot_follow.edge(&t, edge);
                     }
                 }
+                RadioEvent::AudioLevel(l) => self.audio_level = Some((std::time::Instant::now(), *l)),
                 RadioEvent::Qo100Status(st) => self.qo100_status = Some(st),
                 RadioEvent::HfdlStatus(st) => {
                     // Feed the map's plot table before the log scrolls anything

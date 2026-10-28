@@ -3449,6 +3449,8 @@ struct Engine {
     dab_idle_sent: Option<Option<String>>,
     /// The decoded audio's level, left and right, from the last block played.
     dab_level: Option<[f32; 2]>,
+    /// The speaker feed's level meter, for `RadioEvent::AudioLevel`.
+    audio_meter: sdroxide_dsp::AudioMeter,
     /// QO-100 beacon decoder: a fixed downconversion onto
     /// [`sdroxide_types::QO100_BEACON_HZ`] plus a worker-thread demodulator,
     /// present only while the decoder is enabled. Simpler than the ISM
@@ -5055,6 +5057,7 @@ fn engine_thread(
         dab_cfg,
         dab_idle_sent: None,
         dab_level: None,
+        audio_meter: sdroxide_dsp::AudioMeter::new(),
         qo100_ddc: None,
         qo100: None,
         qo100_buf: Vec::new(),
@@ -6572,6 +6575,9 @@ impl Engine {
         }
         let (speaker, speaker_right): (&[f32], Option<&[f32]>) =
             if self.replay.on() { (&self.replay_buf, None) } else { (&self.main_play, right) };
+        if let Some(level) = self.audio_meter.feed(speaker, speaker_right, self.audio_out_rate, Instant::now()) {
+            let _ = self.event_tx.send(RadioEvent::AudioLevel(Box::new(level)));
+        }
         if let Some(mixer) = self.mixer.as_mut() {
             mixer.push(speaker, speaker_right, &self.main_play_rec, rec_right);
         }
