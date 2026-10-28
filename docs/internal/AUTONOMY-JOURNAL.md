@@ -21,6 +21,71 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-28 (Google Groups — LimeSDR question and upside-down Hell)
+
+**In plain words.** Looked at two Google Groups posts. The LimeSDR one is a
+question with a clean answer: PureSignal predistortion, the two TX/RX chains and
+the second-RX diversity path are all in Brown (shared with upstream), though the
+LimeSDR's second-RX path has never run on real hardware here. The Hell one is a
+bug report — Brown prints Hell upside down — but it is *not* the quick polarity
+flip hoped for: the demodulator's sign is byte-identical to upstream, so it is
+Brown's added print-sync mis-framing the cell (or a variant-specific issue),
+which needs the reporter's variant or an off-air clip to pin down.
+
+**Done.**
+
+- LimeSDR: `predistort.rs` (`PureSignal`), the 2 TX/RX chains (`num_channels`),
+  and `lime/src/auxrx.rs` (second receive chain for diversity, issue #98) all
+  exist in Brown and are shared with upstream; the auxrx doc notes "no LimeSDR
+  has been attached to this code". Drafted an answer for Ed.
+- Hell: diffed `hell.rs` against upstream — the mixing sign (`-TAU*carrier/rate`),
+  the discriminator (`d.arg()`) and the FSK ink mapping (`-mean…+0.5`, ink = lower
+  tone) are all identical, so there is no polarity flip to restore. Brown's
+  additions are print-sync, slant trim, FSK deviation scaling and 7-row variants;
+  the print-sync is the only one that re-frames the *vertical* axis and is the
+  likely culprit. The (ignored) corpus test correlates the raster against the
+  upright font, so it would catch a flip and passes for FELDHELL/HELLX5.
+- Drafted a reply for Rick asking for the Hell variant (on/off vs frequency-
+  shifted) and, ideally, a short recording.
+
+**Not done / blocked.** Hell needs the reporter's variant or a recording; it
+cannot be reproduced here (no off-air Hell signal).
+
+**Next.** Hand the two drafts to the operator; nothing further to code on these
+until the answers come back.
+
+---
+
+## 2026-10-28 (#283 — settings bleed between the two builds)
+
+**In plain words.** A user (ON9KVE) found that sdroxide and sdroxide-brown
+step on each other's window position and BC spot filter. The config dirs were
+already separate (`~/.config/sdroxide-brown`), but the native app still passed
+`app_name = "sdroxide"` to eframe, so the window geometry and the view state
+(which holds the BC filter) were persisted in the *shared* eframe storage. Gave
+brown its own storage key; replied on the issue.
+
+**Done.**
+
+- Root cause: `src/gui_main.rs` passed `"sdroxide"` (and `"sdroxide-remote"`)
+  as eframe's `app_name`, so `eframe::storage_dir` was shared with upstream —
+  `ViewState` (including `spot_kinds_shown`, the BC chip) and window geometry
+  live there, not in the config dir.
+- Fix `da78715b`: `app_name` is now `"sdroxide-brown"` / `"sdroxide-brown-remote"`.
+  Executable name, macOS bundle id and release asset names untouched; the
+  WM_CLASS stays `"sdroxide"` for the `.desktop` StartupWMClass match.
+- `cargo check -p sdroxide` clean (pre-existing warnings only).
+
+**Not done / blocked.** The WM_CLASS (`with_app_id("sdroxide")`) is still
+shared, so on Wayland the compositor may still group the two windows; taskbar
+grouping is shared too. Left as-is — changing it means editing the `.desktop`
+StartupWMClass, which is a packaging decision for the operator.
+
+**Next.** The Google Groups reports: a draft answer for the LimeSDR 2T2R
+question, and the upside-down HELL fix.
+
+---
+
 ## 2026-10-28 (#263 — CTR off-centre after zoom, follow-up)
 
 **In plain words.** The original zoom bug — a switched-off radio's 48 kHz
