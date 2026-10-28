@@ -13211,6 +13211,31 @@ window-rule {
 }
 ```
 
+For **i3**, in `~/.config/i3/config` (match on the window class / title):
+
+```i3
+# Float the panadapter and pin it to a workspace
+for_window [class="sdroxide" title="panadapter"] floating enable, move to workspace 2
+for_window [class="sdroxide" title="controls"] floating enable, move to workspace 2
+for_window [class="sdroxide" title="panel"] floating enable
+# All tool windows float
+for_window [class="sdroxide" title="sdroxide-tool-"] floating enable
+```
+
+For **AwesomeWM**, in `~/.config/awesome/rc.lua` (inside the `awful.rules.rules`
+table):
+
+```lua
+{ rule = { class = "sdroxide", name = "panadapter" },
+  properties = { floating = true, tag = "2" } },
+{ rule = { class = "sdroxide", name = "controls" },
+  properties = { floating = true, tag = "2" } },
+{ rule = { class = "sdroxide", name = "panel" },
+  properties = { floating = true } },
+{ rule = { class = "sdroxide", name = "sdroxide-tool-" },
+  properties = { floating = true } },
+```
+
 On X11, Windows and macOS the position is honoured directly and no rule is
 needed.
 
