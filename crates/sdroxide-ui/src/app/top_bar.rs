@@ -7776,7 +7776,7 @@ fn width_to_edges(mode: Mode, lo: f32, hi: f32, width: f32) -> (f32, f32) {
 /// 700 Hz default sidetone. An operator copying at 500 wants that same width
 /// about *their* pitch; handing them the table verbatim would put the note
 /// they are listening for on the edge of the filter, or outside it.
-fn preset_edges(mode: Mode, lo: f32, hi: f32, cw_pitch_hz: f32) -> (f32, f32) {
+pub(in crate::app) fn preset_edges(mode: Mode, lo: f32, hi: f32, cw_pitch_hz: f32) -> (f32, f32) {
     if mode != Mode::Cw {
         return (lo, hi);
     }

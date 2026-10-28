@@ -44,6 +44,7 @@ fn app(mode: Mode) -> (egui::Context, SdroxideApp) {
 
 /// Run a few frames at 1600x900 and return the text drawn in the last one.
 fn run(ctx: &egui::Context, app: &mut SdroxideApp) -> Vec<String> {
+    let base = ctx.input(|i| i.time);
     let mut last = Vec::new();
     for i in 1..6 {
         let input = egui::RawInput {
@@ -51,7 +52,7 @@ fn run(ctx: &egui::Context, app: &mut SdroxideApp) -> Vec<String> {
                 egui::Pos2::ZERO,
                 egui::vec2(1600.0, 900.0),
             )),
-            time: Some(f64::from(i) * 0.1),
+            time: Some(base + f64::from(i) * 0.1),
             ..Default::default()
         };
         let mut out = ctx.run_ui(input, |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()));
@@ -142,16 +143,14 @@ fn the_panel_asks_for_the_audio_level_only_while_it_is_open() {
     assert_eq!(wants(&sent), 1, "five frames in well under a second: one lease");
 }
 
-/// Where a label was drawn, as the middle of its text.
+/// Where a label was drawn, as the middle of its text — the lowest one on
+/// screen, which is the panel's and not the top bar's.
 fn centre_of(shapes: &[egui::epaint::ClippedShape], what: &str) -> Option<egui::Pos2> {
-    fn walk(s: &egui::Shape, what: &str) -> Option<egui::Pos2> {
-        match s {
-            egui::Shape::Text(t) if t.galley.text() == what => Some(t.pos + t.galley.size() / 2.0),
-            egui::Shape::Vec(v) => v.iter().find_map(|s| walk(s, what)),
-            _ => None,
-        }
-    }
-    shapes.iter().find_map(|c| walk(&c.shape, what))
+    text_rects(shapes)
+        .into_iter()
+        .filter(|(t, _)| t == what)
+        .map(|(_, r)| r.center())
+        .max_by(|a, b| a.y.total_cmp(&b.y))
 }
 
 fn one_frame(
@@ -175,24 +174,25 @@ fn one_frame(
 /// `what`; returns false when no such label is on screen.
 fn click(ctx: &egui::Context, app: &mut SdroxideApp, what: &str) -> bool {
     run(ctx, app);
-    let shapes = one_frame(ctx, app, 1.0, vec![]);
+    let base = ctx.input(|i| i.time);
+    let shapes = one_frame(ctx, app, base + 1.0, vec![]);
     let Some(at) = centre_of(&shapes, what) else { return false };
     let button = egui::PointerButton::Primary;
     let mods = egui::Modifiers::NONE;
-    one_frame(ctx, app, 1.1, vec![egui::Event::PointerMoved(at)]);
+    one_frame(ctx, app, base + 1.1, vec![egui::Event::PointerMoved(at)]);
     one_frame(
         ctx,
         app,
-        1.2,
+        base + 1.2,
         vec![egui::Event::PointerButton { pos: at, button, pressed: true, modifiers: mods }],
     );
     one_frame(
         ctx,
         app,
-        1.3,
+        base + 1.3,
         vec![egui::Event::PointerButton { pos: at, button, pressed: false, modifiers: mods }],
     );
-    one_frame(ctx, app, 1.4, vec![]);
+    one_frame(ctx, app, base + 1.4, vec![]);
     true
 }
 
@@ -344,4 +344,84 @@ fn the_scope_waterfall_runs_at_half_speed_and_keeps_ten_times_the_rows() {
     let _guard = crate::multi::frame_test_lock();
     assert_eq!(rows_after(20), 10, "twenty frames should leave ten rows");
     assert_eq!(rows_after(1200), 400, "the waterfall keeps 400 rows");
+}
+
+type Sent = std::sync::Arc<std::sync::Mutex<Vec<sdroxide_types::Command>>>;
+
+/// A panel on, a recorder behind it, and the receiver set to `mode`.
+fn recorded(mode: Mode) -> (egui::Context, SdroxideApp, Sent) {
+    let sent: Sent = std::sync::Arc::default();
+    let (ctx, mut app) = app(mode);
+    app.ctrl = Box::new(Recorder(sent.clone()));
+    app.ui_settings.radio_classic_on = true;
+    (ctx, app, sent)
+}
+
+/// The four boxes under the S-meter act: BW takes the next filter of the mode.
+#[test]
+fn the_bw_box_takes_the_next_filter_of_the_mode() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, sent) = recorded(Mode::Usb);
+    app.state.rx[0].filter_lo = 200.0;
+    app.state.rx[0].filter_hi = 2600.0; // the 2.4k preset
+    assert!(click(&ctx, &mut app, "BW"), "no BW box");
+    let sent = sent.lock().unwrap();
+    let got = sent.iter().find_map(|c| match c {
+        sdroxide_types::Command::SetFilter { rx: sdroxide_types::RxId::Main, lo, hi } => {
+            Some((*lo, *hi))
+        }
+        _ => None,
+    });
+    assert_eq!(got, Some((150.0, 2850.0)), "{sent:?}");
+}
+
+/// STEP takes the next tuning step, the one the top bar's step chip takes.
+#[test]
+fn the_step_box_takes_the_next_tuning_step() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, _sent) = recorded(Mode::Wfm);
+    let before = app.ui_settings.tune_step_hz;
+    let next = app.ui_settings.next_tune_step();
+    assert_ne!(before, next);
+    assert!(click(&ctx, &mut app, "STEP"), "no STEP box");
+    assert_eq!(app.ui_settings.tune_step_hz, next);
+}
+
+/// AGC cycles Off → Slow → Med → Fast.
+#[test]
+fn the_agc_box_cycles_the_agc() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, sent) = recorded(Mode::Wfm);
+    app.state.rx[0].agc = sdroxide_types::AgcMode::Med;
+    assert!(click(&ctx, &mut app, "AGC"), "no AGC box");
+    let sent = sent.lock().unwrap();
+    assert!(
+        sent.iter().any(|c| matches!(
+            c,
+            sdroxide_types::Command::SetAgc {
+                rx: sdroxide_types::RxId::Main,
+                agc: sdroxide_types::AgcMode::Fast
+            }
+        )),
+        "{sent:?}"
+    );
+}
+
+/// SQL: a click closes the gate on the last threshold, the next one opens it.
+#[test]
+fn the_sql_box_toggles_the_squelch_between_open_and_the_last_threshold() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, sent) = recorded(Mode::Wfm);
+    app.state.rx[0].squelch_db = sdroxide_types::SQUELCH_OPEN_DB;
+    assert!(click(&ctx, &mut app, "SQL"), "no SQL box");
+    let db = |sent: &Sent| {
+        sent.lock().unwrap().iter().rev().find_map(|c| match c {
+            sdroxide_types::Command::SetSquelch { rx: sdroxide_types::RxId::Main, db } => Some(*db),
+            _ => None,
+        })
+    };
+    let set = db(&sent).expect("the click set no squelch");
+    assert!(set > sdroxide_types::SQUELCH_OPEN_DB + 1.0, "still open: {set}");
+    assert!(click(&ctx, &mut app, "SQL"));
+    assert_eq!(db(&sent), Some(sdroxide_types::SQUELCH_OPEN_DB), "the second click did not open");
 }

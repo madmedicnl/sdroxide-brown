@@ -18,7 +18,8 @@ use std::collections::VecDeque;
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Stroke, StrokeKind, vec2};
 use sdroxide_types::{
-    AUDIO_BANDS, Band, Command, Mode, RdsData, RxId, broadcast, byte_to_unit, pty_name,
+    AUDIO_BANDS, AgcMode, Band, Command, Mode, RdsData, RxId, SQUELCH_CLOSED_DB, SQUELCH_OPEN_DB,
+    broadcast, byte_to_unit, pty_name,
 };
 
 use crate::app::SdroxideApp;
@@ -292,6 +293,8 @@ pub(in crate::app) struct State {
     wf_tex: Option<egui::TextureHandle>,
     wf_drawn: Option<(usize, [Color32; 3])>,
     wf_dirty: bool,
+    /// The squelch threshold to put back when SQL is clicked open again.
+    sql_last: f32,
     /// When `WantAudioLevel` was last sent (wall clock), so it is renewed about
     /// once a second while the panel is on screen.
     lease_at: f64,
@@ -315,6 +318,7 @@ impl Default for State {
             wf_tex: None,
             wf_drawn: None,
             wf_dirty: false,
+            sql_last: -70.0,
             lease_at: 0.0,
             frame: None,
         }
@@ -677,9 +681,43 @@ impl SdroxideApp {
         }
         self.rc_smeter(ui, meter, ink);
 
-        let rx = &self.state.rx[0];
+        self.rc_boxes(ui, boxes, cmds, ink, mode);
+
+        // The VU: the volume control too, as in the DAB panel.
+        self.rc_vu_step(ui);
+        ui.scope_builder(egui::UiBuilder::new().max_rect(vu_rect), |ui| {
+            let out = vu_meter::stereo(
+                ui,
+                &self.radio_classic.vu,
+                vu_rect.size(),
+                true,
+                Some(self.state.rx[0].volume),
+            );
+            self.dab_vu_volume(ui, cmds, out);
+        });
+    }
+
+    /// The boxes at the foot, BW · STEP · AGC · SQL — each one acts.
+    ///
+    /// Click takes the next setting, right-click the previous one, and the wheel
+    /// over a box moves it a notch; every route is the one the top bar uses
+    /// (`set_rx_filter`, `SetAgc`, `SetSquelch`, the tuning step).
+    fn rc_boxes(
+        &mut self,
+        ui: &mut egui::Ui,
+        boxes: Rect,
+        cmds: &mut Vec<Command>,
+        ink: &Ink,
+        mode: Mode,
+    ) {
+        let rx = self.state.rx[0];
         let bw = (rx.filter_hi - rx.filter_lo).abs();
-        let items = [
+        let open = rx.squelch_db <= SQUELCH_OPEN_DB + 0.5;
+        if !open {
+            self.radio_classic.sql_last = rx.squelch_db;
+        }
+        let presets = mode.filter_presets();
+        let items: [(&str, String, String); 4] = [
             (
                 "BW",
                 if bw >= 1000.0 {
@@ -687,26 +725,60 @@ impl SdroxideApp {
                 } else {
                     format!("{bw:.0} Hz")
                 },
+                if presets.is_empty() {
+                    "BW — this mode has one fixed passband".to_string()
+                } else {
+                    "BW — click: next filter · right-click: previous · wheel: step".to_string()
+                },
             ),
-            ("STEP", format!("{:.0}", self.ui_settings.tune_step_hz)),
-            ("AGC", rx.agc.label().to_uppercase()),
+            (
+                "STEP",
+                format!("{:.0}", self.ui_settings.tune_step_hz),
+                "STEP — click: next tuning step · right-click: previous · wheel: step".to_string(),
+            ),
+            (
+                "AGC",
+                rx.agc.label().to_uppercase(),
+                "AGC — click: next speed · right-click: previous · wheel: step".to_string(),
+            ),
             (
                 "SQL",
-                if rx.squelch_db <= sdroxide_types::SQUELCH_OPEN_DB + 0.5 {
-                    "OPEN".to_string()
-                } else {
-                    format!("{:.0} dB", rx.squelch_db)
-                },
+                if open { "OPEN".to_string() } else { format!("{:.0} dB", rx.squelch_db) },
+                "SQL — click: open / back to the last threshold · wheel: raise or lower the gate"
+                    .to_string(),
             ),
         ];
         let cell_w = (boxes.width() - 3.0 * 6.0) / 4.0;
-        for (i, (cap, val)) in items.iter().enumerate() {
+        // (clicks forward, clicks back, wheel notches) of each box this frame.
+        let mut acts = [(false, false, 0i32); 4];
+        for (i, (cap, val, hint)) in items.iter().enumerate() {
             let r = Rect::from_min_size(
                 boxes.min + vec2(i as f32 * (cell_w + 6.0), 0.0),
-                vec2(cell_w, boxes_h),
+                vec2(cell_w, boxes.height()),
             );
+            let resp = ui
+                .interact(r, ui.id().with(("radio-classic-box", *cap)), egui::Sense::click())
+                .on_hover_text(hint.as_str());
+            // One notch per wheel event, whatever the smoothing makes of it.
+            let notches = if resp.hovered() {
+                ui.input(|i| {
+                    i.events
+                        .iter()
+                        .map(|e| match e {
+                            egui::Event::MouseWheel { delta, .. } if delta.y != 0.0 => {
+                                delta.y.signum() as i32
+                            }
+                            _ => 0,
+                        })
+                        .sum()
+                })
+            } else {
+                0
+            };
+            acts[i] = (resp.clicked(), resp.secondary_clicked(), notches);
             let p = ui.painter();
-            p.rect_stroke(r, 3.0, Stroke::new(1.0, ink.line), StrokeKind::Inside);
+            let edge = if resp.hovered() { ink.accent } else { ink.line };
+            p.rect_stroke(r, 3.0, Stroke::new(1.0, edge), StrokeKind::Inside);
             p.text(
                 r.left_top() + vec2(5.0, 3.0),
                 Align2::LEFT_TOP,
@@ -723,18 +795,43 @@ impl SdroxideApp {
             );
         }
 
-        // The VU: the volume control too, as in the DAB panel.
-        self.rc_vu_step(ui);
-        ui.scope_builder(egui::UiBuilder::new().max_rect(vu_rect), |ui| {
-            let out = vu_meter::stereo(
-                ui,
-                &self.radio_classic.vu,
-                vu_rect.size(),
-                true,
-                Some(self.state.rx[0].volume),
-            );
-            self.dab_vu_volume(ui, cmds, out);
-        });
+        // BW: the mode's own filter presets.
+        let (fwd, back, wheel) = acts[0];
+        if let Some(dir) = direction(fwd, back, wheel)
+            && let Some(i) = next_preset(presets, mode, rx.filter_lo, rx.filter_hi, dir > 0)
+        {
+            let (_, lo, hi) = presets[i];
+            let (lo, hi) = crate::app::top_bar::preset_edges(mode, lo, hi, self.cw_pitch_hz());
+            self.set_rx_filter(lo, hi, cmds);
+        }
+        // STEP.
+        let (fwd, back, wheel) = acts[1];
+        if let Some(dir) = direction(fwd, back, wheel) {
+            self.ui_settings.tune_step_hz = next_step(self.ui_settings.tune_step_hz, dir > 0);
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+        }
+        // AGC.
+        let (fwd, back, wheel) = acts[2];
+        if let Some(dir) = direction(fwd, back, wheel) {
+            let agc = next_agc(rx.agc, dir > 0);
+            self.state.rx[0].agc = agc; // optimistic echo
+            cmds.push(Command::SetAgc { rx: RxId::Main, agc });
+        }
+        // SQL: a click holds the gate open or puts the last threshold back; the
+        // wheel moves it.
+        let (fwd, back, wheel) = acts[3];
+        let db = if fwd || back {
+            Some(if open { self.radio_classic.sql_last } else { SQUELCH_OPEN_DB })
+        } else if wheel != 0 {
+            Some(sql_wheel(rx.squelch_db, wheel))
+        } else {
+            None
+        };
+        if let Some(db) = db {
+            self.sql_hold = None;
+            self.state.rx[0].squelch_db = db; // optimistic echo
+            cmds.push(Command::SetSquelch { rx: RxId::Main, db });
+        }
     }
 
     /// The range of the band the dial sits in, in MHz, for the header.
@@ -1185,6 +1282,76 @@ fn centred_in(outer: Rect, w: f32) -> Rect {
     Rect::from_min_size(Pos2::new(outer.center().x - w / 2.0, outer.top()), vec2(w, outer.height()))
 }
 
+/// Which way a box was asked to move: `+1` forward (a click, wheel up), `-1`
+/// back (a right-click, wheel down), `None` when it was left alone.
+fn direction(click: bool, secondary: bool, wheel: i32) -> Option<i32> {
+    if click {
+        Some(1)
+    } else if secondary {
+        Some(-1)
+    } else if wheel != 0 {
+        Some(wheel.signum())
+    } else {
+        None
+    }
+}
+
+/// The index, in the mode's presets, of the filter to switch to. The current
+/// width is matched to a preset's (the CW presets move with the pitch, their
+/// widths do not); when it is on none, the nearest one is the starting point.
+fn next_preset(
+    presets: &[(&str, f32, f32)],
+    _mode: Mode,
+    lo: f32,
+    hi: f32,
+    forward: bool,
+) -> Option<usize> {
+    if presets.is_empty() {
+        return None;
+    }
+    let width = (hi - lo).abs();
+    let at = presets
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            ((a.2 - a.1).abs() - width).abs().total_cmp(&((b.2 - b.1).abs() - width).abs())
+        })
+        .map_or(0, |(i, _)| i);
+    let n = presets.len();
+    Some(if forward { (at + 1) % n } else { (at + n - 1) % n })
+}
+
+/// The tuning step after (or before) `hz` in the list the top bar cycles.
+fn next_step(hz: f64, forward: bool) -> f64 {
+    let steps = sdroxide_types::UiSettings::TUNE_STEPS_HZ;
+    let n = steps.len();
+    let at = steps.iter().position(|s| (s - hz).abs() < 0.5);
+    let i = match (at, forward) {
+        (Some(i), true) => (i + 1) % n,
+        (Some(i), false) => (i + n - 1) % n,
+        (None, true) => 0,
+        (None, false) => n - 1,
+    };
+    steps[i]
+}
+
+/// The AGC speed after (or before) `agc`: Off → Slow → Med → Fast.
+fn next_agc(agc: AgcMode, forward: bool) -> AgcMode {
+    let all = AgcMode::ALL;
+    let at = all.iter().position(|a| *a == agc).unwrap_or(0);
+    all[if forward { (at + 1) % all.len() } else { (at + all.len() - 1) % all.len() }]
+}
+
+/// One wheel notch on the squelch: 3 dB a notch, `up` raising the gate. From
+/// open the first notch up lands at -110 dBFS, and the way down ends open.
+fn sql_wheel(db: f32, notches: i32) -> f32 {
+    const STEP_DB: f32 = 3.0;
+    const FIRST_DB: f32 = -110.0;
+    let from = if db <= SQUELCH_OPEN_DB + 0.5 { FIRST_DB - STEP_DB } else { db };
+    let to = from + STEP_DB * notches as f32;
+    if to < FIRST_DB - 0.5 { SQUELCH_OPEN_DB } else { to.min(SQUELCH_CLOSED_DB) }
+}
+
 /// A short mode tag for the right column's corner.
 fn mode_tag(mode: Mode) -> String {
     MODES
@@ -1375,6 +1542,40 @@ mod tests {
         assert!(first != Color32::BLACK && first != Color32::WHITE, "{first:?}");
         // Below the filled part it is the ground.
         assert_eq!(img.pixels[WF_BINS * 50], Color32::BLACK);
+    }
+
+    #[test]
+    fn the_boxes_step_through_their_settings_both_ways() {
+        // Filters: the mode's presets, wrapping at both ends.
+        let usb = Mode::Usb.filter_presets();
+        assert_eq!(next_preset(usb, Mode::Usb, 200.0, 2600.0, true), Some(2));
+        assert_eq!(next_preset(usb, Mode::Usb, 200.0, 2600.0, false), Some(0));
+        assert_eq!(next_preset(usb, Mode::Usb, 100.0, 3400.0, true), Some(0));
+        assert_eq!(next_preset(Mode::Wfm.filter_presets(), Mode::Wfm, 0.0, 1.0, true), None);
+        // The tuning step goes round the top bar's list.
+        let steps = sdroxide_types::UiSettings::TUNE_STEPS_HZ;
+        assert_eq!(next_step(steps[0], true), steps[1]);
+        assert_eq!(next_step(steps[0], false), steps[steps.len() - 1]);
+        // AGC: Off → Slow → Med → Fast → Off.
+        assert_eq!(next_agc(AgcMode::Med, true), AgcMode::Fast);
+        assert_eq!(next_agc(AgcMode::Off, false), AgcMode::Fast);
+        assert_eq!(next_agc(AgcMode::Fast, true), AgcMode::Off);
+        // Click forward, right-click back, wheel by its sign.
+        assert_eq!(direction(true, false, 0), Some(1));
+        assert_eq!(direction(false, true, 3), Some(-1));
+        assert_eq!(direction(false, false, -2), Some(-1));
+        assert_eq!(direction(false, false, 0), None);
+    }
+
+    #[test]
+    fn the_squelch_wheel_runs_from_open_up_to_closed_and_back() {
+        let up = sql_wheel(SQUELCH_OPEN_DB, 1);
+        assert_eq!(up, -110.0);
+        assert_eq!(sql_wheel(up, 1), -107.0);
+        // One notch down from the first threshold is open again.
+        assert_eq!(sql_wheel(up, -1), SQUELCH_OPEN_DB);
+        assert_eq!(sql_wheel(SQUELCH_OPEN_DB, -1), SQUELCH_OPEN_DB);
+        assert_eq!(sql_wheel(-1.0, 5), SQUELCH_CLOSED_DB);
     }
 
     #[test]
