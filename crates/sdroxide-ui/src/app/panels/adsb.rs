@@ -172,8 +172,20 @@ impl SdroxideApp {
             {
                 self.adsb_overlay.enabled = !self.adsb_overlay.enabled;
             }
-            if self.adsb_overlay.enabled && !self.adsb_overlay.aircraft.is_empty() {
-                slot(ui, 100.0, &format!("{} overlay", self.adsb_overlay.aircraft.len()), theme::gray(120));
+            if self.adsb_overlay.enabled {
+                if self.adsb_overlay.aircraft.is_empty() {
+                    if self.adsb_home().is_none() {
+                        slot(ui, 120.0, "set grid square", theme::gray(120));
+                    } else if self.adsb_overlay.fetching {
+                        slot(ui, 80.0, "fetching…", theme::gray(120));
+                    } else if self.adsb_overlay.last_fetch == 0.0 {
+                        slot(ui, 80.0, "waiting", theme::gray(120));
+                    } else {
+                        slot(ui, 100.0, "0 overlay", theme::gray(120));
+                    }
+                } else {
+                    slot(ui, 100.0, &format!("{} overlay", self.adsb_overlay.aircraft.len()), theme::gray(120));
+                }
             }
 
             ui.separator();
