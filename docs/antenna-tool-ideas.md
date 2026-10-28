@@ -354,9 +354,9 @@ was the hard part and is handled.*
       floor (it integrates numerically) and uses SC/EC for the taper shape.
 
 **C — Patterns**
-- [~] **2D polar plots** — the far-field cut and the SVG generator exist in the
-      prototype (`cut`, `polar_svg`, `--pattern FILE`); the real deliverable is
-      the same geometry drawn in the app's tool window (milestone E).
+- [x] **2D polar plots** — the far-field cut and the SVG generator exist in the
+      prototype (`cut`, `polar_svg`, `--pattern FILE`), and the ANTENNA window
+      draws the azimuth cut as a polar field plot with a preset selector.
 - [~] **3D pattern surface** — the prototype writes the normalised far-field
       surface as a PLY mesh and an isometric SVG wireframe
       (`pattern_surface`, `ply_ascii`, `iso_svg`, `--pattern3d DIR`), one per

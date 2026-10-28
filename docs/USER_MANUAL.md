@@ -19,6 +19,7 @@ or connects to a remote sdroxide server.
     - [2.20 HD Radio (NRSC-5)](#220-hd-radio-nrsc-5)
     - [2.22 QO-100 beacon plugin](#222-qo-100-beacon-plugin)
     - [2.23 Radio Classic](#223-radio-classic)
+    - [2.24 Antenna calculator](#224-antenna-calculator)
 3. [Digital modes (FT8, FT4, FT2, JT65, JT9, FST4, MSK144, FSK441, Q65, UVPACKET, JTTY, PSK31, RTTY, Olivia, Contestia, MT63, ARDOP, THOR, MFSK, FSQ, Hellschreiber, SSTV, RIFP, weather fax, JS8, RF Paint, WSPR, PI4, packet, APRS, ADS-B, NAVTEX, DSC, ACARS, VDL2, AIS, HFDL, AtCHAT NET)](#3-digital-modes)
     - [3.17 AtCHAT NET](#317-atchat-net)
     - [3.18 ACARS](#318-acars-airline-datalink-on-airband)
@@ -3664,6 +3665,27 @@ window docks it again.
 
 The colours are the theme's. The VU and the bars need the station to be version
 257 or newer, because the level of the audio comes from it.
+
+### 2.24 Antenna calculator
+
+An antenna design calculator and solver for CB/SWL work: **EXTRAS → ANTENNA**
+opens a window with a frequency in and the cutting lengths out — dipole,
+inverted-V, vertical, ground plane, delta loop and Yagi, each with its nominal
+feed impedance and SWR.
+
+- **Solve impedance and gain** runs the method-of-moments engine on the presets
+  and shows the real feed impedance, SWR and gain (the calculator's figures are
+  nominal). A Yagi stack selector (1×/2×/4×) adds the stacked array's combined
+  gain.
+- **Azimuth pattern** draws the solved far-field cut as a polar plot.
+- **Optimize Yagi** tunes the Yagi's element lengths and gaps against SWR, gain,
+  F/B or jX (a local search, on a background thread).
+- **Obstacles (approximate)** — a stand of trees (ITU-R P.833) or a ridge
+  (knife-edge diffraction) attenuates the pattern on its bearing; the loss is a
+  coarse, labelled estimate, not a terrain solver.
+
+The same engine is the `antenna` command (`cargo run -p antenna-model --bin
+antenna -- --help`), which writes the 3D pattern as PLY/SVG files.
 
 ---
 
