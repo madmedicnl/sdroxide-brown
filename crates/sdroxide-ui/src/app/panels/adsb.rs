@@ -65,6 +65,18 @@ impl SdroxideApp {
         self.adsb_header(ui, cmds, &st);
         ui.add_space(3.0);
 
+        // ADS-B overlay: fetch from adsb.lol if enabled and due.
+        if self.adsb_overlay.enabled {
+            let home = self.adsb_home();
+            if let Some((lat, lon)) = home {
+                let now_f = now as f64;
+                self.adsb_overlay.poll(now_f);
+                if self.adsb_overlay.should_fetch(now_f) {
+                    self.adsb_overlay.start_fetch(lat, lon, 50.0);
+                }
+            }
+        }
+
         let avail_h = (content_bottom - ui.cursor().top()).max(80.0);
         let pane = self.phone_pane(ui, self.state.rx[0].mode);
         let full_w = ui.available_width();
@@ -150,6 +162,18 @@ impl SdroxideApp {
                     ),
                     theme::gray(120),
                 );
+            }
+
+            ui.separator();
+            let overlay_on = self.adsb_overlay.enabled;
+            if crate::chrome::chip(ui, overlay_on, "OVERLAY")
+                .on_hover_text("Show aircraft from adsb.lol as an overlay on the map")
+                .clicked()
+            {
+                self.adsb_overlay.enabled = !self.adsb_overlay.enabled;
+            }
+            if self.adsb_overlay.enabled && !self.adsb_overlay.aircraft.is_empty() {
+                slot(ui, 100.0, &format!("{} overlay", self.adsb_overlay.aircraft.len()), theme::gray(120));
             }
 
             ui.separator();

@@ -1133,6 +1133,8 @@ pub struct SdroxideApp {
     adsb_status: Option<Box<sdroxide_types::AdsbStatus>>,
     /// ADS-B: the radar picture's pan/zoom and which target is selected.
     adsb_map: crate::adsb_map::AdsbMapState,
+    /// ADS-B overlay from adsb.lol (live aircraft positions in the area).
+    adsb_overlay: crate::adsb_overlay::AdsbOverlay,
     /// The one search box of the ADS-B table, the Cards list and the map. Memory
     /// only: it is not saved, and nothing it does reaches the network.
     aircraft_query: String,
@@ -2360,6 +2362,7 @@ impl SdroxideApp {
             aprs_map: crate::aprs_map::AprsMapState::default(),
             adsb_status: None,
             adsb_map: crate::adsb_map::AdsbMapState::default(),
+            adsb_overlay: crate::adsb_overlay::AdsbOverlay::new(),
             aircraft_query: String::new(),
             pin_history_owner: None,
             show_adsb_setup: false,

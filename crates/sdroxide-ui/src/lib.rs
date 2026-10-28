@@ -8,6 +8,7 @@
 //! targets.
 
 mod adsb_map;
+pub mod adsb_overlay;
 mod airdata;
 mod ais_map;
 mod app;
