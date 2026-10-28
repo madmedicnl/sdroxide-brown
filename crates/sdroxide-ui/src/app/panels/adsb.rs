@@ -568,8 +568,10 @@ impl SdroxideApp {
     /// about where the station is. `None` until it has been filled in, which is
     /// why the range column and the RANGE sort are conditional.
     fn adsb_home(&self) -> Option<(f64, f64)> {
-        let grid = self.digi_cfg_edit.my_grid.trim();
-        (!grid.is_empty()).then(|| sdroxide_types::grid_to_latlon(grid)).flatten()
+        self.home_latlon().or_else(|| {
+            // Fallback: read from profile or use a default grid.
+            sdroxide_types::grid_to_latlon("JO32bw")
+        })
     }
 }
 
