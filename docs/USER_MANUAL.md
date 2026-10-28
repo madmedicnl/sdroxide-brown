@@ -3671,13 +3671,19 @@ The colours are the theme's. The VU and the bars need the station to be version
 An antenna design calculator and solver for CB/SWL work: **EXTRAS → ANTENNA**
 opens a window with a frequency in and the cutting lengths out — dipole,
 inverted-V, vertical, ground plane, delta loop and Yagi, each with its nominal
-feed impedance and SWR.
+feed impedance and SWR. The feedline/system impedance (Z₀, default 50 Ω) is
+user-configurable for the SWR readout, and the antenna height above ground
+(AGL) feeds the solver.
 
-- **Solve impedance and gain** runs the method-of-moments engine on the presets
-  and shows the real feed impedance, SWR and gain (the calculator's figures are
-  nominal). A Yagi stack selector (1×/2×/4×) adds the stacked array's combined
-  gain.
-- **Azimuth pattern** draws the solved far-field cut as a polar plot.
+- **Apply** runs the method-of-moments engine on the presets and shows the real
+  feed impedance, SWR and gain (the calculator's figures are nominal). A Yagi
+  stack selector (1×/2×/4×) adds the stacked array's combined gain.
+- **Radiation Pattern** draws the solved far-field cut as a polar plot; the
+  **View** selector switches between Top (azimuth), Front and Side (elevation)
+  cuts, and the 3D view follows.
+- **3D view** shows the normalised radiation surface with an opaque ground
+  plane (radiation below the horizon is clipped), the antenna drawn in red, and
+  the ground plane tracking the AGL height. Drag to rotate.
 - **Optimize Yagi** tunes the Yagi's element lengths and gaps against SWR, gain,
   F/B or jX (a local search, on a background thread).
 - **Obstacles (approximate)** — a stand of trees (ITU-R P.833) or a ridge
