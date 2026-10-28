@@ -501,8 +501,8 @@ State at 2026-10-25, and the thing to re-measure rather than trust:
   2.1.0 installer's missing DLL) are fixed by the 2.2.0 release and await the
   reporters' confirmation; the rest are enhancements (#249, #251, #252, #256)
   and questions (#105 AppImage, #132 frequency display, #281, #283). #260
-  (Chrome web-audio delay) is closed. **Open PRs: #292 and #293, both F4NRM's**,
-  not ours to merge.
+  (Chrome web-audio delay) is closed. **Open PRs: #293** (F4NRM's Radio Classic
+  panel, wire 257/`0x4D`), not ours to merge.
 - **Live handovers**: ALE (built, **never decoded a real burst** — the manual
   §3.29 asks for a recording, and that is the only thing missing), STANAG 4285
   (**decodes**: the vendored GPL reference decoder in `vendor/s4285-ref`, driven
