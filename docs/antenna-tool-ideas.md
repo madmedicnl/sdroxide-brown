@@ -357,12 +357,12 @@ was the hard part and is handled.*
 - [x] **2D polar plots** — the far-field cut and the SVG generator exist in the
       prototype (`cut`, `polar_svg`, `--pattern FILE`), and the ANTENNA window
       draws the azimuth cut as a polar field plot with a preset selector.
-- [~] **3D pattern surface** — the prototype writes the normalised far-field
+- [x] **3D pattern surface** — the prototype writes the normalised far-field
       surface as a PLY mesh and an isometric SVG wireframe
       (`pattern_surface`, `ply_ascii`, `iso_svg`, `--pattern3d DIR`), one per
-      preset. The in-app view (a rotatable 3D hemisphere, reusing the solar
-      scene's renderer, shaped on the ADS-B range visualizer's envelope) is
-      still milestone E.
+      preset, and the ANTENNA window draws it as a rotatable wireframe (drag to
+      rotate). A full GPU hemisphere reusing the solar scene's renderer is left
+      as a future nicety.
 
 **D — Advanced (only once A–C are honest)**
 - [x] Optimizer over chosen variables — a coordinate-descent hill-climb over a
@@ -383,9 +383,12 @@ was the hard part and is handled.*
       Yagi stack selector (1×/2×/4×).
 
 **E — Integration**
-- [ ] Promote `tools/antenna` → `crates/sdroxide-ant`, wire the tool window
-      (`self.tool_window`), then merge the branch to `main`.
-- [ ] Manual section, README entry and a quick-start.
+- [x] Promote `tools/antenna` → a workspace member (`antenna-model`), wire the
+      tool window (`self.tool_window`), then merge the branch to `main` — done,
+      the tool is `crates`-adjacent at `tools/antenna`, wired into EXTRAS, and
+      on `main`.
+- [x] Manual section, README entry and a quick-start — USER_MANUAL 2.24 and a
+      README mention.
 - [ ] RX nice-to-have (decision 2): feed the predicted takeoff into the
       receive/propagation side.
 
