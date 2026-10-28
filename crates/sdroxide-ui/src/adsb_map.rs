@@ -628,6 +628,7 @@ pub fn show(
     ui: &mut Ui,
     state: &mut AdsbMapState,
     aircraft: &[AdsbAircraft],
+    overlay: &[crate::adsb_overlay::OverlayAircraft],
     home: Option<(f64, f64)>,
     now: i64,
     cfg: AdsbSettings,
@@ -883,6 +884,17 @@ pub fn show(
     }
     if let Some(i) = hover {
         draw_target(live[i], true);
+    }
+
+    // ── overlay aircraft (adsb.lol) ──
+    // Drawn as orange circles so they are distinguishable from local targets.
+    for o in overlay {
+        let c = project(o.lat, o.lon);
+        if !rect.contains(c) {
+            continue;
+        }
+        p.circle_filled(c, 3.0, eframe::egui::Color32::from_rgb(255, 165, 0));
+        p.circle_stroke(c, 5.0, eframe::egui::Stroke::new(1.0, eframe::egui::Color32::from_rgb(255, 165, 0)));
     }
 
     // ── the data blocks ──

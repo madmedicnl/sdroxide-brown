@@ -519,10 +519,16 @@ impl SdroxideApp {
         // it: an aid is amplitude modulated and a lane mode cannot carry it, so a
         // station parked on a dial still in ADS-B would be silence and then
         // retuned. A/B is the switch between the plane and the ground station.
+        let overlay: Vec<crate::adsb_overlay::OverlayAircraft> = if self.adsb_overlay.enabled {
+            self.adsb_overlay.aircraft.clone()
+        } else {
+            Vec::new()
+        };
         if let Some(t) = crate::adsb_map::show(
             ui,
             state,
             &st.aircraft,
+            &overlay,
             home,
             now,
             cfg,
