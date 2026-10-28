@@ -376,7 +376,11 @@ was the hard part and is handled.*
       2026-10-28: the COST-235 ↔ Weissberger join at 14 m is discontinuous —
       COST-235 is a UHF model and over-reads at HF — so smooth or re-fit that
       boundary.)*
-- [ ] Stacking and wire scaling (MMANA's Make stack / Wire scale).
+- [x] Stacking and wire scaling (MMANA's Make stack / Wire scale) — `scale`
+      multiplies a design's coordinates, `stack` duplicates it N times into an
+      array, and the solver now feeds several sources together so a stacked
+      array solves for its combined gain. The ANTENNA window's solve row has a
+      Yagi stack selector (1×/2×/4×).
 
 **E — Integration**
 - [ ] Promote `tools/antenna` → `crates/sdroxide-ant`, wire the tool window

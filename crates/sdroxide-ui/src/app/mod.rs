@@ -620,6 +620,9 @@ pub struct SdroxideApp {
     antenna_ridge: Option<(f64, f64)>,
     /// How many Yagi copies to stack in the solve (1, 2 or 4) — see [`antenna`].
     antenna_stack: u32,
+    /// The azimuth cuts of the solved presets, and which one the pattern shows.
+    antenna_patterns: Vec<(String, Vec<(f64, f64)>)>,
+    antenna_pattern_sel: usize,
     /// A Yagi optimization running on a background thread, and its result
     /// channel. Native-only — the browser has no threads and just skips the
     /// optimizer.
@@ -2171,6 +2174,8 @@ impl SdroxideApp {
             antenna_trees: None,
             antenna_ridge: None,
             antenna_stack: 1,
+            antenna_patterns: Vec::new(),
+            antenna_pattern_sel: 0,
             #[cfg(not(target_arch = "wasm32"))]
             antenna_optimizing: false,
             #[cfg(not(target_arch = "wasm32"))]

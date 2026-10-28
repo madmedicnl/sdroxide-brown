@@ -27,6 +27,44 @@ fn objective_value(obj: Objective, score: f64) -> String {
     }
 }
 
+/// Draw an azimuth cut (azimuth in degrees, gain in dBi) as a polar field
+/// pattern: the radius is the field, normalised to the peak.
+fn pattern_plot(ui: &mut egui::Ui, name: &str, cut: &[(f64, f64)]) {
+    let size = egui::vec2(240.0, 240.0);
+    let (response, painter) = ui.allocate_painter(size, egui::Sense::hover());
+    let rect = response.rect;
+    let center = rect.center();
+    let radius = rect.width().min(rect.height()) / 2.0 - 10.0;
+    painter.circle_stroke(
+        center,
+        radius,
+        egui::Stroke::new(1.0, egui::Color32::from_gray(60)),
+    );
+    let max_g = cut.iter().map(|&(_, g)| g).fold(f64::NEG_INFINITY, f64::max);
+    let mut points: Vec<egui::Pos2> = cut
+        .iter()
+        .map(|&(az, g)| {
+            let a = az.to_radians();
+            let r = 10f64.powf((g - max_g) / 20.0) * radius as f64;
+            center + egui::vec2((a.sin() * r) as f32, (-a.cos() * r) as f32)
+        })
+        .collect();
+    if let Some(first) = points.first().copied() {
+        points.push(first);
+    }
+    painter.add(egui::Shape::line(
+        points,
+        egui::Stroke::new(1.5, egui::Color32::from_rgb(120, 200, 120)),
+    ));
+    painter.text(
+        center + egui::vec2(0.0, radius + 6.0),
+        egui::Align2::CENTER_TOP,
+        format!("{name} — {max_g:.1} dBi"),
+        egui::FontId::proportional(11.0),
+        egui::Color32::from_gray(150),
+    );
+}
+
 impl super::SdroxideApp {
     pub(in crate::app) fn antenna_window(&mut self, ctx: &egui::Context) {
         if !self.show_antenna {
@@ -161,6 +199,25 @@ impl super::SdroxideApp {
                 }
             }
 
+            if !self.antenna_patterns.is_empty() {
+                ui.separator();
+                crate::chrome::menu_caption(ui, "Azimuth pattern");
+                let mut sel = self.antenna_pattern_sel;
+                let names: Vec<&str> =
+                    self.antenna_patterns.iter().map(|(n, _)| n.as_str()).collect();
+                egui::ComboBox::from_id_salt("antenna-pattern-sel")
+                    .selected_text(names[sel])
+                    .show_ui(ui, |ui| {
+                        for (i, name) in names.iter().enumerate() {
+                            ui.selectable_value(&mut sel, i, *name);
+                        }
+                    });
+                self.antenna_pattern_sel = sel;
+                if let Some((name, cut)) = self.antenna_patterns.get(self.antenna_pattern_sel) {
+                    pattern_plot(ui, name, cut);
+                }
+            }
+
             if let Some((a, score)) = &self.antenna_optimized {
                 ui.separator();
                 crate::chrome::menu_caption(ui, "Optimized Yagi");
@@ -243,19 +300,16 @@ impl super::SdroxideApp {
     /// Solve the presets at the current frequency (synchronously — the solver is
     /// a few seconds, which is the honest cost of the method of moments).
     fn antenna_solve(&mut self) {
-        use antenna_model::solver::{SolverConfig, analyze, max_gain, swr};
+        use antenna_model::solver::{SolverConfig, analyze, cut, max_gain, swr};
         let freq_hz = self.antenna_freq_mhz * 1e6;
         let mut rows = Vec::new();
+        let mut patterns = Vec::new();
         for a in antenna_model::presets::catalog(freq_hz) {
             if let Ok(sol) = analyze(&a, &SolverConfig::default()) {
                 let (g, _, _) = max_gain(&sol);
-                rows.push(SolvedRow {
-                    name: a.name,
-                    r: sol.zin.re,
-                    x: sol.zin.im,
-                    swr: swr(sol.zin, 50.0),
-                    gain: g,
-                });
+                let name = a.name.clone();
+                patterns.push((name.clone(), cut(&sol, true, 90.0, 5.0)));
+                rows.push(SolvedRow { name, r: sol.zin.re, x: sol.zin.im, swr: swr(sol.zin, 50.0), gain: g });
             }
         }
         // A stacked Yagi, when asked for — the array's combined gain.
@@ -269,16 +323,14 @@ impl super::SdroxideApp {
             );
             if let Ok(sol) = analyze(&stacked, &SolverConfig::default()) {
                 let (g, _, _) = max_gain(&sol);
-                rows.push(SolvedRow {
-                    name: format!("Yagi ×{}", self.antenna_stack),
-                    r: sol.zin.re,
-                    x: sol.zin.im,
-                    swr: swr(sol.zin, 50.0),
-                    gain: g,
-                });
+                let name = format!("Yagi ×{}", self.antenna_stack);
+                patterns.push((name.clone(), cut(&sol, true, 90.0, 5.0)));
+                rows.push(SolvedRow { name, r: sol.zin.re, x: sol.zin.im, swr: swr(sol.zin, 50.0), gain: g });
             }
         }
         self.antenna_solved = Some(rows);
+        self.antenna_patterns = patterns;
+        self.antenna_pattern_sel = self.antenna_pattern_sel.min(self.antenna_patterns.len().saturating_sub(1));
     }
 
     /// Optimize the 3-element Yagi against the chosen objective, at the dense
