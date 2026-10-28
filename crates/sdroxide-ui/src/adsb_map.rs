@@ -889,12 +889,27 @@ pub fn show(
     // ── overlay aircraft (adsb.lol) ──
     // Drawn as circles: green if also received locally, orange if only in the
     // database. This makes it visible which aircraft the receiver is missing.
-    for o in overlay {
+    // Hover shows callsign and altitude.
+    let mut overlay_hover: Option<usize> = None;
+    let mut overlay_best = HIT_RADIUS;
+    for (i, o) in overlay.iter().enumerate() {
         let c = project(o.lat, o.lon);
         if !rect.contains(c) {
             continue;
         }
-        // Check if this overlay aircraft is also locally received.
+        if let Some(m) = pointer {
+            let d = c.distance(m);
+            if d <= overlay_best {
+                overlay_best = d;
+                overlay_hover = Some(i);
+            }
+        }
+    }
+    for (i, o) in overlay.iter().enumerate() {
+        let c = project(o.lat, o.lon);
+        if !rect.contains(c) {
+            continue;
+        }
         let local = u32::from_str_radix(&o.hex, 16).ok()
             .map(|h| aircraft.iter().any(|a| a.icao == h))
             .unwrap_or(false);
@@ -903,8 +918,23 @@ pub fn show(
         } else {
             eframe::egui::Color32::from_rgb(255, 165, 0)
         };
-        p.circle_filled(c, 3.0, color);
-        p.circle_stroke(c, 5.0, eframe::egui::Stroke::new(1.0, color));
+        let r = if overlay_hover == Some(i) { 4.5 } else { 3.0 };
+        p.circle_filled(c, r, color);
+        p.circle_stroke(c, r + 2.0, eframe::egui::Stroke::new(1.0, color));
+    }
+    // Tooltip for hovered overlay aircraft.
+    if let Some(i) = overlay_hover {
+        let o = &overlay[i];
+        let c = project(o.lat, o.lon);
+        let tip = format!(
+            "{}  {}  {} ft  {} kt",
+            o.callsign.as_deref().unwrap_or(&o.hex),
+            o.hex,
+            o.alt_ft.map(|a| a.to_string()).unwrap_or_else(|| "?".into()),
+            o.gs_kt.map(|g| format!("{:.0}", g)).unwrap_or_else(|| "?".into()),
+        );
+        // Draw a small label near the cursor.
+        p.text(c + eframe::egui::vec2(6.0, -6.0), eframe::egui::Align2::LEFT_BOTTOM, tip, eframe::egui::FontId::proportional(10.0), eframe::egui::Color32::WHITE);
     }
 
     // ── the data blocks ──
