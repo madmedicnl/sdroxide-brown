@@ -918,7 +918,7 @@ pub fn show(
         } else {
             eframe::egui::Color32::from_rgb(255, 165, 0)
         };
-        let r = if overlay_hover == Some(i) { 10.0 } else { 8.0 };
+        let r = if overlay_hover == Some(i) { 12.0 } else { 10.0 };
         // Draw a small airplane shape rotated by track.
         let track = o.track_deg.unwrap_or(0.0).to_radians() as f32;
         let (s, co) = (track.sin(), track.cos());
