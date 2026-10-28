@@ -259,6 +259,55 @@ fn the_big_frequency_is_centred_in_its_column() {
     assert!(off.abs() <= 1.5, "the frequency is {off} px off the column's centre {column}");
 }
 
+/// A station name longer than the column goes on two lines, inside the column
+/// and centred on it, instead of running out under the neighbouring panel.
+#[test]
+fn a_long_station_name_wraps_onto_two_lines_inside_the_column() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app) = app(Mode::Wfm);
+    app.ui_settings.radio_classic_on = true;
+    app.state.vfo_a_hz = 89_500_000.0;
+    app.memories = vec![sdroxide_types::MemoryChannel {
+        id: 1040,
+        name: "Belgien Klara (Sint-Pieters-Leeuw Nahe Brüssel)".into(),
+        freq_hz: 89_500_000.0,
+        mode: Mode::Wfm,
+        filter_lo: -96_000.0,
+        filter_hi: 96_000.0,
+        folder: None,
+        rtty: None,
+        repeater: None,
+        antenna: None,
+        color: None,
+    }];
+    run(&ctx, &mut app);
+    let shapes = one_frame(&ctx, &mut app, 2.0, vec![]);
+    let hint = text_rects(&shapes)
+        .into_iter()
+        .find(|(t, _)| t.starts_with("wheel on a digit"))
+        .map(|(_, r)| r)
+        .expect("no hint line");
+    let mut found = None;
+    fn walk(s: &egui::Shape, out: &mut Vec<(std::sync::Arc<egui::Galley>, egui::Pos2)>) {
+        match s {
+            egui::Shape::Text(t) => out.push((t.galley.clone(), t.pos)),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut all = Vec::new();
+    shapes.iter().for_each(|c| walk(&c.shape, &mut all));
+    for (g, pos) in all {
+        if g.text().contains("BELGIEN") && g.size().y > 30.0 {
+            found = Some((g.rows.len(), g.rect.translate(pos.to_vec2())));
+        }
+    }
+    let (rows, rect) = found.expect("the big station name is not drawn");
+    assert_eq!(rows, 2, "the name is on {rows} line(s)");
+    assert!(rect.width() <= 1600.0 * 0.62, "the name is {} px wide", rect.width());
+    assert!((rect.center().x - hint.center().x).abs() <= 1.5, "the name is off the column's centre");
+}
+
 /// The Wideband row of the band menu, drawn on its own.
 fn wideband_row(
     app: &mut SdroxideApp,

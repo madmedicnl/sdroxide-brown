@@ -16,7 +16,7 @@
 
 use std::collections::VecDeque;
 
-use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Stroke, StrokeKind, vec2};
+use eframe::egui::{self, Align, Align2, Color32, FontId, Pos2, Rect, RichText, Stroke, StrokeKind, vec2};
 use sdroxide_types::{
     AUDIO_BANDS, AgcMode, Band, Command, Mode, RdsData, RxId, SQUELCH_CLOSED_DB, SQUELCH_OPEN_DB,
     broadcast, byte_to_unit, pty_name,
@@ -768,16 +768,24 @@ impl SdroxideApp {
         let p = ui.painter();
         p.rect_filled(head, 6.0, ink.ground);
         p.rect_stroke(head, 6.0, Stroke::new(1.0, ink.line), StrokeKind::Inside);
+        let range = self.rc_range(hz);
         if let Some(n) = name {
-            p.text(
-                head.left_top() + vec2(10.0, 8.0),
-                Align2::LEFT_TOP,
+            // One line, cut with an ellipsis before the band's range.
+            let room = head.width() - 20.0 - if range.is_some() { 96.0 } else { 0.0 };
+            let mut job = egui::text::LayoutJob::single_section(
                 n.to_uppercase(),
-                FontId::proportional(14.0),
-                ink.amber,
+                egui::TextFormat::simple(FontId::proportional(14.0), ink.amber),
             );
+            job.wrap = egui::text::TextWrapping {
+                max_width: room.max(40.0),
+                max_rows: 1,
+                break_anywhere: true,
+                overflow_character: Some('…'),
+            };
+            let galley = p.layout_job(job);
+            p.galley(head.left_top() + vec2(10.0, 8.0), galley, ink.amber);
         }
-        if let Some((lo, hi)) = self.rc_range(hz) {
+        if let Some((lo, hi)) = range {
             p.text(
                 head.right_top() + vec2(-10.0, 8.0),
                 Align2::RIGHT_TOP,
@@ -1324,22 +1332,18 @@ impl SdroxideApp {
             ink.dim,
         );
 
-        // Row 3: the station name.
+        // Row 3: the station name, on two lines when it is longer than the
+        // column (a Belgian "Klara (Sint-Pieters-Leeuw Nahe Brüssel)" is).
         let name_y = hint_y + 18.0;
         let name_size = (h * 0.1).clamp(20.0, 40.0);
-        let shown = name.map(|n| n.to_uppercase()).unwrap_or_else(|| "—".into());
-        let spaced: String = shown.chars().flat_map(|c| [c, ' ']).collect();
-        ui.painter().text(
-            Pos2::new(inner.center().x, name_y),
-            Align2::CENTER_TOP,
-            spaced.trim_end(),
-            FontId::proportional(name_size),
-            ink.amber,
-        );
+        let shown = name.map(str::to_uppercase).unwrap_or_else(|| "—".into());
+        let galley = ui.painter().layout_job(name_job(&shown, name_size, inner.width(), ink.amber));
+        let name_h = galley.size().y;
+        ui.painter().galley(Pos2::new(inner.center().x, name_y), galley, ink.amber);
 
         // Row 4: RadioText.
         let rt_rect = Rect::from_min_size(
-            Pos2::new(inner.left(), name_y + name_size + 8.0),
+            Pos2::new(inner.left(), name_y + name_h + 8.0),
             vec2(inner.width(), 30.0),
         );
         let rt_text =
@@ -1594,6 +1598,22 @@ fn pill_rect(
     p.rect_stroke(r, r.height() / 2.0, Stroke::new(1.0, edge), StrokeKind::Inside);
     p.galley(Pos2::new(r.left() + 8.0, r.top() + 4.0), galley, ink);
     r
+}
+
+/// The big station name: letter-spaced, centred on its anchor and wrapped to
+/// two lines of at most `width`, with an ellipsis if it is longer still.
+fn name_job(text: &str, size: f32, width: f32, colour: Color32) -> egui::text::LayoutJob {
+    let mut format = egui::TextFormat::simple(FontId::proportional(size), colour);
+    format.extra_letter_spacing = size * 0.3;
+    let mut job = egui::text::LayoutJob::single_section(text.to_string(), format);
+    job.wrap = egui::text::TextWrapping {
+        max_width: width,
+        max_rows: 2,
+        break_anywhere: false,
+        overflow_character: Some('…'),
+    };
+    job.halign = Align::Center;
+    job
 }
 
 /// RadioText in its box, scrolling when it is longer than the box.
