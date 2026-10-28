@@ -153,26 +153,30 @@ fn surface_plot(
         let y2 = y1 * cp - z * sp; // pitch around x
         center + egui::vec2(x1 * scale, -y2 * scale)
     };
-    // Draw ground plane
+    // Draw ground plane as an opaque disk (the horizon blocks radiation).
+    let ground_fill = egui::Color32::from_rgba_unmultiplied(60, 120, 60, 180);
     let ground_stroke = egui::Stroke::new(1.4, egui::Color32::from_rgb(110, 180, 110));
-    // Draw a visible ground plane disk and grid
+    let mut ground_pts: Vec<egui::Pos2> = Vec::with_capacity(12);
     for i in 0..12 {
         let ang = (i as f32) * std::f32::consts::PI * 2.0 / 12.0;
-        let ang2 = ((i + 1) as f32) * std::f32::consts::PI * 2.0 / 12.0;
         let r = 0.9;
         let x0 = ang.cos() * r * scale;
         let y0 = ang.sin() * r * scale;
-        let x1g = ang2.cos() * r * scale;
-        let y1g = ang2.sin() * r * scale;
         let (x1, y1) = (x0 * cy - y0 * sy, x0 * sy + y0 * cy);
-        let (x2, y2p) = (x1g * cy - y1g * sy, x1g * sy + y1g * cy);
         let y2a = y1 * cp;
-        let y2b = y2p * cp;
-        painter.line_segment(
-            [center + egui::vec2(x1, -y2a), center + egui::vec2(x2, -y2b)],
-            ground_stroke,
-        );
+        ground_pts.push(center + egui::vec2(x1, -y2a));
     }
+    painter.add(egui::Shape::convex_polygon(
+        ground_pts.clone(),
+        ground_fill,
+        ground_stroke,
+    ));
+    // Outline ring
+    let mut ring = ground_pts.clone();
+    if let Some(first) = ring.first().copied() {
+        ring.push(first);
+    }
+    painter.add(egui::Shape::line(ring, ground_stroke));
     // Axis lines
     for i in 0..4 {
         let ang = (i as f32) * std::f32::consts::PI / 2.0;
@@ -207,6 +211,10 @@ fn surface_plot(
             let v1 = verts[t * np + (p + 1) % np];
             let v2 = verts[(t + 1) * np + (p + 1) % np];
             let v3 = verts[(t + 1) * np + p];
+            // Skip quads entirely below the ground plane (the horizon blocks them).
+            if v0[2] < 0.0 && v1[2] < 0.0 && v2[2] < 0.0 && v3[2] < 0.0 {
+                continue;
+            }
             let r0 = ((v0[0] * v0[0] + v0[1] * v0[1] + v0[2] * v0[2]).sqrt() as f32 / max_r)
                 .clamp(0.0, 1.0);
             let c0 = gain_color(r0);
@@ -297,20 +305,21 @@ impl super::SdroxideApp {
             ui.label("m AGL");
         });
 
+        ui.horizontal(|ui| {
+            if ui
+                .button("Apply")
+                .on_hover_text("Run the method-of-moments solver on the presets.")
+                .clicked()
+            {
+                self.antenna_solve();
+            }
+            if self.antenna_solved.is_none() {
+                self.antenna_solve();
+            }
+        });
+        ui.add_space(4.0);
+
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.horizontal(|ui| {
-                if ui
-                    .button("Apply")
-                    .on_hover_text("Run the method-of-moments solver on the presets.")
-                    .clicked()
-                {
-                    self.antenna_solve();
-                }
-                if self.antenna_solved.is_none() {
-                    self.antenna_solve();
-                }
-            });
-            ui.add_space(4.0);
             ui.add_space(4.0);
 
             ui.separator();
