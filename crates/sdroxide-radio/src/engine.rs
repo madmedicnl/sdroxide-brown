@@ -3451,6 +3451,8 @@ struct Engine {
     dab_level: Option<[f32; 2]>,
     /// The speaker feed's level meter, for `RadioEvent::AudioLevel`.
     audio_meter: sdroxide_dsp::AudioMeter,
+    /// Until when a screen has asked for `AudioLevel` (`Command::WantAudioLevel`).
+    audio_level_until: Option<Instant>,
     /// QO-100 beacon decoder: a fixed downconversion onto
     /// [`sdroxide_types::QO100_BEACON_HZ`] plus a worker-thread demodulator,
     /// present only while the decoder is enabled. Simpler than the ISM
@@ -5058,6 +5060,7 @@ fn engine_thread(
         dab_idle_sent: None,
         dab_level: None,
         audio_meter: sdroxide_dsp::AudioMeter::new(),
+        audio_level_until: None,
         qo100_ddc: None,
         qo100: None,
         qo100_buf: Vec::new(),
@@ -6575,10 +6578,13 @@ impl Engine {
         }
         let (speaker, speaker_right): (&[f32], Option<&[f32]>) =
             if self.replay.on() { (&self.replay_buf, None) } else { (&self.main_play, right) };
-        if let Some(level) =
-            self.audio_meter.feed(speaker, speaker_right, self.audio_out_rate, Instant::now())
-        {
-            let _ = self.event_tx.send(RadioEvent::AudioLevel(Box::new(level)));
+        let now = Instant::now();
+        if self.audio_level_until.is_some_and(|t| now < t) {
+            if let Some(level) =
+                self.audio_meter.feed(speaker, speaker_right, self.audio_out_rate, now)
+            {
+                let _ = self.event_tx.send(RadioEvent::AudioLevel(Box::new(level)));
+            }
         }
         if let Some(mixer) = self.mixer.as_mut() {
             mixer.push(speaker, speaker_right, &self.main_play_rec, rec_right);
@@ -11068,6 +11074,13 @@ impl Engine {
                 if self.images.delete_template(&name) {
                     self.emit_image_presets();
                 }
+                return;
+            }
+            WantAudioLevel => {
+                self.audio_level_until = Some(
+                    Instant::now()
+                        + std::time::Duration::from_secs_f64(sdroxide_types::AUDIO_LEVEL_LEASE_SECS),
+                );
                 return;
             }
             // Answered inline: the bytes are already in memory and bounded to

@@ -17,6 +17,10 @@ pub const AUDIO_BANDS_LO_HZ: f32 = 50.0;
 /// Upper edge of the last band, in hertz. Above the 15 kHz of a broadcast FM
 /// programme, so the top bar is the pilot's neighbourhood and not the signal.
 pub const AUDIO_BANDS_HI_HZ: f32 = 16_000.0;
+/// How long one [`crate::Command::WantAudioLevel`] keeps the stream on, in
+/// seconds. A panel renews it about once a second, so a lost command or two
+/// does not blink the bars.
+pub const AUDIO_LEVEL_LEASE_SECS: f64 = 3.0;
 /// What a band of `0` stands for, in dB below full scale.
 pub const AUDIO_BAND_FLOOR_DB: f32 = -80.0;
 

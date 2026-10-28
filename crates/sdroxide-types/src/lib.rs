@@ -163,6 +163,7 @@ pub use contest::{
     cabrillo_mode, rate, score, to_cabrillo, wpx_prefix,
 };
 pub use audio_level::{
+    AUDIO_LEVEL_LEASE_SECS,
     AUDIO_BAND_FLOOR_DB, AUDIO_BANDS, AUDIO_BANDS_HI_HZ, AUDIO_BANDS_LO_HZ, AudioLevel, band_to_byte,
     byte_to_unit,
 };

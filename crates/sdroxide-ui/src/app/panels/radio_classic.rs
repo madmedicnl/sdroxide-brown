@@ -283,6 +283,9 @@ pub(in crate::app) struct State {
     wf: VecDeque<Vec<u8>>,
     wf_seq: Option<u32>,
     pub schedule_open: bool,
+    /// When `WantAudioLevel` was last sent (wall clock), so it is renewed about
+    /// once a second while the panel is on screen.
+    lease_at: f64,
     /// The spectrum frame, handed over by the docked layout: it holds the frame
     /// out of `SdroxideApp::frame` while it draws, so the panel under the
     /// waterfall would otherwise find nothing there.
@@ -300,6 +303,7 @@ impl Default for State {
             wf: VecDeque::new(),
             wf_seq: None,
             schedule_open: false,
+            lease_at: 0.0,
             frame: None,
         }
     }
@@ -390,6 +394,11 @@ impl SdroxideApp {
         );
 
         let now = crate::time::now_unix();
+        let wall = crate::time::now_unix_f64();
+        if wall - self.radio_classic.lease_at >= 1.0 || wall < self.radio_classic.lease_at {
+            self.radio_classic.lease_at = wall;
+            cmds.push(Command::WantAudioLevel);
+        }
         let hz = self.state.active_freq_hz();
         let mode = self.state.rx[0].mode;
         let name = self.rc_name(hz, mode, now);

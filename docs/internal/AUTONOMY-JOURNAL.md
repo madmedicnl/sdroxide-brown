@@ -81,6 +81,8 @@ file touched except two hunks that were already unformatted on `main`
   scrolling row. SCHEDULE shows at most 14 stations, the strongest on the air now
   on the dial's band.
 
+**Review follow-up (same day).** madmedicnl asked that the level stream only while a panel is open. `Command::WantAudioLevel` (appended last, still wire 257 / `0x4D`) is a 3 s lease the open panel renews every second; the engine meters and sends only under a lease. Test `the_panel_asks_for_the_audio_level_only_while_it_is_open` fails with the push removed and passes with it. Also merged `main` (one journal conflict, both entries kept). Engine side not run against a real station.
+
 **Next.** The PR waits for F4NRM's review; the next item in `TODO.md`.
 
 ---

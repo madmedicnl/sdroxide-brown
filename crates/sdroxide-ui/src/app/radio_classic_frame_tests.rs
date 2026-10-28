@@ -110,3 +110,34 @@ fn where_a_panel_owns_the_slot_it_opens_as_a_window_instead_of_doing_nothing() {
         assert!(!app.show_radio_classic, "{mode:?}: the window is forced, not detached");
     }
 }
+
+struct Recorder(std::sync::Arc<std::sync::Mutex<Vec<sdroxide_types::Command>>>);
+
+impl RadioController for Recorder {
+    fn send(&mut self, cmd: sdroxide_types::Command) {
+        self.0.lock().unwrap().push(cmd);
+    }
+    fn poll_event(&mut self) -> Option<RadioEvent> {
+        None
+    }
+}
+
+fn wants(sent: &std::sync::Mutex<Vec<sdroxide_types::Command>>) -> usize {
+    let sent = sent.lock().unwrap();
+    sent.iter().filter(|c| matches!(c, sdroxide_types::Command::WantAudioLevel)).count()
+}
+
+/// The station sends the level only to a screen that asked for it: closed, the
+/// panel asks for nothing; open, it asks once and renews, not every frame.
+#[test]
+fn the_panel_asks_for_the_audio_level_only_while_it_is_open() {
+    let _guard = crate::multi::frame_test_lock();
+    let sent = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (ctx, mut app) = app(Mode::Wfm);
+    app.ctrl = Box::new(Recorder(sent.clone()));
+    run(&ctx, &mut app);
+    assert_eq!(wants(&sent), 0, "a closed panel must not ask for the stream");
+    app.ui_settings.radio_classic_on = true;
+    run(&ctx, &mut app);
+    assert_eq!(wants(&sent), 1, "five frames in well under a second: one lease");
+}

@@ -2156,8 +2156,9 @@ use sdroxide_types::{
 /// v257: **the main receiver's audio level.** `ServerMsg` gains
 /// `AudioLevel(Box<AudioLevel>)` last: the speaker feed's left/right level and
 /// 48 spectrum bars, about thirty times a second, for the Radio Classic panel's
-/// VU and bars. Until now only the DAB status carried a level. `PROTO_VERSION`
-/// 256 → 257, `VERSION_BYTE` 0x4C → 0x4D. A downstream (fork) change.
+/// VU and bars. Until now only the DAB status carried a level. It is sent only
+/// while a screen holds a lease: `Command` gains `WantAudioLevel` last, renewed
+/// about once a second by an open panel. `PROTO_VERSION` 256 → 257, `VERSION_BYTE` 0x4C → 0x4D. A downstream (fork) change.
 pub const PROTO_VERSION: u16 = 257;
 const VERSION_BYTE: u8 = 0x4D;
 
@@ -3278,6 +3279,7 @@ mod tests {
                 ),
             }),
             ClientMsg::Command(Command::ImageDeleteTemplate { name: "Reply".into() }),
+            ClientMsg::Command(Command::WantAudioLevel),
             ClientMsg::Command(Command::ImageGetSlot(4)),
             ClientMsg::Command(Command::ImageClearSlot(0)),
             ClientMsg::Command(Command::ImageList { kind: ImageKind::Wefax, offset: 0, count: 48 }),
