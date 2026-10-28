@@ -21,6 +21,36 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-28 (HF+ skirt — view held inside the usable span)
+
+**In plain words.** Fixed the Airspy HF+ Discovery waterfall skirt that Graeme
+reported on the 2.2.0.2 build. The radio shows 768 kHz but only about 660 kHz of
+it is real band; the rest is filter roll-off. The window could pan or zoom into
+that dead edge and draw it as signal, and the skirt came back whenever the dial
+moved. The view is now held inside the usable 660 kHz, so it stays gone while
+tuning. Graeme can re-check on the next build.
+
+**Done.**
+
+- The panadapter widget read the raw sample rate (768 kHz) as the span it fits,
+  zooms and pans within, so the skirt returned on tune. It now reads
+  `display_span(sample_rate, usable_hz)` — the same number the app's own span
+  already used — while the raw rate stays as the sub-receiver's DDC bound, where
+  the skirt is still inside the stream.
+- Commits `d07ffea6` (the fix) and the navtex-guard `.gitignore` (build artifacts).
+- Gate `cargo check --workspace --all-targets` silent; wasm check green;
+  `spectrum_view` tests 50 passed; `display_span` test passes.
+
+**Not done / blocked.** The wiring is inside the egui widget and is not
+unit-tested — verified by the gate and by Graeme's on-air report on the next
+build. Mid-item the working tree was switched to `fork/antenna-tool` and my
+uncommitted fix was stashed as "stash before antenna tool"; I re-applied and
+committed it on `main`.
+
+**Next.** Await Graeme's re-check. The NAVTEX 518 kHz capture is still pending.
+
+---
+
 ## 2026-10-28 (#257 NAVTEX — guard set up, waiting on the capture)
 
 **In plain words.** Started the NAVTEX work. The only recent change to the decoder
