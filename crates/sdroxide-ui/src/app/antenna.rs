@@ -129,7 +129,11 @@ fn surface_plot(
     np: usize,
     yaw: &mut f32,
     pitch: &mut f32,
+    height_m: f64,
 ) {
+    // Scale the antenna height into the normalised pattern space so the ground
+    // plane (z = 0) stays put and the antenna lifts off it.
+    let height_scaled = (height_m / 30.0).clamp(0.0, 1.0);
     let size = egui::vec2(280.0, 280.0);
     let (response, painter) = ui.allocate_painter(size, egui::Sense::drag());
     let rect = response.rect;
@@ -148,7 +152,7 @@ fn surface_plot(
     let (cy, sy) = (yaw.cos(), yaw.sin());
     let (cp, sp) = (pitch.cos(), pitch.sin());
     let proj = |v: [f64; 3]| -> egui::Pos2 {
-        let (x, y, z) = (v[0] as f32, v[1] as f32, v[2] as f32);
+        let (x, y, z) = (v[0] as f32, v[1] as f32, (v[2] + height_scaled as f64) as f32);
         let (x1, y1) = (x * cy - y * sy, x * sy + y * cy); // yaw around z
         let y2 = y1 * cp - z * sp; // pitch around x
         center + egui::vec2(x1 * scale, -y2 * scale)
@@ -212,7 +216,11 @@ fn surface_plot(
             let v2 = verts[(t + 1) * np + (p + 1) % np];
             let v3 = verts[(t + 1) * np + p];
             // Skip quads entirely below the ground plane (the horizon blocks them).
-            if v0[2] < 0.0 && v1[2] < 0.0 && v2[2] < 0.0 && v3[2] < 0.0 {
+            if v0[2] + height_scaled < 0.0
+                && v1[2] + height_scaled < 0.0
+                && v2[2] + height_scaled < 0.0
+                && v3[2] + height_scaled < 0.0
+            {
                 continue;
             }
             let r0 = ((v0[0] * v0[0] + v0[1] * v0[1] + v0[2] * v0[2]).sqrt() as f32 / max_r)
@@ -457,6 +465,7 @@ impl super::SdroxideApp {
                             *np,
                             &mut self.antenna_yaw,
                             &mut self.antenna_pitch,
+                            self.antenna_height_m,
                         );
                     }
                 });
