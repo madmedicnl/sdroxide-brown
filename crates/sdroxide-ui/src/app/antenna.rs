@@ -15,6 +15,8 @@ pub(in crate::app) struct SolvedRow {
     pub(in crate::app) x: f64,
     pub(in crate::app) swr: f64,
     pub(in crate::app) gain: f64,
+    /// The takeoff angle — the elevation of the peak gain, above the horizon.
+    pub(in crate::app) takeoff: f64,
 }
 
 /// The optimizer's objective rendered for a person.
@@ -234,6 +236,10 @@ impl super::SdroxideApp {
                             ui.monospace(format!("SWR {:.2}", row.swr));
                             ui.add_space(8.0);
                             ui.monospace(format!("{:.1} dBi", row.gain));
+                            ui.add_space(8.0);
+                            ui.monospace(
+                                egui::RichText::new(format!("takeoff {:.0}°", row.takeoff)).weak(),
+                            );
                         });
                     });
                     ui.add_space(4.0);
@@ -352,11 +358,11 @@ impl super::SdroxideApp {
         let mut surfaces = Vec::new();
         for a in antenna_model::presets::catalog(freq_hz) {
             if let Ok(sol) = analyze(&a, &SolverConfig::default()) {
-                let (g, _, _) = max_gain(&sol);
+                let (g, th, _) = max_gain(&sol);
                 let name = a.name.clone();
                 patterns.push((name.clone(), cut(&sol, true, 90.0, 5.0)));
                 surfaces.push(pattern_surface(&sol, 37, 48));
-                rows.push(SolvedRow { name, r: sol.zin.re, x: sol.zin.im, swr: swr(sol.zin, 50.0), gain: g });
+                rows.push(SolvedRow { name, r: sol.zin.re, x: sol.zin.im, swr: swr(sol.zin, 50.0), gain: g, takeoff: 90.0 - th });
             }
         }
         // A stacked Yagi, when asked for — the array's combined gain.
@@ -369,11 +375,11 @@ impl super::SdroxideApp {
                 true,
             );
             if let Ok(sol) = analyze(&stacked, &SolverConfig::default()) {
-                let (g, _, _) = max_gain(&sol);
+                let (g, th, _) = max_gain(&sol);
                 let name = format!("Yagi ×{}", self.antenna_stack);
                 patterns.push((name.clone(), cut(&sol, true, 90.0, 5.0)));
                 surfaces.push(pattern_surface(&sol, 37, 48));
-                rows.push(SolvedRow { name, r: sol.zin.re, x: sol.zin.im, swr: swr(sol.zin, 50.0), gain: g });
+                rows.push(SolvedRow { name, r: sol.zin.re, x: sol.zin.im, swr: swr(sol.zin, 50.0), gain: g, takeoff: 90.0 - th });
             }
         }
         self.antenna_solved = Some(rows);
