@@ -453,6 +453,7 @@ impl super::SdroxideApp {
                 self.antenna_pattern_sel = sel;
                 ui.horizontal(|ui| {
                     ui.label("View:");
+                    let view_before = self.antenna_pattern_view;
                     egui::ComboBox::from_id_salt("antenna-view")
                         .selected_text(match self.antenna_pattern_view {
                             1 => "Front",
@@ -464,6 +465,22 @@ impl super::SdroxideApp {
                             ui.selectable_value(&mut self.antenna_pattern_view, 1, "Front");
                             ui.selectable_value(&mut self.antenna_pattern_view, 2, "Side");
                         });
+                    if self.antenna_pattern_view != view_before {
+                        match self.antenna_pattern_view {
+                            1 => {
+                                self.antenna_yaw = 0.0;
+                                self.antenna_pitch = 0.0;
+                            }
+                            2 => {
+                                self.antenna_yaw = std::f32::consts::FRAC_PI_2;
+                                self.antenna_pitch = 0.0;
+                            }
+                            _ => {
+                                self.antenna_yaw = 0.0;
+                                self.antenna_pitch = std::f32::consts::FRAC_PI_2;
+                            }
+                        }
+                    }
                 });
                 ui.horizontal(|ui| {
                     if let Some((name, cuts)) = self.antenna_patterns.get(self.antenna_pattern_sel) {
