@@ -607,6 +607,9 @@ pub struct SdroxideApp {
     /// working at (MHz).
     show_antenna: bool,
     antenna_freq_mhz: f64,
+    /// The MoM solve of the presets at `antenna_freq_mhz`, once asked for — see
+    /// [`antenna`]. Memory only.
+    antenna_solved: Option<Vec<antenna::SolvedRow>>,
     /// The AIRCRAFT window — see [`aircraft`] — and which opening of it this is.
     show_aircraft: bool,
     aircraft_epoch: u32,
@@ -2144,6 +2147,7 @@ impl SdroxideApp {
             extras_was_open: false,
             show_antenna: false,
             antenna_freq_mhz: 27.265,
+            antenna_solved: None,
             show_aircraft: false,
             aircraft_epoch: 0,
             aircraft_was_open: false,
