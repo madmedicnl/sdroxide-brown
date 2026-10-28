@@ -6122,6 +6122,16 @@ purely a matter of taste; nothing about the picture's meaning changes with it.
 Hover a station and it names itself, with its published frequency — `108.400
 MHz` for a VOR, `373 kHz (medium wave)` for an NDB.
 
+**The overlay (optional).** The **OVERLAY** chip in the panel header fetches
+live aircraft positions from [adsb.lol](https://adsb.lol) and plots them on the
+radar picture alongside the locally received ones, so you can see what is in
+the air around you even beyond your receiver's range. Overlay aircraft are drawn
+as spearheads: **green** when you are also receiving them locally, **orange**
+when they are only in the database. Hover one for its callsign, ICAO, altitude
+and speed. The fetch happens every 30 seconds within a 250 nm radius of your
+station (from **My grid**); without a grid square the overlay cannot fetch and
+the header says so.
+
 **Double-click a station to listen to it.** It goes to **the other VFO**, in
 AM, and the receiver switches to it; press **A/B** to go back and forth between
 the aircraft and the ground. It never goes to the dial in use, and that is not a
