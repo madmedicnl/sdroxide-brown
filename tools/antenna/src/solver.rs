@@ -64,7 +64,7 @@ use num_complex::Complex64;
 use std::f64::consts::PI;
 
 pub use crate::C;
-use crate::model::{Antenna, GroundKind, Pos, Seg};
+use crate::model::{Antenna, Ground, GroundKind, Pos, Seg};
 
 const MU0: f64 = 1.256_637_062_12e-6;
 const EPS0: f64 = 8.854_187_812_8e-12;
@@ -248,6 +248,28 @@ fn load_impedance(load: &crate::model::Load, omega: f64) -> Complex64 {
     }
 }
 
+/// The complex relative permittivity of the ground, `εc = εr − j·60σλ` with σ
+/// in S/m and λ in metres.
+fn eps_c(ground: &Ground, lambda: f64) -> Complex64 {
+    let sigma_sm = ground.sigma_ms_m * 1e-3;
+    Complex64::new(ground.eps_r, -60.0 * sigma_sm * lambda)
+}
+
+/// Fresnel reflection coefficient for **vertical** polarisation, at grazing
+/// angle `psi` (radians; 0 along the surface, π/2 straight down).
+fn reflection_v(ec: Complex64, psi: f64) -> Complex64 {
+    let (s, c) = (psi.sin(), psi.cos());
+    let root = (ec - c * c).sqrt();
+    (ec * s - root) / (ec * s + root)
+}
+
+/// Fresnel reflection coefficient for **horizontal** polarisation.
+fn reflection_h(ec: Complex64, psi: f64) -> Complex64 {
+    let (s, c) = (psi.sin(), psi.cos());
+    let root = (ec - c * c).sqrt();
+    (s - root) / (s + root)
+}
+
 // ── the solve ────────────────────────────────────────────────────────────────
 
 /// A segment reduced to what the far field needs: its current, direction and
@@ -274,6 +296,11 @@ pub struct Solution {
     pub power_w: f64,
     /// Segments with their currents, for the far field.
     pub segments: Vec<FarSeg>,
+    /// Their mirror images through `z = 0`, with the *same* current (the
+    /// reflection coefficient is applied per direction in the far field).
+    pub image_segments: Vec<FarSeg>,
+    /// The ground, for the far-field reflection coefficient.
+    pub ground: Ground,
 }
 
 /// Solve one model at its own frequency.
@@ -376,16 +403,15 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     let omega = 2.0 * PI * a.freq_hz;
     let nu = unknowns.len();
 
-    // Ground. Free space has no image; a perfect ground adds the mirror image
-    // of every source segment with its current reversed (image theory for a PEC
-    // plane at z = 0). Real/Fresnel ground is not modelled yet — refuse rather
-    // than pretend.
+    // Ground. The *impedance* always uses the perfect image (MININEC, like
+    // MMANA, assumes a perfect ground for Z); the *far field* uses the Fresnel
+    // reflection coefficient for a real ground. Free space has no image.
     let image: Option<Complex64> = match a.ground.kind {
         GroundKind::FreeSpace => None,
-        GroundKind::Perfect => Some(Complex64::new(-1.0, 0.0)),
-        GroundKind::Real | GroundKind::SommerfeldNorton => {
-            return Err("real-ground (Fresnel) modelling is not built yet — use free space or a \
-                 perfect ground"
+        GroundKind::Perfect | GroundKind::Real => Some(Complex64::new(-1.0, 0.0)),
+        GroundKind::SommerfeldNorton => {
+            return Err("the Sommerfeld-Norton ground is not modelled — use free space, perfect \
+                 or real ground"
                 .into());
         }
     };
@@ -479,12 +505,17 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     };
     let mut segments: Vec<FarSeg> =
         m.segs.iter().map(|s| far_seg(s, 0.5 * (node_current[s.a] + node_current[s.b]))).collect();
-    if let Some(fac) = image {
-        for s in &m.segs {
-            let i = 0.5 * (node_current[s.a] + node_current[s.b]);
-            segments.push(far_seg(&mirror(s), fac * i));
-        }
-    }
+    // The image segments carry the *same* current; the far field applies the
+    // reflection coefficient per direction (and per observation angle for a
+    // real ground).
+    let image_segments: Vec<FarSeg> = if image.is_some() {
+        m.segs
+            .iter()
+            .map(|s| far_seg(&mirror(s), 0.5 * (node_current[s.a] + node_current[s.b])))
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     Ok(Solution {
         freq_hz: a.freq_hz,
@@ -494,6 +525,8 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
         zin,
         power_w,
         segments,
+        image_segments,
+        ground: a.ground,
     })
 }
 
@@ -511,22 +544,65 @@ fn mirror(s: &Segment) -> Segment {
 }
 
 /// The far-field vector pattern factor `F(θ,φ)`, as a complex 3-vector:
-/// `Σ I_n Δ_n [ŝ_n − (ŝ_n·r̂)r̂] e^{jk r̂·r_n}`.
+/// `Σ I_n Δ_n [ŝ_n − (ŝ_n·r̂)r̂] e^{jk r̂·r_n}`, plus the image field weighted by
+/// the ground's reflection coefficient (vertical and horizontal separately).
 fn far_factor(sol: &Solution, theta_deg: f64, phi_deg: f64, k: f64) -> [Complex64; 3] {
     let th = theta_deg.to_radians();
     let ph = phi_deg.to_radians();
     let rhat = [th.sin() * ph.cos(), th.sin() * ph.sin(), th.cos()];
     let mut f = [Complex64::new(0.0, 0.0); 3];
     for s in &sol.segments {
-        let dd = dot(s.dir, rhat);
-        let proj = [s.dir[0] - dd * rhat[0], s.dir[1] - dd * rhat[1], s.dir[2] - dd * rhat[2]];
-        let phase = k * dot(rhat, s.mid);
-        let e = Complex64::from_polar(s.len, phase) * s.current;
-        for (fi, pi) in f.iter_mut().zip(proj) {
-            *fi += e * pi;
+        add_segment(&mut f, s, s.current, rhat, k);
+    }
+    if !sol.image_segments.is_empty() {
+        let (rv, rh) = ground_reflection(sol, theta_deg);
+        for s in &sol.image_segments {
+            // Vertical: the mirror flipped z, but the image of a vertical
+            // current keeps its direction — flip it back and weight by R_v.
+            add_segment(
+                &mut f,
+                &FarSeg { dir: [0.0, 0.0, -s.dir[2]], ..*s },
+                rv * s.current,
+                rhat,
+                k,
+            );
+            add_segment(
+                &mut f,
+                &FarSeg { dir: [s.dir[0], s.dir[1], 0.0], ..*s },
+                rh * s.current,
+                rhat,
+                k,
+            );
         }
     }
     f
+}
+
+/// Add one far-field segment's contribution to `f`.
+fn add_segment(f: &mut [Complex64; 3], s: &FarSeg, current: Complex64, rhat: [f64; 3], k: f64) {
+    let dd = dot(s.dir, rhat);
+    let proj = [s.dir[0] - dd * rhat[0], s.dir[1] - dd * rhat[1], s.dir[2] - dd * rhat[2]];
+    let phase = k * dot(rhat, s.mid);
+    let e = Complex64::from_polar(s.len, phase) * current;
+    for (fi, pi) in f.iter_mut().zip(proj) {
+        *fi += e * pi;
+    }
+}
+
+/// The ground's reflection coefficient at an observation elevation — the pair
+/// `(vertical, horizontal)`. For a perfect ground these are the PEC limits
+/// `(+1, −1)`; for a real ground they are the Fresnel coefficients at the
+/// grazing angle. The grazing angle is 0 at the horizon and π/2 at the zenith.
+fn ground_reflection(sol: &Solution, theta_deg: f64) -> (Complex64, Complex64) {
+    let psi = (90.0 - theta_deg).abs().to_radians();
+    match sol.ground.kind {
+        GroundKind::Perfect => (Complex64::new(1.0, 0.0), Complex64::new(-1.0, 0.0)),
+        GroundKind::Real => {
+            let ec = eps_c(&sol.ground, C / sol.freq_hz);
+            (reflection_v(ec, psi), reflection_h(ec, psi))
+        }
+        _ => (Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0)),
+    }
 }
 
 /// Gain in dBi toward `(θ, φ)` (θ from +z, φ from +x).
@@ -1056,14 +1132,91 @@ mod tests {
         );
     }
 
-    /// Real (Fresnel) ground is not modelled yet, so it is refused rather than
-    /// silently treated as something else.
+    /// A real (Fresnel) ground solves — the impedance uses the perfect image
+    /// (MININEC's assumption) and the far field uses the reflection
+    /// coefficient. A quarter-wave vertical over real ground still comes out
+    /// near the perfect-ground figure, and the Sommerfeld-Norton ground is
+    /// refused rather than silently treated as something else.
     #[test]
-    fn real_ground_is_refused() {
-        let mut a = dipole(0.475, 80);
-        a.ground.kind = GroundKind::Real;
-        let err = analyze(&a, &SolverConfig::default()).unwrap_err();
-        assert!(err.contains("real-ground"), "{err}");
+    fn real_ground_solves_and_sommerfeld_is_refused() {
+        let f = 30e6;
+        let lam = C / f;
+        let mut mono = Antenna::wire_with_feed(
+            f,
+            "m",
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.25 * lam],
+            lam / 10_000.0,
+            Seg::Fixed(80),
+        );
+        mono.sources = vec![Source {
+            at: WirePoint { wire: 1, at: Pos::Begin, offset: 0 },
+            phase_deg: 0.0,
+            volts: 1.0,
+        }];
+        mono.ground.kind = GroundKind::Real;
+        mono.ground.eps_r = 13.0;
+        mono.ground.sigma_ms_m = 5.0;
+        let z = analyze(&mono, &SolverConfig::default()).expect("real ground should solve").zin;
+        assert!(z.re.is_finite() && z.re > 0.0, "R = {z}");
+
+        mono.ground.kind = GroundKind::SommerfeldNorton;
+        let err = analyze(&mono, &SolverConfig::default()).unwrap_err();
+        assert!(err.contains("Sommerfeld"), "{err}");
+    }
+
+    /// The Fresnel coefficients tend to the PEC limits — `R_v → 1`, `R_h → −1`
+    /// as the ground grows more conductive — and both are `−1` at grazing for
+    /// any ground.
+    #[test]
+    fn the_fresnel_coefficients_have_the_right_limits() {
+        let ec = Complex64::new(13.0, 0.0);
+        assert!((reflection_v(ec, 0.0).re + 1.0).abs() < 1e-9, "R_v at grazing");
+        assert!((reflection_h(ec, 0.0).re + 1.0).abs() < 1e-9, "R_h at grazing");
+        let rv = reflection_v(ec, std::f64::consts::FRAC_PI_2);
+        let expect = (13.0 - 13f64.sqrt()) / (13.0 + 13f64.sqrt());
+        assert!((rv.re - expect).abs() < 1e-6, "R_v = {rv:.4}, want {expect:.4}");
+        let rh = reflection_h(ec, std::f64::consts::FRAC_PI_2);
+        assert!((rh.re + expect).abs() < 1e-6, "R_h = {rh:.4}, want {:.4}", -expect);
+    }
+
+    /// Real ground changes the far field while the impedance stays the
+    /// perfect-ground figure (MININEC's assumption: Z always uses the image).
+    #[test]
+    fn real_ground_shifts_the_pattern_but_not_the_impedance() {
+        let f = 30e6;
+        let lam = C / f;
+        let mono = |kind: GroundKind| {
+            let mut m = Antenna::wire_with_feed(
+                f,
+                "m",
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.25 * lam],
+                lam / 10_000.0,
+                Seg::Fixed(80),
+            );
+            m.sources = vec![Source {
+                at: WirePoint { wire: 1, at: Pos::Begin, offset: 0 },
+                phase_deg: 0.0,
+                volts: 1.0,
+            }];
+            m.ground = Ground { kind, ..Ground::default() };
+            m
+        };
+        let perf = analyze(&mono(GroundKind::Perfect), &SolverConfig::default()).unwrap();
+        let real = analyze(&mono(GroundKind::Real), &SolverConfig::default()).unwrap();
+        assert!(
+            (perf.zin.re - real.zin.re).abs() < 0.01,
+            "Z should be unchanged: {} vs {}",
+            perf.zin.re,
+            real.zin.re
+        );
+        let gp = gain_dbi(&perf, 60.0, 0.0);
+        let gr = gain_dbi(&real, 60.0, 0.0);
+        assert!(
+            (gp - gr).abs() > 0.1,
+            "real ground should change the pattern at 30° elevation: {gp:.2} vs {gr:.2}"
+        );
     }
 
     #[test]

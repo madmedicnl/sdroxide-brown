@@ -137,6 +137,10 @@ pub struct Load {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Ground {
     pub kind: GroundKind,
+    /// Relative permittivity εr (the dielectric constant). Defaults to 13, the
+    /// "dry field / forest" figure from MMANA's own table.
+    #[serde(default = "default_eps_r")]
+    pub eps_r: f64,
     /// Conductivity, mS/m, as MMANA stores it (`0.0` = unspecified).
     pub sigma_ms_m: f64,
     /// Radials, informational.
@@ -147,6 +151,10 @@ pub struct Ground {
     pub az_deg: f64,
     pub el_deg: f64,
     pub height_m: f64,
+}
+
+fn default_eps_r() -> f64 {
+    13.0
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -181,6 +189,7 @@ impl Default for Ground {
     fn default() -> Ground {
         Ground {
             kind: GroundKind::Real,
+            eps_r: 13.0,
             sigma_ms_m: 5.0,
             radials: 0,
             ref_z: 50.0,

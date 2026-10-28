@@ -106,6 +106,7 @@ pub fn read(text: &str) -> Result<Antenna, String> {
                 if n.len() >= 7 {
                     a.ground = Ground {
                         kind: GroundKind::from_code(n[0] as i32),
+                        eps_r: 13.0, // not stored in the file — a UI-only setting
                         sigma_ms_m: n[1],
                         radials: n[2] as i32,
                         ref_z: n[3],

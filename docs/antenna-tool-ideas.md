@@ -334,9 +334,11 @@ was the hard part and is handled.*
       quarter-wave monopole over a perfect ground comes out at half a dipole,
       ≈35 Ω and ~5.1 dBi (3 dB over the dipole). The presets now carry a ground
       (horizontals in free space, the vertical/GP over perfect).
-- [ ] **Real (Fresnel) ground** — refused for now rather than treated as
-      something else; the reflection-coefficient model with the εr/σ presets and
-      the <0.2 λ caveat is the next ground item.
+- [x] **Real (Fresnel) ground** — the reflection coefficient at the grazing
+      angle (vertical and horizontal separately, `εc = εr − j·60σλ`). The
+      impedance still uses the perfect image, exactly as MININEC/MMANA do; only
+      the far field takes the real ground. `eps_r` defaults to 13 (dry ground);
+      the σ is the model's `sigma_ms_m`. The `<0.2 λ` caveat stays worth saying.
 - [ ] MMANA's DM1/DM2/SC/EC tapering.
 
 **C — Patterns**
