@@ -961,8 +961,16 @@ impl SdroxideApp {
         let wheel = self.input.cfg.wheel;
         let active = self.state.active_vfo;
         let mut new_hz = None;
-        ui.scope_builder(egui::UiBuilder::new().max_rect(vfo_rect), |ui| {
-            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+        // The readout is as wide as its digits and sits at the left of whatever
+        // room it is given, so it is placed by the width it had last frame.
+        let width_id = crate::layout::salted_id(ui.ctx(), "radio-classic-freq-width");
+        let known = ui.data(|d| d.get_temp::<f32>(width_id));
+        let dial_rect = match known {
+            Some(w) => centred_in(vfo_rect, w),
+            None => vfo_rect,
+        };
+        let used = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(dial_rect), |ui| {
                 new_hz = crate::widgets::freq_display::show(
                     ui,
                     crate::layout::salted_id(ui.ctx(), "radio-classic-freq"),
@@ -972,8 +980,14 @@ impl SdroxideApp {
                     Some(ink.amber),
                     9,
                 );
-            });
-        });
+            })
+            .response
+            .rect
+            .width();
+        if known.is_none_or(|w| (w - used).abs() > 0.5) {
+            ui.data_mut(|d| d.insert_temp(width_id, used));
+            ui.ctx().request_repaint();
+        }
         if let Some(hz) = new_hz {
             cmds.push(Command::SetVfo { vfo: active, hz });
         }
@@ -1090,6 +1104,12 @@ impl SdroxideApp {
             );
         }
     }
+}
+
+/// `w` points wide, in the middle of `outer` (all of it when it is wider).
+fn centred_in(outer: Rect, w: f32) -> Rect {
+    let w = w.min(outer.width());
+    Rect::from_min_size(Pos2::new(outer.center().x - w / 2.0, outer.top()), vec2(w, outer.height()))
 }
 
 /// A short mode tag for the right column's corner.
@@ -1240,6 +1260,14 @@ mod tests {
             let rows = group_rows(g);
             assert!(!rows.is_empty() && rows.iter().all(|(_, r)| !r.is_empty()), "{g:?}");
         }
+    }
+
+    #[test]
+    fn a_readout_is_placed_in_the_middle_of_its_room() {
+        let room = Rect::from_min_size(Pos2::new(100.0, 10.0), vec2(400.0, 50.0));
+        let r = centred_in(room, 200.0);
+        assert!((r.center().x - room.center().x).abs() < 0.01 && r.width() == 200.0);
+        assert_eq!(centred_in(room, 900.0), room, "wider than the room: the room");
     }
 
     #[test]

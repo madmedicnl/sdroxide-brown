@@ -209,3 +209,53 @@ fn the_programs_chip_opens_the_programs_window() {
     assert!(click(&ctx, &mut app, "PROGRAMS"), "no PROGRAMS chip on the panel");
     assert!(app.schedule.show, "the click did not open the PROGRAMS window");
 }
+
+/// Every text shape on screen, as `(text, rect)`.
+fn text_rects(shapes: &[egui::epaint::ClippedShape]) -> Vec<(String, egui::Rect)> {
+    fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => {
+                out.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size())))
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    shapes.iter().for_each(|c| walk(&c.shape, &mut out));
+    out
+}
+
+/// The big frequency sits in the middle of its column: the hint line under it
+/// is centred on the column, and the digits must share its centre.
+#[test]
+fn the_big_frequency_is_centred_in_its_column() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app) = app(Mode::Wfm);
+    app.ui_settings.radio_classic_on = true;
+    run(&ctx, &mut app);
+    let shapes = one_frame(&ctx, &mut app, 2.0, vec![]);
+    let texts = text_rects(&shapes);
+    let hint = texts
+        .iter()
+        .find(|(t, _)| t.starts_with("wheel on a digit"))
+        .map(|(_, r)| *r)
+        .expect("no hint line under the frequency");
+    let column = hint.center().x;
+    let digits: Vec<egui::Rect> = texts
+        .iter()
+        .filter(|(t, r)| {
+            (t.chars().count() == 1 && t.chars().all(|c| c.is_ascii_digit() || c == '.')
+                || t.trim() == "Hz")
+                && r.bottom() <= hint.top() + 2.0
+                && r.top() > hint.top() - 90.0
+                && (r.center().x - column).abs() < 450.0
+                && r.height() > 14.0
+        })
+        .map(|(_, r)| *r)
+        .collect();
+    assert!(digits.len() >= 9, "found {} digits", digits.len());
+    let span = digits.iter().fold(digits[0], |a, r| a.union(*r));
+    let off = span.center().x - hint.center().x;
+    assert!(off.abs() <= 1.5, "the frequency is {off} px off the column's centre {column}");
+}
