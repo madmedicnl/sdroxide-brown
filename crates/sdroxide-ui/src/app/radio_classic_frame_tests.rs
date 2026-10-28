@@ -146,9 +146,7 @@ fn the_panel_asks_for_the_audio_level_only_while_it_is_open() {
 fn centre_of(shapes: &[egui::epaint::ClippedShape], what: &str) -> Option<egui::Pos2> {
     fn walk(s: &egui::Shape, what: &str) -> Option<egui::Pos2> {
         match s {
-            egui::Shape::Text(t) if t.galley.text() == what => {
-                Some(t.pos + t.galley.size() / 2.0)
-            }
+            egui::Shape::Text(t) if t.galley.text() == what => Some(t.pos + t.galley.size() / 2.0),
             egui::Shape::Vec(v) => v.iter().find_map(|s| walk(s, what)),
             _ => None,
         }
@@ -214,9 +212,10 @@ fn the_programs_chip_opens_the_programs_window() {
 fn text_rects(shapes: &[egui::epaint::ClippedShape]) -> Vec<(String, egui::Rect)> {
     fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
         match s {
-            egui::Shape::Text(t) => {
-                out.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size())))
-            }
+            egui::Shape::Text(t) => out.push((
+                t.galley.text().to_string(),
+                egui::Rect::from_min_size(t.pos, t.galley.size()),
+            )),
             egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
             _ => {}
         }
@@ -258,4 +257,55 @@ fn the_big_frequency_is_centred_in_its_column() {
     let span = digits.iter().fold(digits[0], |a, r| a.union(*r));
     let off = span.center().x - hint.center().x;
     assert!(off.abs() <= 1.5, "the frequency is {off} px off the column's centre {column}");
+}
+
+/// The Wideband row of the band menu, drawn on its own.
+fn wideband_row(
+    app: &mut SdroxideApp,
+    ctx: &egui::Context,
+    radio: &mut super::top_bar::RadioChip,
+) -> Vec<String> {
+    let mut show_ism = false;
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))),
+        ..Default::default()
+    };
+    let mut out = ctx.run_ui(input, |ui| {
+        super::top_bar::wideband_chip_grid(
+            ui,
+            Mode::Wfm,
+            sdroxide_types::Band::Gen,
+            &app.state,
+            false,
+            &mut show_ism,
+            radio,
+            &mut Vec::new(),
+        );
+    });
+    out.textures_delta.clear();
+    texts(&out.shapes)
+}
+
+/// WIDEBAND has a RADIO chip to the right of ISM, and it is lit while RADIO
+/// CLASSIC is on — the same state EXTRAS' chip reads.
+#[test]
+fn the_wideband_row_has_a_radio_chip_after_ism() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app) = app(Mode::Wfm);
+    let mut radio = super::top_bar::RadioChip::new(app.radio_classic_active());
+    let row = wideband_row(&mut app, &ctx, &mut radio);
+    let ism = row.iter().position(|t| t == "ISM").expect("no ISM chip");
+    assert_eq!(row.get(ism + 1).map(String::as_str), Some("RADIO"), "{row:?}");
+}
+
+/// EXTRAS' chip and the Wideband row's flip the same switch.
+#[test]
+fn both_radio_chips_flip_the_same_switch() {
+    let _guard = crate::multi::frame_test_lock();
+    let (_ctx, mut app) = app(Mode::Wfm);
+    assert!(!app.radio_classic_active());
+    app.toggle_radio_classic();
+    assert!(app.radio_classic_active() && app.ui_settings.radio_classic_on);
+    app.toggle_radio_classic();
+    assert!(!app.radio_classic_active());
 }

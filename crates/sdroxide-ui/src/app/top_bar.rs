@@ -1565,6 +1565,7 @@ impl SdroxideApp {
                 .radio_cfg
                 .as_ref()
                 .is_some_and(|c| c.backend == sdroxide_types::Backend::AtsMini);
+            let mut radio = RadioChip::new(self.radio_classic_active());
             crate::chrome::menu_group(ui, "Band", w, |ui| {
                 band_mode_menu(
                     ui,
@@ -1578,10 +1579,14 @@ impl SdroxideApp {
                     self.daylight,
                     atsmini,
                     &mut self.show_ism,
+                    &mut radio,
                     self.ui_settings.listen_tab_hides_tx,
                     cmds,
                 );
             });
+            if radio.clicked {
+                self.toggle_radio_classic();
+            }
             ui.add_space(4.0);
 
             // SYSTEM — the receiver, the transmitter and the radio, the three
@@ -2996,6 +3001,7 @@ impl SdroxideApp {
         let mut dock = false;
         #[cfg(not(target_arch = "wasm32"))]
         let mut window = false;
+        let mut radio = RadioChip::new(self.radio_classic_active());
         crate::chrome::fading_menu_popup(ui, &btn, &mut self.mode_popup_since, |ui| {
             if can_dock {
                 ui.horizontal(|ui| {
@@ -3037,10 +3043,14 @@ impl SdroxideApp {
                 daylight,
                 atsmini,
                 &mut self.show_ism,
+                &mut radio,
                 self.ui_settings.listen_tab_hides_tx,
                 cmds,
             );
         });
+        if radio.clicked {
+            self.toggle_radio_classic();
+        }
         if dock {
             self.band_docked = true;
             self.band_dock_visible = true;
@@ -3151,6 +3161,7 @@ impl SdroxideApp {
         let stated = self.radio_cfg.as_ref().is_some_and(|c| !c.freq_ranges_rx.is_empty());
         let atsmini =
             self.radio_cfg.as_ref().is_some_and(|c| c.backend == sdroxide_types::Backend::AtsMini);
+        let mut radio = RadioChip::new(self.radio_classic_active());
         band_mode_menu(
             ui,
             &mut self.band_menu_tab,
@@ -3163,9 +3174,13 @@ impl SdroxideApp {
             self.daylight,
             atsmini,
             &mut self.show_ism,
+            &mut radio,
             self.ui_settings.listen_tab_hides_tx,
             cmds,
         );
+        if radio.clicked {
+            self.toggle_radio_classic();
+        }
         // **LISTEN hides the transmit controls; OPERATE never grants them** —
         // and the half of issue #146 that says so lives in `swl_mode` and
         // `remember_band_tab`, not here. It used to live here, which is how the
@@ -8698,21 +8713,49 @@ pub(in crate::app) fn wideband_chip_grid(
     state: &RadioState,
     listen: bool,
     show_ism: &mut bool,
+    radio: &mut RadioChip,
     cmds: &mut Vec<Command>,
 ) {
     const ISM_LABEL: &str = "ISM";
+    const RADIO_LABEL: &str = "RADIO";
     let mut widths: Vec<f32> =
         WIDEBAND_MODES.iter().map(|m| crate::chrome::chip_width(ui, m.label(), None)).collect();
     widths.push(crate::chrome::chip_width(ui, ISM_LABEL, None));
-    let total = WIDEBAND_MODES.len() + 1; // five lanes + ISM
+    widths.push(crate::chrome::chip_width(ui, RADIO_LABEL, None));
+    let total = WIDEBAND_MODES.len() + 2; // five lanes + ISM + RADIO
     chip_lines(ui, &widths, |ui, i| {
         if i < WIDEBAND_MODES.len() {
             mode_chip(ui, mode, WIDEBAND_MODES[i], band, state, listen, cmds);
-        } else {
+        } else if i == WIDEBAND_MODES.len() {
             draw_ism_chip(ui, state, show_ism);
+        } else {
+            radio.draw(ui);
         }
     });
     debug_assert_eq!(widths.len(), total);
+}
+
+/// The RADIO chip of the Wideband row: the same switch as EXTRAS' RADIO chip.
+/// It only reports the click; [`SdroxideApp::toggle_radio_classic`] acts on it.
+pub(in crate::app) struct RadioChip {
+    /// Whether RADIO CLASSIC is on, as the caller read it.
+    pub on: bool,
+    /// Set when the chip was clicked this frame.
+    pub clicked: bool,
+}
+
+impl RadioChip {
+    pub(in crate::app) fn new(on: bool) -> Self {
+        Self { on, clicked: false }
+    }
+
+    fn draw(&mut self, ui: &mut egui::Ui) {
+        let resp = crate::chrome::chip(ui, self.on, "RADIO").on_hover_text(
+            "RADIO CLASSIC — a classic radio face for broadcast listening. Switching it \
+             on gives it the receiver: the other modes and their windows are closed",
+        );
+        self.clicked |= resp.clicked();
+    }
 }
 
 /// The ISM chip as it appears in the Wideband row: toggles the window, lit when
@@ -9442,6 +9485,9 @@ pub(in crate::app) fn band_mode_menu(
     // Whether the ISM decoder window is open — the chip lives in the Wideband
     // row now, so the menu needs to read and write it.
     show_ism: &mut bool,
+    // The RADIO chip beside ISM: RADIO CLASSIC is a face, not a mode, so the
+    // click is handed back for the app to act on.
+    radio: &mut RadioChip,
     // The operator's own setting: does the LISTEN tab carry the listening
     // screen? Read here only to say where the switch is while it is off —
     // issue #146 was reopened by a man who had every right to expect the tab to
@@ -9603,7 +9649,7 @@ pub(in crate::app) fn band_mode_menu(
             mode_chip_grid(ui, mode, &digital, band, state, false, cmds);
             ui.add_space(6.0);
             crate::chrome::menu_caption(ui, "Wideband");
-            wideband_chip_grid(ui, mode, band, state, false, show_ism, cmds);
+            wideband_chip_grid(ui, mode, band, state, false, show_ism, radio, cmds);
             ui.add_space(6.0);
             crate::chrome::menu_caption(ui, "11M/CB");
             // The channel plans, in the same aligned grid as the modes. Which
@@ -9666,7 +9712,7 @@ pub(in crate::app) fn band_mode_menu(
             mode_chip_grid(ui, mode, &digital, band, state, true, cmds);
             ui.add_space(6.0);
             crate::chrome::menu_caption(ui, "Wideband");
-            wideband_chip_grid(ui, mode, band, state, true, show_ism, cmds);
+            wideband_chip_grid(ui, mode, band, state, true, show_ism, radio, cmds);
             ui.add_space(6.0);
             crate::chrome::menu_caption(ui, "Experimental (unproven)");
             mode_chip_grid(ui, mode, &Mode::EXPERIMENTAL, band, state, true, cmds);
@@ -11958,6 +12004,7 @@ mod tests {
                     true,
                     false,
                     &mut false,
+                    &mut RadioChip::new(false),
                     false,
                     cmds,
                 );
@@ -12098,6 +12145,7 @@ mod tests {
                     true,
                     false,
                     &mut false,
+                    &mut RadioChip::new(false),
                     false,
                     &mut Vec::new(),
                 );
