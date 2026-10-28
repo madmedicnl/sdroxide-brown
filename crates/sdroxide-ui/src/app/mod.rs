@@ -76,7 +76,7 @@ pub(in crate::app) mod schedule;
 pub(in crate::app) mod settings;
 pub(in crate::app) mod signal_id;
 pub(in crate::app) mod solar;
-pub(in crate::app) mod spectrum;
+pub(crate) mod spectrum;
 pub(in crate::app) mod speech;
 pub(in crate::app) mod spots;
 mod swl_log;
