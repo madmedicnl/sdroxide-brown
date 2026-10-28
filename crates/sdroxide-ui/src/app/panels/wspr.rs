@@ -163,7 +163,28 @@ impl SdroxideApp {
         let stations = self.digi_stations.stations(now_t);
         let heat = self.prop_texture(ui.ctx(), self.state.rx_freq_hz());
         let night = self.night_texture(ui.ctx());
-        let reporters = self.heard_me_reporters();
+        // WSPR's "who heard me" reports live in `wspr_spots` (spots where
+        // `reporter` is set), not in the PSK reporter feed, so build the map's
+        // reporter markers from them directly.
+        let reporters: Vec<sdroxide_types::Spot> = self
+            .wspr_spots
+            .iter()
+            .filter(|s| s.is_heard_by_other())
+            .map(|s| sdroxide_types::Spot {
+                id: 0,
+                kind: sdroxide_types::SpotKind::HeardMe,
+                freq_hz: s.freq_hz,
+                call: s.reporter.clone().unwrap_or_default(),
+                spotter: String::new(),
+                mode: "WSPR".to_string(),
+                comment: String::new(),
+                reference: None,
+                grid: s.reporter_grid.clone(),
+                loc: s.reporter_grid.as_deref().and_then(sdroxide_types::grid_to_latlon),
+                when_utc: s.slot_utc,
+                snr_db: Some(s.snr_db),
+            })
+            .collect();
         if let Some((lat, lon)) = crate::widgets::worldmap::show(
             ui,
             &mut self.map_view,
@@ -219,6 +240,17 @@ impl SdroxideApp {
                     format!("{} rx", self.wspr_spots.len())
                 };
                 ui.label(RichText::new(label).size(10.0).color(crate::theme::gray(120)));
+                if crate::chrome::chip(ui, false, RichText::new("CLEAR RX").size(9.5)).clicked()
+                    && !self.wspr_spots.is_empty()
+                {
+                    self.wspr_spots.clear();
+                }
+                for (mode, name) in [(1u8, "DIST"), (2u8, "COUNTRY")] {
+                    let resp = crate::chrome::chip(ui, self.wspr_sort == mode, RichText::new(name).size(9.5));
+                    if resp.clicked() {
+                        self.wspr_sort = if self.wspr_sort == mode { 0 } else { mode };
+                    }
+                }
                 crate::app::panels::save_text_chip(
                     ui,
                     !self.wspr_spots.is_empty(),
@@ -231,7 +263,56 @@ impl SdroxideApp {
 
         // Virtualised: only the rows the viewport covers are laid out, so a
         // night of receptions costs the same per frame as an hour of them.
-        let spots = std::mem::take(&mut self.wspr_spots);
+        let mut spots = std::mem::take(&mut self.wspr_spots);
+        // Apply the chosen sort order (default: newest first, as stored).
+        match self.wspr_sort {
+            1 => {
+                let home_ll = home;
+                spots.sort_by(|a, b| {
+                    let far_a = if a.is_heard_by_other() {
+                        a.reporter_grid.as_deref()
+                    } else {
+                        a.grid.as_deref()
+                    };
+                    let far_b = if b.is_heard_by_other() {
+                        b.reporter_grid.as_deref()
+                    } else {
+                        b.grid.as_deref()
+                    };
+                    let da = home_ll
+                        .zip(far_a.and_then(sdroxide_types::grid_to_latlon))
+                        .map(|(h, g)| sdroxide_types::distance_km(h, g))
+                        .unwrap_or(f64::MAX);
+                    let db = home_ll
+                        .zip(far_b.and_then(sdroxide_types::grid_to_latlon))
+                        .map(|(h, g)| sdroxide_types::distance_km(h, g))
+                        .unwrap_or(f64::MAX);
+                    da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                });
+            }
+            2 => {
+                spots.sort_by(|a, b| {
+                    let who_a = if a.is_heard_by_other() {
+                        a.reporter.as_deref().unwrap_or("")
+                    } else {
+                        a.call.as_str()
+                    };
+                    let who_b = if b.is_heard_by_other() {
+                        b.reporter.as_deref().unwrap_or("")
+                    } else {
+                        b.call.as_str()
+                    };
+                    let ca = sdroxide_types::resolve_callsign(who_a)
+                        .map(|e| e.name)
+                        .unwrap_or_default();
+                    let cb = sdroxide_types::resolve_callsign(who_b)
+                        .map(|e| e.name)
+                        .unwrap_or_default();
+                    ca.cmp(&cb)
+                });
+            }
+            _ => {}
+        }
         egui::ScrollArea::vertical()
             .id_salt("wspr-receptions")
             .max_height(ui.available_height())
@@ -450,8 +531,27 @@ impl SdroxideApp {
                         cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
                     }
                 }
+                // Explicit enable / stop controls for clarity.
+                let enable_resp = crate::chrome::chip_accent_enabled(
+                    ui,
+                    tx_ok,
+                    cur > 0,
+                    "TX ENABLE",
+                    Some(10.5),
+                    crate::theme::PINK(),
+                    crate::theme::INK_ON_CYAN(),
+                );
+                if enable_resp.clicked() && cur == 0 && self.digi_cfg_seeded && tx_ok {
+                    self.digi_cfg_edit.wspr_tx_percent = 20;
+                    cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+                }
+                let stop_resp = crate::chrome::chip(ui, cur == 0, RichText::new("STOP TX").size(10.5));
+                if stop_resp.clicked() && cur > 0 && self.digi_cfg_seeded {
+                    self.digi_cfg_edit.wspr_tx_percent = 0;
+                    cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+                }
             });
-
+            
             // Power, in the unit an operator sets their radio in.
             //
             // A picker rather than a free number: WSPR's fifty-bit message can name
