@@ -52,17 +52,16 @@ fn pattern_plot(ui: &mut egui::Ui, name: &str, cut: &[(f64, f64)]) {
     );
     painter.circle_filled(center, 1.5, egui::Color32::from_gray(220));
     let max_g = cut.iter().map(|&(_, g)| g).fold(f64::NEG_INFINITY, f64::max);
-    let min_g = cut.iter().map(|&(_, g)| g).fold(f64::INFINITY, f64::min);
-    let range = (max_g - min_g).max(1.0);
-    // Draw filled pattern
+    // Draw filled pattern — radius is the relative field (10^((G-Gmax)/20)),
+    // so nulls land near zero and the peak at the rim.
     let mut n = cut.len();
     for i in 0..n {
         let (az1, g1) = cut[i];
         let (az2, g2) = cut[(i + 1) % n];
         let a1 = az1.to_radians();
         let a2 = az2.to_radians();
-        let r1 = ((g1 - min_g) / range).clamp(0.0, 1.0);
-        let r2 = ((g2 - min_g) / range).clamp(0.0, 1.0);
+        let r1 = 10f64.powf((g1 - max_g) / 20.0).clamp(0.0, 1.0);
+        let r2 = 10f64.powf((g2 - max_g) / 20.0).clamp(0.0, 1.0);
         let c1 = gain_color(r1 as f32);
         let p0 = center;
         let p1 = center
@@ -83,7 +82,7 @@ fn pattern_plot(ui: &mut egui::Ui, name: &str, cut: &[(f64, f64)]) {
         .iter()
         .map(|&(az, g)| {
             let a = az.to_radians();
-            let r = ((g - min_g) / range).clamp(0.05, 1.0);
+            let r = 10f64.powf((g - max_g) / 20.0).clamp(0.05, 1.0);
             center
                 + egui::vec2(
                     (a.sin() * radius as f64 * r) as f32,
