@@ -142,10 +142,8 @@ impl SdroxideApp {
 /// the window saw it — a report decoded at 02:05 was observed at the hour, and
 /// the difference is the thing a listener checks.
 fn ago(unix: i64) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(unix);
+    // Wasm-safe: `SystemTime::now()` panics in the browser (#262/#297).
+    let now = crate::time::now_unix();
     let mins = ((now - unix) / 60).max(0);
     match mins {
         0 => "just now".into(),
