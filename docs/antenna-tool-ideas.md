@@ -323,8 +323,11 @@ was the hard part and is handled.*
       node into the two wires' terminals and puts the source **between** them
       with opposite polarity — the inverted-V now solves to ~40 Ω (against the
       ~50 Ω classic figure; the `K = 0.95` length is not quite resonant for a
-      bent leg). A feed at a **three-or-more-way** junction (the ground-plane
-      base) is still refused. Unfed junctions (the delta loop's corners) give a
+      bent leg).
+- [x] **Multi-way junction (the ground-plane base).** The feed splits the node
+      into the feed wire and everything else, so the source sits between the
+      radiator and the radials — the ground plane solves to ~35 Ω (the ~36 Ω
+      classic figure). Unfed junctions (the delta loop's corners) give a
       plausible ~107 Ω, but **no reference value here pins them** — treat them as
       plausible, not proven.
 - [x] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — all seven MMANA

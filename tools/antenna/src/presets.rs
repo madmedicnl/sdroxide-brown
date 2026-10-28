@@ -115,7 +115,10 @@ pub fn ground_plane(freq_hz: f64) -> Antenna {
             phase_deg: 0.0,
             volts: 1.0,
         }],
-        ground: Ground { kind: GroundKind::Perfect, radials: 4, ..Ground::default() },
+        // The radials are the counterpoise, so the model is free-space — no
+        // ground image (a perfect ground would mirror the radials onto
+        // themselves at z=0).
+        ground: Ground { kind: GroundKind::FreeSpace, radials: 4, ..Ground::default() },
         ..Antenna::default()
     }
 }

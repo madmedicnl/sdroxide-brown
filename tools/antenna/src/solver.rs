@@ -35,7 +35,8 @@
 //! is a delta gap over that segment. A feed at a **non-collinear junction** (the
 //! inverted-V apex) splits the node into the two wires' terminals and puts the
 //! source **between** them with opposite polarity. A feed at a **multi-way
-//! junction** (the ground-plane star) is still refused, not solved wrong.
+//! junction** (the ground-plane base) splits the node into the feed wire and
+//! everything else, so the source sits between the radiator and the radials.
 //!
 //! **Ground** is free space (no image) or a **perfect** ground, added by image
 //! theory: every source segment is mirrored through `z = 0` with its current
@@ -365,11 +366,25 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
                 }
             }
             n if n >= 3 => {
-                return Err(
-                    "the feed sits at a multi-way junction (three or more wires), which is not \
-                     modelled yet — feed a two-wire bend or a straight segment"
-                        .into(),
-                );
+                // A feed at a multi-way junction (the ground-plane base): the
+                // source sits between the feed wire and everything else, so the
+                // feed segment keeps its node and every other segment moves to a
+                // second node. The two are the source's terminals.
+                let j2 = m.node_pts.len();
+                m.node_pts.push(m.node_pts[node]);
+                m.incident.push(Vec::new());
+                let others: Vec<usize> =
+                    m.incident[node].iter().copied().filter(|&s| s != feed_seg).collect();
+                for other in others {
+                    if m.segs[other].a == node {
+                        m.segs[other].a = j2;
+                    } else {
+                        m.segs[other].b = j2;
+                    }
+                    m.incident[j2].push(other);
+                }
+                m.incident[node].retain(|&s| s == feed_seg);
+                split = Some((node, j2));
             }
             _ => {}
         }
@@ -1029,8 +1044,8 @@ mod tests {
     /// Wires that meet share a node, so an *unfed* junction solves. A feed at a
     /// non-collinear junction (the inverted-V apex) splits the node into the two
     /// wires' terminals and solves too — ~40–50 Ω, the classic inverted-V
-    /// figure — while a feed at a three-or-more-way junction (the ground plane
-    /// base) is still refused, not solved wrong.
+    /// figure — and a feed at a three-or-more-way junction (the ground plane
+    /// base) splits into the feed wire and everything else, ~36 Ω.
     #[test]
     fn junctions_solve_and_a_bend_feed_solves() {
         let loopa = crate::presets::delta_loop(28_500_000.0, 10.0);
@@ -1041,9 +1056,9 @@ mod tests {
             .expect("the inverted-V should solve");
         assert!((25.0..80.0).contains(&v.zin.re), "inverted-V R = {:.1} Ω, want ~50", v.zin.re);
 
-        let err = analyze(&crate::presets::ground_plane(28_500_000.0), &SolverConfig::default())
-            .unwrap_err();
-        assert!(err.contains("multi-way"), "ground plane: {err}");
+        let gp = analyze(&crate::presets::ground_plane(28_500_000.0), &SolverConfig::default())
+            .expect("the ground plane should solve");
+        assert!((20.0..60.0).contains(&gp.zin.re), "ground plane R = {:.1} Ω, want ~36", gp.zin.re);
     }
 
     /// A lumped series resistor in the middle of a dipole adds its resistance to
