@@ -369,8 +369,13 @@ was the hard part and is handled.*
       3-element Yagi's element lengths and gaps against SWR / gain / F-B / jX.
       Runs on the dense solver (the coarse one misleads the far field) on a
       background thread; the browser falls back to the calculator only.
-- [ ] Obstacle attenuation overlay — vegetation + knife-edge, **labelled an
-      approximation** (decision 1).
+- [x] Obstacle attenuation overlay — vegetation (ITU-R P.833 Weissberger/
+      COST-235) + knife-edge (Fresnel), **labelled an approximation**. The
+      ANTENNA window has Trees and Ridge toggles (azimuth/depth/height) and
+      reports the attenuation on the 0° bearing. *(Later improvement, operator
+      2026-10-28: the COST-235 ↔ Weissberger join at 14 m is discontinuous —
+      COST-235 is a UHF model and over-reads at HF — so smooth or re-fit that
+      boundary.)*
 - [ ] Stacking and wire scaling (MMANA's Make stack / Wire scale).
 
 **E — Integration**
