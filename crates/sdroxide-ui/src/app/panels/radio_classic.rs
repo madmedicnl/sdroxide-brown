@@ -522,7 +522,7 @@ impl SdroxideApp {
                         .color(theme::gray(130)),
                 );
             }
-            let r = crate::chrome::chip(ui, self.radio_classic.schedule_open, "SCHEDULE")
+            let r = crate::chrome::chip(ui, self.radio_classic.schedule_open, "PROGRAMS")
                 .on_hover_text("Broadcasts on the air now, on this band");
             if r.clicked() {
                 self.radio_classic.schedule_open = !self.radio_classic.schedule_open;

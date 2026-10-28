@@ -133,7 +133,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "schedule",
-            "SCHEDULE",
+            "PROGRAMS",
             [SCHEDULE_WINDOW_W, 560.0],
             self.schedule.show,
             |me, ui| me.schedule_body(ui, &mut tune, &mut log, &mut fav_toggle, &mut all_toggle),

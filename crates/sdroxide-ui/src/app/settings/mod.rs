@@ -3815,7 +3815,7 @@ impl SdroxideApp {
                 note(ui, "Panels converted to floating windows. Their open state is remembered.");
                 ui.add_space(4.0);
                 let tool_windows: &[(&str, u64)] = &[
-                    ("SCHEDULE", crate::app::frame::TW_SCHEDULE),
+                    ("PROGRAMS", crate::app::frame::TW_SCHEDULE),
                     ("LISTEN", crate::app::frame::TW_LISTEN),
                     ("LOGBOOK", crate::app::frame::TW_LOGBOOK),
                     ("SETTINGS", crate::app::frame::TW_SETTINGS),

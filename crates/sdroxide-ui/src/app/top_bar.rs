@@ -6746,7 +6746,7 @@ impl SdroxideApp {
             }
         }
         if swl
-            && chip_stretched(ui, self.schedule.show, "SCHEDULE", extra)
+            && chip_stretched(ui, self.schedule.show, "PROGRAMS", extra)
                 .on_hover_text("Broadcast schedule — what is on, when and where")
                 .clicked()
         {
@@ -8326,7 +8326,7 @@ fn system_top_row(simple: bool, swl: bool) -> Vec<&'static str> {
     if swl {
         // **LISTEN is here now**, which it could not be until PUBLIC SDR moved
         // down: the two rows are rebalanced, so there is room on the top one.
-        v.insert(0, "SCHEDULE");
+        v.insert(0, "PROGRAMS");
         v.insert(1, "LISTEN");
         // **Mirrored with the top bar's chips**, which is the whole reason this
         // function exists: the two lists must name the same chips in the same
@@ -10828,7 +10828,7 @@ mod tests {
         //
         assert_eq!(
             system_top_row(false, true),
-            vec!["SCHEDULE", "LISTEN", "SWL LOG", "SPOTS", "BANDS", "SAT", "DISP"]
+            vec!["PROGRAMS", "LISTEN", "SWL LOG", "SPOTS", "BANDS", "SAT", "DISP"]
         );
         // HFDL is a decode window, so it sits with the others in the bottom
         // row — where the simple interface keeps it, unlike radio email.
