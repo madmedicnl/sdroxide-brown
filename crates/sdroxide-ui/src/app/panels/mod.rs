@@ -38,6 +38,7 @@ mod navtex;
 pub(in crate::app) mod packet;
 pub(in crate::app) mod pi4;
 pub(in crate::app) mod rade;
+pub(in crate::app) mod radio_classic;
 pub(in crate::app) mod rf_paint;
 pub(in crate::app) mod setup;
 pub(in crate::app) mod sstv;

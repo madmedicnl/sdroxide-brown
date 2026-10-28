@@ -13,6 +13,9 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
+### Added
+- **Radio Classic** — EXTRAS → RADIO: a classic-radio face for broadcast listening (bands, memories, schedule, S-meter, stereo VU, 9-digit VFO, RDS name and RadioText), docked under the waterfall in the voice modes and detachable from Settings. — madmedicnl (wire 257)
+
 ## [2.2.0.2_brown] - 2026-10-27
 
 ### Added

@@ -18,6 +18,13 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **Radio Classic** (madmedicnl, 2026-10-28) — built: EXTRAS → RADIO, docked
+   under the waterfall in the voice modes, detachable from Settings. Wire
+   change (the audio level, 256 → 257 / `0x4D`), so it is a **PR** on branch
+   **f4nrm/determined-dirac-yyf856**, not merged by us. Waiting on F4NRM's review
+   and on a first look with a real station's audio and RDS. See
+   [`docs/internal/RADIO-CLASSIC-PLAN.md`](docs/internal/RADIO-CLASSIC-PLAN.md).
+
 0. ~~**#265 "outside receive range" notice is noise**~~ **done** (`bd1f41df`,
    operator 2026-10-28) — the startup/swap notices are now logged, not shown;
    the operator-tune refusal is still said out loud. The "2.941 MHz on

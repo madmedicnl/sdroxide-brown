@@ -1407,6 +1407,17 @@ pub enum Command {
     ImageDeleteTemplate {
         name: String,
     },
+    /// A screen is showing the Radio Classic panel and wants
+    /// [`crate::RadioEvent::AudioLevel`] for the next few seconds
+    /// ([`crate::AUDIO_LEVEL_LEASE_SECS`]).
+    ///
+    /// A lease rather than an on/off switch: several screens can be attached to
+    /// one station, and one that closes its panel must not silence another that
+    /// has it open, nor can a screen that vanished leave the stream on. A panel
+    /// that stays open sends it again about once a second.
+    ///
+    /// Appended for the usual reason — postcard numbers variants by position.
+    WantAudioLevel,
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.

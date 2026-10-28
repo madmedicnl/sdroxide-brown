@@ -1106,6 +1106,11 @@ pub struct UiSettings {
     /// ouvert. Reste `Copy` (u64).
     #[serde(default)]
     pub tool_windows_open: u64,
+    /// The Radio Classic panel (EXTRAS) is in use: docked under the waterfall in
+    /// the voice modes, or in a window where the slot is taken or the operator
+    /// detached it. Off by default.
+    #[serde(default)]
+    pub radio_classic_on: bool,
     /// Which repair [`UiSettings::tool_windows_open`] has had. **1** clears the
     /// bits the program used to set when a mode was selected — until then,
     /// choosing a mode opened its panel in a window of its own instead of docking
@@ -1697,6 +1702,7 @@ impl Default for UiSettings {
             classic_ui: false,
             classic_sections: String::new(),
             tool_windows_open: 0,
+            radio_classic_on: false,
             tool_windows_repaired: 0,
         }
     }

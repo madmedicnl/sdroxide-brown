@@ -1660,6 +1660,15 @@ impl eframe::App for SdroxideApp {
             // the pitch being copied, which a click on the waterfall moves.
             let cw_mode = self.state.rx[0].mode == Mode::Cw;
             let phone = tier == crate::layout::Tier::Phone;
+            // Radio Classic takes the same slot in the voice modes that have
+            // nothing under the waterfall (see `RadioClassicPlace`).
+            let rc_docked = crate::app::panels::radio_classic::place(
+                self.ui_settings.radio_classic_on,
+                self.show_radio_classic,
+                self.state.rx[0].mode,
+                phone,
+            ) == crate::app::panels::radio_classic::RadioClassicPlace::Docked;
+            let panel_mode = cw_mode || rc_docked;
             // As on the digital path above: no layers, no panadapter. In a mode
             // with nothing under it that leaves the pane empty, which is what
             // switching both off asks for.
@@ -1668,7 +1677,7 @@ impl eframe::App for SdroxideApp {
             // here; whatever is left in the column gets the whole of it.
             let detached = self.panadapter_window_wanted();
             let panel_gone = self.panel_in_a_window(self.state.rx[0].mode);
-            let (wf_h, panel_h, show_wf, show_panel) = if !cw_mode {
+            let (wf_h, panel_h, show_wf, show_panel) = if !panel_mode {
                 if detached {
                     (0.0, 0.0, false, false)
                 } else {
@@ -1726,7 +1735,13 @@ impl eframe::App for SdroxideApp {
                     }
                 }
                 ui.allocate_ui(egui::vec2(width, panel_h), |ui| {
-                    self.draw_operating_panel(ui, &mut cmds, Mode::Cw, panel_h);
+                    if rc_docked {
+                        self.radio_classic.frame = frame.clone();
+                        self.radio_classic_docked(ui, &mut cmds, panel_h);
+                        self.radio_classic.frame = None;
+                    } else {
+                        self.draw_operating_panel(ui, &mut cmds, Mode::Cw, panel_h);
+                    }
                 });
             }
             self.frame = frame;
@@ -1809,6 +1824,7 @@ impl eframe::App for SdroxideApp {
         sync!(self.show_memories, TW_MEMORIES);
         sync!(self.show_extras, TW_EXTRAS);
         sync!(self.show_aircraft, TW_AIRCRAFT);
+        sync!(self.show_radio_classic, TW_RADIO_CLASSIC);
         sync!(self.show_rds, TW_RDS);
         sync!(self.show_drm, TW_DRM);
         sync!(self.show_hd, TW_HD_RADIO);
@@ -1839,6 +1855,7 @@ impl eframe::App for SdroxideApp {
         if mode == sdroxide_types::Mode::Dab && self.show_dab {
             self.dab_window(&ctx, &mut cmds);
         }
+        self.radio_classic_window(&ctx, &mut cmds);
         if mode.is_js8() && self.show_js8 {
             self.js8_window(&ctx, &mut cmds);
         }
@@ -4325,6 +4342,9 @@ impl SdroxideApp {
                         self.slot_follow.edge(&t, edge);
                     }
                 }
+                RadioEvent::AudioLevel(l) => {
+                    self.audio_level = Some((crate::time::now_unix_f64(), *l))
+                }
                 RadioEvent::Qo100Status(st) => self.qo100_status = Some(st),
                 RadioEvent::HfdlStatus(st) => {
                     // Feed the map's plot table before the log scrolls anything
@@ -6114,6 +6134,55 @@ impl SdroxideApp {
         }
         crate::app::persist::persist_ui_settings(&self.ui_settings);
     }
+    /// Radio Classic in a window: when the operator detached it (Settings →
+    /// Detachable), or when it is switched on in a mode whose panel owns the
+    /// slot under the waterfall, or on a phone, where there is no room to dock.
+    pub(in crate::app) fn radio_classic_window(
+        &mut self,
+        ctx: &egui::Context,
+        cmds: &mut Vec<Command>,
+    ) {
+        use crate::app::panels::radio_classic::{RadioClassicPlace, place};
+        let phone = crate::layout::tier(ctx) == crate::layout::Tier::Phone;
+        let mode = self.state.rx[0].mode;
+        let wanted = place(self.ui_settings.radio_classic_on, self.show_radio_classic, mode, phone)
+            == RadioClassicPlace::Window;
+        let open = self.tool_window(
+            ctx,
+            "radio_classic",
+            "RADIO CLASSIC",
+            [1180.0, 440.0],
+            wanted,
+            |me, ui| {
+                let h = ui.available_height();
+                me.radio_classic_panel(ui, cmds, h);
+            },
+        );
+        let mut changed = false;
+        if wanted && !open {
+            // Closed with its ✕. A detached panel goes back where it docks; one
+            // that was only a window because the slot is taken is switched off,
+            // or the ✕ would do nothing.
+            if self.show_radio_classic {
+                self.show_radio_classic = false;
+            } else {
+                self.ui_settings.radio_classic_on = false;
+            }
+            changed = true;
+        }
+        let bit = self.ui_settings.tool_windows_open & TW_RADIO_CLASSIC != 0;
+        if bit != self.show_radio_classic {
+            if self.show_radio_classic {
+                self.ui_settings.tool_windows_open |= TW_RADIO_CLASSIC;
+            } else {
+                self.ui_settings.tool_windows_open &= !TW_RADIO_CLASSIC;
+            }
+            changed = true;
+        }
+        if changed {
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+        }
+    }
     pub(in crate::app) fn js8_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         let open = self.tool_window(ctx, "js8", "JS8", [640.0, 480.0], self.show_js8, |me, ui| {
             let h = ui.available_height();
@@ -6508,6 +6577,7 @@ pub const TW_SCHEDULE: u64 = 1 << 46;
 pub const TW_PLAYBACK: u64 = 1 << 47;
 pub const TW_PUBLICSDR: u64 = 1 << 48;
 pub const TW_AIRCRAFT: u64 = 1 << 49;
+pub const TW_RADIO_CLASSIC: u64 = 1 << 50;
 
 /// Charge a failed interface change to the public-SDR receiver just tried, so
 /// its row reads "could not connect" instead of being offered again. The

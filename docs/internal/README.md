@@ -22,6 +22,7 @@ queue is [`../../TODO.md`](../../TODO.md).
 | `UPSTREAM-PICKS.md` | Which upstream work was taken by hand this phase, and why. |
 | `BRICK2-HANDOVER.md` | The two Brick2 reports, what upstream had, and what is left. |
 | `ROADMAP.md` | The listener side's long list. |
+| [`RADIO-CLASSIC-PLAN.md`](RADIO-CLASSIC-PLAN.md) | The Radio Classic panel: what it is, the approved decisions, the steps. |
 | `PROJECT-BOARD.md` | The three-column view: done, in progress, roadmap. |
 | `ALE-HANDOVER.md` | ALE, mid-flight. |
 | `OLIVIA-HANDOVER.md` | Olivia: receive proven on air, transmit interop open. |

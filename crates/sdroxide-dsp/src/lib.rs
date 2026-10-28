@@ -3,6 +3,7 @@ mod adc;
 pub mod afsk;
 mod agc;
 pub mod ale;
+mod audio_bands;
 mod ale_tables;
 pub mod ardop;
 mod binaural;
@@ -73,6 +74,7 @@ pub mod wefax;
 mod window;
 
 pub use adc::AdcMeter;
+pub use audio_bands::{AUDIO_LEVEL_INTERVAL, AudioBands, AudioMeter};
 pub use afsk::{AFSK_TX_PEAK, AfskProfile, AfskRx, AfskTx};
 pub use agc::Agc;
 pub use binaural::Binaural;

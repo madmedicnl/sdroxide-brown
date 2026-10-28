@@ -80,6 +80,10 @@ Last brought up to date **2026-10-24** (crate 2.1.0, `PROTO_VERSION` 243 on
 
 ## Open (In Progress)
 
+- **Radio Classic** (the operator, 2026-10-28) — built; PR open on
+  `f4nrm/determined-dirac-yyf856` because it carries the wire change
+  (256 → 257), not merged by us. [`RADIO-CLASSIC-PLAN.md`](RADIO-CLASSIC-PLAN.md).
+  Waiting on review and a first look with a real station.
 - **Aircraft window clean-up** (the operator, 2026-10-27) — ten PRs open,
   #266–#274 and #276, none merged; see the journal entry of that date. Waiting on review
   and on a look at the screen.

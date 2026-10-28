@@ -2,8 +2,8 @@
 //! ordinary modes. The System box's EXTRAS chip opens it, and like PLAYBACK it
 //! is a tool window — it can be pulled out into a window of its own with ⇱.
 //!
-//! Five buttons side by side is the room it is built for; only DAB is in it for
-//! now, on the left.
+//! Five buttons side by side is the room it is built for; DAB, AIRCRAFT and RADIO
+//! (the Radio Classic panel) are in it so far.
 
 use eframe::egui;
 use sdroxide_types::{Command, Mode, RxId};
@@ -203,9 +203,26 @@ impl super::SdroxideApp {
             if air.clicked() {
                 self.show_aircraft = !self.show_aircraft;
             }
+            let rc_active = self.ui_settings.radio_classic_on || self.show_radio_classic;
+            let rc = crate::chrome::chip_sized(ui, rc_active, "RADIO", egui::vec2(SLOT_W, SLOT_H))
+                .on_hover_text(
+                    "RADIO CLASSIC — a classic radio face for broadcast listening: bands, \
+                 memories, the station name and RadioText. It docks under the waterfall \
+                 in the voice modes; Settings → Detachable puts it in a window",
+                );
+            if rc.clicked() {
+                if rc_active {
+                    self.ui_settings.radio_classic_on = false;
+                    self.show_radio_classic = false;
+                    self.ui_settings.tool_windows_open &= !super::frame::TW_RADIO_CLASSIC;
+                } else {
+                    self.ui_settings.radio_classic_on = true;
+                }
+                crate::app::persist::persist_ui_settings(&self.ui_settings);
+            }
             // The other slots are kept: the panel is sized for them, so a
             // receiver added here does not widen the window.
-            for _ in 2..EXTRAS_SLOTS {
+            for _ in 3..EXTRAS_SLOTS {
                 let (rect, _) =
                     ui.allocate_exact_size(egui::vec2(SLOT_W, SLOT_H), egui::Sense::hover());
                 ui.painter().rect_stroke(
