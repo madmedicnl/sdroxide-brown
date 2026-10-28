@@ -622,11 +622,13 @@ pub struct SdroxideApp {
     /// How many Yagi copies to stack in the solve (1, 2 or 4) — see [`antenna`].
     antenna_stack: u32,
     /// The azimuth cuts of the solved presets, and which one the pattern shows.
-    antenna_patterns: Vec<(String, Vec<(f64, f64)>)>,
+    antenna_patterns: Vec<(String, [Vec<(f64, f64)>; 3])>,
+    antenna_pattern_view: usize,
     antenna_pattern_sel: usize,
     /// The 3D pattern surfaces (parallel to `antenna_patterns`), and the view
     /// rotation.
     antenna_surfaces: Vec<(Vec<[f64; 3]>, usize, usize)>,
+    antenna_wires: Vec<Vec<([f64; 3], [f64; 3])>>,
     antenna_yaw: f32,
     antenna_pitch: f32,
     /// Feedline impedance for SWR display.
@@ -2185,7 +2187,9 @@ impl SdroxideApp {
             antenna_stack: 1,
             antenna_patterns: Vec::new(),
             antenna_pattern_sel: 0,
+            antenna_pattern_view: 0,
             antenna_surfaces: Vec::new(),
+            antenna_wires: Vec::new(),
             antenna_yaw: -0.6,
             antenna_pitch: 0.4,
             antenna_z0: 50.0,
