@@ -182,11 +182,27 @@ fn surface_plot(
     }
     painter.add(egui::Shape::line(ring, ground_stroke));
 
-    // Draw the antenna wires in alarm red.
+    // Draw the antenna wires in alarm red, normalised to the pattern scale so
+    // they sit at the centre of the view instead of far outside it.
+    let mut extent = 0.0_f64;
+    for w in wires {
+        for c in [w.0, w.1] {
+            extent = extent.max(c[0].abs()).max(c[1].abs()).max(c[2].abs());
+        }
+    }
+    let wire_scale = if extent > 0.0 { 0.25 / extent } else { 1.0 };
     let wire_stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 40, 40));
     for w in wires {
-        let a = [w.0[0], w.0[1], w.0[2] + height_scaled as f64];
-        let b = [w.1[0], w.1[1], w.1[2] + height_scaled as f64];
+        let a = [
+            w.0[0] * wire_scale,
+            w.0[1] * wire_scale,
+            w.0[2] * wire_scale + height_scaled as f64,
+        ];
+        let b = [
+            w.1[0] * wire_scale,
+            w.1[1] * wire_scale,
+            w.1[2] * wire_scale + height_scaled as f64,
+        ];
         let pa = proj(a);
         let pb = proj(b);
         painter.line_segment([pa, pb], wire_stroke);
