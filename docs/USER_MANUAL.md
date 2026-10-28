@@ -16145,10 +16145,13 @@ How much of the band is *named* is a second chip, on the right of the search row
 in the same window, and the two are independent of each other. **BC TUNED** — the
 default — names only the station under the dial. **BC ALL** names every station
 the schedule has on air now, wherever it sits, which is what you want while
-browsing a band and what makes a crowded one unreadable. That is one setting with
-two homes — this chip, and **Waterfall labels → Tuned only / The whole band** on
-Settings → UI ([§6.3](#63-ui-display-preferences-and-voice-announcements)) — and
-both write the same preference.
+browsing a band and what makes a crowded one unreadable. **Ctrl+B** flips between
+the two from anywhere — it is the *Broadcast labels (tuned / whole band)* action
+in Settings → Controls ([§6.4](#64-controls-keyboard-mouse-and-midi)), so it can
+be rebound — and the chip is the same setting in a second home, beside
+**Waterfall labels → Tuned only / The whole band** on Settings → UI
+([§6.3](#63-ui-display-preferences-and-voice-announcements)). All three write one
+preference.
 
 A band is still busy at prime time (the 31 m band carries 50–95 transmissions at
 midday UTC), so zoom in or use **IN VIEW** when the labels crowd each other —
