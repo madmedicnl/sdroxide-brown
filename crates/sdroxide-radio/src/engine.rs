@@ -11077,10 +11077,8 @@ impl Engine {
                 return;
             }
             WantAudioLevel => {
-                self.audio_level_until = Some(
-                    Instant::now()
-                        + std::time::Duration::from_secs_f64(sdroxide_types::AUDIO_LEVEL_LEASE_SECS),
-                );
+                let lease = std::time::Duration::from_secs_f64(sdroxide_types::AUDIO_LEVEL_LEASE_SECS);
+                self.audio_level_until = Some(Instant::now() + lease);
                 return;
             }
             // Answered inline: the bytes are already in memory and bounded to
