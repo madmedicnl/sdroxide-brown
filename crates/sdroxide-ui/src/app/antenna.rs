@@ -71,16 +71,26 @@ impl super::SdroxideApp {
         });
 
         egui::ScrollArea::vertical().show(ui, |ui| {
-            if ui
-                .button("Solve impedance and gain")
-                .on_hover_text(
-                    "Run the method-of-moments solver on the presets — the real feed \
-                     impedance, SWR and gain. Takes a few seconds.",
-                )
-                .clicked()
-            {
-                self.antenna_solve();
-            }
+            ui.horizontal(|ui| {
+                if ui
+                    .button("Solve impedance and gain")
+                    .on_hover_text(
+                        "Run the method-of-moments solver on the presets — the real feed \
+                         impedance, SWR and gain. Takes a few seconds.",
+                    )
+                    .clicked()
+                {
+                    self.antenna_solve();
+                }
+                ui.label("Yagi stack");
+                for n in [1, 2, 4] {
+                    let sel = self.antenna_stack == n;
+                    if ui.selectable_label(sel, format!("{n}×")).clicked() {
+                        self.antenna_stack = n;
+                        self.antenna_solved = None;
+                    }
+                }
+            });
 
             ui.horizontal(|ui| {
                 ui.label("Optimize Yagi for");
@@ -241,6 +251,26 @@ impl super::SdroxideApp {
                 let (g, _, _) = max_gain(&sol);
                 rows.push(SolvedRow {
                     name: a.name,
+                    r: sol.zin.re,
+                    x: sol.zin.im,
+                    swr: swr(sol.zin, 50.0),
+                    gain: g,
+                });
+            }
+        }
+        // A stacked Yagi, when asked for — the array's combined gain.
+        if self.antenna_stack > 1 {
+            let single = antenna_model::presets::yagi(freq_hz, 3, antenna_model::presets::DEFAULT_HEIGHT_M);
+            let stacked = antenna_model::transform::stack(
+                &single,
+                self.antenna_stack as usize,
+                0.5 * antenna_model::wavelength_m(freq_hz),
+                true,
+            );
+            if let Ok(sol) = analyze(&stacked, &SolverConfig::default()) {
+                let (g, _, _) = max_gain(&sol);
+                rows.push(SolvedRow {
+                    name: format!("Yagi ×{}", self.antenna_stack),
                     r: sol.zin.re,
                     x: sol.zin.im,
                     swr: swr(sol.zin, 50.0),

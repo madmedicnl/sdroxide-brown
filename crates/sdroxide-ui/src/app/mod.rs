@@ -618,6 +618,8 @@ pub struct SdroxideApp {
     /// in-leaf) and a knife-edge ridge (azimuth, height) — see [`antenna`].
     antenna_trees: Option<(f64, f64, bool)>,
     antenna_ridge: Option<(f64, f64)>,
+    /// How many Yagi copies to stack in the solve (1, 2 or 4) — see [`antenna`].
+    antenna_stack: u32,
     /// A Yagi optimization running on a background thread, and its result
     /// channel. Native-only — the browser has no threads and just skips the
     /// optimizer.
@@ -2168,6 +2170,7 @@ impl SdroxideApp {
             antenna_optimized: None,
             antenna_trees: None,
             antenna_ridge: None,
+            antenna_stack: 1,
             #[cfg(not(target_arch = "wasm32"))]
             antenna_optimizing: false,
             #[cfg(not(target_arch = "wasm32"))]

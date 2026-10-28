@@ -19,6 +19,7 @@ pub mod optimize;
 pub mod presets;
 pub mod solver;
 pub mod store;
+pub mod transform;
 
 /// Speed of light, m/s.
 pub const C: f64 = 299_792_458.0;

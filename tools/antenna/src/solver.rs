@@ -360,91 +360,97 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
         return Err("the design has no wires".into());
     }
 
-    // The feed is a **segment**, not a node — MMANA's `w#c`/`w#b`/`w#e` name a
+    // Each source is a **segment** gap — MMANA's `w#c`/`w#b`/`w#e` name a
     // segment. A delta gap over a segment has a well-defined direction whatever
     // the geometry, so a bend or a junction can be fed correctly: the impressed
     // field V/Δ over the feed segment excites the two node basis functions that
-    // overlap it by V/2 each.
-    let src = &a.sources[0];
-    let fw = (src.at.wire as usize).saturating_sub(1);
-    if fw >= m.wire_segs.len() || m.wire_segs[fw].is_empty() {
-        return Err(format!("the source names wire {}, which is not there", fw + 1));
-    }
-    let nseg = m.wire_segs[fw].len();
-    let base = match src.at.at {
-        Pos::Begin => 0isize,
-        Pos::Center => (nseg as isize) / 2,
-        Pos::End => nseg as isize - 1,
-    };
-    let si = (base + src.at.offset as isize).clamp(0, nseg as isize - 1) as usize;
-    let (feed_a, feed_b) = (m.segs[m.wire_segs[fw][si]].a, m.segs[m.wire_segs[fw][si]].b);
+    // overlap it by V/2 each. Several sources (a stacked array) are fed
+    // together, each contributing its own gap.
+    // (terminal_a, terminal_b, is_split, voltage).
+    let mut feed_terms: Vec<(usize, usize, bool, Complex64)> = Vec::new();
+    for src in &a.sources {
+        let fw = (src.at.wire as usize).saturating_sub(1);
+        if fw >= m.wire_segs.len() || m.wire_segs[fw].is_empty() {
+            return Err(format!("the source names wire {}, which is not there", fw + 1));
+        }
+        let nseg = m.wire_segs[fw].len();
+        let base = match src.at.at {
+            Pos::Begin => 0isize,
+            Pos::Center => (nseg as isize) / 2,
+            Pos::End => nseg as isize - 1,
+        };
+        let si = (base + src.at.offset as isize).clamp(0, nseg as isize - 1) as usize;
+        let (feed_a, feed_b) = (m.segs[m.wire_segs[fw][si]].a, m.segs[m.wire_segs[fw][si]].b);
 
-    // A feed at a non-collinear junction (the inverted-V apex) needs a
-    // **source-between-terminals** model: the two wires are the source's two
-    // terminals, not one shared node. Split the junction so the feed segment's
-    // end and the other wire's end are two separate unknowns, and put the
-    // delta-gap source between them. A collinear through-connection and a free
-    // end keep the plain delta-gap-over-a-segment feed.
-    let feed_seg = m.wire_segs[fw][si];
-    // (junction node, the node the "other" wire moved to).
-    let mut split: Option<(usize, usize)> = None;
-    for node in [feed_a, feed_b] {
-        let inc = &m.incident[node];
-        match inc.len() {
-            2 => {
-                let (s0, s1) = (inc[0], inc[1]);
-                if dot(m.segs[s0].dir, m.segs[s1].dir).abs() < 0.9999 {
-                    let other = if s0 == feed_seg { s1 } else { s0 };
+        // A feed at a non-collinear junction (the inverted-V apex) needs a
+        // **source-between-terminals** model: the two wires are the source's two
+        // terminals, not one shared node. Split the junction so the feed
+        // segment's end and the other wire's end are two separate unknowns, and
+        // put the delta-gap source between them. A collinear through-connection
+        // and a free end keep the plain delta-gap-over-a-segment feed.
+        let feed_seg = m.wire_segs[fw][si];
+        // (junction node, the node the "other" wire moved to).
+        let mut split: Option<(usize, usize)> = None;
+        for node in [feed_a, feed_b] {
+            let inc = &m.incident[node];
+            match inc.len() {
+                2 => {
+                    let (s0, s1) = (inc[0], inc[1]);
+                    if dot(m.segs[s0].dir, m.segs[s1].dir).abs() < 0.9999 {
+                        let other = if s0 == feed_seg { s1 } else { s0 };
+                        let j2 = m.node_pts.len();
+                        m.node_pts.push(m.node_pts[node]);
+                        m.incident.push(Vec::new());
+                        if m.segs[other].a == node {
+                            m.segs[other].a = j2;
+                        } else {
+                            m.segs[other].b = j2;
+                        }
+                        m.incident[node].retain(|&s| s != other);
+                        m.incident[j2].push(other);
+                        split = Some((node, j2));
+                    }
+                }
+                n if n >= 3 => {
+                    // A feed at a multi-way junction (the ground-plane base): the
+                    // source sits between the feed wire and everything else, so
+                    // the feed segment keeps its node and every other segment
+                    // moves to a second node. The two are the source's terminals.
                     let j2 = m.node_pts.len();
                     m.node_pts.push(m.node_pts[node]);
                     m.incident.push(Vec::new());
-                    if m.segs[other].a == node {
-                        m.segs[other].a = j2;
-                    } else {
-                        m.segs[other].b = j2;
+                    let others: Vec<usize> =
+                        m.incident[node].iter().copied().filter(|&s| s != feed_seg).collect();
+                    for other in others {
+                        if m.segs[other].a == node {
+                            m.segs[other].a = j2;
+                        } else {
+                            m.segs[other].b = j2;
+                        }
+                        m.incident[j2].push(other);
                     }
-                    m.incident[node].retain(|&s| s != other);
-                    m.incident[j2].push(other);
+                    m.incident[node].retain(|&s| s == feed_seg);
                     split = Some((node, j2));
                 }
+                _ => {}
             }
-            n if n >= 3 => {
-                // A feed at a multi-way junction (the ground-plane base): the
-                // source sits between the feed wire and everything else, so the
-                // feed segment keeps its node and every other segment moves to a
-                // second node. The two are the source's terminals.
-                let j2 = m.node_pts.len();
-                m.node_pts.push(m.node_pts[node]);
-                m.incident.push(Vec::new());
-                let others: Vec<usize> =
-                    m.incident[node].iter().copied().filter(|&s| s != feed_seg).collect();
-                for other in others {
-                    if m.segs[other].a == node {
-                        m.segs[other].a = j2;
-                    } else {
-                        m.segs[other].b = j2;
-                    }
-                    m.incident[j2].push(other);
-                }
-                m.incident[node].retain(|&s| s == feed_seg);
-                split = Some((node, j2));
-            }
-            _ => {}
         }
+
+        let (ta, tb) = match split {
+            Some((node, j2)) => (node, j2),
+            None => (feed_a, feed_b),
+        };
+        let v = Complex64::from_polar(src.volts, src.phase_deg.to_radians());
+        feed_terms.push((ta, tb, split.is_some(), v));
     }
 
     // Unknowns: every node with two or more segments (a bend, junction or
-    // through-connection), plus the source terminals. For a straight feed those
-    // are the two nodes of the feed segment; for a split junction they are the
-    // junction node and the wire moved off it.
+    // through-connection), plus every source terminal.
     let mut unknowns: Vec<usize> = Vec::new();
     let mut index = vec![None; m.node_pts.len()];
-    let (term_a, term_b) = match split {
-        Some((node, j2)) => (node, j2),
-        None => (feed_a, feed_b),
-    };
     for (node, slot) in index.iter_mut().enumerate() {
-        if m.incident[node].len() >= 2 || node == term_a || node == term_b {
+        let is_term = feed_terms.iter().any(|&(ta, tb, _, _)| node == ta || node == tb);
+        if m.incident[node].len() >= 2 || is_term {
             *slot = Some(unknowns.len());
             unknowns.push(node);
         }
@@ -452,10 +458,6 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     if unknowns.is_empty() {
         return Err("no node to solve for".into());
     }
-    let (ia, ib) = (
-        index[term_a].expect("the source terminal was added"),
-        index[term_b].expect("the source terminal was added"),
-    );
 
     let k = 2.0 * PI * a.freq_hz / C;
     let omega = 2.0 * PI * a.freq_hz;
@@ -524,31 +526,42 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
     }
 
     let mut rhs = vec![Complex64::new(0.0, 0.0); nu];
-    let half_v = Complex64::new(src.volts / 2.0, 0.0);
     // A segment gap excites both terminals in phase (the impressed field is
     // uniform over the segment); a split junction is a gap *between* the two
-    // wires, so the two terminals are driven with opposite polarity.
-    rhs[ia] += half_v;
-    if split.is_some() {
-        rhs[ib] -= half_v;
-    } else {
-        rhs[ib] += half_v;
+    // wires, so the two terminals are driven with opposite polarity. Each source
+    // contributes its own gap.
+    for &(ta, tb, is_split, v) in &feed_terms {
+        let ia = index[ta].expect("the source terminal was added");
+        let ib = index[tb].expect("the source terminal was added");
+        let half_v = v / 2.0;
+        rhs[ia] += half_v;
+        if is_split {
+            rhs[ib] -= half_v;
+        } else {
+            rhs[ib] += half_v;
+        }
     }
 
     let currents = solve_complex(&mut z, &rhs).ok_or("the interaction matrix is singular")?;
     // The source current. A segment feed reads the midpoint of its two node
     // currents; a split junction reads the current at the junction terminal —
     // the wire moved off the junction carries the same current, opposite sign.
-    let i_feed = match split {
-        Some(_) => currents[ia],
-        None => 0.5 * (currents[ia] + currents[ib]),
-    };
+    // Several sources (a stacked array) add.
+    let mut i_feed = Complex64::new(0.0, 0.0);
+    let mut power_w = 0.0;
+    for &(ta, tb, is_split, v) in &feed_terms {
+        let ia = index[ta].expect("the source terminal was added");
+        let ib = index[tb].expect("the source terminal was added");
+        let i = if is_split { currents[ia] } else { 0.5 * (currents[ia] + currents[ib]) };
+        power_w += 0.5 * (v * i.conj()).re;
+        i_feed += i;
+    }
     if i_feed.norm() == 0.0 {
         return Err("the feed current came out zero".into());
     }
-    let volts = Complex64::new(src.volts, 0.0);
+    // The combined feed impedance against the first source's voltage.
+    let volts = feed_terms[0].3;
     let zin = volts / i_feed;
-    let power_w = 0.5 * (volts * i_feed.conj()).re;
 
     // Per-segment current (the tent's midpoint value) for the far field.
     let mut node_current = vec![Complex64::new(0.0, 0.0); m.node_pts.len()];
@@ -579,7 +592,7 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
         freq_hz: a.freq_hz,
         currents,
         unknowns,
-        feed_unknown: ia,
+        feed_unknown: index[feed_terms[0].0].expect("the source terminal was added"),
         zin,
         power_w,
         segments,
