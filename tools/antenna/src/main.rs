@@ -19,6 +19,7 @@ fn main() {
     let mut convert: Option<String> = None;
     let mut to: Option<String> = None;
     let mut pattern_out: Option<String> = None;
+    let mut pattern3d_out: Option<String> = None;
 
     let mut i = 0;
     while i < args.len() {
@@ -29,6 +30,11 @@ fn main() {
                 i += 1;
                 pattern_out = args.get(i).cloned();
                 mode = Mode::Pattern;
+            }
+            "--pattern3d" => {
+                i += 1;
+                pattern3d_out = args.get(i).cloned();
+                mode = Mode::Pattern3d;
             }
             "--expr" => {
                 i += 1;
@@ -72,6 +78,7 @@ fn main() {
         Mode::Presets => presets(freq_mhz, freq_hz),
         Mode::Solve => solve(freq_mhz, freq_hz),
         Mode::Pattern => pattern(pattern_out.as_deref(), freq_mhz, freq_hz),
+        Mode::Pattern3d => pattern3d(pattern3d_out.as_deref(), freq_mhz, freq_hz),
         Mode::Expr => do_expr(expr.as_deref().unwrap_or(""), freq_hz),
         Mode::Convert => do_convert(convert.as_deref().unwrap_or(""), to.as_deref(), freq_hz),
     }
@@ -82,6 +89,7 @@ enum Mode {
     Presets,
     Solve,
     Pattern,
+    Pattern3d,
     Expr,
     Convert,
 }
@@ -171,6 +179,36 @@ fn pattern(path: Option<&str>, mhz: f64, freq_hz: f64) {
     }
 }
 
+/// Write each solvable preset's 3D pattern as a PLY mesh and an isometric SVG
+/// wireframe, into the directory `dir` (or `antenna-3d/`).
+fn pattern3d(dir: Option<&str>, mhz: f64, freq_hz: f64) {
+    use ant::solver::{SolverConfig, analyze, iso_svg, max_gain, pattern_surface, ply_ascii};
+    let dir = dir.unwrap_or("antenna-3d");
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        eprintln!("could not make {dir}: {e}");
+        std::process::exit(1);
+    }
+    for a in ant::presets::catalog(freq_hz) {
+        match analyze(&a, &SolverConfig::default()) {
+            Ok(sol) => {
+                let (verts, nt, np) = pattern_surface(&sol, 61, 72);
+                let (gmax, _, _) = max_gain(&sol);
+                let title = format!("{} 3D, {mhz:.3} MHz — peak {gmax:.1} dBi", a.name);
+                let stem = a.name.replace(' ', "-").to_lowercase();
+                let ply = format!("{dir}/{stem}.ply");
+                let svg = format!("{dir}/{stem}.svg");
+                if std::fs::write(&ply, ply_ascii(&verts, nt, np)).is_ok() {
+                    println!("wrote {ply}");
+                }
+                if std::fs::write(&svg, iso_svg(&title, &verts, nt, np)).is_ok() {
+                    println!("wrote {svg}");
+                }
+            }
+            Err(e) => println!("{:<30} — {e}", a.name),
+        }
+    }
+}
+
 fn do_expr(text: &str, freq_hz: f64) {
     let c = Consts::at_freq(freq_hz);
     match eval(text, c) {
@@ -218,6 +256,7 @@ fn print_help() {
     println!("antenna --presets [MHz]           the CB/SWL shape presets, as .maa");
     println!("antenna --solve [MHz]             solve the presets: Zin and SWR");
     println!("antenna --pattern FILE [MHz]      write the dipole azimuth pattern as SVG");
+    println!("antenna --pattern3d DIR [MHz]     write each preset's 3D pattern (PLY + SVG)");
     println!("antenna --expr \"R/4\" [MHz]        evaluate an MMANA dimension expression");
     println!("antenna --convert 17ft --to m     convert a length between units");
 }

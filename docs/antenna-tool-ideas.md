@@ -343,7 +343,12 @@ was the hard part and is handled.*
 - [~] **2D polar plots** — the far-field cut and the SVG generator exist in the
       prototype (`cut`, `polar_svg`, `--pattern FILE`); the real deliverable is
       the same geometry drawn in the app's tool window (milestone E).
-- [ ] 3D hemisphere toggle, reusing the solar-scene renderer.
+- [~] **3D pattern surface** — the prototype writes the normalised far-field
+      surface as a PLY mesh and an isometric SVG wireframe
+      (`pattern_surface`, `ply_ascii`, `iso_svg`, `--pattern3d DIR`), one per
+      preset. The in-app view (a rotatable 3D hemisphere, reusing the solar
+      scene's renderer, shaped on the ADS-B range visualizer's envelope) is
+      still milestone E.
 
 **D — Advanced (only once A–C are honest)**
 - [ ] Optimizer over chosen variables (jX / SWR / gain / F-B / elevation).

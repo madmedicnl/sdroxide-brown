@@ -29,6 +29,8 @@ The **tool layer** (milestone A) — no method-of-moments engine yet:
 cargo run -- 27.265                              # dimensions table
 cargo run -- --presets 27.265                    # presets, as .maa
 cargo run -- --solve 27.265                      # Zin and SWR of the presets
+cargo run -- --pattern FILE 27.265               # dipole azimuth pattern as SVG
+cargo run -- --pattern3d DIR 27.265              # each preset's 3D pattern (PLY + SVG)
 cargo run -- --expr "5*R/8" 27.265               # the equation box
 cargo run -- --convert 17ft --to m               # unit conversion
 cargo test

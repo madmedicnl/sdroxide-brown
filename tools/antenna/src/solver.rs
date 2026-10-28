@@ -564,6 +564,120 @@ pub fn front_to_back_db(sol: &Solution) -> f64 {
     g - back
 }
 
+/// The 3D radiation surface: a `(n_theta × n_phi)` grid of points on the
+/// normalised far-field pattern, radius = |E|/|E_max| = 10^((G−G_max)/20). θ
+/// from +z (up), φ from +x, so `z` is up and the pole is overhead. The radius
+/// is also the relative *range* — a link's reach goes as the field (√gain).
+/// Vertices are row-major, θ outer and φ inner.
+pub fn pattern_surface(
+    sol: &Solution,
+    n_theta: usize,
+    n_phi: usize,
+) -> (Vec<[f64; 3]>, usize, usize) {
+    let (gmax, _, _) = max_gain(sol);
+    let mut verts = Vec::with_capacity(n_theta * n_phi);
+    for it in 0..n_theta {
+        let th = it as f64 / (n_theta - 1) as f64 * 180.0;
+        for ip in 0..n_phi {
+            let ph = ip as f64 / n_phi as f64 * 360.0;
+            let g = gain_dbi(sol, th, ph);
+            let r = if g.is_finite() { 10f64.powf((g - gmax) / 20.0) } else { 0.0 };
+            let (tr, pr) = (th.to_radians(), ph.to_radians());
+            verts.push([r * tr.sin() * pr.cos(), r * tr.sin() * pr.sin(), r * tr.cos()]);
+        }
+    }
+    (verts, n_theta, n_phi)
+}
+
+/// The [`pattern_surface`] mesh as an ASCII PLY, loadable in any 3D viewer.
+pub fn ply_ascii(verts: &[[f64; 3]], n_theta: usize, n_phi: usize) -> String {
+    let idx = |t: usize, p: usize| t * n_phi + p;
+    let mut faces = 0usize;
+    let mut tris = String::new();
+    for t in 0..n_theta - 1 {
+        for p in 0..n_phi {
+            let p2 = (p + 1) % n_phi;
+            for (a, b, c) in [
+                (idx(t, p), idx(t, p2), idx(t + 1, p)),
+                (idx(t, p2), idx(t + 1, p2), idx(t + 1, p)),
+            ] {
+                tris.push_str(&format!("3 {a} {b} {c}\n"));
+                faces += 1;
+            }
+        }
+    }
+    let mut s = String::new();
+    s.push_str("ply\nformat ascii 1.0\n");
+    s.push_str(&format!("element vertex {}\n", verts.len()));
+    s.push_str("property float x\nproperty float y\nproperty float z\n");
+    s.push_str(&format!("element face {faces}\n"));
+    s.push_str("property list uchar int vertex_indices\nend_header\n");
+    for v in verts {
+        s.push_str(&format!("{} {} {}\n", v[0], v[1], v[2]));
+    }
+    s.push_str(&tris);
+    s
+}
+
+/// An isometric wireframe of [`pattern_surface`] as SVG — a self-contained look
+/// at the shape without a 3D viewer. `z` is up.
+pub fn iso_svg(title: &str, verts: &[[f64; 3]], n_theta: usize, n_phi: usize) -> String {
+    let (w, h) = (520.0_f64, 520.0_f64);
+    let c = w / 2.0;
+    let (a, b) = (45f64.to_radians(), 35.264f64.to_radians());
+    let (sa, ca, sb, cb) = (a.sin(), a.cos(), b.sin(), b.cos());
+    let scale = (w / 2.0 - 34.0) / 1.42;
+    let px = |v: &[f64; 3]| -> (f64, f64) {
+        let x1 = v[0] * ca - v[1] * sa;
+        let y1 = v[0] * sa + v[1] * ca;
+        (c + x1 * scale, c - (y1 * cb - v[2] * sb) * scale)
+    };
+    let idx = |t: usize, p: usize| t * n_phi + p;
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='{w}' height='{h}' viewBox='0 0 {w} {h}'>\n"
+    ));
+    out.push_str(&format!("<rect width='{w}' height='{h}' fill='white'/>\n"));
+    out.push_str(&format!(
+        "<text x='{c}' y='18' text-anchor='middle' font-size='13' fill='#333'>{title}</text>\n"
+    ));
+    for p in 0..n_phi {
+        for t in 0..n_theta - 1 {
+            let (x1, y1) = px(&verts[idx(t, p)]);
+            let (x2, y2) = px(&verts[idx(t + 1, p)]);
+            out.push_str(&format!(
+                "<line x1='{x1:.1}' y1='{y1:.1}' x2='{x2:.1}' y2='{y2:.1}' stroke='#8ab' stroke-width='0.6'/>\n"
+            ));
+        }
+    }
+    for t in 0..n_theta {
+        for p in 0..n_phi {
+            let (x1, y1) = px(&verts[idx(t, p)]);
+            let (x2, y2) = px(&verts[idx(t, (p + 1) % n_phi)]);
+            out.push_str(&format!(
+                "<line x1='{x1:.1}' y1='{y1:.1}' x2='{x2:.1}' y2='{y2:.1}' stroke='#8ab' stroke-width='0.6'/>\n"
+            ));
+        }
+    }
+    for (v, col, lab) in [
+        ([1.25, 0.0, 0.0], "#a00", "x"),
+        ([0.0, 1.25, 0.0], "#0a0", "y"),
+        ([0.0, 0.0, 1.25], "#00a", "z"),
+    ] {
+        let (x0, y0) = px(&[0.0, 0.0, 0.0]);
+        let (x1, y1) = px(&v);
+        out.push_str(&format!(
+            "<line x1='{x0:.1}' y1='{y0:.1}' x2='{x1:.1}' y2='{y1:.1}' stroke='{col}' stroke-width='1.3'/>\n"
+        ));
+        out.push_str(&format!(
+            "<text x='{x1:.1}' y='{y1:.1}' font-size='12' fill='{col}'>{lab}</text>\n"
+        ));
+    }
+    out.push_str("</svg>\n");
+    out
+}
+
 /// One point of a frequency sweep.
 #[derive(Clone, Copy, Debug)]
 pub struct SweepPoint {
@@ -874,6 +988,23 @@ mod tests {
             sol.zin.re,
             bare.zin.re
         );
+    }
+
+    /// The 3D surface is the far field on a sphere: a horizontal dipole (wire on
+    /// +x) has a null along x and its peak along y.
+    #[test]
+    fn the_3d_surface_has_the_dipoles_null_and_peak() {
+        let f = 28.5e6;
+        let sol = analyze(&crate::presets::dipole(f, 10.0), &SolverConfig::default()).unwrap();
+        let (verts, nt, np) = pattern_surface(&sol, 37, 72);
+        let mag = |t: usize, p: usize| {
+            let v = verts[t * np + p];
+            (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
+        };
+        let null_x = mag(nt / 2, 0); // θ=90, φ=0 → +x, along the wire
+        let peak_y = mag(nt / 2, np / 4); // θ=90, φ=90 → +y, broadside
+        assert!(null_x < 0.1, "null along x should be near zero, got {null_x:.3}");
+        assert!((peak_y - 1.0).abs() < 0.05, "peak along y should be ~1, got {peak_y:.3}");
     }
 
     /// A quarter-wave monopole over a **perfect** ground is half a dipole: the
