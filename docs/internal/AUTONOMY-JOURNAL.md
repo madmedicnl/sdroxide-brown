@@ -21,6 +21,38 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-28 (morning triage — issues and replies)
+
+**In plain words.** Checked the queue and the issue replies while the operator
+was away. Nothing needs a code change today: every fixable report is waiting on
+a recording, a specific radio, or F4NRM. Two replies went out — one asking for
+the right NAVTEX recording (the link was the WEFAX one), one thanking the
+installer reporter for confirming and noting the icon fix — and the counts were
+re-measured.
+
+**Done.**
+
+- Re-measured: **17 open issues** (was 18 — #260 Chrome web-audio closed),
+  **2 open PRs, both F4NRM's** (#292 re-applies the MinGW static-link, #293
+  Radio Classic panel, wire 257/0x4D). Fixed the stale wire register in
+  `AGENTS.md` (243/0x3F → 256/0x4C). Commits `ac4f4f04`.
+- Replied to #257 (F4NRM's "sample in the PRs" link is the DWD 3855 WEFAX
+  recording, not a NAVTEX capture — asked for the right one) and #280 (the
+  reporter confirmed the MSI runs; noted the desktop icon is embedded now).
+
+**Not done / blocked.**
+
+- #239 orientation — still waiting on the upside-down-vs-negative answer.
+- #257 — waiting on a real NAVTEX recording.
+- #264 — waiting on F4NRM's PWA hard-reload result.
+- #259/#262 — F4NRM's area, no new reports.
+
+**Next.**
+
+- Nothing in the queue that can move without a recording or F4NRM.
+
+---
+
 ## 2026-10-28 (#265 — the range notices are logged, not shown)
 
 **In plain words.** The "would not open on X, so it opened on Y" and "the dial
