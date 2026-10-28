@@ -382,34 +382,37 @@ impl super::SdroxideApp {
             ui.separator();
 
             let shapes = antenna_model::all(self.antenna_freq_mhz * 1e6);
-            for d in shapes {
-                ui.group(|ui| {
-                    ui.label(egui::RichText::new(d.name).strong());
-                    ui.label(egui::RichText::new(&d.notes).small().weak());
-                    for dim in &d.dims {
-                        ui.horizontal(|ui| {
-                            ui.label(&dim.what);
-                            ui.add_space(8.0);
-                            ui.monospace(format!("{:.2} m", dim.metres));
+            ui.columns(2, |cols| {
+                cols[0].vertical(|ui| {
+                    for d in &shapes {
+                        ui.group(|ui| {
+                            ui.label(egui::RichText::new(d.name).strong());
+                            ui.label(egui::RichText::new(&d.notes).small().weak());
+                            for dim in &d.dims {
+                                ui.horizontal(|ui| {
+                                    ui.label(&dim.what);
+                                    ui.add_space(8.0);
+                                    ui.monospace(format!("{:.2} m", dim.metres));
+                                });
+                            }
+                            if let Some((r, x)) = d.feed_z {
+                                ui.horizontal(|ui| {
+                                    ui.label(format!("feed ≈ {r:.0} Ω"));
+                                    ui.add_space(8.0);
+                                    ui.monospace(format!(
+                                        "SWR {:.2}",
+                                        antenna_model::swr((r, x), self.antenna_z0)
+                                    ));
+                                });
+                            }
                         });
-                    }
-                    if let Some((r, x)) = d.feed_z {
-                        ui.horizontal(|ui| {
-                            ui.label(format!("feed ≈ {r:.0} Ω"));
-                            ui.add_space(8.0);
-                            ui.monospace(format!(
-                                "SWR {:.2}",
-                                antenna_model::swr((r, x), self.antenna_z0)
-                            ));
-                        });
+                        ui.add_space(4.0);
                     }
                 });
-                ui.add_space(4.0);
-            }
-
-            if let Some(rows) = &self.antenna_solved {
-                crate::chrome::menu_caption(ui, "Solved");
-                for row in rows {
+                cols[1].vertical(|ui| {
+                    if let Some(rows) = &self.antenna_solved {
+                        crate::chrome::menu_caption(ui, "Solved");
+                        for row in rows {
                     ui.group(|ui| {
                         ui.label(egui::RichText::new(&row.name).strong());
                         ui.horizontal(|ui| {
@@ -448,21 +451,13 @@ impl super::SdroxideApp {
                 }
                 ui.separator();
             }
+            });
+        });
 
             if !self.antenna_patterns.is_empty() {
-                crate::chrome::menu_caption(ui, "Radiation Pattern");
-                let mut sel = self.antenna_pattern_sel;
-                let names: Vec<&str> =
-                    self.antenna_patterns.iter().map(|(n, _)| n.as_str()).collect();
-                egui::ComboBox::from_id_salt("antenna-pattern-sel")
-                    .selected_text(names[sel])
-                    .show_ui(ui, |ui| {
-                        for (i, name) in names.iter().enumerate() {
-                            ui.selectable_value(&mut sel, i, *name);
-                        }
-                    });
-                self.antenna_pattern_sel = sel;
                 ui.horizontal(|ui| {
+                    crate::chrome::menu_caption(ui, "Radiation Pattern");
+                    ui.add_space(8.0);
                     ui.label("View:");
                     let view_before = self.antenna_pattern_view;
                     egui::ComboBox::from_id_salt("antenna-view")
@@ -493,6 +488,17 @@ impl super::SdroxideApp {
                         }
                     }
                 });
+                let mut sel = self.antenna_pattern_sel;
+                let names: Vec<&str> =
+                    self.antenna_patterns.iter().map(|(n, _)| n.as_str()).collect();
+                egui::ComboBox::from_id_salt("antenna-pattern-sel")
+                    .selected_text(names[sel])
+                    .show_ui(ui, |ui| {
+                        for (i, name) in names.iter().enumerate() {
+                            ui.selectable_value(&mut sel, i, *name);
+                        }
+                    });
+                self.antenna_pattern_sel = sel;
                 ui.horizontal(|ui| {
                     if let Some((name, cuts)) = self.antenna_patterns.get(self.antenna_pattern_sel) {
                         let cut = &cuts[self.antenna_pattern_view.min(2)];
