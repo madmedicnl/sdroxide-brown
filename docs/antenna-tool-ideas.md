@@ -327,8 +327,9 @@ was the hard part and is handled.*
       base) is still refused. Unfed junctions (the delta loop's corners) give a
       plausible ~107 Ω, but **no reference value here pins them** — treat them as
       plausible, not proven.
-- [ ] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — the model holds
-      them; the solver does not yet apply them.
+- [x] Lumped loads on a segment (R+jX, L, C, parallel-LC trap) — all seven MMANA
+      load types, added to the matrix at the segment midpoint (`Z_L/4` per tent
+      pair). Pinned by a 100 Ω series resistor lifting the input resistance.
 - [x] **Ground — free space and perfect (image method).** Validated: a
       quarter-wave monopole over a perfect ground comes out at half a dipole,
       ≈35 Ω and ~5.1 dBi (3 dB over the dipole). The presets now carry a ground

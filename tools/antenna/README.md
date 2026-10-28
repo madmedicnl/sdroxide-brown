@@ -36,9 +36,9 @@ cargo test
 
 ## What comes next
 
-Lumped loads, the Fresnel (real) ground model, and the multi-way-junction feed
-(the ground plane), then the 2D polar plots. The frequency sweep, far-field
-gain/F-B and the bend feed are done. See the ideas doc for the formulas and the
+The Fresnel (real) ground model, the multi-way-junction feed (the ground
+plane), and the 2D polar plots. The frequency sweep, far-field gain/F-B, the
+bend feed and lumped loads are done. See the ideas doc for the formulas and the
 phasing.
 
 ## Note on the shortening factor

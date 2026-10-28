@@ -212,6 +212,42 @@ fn build_mesh(a: &Antenna, cfg: &SolverConfig) -> Mesh {
     Mesh { node_pts, segs, incident, wire_segs }
 }
 
+/// Parallel combination of two impedances, `a ∥ b`.
+fn par(a: Complex64, b: Complex64) -> Complex64 {
+    let den = a + b;
+    if den.norm() == 0.0 { Complex64::new(0.0, 0.0) } else { a * b / den }
+}
+
+/// The series impedance of a lumped load at the solve frequency, from MMANA's
+/// load types (`values[0]` is the type, `values[1..]` the R, L and C in the
+/// order the type names them — R in Ω, L in µH, C in pF, X in Ω for type 0):
+///
+/// | type | meaning      | impedance                                    |
+/// |------|--------------|----------------------------------------------|
+/// | 0    | R + jX       | R + jX                                       |
+/// | 1    | R ∥ C        | R / (1 + jωRC)                               |
+/// | 2    | R ∥ L        | jωLR / (R + jωL)                             |
+/// | 3    | R + C        | R + 1/(jωC)                                  |
+/// | 4    | R + L        | R + jωL                                      |
+/// | 5    | R ∥ (L + C)  | R(jωL + 1/(jωC)) / (R + jωL + 1/(jωC))       |
+/// | 6    | R + (L ∥ C)  | R + (jωL · 1/(jωC)) / (jωL + 1/(jωC))        |
+fn load_impedance(load: &crate::model::Load, omega: f64) -> Complex64 {
+    let j = Complex64::new(0.0, 1.0);
+    let r = Complex64::new(load.values[1], 0.0);
+    let xl = |l_uh: f64| Complex64::new(0.0, omega * l_uh * 1e-6);
+    let xc = |c_pf: f64| Complex64::new(0.0, -1.0 / (omega * c_pf.max(1e-30) * 1e-12));
+    match load.values[0] as i32 {
+        0 => r + j * Complex64::new(load.values[2], 0.0),
+        1 => par(r, xc(load.values[2])),
+        2 => par(r, xl(load.values[2])),
+        3 => r + xc(load.values[2]),
+        4 => r + xl(load.values[2]),
+        5 => par(r, xl(load.values[2]) + xc(load.values[3])),
+        6 => r + par(xl(load.values[2]), xc(load.values[3])),
+        _ => Complex64::new(0.0, 0.0),
+    }
+}
+
 // ── the solve ────────────────────────────────────────────────────────────────
 
 /// A segment reduced to what the far field needs: its current, direction and
@@ -375,6 +411,31 @@ pub fn analyze(a: &Antenna, cfg: &SolverConfig) -> Result<Solution, String> {
                 }
             }
             z[mi][ni] = acc;
+        }
+    }
+
+    // Lumped loads: a series impedance at a point on a segment. In the Galerkin
+    // basis a load `Z_L` at fraction `t` along a segment (nodes a, b) adds
+    // `Z_L·f_a(t)·f_n(t)` to the matrix; at the segment midpoint each tent is ½,
+    // so it is a `Z_L/4` block coupling the two nodes.
+    for load in &a.loads {
+        let lw = (load.at.wire as usize).saturating_sub(1);
+        if lw >= m.wire_segs.len() || m.wire_segs[lw].is_empty() {
+            continue;
+        }
+        let nseg = m.wire_segs[lw].len();
+        let base = match load.at.at {
+            Pos::Begin => 0isize,
+            Pos::Center => (nseg as isize) / 2,
+            Pos::End => nseg as isize - 1,
+        };
+        let si = (base + load.at.offset as isize).clamp(0, nseg as isize - 1) as usize;
+        let seg = &m.segs[m.wire_segs[lw][si]];
+        let zl = load_impedance(load, omega) * 0.25;
+        for (n1, n2) in [(seg.a, seg.a), (seg.a, seg.b), (seg.b, seg.a), (seg.b, seg.b)] {
+            if let (Some(i), Some(j)) = (index[n1], index[n2]) {
+                z[i][j] += zl;
+            }
         }
     }
 
@@ -793,6 +854,26 @@ mod tests {
         let err = analyze(&crate::presets::ground_plane(28_500_000.0), &SolverConfig::default())
             .unwrap_err();
         assert!(err.contains("multi-way"), "ground plane: {err}");
+    }
+
+    /// A lumped series resistor in the middle of a dipole adds its resistance to
+    /// the input impedance: 100 Ω at the feed reads ~100 Ω above the bare dipole.
+    #[test]
+    fn a_series_load_raises_the_input_resistance() {
+        let f = 28.5e6;
+        let bare = analyze(&crate::presets::dipole(f, 10.0), &SolverConfig::default()).unwrap();
+        let mut loaded = crate::presets::dipole(f, 10.0);
+        loaded.loads.push(crate::model::Load {
+            at: crate::model::WirePoint { wire: 1, at: Pos::Center, offset: 0 },
+            values: [0.0, 100.0, 0.0, 0.0],
+        });
+        let sol = analyze(&loaded, &SolverConfig::default()).expect("a loaded dipole solves");
+        assert!(
+            sol.zin.re > bare.zin.re + 50.0,
+            "loaded {:.1} Ω should sit well above bare {:.1} Ω",
+            sol.zin.re,
+            bare.zin.re
+        );
     }
 
     /// A quarter-wave monopole over a **perfect** ground is half a dipole: the
