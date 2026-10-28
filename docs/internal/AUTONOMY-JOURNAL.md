@@ -21,6 +21,111 @@ Each entry, in this order:
 
 ---
 
+## 2026-10-28 (#263 — CTR off-centre after zoom, follow-up)
+
+**In plain words.** The original zoom bug — a switched-off radio's 48 kHz
+placeholder span carrying over when a real SDR was linked — is fixed by
+`c2889ac6` on `main`, and the operator has already replied to that effect.
+F4NRM's follow-up, "CTR is not in centre when I zoom with the mouse", is the
+same span going stale, reported against v2.2.0.2, which predates the fix. The
+panadapter already has extensive CTR/zoom handling (#133, #535, #576, #310);
+the follow-up most likely clears on the next build.
+
+**Done.**
+
+- Read the CTR/zoom path in `spectrum_view.rs` (`centring_due`, `center_on_dial`,
+  `pan_center`, `ctr_settle`); the #535 and CTR-chasing fixes are in v2.2.0.2,
+  the span-recompute fix `c2889ac6` is after it.
+- No code change: the report is against a build that predates the fix.
+
+**Not done / blocked.** Needs F4NRM's re-test on the next build; if CTR is
+still off-centre there, he should name the radio, mode and zoom direction.
+
+**Next.** #283 (settings bleed between the two builds), then the Google Groups
+Hell report (upside-down HELL).
+
+---
+
+## 2026-10-28 (#264 Public SDR — blocked on re-test)
+
+**In plain words.** F4NRM reported the public-SDR list loads but no receiver
+connects in 2.2.0 (2.1.0 works). The list is served over HTTP and loads; the
+connect is over the wire, so a stale browser client at the old wire version is
+the likely cause — the server refuses the mismatch while the cached list still
+shows. The cache policy is already correct and the connect path is tested; the
+one missing piece is F4NRM re-testing after a hard reload.
+
+**Done.**
+
+- Confirmed the cache policy is correct (`cache_policy_for` in
+  `sdroxide-server`): fingerprinted `.wasm`/`.js` = `max-age=…, immutable`,
+  fixed names = `no-store`. #278 is merged and in the 2.2.0.x tags.
+- No code change; madmedicnl has already asked F4NRM to hard-reload and name
+  the receiver.
+
+**Not done / blocked.** Waiting on F4NRM's re-test (hard reload + which
+receiver).
+
+**Next.** #263 (CTR not centred when zooming with the mouse).
+
+---
+
+## 2026-10-28 (#265 — "outside receive range" notice, follow-up)
+
+**In plain words.** F4NRM's follow-up: the startup "would not open" notice is
+already fixed (logged, not shown) on `main`, but he also showed a second message
+— "2.941 MHz is outside this radio's receive range … back to 1090 MHz" — which
+is a different path. I traced 2.941 MHz to the HFDL channel, which moves the
+dial without the range check that ADS-B/VDL2/AIS apply. Asked him one question
+to pin down whether HFDL is involved or it is a plain ADS-B ↔ VDL2 switch.
+
+**Done.**
+
+- The startup notice was already fixed by `bd1f41df` (log-only); F4NRM's
+  follow-up predates that push, so he has not tested it yet.
+- The "… back to X MHz" notice is `Engine::tune_refused`, kept shown by design
+  for an *explicit* tune the rig refuses. It also fires on the auto path when a
+  mode's fixed channel (HFDL 2.941 MHz, from `HFDL_PLAN_KHZ`) is put on the dial
+  without a `may_rx_hz` guard — unlike ADS-B/VDL2/AIS in `set_rx_mode`.
+- Replied on the issue asking whether HFDL is involved; no code changed yet.
+
+**Not done / blocked.** Needs F4NRM's answer (and/or a Pluto on the bench to
+reproduce) before touching the HFDL dial path.
+
+**Next.** #264 (Public SDR connect), then #263 (CTR not centred on zoom).
+
+---
+
+## 2026-10-28 (#294 rustls, and the PR cleanup)
+
+**In plain words.** Closed the Dependabot security issue by moving rustls to
+0.23.46, which patches the four TLS advisories. Also tidied two of my own open
+PRs: the NAVTEX PR had accidentally carried the WEFAX commit with it, so both
+are rebased onto current `main` (which F4NRM had moved when he merged his Radio
+Classic panel) and now each holds exactly its own change.
+
+**Done.**
+
+- rustls 0.23.45 → 0.23.46 (`7480058e`); `cargo update -p rustls --precise
+  0.23.46` also re-resolved tempfile's getrandom 0.4.3 → 0.3.4 (harmless, both
+  satisfy tempfile's `>=0.3,<0.5`). Gate compiles with pre-existing warnings
+  only, `cargo check --locked` passes, `-p sdroxide-net` 127 and `-p
+  sdroxide-picup` 17 tests pass, wasm check clean. Issue #294 closed.
+- Rebased `wefax-negative-autocorrect` and `navtex-false-sync-fix` onto `main`
+  after #293 merged, so PR #298 no longer carries the WEFAX commit. Force-pushed
+  with `--force-with-lease`; commits now `590b4a2a` (WEFAX) and `5aac9587`
+  (NAVTEX). Both PRs `CLEAN`/`MERGEABLE`.
+- Docs commit `abf55d95`: journaled the WEFAX and NAVTEX PRs and refreshed the
+  TODO state line (PROTO_VERSION 257 / `0x4D`, v2.2.0.3_brown, PRs #295/#298
+  open).
+
+**Not done / blocked.** Nothing for this item.
+
+**Next.** #265 (the "outside receive range" notice still shows without a mode
+change), then #264 and #263.
+
+---
+
 ## 2026-10-28 (Radio Classic — the panel, and the audio level it needs)
 
 **In plain words.** EXTRAS now has a RADIO chip that opens a classic-radio face
