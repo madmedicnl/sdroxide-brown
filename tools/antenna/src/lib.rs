@@ -292,6 +292,7 @@ mod tests {
             let got = swr((*r, *x), 50.0);
             assert!((got - swr_exp).abs() < 0.01, "{name}: SWR {got:.2} vs {swr_exp:.2}");
         }
+        // Spot-check the actual Design feed_z values for the dipole and the loop.
         assert_eq!(dipole(27_265_000.0).feed_z, Some((73.0, 0.0)));
         assert_eq!(delta_loop(28_500_000.0).feed_z, Some((110.0, 0.0)));
     }
