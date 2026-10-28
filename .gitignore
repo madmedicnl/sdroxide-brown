@@ -25,10 +25,23 @@ received/
 # Release notes drafted for the GitHub release page, not part of the tree.
 /RELEASE_NOTES*.md
 
+# The operator/agent working notes — the live brief, the queue, the session
+# history and the topic handovers. Kept on disk for the agent to work from,
+# and out of the published tree (operator's instruction, 2026-10-28): they
+# carry names, callsigns and station detail that do not belong in a public
+# repo. `git add -A` would put them back, which is why they are named here.
+/AGENTS.md
+/TODO.md
+/docs/internal/
+/docs/cquam-design.md
+/docs/multi-window-brainstorm.md
+/docs/skyroof-notes.md
+/docs/swl-phase1-design.md
+/docs/swl-phase2-3-design.md
+/docs/synop-notes.md
+
 # The running session handover, written for whoever picks this up next. Kept on
-# disk and out of the tree: `git add -A` put it back once already (61684f6d,
-# undoing ec129ebe). The topic handovers beside it — ALE-, CW-, DAB-HANDOVER.md
-# — are part of the tree and stay tracked, because AGENTS.md points at them.
+# disk and out of the tree.
 /HANDOVER.md
 
 # Python bytecode from the tools
