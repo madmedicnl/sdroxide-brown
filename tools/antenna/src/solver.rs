@@ -168,8 +168,40 @@ fn find_or_add(pts: &mut Vec<[f64; 3]>, p: [f64; 3]) -> usize {
     pts.len() - 1
 }
 
+/// Endpoint fractions `[0.0 ..= 1.0]` for a wire of `n` segments, tapered so the
+/// segments nearest a tapered end are `ratio`× shorter than the coarsest ones (a
+/// geometric progression). `taper_start`/`taper_end` select which ends taper.
+/// A uniform wire is the `ratio == 1` (or neither end tapered) case.
+fn tapered_fractions(n: usize, ratio: f64, taper_start: bool, taper_end: bool) -> Vec<f64> {
+    let r = ratio.max(1.0);
+    // Distance from the nearer tapered end to the coarsest segment: half the
+    // wire when both ends taper, the whole wire when one does.
+    let maxd = if taper_start && taper_end {
+        ((n.saturating_sub(1)) / 2) as f64
+    } else {
+        (n.saturating_sub(1)) as f64
+    };
+    let g = r.powf(1.0 / maxd.max(1.0));
+    let mut lens = Vec::with_capacity(n);
+    for i in 0..n {
+        let ds = if taper_start { i as f64 } else { f64::INFINITY };
+        let de = if taper_end { (n - 1 - i) as f64 } else { f64::INFINITY };
+        lens.push(g.powf(ds.min(de)));
+    }
+    let total: f64 = lens.iter().sum();
+    let mut fracs = vec![0.0; n + 1];
+    let mut acc = 0.0;
+    for (i, l) in lens.iter().enumerate() {
+        acc += l / total;
+        fracs[i + 1] = acc;
+    }
+    fracs
+}
+
 fn build_mesh(a: &Antenna, cfg: &SolverConfig) -> Mesh {
     let lambda = C / a.freq_hz;
+    // The taper ratio: MMANA's SC (near bends/junctions) × EC (near free ends).
+    let taper = (a.segmentation.sc * a.segmentation.ec as f64).max(1.0);
     let mut node_pts: Vec<[f64; 3]> = Vec::new();
     let mut segs: Vec<Segment> = Vec::new();
     let mut wire_segs: Vec<Vec<usize>> = Vec::new();
@@ -183,10 +215,20 @@ fn build_mesh(a: &Antenna, cfg: &SolverConfig) -> Mesh {
             Seg::Fixed(n) => n.max(1) as usize,
             _ => ((cfg.segs_per_wavelength * len / lambda).round() as u32).max(2) as usize,
         };
+        // The endpoint fractions: uniform, or tapered toward the ends (where a
+        // bend, junction or free edge lives). MMANA's SC and EC are combined into
+        // one taper ratio; a finer per-end split (SC for junctions, EC for free
+        // ends) is left as a refinement.
+        let fracs: Vec<f64> = match w.seg {
+            Seg::AutoTaper => tapered_fractions(n, taper, true, true),
+            Seg::TaperStart => tapered_fractions(n, taper, true, false),
+            Seg::TaperEnd => tapered_fractions(n, taper, false, true),
+            _ => (0..=n).map(|i| i as f64 / n as f64).collect(),
+        };
         let dir = scale(sub(w.to, w.from), 1.0 / len);
         let mut ids = Vec::new();
-        for i in 0..=n {
-            let p = add(w.from, scale(sub(w.to, w.from), i as f64 / n as f64));
+        for &f in &fracs {
+            let p = add(w.from, scale(sub(w.to, w.from), f));
             ids.push(find_or_add(&mut node_pts, p));
         }
         let mut local_segs = Vec::new();
@@ -1062,6 +1104,30 @@ mod tests {
         let gp = analyze(&crate::presets::ground_plane(28_500_000.0), &SolverConfig::default())
             .expect("the ground plane should solve");
         assert!((18.0..45.0).contains(&gp.zin.re), "ground plane R = {:.1} Ω, want ~23", gp.zin.re);
+    }
+
+    /// The taper puts shorter segments at the tapered ends and longer ones in the
+    /// middle, symmetric when both ends taper, and always runs 0 → 1.
+    #[test]
+    fn the_taper_refines_the_ends() {
+        let f = tapered_fractions(10, 2.0, true, true);
+        assert_eq!(f.len(), 11);
+        assert_eq!(f[0], 0.0);
+        assert_eq!(f[10], 1.0);
+        let end = f[1] - f[0];
+        let mid = f[5] - f[4];
+        assert!(mid > end * 1.5, "middle {mid} should be coarser than end {end}");
+        // symmetric: the two end segments match
+        assert!((end - (f[10] - f[9])).abs() < 1e-12);
+    }
+
+    /// A one-sided taper refines only the selected end.
+    #[test]
+    fn a_one_sided_taper_refines_only_its_end() {
+        let f = tapered_fractions(8, 2.0, true, false);
+        let start = f[1] - f[0];
+        let end = f[8] - f[7];
+        assert!(end > start, "start {start} should be finer than end {end}");
     }
 
     /// A lumped series resistor in the middle of a dipole adds its resistance to

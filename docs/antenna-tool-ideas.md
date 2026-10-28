@@ -345,7 +345,13 @@ was the hard part and is handled.*
       impedance still uses the perfect image, exactly as MININEC/MMANA do; only
       the far field takes the real ground. `eps_r` defaults to 13 (dry ground);
       the σ is the model's `sigma_ms_m`. The `<0.2 λ` caveat stays worth saying.
-- [ ] MMANA's DM1/DM2/SC/EC tapering.
+- [x] MMANA's DM1/DM2/SC/EC tapering — a geometric taper, shorter segments
+      toward the wire ends (bends, junctions, free edges) and longer in the
+      middle. `AutoTaper` tapers both ends, `TaperStart`/`TaperEnd` one end;
+      the taper ratio is SC × EC (the per-end split — SC for junctions, EC for
+      free ends — is left as a refinement). `dm1`/`dm2` set MMANA's absolute
+      densities, but this solver keeps its own denser `segs_per_wavelength`
+      floor (it integrates numerically) and uses SC/EC for the taper shape.
 
 **C — Patterns**
 - [~] **2D polar plots** — the far-field cut and the SVG generator exist in the
