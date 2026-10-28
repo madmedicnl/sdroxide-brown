@@ -65,6 +65,47 @@ fn pattern_plot(ui: &mut egui::Ui, name: &str, cut: &[(f64, f64)]) {
     );
 }
 
+/// Draw the 3D pattern surface as a rotatable wireframe (drag to rotate), using
+/// a software yaw/pitch projection. `z` is up.
+fn surface_plot(
+    ui: &mut egui::Ui,
+    verts: &[[f64; 3]],
+    nt: usize,
+    np: usize,
+    yaw: &mut f32,
+    pitch: &mut f32,
+) {
+    let size = egui::vec2(240.0, 240.0);
+    let (response, painter) = ui.allocate_painter(size, egui::Sense::drag());
+    let rect = response.rect;
+    let center = rect.center();
+    let scale = rect.width().min(rect.height()) / 2.0 - 10.0;
+    if response.dragged() {
+        let d = response.drag_delta();
+        *yaw += d.x * 0.01;
+        *pitch = (*pitch + d.y * 0.01).clamp(-1.5, 1.5);
+    }
+    let (cy, sy) = (yaw.cos(), yaw.sin());
+    let (cp, sp) = (pitch.cos(), pitch.sin());
+    let proj = |v: [f64; 3]| -> egui::Pos2 {
+        let (x, y, z) = (v[0] as f32, v[1] as f32, v[2] as f32);
+        let (x1, y1) = (x * cy - y * sy, x * sy + y * cy); // yaw around z
+        let y2 = y1 * cp - z * sp; // pitch around x
+        center + egui::vec2(x1 * scale, -y2 * scale)
+    };
+    let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(120, 200, 120));
+    // φ-rings: for each theta, the closed ring over phi.
+    for t in 0..nt {
+        let ring: Vec<egui::Pos2> = (0..=np).map(|p| proj(verts[t * np + (p % np)])).collect();
+        painter.add(egui::Shape::line(ring, stroke));
+    }
+    // θ-lines: for each phi, the meridian over theta.
+    for p in 0..np {
+        let meridian: Vec<egui::Pos2> = (0..nt).map(|t| proj(verts[t * np + p])).collect();
+        painter.add(egui::Shape::line(meridian, stroke));
+    }
+}
+
 impl super::SdroxideApp {
     pub(in crate::app) fn antenna_window(&mut self, ctx: &egui::Context) {
         if !self.show_antenna {
@@ -216,6 +257,10 @@ impl super::SdroxideApp {
                 if let Some((name, cut)) = self.antenna_patterns.get(self.antenna_pattern_sel) {
                     pattern_plot(ui, name, cut);
                 }
+                if let Some((verts, nt, np)) = self.antenna_surfaces.get(self.antenna_pattern_sel) {
+                    ui.small("3D — drag to rotate");
+                    surface_plot(ui, verts, *nt, *np, &mut self.antenna_yaw, &mut self.antenna_pitch);
+                }
             }
 
             if let Some((a, score)) = &self.antenna_optimized {
@@ -300,15 +345,17 @@ impl super::SdroxideApp {
     /// Solve the presets at the current frequency (synchronously — the solver is
     /// a few seconds, which is the honest cost of the method of moments).
     fn antenna_solve(&mut self) {
-        use antenna_model::solver::{SolverConfig, analyze, cut, max_gain, swr};
+        use antenna_model::solver::{SolverConfig, analyze, cut, max_gain, pattern_surface, swr};
         let freq_hz = self.antenna_freq_mhz * 1e6;
         let mut rows = Vec::new();
         let mut patterns = Vec::new();
+        let mut surfaces = Vec::new();
         for a in antenna_model::presets::catalog(freq_hz) {
             if let Ok(sol) = analyze(&a, &SolverConfig::default()) {
                 let (g, _, _) = max_gain(&sol);
                 let name = a.name.clone();
                 patterns.push((name.clone(), cut(&sol, true, 90.0, 5.0)));
+                surfaces.push(pattern_surface(&sol, 37, 48));
                 rows.push(SolvedRow { name, r: sol.zin.re, x: sol.zin.im, swr: swr(sol.zin, 50.0), gain: g });
             }
         }
@@ -325,11 +372,13 @@ impl super::SdroxideApp {
                 let (g, _, _) = max_gain(&sol);
                 let name = format!("Yagi ×{}", self.antenna_stack);
                 patterns.push((name.clone(), cut(&sol, true, 90.0, 5.0)));
+                surfaces.push(pattern_surface(&sol, 37, 48));
                 rows.push(SolvedRow { name, r: sol.zin.re, x: sol.zin.im, swr: swr(sol.zin, 50.0), gain: g });
             }
         }
         self.antenna_solved = Some(rows);
         self.antenna_patterns = patterns;
+        self.antenna_surfaces = surfaces;
         self.antenna_pattern_sel = self.antenna_pattern_sel.min(self.antenna_patterns.len().saturating_sub(1));
     }
 

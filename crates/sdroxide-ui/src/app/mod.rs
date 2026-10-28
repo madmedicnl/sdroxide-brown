@@ -623,6 +623,11 @@ pub struct SdroxideApp {
     /// The azimuth cuts of the solved presets, and which one the pattern shows.
     antenna_patterns: Vec<(String, Vec<(f64, f64)>)>,
     antenna_pattern_sel: usize,
+    /// The 3D pattern surfaces (parallel to `antenna_patterns`), and the view
+    /// rotation.
+    antenna_surfaces: Vec<(Vec<[f64; 3]>, usize, usize)>,
+    antenna_yaw: f32,
+    antenna_pitch: f32,
     /// A Yagi optimization running on a background thread, and its result
     /// channel. Native-only — the browser has no threads and just skips the
     /// optimizer.
@@ -2176,6 +2181,9 @@ impl SdroxideApp {
             antenna_stack: 1,
             antenna_patterns: Vec::new(),
             antenna_pattern_sel: 0,
+            antenna_surfaces: Vec::new(),
+            antenna_yaw: -0.6,
+            antenna_pitch: 0.4,
             #[cfg(not(target_arch = "wasm32"))]
             antenna_optimizing: false,
             #[cfg(not(target_arch = "wasm32"))]
