@@ -389,8 +389,10 @@ was the hard part and is handled.*
       on `main`.
 - [x] Manual section, README entry and a quick-start — USER_MANUAL 2.24 and a
       README mention.
-- [ ] RX nice-to-have (decision 2): feed the predicted takeoff into the
-      receive/propagation side.
+- [x] RX nice-to-have (decision 2): the solve now reads the **takeoff angle** (the
+      elevation of the peak gain, above the horizon), so the antenna's predicted
+      receive takeoff is visible for the listening side. *(A deeper feed into
+      the LISTEN path prediction is left open.)*
 
 ## Reference resource: dx-antennas.com (operator, 2026-10-11)
 
