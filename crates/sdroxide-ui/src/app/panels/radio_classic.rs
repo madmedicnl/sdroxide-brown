@@ -270,8 +270,11 @@ fn s_reading(s_dbm: f32) -> String {
 /// How long ago a reading may be and still count as the sound that is playing.
 const LEVEL_FRESH_S: f32 = 0.4;
 /// Rows kept by the mini waterfall, and the bins in each.
-const WF_ROWS: usize = 40;
+const WF_ROWS: usize = 400;
 const WF_BINS: usize = 96;
+/// One spectrum frame in this many becomes a row: the scope runs at half the
+/// speed it did, and ten times the rows make the picture finer, not faster.
+const WF_EVERY: u32 = 2;
 
 /// The panel's own state: what has to live between frames.
 pub(in crate::app) struct State {
@@ -280,8 +283,15 @@ pub(in crate::app) struct State {
     vu_at: Option<f64>,
     bars: Vec<f32>,
     peaks: Vec<f32>,
-    wf: VecDeque<Vec<u8>>,
+    pub(in crate::app) wf: VecDeque<Vec<u8>>,
     wf_seq: Option<u32>,
+    /// Spectrum frames seen, to keep one in [`WF_EVERY`].
+    wf_tick: u32,
+    /// The waterfall as a picture, and what it was drawn for: its height in
+    /// pixels and the three colours it is made from.
+    wf_tex: Option<egui::TextureHandle>,
+    wf_drawn: Option<(usize, [Color32; 3])>,
+    wf_dirty: bool,
     /// When `WantAudioLevel` was last sent (wall clock), so it is renewed about
     /// once a second while the panel is on screen.
     lease_at: f64,
@@ -301,9 +311,65 @@ impl Default for State {
             peaks: vec![0.0; AUDIO_BANDS],
             wf: VecDeque::new(),
             wf_seq: None,
+            wf_tick: 0,
+            wf_tex: None,
+            wf_drawn: None,
+            wf_dirty: false,
             lease_at: 0.0,
             frame: None,
         }
+    }
+}
+
+impl State {
+    /// Take a new spectrum row: one in [`WF_EVERY`] is kept, newest first, up to
+    /// [`WF_ROWS`]. Returns whether the picture changed.
+    fn wf_push(&mut self, row: Vec<u8>) -> bool {
+        let keep = self.wf_tick % WF_EVERY == 0;
+        self.wf_tick = self.wf_tick.wrapping_add(1);
+        if keep {
+            self.wf.push_front(row);
+            self.wf.truncate(WF_ROWS);
+        }
+        keep
+    }
+}
+
+/// The colour of a waterfall cell for a level `0.0..=1.0`.
+fn wf_colour(t: f32, ink: &[Color32; 3]) -> Color32 {
+    let [ground, accent, strong] = *ink;
+    if t < 0.8 { mix(ground, accent, t / 0.8) } else { mix(accent, strong, (t - 0.8) * 5.0) }
+}
+
+/// The waterfall as an image `out_h` pixels tall: the [`WF_ROWS`] rows are
+/// averaged down to the pixels they land on (a row per pixel would shimmer),
+/// newest at the top, and the part not filled yet is the ground.
+fn wf_image(rows: &VecDeque<Vec<u8>>, out_h: usize, ink: &[Color32; 3]) -> egui::ColorImage {
+    let out_h = out_h.clamp(1, WF_ROWS);
+    let mut pixels = Vec::with_capacity(WF_BINS * out_h);
+    for y in 0..out_h {
+        let from = y * WF_ROWS / out_h;
+        let to = ((y + 1) * WF_ROWS / out_h).max(from + 1);
+        let mut sum = [0u32; WF_BINS];
+        let mut n = 0u32;
+        for row in (from..to).filter_map(|r| rows.get(r)) {
+            for (acc, v) in sum.iter_mut().zip(row) {
+                *acc += u32::from(*v);
+            }
+            n += 1;
+        }
+        for acc in sum {
+            pixels.push(if n == 0 {
+                ink[0]
+            } else {
+                wf_colour(acc as f32 / (n as f32 * 255.0), ink)
+            });
+        }
+    }
+    egui::ColorImage {
+        size: [WF_BINS, out_h],
+        source_size: vec2(WF_BINS as f32, out_h as f32),
+        pixels,
     }
 }
 
@@ -709,9 +775,9 @@ impl SdroxideApp {
                     if at < 0.0 || at >= n as f64 { 0 } else { frame.bins[at as usize] }
                 })
                 .collect();
-            let wf = &mut self.radio_classic.wf;
-            wf.push_front(row);
-            wf.truncate(WF_ROWS);
+            if self.radio_classic.wf_push(row) {
+                self.radio_classic.wf_dirty = true;
+            }
         }
         let p = ui.painter_at(rect);
         p.rect_filled(rect, 4.0, ink.ground);
@@ -733,28 +799,35 @@ impl SdroxideApp {
                 .collect();
             p.add(egui::Shape::line(pts, Stroke::new(1.2, ink.accent)));
         }
-        let rows = self.radio_classic.wf.len().max(1);
-        let cell_h = wf_rect.height() / WF_ROWS as f32;
-        let cell_w = wf_rect.width() / WF_BINS as f32;
-        for (r, row) in self.radio_classic.wf.iter().enumerate() {
-            for (i, v) in row.iter().enumerate() {
-                let t = f32::from(*v) / 255.0;
-                let c = if t < 0.8 {
-                    mix(ink.ground, ink.accent, t / 0.8)
-                } else {
-                    mix(ink.accent, ink.strong, (t - 0.8) * 5.0)
-                };
-                let cell = Rect::from_min_size(
-                    Pos2::new(
-                        wf_rect.left() + i as f32 * cell_w,
-                        wf_rect.top() + r as f32 * cell_h,
-                    ),
-                    vec2(cell_w + 0.5, cell_h + 0.5),
-                );
-                p.rect_filled(cell, 0.0, c);
+        // The cascade is one picture, rebuilt only when a row came in or the
+        // size or the colours changed — not 96 × 400 rectangles every frame.
+        let ppp = ui.ctx().pixels_per_point();
+        let out_h = ((wf_rect.height() * ppp).round() as usize).clamp(1, WF_ROWS);
+        let colours = [ink.ground, ink.accent, ink.strong];
+        let st = &mut self.radio_classic;
+        if st.wf_tex.is_none() || st.wf_drawn != Some((out_h, colours)) || st.wf_dirty {
+            let image = wf_image(&st.wf, out_h, &colours);
+            match st.wf_tex.as_mut() {
+                Some(tex) => tex.set(image, egui::TextureOptions::LINEAR),
+                None => {
+                    st.wf_tex = Some(ui.ctx().load_texture(
+                        "radio-classic-waterfall",
+                        image,
+                        egui::TextureOptions::LINEAR,
+                    ));
+                }
             }
+            st.wf_drawn = Some((out_h, colours));
+            st.wf_dirty = false;
         }
-        let _ = rows;
+        if let Some(tex) = &st.wf_tex {
+            p.image(
+                tex.id(),
+                wf_rect,
+                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                Color32::WHITE,
+            );
+        }
         // The dial's own mark, at the centre.
         let x = rect.center().x;
         p.line_segment(
@@ -1268,6 +1341,40 @@ mod tests {
         let r = centred_in(room, 200.0);
         assert!((r.center().x - room.center().x).abs() < 0.01 && r.width() == 200.0);
         assert_eq!(centred_in(room, 900.0), room, "wider than the room: the room");
+    }
+
+    #[test]
+    fn the_waterfall_keeps_one_row_in_two_up_to_four_hundred() {
+        let mut st = State::default();
+        for i in 0..20u8 {
+            st.wf_push(vec![i; WF_BINS]);
+        }
+        assert_eq!(st.wf.len(), 10);
+        // Newest first: the last kept frame is the 19th (index 18).
+        assert_eq!(st.wf.front().map(|r| r[0]), Some(18));
+        for _ in 0..2000 {
+            st.wf_push(vec![0; WF_BINS]);
+        }
+        assert_eq!(st.wf.len(), WF_ROWS);
+        assert_eq!(WF_ROWS, 400);
+    }
+
+    #[test]
+    fn the_waterfall_picture_averages_rows_to_the_pixels_it_lands_on() {
+        let ink = [Color32::BLACK, Color32::from_rgb(0, 100, 200), Color32::WHITE];
+        let mut rows = VecDeque::new();
+        // Two bright rows on top of two dark ones, nothing below.
+        for v in [255u8, 255, 0, 0] {
+            rows.push_back(vec![v; WF_BINS]);
+        }
+        let img = wf_image(&rows, 100, &ink);
+        assert_eq!(img.size, [WF_BINS, 100]);
+        // 400 rows over 100 pixels: four rows a pixel, so the first pixel row
+        // holds all four, half of them bright.
+        let first = img.pixels[0];
+        assert!(first != Color32::BLACK && first != Color32::WHITE, "{first:?}");
+        // Below the filled part it is the ground.
+        assert_eq!(img.pixels[WF_BINS * 50], Color32::BLACK);
     }
 
     #[test]

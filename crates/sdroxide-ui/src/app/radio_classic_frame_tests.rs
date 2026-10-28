@@ -309,3 +309,39 @@ fn both_radio_chips_flip_the_same_switch() {
     app.toggle_radio_classic();
     assert!(!app.radio_classic_active());
 }
+
+fn spectrum(seq: u32) -> std::sync::Arc<sdroxide_types::SpectrumFrame> {
+    std::sync::Arc::new(sdroxide_types::SpectrumFrame {
+        seq,
+        center_hz: 100e6,
+        span_hz: 2e6,
+        db_floor: -120.0,
+        db_ceil: 0.0,
+        bins: (0..512).map(|i| (i % 256) as u8).collect(),
+        rows: Vec::new(),
+        rows_clocked: false,
+    })
+}
+
+/// Feed the panel `n` spectrum frames, one per screen frame, and say how many
+/// waterfall rows it kept.
+fn rows_after(n: u32) -> usize {
+    let (ctx, mut app) = app(Mode::Wfm);
+    app.ui_settings.radio_classic_on = true;
+    run(&ctx, &mut app);
+    app.radio_classic.wf.clear();
+    for i in 0..n {
+        app.frame = Some(spectrum(1000 + i));
+        one_frame(&ctx, &mut app, 10.0 + f64::from(i) * 0.05, vec![]);
+    }
+    app.radio_classic.wf.len()
+}
+
+/// The little waterfall scrolls at half the speed it did — one row for every
+/// two spectrum frames — and keeps ten times as many rows.
+#[test]
+fn the_scope_waterfall_runs_at_half_speed_and_keeps_ten_times_the_rows() {
+    let _guard = crate::multi::frame_test_lock();
+    assert_eq!(rows_after(20), 10, "twenty frames should leave ten rows");
+    assert_eq!(rows_after(1200), 400, "the waterfall keeps 400 rows");
+}
