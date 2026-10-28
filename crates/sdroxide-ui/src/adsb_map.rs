@@ -922,19 +922,23 @@ pub fn show(
         // Draw a small airplane shape rotated by track.
         let track = o.track_deg.unwrap_or(0.0).to_radians() as f32;
         let (s, co) = (track.sin(), track.cos());
-        // Simple airplane: nose forward, wings back.
+        // Spearhead (arrowhead) pointing in the track direction.
         let pts = [
-            c + eframe::egui::vec2(0.0 * co - (-r) * s, 0.0 * s + (-r) * co),        // nose
-            c + eframe::egui::vec2((-r * 0.4) * co - (r * 0.6) * s, (-r * 0.4) * s + (r * 0.6) * co),  // left wing
-            c + eframe::egui::vec2((-r * 0.15) * co - (r * 0.3) * s, (-r * 0.15) * s + (r * 0.3) * co), // tail left
-            c + eframe::egui::vec2((-r * 0.15) * co - (-r * 0.3) * s, (-r * 0.15) * s + (-r * 0.3) * co), // tail right
-            c + eframe::egui::vec2((-r * 0.4) * co - (-r * 0.6) * s, (-r * 0.4) * s + (-r * 0.6) * co), // right wing
+            c + eframe::egui::vec2(0.0 * co - (-r) * s, 0.0 * s + (-r) * co),   // tip
+            c + eframe::egui::vec2((-r * 0.7) * co - (r * 0.5) * s, (-r * 0.7) * s + (r * 0.5) * co), // left base
+            c + eframe::egui::vec2((-r * 0.7) * co - (-r * 0.5) * s, (-r * 0.7) * s + (-r * 0.5) * co), // right base
         ];
         p.add(eframe::egui::Shape::convex_polygon(
             pts.to_vec(),
             color,
             eframe::egui::Stroke::NONE,
         ));
+        // Outline.
+        let mut outline: Vec<eframe::egui::Pos2> = pts.to_vec();
+        if let Some(first) = outline.first().copied() {
+            outline.push(first);
+        }
+        p.add(eframe::egui::Shape::line(outline, eframe::egui::Stroke::new(1.0, color)));
     }
     // Tooltip for hovered overlay aircraft.
     if let Some(i) = overlay_hover {
