@@ -18,6 +18,12 @@ maintainer's queue there, not a promise.
 
 ## Now
 
+0. **Radio Classic** (madmedicnl, 2026-10-28) — a classic-radio panel in
+   EXTRAS, docked under the waterfall like DAB, WFM + RDS first. Previews
+   validated; plan approved, with one wire change (the audio level, a PR:
+   256 → 257 / `0x4D`). Branch **f4nrm/determined-dirac-yyf856**. See
+   [`docs/internal/RADIO-CLASSIC-PLAN.md`](docs/internal/RADIO-CLASSIC-PLAN.md).
+
 0. ~~**#265 "outside receive range" notice is noise**~~ **done** (`bd1f41df`,
    operator 2026-10-28) — the startup/swap notices are now logged, not shown;
    the operator-tune refusal is still said out loud. The "2.941 MHz on
