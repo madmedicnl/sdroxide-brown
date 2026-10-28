@@ -103,13 +103,13 @@ fn the_detachable_pages_switch_opens_it_as_a_window_and_keeps_its_bit() {
 #[test]
 fn where_a_panel_owns_the_slot_it_opens_as_a_window_instead_of_doing_nothing() {
     let _guard = crate::multi::frame_test_lock();
-    for mode in [Mode::Cw] {
-        let (ctx, mut app) = app(mode);
-        app.ui_settings.radio_classic_on = true;
-        let text = run(&ctx, &mut app);
-        assert_eq!(count(&text, "RADIO CLASSIC"), 2, "{mode:?}: {text:?}");
-        assert!(!app.show_radio_classic, "{mode:?}: the window is forced, not detached");
-    }
+    // CW has a panel of its own under the waterfall. (The digital modes no
+    // longer get here: RADIO yields to them, see `choosing_another_mode_…`.)
+    let (ctx, mut app) = app(Mode::Cw);
+    app.ui_settings.radio_classic_on = true;
+    let text = run(&ctx, &mut app);
+    assert_eq!(count(&text, "RADIO CLASSIC"), 2, "{text:?}");
+    assert!(!app.show_radio_classic, "the window is forced, not detached");
 }
 
 struct Recorder(std::sync::Arc<std::sync::Mutex<Vec<sdroxide_types::Command>>>);
@@ -645,4 +645,44 @@ fn switching_radio_on_allows_the_wfm_stereo_decode() {
         "{:?}",
         sent.lock().unwrap()
     );
+}
+
+/// Renders the band menu's body, where the Wideband row now ends in RADIO, to a
+/// PNG for looking at (`RC_WIDEBAND_OUT`, default `target/radio_wideband_preview.png`).
+#[test]
+#[ignore = "writes a picture to look at; not an assertion"]
+fn wideband_preview() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app) = app(Mode::Wfm);
+    app.ui_settings.radio_classic_on = true;
+    let (w, h) = (620.0, 640.0);
+    let mut tex = crate::test_raster::Textures::default();
+    let mut last = None;
+    for i in 0..6 {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
+            time: Some(10.0 + f64::from(i) * 0.1),
+            ..Default::default()
+        };
+        let mut full = ctx.run_ui(input, |ui| {
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                app.band_menu_body(ui, &mut Vec::new());
+            });
+        });
+        tex.apply(&full.textures_delta);
+        full.textures_delta.clear();
+        last = Some(full);
+    }
+    let img = crate::test_raster::rasterize(
+        &ctx,
+        last.unwrap(),
+        &tex,
+        egui::vec2(w, h),
+        crate::theme::BG_DEEP(),
+    );
+    let out = std::env::var("RC_WIDEBAND_OUT").unwrap_or_else(|_| {
+        format!("{}/../../target/radio_wideband_preview.png", env!("CARGO_MANIFEST_DIR"))
+    });
+    img.save(&out).expect("write the preview");
+    println!("wrote {out}");
 }

@@ -1,4 +1,4 @@
-# Radio Classic — correctif (plan, en attente du OK)
+# Radio Classic — correctif (plan validé par l'opérateur, implémenté)
 
 Branche neuve depuis `origin/main` (d2844aa, PROGRAMS déjà renommé par #303). Une PR, non mergée, non suivie.
 Pas de changement de protocole prévu : tout passe par des commandes existantes et par `UiSettings` (non wire).

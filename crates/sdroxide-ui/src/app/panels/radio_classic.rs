@@ -355,7 +355,7 @@ impl State {
     /// Take a new spectrum row: one in [`WF_EVERY`] is kept, newest first, up to
     /// [`WF_ROWS`]. Returns whether the picture changed.
     fn wf_push(&mut self, row: Vec<u8>) -> bool {
-        let keep = self.wf_tick % WF_EVERY == 0;
+        let keep = self.wf_tick.is_multiple_of(WF_EVERY);
         self.wf_tick = self.wf_tick.wrapping_add(1);
         if keep {
             self.wf.push_front(row);

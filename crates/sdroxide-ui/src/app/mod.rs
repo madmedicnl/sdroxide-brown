@@ -4974,7 +4974,9 @@ mod tests {
     ///     radio_classic_preview -- --ignored --nocapture
     /// ```
     /// `RC_W`/`RC_H` size the screen (default 1920x1080), `RC_MODE` is `fm`
-    /// (default) or `am`, `RC_OUT` the file.
+    /// (default, pilot locked), `fmmono` (FM with no pilot) or `am`, `RC_FRAMES`
+    /// how many frames to run (the waterfall fills at one row per two), `RC_PROGRAMS=1`
+    /// opens the PROGRAMS window, `RC_OUT` the file.
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     #[ignore = "writes a picture to look at; not an assertion"]
@@ -4995,7 +4997,10 @@ mod tests {
         let theme = std::env::var("RC_THEME").ok().and_then(|name| {
             sdroxide_types::UiTheme::ALL.iter().find(|t| format!("{t:?}") == name).copied()
         });
-        let fm = std::env::var("RC_MODE").map_or(true, |m| m != "am");
+        let kind = std::env::var("RC_MODE").unwrap_or_else(|_| "fm".into());
+        let fm = kind != "am";
+        let pilot = kind == "fm";
+        let frames = num("RC_FRAMES", 300.0) as usize;
 
         let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
         let ctx = egui::Context::default();
@@ -5043,11 +5048,12 @@ mod tests {
             adc_clip: 0.0,
             adc_overload: None,
             tx: None,
-            stereo: fm,
+            stereo: pilot,
             tone: None,
             passband_dbfs: -40.0,
             puresignal: None,
         });
+        app.schedule.show = std::env::var("RC_PROGRAMS").is_ok_and(|v| v == "1");
         if fm {
             app.rds = Some(RdsData {
                 sync: true,
@@ -5073,22 +5079,24 @@ mod tests {
         }
         // A spectrum with a station at the dial, and a music-like set of bars.
         let n = 1024usize;
-        let bins: Vec<u8> = (0..n)
-            .map(|i| {
-                let x = (i as f32 - n as f32 / 2.0) / 12.0;
-                (60.0 + 150.0 * (-x * x).exp() + 14.0 * ((i * 37 % 11) as f32 / 11.0)) as u8
-            })
-            .collect();
-        app.frame = Some(std::sync::Arc::new(SpectrumFrame {
-            seq: 1,
+        let spectrum = move |seq: u32| SpectrumFrame {
+            seq,
             center_hz: hz,
             span_hz: 2_400_000.0,
             db_floor: -120.0,
             db_ceil: -20.0,
-            bins,
+            bins: (0..n)
+                .map(|i| {
+                    let x = (i as f32 - n as f32 / 2.0) / 12.0;
+                    let live = 1.0 + 0.25 * (seq as f32 / 9.0).sin();
+                    let noise = ((i * 37 + seq as usize * 13) % 11) as f32 / 11.0;
+                    (60.0 + 150.0 * live * (-x * x).exp() + 14.0 * noise) as u8
+                })
+                .collect(),
             rows: Vec::new(),
             rows_clocked: false,
-        }));
+        };
+        app.frame = Some(std::sync::Arc::new(spectrum(1)));
         let bands: Vec<u8> = (0..AUDIO_BANDS)
             .map(|i| {
                 let t = i as f32 / AUDIO_BANDS as f32;
@@ -5096,12 +5104,13 @@ mod tests {
                 band_to_byte(db)
             })
             .collect();
-        app.audio_level =
-            Some((crate::time::now_unix_f64(), AudioLevel { rms_db: [-14.0, -17.0], bands }));
+        // A real stereo broadcast has two different ears; a mono signal one.
+        let rms_db = if pilot { [-14.0, -17.0] } else { [-15.5, -15.5] };
+        app.audio_level = Some((crate::time::now_unix_f64(), AudioLevel { rms_db, bands }));
 
         let mut tex = crate::test_raster::Textures::default();
         let mut last = None;
-        for i in 0..40 {
+        for i in 0..frames {
             let input = egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
                 time: Some(10.0 + i as f64 / 30.0),
@@ -5111,9 +5120,7 @@ mod tests {
             if let Some((at, _)) = app.audio_level.as_mut() {
                 *at = crate::time::now_unix_f64();
             }
-            if let Some(f) = app.frame.as_mut() {
-                std::sync::Arc::make_mut(f).seq += 1;
-            }
+            app.frame = Some(std::sync::Arc::new(spectrum(2 + i as u32)));
             let mut full = ctx.run_ui(input, |ui| {
                 app.ui(ui, &mut eframe::Frame::_new_kittest());
             });
