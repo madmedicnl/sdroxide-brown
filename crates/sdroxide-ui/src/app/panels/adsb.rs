@@ -72,7 +72,7 @@ impl SdroxideApp {
                 let now_f = now as f64;
                 self.adsb_overlay.poll(now_f);
                 if self.adsb_overlay.should_fetch(now_f) {
-                    self.adsb_overlay.start_fetch(lat, lon, 50.0);
+                    self.adsb_overlay.start_fetch(lat, lon, 250.0);
                 }
             }
         }
