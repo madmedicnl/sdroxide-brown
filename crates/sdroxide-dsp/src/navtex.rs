@@ -359,15 +359,28 @@ impl BitPhase {
     }
 
     fn sync_score(&self) -> i32 {
-        ((8i32 as f64 / self.sens_k()).round() as i32).clamp(3, 24)
+        if self.sensitivity >= 0 {
+            // At positive sensitivity be more conservative to avoid false sync on noise
+            ((8i32 as f64 / (1.0 + 0.05 * f64::from(self.sensitivity))).round() as i32).clamp(6, 24)
+        } else {
+            ((8i32 as f64 / self.sens_k()).round() as i32).clamp(5, 24)
+        }
     }
 
     fn loss_limit(&self) -> u32 {
-        ((24u32 as f64 * self.sens_k()).round() as u32).clamp(4, 48)
+        if self.sensitivity >= 0 {
+            ((24u32 as f64 * (1.0 + 0.1 * f64::from(self.sensitivity))).round() as u32).clamp(4, 48)
+        } else {
+            ((24u32 as f64 * self.sens_k()).round() as u32).clamp(4, 48)
+        }
     }
 
     fn disagree_limit(&self) -> u32 {
-        ((6u32 as f64 * self.sens_k()).round() as u32).clamp(2, 12)
+        if self.sensitivity >= 0 {
+            ((6u32 as f64 * (1.0 + 0.1 * f64::from(self.sensitivity))).round() as u32).clamp(3, 12)
+        } else {
+            ((6u32 as f64 * self.sens_k()).round() as u32).clamp(2, 12)
+        }
     }
     /// Forget the character phase — the signal it was found in has gone.
     fn drop_sync(&mut self) {
