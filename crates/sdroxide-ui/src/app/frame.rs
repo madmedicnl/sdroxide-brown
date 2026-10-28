@@ -1855,6 +1855,7 @@ impl eframe::App for SdroxideApp {
         if mode == sdroxide_types::Mode::Dab && self.show_dab {
             self.dab_window(&ctx, &mut cmds);
         }
+        self.radio_classic_tick(now, &mut cmds);
         self.radio_classic_window(&ctx, &mut cmds);
         if mode.is_js8() && self.show_js8 {
             self.js8_window(&ctx, &mut cmds);

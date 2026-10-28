@@ -103,7 +103,7 @@ fn the_detachable_pages_switch_opens_it_as_a_window_and_keeps_its_bit() {
 #[test]
 fn where_a_panel_owns_the_slot_it_opens_as_a_window_instead_of_doing_nothing() {
     let _guard = crate::multi::frame_test_lock();
-    for mode in [Mode::Ft8, Mode::Cw] {
+    for mode in [Mode::Cw] {
         let (ctx, mut app) = app(mode);
         app.ui_settings.radio_classic_on = true;
         let text = run(&ctx, &mut app);
@@ -424,4 +424,122 @@ fn the_sql_box_toggles_the_squelch_between_open_and_the_last_threshold() {
     assert!(set > sdroxide_types::SQUELCH_OPEN_DB + 1.0, "still open: {set}");
     assert!(click(&ctx, &mut app, "SQL"));
     assert_eq!(db(&sent), Some(sdroxide_types::SQUELCH_OPEN_DB), "the second click did not open");
+}
+
+/// An app in `mode` with a recorder, RADIO still off, and a few frames run so
+/// that switching it on afterwards is a real switch-on.
+fn off_in(mode: Mode) -> (egui::Context, SdroxideApp, Sent) {
+    let sent: Sent = std::sync::Arc::default();
+    let (ctx, mut app) = app(mode);
+    app.ctrl = Box::new(Recorder(sent.clone()));
+    run(&ctx, &mut app);
+    (ctx, app, sent)
+}
+
+fn vfo_sent(sent: &Sent) -> Option<f64> {
+    sent.lock().unwrap().iter().rev().find_map(|c| match c {
+        sdroxide_types::Command::SetVfo { hz, .. } => Some(*hz),
+        _ => None,
+    })
+}
+
+fn mode_sent(sent: &Sent) -> Option<Mode> {
+    sent.lock().unwrap().iter().rev().find_map(|c| match c {
+        sdroxide_types::Command::SetMode { rx: sdroxide_types::RxId::Main, mode } => Some(*mode),
+        _ => None,
+    })
+}
+
+/// The first time the panel is switched on it tunes 100 MHz in WFM.
+#[test]
+fn the_first_launch_tunes_100_mhz_in_wfm() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, sent) = off_in(Mode::Usb);
+    app.state.vfo_a_hz = 7_100_000.0;
+    app.toggle_radio_classic();
+    run(&ctx, &mut app);
+    assert_eq!(vfo_sent(&sent), Some(100e6));
+    assert_eq!(mode_sent(&sent), Some(Mode::Wfm));
+}
+
+/// After that it comes back to the last frequency it was listening on.
+#[test]
+fn the_next_launch_returns_to_the_last_frequency_listened() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, sent) = off_in(Mode::Usb);
+    app.ui_settings.radio_classic_last_hz = 1_215_000.0;
+    app.ui_settings.radio_classic_last_mode = Some(Mode::Am);
+    app.toggle_radio_classic();
+    run(&ctx, &mut app);
+    assert_eq!(vfo_sent(&sent), Some(1_215_000.0));
+    assert_eq!(mode_sent(&sent), Some(Mode::Am));
+}
+
+/// While it is on, whatever the dial lands on (MEM, PROGRAMS, the wheel) is
+/// what it will come back to.
+#[test]
+fn the_frequency_it_ends_on_is_the_one_it_remembers() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, _sent) = off_in(Mode::Wfm);
+    app.toggle_radio_classic();
+    run(&ctx, &mut app);
+    // The station answers; some time passes; the operator tunes elsewhere.
+    for _ in 0..4 {
+        run(&ctx, &mut app);
+    }
+    app.state.vfo_a_hz = 99_700_000.0;
+    app.state.rx[0].mode = Mode::Wfm;
+    for _ in 0..2 {
+        run(&ctx, &mut app);
+    }
+    assert_eq!(app.ui_settings.radio_classic_last_hz, 99_700_000.0);
+    assert_eq!(app.ui_settings.radio_classic_last_mode, Some(Mode::Wfm));
+}
+
+/// Radio Classic has the receiver to itself: from SSTV, the SSTV window is
+/// closed, the second receiver and the scan and the ISM decoder are stopped,
+/// and the dial goes straight to Radio Classic's frequency in a voice mode.
+#[test]
+fn switching_radio_on_from_sstv_takes_the_whole_receiver() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, sent) = off_in(Mode::Sstv);
+    app.show_sstv = true;
+    app.show_ism = true;
+    app.state.sub_rx_enabled = true;
+    app.state.scan.running = true;
+    app.state.ism.enabled = true;
+    app.state.ism.families = 1;
+    app.toggle_radio_classic();
+    run(&ctx, &mut app);
+    assert!(!app.show_sstv, "the SSTV window is still open");
+    assert!(!app.show_ism, "the ISM window is still open");
+    let sent = sent.lock().unwrap();
+    let has = |f: &dyn Fn(&sdroxide_types::Command) -> bool| sent.iter().any(f);
+    assert!(has(&|c| matches!(c, sdroxide_types::Command::SetSubRx(false))), "{sent:?}");
+    assert!(has(&|c| matches!(c, sdroxide_types::Command::SetScanning(false))), "{sent:?}");
+    assert!(
+        has(&|c| matches!(c, sdroxide_types::Command::SetIsmConfig(s) if !s.any_enabled())),
+        "{sent:?}"
+    );
+    assert!(has(&|c| matches!(c, sdroxide_types::Command::SetMode { mode: Mode::Wfm, .. })));
+    assert!(has(&|c| matches!(c, sdroxide_types::Command::SetVfo { hz, .. } if *hz == 100e6)));
+    drop(sent);
+    assert!(app.radio_classic_active(), "it switched itself off again");
+}
+
+/// Choosing another mode afterwards hands the receiver back: RADIO goes off.
+#[test]
+fn choosing_another_mode_switches_radio_off() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, _sent) = off_in(Mode::Wfm);
+    app.toggle_radio_classic();
+    for _ in 0..4 {
+        run(&ctx, &mut app);
+    }
+    assert!(app.radio_classic_active());
+    app.state.rx[0].mode = Mode::Ft8;
+    for _ in 0..2 {
+        run(&ctx, &mut app);
+    }
+    assert!(!app.radio_classic_active(), "RADIO stayed on over FT8");
 }

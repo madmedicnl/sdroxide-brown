@@ -268,6 +268,22 @@ fn s_reading(s_dbm: f32) -> String {
     }
 }
 
+/// Where Radio Classic tunes the very first time, in WFM.
+const FIRST_HZ: f64 = 100e6;
+/// After it takes the receiver, how long the station's state is not believed
+/// over the panel's own: a message sent before the commands were applied can
+/// still be on its way.
+const ENTER_GRACE_S: f64 = 1.5;
+/// The frequency it listens on is written to disk at most this often.
+const SAVE_EVERY_S: f64 = 2.0;
+
+/// Whether `mode` is one Radio Classic listens in. Anything else — a digital
+/// mode, DAB, ADS-B — is another receiver's job.
+fn is_radio_mode(mode: Mode) -> bool {
+    MODES.iter().any(|(_, m)| *m == mode)
+        || matches!(mode, Mode::Sam | Mode::Cquam | Mode::Dsb | Mode::Isb)
+}
+
 /// How long ago a reading may be and still count as the sound that is playing.
 const LEVEL_FRESH_S: f32 = 0.4;
 /// Rows kept by the mini waterfall, and the bins in each.
@@ -295,6 +311,13 @@ pub(in crate::app) struct State {
     wf_dirty: bool,
     /// The squelch threshold to put back when SQL is clicked open again.
     sql_last: f32,
+    /// Whether the panel was on the last frame (`None` before the first one,
+    /// so an app that starts with it on is not "switching it on").
+    on_seen: Option<bool>,
+    /// When it last took the receiver, on the UI clock.
+    entered_at: f64,
+    /// When the last frequency was last written to disk.
+    saved_at: f64,
     /// When `WantAudioLevel` was last sent (wall clock), so it is renewed about
     /// once a second while the panel is on screen.
     lease_at: f64,
@@ -319,6 +342,9 @@ impl Default for State {
             wf_drawn: None,
             wf_dirty: false,
             sql_last: -70.0,
+            on_seen: None,
+            entered_at: f64::NEG_INFINITY,
+            saved_at: f64::NEG_INFINITY,
             lease_at: 0.0,
             frame: None,
         }
@@ -482,6 +508,118 @@ impl SdroxideApp {
             || self.radio_classic.bars.iter().any(|b| *b > 0.01)
             || self.audio_level.is_some();
         crate::repaint::after_ms(ui.ctx(), if moving { 33 } else { 250 });
+    }
+
+    // ───────────────────────────────────────────────── the receiver is its own
+
+    /// Radio Classic's hold on the receiver, once a frame.
+    ///
+    /// Switched on, it takes everything: [`Self::radio_classic_enter`]. While it
+    /// is on, the frequency and mode it ends up on are what it comes back to,
+    /// and another mode (or a second receiver, or a scan) taking the receiver
+    /// hands it back — RADIO goes off.
+    pub(in crate::app) fn radio_classic_tick(&mut self, now: f64, cmds: &mut Vec<Command>) {
+        let on = self.radio_classic_active();
+        match self.radio_classic.on_seen.replace(on) {
+            Some(false) if on => self.radio_classic_enter(now, cmds),
+            Some(true) if !on => crate::app::persist::persist_ui_settings(&self.ui_settings),
+            _ => {}
+        }
+        if !on || now - self.radio_classic.entered_at < ENTER_GRACE_S {
+            return;
+        }
+        let mode = self.state.rx[0].mode;
+        if !is_radio_mode(mode) || self.state.sub_rx_enabled || self.state.scan.running {
+            self.ui_settings.radio_classic_on = false;
+            self.show_radio_classic = false;
+            self.ui_settings.tool_windows_open &= !crate::app::frame::TW_RADIO_CLASSIC;
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
+            return;
+        }
+        let hz = self.state.active_freq_hz();
+        let ui = &mut self.ui_settings;
+        if ui.radio_classic_last_hz != hz || ui.radio_classic_last_mode != Some(mode) {
+            ui.radio_classic_last_hz = hz;
+            ui.radio_classic_last_mode = Some(mode);
+            if now - self.radio_classic.saved_at >= SAVE_EVERY_S {
+                self.radio_classic.saved_at = now;
+                crate::app::persist::persist_ui_settings(&self.ui_settings);
+            }
+        }
+    }
+
+    /// Radio Classic has just been switched on: every other mode is quit, its
+    /// window shut, and the dial goes to Radio Classic's frequency at once — the
+    /// last one it listened on, or 100 MHz in WFM the first time.
+    fn radio_classic_enter(&mut self, now: f64, cmds: &mut Vec<Command>) {
+        self.radio_classic.entered_at = now;
+        let (hz, mode) = match self.ui_settings.radio_classic_last_hz {
+            hz if hz > 0.0 => (
+                hz,
+                self.ui_settings
+                    .radio_classic_last_mode
+                    .filter(|m| is_radio_mode(*m))
+                    .unwrap_or(Mode::Wfm),
+            ),
+            _ => (FIRST_HZ, Mode::Wfm),
+        };
+        // The other flows: the second receiver, the scan, the ISM decoder.
+        if self.state.sub_rx_enabled {
+            self.state.sub_rx_enabled = false;
+            cmds.push(Command::SetSubRx(false));
+        }
+        if self.state.scan.running {
+            self.state.scan.running = false;
+            cmds.push(Command::SetScanning(false));
+        }
+        if self.state.ism.any_enabled() {
+            self.state.ism.enabled = false;
+            cmds.push(Command::SetIsmConfig(self.state.ism));
+        }
+        // The windows of the modes and decoders that were in use.
+        for open in [
+            &mut self.show_sstv,
+            &mut self.show_dab,
+            &mut self.show_aircraft,
+            &mut self.show_ism,
+            &mut self.show_adsb,
+            &mut self.show_ais,
+            &mut self.show_acars,
+            &mut self.show_hfdl,
+            &mut self.show_vdl2,
+            &mut self.show_navtex,
+            &mut self.show_dsc,
+            &mut self.show_aprs,
+            &mut self.show_wefax,
+            &mut self.show_js8,
+            &mut self.show_fsq,
+            &mut self.show_hell,
+            &mut self.show_packet,
+            &mut self.show_wspr,
+            &mut self.show_pi4,
+            &mut self.show_text,
+            &mut self.show_uvpacket,
+            &mut self.show_jtty,
+            &mut self.show_ale,
+            &mut self.show_rf_paint,
+            &mut self.show_image,
+            &mut self.show_drm,
+            &mut self.show_hd,
+            &mut self.show_scanner,
+        ] {
+            *open = false;
+        }
+        // And the dial: the frequency first, as the band buttons do.
+        let vfo = self.state.active_vfo;
+        cmds.push(Command::SetVfo { vfo, hz });
+        cmds.push(Command::SetMode { rx: RxId::Main, mode });
+        // Echoed now, so nothing of the old mode is drawn while the station
+        // answers.
+        self.state.rx[0].mode = mode;
+        match vfo {
+            sdroxide_types::Vfo::A => self.state.vfo_a_hz = hz,
+            sdroxide_types::Vfo::B => self.state.vfo_b_hz = hz,
+        }
     }
 
     /// The name on the big line, from what is known about the dial.

@@ -1111,6 +1111,13 @@ pub struct UiSettings {
     /// detached it. Off by default.
     #[serde(default)]
     pub radio_classic_on: bool,
+    /// The last frequency Radio Classic was listening on, in Hz, and the mode it
+    /// was in — `0.0` and `None` until it has been used once. Switching the
+    /// panel on tunes here, or to 100 MHz in WFM the very first time.
+    #[serde(default)]
+    pub radio_classic_last_hz: f64,
+    #[serde(default)]
+    pub radio_classic_last_mode: Option<crate::Mode>,
     /// Which repair [`UiSettings::tool_windows_open`] has had. **1** clears the
     /// bits the program used to set when a mode was selected — until then,
     /// choosing a mode opened its panel in a window of its own instead of docking
@@ -1703,6 +1710,8 @@ impl Default for UiSettings {
             classic_sections: String::new(),
             tool_windows_open: 0,
             radio_classic_on: false,
+            radio_classic_last_hz: 0.0,
+            radio_classic_last_mode: None,
             tool_windows_repaired: 0,
         }
     }
