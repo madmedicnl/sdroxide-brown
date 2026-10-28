@@ -470,47 +470,54 @@ impl super::SdroxideApp {
         });
 
             if !self.antenna_patterns.is_empty() {
-                crate::chrome::menu_caption(ui, "Radiation Pattern");
-                crate::chrome::menu_caption(ui, "View");
-                let view_before = self.antenna_pattern_view;
-                egui::ComboBox::from_id_salt("antenna-view")
-                    .selected_text(match self.antenna_pattern_view {
-                        1 => "Front",
-                        2 => "Side",
-                        _ => "Top",
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.antenna_pattern_view, 0, "Top");
-                        ui.selectable_value(&mut self.antenna_pattern_view, 1, "Front");
-                        ui.selectable_value(&mut self.antenna_pattern_view, 2, "Side");
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        crate::chrome::menu_caption(ui, "Radiation Pattern");
+                        let mut sel = self.antenna_pattern_sel;
+                        let names: Vec<&str> =
+                            self.antenna_patterns.iter().map(|(n, _)| n.as_str()).collect();
+                        egui::ComboBox::from_id_salt("antenna-pattern-sel")
+                            .selected_text(names[sel])
+                            .show_ui(ui, |ui| {
+                                for (i, name) in names.iter().enumerate() {
+                                    ui.selectable_value(&mut sel, i, *name);
+                                }
+                            });
+                        self.antenna_pattern_sel = sel;
                     });
-                if self.antenna_pattern_view != view_before {
-                    match self.antenna_pattern_view {
-                        1 => {
-                            self.antenna_yaw = 0.0;
-                            self.antenna_pitch = 0.0;
-                        }
-                        2 => {
-                            self.antenna_yaw = std::f32::consts::FRAC_PI_2;
-                            self.antenna_pitch = 0.0;
-                        }
-                        _ => {
-                            self.antenna_yaw = 0.0;
-                            self.antenna_pitch = std::f32::consts::FRAC_PI_2;
-                        }
-                    }
-                }
-                let mut sel = self.antenna_pattern_sel;
-                let names: Vec<&str> =
-                    self.antenna_patterns.iter().map(|(n, _)| n.as_str()).collect();
-                egui::ComboBox::from_id_salt("antenna-pattern-sel")
-                    .selected_text(names[sel])
-                    .show_ui(ui, |ui| {
-                        for (i, name) in names.iter().enumerate() {
-                            ui.selectable_value(&mut sel, i, *name);
+                    ui.add_space(12.0);
+                    ui.vertical(|ui| {
+                        crate::chrome::menu_caption(ui, "View");
+                        let view_before = self.antenna_pattern_view;
+                        egui::ComboBox::from_id_salt("antenna-view")
+                            .selected_text(match self.antenna_pattern_view {
+                                1 => "Front",
+                                2 => "Side",
+                                _ => "Top",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.antenna_pattern_view, 0, "Top");
+                                ui.selectable_value(&mut self.antenna_pattern_view, 1, "Front");
+                                ui.selectable_value(&mut self.antenna_pattern_view, 2, "Side");
+                            });
+                        if self.antenna_pattern_view != view_before {
+                            match self.antenna_pattern_view {
+                                1 => {
+                                    self.antenna_yaw = 0.0;
+                                    self.antenna_pitch = 0.0;
+                                }
+                                2 => {
+                                    self.antenna_yaw = std::f32::consts::FRAC_PI_2;
+                                    self.antenna_pitch = 0.0;
+                                }
+                                _ => {
+                                    self.antenna_yaw = 0.0;
+                                    self.antenna_pitch = std::f32::consts::FRAC_PI_2;
+                                }
+                            }
                         }
                     });
-                self.antenna_pattern_sel = sel;
+                });
                 ui.horizontal(|ui| {
                     if let Some((name, cuts)) = self.antenna_patterns.get(self.antenna_pattern_sel) {
                         let cut = &cuts[self.antenna_pattern_view.min(2)];
