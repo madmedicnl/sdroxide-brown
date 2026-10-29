@@ -1119,13 +1119,19 @@ pub struct UiSettings {
     #[serde(default)]
     pub radio_classic_last_mode: Option<crate::Mode>,
     /// Which repair [`UiSettings::tool_windows_open`] has had. **1** clears the
-    /// bits the program used to set when a mode was selected — until then,
+    /// bits the program used to set when a mode was selected - until then,
     /// choosing a mode opened its panel in a window of its own instead of docking
     /// it under the waterfall, and wrote that into the settings, so the bits it
     /// left are indistinguishable from the operator's (issue #217). Cleared once;
     /// from then on a panel window is open only because somebody opened it.
     #[serde(default)]
     pub tool_windows_repaired: u8,
+    /// SESSION QSOs window: sort column (0=Time,1=Call,2=Grid,3=Band,4=Mode,
+    /// 5=RST sent,6=RST rcvd,7=Country,8=CQ,9=Distance,10=Final) and direction.
+    #[serde(default)]
+    pub session_qso_sort: u8,
+    #[serde(default = "default_true")]
+    pub session_qso_sort_desc: bool,
     /// Keep the screen on: ask the browser for a Screen Wake Lock so a phone
     /// or tablet left on the waterfall does not dim and lock itself. A
     /// property of this screen, like the theme, and carried with the profile's
@@ -1713,6 +1719,8 @@ impl Default for UiSettings {
             radio_classic_last_hz: 0.0,
             radio_classic_last_mode: None,
             tool_windows_repaired: 0,
+            session_qso_sort: 0,
+            session_qso_sort_desc: true,
         }
     }
 }

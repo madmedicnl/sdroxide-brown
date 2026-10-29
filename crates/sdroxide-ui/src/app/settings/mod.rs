@@ -3866,6 +3866,7 @@ impl SdroxideApp {
                     ("ALE", crate::app::frame::TW_ALE),
                     ("RF PAINT", crate::app::frame::TW_RFPAINT),
                     ("IMAGE", crate::app::frame::TW_IMAGE),
+                    ("SESSION QSOs", crate::app::frame::TW_SESSION_QSOS),
                 ];
                 for (name, bit) in tool_windows {
                     let mut on = (io.ui_edit.tool_windows_open & bit) != 0;
