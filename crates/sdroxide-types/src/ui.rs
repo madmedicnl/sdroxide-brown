@@ -1062,6 +1062,16 @@ pub struct UiSettings {
     /// window, and the choice is kept.
     #[serde(default = "default_memory_waterfall_color")]
     pub memory_waterfall_color: [u8; 3],
+    /// The colour every scheduled broadcast station's label is painted in on
+    /// the waterfall, chosen in the PROGRAMS window. `None` keeps the stock
+    /// tint of the broadcast spot kind. A station with a colour of its own in
+    /// [`Self::programs_colours`] keeps that one.
+    #[serde(default)]
+    pub programs_colour_all: Option<[u8; 3]>,
+    /// The colour of single stations on the waterfall, by station name — the
+    /// key PROGRAMS' favourites use. Chosen in the PROGRAMS window.
+    #[serde(default)]
+    pub programs_colours: std::collections::BTreeMap<String, [u8; 3]>,
     /// How the FT8/FT4 decode list orders the stations. This screen's
     /// preference like [`UiSettings::memory_sort`] above, and for the same
     /// reason: the decodes are the station's, the order they are read in is
@@ -1760,6 +1770,8 @@ impl Default for UiSettings {
             memory_waterfall_lanes: 4,
             memory_waterfall_show_folder: true,
             memory_waterfall_color: [70, 224, 125],
+            programs_colour_all: None,
+            programs_colours: std::collections::BTreeMap::new(),
             decode_sort: crate::DecodeSort::None,
             // Strongest and farthest first, which is the useful end of both
             // numbers; the Country order flips this when it is picked.

@@ -401,6 +401,28 @@ impl SdroxideApp {
             .size(11.0)
             .color(crate::theme::gray(150)),
         );
+        // The waterfall label colour for every station, and the way back to the
+        // stock tint. A single station's colour is on its row.
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(tr!("schedule-colour-all")).size(11.0))
+                .on_hover_text(tr!("schedule-colour-all-hint"));
+            let stock = crate::theme::spot_color(sdroxide_types::SpotKind::Broadcast);
+            let mut all = self.ui_settings.programs_colour_all.unwrap_or([stock.0, stock.1, stock.2]);
+            if super::colour_edit::colour_edit(ui, &mut all) {
+                // "All" means all: the colours picked one by one give way to it.
+                self.ui_settings.programs_colour_all = Some(all);
+                self.ui_settings.programs_colours.clear();
+                crate::app::persist::persist_ui_settings(&self.ui_settings);
+            }
+            if crate::chrome::chip(ui, false, RichText::new(tr!("schedule-colour-reset")).size(11.0))
+                .on_hover_text(tr!("schedule-colour-reset-hint"))
+                .clicked()
+            {
+                self.ui_settings.programs_colour_all = None;
+                self.ui_settings.programs_colours.clear();
+                crate::app::persist::persist_ui_settings(&self.ui_settings);
+            }
+        });
         ui.separator();
         egui::ScrollArea::vertical().auto_shrink([false, false]).id_salt("sched-list").show(
             ui,
@@ -449,6 +471,22 @@ impl SdroxideApp {
                                 site = s.site,
                                 lon = format!("{lon:.1}")
                             ));
+                        }
+                        let stock = crate::theme::spot_color(sdroxide_types::SpotKind::Broadcast);
+                        let mut col = self
+                            .ui_settings
+                            .programs_colours
+                            .get(&s.name)
+                            .copied()
+                            .or(self.ui_settings.programs_colour_all)
+                            .unwrap_or([stock.0, stock.1, stock.2]);
+                        if ui
+                            .color_edit_button_srgb(&mut col)
+                            .on_hover_text(tr!("schedule-colour-station-hint"))
+                            .changed()
+                        {
+                            self.ui_settings.programs_colours.insert(s.name.clone(), col);
+                            crate::app::persist::persist_ui_settings(&self.ui_settings);
                         }
                         let fav = self.broadcast_favs.iter().any(|n| n == &s.name);
                         if ui

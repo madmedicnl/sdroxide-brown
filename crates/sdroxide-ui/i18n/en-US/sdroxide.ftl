@@ -8920,3 +8920,13 @@ sessionqso-include-cw = Include CW
 decodes-live-log = LIVE LOG
 
 decodes-setup = ⚙ SETUP
+
+schedule-colour-all = Colour
+
+schedule-colour-all-hint = Waterfall label colour for every station — replaces the ones picked per station
+
+schedule-colour-station-hint = Waterfall label colour of this station
+
+schedule-colour-reset = DEFAULT
+
+schedule-colour-reset-hint = Back to the stock colour for every station, forgetting the ones picked
