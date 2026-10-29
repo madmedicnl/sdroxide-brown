@@ -179,6 +179,26 @@ pub fn set_freq_vfo_b_frames(radio: u8, hz: f64) -> Vec<Vec<u8>> {
         frame(radio, 0x07, &[0x00]), // select VFO A
     ]
 }
+
+/// Set VFO B's mode: select VFO B, set mode, then select VFO A.
+pub fn set_mode_vfo_b_frames(radio: u8, mode_byte: u8) -> Vec<Vec<u8>> {
+    vec![
+        frame(radio, 0x07, &[0x01]), // select VFO B
+        frame(radio, 0x06, &[mode_byte]), // set mode
+        frame(radio, 0x07, &[0x00]), // select VFO A
+    ]
+}
+
+/// Enable CTCSS tone on VFO B: select VFO B, set tone freq, tone on, select VFO A.
+pub fn set_ctcss_vfo_b_frames(radio: u8, tone_hz: f64) -> Vec<Vec<u8>> {
+    let tone = (tone_hz * 10.0).round() as u16;
+    vec![
+        frame(radio, 0x07, &[0x01]), // select VFO B
+        frame(radio, 0x1B, &[0x00, (tone >> 8) as u8, (tone & 0xFF) as u8]), // tone freq
+        frame(radio, 0x16, &[0x42]), // tone on
+        frame(radio, 0x07, &[0x00]), // select VFO A
+    ]
+}
 pub fn read_freq_frame(radio: u8) -> Vec<u8> {
     frame(radio, 0x03, &[])
 }

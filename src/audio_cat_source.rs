@@ -1027,6 +1027,17 @@ impl IqSource for AudioCatSource {
         self.cat.split_off();
     }
 
+    fn set_vfo_b_mode(&mut self, mode: sdroxide_types::Mode) {
+        // Convert mode to CI-V byte for Icom. Yaesu uses mode_digit which is
+        // different; the CAT thread handles per-protocol conversion.
+        let mode_byte = sdroxide_cat::civ::mode_to_civ(mode);
+        self.cat.set_mode_vfo_b(mode_byte);
+    }
+
+    fn set_vfo_b_ctcss(&mut self, tone_hz: f64) {
+        self.cat.set_ctcss_vfo_b(tone_hz);
+    }
+
     /// The rig's synthesiser is the centre of the I/Q it sends us: there is no
     /// second oscillator to park somewhere and tune away from — so the dial the
     /// operator asks for is commanded at the radio and the window follows it

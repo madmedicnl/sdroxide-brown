@@ -453,6 +453,17 @@ impl Protocol for Yaesu {
         vec![self.set_freq_vfo_b(hz)]
     }
 
+    fn set_mode_vfo_b(&mut self, mode_byte: u8) -> Vec<Vec<u8>> {
+        // Yaesu: no VFO select command, so mode is set on the current VFO.
+        // Best-effort: send MD0 on the current VFO.
+        vec![format!("MD0{};", mode_byte).into_bytes()]
+    }
+
+    fn set_ctcss_vfo_b(&mut self, _tone_hz: f64) -> Vec<Vec<u8>> {
+        // Yaesu CTCSS is model-specific; not implemented.
+        Vec::new()
+    }
+
     fn split_on(&mut self) -> Vec<Vec<u8>> {
         Yaesu::split_on_frames()
     }

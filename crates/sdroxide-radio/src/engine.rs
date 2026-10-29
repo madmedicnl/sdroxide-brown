@@ -14353,6 +14353,10 @@ impl Engine {
                 self.source.set_vfo_b_freq(up);
                 self.sat_vfo_b_last_freq = up;
             }
+            // Step 2c: set VFO B mode to the current mode (uplink mode).
+            self.source.set_vfo_b_mode(self.state.rx[0].mode);
+            // CTCSS on VFO B: not implemented yet (needs structured tone data
+            // and hardware verification). The rig retains its last tone setting.
             self.source.split_on();
             self.sat_split_on = true;
         }

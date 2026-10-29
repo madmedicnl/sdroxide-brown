@@ -262,6 +262,14 @@ trait Protocol: Send {
     fn set_freq_vfo_b(&mut self, _hz: f64) -> Vec<Vec<u8>> {
         Vec::new()
     }
+    /// Set VFO B's mode. Returns the frames to send.
+    fn set_mode_vfo_b(&mut self, _mode_byte: u8) -> Vec<Vec<u8>> {
+        Vec::new()
+    }
+    /// Set CTCSS tone on VFO B. Returns the frames to send.
+    fn set_ctcss_vfo_b(&mut self, _tone_hz: f64) -> Vec<Vec<u8>> {
+        Vec::new()
+    }
     /// Switch split on. Returns the frames to send.
     fn split_on(&mut self) -> Vec<Vec<u8>> {
         Vec::new()
@@ -920,6 +928,14 @@ impl Protocol for Civ {
         civ::set_freq_vfo_b_frames(self.radio, hz)
     }
 
+    fn set_mode_vfo_b(&mut self, mode_byte: u8) -> Vec<Vec<u8>> {
+        civ::set_mode_vfo_b_frames(self.radio, mode_byte)
+    }
+
+    fn set_ctcss_vfo_b(&mut self, tone_hz: f64) -> Vec<Vec<u8>> {
+        civ::set_ctcss_vfo_b_frames(self.radio, tone_hz)
+    }
+
     fn split_on(&mut self) -> Vec<Vec<u8>> {
         vec![civ::split_on_frame(self.radio)]
     }
@@ -1397,6 +1413,10 @@ enum CatCmd {
     SplitOn,
     /// Switch split off.
     SplitOff,
+    /// Set VFO B's mode.
+    ModeVfoB(u8),
+    /// Set CTCSS tone on VFO B.
+    CtcssVfoB(f64),
     Mode(Mode),
     Ptt(bool),
     /// Text for the rig's own keyer to send.
@@ -1509,6 +1529,16 @@ impl CatHandle {
     /// Switch the rig's split off.
     pub fn split_off(&self) {
         let _ = self.cmd_tx.send(CatCmd::SplitOff);
+    }
+
+    /// Set VFO B's mode (Icom only).
+    pub fn set_mode_vfo_b(&self, mode_byte: u8) {
+        let _ = self.cmd_tx.send(CatCmd::ModeVfoB(mode_byte));
+    }
+
+    /// Set CTCSS tone on VFO B (Icom only).
+    pub fn set_ctcss_vfo_b(&self, tone_hz: f64) {
+        let _ = self.cmd_tx.send(CatCmd::CtcssVfoB(tone_hz));
     }
     pub fn set_mode(&self, m: Mode) {
         let _ = self.cmd_tx.send(CatCmd::Mode(m));
@@ -3101,6 +3131,16 @@ fn serial_thread(
                     }
                     Ok(CatCmd::SplitOff) => {
                         for f in protocol.split_off() {
+                            let _ = write_frame(&mut *port, &mut *protocol, &f, &mut last_write, &mut io);
+                        }
+                    }
+                    Ok(CatCmd::ModeVfoB(mode_byte)) => {
+                        for f in protocol.set_mode_vfo_b(mode_byte) {
+                            let _ = write_frame(&mut *port, &mut *protocol, &f, &mut last_write, &mut io);
+                        }
+                    }
+                    Ok(CatCmd::CtcssVfoB(tone_hz)) => {
+                        for f in protocol.set_ctcss_vfo_b(tone_hz) {
                             let _ = write_frame(&mut *port, &mut *protocol, &f, &mut last_write, &mut io);
                         }
                     }
