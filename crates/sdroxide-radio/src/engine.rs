@@ -18233,7 +18233,7 @@ impl Engine {
                     self.source.split_on();
                     self.sat_split_on = true;
                 }
-                if (up - self.sat_vfo_b_last_freq).abs() > 1.0 || self.sat_vfo_b_last_freq == 0.0 {
+                if (up - self.sat_vfo_b_last_freq).abs() > 500.0 || self.sat_vfo_b_last_freq == 0.0 {
                     self.source.set_vfo_b_freq(up);
                     self.sat_vfo_b_last_freq = up;
                 }
@@ -18892,7 +18892,13 @@ impl Engine {
             // On a radio that makes its own CW carrier the VFO *is* the transmit
             // frequency, and the contact sits a sidetone above the dial — the
             // same offset the receive window already rides on.
-            let rig_txf = txf + self.rig_cw_offset_hz();
+            // SAT Doppler (step 2): with split on, VFO B already carries the
+            // uplink, so VFO A stays on the downlink — no frequency change on TX.
+            let rig_txf = if self.sat_split_on {
+                self.state.active_freq_hz()
+            } else {
+                txf + self.rig_cw_offset_hz()
+            };
             // Every rail has passed and the station is about to be on the air.
             // The external T/R switch leads the RF — contacts first, drive
             // second, always — which is the one guarantee that whole subsystem
