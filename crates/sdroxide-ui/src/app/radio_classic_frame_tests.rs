@@ -746,3 +746,25 @@ fn wideband_preview() {
     img.save(&out).expect("write the preview");
     println!("wrote {out}");
 }
+
+/// A PROGRAMS row tunes the VFO the receiver is on, and the dial shows it at
+/// once — not VFO A whatever the receiver is on.
+#[test]
+fn a_programs_row_tunes_the_active_vfo() {
+    let _guard = crate::multi::frame_test_lock();
+    let (_ctx, mut app, _sent) = recorded(Mode::Wfm);
+    app.state.active_vfo = sdroxide_types::Vfo::B;
+    let station = sdroxide_types::BroadcastStation {
+        name: "Radio X".into(),
+        freq_khz: 6070.0,
+        ..Default::default()
+    };
+    let mut cmds = Vec::new();
+    app.tune_to_station(&station, &mut cmds);
+    assert!(cmds.iter().any(|c| matches!(
+        c,
+        sdroxide_types::Command::SetVfo { vfo: sdroxide_types::Vfo::B, hz } if *hz == 6_070_000.0
+    )));
+    assert_eq!(app.state.vfo_b_hz, 6_070_000.0);
+    assert_eq!(app.state.rx[0].mode, Mode::Am);
+}
