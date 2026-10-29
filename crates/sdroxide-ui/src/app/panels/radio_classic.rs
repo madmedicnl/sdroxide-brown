@@ -20,7 +20,7 @@ use std::collections::VecDeque;
 use eframe::egui::{self, Align, Align2, Color32, FontId, Pos2, Rect, RichText, Stroke, StrokeKind, vec2};
 use sdroxide_types::{
     AUDIO_BANDS, AgcMode, Band, Command, Mode, RdsData, RxId, SQUELCH_CLOSED_DB, SQUELCH_OPEN_DB,
-    broadcast, byte_to_unit, pty_name,
+    BroadcastStation, MemoryChannel, broadcast, byte_to_unit, pty_name,
 };
 
 use crate::app::SdroxideApp;
@@ -259,17 +259,70 @@ const MODES: [(&str, Mode); 6] = [
 
 // ──────────────────────────────────────────────────────────── what is on show
 
-/// The name the big line shows: the station's own on FM, the memory's or the
+/// What the right-hand display writes about the station on the dial: the big
+/// line, an optional small line above it and small lines under it.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct StationLines {
+    /// The big line, in capitals.
+    big: String,
+    /// The small line over it.
+    above: Option<String>,
+    /// The small lines under it, in order.
+    below: Vec<String>,
+}
+
+/// What the big line shows: the station's own name on FM, the memory's or the
 /// schedule's everywhere else (and on FM too while the station sends no name).
-fn station_name(
+///
+/// * A **schedule** row is its metre band and name on the big line, with what
+///   the table says about the transmission — language, country, site — above.
+/// * A **memory** is its name, with its frequency and mode under it.
+/// * A name that carries a bracket ("Klara (Sint-Pieters-Leeuw)") keeps the
+///   bracket in small type under the name.
+fn station_lines(
     mode: Mode,
     ps: Option<&str>,
-    memory: Option<&str>,
-    schedule: Option<&str>,
-) -> Option<String> {
+    memory: Option<&MemoryChannel>,
+    schedule: Option<&BroadcastStation>,
+) -> Option<StationLines> {
     let ps = ps.map(str::trim).filter(|s| !s.is_empty());
-    let own = if mode == Mode::Wfm { ps } else { None };
-    own.or(memory).or(schedule).map(str::to_string)
+    let named = |name: &str| {
+        let (main, note) = split_name(name);
+        StationLines {
+            big: main.to_uppercase(),
+            above: None,
+            below: note.map(str::to_string).into_iter().collect(),
+        }
+    };
+    if let Some(ps) = ps.filter(|_| mode == Mode::Wfm) {
+        return Some(named(ps));
+    }
+    if let Some(m) = memory {
+        let mut lines = named(&m.name);
+        lines.below.push(format!("{:.6} MHz {}", m.freq_hz / 1e6, mode_label(m.mode)));
+        return Some(lines);
+    }
+    schedule.map(|s| {
+        let big = match broadcast::metre_band(s.freq_khz) {
+            Some(band) => format!("{band} {}", s.name.to_uppercase()),
+            None => s.name.to_uppercase(),
+        };
+        let above = [s.lang.as_str(), s.country.as_str(), s.site.as_str()]
+            .iter()
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        StationLines { big, above: (!above.is_empty()).then_some(above), below: Vec::new() }
+    })
+}
+
+/// The mode as the display writes it.
+fn mode_label(mode: Mode) -> String {
+    MODES
+        .iter()
+        .find(|(_, m)| *m == mode)
+        .map_or_else(|| format!("{mode:?}").to_uppercase(), |(l, _)| (*l).to_string())
 }
 
 /// The width of the three columns for a panel `w` wide, with the gap between
@@ -528,11 +581,11 @@ impl SdroxideApp {
         }
         let hz = self.state.active_freq_hz();
         let mode = self.state.rx[0].mode;
-        let name = self.rc_name(hz, mode, now);
+        let lines = self.rc_name(hz, mode, now);
 
         self.rc_left(ui, left, cmds, &ink, hz, mode);
-        self.rc_middle(ui, mid, cmds, &ink, hz, mode, name.as_deref());
-        self.rc_right(ui, right, cmds, &ink, hz, mode, name.as_deref(), now);
+        self.rc_middle(ui, mid, cmds, &ink, hz, mode, lines.as_ref());
+        self.rc_right(ui, right, cmds, &ink, hz, mode, lines.as_ref(), now);
 
         // Bars, needles and the marquee move between messages: ask for frames
         // only while there is something to move (and once a second for the
@@ -661,17 +714,14 @@ impl SdroxideApp {
         }
     }
 
-    /// The name on the big line, from what is known about the dial.
-    fn rc_name(&self, hz: f64, mode: Mode, now: i64) -> Option<String> {
+    /// The lines the station is written in, from what is known about the dial.
+    fn rc_name(&self, hz: f64, mode: Mode, now: i64) -> Option<StationLines> {
         let rounded = hz.round() as i64;
-        let memory = self
-            .memories
-            .iter()
-            .find(|m| m.mode == mode && m.freq_hz.round() as i64 == rounded)
-            .map(|m| m.name.as_str());
-        let scheduled = broadcast::at_dial(&self.broadcast, hz, now).map(|s| s.name.as_str());
+        let memory =
+            self.memories.iter().find(|m| m.mode == mode && m.freq_hz.round() as i64 == rounded);
+        let scheduled = broadcast::at_dial(&self.broadcast, hz, now);
         let ps = self.rds.as_ref().and_then(|r| r.ps.as_deref());
-        station_name(mode, ps, memory, scheduled)
+        station_lines(mode, ps, memory, scheduled)
     }
 
     // ───────────────────────────────────────────────────────────── left column
@@ -787,7 +837,7 @@ impl SdroxideApp {
         ink: &Ink,
         hz: f64,
         mode: Mode,
-        name: Option<&str>,
+        name: Option<&StationLines>,
     ) {
         let vu_w = vu_meter::WIDTH_COMPACT.max(64.0);
         let main =
@@ -806,7 +856,7 @@ impl SdroxideApp {
             // The name proper, without its bracket, on one line.
             let room = head.width() - 20.0 - if range.is_some() { 96.0 } else { 0.0 };
             let mut job = egui::text::LayoutJob::single_section(
-                split_name(n).0.to_uppercase(),
+                n.big.clone(),
                 egui::TextFormat::simple(FontId::proportional(14.0), ink.amber),
             );
             job.wrap = egui::text::TextWrapping {
@@ -827,14 +877,10 @@ impl SdroxideApp {
                 ink.dim,
             );
         }
-        let mode_label = MODES
-            .iter()
-            .find(|(_, m)| *m == mode)
-            .map_or_else(|| format!("{mode:?}"), |(l, _)| (*l).to_string());
         p.text(
             head.center() + vec2(0.0, 8.0),
             Align2::CENTER_CENTER,
-            mode_label,
+            mode_label(mode),
             FontId::proportional((head_h * 0.52).clamp(24.0, 46.0)),
             ink.accent,
         );
@@ -1248,7 +1294,7 @@ impl SdroxideApp {
         ink: &Ink,
         hz: f64,
         mode: Mode,
-        name: Option<&str>,
+        name: Option<&StationLines>,
         now: i64,
     ) {
         {
@@ -1365,30 +1411,43 @@ impl SdroxideApp {
             ink.dim,
         );
 
-        // Row 3: the station name at its size; what it carries in brackets
-        // ("Belgien Klara (Sint-Pieters-Leeuw Nahe Brüssel)") goes under it in
-        // the small type of the RadioText line, in the same colour. A name
-        // that is still too long for the column wraps onto a second line.
+        // Row 3: the station name at its size, in the small type of the
+        // RadioText line around it: what the table says about a scheduled
+        // transmission over it, and under it the bracket of a long name and a
+        // memory's frequency and mode, all in the same colour. A name that is
+        // still too long for the column wraps onto a second line.
         let name_y = hint_y + 18.0;
         let name_size = (h * 0.1).clamp(20.0, 40.0);
-        let (main, note) = split_name(name.unwrap_or("—"));
-        let galley = ui
-            .painter()
-            .layout_job(name_job(&main.to_uppercase(), name_size, inner.width(), ink.amber));
-        let mut name_h = galley.size().y;
-        ui.painter().galley(Pos2::new(inner.center().x, name_y), galley, ink.amber);
-        if let Some(note) = note {
+        let small = |text: &str| {
             let mut job = egui::text::LayoutJob::single_section(
-                note.to_string(),
+                text.to_string(),
                 egui::TextFormat::simple(FontId::proportional(15.0), ink.amber),
             );
             job.wrap.max_width = inner.width();
             job.wrap.max_rows = 1;
             job.halign = Align::Center;
-            let galley = ui.painter().layout_job(job);
-            ui.painter().galley(Pos2::new(inner.center().x, name_y + name_h + 2.0), galley.clone(), ink.amber);
-            name_h += galley.size().y + 2.0;
+            ui.painter().layout_job(job)
+        };
+        let mut y = name_y;
+        if let Some(above) = name.and_then(|n| n.above.as_deref()) {
+            let galley = small(above);
+            let gh = galley.size().y;
+            ui.painter().galley(Pos2::new(inner.center().x, y), galley, ink.amber);
+            y += gh + 2.0;
         }
+        let big = name.map_or("—", |n| n.big.as_str());
+        let galley = ui.painter().layout_job(name_job(big, name_size, inner.width(), ink.amber));
+        let big_h = galley.size().y;
+        ui.painter().galley(Pos2::new(inner.center().x, y), galley, ink.amber);
+        y += big_h;
+        for line in name.map(|n| n.below.as_slice()).unwrap_or_default() {
+            let galley = small(line);
+            let gh = galley.size().y;
+            y += 2.0;
+            ui.painter().galley(Pos2::new(inner.center().x, y), galley, ink.amber);
+            y += gh;
+        }
+        let name_h = y - name_y;
 
         // Row 4: RadioText.
         let rt_rect = Rect::from_min_size(
@@ -1753,23 +1812,74 @@ mod tests {
         assert_eq!(place(true, false, Mode::Wfm, true), Window, "a phone has no room to dock");
     }
 
+    fn memory(name: &str, hz: f64, mode: Mode) -> MemoryChannel {
+        MemoryChannel {
+            id: 1,
+            name: name.into(),
+            freq_hz: hz,
+            mode,
+            filter_lo: 0.0,
+            filter_hi: 0.0,
+            folder: None,
+            rtty: None,
+            repeater: None,
+            antenna: None,
+            color: None,
+        }
+    }
+
+    fn tropical() -> BroadcastStation {
+        BroadcastStation {
+            name: "Tropical R.Program 4TRP".into(),
+            freq_khz: 2355.0,
+            lang: "English".into(),
+            country: "Australia".into(),
+            site: "Kuranda QLD".into(),
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn on_fm_the_name_is_the_stations_and_elsewhere_the_memorys_or_the_schedules() {
-        let name = |m, ps, mem, sch| station_name(m, ps, mem, sch);
-        assert_eq!(
-            name(Mode::Wfm, Some("EUROPE 1"), Some("M3"), None).as_deref(),
-            Some("EUROPE 1")
-        );
+        let big = |m, ps, mem: Option<&MemoryChannel>, sch: Option<&BroadcastStation>| {
+            station_lines(m, ps, mem, sch).map(|l| l.big)
+        };
+        let m3 = memory("M3", 99.0e6, Mode::Wfm);
+        let bbc = BroadcastStation { name: "BBC".into(), freq_khz: 9410.0, ..Default::default() };
+        assert_eq!(big(Mode::Wfm, Some("EUROPE 1"), Some(&m3), None).as_deref(), Some("EUROPE 1"));
         // A station that sends no name falls back to the memory, then the schedule.
-        assert_eq!(name(Mode::Wfm, Some("  "), Some("M3"), Some("BBC")).as_deref(), Some("M3"));
-        assert_eq!(name(Mode::Wfm, None, None, Some("BBC")).as_deref(), Some("BBC"));
+        assert_eq!(big(Mode::Wfm, Some("  "), Some(&m3), Some(&bbc)).as_deref(), Some("M3"));
+        assert_eq!(big(Mode::Wfm, None, None, Some(&bbc)).as_deref(), Some("31m BBC"));
         // Off FM the RDS name is never used, even if one is lying around.
-        assert_eq!(name(Mode::Am, Some("EUROPE 1"), None, Some("RFI")).as_deref(), Some("RFI"));
+        let rfi = BroadcastStation { name: "RFI".into(), freq_khz: 9410.0, ..Default::default() };
+        assert_eq!(big(Mode::Am, Some("EUROPE 1"), None, Some(&rfi)).as_deref(), Some("31m RFI"));
+        let r3 = memory("Radio 3", 9.41e6, Mode::Am);
         assert_eq!(
-            name(Mode::Am, Some("EUROPE 1"), Some("Radio 3"), Some("RFI")).as_deref(),
-            Some("Radio 3")
+            big(Mode::Am, Some("EUROPE 1"), Some(&r3), Some(&rfi)).as_deref(),
+            Some("RADIO 3")
         );
-        assert_eq!(name(Mode::Usb, None, None, None), None);
+        assert_eq!(big(Mode::Usb, None, None, None), None);
+    }
+
+    #[test]
+    fn a_scheduled_station_is_band_and_name_big_and_what_it_says_about_itself_above() {
+        let lines = station_lines(Mode::Am, None, None, Some(&tropical())).unwrap();
+        assert_eq!(lines.big, "120m TROPICAL R.PROGRAM 4TRP");
+        assert_eq!(lines.above.as_deref(), Some("English Australia Kuranda QLD"));
+        assert!(lines.below.is_empty());
+        // What the table leaves empty is not written as a gap.
+        let bare = BroadcastStation { site: String::new(), ..tropical() };
+        let lines = station_lines(Mode::Am, None, None, Some(&bare)).unwrap();
+        assert_eq!(lines.above.as_deref(), Some("English Australia"));
+    }
+
+    #[test]
+    fn a_memory_is_its_name_big_and_its_dial_and_mode_under_it() {
+        let m = memory("Qso MATIN", 3.6e6, Mode::Lsb);
+        let lines = station_lines(Mode::Lsb, None, Some(&m), None).unwrap();
+        assert_eq!(lines.big, "QSO MATIN");
+        assert_eq!(lines.above, None);
+        assert_eq!(lines.below, vec!["3.600000 MHz LSB".to_string()]);
     }
 
     #[test]
