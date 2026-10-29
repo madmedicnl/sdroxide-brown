@@ -14839,6 +14839,13 @@ impl Engine {
         }
     }
 
+    fn sat_tx_doppler_hz(&self) -> f64 {
+        match &self.sat_lock {
+            Some(l) if l.track.corrections_active => l.track.doppler_tx_hz,
+            _ => 0.0,
+        }
+    }
+
     /// Keep the transmit-side NCO on the current correction: TX Doppler plus
     /// however far the transponder mapping has moved since key-down (the
     /// operator tuning across the passband mid-over). A no-op between overs —
@@ -18269,7 +18276,14 @@ impl Engine {
     /// filters on the uplink's band rather than the downlink's.
     fn tx_target_hz(&self) -> f64 {
         match self.sat_lock.as_ref().and_then(|l| l.cfg.uplink) {
-            Some(u) => u.uplink_for(self.state.active_freq_hz()) + self.state.xit.effective_hz(),
+            Some(u) => {
+                let up = u.uplink_for(self.state.active_freq_hz()) + self.state.xit.effective_hz();
+                if self.sat_lock.as_ref().is_some_and(|l| l.track.corrections_active) {
+                    up + self.sat_tx_doppler_hz()
+                } else {
+                    up
+                }
+            }
             None => self.state.tx_freq_hz(),
         }
     }
@@ -18724,7 +18738,14 @@ impl Engine {
             let txf = match self.sat_lock.as_ref() {
                 Some(l) => match l.cfg.uplink {
                     Some(u) => {
-                        u.uplink_for(self.state.active_freq_hz()) + self.state.xit.effective_hz()
+                        let up = u.uplink_for(self.state.active_freq_hz()) + self.state.xit.effective_hz();
+                        // SAT Doppler (step 2): pre-correct the uplink so the
+                        // satellite hears the published frequency.
+                        if self.sat_lock.as_ref().is_some_and(|l| l.track.corrections_active) {
+                            up + self.sat_tx_doppler_hz()
+                        } else {
+                            up
+                        }
                     }
                     None => {
                         return self.deny_tx(
