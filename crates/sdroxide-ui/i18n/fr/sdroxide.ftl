@@ -4127,7 +4127,7 @@ smeter-ps = PS --
 ## multi (src/multi.rs)
 
 multi-tx = ● TX
-multi-link = LIAISON
+multi-link = Power
 multi-mute-radio-s-audio = Couper l'audio de cette radio
 multi-close-radio-s-split-view = Fermer la vue scindée de cette radio
 multi-open-radio-split-view-own = Ouvrir cette radio dans une vue scindée à part
