@@ -338,6 +338,51 @@ fn pan_center(
     cmds.push(Command::SetCenter(hz));
 }
 
+/// The dial CTR last asked the front end to centre on, and the centre the
+/// client held after asking: see [`ask_for_the_dial`].
+type CtrTarget = Option<(f64, f64)>;
+
+/// Forget the request when the front end's centre moved for any other reason
+/// than the answer to it, so a window that was moved from elsewhere is asked
+/// for again. While the request is pending its answer lands here too.
+fn refresh_ctr_target(target: &mut CtrTarget, pending: bool, dev_center: f64) {
+    if let Some((_, seen)) = target {
+        if pending {
+            *seen = dev_center;
+        } else if (*seen - dev_center).abs() > 0.5 {
+            *target = None;
+        }
+    }
+}
+
+/// Ask the front end to put its centre on the dial — once for a given dial.
+///
+/// The request used to be the overshoot of the view, a few kHz more with every
+/// notch of a zoom out. A zero-IF front end keeps its LO a guard away from the
+/// dial (`guarded_center`), so every one of those requests inside the guard was
+/// answered with the same centre it already had: the window the picture sits
+/// on slid by the overshoot and slid back, once a notch, for as long as the
+/// wheel was turned past the widest view. Asking for the dial itself is one
+/// request with one answer; asking again for it can only get that answer.
+fn ask_for_the_dial(
+    dev_center: &mut f64,
+    state: &mut RadioState,
+    over: f64,
+    vfo: f64,
+    target: &mut CtrTarget,
+    pan: WindowPan,
+    cmds: &mut Vec<Command>,
+) {
+    if over == 0.0 || target.is_some_and(|(v, _)| (v - vfo).abs() < 0.5) {
+        return;
+    }
+    let before = *dev_center;
+    pan_center(dev_center, state, vfo - before, pan, cmds);
+    if *dev_center != before {
+        *target = Some((vfo, *dev_center));
+    }
+}
+
 /// Slide the window so `vfo` sits in the middle of it, and report what the
 /// captured span could not absorb — the amount the front end's own centre has
 /// to move for the dial to be centred, which is nothing at all while the view
@@ -2215,6 +2260,9 @@ pub fn show_ext(
         let vfo = state.active_freq_hz()
             + cursor.filter(|c| c.center_on_cursor).map_or(0.0, |c| f64::from(c.hz));
         let mut asked = asked;
+        let target_id = ui.id().with("centre-target");
+        let mut target: CtrTarget = ui.data(|d| d.get_temp(target_id)).unwrap_or(None);
+        refresh_ctr_target(&mut target, asked.is_some(), dev_center);
         if let Some(ask) = asked {
             match ctr_settle(view, vfo, ask, dev_center, zoom_center, zoom_span) {
                 CtrSettle::Waiting => {}
@@ -2250,7 +2298,7 @@ pub fn show_ext(
         {
             let over = center_on_dial(view, vfo, zoom_center, zoom_span, rect.width());
             let before = dev_center;
-            pan_center(&mut dev_center, state, over, pan, cmds);
+            ask_for_the_dial(&mut dev_center, state, over, vfo, &mut target, pan, cmds);
             if dev_center != before {
                 asked = Some(CtrAsk {
                     center: dev_center,
@@ -2263,8 +2311,12 @@ pub fn show_ext(
             // than resetting the comparison every frame and never arriving.
             ui.data_mut(|d| d.insert_temp(centring_id, Some((vfo, view.span()))));
         }
-        ui.data_mut(|d| d.insert_temp(asked_id, asked));
+        ui.data_mut(|d| {
+            d.insert_temp(asked_id, asked);
+            d.insert_temp(target_id, target);
+        });
     } else {
+        ui.data_mut(|d| d.insert_temp(ui.id().with("centre-target"), None::<(f64, f64)>));
         if centred_at.is_some() {
             ui.data_mut(|d| d.insert_temp(centring_id, None::<(f64, f64)>));
         }
@@ -4592,6 +4644,7 @@ mod ctr_zoom_sim {
         centred_at: Option<(f64, f64)>,
         /// `SetCenter` commands sent so far.
         sent: usize,
+        target: CtrTarget,
     }
 
     /// What the operator sees at the end of one frame.
@@ -4621,6 +4674,7 @@ mod ctr_zoom_sim {
                 asked: None,
                 centred_at: None,
                 sent: 0,
+                target: None,
             }
         }
 
@@ -4658,6 +4712,7 @@ mod ctr_zoom_sim {
             // --- mirror of the CTR block in `show` ---
             let vfo = state.active_freq_hz();
             let mut asked = self.asked;
+            refresh_ctr_target(&mut self.target, asked.is_some(), dev_center);
             if let Some(ask) = asked {
                 match ctr_settle(view, vfo, ask, dev_center, zoom_center, zoom_span) {
                     CtrSettle::Waiting => {}
@@ -4683,7 +4738,15 @@ mod ctr_zoom_sim {
             {
                 let over = center_on_dial(view, vfo, zoom_center, zoom_span, rect.width());
                 let before = dev_center;
-                pan_center(&mut dev_center, state, over, self.pan, &mut cmds);
+                ask_for_the_dial(
+                    &mut dev_center,
+                    state,
+                    over,
+                    vfo,
+                    &mut self.target,
+                    self.pan,
+                    &mut cmds,
+                );
                 if dev_center != before {
                     asked = Some(CtrAsk {
                         center: dev_center,
@@ -4918,6 +4981,49 @@ mod ctr_zoom_sim {
             }
         }
         assert!(failures.is_empty(), "the view moved at the limit:\n{}", failures.join("\n"));
+    }
+
+    /// The front end starts off the dial (the operator tuned away, or a zero-IF
+    /// guard) and the wheel is forced past the widest view. The window the front
+    /// end captures must not creep under the picture a step per notch.
+    #[test]
+    fn a_wheel_forced_past_the_widest_view_does_not_creep_the_window() {
+        let mut failures = Vec::new();
+        for off in [-312_000.0, -150_000.0, 150_000.0, 312_000.0] {
+            for lag in [0usize, 3] {
+                for guard in [0.0, 150_000.0] {
+                    let mut sim = Sim::new(lag, guard);
+                    sim.engine_center = DIAL + off;
+                    sim.state.center_hz = sim.engine_center;
+                    sim.view.fit(sim.engine_center, DEV_SPAN);
+                    for _ in 0..40 {
+                        sim.frame(500.0, 0.8);
+                    }
+                    for _ in 0..80 {
+                        sim.frame(500.0, 1.0 / 0.8);
+                    }
+                    settled(&mut sim, lag + 6);
+                    let (c0, sent0) = (sim.engine_center, sim.sent);
+                    let mut moves = 0;
+                    let mut last = sim.state.center_hz;
+                    for _ in 0..60 {
+                        sim.frame(500.0, 1.02);
+                        // The window the picture is laid on, as the client holds it.
+                        if sim.state.center_hz != last {
+                            moves += 1;
+                            last = sim.state.center_hz;
+                        }
+                    }
+                    if moves > 0 || sim.sent != sent0 {
+                        failures.push(format!(
+                            "off={off} lag={lag} guard={guard}: window {c0:.0} -> {:.0}, {} retunes, {moves} moves",
+                            sim.engine_center, sim.sent - sent0
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "the window crept:\n{}", failures.join("\n"));
     }
 
     /// Notch after notch of a fast wheel or a quick pinch.
