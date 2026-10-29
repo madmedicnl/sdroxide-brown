@@ -1998,6 +1998,20 @@ impl SdroxideApp {
                         .size(10.5)
                         .color(crate::theme::ALERT()),
                 );
+                // Pending caller queue (compact, one line).
+                let my_call = self
+                    .digi_status
+                    .as_ref()
+                    .map(|s| s.config.my_call.clone())
+                    .unwrap_or_default();
+                let pending = self.pending_callers(&my_call);
+                if !pending.is_empty() {
+                    ui.label(
+                        RichText::new(format!("Queue: {}", pending.join(", ")))
+                            .size(9.5)
+                            .color(crate::theme::gray(180)),
+                    );
+                }
             }
         }
         ui.add_space(gap);

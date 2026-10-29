@@ -293,13 +293,51 @@ impl SdroxideApp {
         })
     }
 
+    /// Pending callers for the queue display: stations calling us that are
+    /// eligible to be worked next, in priority order (best SNR first).
+    pub(in crate::app) fn pending_callers(&self, my_call: &str) -> Vec<String> {
+        if my_call.trim().is_empty() || self.digi_decodes.is_empty() {
+            return Vec::new();
+        }
+        let mine = my_call.to_ascii_uppercase();
+        let budget = self.digi_cfg_edit.auto_call_retries;
+        let attempts = &self.auto_attempts;
+        let now = crate::time::now_unix();
+        let now_f = now as f64;
+        let decodes = &self.digi_decodes;
+        let mut callers: Vec<(String, i16, i64)> = Vec::new();
+        for d in decodes {
+            let Some(to_field) = d.to.as_deref() else { continue };
+            if !to_field.eq_ignore_ascii_case(&mine) {
+                continue;
+            }
+            let Some(from) = d.from.as_deref().filter(|c| !c.is_empty()) else { continue };
+            if from.eq_ignore_ascii_case(&mine) {
+                continue;
+            }
+            let key = from.to_ascii_uppercase();
+            if self.auto_tried.contains(&key) {
+                continue;
+            }
+            if let Some(rec) = attempts.get(&key)
+                && auto::retry_holds(*rec, budget, now_f)
+            {
+                continue;
+            }
+            if auto::looks_busy(decodes, from, &mine, now, auto::BUSY_DEFER_S as i64) {
+                continue;
+            }
+            callers.push((from.to_string(), d.snr_db, d.slot_utc));
+        }
+        // Sort by SNR descending, then by slot_utc descending (newest first)
+        callers.sort_by(|a, b| b.1.cmp(&a.1).then(b.2.cmp(&a.2)));
+        // Deduplicate by callsign (keep best SNR)
+        let mut seen = std::collections::HashSet::new();
+        callers.retain(|c| seen.insert(c.0.to_ascii_uppercase()));
+        callers.into_iter().map(|c| c.0).collect()
+    }
+
     /// Disarm auto mode, leaving `note` as the reason shown on the toggle.
-    ///
-    /// Disarming is a kill switch, not just a stop-selecting: it also tells
-    /// the engine to stop the QSO and abort any burst in flight. An unattended
-    /// run that has gone wrong must be stoppable in one click, and leaving the
-    /// contact in hand to sequence on its own is exactly the "runs wild" this
-    /// exists to end.
     pub(in crate::app) fn stop_auto(&mut self, note: String, cmds: &mut Vec<Command>) {
         if self.auto_role.is_some() {
             cmds.push(Command::DigiStopQso);
