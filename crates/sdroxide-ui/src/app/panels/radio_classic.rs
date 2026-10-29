@@ -375,9 +375,39 @@ const LEVEL_FRESH_S: f32 = 0.4;
 /// Rows kept by the mini waterfall, and the bins in each.
 const WF_ROWS: usize = 400;
 const WF_BINS: usize = 96;
-/// One spectrum frame in this many becomes a row: the scope runs at half the
-/// speed it did, and ten times the rows make the picture finer, not faster.
-const WF_EVERY: u32 = 2;
+/// Of every [`WF_OF`] spectrum frames, [`WF_KEEP`] become a row: three in four,
+/// so the scope runs one and a half times as fast as it did at one in two. The
+/// ten times as many rows make the picture finer, not faster.
+const WF_KEEP: u32 = 3;
+const WF_OF: u32 = 4;
+/// The least span the scope zooms to, in Hz — a CW filter is a few hundred.
+const SCOPE_MIN_SPAN_HZ: f64 = 1_000.0;
+/// Room left around the filter's edges, as a fraction of its width.
+const SCOPE_MARGIN: f64 = 0.1;
+
+/// The part of the spectrum the scope draws, `(lo_hz, span_hz)`: the receive
+/// filter with a margin round it, so the bandwidth in use fills the width —
+/// all of a broadcast channel on WFM, a few kHz of a voice filter on SSB.
+fn scope_window(hz: f64, filter_lo: f32, filter_hi: f32) -> (f64, f64) {
+    let (lo, hi) = (f64::from(filter_lo.min(filter_hi)), f64::from(filter_lo.max(filter_hi)));
+    let span = ((hi - lo) * (1.0 + 2.0 * SCOPE_MARGIN)).max(SCOPE_MIN_SPAN_HZ);
+    let centre = hz + (lo + hi) / 2.0;
+    (centre - span / 2.0, span)
+}
+
+/// The level of `bins` (spread over `span_hz` from `lo_hz`) at `f`, read with a
+/// straight line between the neighbouring bins so a narrow window over coarse
+/// bins is a slope and not a staircase. Nothing outside the frame.
+fn level_at(bins: &[u8], lo_hz: f64, span_hz: f64, f: f64) -> u8 {
+    let x = (f - lo_hz) / span_hz * bins.len() as f64 - 0.5;
+    if x < -0.5 || x > bins.len() as f64 - 0.5 {
+        return 0;
+    }
+    let i = x.floor().max(0.0) as usize;
+    let j = (i + 1).min(bins.len() - 1);
+    let t = (x - i as f64).clamp(0.0, 1.0);
+    (f64::from(bins[i]) * (1.0 - t) + f64::from(bins[j]) * t).round() as u8
+}
 
 /// The panel's own state: what has to live between frames.
 pub(in crate::app) struct State {
@@ -388,8 +418,11 @@ pub(in crate::app) struct State {
     peaks: Vec<f32>,
     pub(in crate::app) wf: VecDeque<Vec<u8>>,
     wf_seq: Option<u32>,
-    /// Spectrum frames seen, to keep one in [`WF_EVERY`].
+    /// Spectrum frames seen, to keep [`WF_KEEP`] in every [`WF_OF`].
     wf_tick: u32,
+    /// The span the rows were made for: a row of another one does not line up
+    /// with them.
+    wf_span: f64,
     /// The waterfall as a picture, and what it was drawn for: its height in
     /// pixels and the three colours it is made from.
     wf_tex: Option<egui::TextureHandle>,
@@ -424,6 +457,7 @@ impl Default for State {
             wf: VecDeque::new(),
             wf_seq: None,
             wf_tick: 0,
+            wf_span: 0.0,
             wf_tex: None,
             wf_drawn: None,
             wf_dirty: false,
@@ -438,16 +472,25 @@ impl Default for State {
 }
 
 impl State {
-    /// Take a new spectrum row: one in [`WF_EVERY`] is kept, newest first, up to
-    /// [`WF_ROWS`]. Returns whether the picture changed.
+    /// Take a new spectrum row: [`WF_KEEP`] of every [`WF_OF`] are kept, newest
+    /// first, up to [`WF_ROWS`]. Returns whether the picture changed.
     fn wf_push(&mut self, row: Vec<u8>) -> bool {
-        let keep = self.wf_tick.is_multiple_of(WF_EVERY);
+        let keep = self.wf_tick % WF_OF < WF_KEEP;
         self.wf_tick = self.wf_tick.wrapping_add(1);
         if keep {
             self.wf.push_front(row);
             self.wf.truncate(WF_ROWS);
         }
         keep
+    }
+
+    /// The scope now shows `span_hz`: rows made for another span are cleared.
+    fn wf_span_is(&mut self, span_hz: f64) {
+        if (self.wf_span - span_hz).abs() > span_hz * 0.01 {
+            self.wf_span = span_hz;
+            self.wf.clear();
+            self.wf_dirty = true;
+        }
     }
 }
 
@@ -908,7 +951,7 @@ impl SdroxideApp {
             Pos2::new(main.right(), meter.top() - 6.0),
         );
         if scope.height() > 30.0 {
-            self.rc_scope(ui, scope, ink, hz, mode);
+            self.rc_scope(ui, scope, ink, hz);
         }
         self.rc_smeter(ui, meter, ink);
 
@@ -1080,13 +1123,10 @@ impl SdroxideApp {
     }
 
     /// The mini spectrum and its waterfall, around the dial.
-    fn rc_scope(&mut self, ui: &mut egui::Ui, rect: Rect, ink: &Ink, hz: f64, mode: Mode) {
+    fn rc_scope(&mut self, ui: &mut egui::Ui, rect: Rect, ink: &Ink, hz: f64) {
         let rx = &self.state.rx[0];
-        let half = if mode == Mode::Wfm {
-            150_000.0
-        } else {
-            ((rx.filter_hi - rx.filter_lo).abs() as f64 * 1.5).clamp(6_000.0, 60_000.0)
-        };
+        let (win_lo, win_span) = scope_window(hz, rx.filter_lo, rx.filter_hi);
+        self.radio_classic.wf_span_is(win_span);
         let held = self.frame.clone().or_else(|| self.radio_classic.frame.clone());
         if let Some(frame) = held.as_ref()
             && self.radio_classic.wf_seq != Some(frame.seq)
@@ -1094,13 +1134,11 @@ impl SdroxideApp {
             && frame.span_hz > 0.0
         {
             self.radio_classic.wf_seq = Some(frame.seq);
-            let n = frame.bins.len();
             let lo = frame.center_hz - frame.span_hz / 2.0;
             let row: Vec<u8> = (0..WF_BINS)
                 .map(|i| {
-                    let f = hz - half + 2.0 * half * (i as f64 + 0.5) / WF_BINS as f64;
-                    let at = ((f - lo) / frame.span_hz * n as f64).floor();
-                    if at < 0.0 || at >= n as f64 { 0 } else { frame.bins[at as usize] }
+                    let f = win_lo + win_span * (i as f64 + 0.5) / WF_BINS as f64;
+                    level_at(&frame.bins, lo, frame.span_hz, f)
                 })
                 .collect();
             if self.radio_classic.wf_push(row) {
@@ -1156,8 +1194,10 @@ impl SdroxideApp {
                 Color32::WHITE,
             );
         }
-        // The dial's own mark, at the centre.
-        let x = rect.center().x;
+        // The dial's own mark, where the dial falls in the window: the centre
+        // on a symmetric filter, off to one side on SSB.
+        let x = (rect.left() + rect.width() * ((hz - win_lo) / win_span) as f32)
+            .clamp(rect.left(), rect.right());
         p.line_segment(
             [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
             Stroke::new(1.0, ink.amber.gamma_multiply(0.6)),
@@ -1937,12 +1977,12 @@ mod tests {
     }
 
     #[test]
-    fn the_waterfall_keeps_one_row_in_two_up_to_four_hundred() {
+    fn the_waterfall_keeps_three_rows_in_four_up_to_four_hundred() {
         let mut st = State::default();
         for i in 0..20u8 {
             st.wf_push(vec![i; WF_BINS]);
         }
-        assert_eq!(st.wf.len(), 10);
+        assert_eq!(st.wf.len(), 15);
         // Newest first: the last kept frame is the 19th (index 18).
         assert_eq!(st.wf.front().map(|r| r[0]), Some(18));
         for _ in 0..2000 {
@@ -1950,6 +1990,42 @@ mod tests {
         }
         assert_eq!(st.wf.len(), WF_ROWS);
         assert_eq!(WF_ROWS, 400);
+    }
+
+    #[test]
+    fn the_scope_shows_the_filter_with_a_margin_round_it() {
+        // WFM: a wide filter fills the width, centred on the dial.
+        let (lo, span) = scope_window(100e6, -96_000.0, 96_000.0);
+        assert!((span - 192_000.0 * 1.2).abs() < 1.0);
+        assert!((lo + span / 2.0 - 100e6).abs() < 1.0);
+        // USB: the window sits over the passband, so the dial is near its left edge.
+        let (lo, span) = scope_window(14.2e6, 200.0, 2600.0);
+        assert!((span - 2400.0 * 1.2).abs() < 1.0);
+        assert!(lo > 14.2e6 - 100.0 && lo < 14.2e6 + 200.0);
+        assert!(lo + span > 14.2e6 + 2600.0);
+        // A narrow CW filter does not zoom past what the bins can show.
+        assert_eq!(scope_window(7.03e6, -50.0, 50.0).1, SCOPE_MIN_SPAN_HZ);
+    }
+
+    #[test]
+    fn a_level_between_two_bins_is_read_on_the_line_between_them() {
+        let bins = [0u8, 100, 200];
+        // Bin centres at lo + span * (0.5, 1.5, 2.5) / 3.
+        assert_eq!(level_at(&bins, 0.0, 3.0, 1.5), 100);
+        assert_eq!(level_at(&bins, 0.0, 3.0, 1.0), 50);
+        assert_eq!(level_at(&bins, 0.0, 3.0, -1.0), 0, "outside the frame");
+        assert_eq!(level_at(&bins, 0.0, 3.0, 4.0), 0, "outside the frame");
+    }
+
+    #[test]
+    fn rows_made_for_another_span_are_dropped() {
+        let mut st = State::default();
+        st.wf_span_is(10_000.0);
+        st.wf_push(vec![1; WF_BINS]);
+        st.wf_span_is(10_050.0);
+        assert_eq!(st.wf.len(), 1, "a hair of change keeps the picture");
+        st.wf_span_is(2_400.0);
+        assert!(st.wf.is_empty());
     }
 
     #[test]
