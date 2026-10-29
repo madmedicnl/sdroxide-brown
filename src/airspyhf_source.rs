@@ -67,13 +67,26 @@ impl AirspyHfSource {
 /// is taken as constant — the figure is *measured* at 768 kSPS and assumed at
 /// the others, and a rate that turns out to differ should be re-measured rather
 /// than reasoned about.
-const USABLE_FRAC: f64 = 0.86;
+/// The fraction of the rate the HF+ Discovery's decimation filter leaves as
+/// spectrum. Airspy's own figure for 768 kSPS is about 660 kHz (0.86); the
+/// filter is the same one scaled to each rate, so the fraction is per-rate.
+/// Values for rates other than 768 kSPS are estimates (660 kHz / rate) and
+/// should be confirmed by measurement on hardware.
+fn usable_frac_for_rate(rate_hz: f64) -> f64 {
+    match rate_hz as u32 {
+        192_000 => 1.0,
+        384_000 => 0.95,
+        768_000 => 0.86,
+        912_000 => 0.72,
+        _ => 0.86,
+    }
+}
 
 impl IqSource for AirspyHfSource {
-    /// See [`USABLE_FRAC`]: a display built on the raw rate shows the filter
-    /// skirt as band, and the operator can pan into it.
+    /// Per-rate usable fraction: the HF+ filter rolls off inside the rate,
+    /// and the fraction differs per sample rate (see [`usable_frac_for_rate`]).
     fn usable_frac(&self) -> f64 {
-        USABLE_FRAC
+        usable_frac_for_rate(self.handle.sample_rate_hz)
     }
 
     /// The engine is transmitting and has stopped reading, or has started
