@@ -33,6 +33,7 @@ pub(in crate::app) mod aircraft_share;
 pub(in crate::app) mod aircraft_stats;
 pub(in crate::app) mod aircraft_watch;
 pub(in crate::app) mod alerts;
+pub(in crate::app) mod antenna;
 pub(in crate::app) mod auto_mode;
 pub(in crate::app) mod awards;
 pub(in crate::app) mod bands;
@@ -48,7 +49,6 @@ pub(in crate::app) mod drm;
 pub(in crate::app) mod duo_power;
 pub(in crate::app) mod enigma;
 pub(in crate::app) mod extras;
-pub(in crate::app) mod antenna;
 pub(in crate::app) mod frame;
 pub(in crate::app) mod grid_tracker;
 pub(in crate::app) mod hd;
@@ -609,6 +609,7 @@ pub struct SdroxideApp {
     /// working at (MHz).
     show_antenna: bool,
     antenna_freq_mhz: f64,
+    antenna_height_m: f64,
     /// The MoM solve of the presets at `antenna_freq_mhz`, once asked for — see
     /// [`antenna`]. Memory only.
     antenna_solved: Option<Vec<antenna::SolvedRow>>,
@@ -623,13 +624,17 @@ pub struct SdroxideApp {
     /// How many Yagi copies to stack in the solve (1, 2 or 4) — see [`antenna`].
     antenna_stack: u32,
     /// The azimuth cuts of the solved presets, and which one the pattern shows.
-    antenna_patterns: Vec<(String, Vec<(f64, f64)>)>,
+    antenna_patterns: Vec<(String, [Vec<(f64, f64)>; 3])>,
+    antenna_pattern_view: usize,
     antenna_pattern_sel: usize,
     /// The 3D pattern surfaces (parallel to `antenna_patterns`), and the view
     /// rotation.
     antenna_surfaces: Vec<(Vec<[f64; 3]>, usize, usize)>,
+    antenna_wires: Vec<Vec<([f64; 3], [f64; 3])>>,
     antenna_yaw: f32,
     antenna_pitch: f32,
+    /// Feedline impedance for SWR display.
+    antenna_z0: f64,
     /// A Yagi optimization running on a background thread, and its result
     /// channel. Native-only — the browser has no threads and just skips the
     /// optimizer.
@@ -2181,6 +2186,7 @@ impl SdroxideApp {
             extras_was_open: false,
             show_antenna: false,
             antenna_freq_mhz: 27.265,
+            antenna_height_m: 10.0,
             antenna_solved: None,
             antenna_objective: antenna_model::optimize::Objective::Gain,
             antenna_optimized: None,
@@ -2189,9 +2195,12 @@ impl SdroxideApp {
             antenna_stack: 1,
             antenna_patterns: Vec::new(),
             antenna_pattern_sel: 0,
+            antenna_pattern_view: 0,
             antenna_surfaces: Vec::new(),
+            antenna_wires: Vec::new(),
             antenna_yaw: -0.6,
             antenna_pitch: 0.4,
+            antenna_z0: 50.0,
             #[cfg(not(target_arch = "wasm32"))]
             antenna_optimizing: false,
             #[cfg(not(target_arch = "wasm32"))]

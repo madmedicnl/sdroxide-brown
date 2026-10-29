@@ -237,8 +237,7 @@ impl super::SdroxideApp {
                 egui::vec2(SLOT_W, SLOT_H),
             )
             .on_hover_text(
-                "ANTENNA — cutting lengths and SWR for a dipole, vertical, ground plane, \
-                 loop or Yagi",
+                "ANTENNA (Experimental/Beta) — cutting lengths, feedpoint impedance and pattern for common wire/vertical/Yagi antennas",
             );
             if ant.clicked() {
                 self.show_antenna = !self.show_antenna;
