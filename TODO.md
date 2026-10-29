@@ -39,8 +39,9 @@ Open issues: 13 (re-measured 2026-10-29).
 
 ## Waiting on other people
 
-- STANAG 4285 coded payload — Mark confirmed decode with video. Rust equaliser
-  still does not converge; coded payload not read by our chain.
+- ~~STANAG 4285~~ **finished** (2026-10-29) — Mark confirmed decode with video.
+  Coded payload decoding intentionally not implemented (restricted by law in
+  several countries). Rust equaliser still does not converge.
 - ALE — never decoded a real burst. Needs recording.
 - S-meter jumping with mouse — question to reporter: number or needle?
 - #105 AppImage — planned for stable release.
@@ -85,7 +86,7 @@ Open issues: 13 (re-measured 2026-10-29).
 - 2026-10-29 — Antenna calculator (MoM solver, presets, 3D, Yagi optimizer)
 - 2026-10-29 — FT8 auto queue UI
 - 2026-10-29 — Grey-line gradient confirmed
-- 2026-10-29 — STANAG 4285 proven (Mark's video)
+- 2026-10-29 — STANAG 4285 finished (coded payload not implemented — legal)
 - 2026-10-29 — Olivia proven (RX+TX)
 - 2026-10-29 — S-meter still an issue
 - 2026-10-28 — NAVTEX false-sync fix

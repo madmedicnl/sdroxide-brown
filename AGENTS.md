@@ -164,9 +164,9 @@ crates' tests passing, rustfmt clean on touched files, one complete thing per PR
 ## Focus
 
 No UI work unless a new mode needs a panel or something is very off. The
-programme is the modes that did not finish in 2.1.0: STANAG 4285 first, then
-8PSK filter, wide PSK banks, speeds that lose a word, MT63/Contestia/DominoEX
-variants. F4NRM's list (SSTV, DAB, NAVTEX, APRS, WFM, DSC, Olivia, RTTY,
+programme is the modes that did not finish in 2.1.0: 8PSK filter, wide PSK
+banks, speeds that lose a word, MT63/Contestia/DominoEX variants. STANAG 4285
+is finished. F4NRM's list (SSTV, DAB, NAVTEX, APRS, WFM, DSC, Olivia, RTTY,
 WEFAX, FT8, RDS, HackRF, PlutoSDR) is his — report faults as PRs, never
 unrequested tidy-ups. RSP1 is ours. DMR is out (patent). ATS Mini/DiamondRadio
 are closed/unlicensed (research only). SDRuno look is parked.
@@ -176,11 +176,13 @@ are closed/unlicensed (research only). SDRuno look is parked.
 - `main` at crate 2.2.0, PROTO_VERSION 256 (0x4C). Latest release v2.2.0.3_brown.
 - Open issues: 13 (re-measured 2026-10-29). Open PRs: 4 (antenna #304, navtex
   #317, adsb #312, ft8 #323) + upstream #651 (SAT Doppler, SP9TKN testing).
-- STANAG 4285 proven by Mark (video). Olivia proven by user (RX+TX). Grey-line
+- STANAG 4285 finished (Mark proved decode with video; coded payload not
+  implemented — legal restriction). Olivia proven by user (RX+TX). Grey-line
   confirmed. S-meter still an issue.
-- Live handovers: ALE (no real burst yet), STANAG 4285 (coded payload not read),
-  Olivia (TX unproven by another station), CW keyer (built), SWL schedule
-  sources (scoped), FST4W (do not ship).
+- Live handovers: ALE (no real burst yet), STANAG 4285 (finished — Mark proved
+  decode with video; coded payload intentionally not implemented, restricted by
+  law in several countries), Olivia (TX unproven by another station), CW keyer
+  (built), SWL schedule sources (scoped), FST4W (do not ship).
 - Confirmed on air: WEFAX, DAB, SSTV, DSC, HD Radio.
 
 ## Current work
