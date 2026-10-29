@@ -158,8 +158,7 @@ impl SdroxideApp {
             self.set_broadcast_all(on);
         }
         if let Some(s) = tune {
-            cmds.push(Command::SetVfo { vfo: Vfo::A, hz: s.freq_hz() });
-            cmds.push(Command::SetMode { rx: RxId::Main, mode: s.mode() });
+            self.tune_to_station(&s, cmds);
         }
         if let Some(s) = log {
             let smeter = self.meters.map(|m| m.s_dbm);
@@ -180,6 +179,27 @@ impl SdroxideApp {
                 antenna,
             ));
             self.show_swl = true;
+        }
+    }
+
+    /// Tunes the receiver to a PROGRAMS row.
+    pub(in crate::app) fn tune_to_station(
+        &mut self,
+        s: &BroadcastStation,
+        cmds: &mut Vec<Command>,
+    ) {
+        // The VFO the receiver is on, not always A: the engine ignores a
+        // retune of the other one, and the dial would stay where it was.
+        let vfo = self.state.active_vfo;
+        let (hz, mode) = (s.freq_hz(), s.mode());
+        cmds.push(Command::SetVfo { vfo, hz });
+        cmds.push(Command::SetMode { rx: RxId::Main, mode });
+        // Echoed now, as every other route that tunes from the screen does, so
+        // the dial does not show the old frequency while the engine answers.
+        self.state.rx[0].mode = mode;
+        match vfo {
+            Vfo::A => self.state.vfo_a_hz = hz,
+            Vfo::B => self.state.vfo_b_hz = hz,
         }
     }
 
