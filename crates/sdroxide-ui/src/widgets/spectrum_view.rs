@@ -2305,6 +2305,12 @@ pub fn show_ext(
                     view_lo: view.view_lo_hz,
                     view_hi: view.view_hi_hz,
                 });
+            } else if over != 0.0 {
+                // Nothing left to ask: the front end has the dial as near the
+                // middle as it will put it (a zero-IF LO a guard away). The
+                // widest view that holds the dial centred is the one the
+                // window allows, at any sample rate — see [`ctr_settle`].
+                narrow_about_dial(view, vfo, zoom_center, zoom_span);
             }
             // Recorded only when it actually centred, so a gesture that moves
             // the span in steps below `ZOOM_EPS` accumulates towards one rather
@@ -4753,6 +4759,8 @@ mod ctr_zoom_sim {
                         view_lo: view.view_lo_hz,
                         view_hi: view.view_hi_hz,
                     });
+                } else if over != 0.0 {
+                    narrow_about_dial(view, vfo, zoom_center, zoom_span);
                 }
                 self.centred_at = Some((vfo, view.span()));
             }
@@ -5024,6 +5032,46 @@ mod ctr_zoom_sim {
             }
         }
         assert!(failures.is_empty(), "the window crept:\n{}", failures.join("\n"));
+    }
+
+    /// A zero-IF front end keeps its LO a guard away from the dial, so the
+    /// captured window is not centred on it and a view as wide as the window
+    /// cannot be. The widest view CTR can show is the one that fits centred —
+    /// whatever the guard and the sample rate — and turning the wheel back in
+    /// from the limit must not walk the dial across the screen.
+    #[test]
+    fn the_dial_stays_in_the_middle_from_the_widest_view_the_window_allows() {
+        let mut failures = Vec::new();
+        for guard in [50_000.0, 150_000.0, 312_500.0, 600_000.0] {
+            for lag in [0usize, 3] {
+                let mut sim = Sim::new(lag, guard);
+                // The LO is already where the engine keeps it, a guard above.
+                sim.engine_center = DIAL + guard;
+                sim.state.center_hz = sim.engine_center;
+                sim.view.fit(sim.engine_center, DEV_SPAN);
+                for _ in 0..40 {
+                    sim.frame(500.0, 0.8);
+                }
+                for _ in 0..60 {
+                    sim.frame(500.0, 1.0 / 0.8);
+                }
+                settled(&mut sim, lag + 6);
+                for i in 0..40 {
+                    // Forced out for a while, then turned back in.
+                    let factor = if i < 15 { 1.02 } else { 0.98 };
+                    let seen = sim.frame(500.0, factor);
+                    let tol = seen.span / WIDTH as f64;
+                    if seen.off_hz.abs() > tol {
+                        failures.push(format!(
+                            "guard={guard} lag={lag} frame {i}: dial {:+.0} Hz off the middle, span {:.0}",
+                            seen.off_hz, seen.span
+                        ));
+                        break;
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "CTR left the middle:\n{}", failures.join("\n"));
     }
 
     /// Notch after notch of a fast wheel or a quick pinch.
