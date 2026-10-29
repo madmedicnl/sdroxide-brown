@@ -8918,3 +8918,7 @@ schedule-colour-station-hint = Farbe der Wasserfall-Beschriftung dieses Senders
 schedule-colour-reset = STANDARD
 
 schedule-colour-reset-hint = Zurück zur Standardfarbe für alle Sender, die gewählten Farben werden vergessen
+
+settings-language = Sprache
+
+settings-language-note = Die Sprache, in der die Oberflaeche dargestellt wird. Standardmaessig folgt sie dem Betriebssystem; waehlen Sie eine andere, um sie zu ersetzen. Die Wahl wird gespeichert und gemerkt.

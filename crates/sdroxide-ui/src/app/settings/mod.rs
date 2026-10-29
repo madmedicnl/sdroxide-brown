@@ -71,6 +71,7 @@ use crate::theme::ThemedScroll as _;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(in crate::app) enum SettingsTab {
     General,
+    Language,
     Radio,
     /// Sound, in one place: your speakers and microphone, this radio's sound
     /// card, and where recordings are written. Its own tab because it used to be
@@ -115,6 +116,7 @@ impl SettingsTab {
         let key = key.trim().to_ascii_lowercase();
         [
             Self::General,
+            Self::Language,
             Self::Radio,
             Self::Audio,
             Self::Cw,
@@ -152,6 +154,7 @@ const SETTINGS_GROUPS: &[(&str, &[(SettingsTab, &str)])] = &[
         "Station",
         &[
             (SettingsTab::General, "General"),
+            (SettingsTab::Language, "Language"),
             (SettingsTab::Radio, "Radio"),
             (SettingsTab::Audio, "Audio"),
             (SettingsTab::Cw, "CW"),
@@ -191,6 +194,7 @@ const SETTINGS_GROUPS: &[(&str, &[(SettingsTab, &str)])] = &[
 fn tab_label(tab: SettingsTab, english: &str) -> String {
     match tab {
         SettingsTab::General => tr!("settings-general"),
+        SettingsTab::Language => tr!("settings-language"),
         SettingsTab::Radio => tr!("settings-radio"),
         SettingsTab::Ui => tr!("settings-ui"),
         SettingsTab::Spots => tr!("settings-spots"),
@@ -2442,7 +2446,12 @@ impl SdroxideApp {
                 // were for the same reason.
                 let selected = *io.tab == *tab;
                 let ink = if selected { crate::theme::INK_ON_CYAN() } else { crate::theme::TEXT() };
-                let label = egui::RichText::new(*label)
+                let label_text = if *tab == SettingsTab::Language {
+                    tr!("settings-language")
+                } else {
+                    (*label).to_string()
+                };
+                let label = egui::RichText::new(label_text)
                     .family(egui::FontFamily::Name("chakra-bold".into()))
                     .color(ink);
                 if ui.selectable_label(selected, label).clicked() {
@@ -2737,6 +2746,45 @@ impl SdroxideApp {
                     io.recordings_reset,
                 );
                 return;
+            }
+            SettingsTab::Language => {
+                ui.label(
+                    RichText::new(tr!("settings-language"))
+                        .size(14.0)
+                        .strong()
+                        .color(crate::theme::CYAN()),
+                );
+                ui.add_space(6.0);
+                let current = io.ui_edit.language;
+                let shown = if current.is_system() {
+                    tr!("settings-general-system-default")
+                } else {
+                    crate::i18n::languages()
+                        .iter()
+                        .find(|l| l.tag == current.tag().unwrap_or(""))
+                        .map(|l| l.name.clone())
+                        .unwrap_or_else(|| current.tag().unwrap_or("").to_string())
+                };
+                egui::ComboBox::from_id_salt("settings-language")
+                    .selected_text(shown)
+                    .show_styled(ui, |ui| {
+                        if ui
+                            .selectable_label(current.is_system(), tr!("settings-general-system-default"))
+                            .clicked()
+                        {
+                            io.ui_edit.language = sdroxide_types::UiLanguage::SYSTEM;
+                        }
+                        for lang in crate::i18n::languages() {
+                            let selected = current.tag() == Some(lang.tag.as_str());
+                            if ui.selectable_label(selected, &lang.name).clicked() {
+                                if let Some(ul) = sdroxide_types::UiLanguage::from_tag(&lang.tag) {
+                                    io.ui_edit.language = ul;
+                                }
+                            }
+                        }
+                    });
+                ui.add_space(6.0);
+                note(ui, &tr!("settings-language-note"));
             }
             SettingsTab::Radio => {
                 // The station's radios, managed from here: this page is where
@@ -5559,6 +5607,7 @@ mod settings_menu_tests {
     /// Every tab, counted.
     const EVERY_TAB: &[SettingsTab] = &[
         SettingsTab::General,
+        SettingsTab::Language,
         SettingsTab::Radio,
         SettingsTab::Audio,
         SettingsTab::Cw,

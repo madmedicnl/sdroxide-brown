@@ -8930,3 +8930,7 @@ schedule-colour-station-hint = Waterfall label colour of this station
 schedule-colour-reset = DEFAULT
 
 schedule-colour-reset-hint = Back to the stock colour for every station, forgetting the ones picked
+
+settings-language = Language
+
+settings-language-note = The language the interface is drawn in. System default follows the operating system; pick another to override it. The choice is saved and remembered.

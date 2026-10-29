@@ -8919,3 +8919,7 @@ schedule-colour-station-hint = Color de la etiqueta de esta emisora en la cascad
 schedule-colour-reset = DEFECTO
 
 schedule-colour-reset-hint = Volver al color original de todas las emisoras, olvidando las elegidas
+
+settings-language = Idioma
+
+settings-language-note = El idioma en el que se dibuja la interfaz. Por defecto sigue al sistema operativo; elija otro para sustituirlo. La eleccion se guarda y se recuerda.

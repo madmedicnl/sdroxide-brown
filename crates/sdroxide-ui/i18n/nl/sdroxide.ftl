@@ -8928,3 +8928,7 @@ schedule-colour-station-hint = Kleur van het waterval-label van deze zender
 schedule-colour-reset = STANDAARD
 
 schedule-colour-reset-hint = Terug naar de standaardkleur voor alle zenders; de gekozen kleuren worden vergeten
+
+settings-language = Taal
+
+settings-language-note = De taal waarin de interface wordt getekend. Standaard volgt die het besturingssysteem; kies een andere om die te vervangen. De keuze wordt opgeslagen en onthouden.

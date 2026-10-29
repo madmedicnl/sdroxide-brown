@@ -8931,3 +8931,7 @@ schedule-colour-station-hint = Couleur de l'étiquette de cette station sur la c
 schedule-colour-reset = DÉFAUT
 
 schedule-colour-reset-hint = Retour à la couleur d'origine pour toutes les stations, en oubliant les choix faits
+
+settings-language = Langue
+
+settings-language-note = La langue dans laquelle l interface est affichee. Par defaut, elle suit le systeme d exploitation ; choisissez-en une autre pour la remplacer. Le choix est enregistre et memorise.
