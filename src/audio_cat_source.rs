@@ -1009,6 +1009,10 @@ impl IqSource for AudioCatSource {
         Ok(())
     }
 
+    fn cat_handle(&mut self) -> Option<&mut sdroxide_cat::CatHandle> {
+        Some(&mut self.cat)
+    }
+
     fn set_rit_hz(&mut self, hz: f64) {
         if let Some(f) = self.dial.set_rit(hz) {
             self.cat.set_freq(f);
