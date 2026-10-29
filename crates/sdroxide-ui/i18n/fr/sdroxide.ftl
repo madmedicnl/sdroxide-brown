@@ -6110,9 +6110,9 @@ rc-music = MUSIQUE ♪
 
 rc-speech = PAROLE
 
-rc-stereo-the-19-khz-pilot-is-locked = Stéréo — la sous-porteuse pilote 19 kHz est verrouillée
+rc-stereo-the-19-khz-pilot-is-locked = Stéréo — la sous-porteuse pilote 19 kHz est verrouillée — cliquer pour passer en mono
 
-rc-mono-the-broadcast-stereo-decode = Mono — le décodage stéréo de la radiodiffusion est désactivé (ST dans la barre du haut)
+rc-mono-the-broadcast-stereo-decode = Mono — le décodage stéréo de la radiodiffusion est désactivé — cliquer pour l'activer
 
 rc-mono-noise-reduction-is-on-and = Mono — la réduction de bruit est active et la stéréo lui cède la place
 
