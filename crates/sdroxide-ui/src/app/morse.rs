@@ -43,10 +43,10 @@ enum Tab {
 impl Tab {
     fn label(self) -> String {
         match self {
-            Tab::Translate => "TRANSLATE",
-            Tab::Practice => "PRACTICE",
-            Tab::Learn => "LEARN",
-            Tab::Send => "SEND",
+            Tab::Translate => tr!("morse-translate"),
+            Tab::Practice => tr!("morse-practice"),
+            Tab::Learn => tr!("morse-learn"),
+            Tab::Send => "SEND".to_string(),
         }
     }
 }

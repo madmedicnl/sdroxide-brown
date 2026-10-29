@@ -5,6 +5,7 @@
 //! UI that needs the date rather than a frame time goes through here: the
 //! logbook, the waterfall's time gridlines, and the solar view, whose whole
 //! scene is a function of an explicit timestamp.
+use crate::i18n::tr;
 
 /// The current UTC time as a listener reads it, `HH:MM:SS`.
 pub fn utc_clock(unix: i64) -> String {

@@ -335,15 +335,21 @@ impl SdroxideApp {
                 let mut rows: Vec<(String, String)> = Vec::new();
                 if let Some(ft) = a.altitude_ft {
                     rows.push((
-                        "altitude",
+                        "altitude".to_string(),
                         format!("{} barometric", sdroxide_types::AirUnits::current().altitude(ft)),
                     ));
                 }
                 if let Some(ft) = a.gnss_altitude_ft {
-                    rows.push(("GNSS altitude", sdroxide_types::AirUnits::current().altitude(ft)));
+                    rows.push((
+                        "GNSS altitude".to_string(),
+                        sdroxide_types::AirUnits::current().altitude(ft),
+                    ));
                 }
                 if let Some(kt) = a.ground_speed_kt {
-                    rows.push(("ground speed", sdroxide_types::AirUnits::current().speed(kt)));
+                    rows.push((
+                        "ground speed".to_string(),
+                        sdroxide_types::AirUnits::current().speed(kt),
+                    ));
                 }
                 if let Some(t) = a.track_deg {
                     rows.push((tr!("adsb-row-track"), format!("{t:.0}°")));
@@ -353,7 +359,7 @@ impl SdroxideApp {
                 }
                 if let Some(v) = a.vertical_rate_fpm {
                     rows.push((
-                        "vertical rate",
+                        "vertical rate".to_string(),
                         sdroxide_types::AirUnits::current().vertical_rate(v),
                     ));
                 }
@@ -364,7 +370,7 @@ impl SdroxideApp {
                     let km = sdroxide_types::distance_km((hlat, hlon), (lat, lon));
                     let bear = sdroxide_types::bearing_deg((hlat, hlon), (lat, lon));
                     rows.push((
-                        "range",
+                        "range".to_string(),
                         format!("{}  {bear:.0}°", sdroxide_types::AirUnits::current().distance(km)),
                     ));
                 }

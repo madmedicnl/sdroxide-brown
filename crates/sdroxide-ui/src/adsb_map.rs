@@ -30,6 +30,7 @@
 //! wrong: a faint square at a stale position is still a claim about where an
 //! aeroplane is, drawn in the same ink as the ones that are true, and the map
 //! is the one place with no room for a hedge.
+use crate::i18n::tr;
 
 use eframe::egui::{
     Align2, Color32, FontId, Painter, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2, pos2, vec2,

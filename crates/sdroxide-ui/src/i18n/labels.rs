@@ -5,13 +5,14 @@
 //! the operator's language. What the interface draws comes from here instead.
 //! Each is an exhaustive `match`, so a variant added to a type is a build
 //! error here until it has a message.
+use crate::i18n::tr;
 
 use sdroxide_types::{
-    AlertReply, AlertSound, AmpModel, AudioRoute, Backend, BandplanKind, CallsignStyle, CatFamily,
-    ChromeStyle, CwKeying, DigiMode, EladTxInput, FontSize, FreqStyle, IcomModel, KenwoodSend,
-    LayoutMode, LineState, ModeControl, PanadapterAudio, PanadapterTap, Parity, PlutoAgc,
-    PlutoDuplex, PlutoPtt, RotatorProtocol, RtlSdrAgc, RtlSdrHfMode, SdrPlayAgc, SdrPlayDuoRole,
-    SdrPlayDuoTuner, SoundFormat, SpyServerFormat, TrUsdxAudio, UiTheme, Verbosity,
+    AlertReply, AlertSound, Backend, BandplanKind, CallsignStyle, CatFamily, ChromeStyle, CwKeying,
+    DigiMode, EladTxInput, FontSize, FreqStyle, IcomModel, KenwoodSend, LayoutMode, LineState,
+    ModeControl, PanadapterAudio, PanadapterTap, Parity, PlutoAgc, PlutoDuplex, PlutoPtt,
+    RtlSdrAgc, RtlSdrHfMode, SdrPlayAgc, SdrPlayDuoRole, SdrPlayDuoTuner, SoundFormat,
+    SpyServerFormat, TrUsdxAudio, UiTheme, Verbosity,
 };
 
 use sdroxide_types::{
@@ -21,10 +22,8 @@ use sdroxide_types::{
     LimeAuxRole, LookupProvider, MailFolder, MemorySort, MouseButton, NrLevel, NrStrength,
     OrbitRings, QsoStep, RdsStandard, Region, RelativeMode, RelayLink, RelayRole, RfeChannel,
     RfeLink, RfeModeControl, RifpEncoding, ScanKind, ScanResume, SenseLine, Shift, Speed,
-    TlsVerify, ToneMode, TxVoiceStage, UploadNaming, WheelAction,
+    TlsVerify, ToneMode, UploadNaming, WheelAction,
 };
-
-use super::tr;
 
 /// A value's name, in the interface's language.
 pub(crate) trait Tr: Copy {
@@ -46,6 +45,9 @@ impl Tr for LayoutMode {
 impl Tr for UiTheme {
     fn tr(self) -> String {
         match self {
+            UiTheme::Calm | UiTheme::Calmer | UiTheme::Compline | UiTheme::Lauds => {
+                self.label().to_string()
+            }
             UiTheme::Default => tr!("ui-theme-default"),
             UiTheme::Light => tr!("ui-theme-light"),
             UiTheme::HighContrast => tr!("ui-theme-high-contrast"),
@@ -243,15 +245,6 @@ impl Tr for SdrPlayAgc {
     }
 }
 
-impl Tr for RotatorProtocol {
-    fn tr(self) -> String {
-        match self {
-            RotatorProtocol::Rotctld => tr!("rotator-protocol-rotctld"),
-            RotatorProtocol::PstRotator => tr!("rotator-protocol-pst-rotator"),
-        }
-    }
-}
-
 impl Tr for PlutoPtt {
     fn tr(self) -> String {
         match self {
@@ -338,25 +331,6 @@ impl Tr for CwKeying {
     }
 }
 
-impl Tr for AudioRoute {
-    fn tr(self) -> String {
-        match self {
-            AudioRoute::Both => tr!("audio-route-both"),
-            AudioRoute::Left => tr!("audio-route-left"),
-            AudioRoute::Right => tr!("audio-route-right"),
-        }
-    }
-}
-
-impl Tr for AmpModel {
-    fn tr(self) -> String {
-        match self {
-            AmpModel::Hr500 => tr!("amp-model-hr500"),
-            AmpModel::Hr50 => tr!("amp-model-hr50"),
-        }
-    }
-}
-
 impl Tr for AlertSound {
     fn tr(self) -> String {
         match self {
@@ -405,6 +379,7 @@ impl Tr for IcomModel {
 impl Tr for Backend {
     fn tr(self) -> String {
         match self {
+            Backend::AtsMini => self.label().to_string(),
             Backend::Auto => tr!("backend-auto"),
             Backend::Soapy => tr!("backend-soapy"),
             Backend::Cat => tr!("backend-cat"),
@@ -436,6 +411,7 @@ impl Tr for Backend {
 impl Tr for CatFamily {
     fn tr(self) -> String {
         match self {
+            CatFamily::TrUsdxNg => self.label().to_string(),
             CatFamily::Xiegu => tr!("cat-family-xiegu"),
             CatFamily::Icom => tr!("cat-family-icom"),
             CatFamily::Yaesu => tr!("cat-family-yaesu"),
@@ -519,6 +495,7 @@ impl Tr for ButtonMode {
 impl Tr for ContestMode {
     fn tr(self) -> String {
         match self {
+            ContestMode::RttyRoundup => self.label().to_string(),
             ContestMode::None => tr!("contest-mode-none"),
             ContestMode::EuVhf => tr!("contest-mode-eu-vhf"),
         }
@@ -985,17 +962,6 @@ impl Tr for ToneMode {
     }
 }
 
-impl Tr for TxVoiceStage {
-    fn tr(self) -> String {
-        match self {
-            TxVoiceStage::Gate => tr!("tx-voice-stage-gate"),
-            TxVoiceStage::Eq => tr!("tx-voice-stage-eq"),
-            TxVoiceStage::DeEss => tr!("tx-voice-stage-de-ess"),
-            TxVoiceStage::Comp => tr!("tx-voice-stage-comp"),
-        }
-    }
-}
-
 impl Tr for UploadNaming {
     fn tr(self) -> String {
         match self {
@@ -1077,7 +1043,6 @@ mod tests {
         check(&Speed::ALL, Speed::label);
         check(&TlsVerify::ALL, TlsVerify::label);
         check(&ToneMode::ALL, ToneMode::label);
-        check(&TxVoiceStage::ALL, TxVoiceStage::label);
         check(&UploadNaming::ALL, UploadNaming::label);
         check(&WheelAction::ALL, WheelAction::label);
         check(&RtlSdrHfMode::ALL, RtlSdrHfMode::label);
@@ -1091,7 +1056,6 @@ mod tests {
         check(&SdrPlayDuoTuner::ALL, SdrPlayDuoTuner::label);
         check(&SdrPlayDuoRole::ALL, SdrPlayDuoRole::label);
         check(&SdrPlayAgc::ALL, SdrPlayAgc::label);
-        check(&RotatorProtocol::ALL, RotatorProtocol::label);
         check(&PlutoPtt::ALL, PlutoPtt::label);
         check(&PlutoDuplex::ALL, PlutoDuplex::label);
         check(&PlutoAgc::ALL, PlutoAgc::label);
@@ -1101,8 +1065,6 @@ mod tests {
         check(&KenwoodSend::ALL, KenwoodSend::label);
         check(&DigiMode::ALL, DigiMode::label);
         check(&CwKeying::ALL, CwKeying::label);
-        check(&AudioRoute::ALL, AudioRoute::label);
-        check(&AmpModel::ALL, AmpModel::label);
         check(&AlertSound::ALL, AlertSound::label);
         check(&AlertReply::ALL, AlertReply::label);
         check(&IcomModel::ALL, IcomModel::label);

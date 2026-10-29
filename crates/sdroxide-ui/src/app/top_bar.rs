@@ -20,6 +20,7 @@
 //! stacked rows — a 1280x720 panel — gets the single-row strip: the VFO box
 //! (a type-in readout over an S-meter bar) beside a thumb-sized PTT and two
 //! rows of menu buttons stretched to the edge of the screen.
+use crate::i18n::{Tr, tr};
 
 use eframe::egui::{self, Color32, ComboBox, DragValue, Label, RichText, Sense, Slider};
 use sdroxide_types::{
@@ -3702,10 +3703,10 @@ impl SdroxideApp {
             changed.push(tr!("topbar-changed-binaural"));
         }
         if defaults.tone != Some(rx.tone) {
-            changed.push("tone");
+            changed.push("tone".to_string());
         }
         if defaults.loudness != Some(rx.loudness) {
-            changed.push("LOUDNESS");
+            changed.push("LOUDNESS".to_string());
         }
         if changed.is_empty() {
             return;
@@ -3819,7 +3820,7 @@ impl SdroxideApp {
                 // `chip_enabled_tinted`.
                 let chip = crate::chrome::chip_enabled(ui, !sub, on && !sub, "BIN").on_hover_text(
                     if sub {
-                        "Binaural audio — not while the sub receiver has the right ear"
+                        "Binaural audio — not while the sub receiver has the right ear".to_string()
                     } else if on {
                         tr!("topbar-binaural-audio-passband-spread-across")
                     } else if cw {
@@ -3829,6 +3830,7 @@ impl SdroxideApp {
                          noise spreads over the whole image while the station stays in the \
                          middle of it, which is easier to listen to for an hour — at the cost \
                          of the voice itself being spread out. Best on headphones"
+                            .to_string()
                     },
                 );
                 if chip.clicked() {
@@ -3928,17 +3930,19 @@ impl SdroxideApp {
                     || (rx0.auto_notch && rx0.mode.auto_notch_applies());
                 let playback = self.state.playback.as_ref();
                 let hover = if !want {
-                    "WFM stereo forced off — click for automatic stereo"
+                    "WFM stereo forced off — click for automatic stereo".to_string()
                 } else if yields {
                     "WFM stereo is off while noise reduction or the auto-notch runs — they \
                      would smear the two channels. Switch them off to hear stereo"
+                        .to_string()
                 } else if locked && playback.is_some() {
                     "Stereo: the recording is playing back in both ears, as recorded. Click to \
                      force mono"
+                        .to_string()
                 } else if locked {
-                    "WFM stereo: pilot locked. Click to force mono"
+                    "WFM stereo: pilot locked. Click to force mono".to_string()
                 } else if playback.is_some_and(|p| p.channels < 2) {
-                    "This recording is mono — there is no second channel to play"
+                    "This recording is mono — there is no second channel to play".to_string()
                 } else {
                     tr!("topbar-wfm-stereo-automatic-no-pilot")
                 };
@@ -4437,7 +4441,7 @@ impl SdroxideApp {
             let mono = self.state.recording_mono;
             let mono_chip =
                 crate::chrome::chip_enabled(ui, !audio, mono, "MONO").on_hover_text(if mono {
-                    "Mixed to one channel — click for two"
+                    "Mixed to one channel — click for two".to_string()
                 } else {
                     tr!("topbar-two-channels-rx-left-tx")
                 });
@@ -4589,7 +4593,7 @@ impl SdroxideApp {
             ] {
                 let armed = self.rec_gate_s == secs;
                 let enabled = secs.is_none() || block.is_none();
-                let chip = crate::chrome::chip_enabled(ui, enabled, armed, label).on_hover_text(
+                let chip = crate::chrome::chip_enabled(ui, enabled, armed, &label).on_hover_text(
                     match secs {
                         None => "Stop following the squelch".to_string(),
                         Some(s) => format!(
@@ -5649,7 +5653,7 @@ impl SdroxideApp {
     }
 
     /// The hover that explains the transmit-audio level wherever it is drawn.
-    pub(in crate::app) fn digi_tx_level_hover(&self) -> &'static str {
+    pub(in crate::app) fn digi_tx_level_hover(&self) -> String {
         if self.state.rx[0].mode.is_fm_carrier() {
             tr!("topbar-deviation-how-far-mode-s")
         } else {
