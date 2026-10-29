@@ -189,9 +189,9 @@ are closed/unlicensed (research only). SDRuno look is parked.
   confirmed. S-meter still an issue.
 - Live handovers: ALE (no real burst yet), STANAG 4285 (finished — Mark proved
   decode with video; coded payload intentionally not implemented, restricted by
-  law in several countries), Olivia (TX unproven by another station), CW keyer
+  law in several countries), Olivia (proven on air RX+TX), CW keyer
   (built), SWL schedule sources (scoped), FST4W (do not ship).
-- Confirmed on air: WEFAX, DAB, SSTV, DSC, HD Radio.
+- Confirmed on air: WEFAX, DAB, SSTV, DSC, HD Radio, Olivia.
 
 ## Current work
 
