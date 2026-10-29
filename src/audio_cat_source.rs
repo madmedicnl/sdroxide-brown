@@ -74,6 +74,9 @@ pub struct AudioCatSource {
     stream_scratch: Vec<f32>,
 
     cat: sdroxide_cat::CatHandle,
+    /// When set, `tx_begin` skips the frequency write (VFO A stays on the
+    /// downlink; the rig transmits on VFO B because split is on).
+    sat_split_on: bool,
     /// Top of the `27 00` amplitude scale on the rig the model list names —
     /// 160 on the IC-7300 generation, 200 on an IC-7760. Taken at open, since
     /// the model cannot change under a session.
@@ -389,6 +392,7 @@ impl AudioCatSource {
             tx_gain_scratch: Vec::new(),
             stream_scratch: Vec::new(),
             cat,
+            sat_split_on: false,
             scope_full_scale,
             cw_mcw,
             dial: Dial::at(center),
@@ -458,6 +462,7 @@ impl AudioCatSource {
             tx_gain_scratch: Vec::new(),
             stream_scratch: Vec::new(),
             cat,
+            sat_split_on: false,
             scope_full_scale: 160.0,
             cw_mcw: sdroxide_cat::effective_cw_keying(&cfg) == sdroxide_types::CwKeying::Audio,
             // Where the band starts, not where the radio is — nothing reads
@@ -1028,14 +1033,16 @@ impl IqSource for AudioCatSource {
     }
 
     fn set_vfo_b_mode(&mut self, mode: sdroxide_types::Mode) {
-        // Convert mode to CI-V byte for Icom. Yaesu uses mode_digit which is
-        // different; the CAT thread handles per-protocol conversion.
         let mode_byte = sdroxide_cat::civ::mode_to_civ(mode);
         self.cat.set_mode_vfo_b(mode_byte);
     }
 
     fn set_vfo_b_ctcss(&mut self, tone_hz: f64) {
         self.cat.set_ctcss_vfo_b(tone_hz);
+    }
+
+    fn set_sat_split_on(&mut self, on: bool) {
+        self.sat_split_on = on;
     }
 
     /// The rig's synthesiser is the centre of the I/Q it sends us: there is no
@@ -1455,7 +1462,10 @@ impl IqSource for AudioCatSource {
         // where we listen borrows the dial for its duration. The frequency is
         // queued before PTT and the CAT thread writes a pending frequency out
         // ahead of keying, so nothing goes on air at the receive frequency.
-        if let Some(f) = self.dial.begin_tx(center_hz) {
+        if self.sat_split_on {
+            // Split is on: VFO B carries the uplink, so VFO A stays put and
+            // key-down is just PTT. No frequency write, no dial borrow.
+        } else if let Some(f) = self.dial.begin_tx(center_hz) {
             self.cat.set_freq(f);
         }
         self.cat.set_ptt(true);
@@ -1472,7 +1482,9 @@ impl IqSource for AudioCatSource {
         self.cat.set_ptt(false);
         // Give the dial back, including any retune the operator asked for while
         // the over held it.
-        if let Some(f) = self.dial.end_tx() {
+        if !self.sat_split_on
+            && let Some(f) = self.dial.end_tx()
+        {
             self.cat.set_freq(f);
         }
         self.last_telem = None; // drop the stale SWR reading on unkey

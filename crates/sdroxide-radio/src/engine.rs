@@ -14360,6 +14360,7 @@ impl Engine {
             let tone = cfg.ctcss_hz.unwrap_or(67.0);
             self.source.set_vfo_b_ctcss(tone);
             self.source.split_on();
+            self.source.set_sat_split_on(true);
             self.sat_split_on = true;
         }
         self.stop_scan_for_operator();
@@ -14416,6 +14417,7 @@ impl Engine {
         // Step 2: restore the rig's split state.
         if self.sat_split_on {
             self.source.split_off();
+            self.source.set_sat_split_on(false);
             self.sat_split_on = false;
         }
         if let Some(tx) = self.tx.as_mut() {
