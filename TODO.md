@@ -3,8 +3,8 @@
 Working queue. Rules in AGENTS.md. Last updated 2026-10-29.
 
 State: `main` at crate 2.2.0, PROTO_VERSION 256 (0x4C). Latest release
-v2.2.0.3_brown. Open PRs: 8 (#304, #308, #309, #312, #313, #317, #318, #323).
-Open issues: 13 (re-measured 2026-10-29).
+v2.2.0.3_brown. Open PRs: 11 (#304, #308, #309, #312, #313, #317, #318, #323,
+#333, #339, #341). Open issues: 15 (re-measured 2026-10-29).
 
 ## Task tracking rules
 
@@ -77,6 +77,10 @@ Open issues: 13 (re-measured 2026-10-29).
 - AppImage — beslissing nodig.
 
 ## Recently done
+- 2026-10-29 — Language selector in Settings → UI with Apply button (PR #339, #331)
+- 2026-10-29 — S-meter calibration removed from UI and reading (PR #341, #340)
+- 2026-10-29 — SSTV received-image viewer nav + composer text transfer (PR #333)
+- 2026-10-29 — UDP feed rolling-window unit tests added (PR #318)
 
 - 2026-10-29 — ADS-B overlay (adsb.lol, spearheads, relay fix, manual)
 - 2026-10-29 — NAVTEX restore to F4NRM's PR #157/#161
