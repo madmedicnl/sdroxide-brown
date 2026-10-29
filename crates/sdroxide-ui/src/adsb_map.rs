@@ -381,12 +381,11 @@ fn draw_hover_label(p: &Painter, rect: Rect, map: &theme::MapPalette, hover: &Na
     // The gesture is *said*, where the station's name is read: a station that can
     // be tuned has to look like one, or the feature is invisible. Only the ones
     // that are on a frequency say it.
-    let hint =
-        hover.freq_khz.is_some().then_some("double-click to tune · shift for the other dial");
+    let hint = hover.freq_khz.is_some().then(|| tr!("adsbmap-tune-hint"));
     let galley =
         p.layout_no_wrap(hover.text.clone(), FontId::monospace(10.0), alpha(map.city_label, 255.0));
     let hint_galley = hint.map(|h| {
-        p.layout_no_wrap(h.to_owned(), FontId::proportional(9.0), alpha(map.city_label, 190.0))
+        p.layout_no_wrap(h, FontId::proportional(9.0), alpha(map.city_label, 190.0))
     });
     let pad = vec2(6.0, 4.0);
     let hint_h = hint_galley.as_ref().map_or(0.0, |g| g.size().y + 2.0);
@@ -433,16 +432,27 @@ fn airport_card_text(
         (false, true) => format!("{} / {}", a.iata, a.ident),
         (false, false) => format!("{} / {} / {}", a.iata, a.icao, a.ident),
     };
+    let elev = units.altitude(i32::from(a.elev_ft));
     let mut text = format!(
-        "{codes}\n{}\n{} airport · field {}",
+        "{codes}\n{}\n{}",
         a.name,
-        if a.large { "large" } else { "medium" },
-        units.altitude(i32::from(a.elev_ft))
+        if a.large {
+            tr!("adsbmap-airport-large", elev = elev)
+        } else {
+            tr!("adsbmap-airport-medium", elev = elev)
+        }
     );
     if let Some(h) = home {
         let km = sdroxide_types::distance_km(h, (a.lat, a.lon));
         let bear = sdroxide_types::bearing_deg(h, (a.lat, a.lon));
-        text.push_str(&format!("\n{}  {bear:.0}° from your station", units.distance(km)));
+        text.push_str(&format!(
+            "\n{}",
+            tr!(
+                "adsbmap-from-station",
+                dist = units.distance(km),
+                bear = format!("{bear:.0}")
+            )
+        ));
     }
     let near = live
         .iter()
@@ -452,7 +462,10 @@ fn airport_card_text(
         })
         .count();
     if near > 0 {
-        text.push_str(&format!("\n{near} aircraft within {}", units.distance(AIRPORT_NEAR_KM)));
+        text.push_str(&format!(
+            "\n{}",
+            tr!("adsbmap-aircraft-within", n = near, dist = units.distance(AIRPORT_NEAR_KM))
+        ));
     }
     text
 }
@@ -493,7 +506,7 @@ fn airport_hover_text(a: &crate::airdata::Airport) -> String {
 /// cares about.
 fn navaid_hover_text(n: &crate::airdata::Navaid) -> String {
     let freq = if n.kind.is_audible_on_mf() {
-        format!("{} kHz (medium wave)", n.freq_khz)
+        tr!("adsbmap-navaid-mw", khz = n.freq_khz)
     } else {
         format!("{:.3} MHz", n.freq_khz as f64 / 1000.0)
     };
@@ -951,7 +964,7 @@ pub fn show(
         if rect.contains(at) {
             let pinned = NavHover {
                 at,
-                text: format!("{}\nclick the map to close", airport_card_text(a, home, &live)),
+                text: format!("{}\n{}", airport_card_text(a, home, &live), tr!("adsbmap-click-to-close")),
                 freq_khz: None,
                 airport: state.airport_pin,
             };

@@ -401,7 +401,7 @@ impl SdroxideApp {
                                     crate::chrome::chip_accent(
                                         ui,
                                         false,
-                                        " SEND ",
+                                        tr!("fsq-send"),
                                         crate::theme::ALERT(),
                                         crate::theme::INK_ON_CYAN(),
                                     )
@@ -423,14 +423,14 @@ impl SdroxideApp {
                         });
                         // Row 2: CQ / ? heard / CLEAR.
                         ui.horizontal(|ui| {
-                            if tx_gated(ui, tx_ok, |ui| crate::chrome::chip(ui, false, " CALL CQ "))
+                            if tx_gated(ui, tx_ok, |ui| crate::chrome::chip(ui, false, tr!("fsq-call-cq")))
                                 .clicked()
                             {
                                 cmds.push(Command::DigiCallCq);
                             }
                             if !self.fsq_target.is_empty()
                                 && tx_gated(ui, tx_ok, |ui| {
-                                    crate::chrome::chip(ui, false, " ? heard ")
+                                    crate::chrome::chip(ui, false, tr!("fsq-heard-2"))
                                 })
                                 .clicked()
                             {
@@ -440,7 +440,7 @@ impl SdroxideApp {
                                 cmds.push(Command::DigiTxText(full));
                                 cmds.push(Command::DigiTxActive(true));
                             }
-                            if crate::chrome::chip(ui, false, " CLEAR ").clicked() {
+                            if crate::chrome::chip(ui, false, tr!("fsq-clear-2")).clicked() {
                                 self.text_tx.clear();
                                 cmds.push(Command::DigiAbortTx);
                             }
@@ -489,7 +489,7 @@ impl SdroxideApp {
                 ui,
                 egui::TextEdit::singleline(&mut self.fsq_new_contact)
                     .desired_width(140.0)
-                    .hint_text("callsign"),
+                    .hint_text(tr!("packet-callsign-hint")),
             );
             let can_add = !self.fsq_new_contact.trim().is_empty();
             if ui.add_enabled(can_add, egui::Button::new(tr!("fsq-add"))).clicked() {
@@ -509,14 +509,14 @@ impl SdroxideApp {
         egui::ScrollArea::vertical().max_height(260.0).show_themed(ui, |ui| {
             for c in &mut self.fsq_contacts {
                 ui.horizontal(|ui| {
-                    if ui.button("TO").clicked() {
+                    if ui.button(tr!("fsq-to-button")).clicked() {
                         *set_target = Some(c.call.clone());
                     }
                     ui.label(RichText::new(&c.call).monospace().strong());
                     if crate::chrome::field(
                         ui,
                         egui::TextEdit::singleline(&mut c.name)
-                            .hint_text("name")
+                            .hint_text(tr!("windows-name-hint"))
                             .desired_width(120.0),
                     )
                     .changed()
@@ -526,7 +526,7 @@ impl SdroxideApp {
                     if crate::chrome::chip_accent(
                         ui,
                         false,
-                        "DEL",
+                        tr!("fsq-del-chip"),
                         crate::theme::PINK(),
                         crate::theme::INK_ON_CYAN(),
                     )

@@ -13,6 +13,7 @@
 //! lines is capped, so the card cannot grow with what a registry says.
 
 // ==== IMPL ====
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::AdsbAircraft;
 
@@ -65,7 +66,7 @@ pub(in crate::app) struct HoverCard {
     pub photo: Option<HoverPhoto>,
     /// One grey line, only when the operator could do something about the
     /// missing online half.
-    pub footer: Option<&'static str>,
+    pub footer: Option<String>,
 }
 
 /// Lift the note that two or more lines share into one, and clear it from
@@ -111,17 +112,11 @@ pub(in crate::app) fn hover_photo(state: &OnlineState, thumb: ThumbStatus) -> Op
 /// The one-line note under the card for an online half that is not there. Only
 /// the reasons the operator can do something about; a failure that mends itself
 /// is not said.
-pub(in crate::app) fn footer(state: &OnlineState) -> Option<&'static str> {
+pub(in crate::app) fn footer(state: &OnlineState) -> Option<String> {
     match state {
-        OnlineState::Unavailable(Reason::Disabled) => {
-            Some("online unavailable — relay off on the station")
-        }
-        OnlineState::Unavailable(Reason::NoStation) => {
-            Some("online unavailable — no station to ask")
-        }
-        OnlineState::Unavailable(Reason::Unauthorized) => {
-            Some("online unavailable — not signed in")
-        }
+        OnlineState::Unavailable(Reason::Disabled) => Some(tr!("aircraft-footer-disabled")),
+        OnlineState::Unavailable(Reason::NoStation) => Some(tr!("aircraft-footer-no-station")),
+        OnlineState::Unavailable(Reason::Unauthorized) => Some(tr!("aircraft-footer-unauthorized")),
         _ => None,
     }
 }
@@ -153,8 +148,11 @@ pub(in crate::app) fn hover_card(
             &own
         }
     };
-    let age =
-        format!("{}, {} ago", source_label(Source::Adsb), super::util::fmt_age(now - live.last_at));
+    let age = tr!(
+        "aircraft-provenance",
+        source = source_label(Source::Adsb),
+        age = super::util::fmt_age(now - live.last_at)
+    );
 
     let all: Vec<Row> = aircraft_online::rows(card, state, now)
         .into_iter()
@@ -169,7 +167,7 @@ pub(in crate::app) fn hover_card(
         let km = sdroxide_types::distance_km(h, (lat, lon));
         let bear = sdroxide_types::bearing_deg(h, (lat, lon));
         let range = format!("{}  {bear:.0}°", sdroxide_types::AirUnits::current().distance(km));
-        lines.push(extra("Range", range, "from your station".into()));
+        lines.push(extra("Range", range, tr!("aircraft-from-your-station")));
     }
     if let Some(vr) = live.vertical_rate_fpm.filter(|v| v.abs() > 100) {
         lines.push(extra(
@@ -244,7 +242,7 @@ fn draw_inner(
             }
             if let Some(out) = pin.as_deref_mut() {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let r = ui.small_button("✕").on_hover_text("Close (Esc)");
+                    let r = ui.small_button("✕").on_hover_text(tr!("aircraft-hover-close"));
                     if r.clicked() {
                         out.actions.push(PinAction::Close);
                     }
@@ -254,7 +252,7 @@ fn draw_inner(
         });
         for r in &card.lines {
             ui.horizontal(|ui| {
-                cell(ui, COL_LABEL, RichText::new(r.label).size(10.5).color(gray));
+                cell(ui, COL_LABEL, RichText::new(aircraft_card::field_label(r.label)).size(10.5).color(gray));
                 ui.allocate_ui_with_layout(
                     egui::vec2(COL_BADGE, LINE_H),
                     egui::Layout::left_to_right(egui::Align::Center),
@@ -309,17 +307,15 @@ fn draw_inner(
                 }
             });
         }
-        if let Some(f) = card.footer {
+        if let Some(f) = &card.footer {
             ui.label(RichText::new(f).size(10.0).color(crate::theme::gray(130)));
         }
         if let Some(out) = pin.as_deref_mut() {
             match offer {
                 LookupOffer::Button => {
                     ui.add_space(4.0);
-                    let r = ui.small_button("Look up online").on_hover_text(
-                        "Ask this station's relay about this aircraft: type, operator, \
-                         route and a photo. Nothing is asked until you press it.",
-                    );
+                    let r = ui.small_button(tr!("aircraft-hover-lookup"))
+                        .on_hover_text(tr!("aircraft-hover-lookup-hint"));
                     if r.clicked() {
                         out.actions.push(PinAction::Lookup);
                     }
@@ -327,12 +323,12 @@ fn draw_inner(
                 }
                 LookupOffer::Asking => {
                     ui.add_space(4.0);
-                    ui.label(RichText::new("asking the station…").size(10.0).weak());
+                    ui.label(RichText::new(tr!("aircraft-asking-station-dots")).size(10.0).weak());
                 }
                 LookupOffer::Waiting => {
                     ui.add_space(4.0);
                     ui.label(
-                        RichText::new("another lookup is running — one at a time")
+                        RichText::new(tr!("aircraft-hover-lookup-waiting"))
                             .size(10.0)
                             .weak(),
                     );
@@ -341,10 +337,7 @@ fn draw_inner(
             }
             if history != HistoryOffer::Hidden {
                 ui.add_space(4.0);
-                let r = ui.small_button(history.label()).on_hover_text(
-                    "Where this aircraft has been in the last day, from your station's own \
-                     record. It asks your station, never the internet.",
-                );
+                let r = ui.small_button(history.label()).on_hover_text(tr!("aircraft-hover-history-hint"));
                 if r.clicked() {
                     out.actions.push(PinAction::History);
                 }
@@ -787,8 +780,8 @@ mod tests {
     fn only_a_switched_off_relay_or_a_missing_station_says_so_in_the_footer() {
         for r in [Reason::Disabled, Reason::NoStation, Reason::Unauthorized] {
             let c = card_with(Some(&heard()), &OnlineState::Unavailable(r), ThumbStatus::NotTried);
-            assert!(c.footer.is_some_and(|f| f.contains("online unavailable")), "{r:?}");
-            assert!(c.footer.is_some_and(|f| f.chars().count() <= 60), "{r:?}");
+            assert!(c.footer.as_ref().is_some_and(|f| f.contains("online unavailable")), "{r:?}");
+            assert!(c.footer.as_ref().is_some_and(|f| f.chars().count() <= 60), "{r:?}");
         }
         for st in [
             OnlineState::Idle,

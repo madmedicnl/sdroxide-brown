@@ -85,7 +85,7 @@ pub(in crate::app) fn alerts_settings(
                 let speaks = rule.reply.speaks();
                 // Wrapped: a checkbox and two combos are wider than a phone.
                 ui.horizontal_wrapped(|ui| {
-                    crate::chrome::checkbox(ui, &mut rule.enabled, event.label());
+                    crate::chrome::checkbox(ui, &mut rule.enabled, event.tr());
                     // The sound only matters when the reply makes one; a
                     // voice-only rule greys it rather than hiding it, so the
                     // row keeps its shape.
@@ -109,13 +109,13 @@ pub(in crate::app) fn alerts_settings(
                     // one. Offered only when the voice is on, and it says why
                     // when it is not rather than doing nothing.
                     let can_say = speaks && speech_on;
-                    let resp = ui.add_enabled(can_say, egui::Button::new("SAY")).on_hover_text(
+                    let resp = ui.add_enabled(can_say, egui::Button::new(tr!("settings-alerts-say"))).on_hover_text(
                         if can_say {
-                            "Hear this alert spoken"
+                            tr!("settings-alerts-say-hint")
                         } else if !speaks {
-                            "Choose Voice or Tone + voice to hear it"
+                            tr!("settings-alerts-say-need-voice")
                         } else {
-                            "Switch the voice on in Settings → UI → Voice announcements"
+                            tr!("settings-alerts-say-voice-off")
                         },
                     );
                     if resp.clicked() {
@@ -124,7 +124,7 @@ pub(in crate::app) fn alerts_settings(
                 });
                 // The words it will speak, so the choice is not a guess.
                 if speaks {
-                    super::note_small(ui, &format!("speaks: {}", spoken_example(event)));
+                    super::note_small(ui, &tr!("settings-alerts-speaks", text = spoken_example(event)));
                 }
                 ui.add_space(2.0);
             }

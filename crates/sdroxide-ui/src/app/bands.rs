@@ -130,16 +130,14 @@ fn activity_cell(
     match table.and_then(|t| t.for_band(band)) {
         Some(a) => {
             ui.label(RichText::new(count_short(a.paths)).size(10.5).color(activity_color(a.paths)))
-                .on_hover_text(format!(
-                    "Global activity on {} in the last 15 minutes, from {source}:\n\
-                 {} reception reports · {} transmitters · {} receivers\n\n\
-                 {note}\n\n\
-                 Shown brighter the busier the band is; it says the band is being heard \
-                 somewhere, not that it is open to you.",
-                    band.label(),
-                    a.paths,
-                    a.tx,
-                    a.rx,
+                .on_hover_text(tr!(
+                    "bands-activity-hover",
+                    band = band.label(),
+                    source = source,
+                    paths = a.paths,
+                    tx = a.tx,
+                    rx = a.rx,
+                    note = note,
                 ));
         }
         None => {
@@ -191,10 +189,10 @@ impl SdroxideApp {
                 }
             }
             if let Some(a) = activity_age(self) {
-                ui.label(dim(&format!("· WSPR activity {a} old (wspr.live)")));
+                ui.label(dim(&tr!("bands-wspr-activity-old", age = a)));
             }
             if let Some(a) = psk_activity_age(self) {
-                ui.label(dim(&format!("· PSK activity {a} old")));
+                ui.label(dim(&tr!("bands-psk-activity-old", age = a)));
             }
         });
         ui.add_space(4.0);
@@ -241,14 +239,7 @@ impl SdroxideApp {
                                 };
                                 let resp = ui.label(t);
                                 if v.derived {
-                                    resp.on_hover_text(format!(
-                                        "{} is not one of the bands HAMQSL.com grades; this \
-                                         is the published {} group's verdict, read as the \
-                                         nearest stand-in.\n\nA forecast, not a measurement \
-                                         of your own path.",
-                                        b.label(),
-                                        v.group,
-                                    ));
+                                    resp.on_hover_text(tr!("bands-derived-hover", band = b.label(), group = v.group));
                                 }
                             }
                             None => {
@@ -264,15 +255,14 @@ impl SdroxideApp {
                             self.band_activity.as_ref(),
                             b,
                             "wspr.live",
-                            "The world's WSPR network — weak-signal beacons.",
+                            &tr!("bands-wspr-note"),
                         );
                         activity_cell(
                             ui,
                             self.psk_activity.as_ref(),
                             b,
                             "PSK Reporter",
-                            "Reception reports from the activity modes: FT8, FT4 and the \
-                             CW/RTTY reporting that WSPR's beacons do not cover.",
+                            &tr!("bands-psk-note"),
                         );
 
                         // The evidence.
@@ -311,10 +301,7 @@ impl SdroxideApp {
 
         ui.add_space(6.0);
         ui.label(
-            dim("CONDX is a global forecast. WSPR is what the world's WSPR network heard \
-                 (wspr.live); PATHS, REACH and BEST are what this station and the RBN heard. \
-                 An empty row means nothing was decoded — which may mean the band was shut, \
-                 or only that nobody was on it.")
+            dim(&tr!("bands-condx-global-forecast-rest-what"))
             .italics(),
         );
     }
@@ -352,17 +339,14 @@ impl SdroxideApp {
         ui.add_space(3.0);
         for a in &active {
             let s = a.shower;
-            let hover = format!(
-                "{} ({}) — {} km/s, parent {}. Peak rate ZHR {} around {}.\n\nA radiant \
-                 above the horizon means the trails can reach you; a fast shower leaves \
-                 longer-lived ionised trails for meteor scatter on 6 m and 2 m, and the \
-                 brief 10 m/11 m openings.",
-                s.name,
-                s.code,
-                s.velocity_kms,
-                s.parent,
-                s.zhr,
-                peak_label(s.peak),
+            let hover = tr!(
+                "bands-km-s-parent-peak-rate",
+                name = s.name,
+                code = s.code,
+                velocity_kms = s.velocity_kms,
+                parent = s.parent,
+                zhr = s.zhr,
+                peak = peak_label(s.peak),
             );
             // The tooltip goes on each label rather than on the row: a `Label`
             // takes the hover for itself, so the `horizontal`'s own response is
@@ -370,7 +354,7 @@ impl SdroxideApp {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(s.name).size(11.0).strong()).on_hover_text(&hover);
                 ui.label(dim(s.code)).on_hover_text(&hover);
-                ui.label(RichText::new(format!("ZHR {}", s.zhr)).size(10.5)).on_hover_text(&hover);
+                ui.label(RichText::new(tr!("bands-zhr", zhr = s.zhr)).size(10.5)).on_hover_text(&hover);
                 if a.at_peak() {
                     ui.label(RichText::new(tr!("bands-peak")).size(9.5).strong().color(crate::theme::GREEN()))
                         .on_hover_text(&hover);
@@ -387,7 +371,7 @@ impl SdroxideApp {
                     .on_hover_text(&hover);
                 } else {
                     ui.label(
-                        RichText::new(format!("radiant down ({:.0}°)", a.alt_deg))
+                        RichText::new(tr!("bands-radiant-down", alt_deg = format!("{:.0}", a.alt_deg)))
                             .size(10.5)
                             .color(dim_ink()),
                     )
@@ -412,17 +396,14 @@ impl SdroxideApp {
         ui.add_space(12.0);
         ui.label(RichText::new(tr!("bands-ibp-beacons")).size(10.0).strong().color(crate::theme::CYAN_DIM()));
         ui.add_space(2.0);
-        ui.label(dim(&format!(
-            "NCDXF/IARU · next beacon in {} s",
-            sdroxide_types::ibp_seconds_left(now)
-        )));
+        ui.label(dim(&tr!("bands-ncdxf-iaru-next-beacon-s", now = sdroxide_types::ibp_seconds_left(now))));
         ui.add_space(3.0);
         for a in &active {
-            let hover = format!(
-                "{} at {} — hearing it means the {} path is open. 10m (28.200 MHz) is the \
-                 closest amateur-band proxy for 11 m conditions. Each beacon steps up a band \
-                 every 10 s, so this row changes every slot.",
-                a.beacon.callsign, a.beacon.location, a.band.label
+            let hover = tr!(
+                "bands-hearing-means-path-open-each",
+                callsign = a.beacon.callsign,
+                location = a.beacon.location,
+                band = a.band.label
             );
             // On each label, not the row: a `Label` takes the hover for itself,
             // so the `horizontal`'s response is not hovered over the text.

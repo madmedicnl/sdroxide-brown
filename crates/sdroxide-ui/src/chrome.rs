@@ -5,6 +5,7 @@ use eframe::egui::{
     self, Color32, CornerRadius, FontSelection, Mesh, Painter, Pos2, Rect, Response, RichText,
     Sense, Shape, Stroke, StrokeKind, TextStyle, Ui, WidgetText, layers::ShapeIdx, pos2, vec2,
 };
+use crate::i18n::tr;
 use sdroxide_types::ChromeStyle;
 
 use crate::theme::{self, ThemedScroll};
@@ -140,8 +141,7 @@ pub fn advisory(
         dismiss = ui
             .small_button("✕")
             .on_hover_text(
-                "Hide this message for good. Nothing about your settings changes, and the \
-                 advice is in the manual.",
+                tr!("chrome-hide-message-hover"),
             )
             .clicked();
     });
@@ -177,7 +177,7 @@ pub fn ribbon(ui: &mut egui::Ui, text: &str, colour: Color32) -> bool {
                 ui.add(egui::Label::new(egui::RichText::new(text).color(colour).size(11.0)).wrap());
                 dismissed = ui
                     .small_button("✕")
-                    .on_hover_text("Close this message. Nothing else changes.")
+                    .on_hover_text(tr!("chrome-close-message-hover"))
                     .clicked();
             });
         });
@@ -1912,7 +1912,7 @@ pub fn chip_power_link(ui: &mut Ui, selected: bool, size: f32) -> Response {
     let mark_w = size * 0.95;
     let space = text_width(ui, " ", font.clone()).max(1.0);
     let pad = " ".repeat((mark_w / space).ceil() as usize);
-    let label = format!("{pad}LINK");
+    let label = format!("{pad}{}", tr!("multi-link"));
     let label_w = text_width(ui, &label, font);
     let resp = chip_impl(ui, selected, RichText::new(label).size(size), None, Sense::click(), None);
     if ui.is_rect_visible(resp.rect) {

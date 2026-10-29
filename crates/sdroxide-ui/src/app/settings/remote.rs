@@ -38,10 +38,7 @@ pub(in crate::app) fn settings_remote_tab(
     ui.add_space(4.0);
     super::note(
         ui,
-        "Drive an sdroxide running somewhere else — the shack machine, a remote site — over \
-             the network. Start it there with --server, and enter its address here. The radio, \
-             the decoders and the logbook stay on that machine; this screen gets the waterfall \
-             and the audio, and its speakers and microphone are the ones you use.",
+        &tr!("settings-remote-drive-sdroxide-running-somewhere-else"),
     );
     ui.add_space(4.0);
     ui.label(RichText::new(tr!("settings-remote-drive-sdroxide-running-somewhere-else")).weak());
@@ -150,12 +147,6 @@ pub(in crate::app) fn settings_remote_tab(
     ui.add_space(6.0);
     super::note(
         ui,
-        "The station appears as a tab beside the radios already open here, and the tab strip \
-             at the top of the window switches between them (⊞ puts two side by side). Close it \
-             from the roster at the top of the Radio tab — that hangs up; nothing on the server \
-             is changed.\n\nIf the server asks for a username and password, its sign-in screen \
-             comes up in the new tab. A plain ws:// link carries none of this encrypted, so \
-             across the open internet either put it through a VPN or an SSH tunnel, or terminate \
-             HTTPS in front of the server and tick Secure above.",
+        &tr!("settings-remote-tab-note"),
     );
 }

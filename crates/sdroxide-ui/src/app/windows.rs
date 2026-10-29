@@ -136,7 +136,7 @@ fn memory_row(
             if crate::chrome::chip_accent(
                 ui,
                 false,
-                RichText::new("DEL").size(11.0),
+                RichText::new(tr!("windows-chip-del")).size(11.0),
                 crate::theme::PINK(),
                 Color32::WHITE,
             )
@@ -145,7 +145,7 @@ fn memory_row(
             {
                 cmds.push(Command::DeleteMemory(m.id));
             }
-            if crate::chrome::chip(ui, false, RichText::new("EDT").size(11.0))
+            if crate::chrome::chip(ui, false, RichText::new(tr!("windows-chip-edt")).size(11.0))
                 .on_hover_text(tr!("windows-edit-name-frequency-mode-antenna"))
                 .clicked()
             {
@@ -243,7 +243,7 @@ fn memory_edit_row(
     ui.horizontal_wrapped(|ui| {
         let name = crate::chrome::field(
             ui,
-            egui::TextEdit::singleline(&mut e.name).hint_text("name").desired_width(110.0),
+            egui::TextEdit::singleline(&mut e.name).hint_text(tr!("windows-name-hint")).desired_width(110.0),
         );
         if *focus {
             name.request_focus();
@@ -577,8 +577,8 @@ impl SdroxideApp {
         // many may be stacked vertically, and whether a memory's folder name
         // rides along with its station name.
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Waterfall").weak().size(11.0));
-            ui.label(RichText::new("stacked").size(11.0));
+            ui.label(RichText::new(tr!("windows-waterfall-marks")).weak().size(11.0));
+            ui.label(RichText::new(tr!("windows-stacked")).size(11.0));
             let mut n = self.ui_settings.memory_waterfall_lanes as i32;
             if crate::chrome::field(ui, egui::DragValue::new(&mut n).range(1..=12).speed(1))
                 .changed()
@@ -586,7 +586,7 @@ impl SdroxideApp {
                 self.ui_settings.memory_waterfall_lanes = n.clamp(1, 12) as usize;
             }
             if ui
-                .checkbox(&mut self.ui_settings.memory_waterfall_show_folder, "folder name")
+                .checkbox(&mut self.ui_settings.memory_waterfall_show_folder, tr!("windows-folder-name"))
                 .changed()
             {
                 // nothing else to do; the mark text is rebuilt each frame
@@ -781,7 +781,7 @@ impl SdroxideApp {
                         if crate::chrome::chip_accent(
                             ui,
                             false,
-                            RichText::new("DEL").size(11.0),
+                            RichText::new(tr!("windows-chip-del")).size(11.0),
                             crate::theme::PINK(),
                             Color32::WHITE,
                         )
@@ -790,7 +790,7 @@ impl SdroxideApp {
                         {
                             cmds.push(Command::DeleteMemoryFolder(f.id));
                         }
-                        if crate::chrome::chip(ui, false, RichText::new("REN").size(11.0))
+                        if crate::chrome::chip(ui, false, RichText::new(tr!("windows-chip-ren")).size(11.0))
                             .on_hover_text(tr!("windows-rename-folder"))
                             .clicked()
                         {
@@ -908,7 +908,7 @@ impl SdroxideApp {
                     let edit = crate::chrome::field_sized(
                         ui,
                         [190.0, 20.0],
-                        egui::TextEdit::singleline(&mut text).hint_text(format!("Slot {}", i + 1)),
+                        egui::TextEdit::singleline(&mut text).hint_text(tr!("windows-slot-n", n = i + 1)),
                     );
                     if edit.changed() {
                         self.voice_name_edit = Some((i, text.clone()));
@@ -932,7 +932,7 @@ impl SdroxideApp {
                             crate::chrome::chip_accent(
                                 ui,
                                 is_rec,
-                                RichText::new("REC").size(11.5),
+                                RichText::new(tr!("windows-chip-rec")).size(11.5),
                                 crate::theme::ALERT(),
                                 Color32::WHITE,
                             )
@@ -941,7 +941,7 @@ impl SdroxideApp {
                         .on_hover_text(if is_rec {
                             tr!("windows-stop-store").to_string()
                         } else {
-                            format!("Record from the microphone (up to {max_len:.0} s)")
+                            tr!("windows-record-from-mic", max = format!("{max_len:.0}"))
                         });
                     if rec.clicked() {
                         cmds.push(Command::VoiceRecord(if is_rec { None } else { Some(i as u8) }));
@@ -1041,7 +1041,7 @@ impl SdroxideApp {
                                 crate::chrome::chip_accent(
                                     ui,
                                     false,
-                                    RichText::new("DEL").size(11.0),
+                                    RichText::new(tr!("windows-chip-del")).size(11.0),
                                     crate::theme::PINK(),
                                     Color32::WHITE,
                                 )

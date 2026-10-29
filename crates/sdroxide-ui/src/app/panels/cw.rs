@@ -508,21 +508,11 @@ impl SdroxideApp {
                             tr!("cw-hold-key-bound-cw-straight")
                         }
                         _ => {
-                            "Arm the keyer and use the USB paddle. The contacts go to the engine, \
-                             which makes the dits and dahs at the transmitted speed — here, not in \
-                             the panel, so the timing is not rounded to a frame. The transmit box \
-                             is locked while this is on and any queued text is dropped. \
-                             A straight key in the same box works too: pick Straight key type.".to_string()
+                            tr!("cw-hand-key-arm-hint")
                         }
                     }
                 } else {
-                    "This radio sends from its own keyer: the text goes over the control \
-                     port and the rig times the elements, so there is nothing between the \
-                     hand and the air for a key to drive — a paddle no less than a straight key.\n\n\
-                     To hand-key it, set CW keying to \"Sound card (MCW)\" in \
-                     Settings → Radio. The rig is then held on a sideband and the \
-                     keyer's own sidetone is transmitted as audio, which is the route the \
-                     straight key drives.".to_string()
+                    tr!("cw-own-keyer-hint")
                 })
             })
             .clicked()
@@ -687,7 +677,7 @@ impl SdroxideApp {
                 })
         };
         let Some(path) = path else {
-            self.cw_key_error = Some("no paddle found — pick one in Settings → CW".into());
+            self.cw_key_error = Some(tr!("cw-no-paddle-found"));
             return;
         };
         let setup = crate::app::cw_key::KeySetup {
@@ -727,12 +717,7 @@ impl SdroxideApp {
     /// machinery that makes them.
     fn msg_edit_chip(&mut self, ui: &mut egui::Ui) {
         if crate::chrome::chip(ui, self.cw_macro_edit, "MSG")
-            .on_hover_text(
-                "Your own message buttons — a contest exchange, a name-and-QTH reply, \
-                 TNX 73 GL. Each sends its whole text in one go, and F1–F9 press the \
-                 first nine. They travel with the station's configuration, so a \
-                 remote client has them too.",
-            )
+            .on_hover_text(tr!("cw-msg-hint"))
             .clicked()
         {
             self.cw_macro_edit = !self.cw_macro_edit;
@@ -814,8 +799,8 @@ impl SdroxideApp {
             "cw-click-decoder-neural-one-copies",
             hint = engine.hint(),
             neural = match engine {
-                CwEngine::Neural => "timing",
-                CwEngine::Timing => "neural",
+                CwEngine::Neural => CwEngine::Timing.tr(),
+                CwEngine::Timing => CwEngine::Neural.tr(),
             }
         ))
         .clicked()

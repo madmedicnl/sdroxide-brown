@@ -163,7 +163,7 @@ impl crate::app::SdroxideApp {
                     },
                 );
                 if edit.naming == UploadNaming::Sequence {
-                    ui.label("keep");
+                    ui.label(tr!("settings-picup-keep"));
                     ui.add(egui::DragValue::new(&mut edit.keep_images).range(1..=999));
                 }
             });

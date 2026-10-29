@@ -455,16 +455,9 @@ impl SdroxideApp {
                 let label = format!("{:.3}", hz / 1e6);
                 let what = sdroxide_types::VDL2_CHANNEL_LABELS[i];
                 let tip = if hz == sdroxide_types::VDL2_CSC_HZ {
-                    format!(
-                        "{what} — in use worldwide, and where every link starts. \
-                         The one to keep if you keep only one."
-                    )
+                    tr!("vdl2-use-worldwide-where-every-link", what = what)
                 } else {
-                    format!(
-                        "Assigned to an {what}. Which channels carry anything \
-                         depends on where you are: leave them all on unless you \
-                         know otherwise."
-                    )
+                    tr!("vdl2-assigned-which-channels-carry-anything", what = what)
                 };
                 if ui.checkbox(&mut on, label).on_hover_text(tip).changed() {
                     if on {
@@ -499,7 +492,7 @@ impl SdroxideApp {
                 ui.add(
                     egui::DragValue::new(&mut cfg.max_messages)
                         .range(10..=sdroxide_types::VDL2_MESSAGE_MAX)
-                        .suffix(" messages"),
+                        .suffix(tr!("vdl2-suffix-messages")),
                 );
             });
             ui.end_row();
@@ -509,7 +502,7 @@ impl SdroxideApp {
                 ui.add(
                     egui::DragValue::new(&mut cfg.max_stations)
                         .range(10..=sdroxide_types::VDL2_STATION_MAX)
-                        .suffix(" stations"),
+                        .suffix(tr!("vdl2-suffix-stations")),
                 );
                 ui.label(RichText::new(tr!("vdl2-longest-silent-go-first")).size(9.5).weak());
             });
@@ -635,7 +628,7 @@ fn vdl2_card(ui: &mut egui::Ui, m: &Vdl2Message, h: f32) {
                 );
                 ui.label(RichText::new(m.frame.label()).monospace().size(10.5));
                 ui.label(
-                    RichText::new(if m.command { "command" } else { "response" }).size(10.0).weak(),
+                    RichText::new(if m.command { tr!("vdl2-command") } else { tr!("vdl2-response") }).size(10.0).weak(),
                 );
             });
             ui.label(
@@ -723,7 +716,7 @@ fn vdl2_card(ui: &mut egui::Ui, m: &Vdl2Message, h: f32) {
             }
 
             ui.add_space(4.0);
-            ui.label(RichText::new("frame").size(9.0).weak());
+            ui.label(RichText::new(tr!("vdl2-frame-hint")).size(9.0).weak());
             ui.label(RichText::new(&m.raw_hex).monospace().size(9.0).color(theme::gray(110)));
         });
 }
@@ -769,8 +762,8 @@ fn station_head_row(ui: &mut egui::Ui, sort: &mut Vdl2Sort, desc: &mut bool) {
             // would be a grouping, and the address column already gives one.
             (cols.kind, L, &tr!("vdl2-type"), None),
             (cols.msgs, R, &tr!("vdl2-msgs"), Some(Vdl2Sort::Messages)),
-            (cols.sig, R, "SIG", Some(Vdl2Sort::Signal)),
-            (cols.age, R, "AGE", Some(Vdl2Sort::Heard)),
+            (cols.sig, R, &tr!("vdl2-col-sig"), Some(Vdl2Sort::Signal)),
+            (cols.age, R, &tr!("vdl2-col-age"), Some(Vdl2Sort::Heard)),
         ],
         sort,
         desc,

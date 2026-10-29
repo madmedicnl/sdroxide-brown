@@ -1527,7 +1527,7 @@ fn freq_table(
                                 .sense(egui::Sense::click()),
                         )
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text("Tune the radio to this downlink");
+                        .on_hover_text(tr!("solar-tune-the-radio-to-this-downlink"));
                     if r.clicked() {
                         tune = Some(i);
                     }

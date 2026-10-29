@@ -262,7 +262,7 @@ impl SdroxideApp {
             ui.label(RichText::new(tr!("ais-vessels")).strong().size(10.5).color(theme::CYAN()));
             ui.add(
                 egui::TextEdit::singleline(&mut self.ais_filter)
-                    .hint_text("filter")
+                    .hint_text(tr!("aprs-filter-hint"))
                     .desired_width(70.0),
             );
         });
@@ -568,13 +568,11 @@ impl SdroxideApp {
             ui.label(tr!("ais-channels"));
             for (i, ch) in sdroxide_ais_channels().iter().enumerate() {
                 let on = cfg.channel_enabled(i);
-                if crate::chrome::chip(ui, on, format!("AIS {}", ch.0))
-                    .on_hover_text(format!(
-                        "{:.3} MHz — marine channel {}. A ship alternates between the \
-                         two, so switching one off halves how often every vessel is \
-                         heard.",
-                        ch.1 / 1e6,
-                        ch.2
+                if crate::chrome::chip(ui, on, tr!("ais-ais-2", ch = ch.0))
+                    .on_hover_text(tr!(
+                        "ais-mhz-marine-channel-ship-alternates",
+                        mhz = format!("{:.3}", ch.1 / 1e6),
+                        ch = ch.2
                     ))
                     .clicked()
                 {
@@ -656,7 +654,7 @@ impl SdroxideApp {
             ui.end_row();
 
             ui.label(tr!("ais-track-most"));
-            ui.add(egui::DragValue::new(&mut cfg.max_vessels).range(10..=5000).suffix(" vessels"));
+            ui.add(egui::DragValue::new(&mut cfg.max_vessels).range(10..=5000).suffix(tr!("ais-vessels-2")));
             ui.end_row();
         });
         ui.separator();
@@ -703,7 +701,7 @@ fn ais_head_row(ui: &mut egui::Ui, have_home: bool, sort: &mut AisSort, desc: &m
             (cols.cog, R, "COG", None),
             (cols.sig, R, "SIG", Some(AisSort::Signal)),
             (cols.range, R, "KM", Some(AisSort::Range)),
-            (cols.age, R, "AGE", Some(AisSort::Heard)),
+            (cols.age, R, &tr!("vdl2-col-age"), Some(AisSort::Heard)),
         ],
         sort,
         desc,

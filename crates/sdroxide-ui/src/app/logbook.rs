@@ -459,8 +459,8 @@ impl SdroxideApp {
                 let mode = self.state.rx[0].mode.label();
                 self.log_edit = Some(LogEditForm::new_entry(now_unix(), freq, mode));
             }
-            if crate::chrome::chip(ui, self.show_contest, "CONTEST")
-                .on_hover_text("Contest logger — a session, dupes, a live score and Cabrillo")
+            if crate::chrome::chip(ui, self.show_contest, tr!("contest-title"))
+                .on_hover_text(tr!("logbook-contest-logger-a-session-dupes-a"))
                 .clicked()
             {
                 self.show_contest = !self.show_contest;
@@ -488,7 +488,7 @@ impl SdroxideApp {
                     );
                 }
                 ui.label(
-                    RichText::new(format!("{} QSO", self.qso_log.len()))
+                    RichText::new(tr!("logbook-qso", qso_log = self.qso_log.len()))
                         .size(11.0)
                         .color(crate::theme::gray(150)),
                 );
@@ -647,7 +647,7 @@ impl SdroxideApp {
                         field(ui, 150.0, &mut f.date);
                         lbl(ui, &tr!("logbook-time"));
                         field(ui, 90.0, &mut f.time);
-                        if crate::chrome::chip(ui, false, "NOW").clicked() {
+                        if crate::chrome::chip(ui, false, tr!("schedule-now-chip")).clicked() {
                             set_now = true;
                         }
                     });
@@ -894,7 +894,7 @@ impl SdroxideApp {
                         if crate::chrome::chip_accent(
                             ui,
                             false,
-                            RichText::new("DEL").size(11.0),
+                            RichText::new(tr!("windows-chip-del")).size(11.0),
                             crate::theme::PINK(),
                             Color32::WHITE,
                         )
@@ -913,7 +913,7 @@ impl SdroxideApp {
                             to_edit = Some(r.id);
                         }
                         if !up_targets.is_empty()
-                            && crate::chrome::chip(ui, false, RichText::new("UP").size(11.0))
+                            && crate::chrome::chip(ui, false, RichText::new(tr!("logbook-up-chip")).size(11.0))
                                 .on_hover_text(tr!("logbook-upload-qso-configured-logs"))
                                 .clicked()
                         {

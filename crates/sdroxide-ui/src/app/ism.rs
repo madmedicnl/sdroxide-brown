@@ -147,7 +147,7 @@ impl SdroxideApp {
         wideband: bool,
     ) {
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("band").size(10.0).color(crate::theme::CYAN_DIM()));
+            ui.label(RichText::new(tr!("ism-band-label")).size(10.0).color(crate::theme::CYAN_DIM()));
             for (bit, label, center_hz) in sdroxide_types::RTL433_BAND_LABELS {
                 let selected = cfg.rtl433.band_enabled(bit);
                 let chip = crate::chrome::chip_enabled(ui, wideband, selected, label);

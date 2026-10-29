@@ -54,19 +54,8 @@ pub(super) fn navtex_list_header(
             ui.label(RichText::new(tr!("navtex-sync")).strong().color(theme::GREEN()))
                 .on_hover_text(tr!("navtex-character-phase-locked-signal-being"));
         } else {
-            ui.label(RichText::new("hunting").weak()).on_hover_text(
-                "Nothing is being read yet.\n\n\
-                 It is almost always the tuning. Do NOT type the advertised number (518) \
-                 into the frequency box: NAVTEX is quoted as a channel, and this program \
-                 listens just below it. Click the 518 button above instead — it sets the \
-                 right dial for you (516.300).\n\n\
-                 If there is clearly a strong signal but the text is still nonsense, press \
-                 REV: it is arriving the other way round.\n\n\
-                 Also remember NAVTEX is a timetable, not a conversation: a coast station \
-                 sends for ten minutes every four hours, so silence is normal most of the \
-                 time. You have to be listening when your station is due. And 518 kHz only \
-                 comes alive at night — a quiet daytime band is not a broken decoder.",
-            );
+            ui.label(RichText::new(tr!("navtex-hunting")).weak())
+                .on_hover_text(tr!("navtex-hunting-hint"));
         }
         // What the time diversity actually did, which is the only quality
         // figure a mode with no checksum has.
@@ -81,19 +70,12 @@ pub(super) fn navtex_list_header(
         // Receive sensitivity. NAVTEX is FSK, so signal strength does not change
         // the alphabet — this moves the detection thresholds instead (signal
         // presence, phase lock, AFC tracking). 0 is the reference behaviour.
-        ui.label(RichText::new("Sensitivity").size(10.0).weak());
+        ui.label(RichText::new(tr!("panels-sensitivity")).size(10.0).weak());
         {
             let mut v = cfg.navtex_rx_sensitivity;
             let resp =
                 crate::chrome::slider(ui, egui::Slider::new(&mut v, -5..=5).fixed_decimals(0))
-                    .on_hover_text(
-                        "Sensitivity — how readily the decoder locks onto and keeps a signal.\n\n\
-                     Auto uses the reference thresholds (0), which is the behaviour as shipped.\n\n\
-                     + accepts a weaker or noisier signal; − waits for a cleaner one before \
-                     declaring sync, which is what stops noise being read as characters.\n\n\
-                     Not volume: NAVTEX is FSK, so the greys come from the tones, not from how \
-                     strong the signal is.",
-                    );
+                    .on_hover_text(tr!("navtex-sensitivity-hint"));
             if resp.changed() {
                 cfg.navtex_rx_sensitivity = v;
                 cfg.navtex_rx_auto = v == 0;
@@ -102,8 +84,8 @@ pub(super) fn navtex_list_header(
                 }
             }
         }
-        if crate::chrome::chip(ui, cfg.navtex_rx_auto, "Auto")
-            .on_hover_text("Returns to the reference thresholds (0). Highlighted while active.")
+        if crate::chrome::chip(ui, cfg.navtex_rx_auto, tr!("sstv-auto"))
+            .on_hover_text(tr!("navtex-auto-hint"))
             .clicked()
         {
             cfg.navtex_rx_auto = true;
@@ -160,7 +142,7 @@ impl SdroxideApp {
                     is_active,
                     RichText::new(format!("{label} kHz")).size(10.0),
                 )
-                .on_hover_text("Tune the dial here (USB, 1.710 kHz below the channel).")
+                .on_hover_text(tr!("navtex-tune-dial-usb-below-channel"))
                 .clicked()
                 {
                     cmds.push(Command::SetVfo { vfo: Vfo::A, hz: vfo_hz });
@@ -169,7 +151,7 @@ impl SdroxideApp {
         });
 
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("CHANNEL").size(10.0).weak());
+            ui.label(RichText::new(tr!("aprs-channel")).size(10.0).weak());
             for (hz, label) in CHANNELS {
                 let active_vfo_hz = match self.state.active_vfo {
                     Vfo::A => self.state.vfo_a_hz,
@@ -177,7 +159,7 @@ impl SdroxideApp {
                 };
                 let is_active = (active_vfo_hz - *hz).abs() < 1.0;
                 if crate::chrome::chip(ui, is_active, RichText::new(*label).size(10.0))
-                    .on_hover_text("Tune the dial here.")
+                    .on_hover_text(tr!("acars-tune-dial-here"))
                     .clicked()
                 {
                     cmds.push(Command::SetVfo { vfo: Vfo::A, hz: *hz });

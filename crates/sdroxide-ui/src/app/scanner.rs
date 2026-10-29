@@ -102,11 +102,11 @@ impl SdroxideApp {
         // pair of typed frequencies. The metre table is the schedule's, so the
         // band named here is the band named there. LW and MW lead it.
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Broadcast band").weak());
+            ui.label(RichText::new(tr!("scanner-broadcast-band")).weak());
             let mut preset = |ui: &mut egui::Ui, name: &str, lo: f64, hi: f64| {
                 let on = (cfg.range_lo_hz - lo).abs() < 1.0 && (cfg.range_hi_hz - hi).abs() < 1.0;
                 if crate::chrome::chip(ui, on, name)
-                    .on_hover_text(format!("Scan {name} ({:.0}-{:.0} kHz)", lo / 1e3, hi / 1e3))
+                    .on_hover_text(tr!("scanner-scan-band-hover", name = name, lo = format!("{:.0}", lo / 1e3), hi = format!("{:.0}", hi / 1e3)))
                     .clicked()
                 {
                     cfg.range_lo_hz = lo;
@@ -125,7 +125,7 @@ impl SdroxideApp {
             ui.label(tr!("scanner-from"));
             ui.horizontal(|ui| {
                 mhz_edit(ui, &mut cfg.range_lo_hz);
-                ui.label("to");
+                ui.label(tr!("scanner-range-to"));
                 mhz_edit(ui, &mut cfg.range_hi_hz);
                 ui.label(RichText::new("MHz").weak());
             });
@@ -316,7 +316,7 @@ impl SdroxideApp {
         let unfiled = count(None);
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new(tr!("scanner-folders")).size(10.5).weak());
-            if crate::chrome::chip(ui, cfg.folders.is_empty(), "ALL")
+            if crate::chrome::chip(ui, cfg.folders.is_empty(), tr!("scanner-all"))
                 .on_hover_text(tr!("scanner-scan-every-folder-every-folder"))
                 .clicked()
             {
@@ -337,7 +337,7 @@ impl SdroxideApp {
                 toggle(ui, Some(f.id), f.name.clone(), count(Some(f.id)));
             }
             if unfiled > 0 {
-                toggle(ui, None, tr!("scanner-unfiled").to_string(), unfiled);
+                toggle(ui, None, tr!("scanner-unfiled"), unfiled);
             }
         });
         if !cfg.folders.is_empty()
@@ -371,17 +371,12 @@ impl SdroxideApp {
                     .any(|m| m.mode.carries_speech()),
             };
             let hint = if any_speech {
-                "Stop only on channels that sound like somebody talking: a voice is periodic, \
-                 fills the speech band and rises and falls a few times a second, which a \
-                 carrier, a birdie and a data burst do not. Each candidate is listened to for \
-                 at least half a second, because that is what it takes to hear a syllable."
+                tr!("scanner-stop-only-on-channels-that-sound")
             } else {
-                "Nothing in this scan is in a mode that carries speech — a voice hunt here \
-                 would run and stop nowhere, so this is not offered until one is. FM, AM and \
-                 the sidebands carry voices; the digital modes do not."
+                tr!("scanner-nothing-in-this-scan-is-in-a-mode")
             };
             let resp = ui.add_enabled_ui(any_speech, |ui| {
-                crate::chrome::chip(ui, cfg.voice_only && any_speech, "VOICE")
+                crate::chrome::chip(ui, cfg.voice_only && any_speech, tr!("scanner-voice"))
             });
             if resp.inner.on_hover_text(hint).clicked() && any_speech {
                 cfg.voice_only = !cfg.voice_only;
@@ -398,9 +393,9 @@ impl SdroxideApp {
             }
             ui.label(
                 RichText::new(if any_speech {
-                    "stop only where somebody is talking"
+                    tr!("scanner-stop-only-where-somebody-is")
                 } else {
-                    "no voice to look for in these modes"
+                    tr!("scanner-no-voice-to-look-for-in-these")
                 })
                 .size(10.0)
                 .weak(),
@@ -412,7 +407,7 @@ impl SdroxideApp {
         egui::Grid::new("scan-levels").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
             ui.label(tr!("scanner-stops"));
             ui.horizontal(|ui| {
-                if crate::chrome::chip(ui, cfg.follow_squelch, "SQL")
+                if crate::chrome::chip(ui, cfg.follow_squelch, tr!("scanner-sql"))
                     .on_hover_text(tr!("scanner-use-receiver-s-own-squelch"))
                     .clicked()
                 {
@@ -422,7 +417,7 @@ impl SdroxideApp {
                     let sql = self.state.rx[0].squelch_db;
                     ui.label(
                         RichText::new(if sql <= SQUELCH_OPEN_DB + 1.0 {
-                            tr!("scanner-squelch-off-scan-will-stop").to_string()
+                            tr!("scanner-squelch-off-scan-will-stop")
                         } else {
                             format!("{sql:.0} dBFS", sql = sql)
                         })
@@ -440,7 +435,7 @@ impl SdroxideApp {
             });
             ui.end_row();
 
-            ui.label("Voice");
+            ui.label(tr!("bandplan-kind-phone"));
             self.scanner_voice(ui, cfg);
             ui.end_row();
             ui.label(tr!("scanner-listens"));
@@ -451,10 +446,7 @@ impl SdroxideApp {
                     .suffix(" ms"),
             )
             .on_hover_text(if cfg.voice_only {
-                "How long to stay on a candidate before judging it. The voice check needs at \
-                 least this much: a voice is a rhythm of syllables, and half a second is two of \
-                 them"
-                .to_string()
+                tr!("scanner-how-long-to-stay-on-a-candidate")
             } else {
                 tr!("scanner-how-long-stay-candidate-before")
             });
@@ -497,7 +489,7 @@ impl SdroxideApp {
         let scan = self.state.scan;
         ui.horizontal(|ui| {
             if !scan.running {
-                ui.label(RichText::new("stopped").weak());
+                ui.label(RichText::new(tr!("scanner-stopped")).weak());
                 return;
             }
             let here = self.state.active_freq_hz() / 1e6;
@@ -549,24 +541,21 @@ impl SdroxideApp {
     fn scanner_voice_status(&self, ui: &mut egui::Ui, scan: sdroxide_types::ScanState) {
         if !self.state.rx[0].mode.carries_speech() {
             ui.label(
-                RichText::new(format!(
-                    "{} carries no speech — passing these channels by",
-                    self.state.rx[0].mode.label()
-                ))
+                RichText::new(tr!("scanner-mode-no-speech", mode = self.state.rx[0].mode.label()))
                 .size(10.5)
                 .weak(),
             );
             return;
         }
         let Some(v) = scan.voice else {
-            ui.label(RichText::new("listening for a voice…").size(10.5).weak());
+            ui.label(RichText::new(tr!("scanner-listening-for-a-voice")).size(10.5).weak());
             return;
         };
         let (text, colour) = if scan.holding {
-            (format!("voice {} · somebody is talking", v.score), crate::theme::GREEN())
+            (tr!("scanner-voice-holding", score = v.score), crate::theme::GREEN())
         } else {
             (
-                format!("passed {:.4} MHz · voice {}", v.freq_hz as f64 / 1e6, v.score),
+                tr!("scanner-voice-passed", mhz = format!("{:.4}", v.freq_hz as f64 / 1e6), score = v.score),
                 crate::theme::TEXT(),
             )
         };

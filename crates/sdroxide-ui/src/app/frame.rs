@@ -167,7 +167,7 @@ fn paint_panadapter_chrome(ui: &egui::Ui, area: egui::Rect) {
 /// (`SdroxideApp::fit_levels_now`).
 fn levels_hidden_chip(ui: &mut egui::Ui, area: egui::Rect) -> bool {
     let galley = ui.painter().layout_no_wrap(
-        "No contrast — click to FIT".to_owned(),
+        tr!("frame-no-contrast-fit"),
         egui::FontId::proportional(13.0),
         egui::Color32::WHITE,
     );
@@ -189,11 +189,7 @@ fn levels_hidden_chip(ui: &mut egui::Ui, area: egui::Rect) -> bool {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     p.galley(rect.center() - galley.size() / 2.0, galley, egui::Color32::WHITE);
-    resp.on_hover_text(
-        "The display floor/ceiling are past everything on screen, so the waterfall is one flat \
-         colour. Click to fit them to what the radio is hearing.",
-    )
-    .clicked()
+    resp.on_hover_text(tr!("frame-levels-hidden-hint")).clicked()
 }
 
 /// A short note centred on the panadapter, over a dark pill so it reads on any
@@ -226,9 +222,9 @@ const PANADAPTER_PILL_GAP: f32 = 4.0;
 /// labels.
 fn waterfall_bw_text(span_hz: f64) -> String {
     if span_hz.is_finite() && span_hz > 0.0 {
-        format!("BW waterfall · {}", spectrum_view::format_bandwidth(span_hz))
+        tr!("frame-bw-waterfall", span = spectrum_view::format_bandwidth(span_hz))
     } else {
-        "BW waterfall · —".to_owned()
+        tr!("frame-bw-waterfall-unknown")
     }
 }
 
@@ -319,7 +315,7 @@ fn empty_centre(ui: &egui::Ui) {
         ink,
     );
     let hint = p.layout_no_wrap(
-        "every module is in its own window".to_owned(),
+        tr!("frame-every-module-own-window"),
         egui::FontId::proportional(13.0),
         dim,
     );
@@ -377,9 +373,7 @@ fn tool_window_title_button(
         |ui| {
             ui.set_min_size(rect.size());
             clicked = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
-                .on_hover_text(
-                    "WINDOW — move this window into its own OS window, put it on another monitor",
-                )
+                .on_hover_text(tr!("frame-window-chip-hint"))
                 .clicked();
         },
     );
@@ -408,12 +402,12 @@ fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
             // two different places to go back to.
             (
                 crate::chrome::WindowIcon::Dock,
-                "DOCK — return this panel to the pane below the waterfall",
+                tr!("frame-dock-panel-pane-hint"),
             )
         } else {
             (
                 crate::chrome::WindowIcon::Out,
-                "WINDOW — move this window into its own OS window, to put it on another monitor",
+                tr!("frame-window-chip-hint"),
             )
         };
         // A **one-row** allocation, right-aligned — not `row_tail`. `row_tail`
@@ -464,23 +458,23 @@ fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec
     use sdroxide_types::DetachableModule as M;
     let app_id = module.app_id();
     let (name, default_size) = match module {
-        M::Panadapter => ("panadapter", [960.0, 540.0]),
-        M::Panel => ("panel", [520.0, 700.0]),
-        M::Controls => ("controls", [1280.0, 640.0]),
-        M::AuxPanadapter => ("aux panadapter", [960.0, 540.0]),
+        M::Panadapter => (tr!("frame-module-panadapter"), [960.0, 540.0]),
+        M::Panel => (tr!("frame-module-panel"), [520.0, 700.0]),
+        M::Controls => (tr!("frame-module-controls"), [1280.0, 640.0]),
+        M::AuxPanadapter => (tr!("frame-module-aux-panadapter"), [960.0, 540.0]),
         // Wide enough for the mode sections in five columns — the whole reason
         // it is a window and not the docked column, which cannot be this wide
         // without squeezing the operating panel below it.
-        M::BandMenu => ("band & mode", [560.0, 760.0]),
+        M::BandMenu => (tr!("frame-module-band-mode"), [560.0, 760.0]),
         // A compass wants to be near square: it is a dial with a readout
         // underneath, and a wide window would just be dial with margins.
-        M::Rotor => ("antenna rotator", [420.0, 520.0]),
+        M::Rotor => (tr!("frame-module-rotator"), [420.0, 520.0]),
     };
     DetachedWindowSpec {
         viewport_id: egui::ViewportId::from_hash_of(app_id),
         settle_id: egui::Id::new(format!("{app_id}-geom")),
         app_id: app_id.to_string(),
-        title: format!("{} — {name}", sdroxide_version::FLAVOR),
+        title: tr!("frame-detached-title", flavor = sdroxide_version::FLAVOR, name = name),
         default_size,
         min_size: [360.0, 240.0],
     }
@@ -497,7 +491,7 @@ fn tool_spec(id: &str, title: &str, default_size: [f32; 2]) -> DetachedWindowSpe
         viewport_id: egui::ViewportId::from_hash_of(&app_id),
         settle_id: egui::Id::new(format!("{app_id}-geom")),
         app_id,
-        title: format!("{} — {title}", sdroxide_version::FLAVOR),
+        title: tr!("frame-detached-title", flavor = sdroxide_version::FLAVOR, name = title),
         default_size,
         min_size: [240.0, 160.0],
     }
@@ -1011,11 +1005,7 @@ impl eframe::App for SdroxideApp {
                             self.panel_floating = false;
                             crate::app::persist::persist_ui_settings(&self.ui_settings);
                         }
-                        None => self.show_notice(format!(
-                            "No workspace {} saved — save one in Settings › UI › Workspaces and \
-                             this key will call it back.",
-                            i + 1
-                        )),
+                        None => self.show_notice(tr!("frame-workspace-missing", n = i + 1)),
                     }
                 }
             }
@@ -1233,10 +1223,8 @@ impl eframe::App for SdroxideApp {
             if unavailable {
                 if self.panel_undock_notice_mode != Some(mode) {
                     self.panel_undock_notice_mode = Some(mode);
-                    self.radio_notice = Some(format!(
-                        "No operating panel in {} — it is undocked, and this mode has none.",
-                        mode.label()
-                    ));
+                    self.radio_notice =
+                        Some(tr!("frame-no-operating-panel", mode = mode.label()));
                 }
             } else {
                 self.panel_undock_notice_mode = None;
@@ -1246,9 +1234,7 @@ impl eframe::App for SdroxideApp {
         let shown = self.radio_notice.clone().or_else(|| self.other_instance.clone());
         let notice = shown.or_else(|| {
             (rx_only && !self.rx_only_nudge_dismissed).then(|| {
-                "This radio is receive-only — it has no transmitter. Hide the transmit \
-                 controls and use the listening screen?"
-                    .to_string()
+                tr!("frame-rx-only-nudge")
             })
         });
         if let Some(notice) = notice {
@@ -1294,12 +1280,8 @@ impl eframe::App for SdroxideApp {
                                 // it, and nothing is retuned.
                                 if rx_only
                                     && ui
-                                        .button(RichText::new("Listening controls").size(13.0))
-                                        .on_hover_text(
-                                            "Hide the transmit controls and switch this radio to \
-                                             the listening screen (Settings → Radio). Nothing is \
-                                             retuned and the decoder keeps running.",
-                                        )
+                                        .button(RichText::new(tr!("frame-listening-controls")).size(13.0))
+                                        .on_hover_text(tr!("frame-listening-controls-hint"))
                                         .clicked()
                                 {
                                     if let Some(cfg) = self.radio_cfg.clone() {
@@ -1338,9 +1320,10 @@ impl eframe::App for SdroxideApp {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(RichText::new("⬆").size(15.0).color(mark));
                         ui.label(
-                            RichText::new(format!(
-                                "SDR Oxide Brown {tag} is available — you are on {}.",
-                                sdroxide_version::VERSION
+                            RichText::new(tr!(
+                                "frame-update-available",
+                                tag = tag,
+                                version = sdroxide_version::VERSION
                             ))
                             .size(13.0)
                             .color(ink),
@@ -1350,8 +1333,8 @@ impl eframe::App for SdroxideApp {
                                 self.update_dismissed = true;
                             }
                             if ui
-                                .button(RichText::new("Download").size(13.0))
-                                .on_hover_text("Opens the release page in your browser")
+                                .button(RichText::new(tr!("frame-download")).size(13.0))
+                                .on_hover_text(tr!("frame-download-hint"))
                                 .clicked()
                             {
                                 crate::download::open_external(super::update::RELEASES_PAGE);
@@ -2570,7 +2553,7 @@ impl SdroxideApp {
             // waterfall is where the eye already is: say it here, centred,
             // rather than under a dial the radio has not reached.
             if self.atsmini_tuning && self.atsmini_active() {
-                centred_waterfall_note(&spec_ui, spec_area, "tuning — the radio is catching up");
+                centred_waterfall_note(&spec_ui, spec_area, &tr!("frame-tuning-catching-up"));
             }
             if let Some(l) = level
                 && crate::widgets::level_slider::show(ui, l, &mut self.view)
@@ -2623,10 +2606,7 @@ impl SdroxideApp {
                 crate::chrome::row_tail(ui, |ui| {
                     self.layers_button(ui, "DISP", 0.0);
                     if crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::In)
-                        .on_hover_text(
-                            "DOCK — return this spectrum into the main window, the same as \
-                         closing this one without hunting for its close box.",
-                        )
+                        .on_hover_text(tr!("frame-dock-spectrum-hint"))
                         .clicked()
                     {
                         self.ui_settings.set_detached(module, false);
@@ -2779,9 +2759,7 @@ impl SdroxideApp {
                                                     crate::chrome::BAR_CHIP,
                                                 ),
                                             )
-                                            .on_hover_text(
-                                                "DOCK — put this panel back under the waterfall",
-                                            )
+                                            .on_hover_text(tr!("frame-dock-panel-hint"))
                                             .clicked();
                                         },
                                     );
@@ -2857,7 +2835,7 @@ impl SdroxideApp {
                             // for the window's close box.
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new("BAND & MODE")
+                                    RichText::new(tr!("topbar-band-mode"))
                                         .size(11.0)
                                         .strong()
                                         .color(crate::theme::CYAN()),
@@ -2867,11 +2845,7 @@ impl SdroxideApp {
                                         ui,
                                         crate::chrome::WindowIcon::In,
                                     )
-                                    .on_hover_text(
-                                        "DOCK — return the band and mode selector into the \
-                                             main window, the same as closing this one \
-                                             without hunting for its close box.",
-                                    )
+                                    .on_hover_text(tr!("frame-dock-band-menu-hint"))
                                     .clicked()
                                     {
                                         self.ui_settings.set_detached(
@@ -2910,7 +2884,7 @@ impl SdroxideApp {
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new("ANTENNA ROTATOR")
+                                    RichText::new(tr!("frame-antenna-rotator-caption"))
                                         .size(11.0)
                                         .strong()
                                         .color(crate::theme::CYAN()),
@@ -2920,11 +2894,7 @@ impl SdroxideApp {
                                         ui,
                                         crate::chrome::WindowIcon::In,
                                     )
-                                    .on_hover_text(
-                                        "DOCK — return the rotator into the main window, the \
-                                             same as closing this one without hunting for its \
-                                             close box.",
-                                    )
+                                    .on_hover_text(tr!("frame-dock-rotator-hint"))
                                     .clicked()
                                     {
                                         self.ui_settings.set_detached(
@@ -3051,7 +3021,7 @@ impl SdroxideApp {
     /// its own, because the title bar is exactly the thing the OS window will not
     /// have.
     fn floating_panel_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>, mode: Mode) {
-        let title = format!("{} — panel", mode.label());
+        let title = tr!("frame-panel-window-title", mode = mode.label());
         let mut open = true;
         // **No dud in the browser.** Detaching is native-only, so an out button
         // there would dock the panel instead of giving it a window — a control
@@ -3111,7 +3081,7 @@ impl SdroxideApp {
                                 crate::chrome::WindowIcon::Close,
                                 btn,
                             )
-                            .on_hover_text("DOCK — put this panel back under the waterfall")
+                            .on_hover_text(tr!("frame-dock-panel-hint"))
                             .clicked()
                             {
                                 open = false;
@@ -3123,10 +3093,9 @@ impl SdroxideApp {
                             };
                             if crate::chrome::chip_window_icon_sized(ui, roll_icon, btn)
                                 .on_hover_text(if rolled {
-                                    "Unroll — show the panel again"
+                                    tr!("frame-unroll-hint")
                                 } else {
-                                    "Roll up — leave the title bar and give the window back to the \
-                                 waterfall"
+                                    tr!("frame-roll-up-hint")
                                 })
                                 .clicked()
                             {
@@ -3144,10 +3113,7 @@ impl SdroxideApp {
                                     crate::chrome::WindowIcon::Out,
                                     btn,
                                 )
-                                .on_hover_text(
-                                    "WINDOW — give this panel a window of its own, to put on \
-                                     another monitor",
-                                )
+                                .on_hover_text(tr!("frame-window-panel-hint"))
                                 .clicked();
                             }
                         });
@@ -3427,7 +3393,7 @@ impl SdroxideApp {
         if self.auto_role.is_some()
             && cmds.iter().any(|c| matches!(c, Command::DigiStopQso | Command::DigiAbortTx))
         {
-            self.disarm_auto("auto stopped: a stop control was used".into());
+            self.disarm_auto(tr!("frame-auto-stopped-stop-control"));
         }
         for c in cmds {
             // Marked here rather than at the button, because the settings panel
@@ -4620,7 +4586,7 @@ impl SdroxideApp {
         }
         let mut dismissed = false;
         let mut remember = false;
-        let resp = egui::Window::new("⚠  TRANSMIT LOCKOUT DISABLED")
+        let resp = egui::Window::new(tr!("frame-transmit-lockout-disabled"))
             .id(crate::layout::salted_id(ctx, "oob-tx-window"))
             .frame(crate::chrome::window_frame())
             .collapsible(false)
@@ -4657,12 +4623,8 @@ impl SdroxideApp {
                     // stopped by this page every launch. Ticking it is itself
                     // an acknowledgement, so the window goes away with it.
                     if ui
-                        .checkbox(&mut self.ui_settings.oob_tx_dismissed, "Don't show again")
-                        .on_hover_text(
-                            "Remember this acknowledgement on this screen. The lockout is still \
-                             off while the engine runs with --oob-tx — this only stops the \
-                             warning from being shown again.",
-                        )
+                        .checkbox(&mut self.ui_settings.oob_tx_dismissed, tr!("frame-dont-show-again"))
+                        .on_hover_text(tr!("frame-dont-show-again-hint"))
                         .changed()
                     {
                         remember = true;
@@ -4701,7 +4663,7 @@ impl SdroxideApp {
         }
         let mut confirm = false;
         let mut cancel = false;
-        let resp = egui::Window::new("⚠  11 m (CB) — NOT AN AMATEUR BAND")
+        let resp = egui::Window::new(tr!("frame-cb-window-title"))
             .id(crate::layout::salted_id(ctx, "cb-tx-confirm-window"))
             .frame(crate::chrome::window_frame())
             .collapsible(false)
@@ -4711,26 +4673,18 @@ impl SdroxideApp {
                 crate::chrome::window_body_bg(ui);
                 ui.set_max_width(crate::layout::window_w(ctx, 460.0));
                 ui.label(
-                    RichText::new("You are about to allow transmit on the 11 m band.")
+                    RichText::new(tr!("frame-cb-about-to-allow"))
                         .color(crate::theme::TEXT_STRONG())
                         .size(13.0),
                 );
                 ui.add_space(6.0);
                 ui.label(
-                    RichText::new(
-                        "11 m is not an amateur band. It is a separate radio service with its \
-                         own channels, modes, power limits and type-approved equipment, and \
-                         those differ from country to country. Transmitting there is subject to \
-                         the rules of the country you are operating from.",
-                    )
+                    RichText::new(tr!("frame-cb-not-amateur"))
                     .color(crate::theme::TEXT()),
                 );
                 ui.add_space(6.0);
                 ui.label(
-                    RichText::new(
-                        "Only continue if you know what your country allows on 27 MHz and you \
-                         are operating within it — you remain responsible for the transmission.",
-                    )
+                    RichText::new(tr!("frame-cb-only-continue"))
                     .color(crate::theme::TEXT()),
                 );
                 ui.add_space(10.0);
@@ -4738,7 +4692,7 @@ impl SdroxideApp {
                     if crate::chrome::chip_accent(
                         ui,
                         false,
-                        RichText::new("  I UNDERSTAND  ").strong(),
+                        RichText::new(tr!("frame-i-understand")).strong(),
                         crate::theme::ALERT(),
                         crate::theme::TEXT_STRONG(),
                     )
@@ -4746,7 +4700,7 @@ impl SdroxideApp {
                     {
                         confirm = true;
                     }
-                    if crate::chrome::chip(ui, false, "Cancel").clicked() {
+                    if crate::chrome::chip(ui, false, tr!("frame-cancel")).clicked() {
                         cancel = true;
                     }
                 });
@@ -4902,9 +4856,8 @@ impl SdroxideApp {
         self.ctrl.send_client_settings(profile.clone(), screen);
         self.client_settings_stored = Some(screen);
         self.client_settings_status = Some(match &profile {
-            Some(name) => format!("saved to the profile {name}"),
-            None => "saved as this station's default (the server has no password,                      so this is what every client gets)"
-                .to_string(),
+            Some(name) => tr!("frame-saved-to-profile", name = name),
+            None => tr!("frame-saved-as-default"),
         });
     }
 
@@ -5066,41 +5019,27 @@ impl SdroxideApp {
         egui::Modal::new(egui::Id::new("client-bindings-offer")).show(ctx, |ui| {
             ui.set_max_width(470.0);
             ui.heading(
-                RichText::new("This profile carries keyboard bindings")
+                RichText::new(tr!("frame-bindings-offer-title"))
                     .color(crate::theme::ALERT()),
             );
             ui.add_space(6.0);
             ui.label(match &offer.profile {
-                Some(name) => format!(
-                    "The profile you signed in as ({name}) stores keyboard and mouse \
-                     bindings on the server, and this browser is not using them. That is \
-                     the safe default — on a station other people share, the keyboard is \
-                     shared too, and one login adopting another's PTT or Space is a real \
-                     hazard."
-                ),
-                None => String::from(
-                    "This station's default profile stores keyboard and mouse bindings on \
-                     the server, and this browser is not using them. That is the safe \
-                     default — on a station other people share, the keyboard is shared \
-                     too, and one login adopting another's PTT or Space is a real hazard.",
-                ),
+                Some(name) => tr!("frame-bindings-offer-profile", name = name),
+                None => tr!("frame-bindings-offer-default"),
             });
             ui.add_space(6.0);
-            ui.label(
-                "Use them here, or leave them. Either way you will be told which, and \
-                 nothing is changed without you choosing.",
-            );
+            ui.label(tr!("frame-bindings-offer-choice"));
             ui.add_space(10.0);
             ui.horizontal(|ui| {
                 if ui
                     .button(
-                        RichText::new("Use this profile's bindings").color(crate::theme::ALERT()),
+                        RichText::new(tr!("frame-bindings-use")).color(crate::theme::ALERT()),
                     )
                     .clicked()
                 {
                     adopt = true;
                 }
-                if ui.button("Keep mine (and stop asking)").clicked() {
+                if ui.button(tr!("frame-bindings-keep-mine")).clicked() {
                     decline = true;
                 }
             });
@@ -5115,7 +5054,7 @@ impl SdroxideApp {
             self.input.persist();
             self.client_settings_from = Some(offer.profile);
             self.client_settings_status =
-                Some("using the keyboard bindings stored for this profile".into());
+                Some(tr!("frame-bindings-using-profile"));
             self.bindings_pending = None;
         } else if decline {
             // **"and stop asking" has to mean it.** Dropping the offer is not
@@ -5126,7 +5065,7 @@ impl SdroxideApp {
             self.ui_settings.client_bindings_declined = true;
             crate::app::persist::persist_ui_settings(&self.ui_settings);
             self.client_settings_status =
-                Some("keeping this device\'s own keyboard bindings; not asked again".into());
+                Some(tr!("frame-bindings-keeping-own"));
             self.bindings_pending = None;
         }
     }
@@ -5142,11 +5081,11 @@ impl SdroxideApp {
                 self.view.fft_size = stored.fft_size;
                 crate::app::persist::persist_ui_settings(&self.ui_settings);
                 self.client_settings_status =
-                    Some("back to the look stored for this profile".into());
+                    Some(tr!("frame-look-back-to-profile"));
             }
             None => {
                 self.client_settings_status =
-                    Some("no stored look for this profile yet — save one first".into());
+                    Some(tr!("frame-look-none-stored"));
             }
         }
     }
@@ -5383,15 +5322,15 @@ mod tests {
         let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
         // The float's title bar carries all three: roll up, out, close.
         assert!(
-            code.contains("WINDOW — give this panel a window of its own"),
+            code.contains("frame-window-panel-hint"),
             "the floating panel has no way out to a real window"
         );
         assert!(
-            code.contains("Roll up — leave the title bar"),
+            code.contains("frame-roll-up-hint"),
             "the floating panel cannot be rolled up, so it costs the laptop its picture"
         );
         assert!(
-            code.contains("DOCK — put this panel back under the waterfall"),
+            code.contains("frame-dock-panel-hint"),
             "the floating panel has no way back to the pane"
         );
         // Its bar is ours, because egui has no hook for a fourth title-bar button.
@@ -5413,7 +5352,7 @@ mod tests {
         // And the docked pane's own way out to a float still exists in the
         // panels that carry it.
         assert!(
-            include_str!("panels/mod.rs").contains("FLOAT — lift this panel out"),
+            include_str!("panels/mod.rs").contains("panels-float-chip-hint"),
             "no panel can float any more"
         );
     }

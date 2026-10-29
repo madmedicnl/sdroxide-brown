@@ -251,8 +251,8 @@ impl SdroxideApp {
         if b.done {
             self.wavelog_sync_running = false;
             if let Some(e) = b.error {
-                self.wavelog_sync_status = Some(format!("stopped: {e}"));
-                self.push_net_log(format!("Wavelog download stopped: {e}"));
+                self.wavelog_sync_status = Some(tr!("net-wavelog-stopped", error = e));
+                self.push_net_log(tr!("net-wavelog-download-stopped", error = e));
             }
             return;
         }
@@ -265,7 +265,7 @@ impl SdroxideApp {
             persist_qso_log(&self.qso_log);
         }
         self.wavelog_sync_status =
-            Some(format!("{} new, {} already here", merged.added, merged.matched));
+            Some(tr!("net-wavelog-new-already-here", added = merged.added, matched = merged.matched));
     }
 
     /// The network settings as the settings page has them, for a Test button
@@ -289,7 +289,7 @@ impl SdroxideApp {
         let cfg = &self.net_cfg_edit.wavelog;
         if !cfg.is_configured() {
             self.wavelog_sync_status =
-                Some("the address and the API key have to be filled in first".into());
+                Some(tr!("net-wavelog-fill-in-first"));
             return;
         }
         let stations = if cfg.download_station_ids.is_empty() {
@@ -305,12 +305,12 @@ impl SdroxideApp {
         .collect::<Vec<_>>();
         if stations.is_empty() {
             self.wavelog_sync_status =
-                Some("no station location to download from — test the connection first".into());
+                Some(tr!("net-wavelog-no-station-location"));
             return;
         }
         let starts = self.wavelog_sync.starts(&cfg.url, &stations);
         self.wavelog_sync_running = true;
-        self.wavelog_sync_status = Some("downloading…".into());
+        self.wavelog_sync_status = Some(tr!("net-downloading"));
         cmds.push(Command::WavelogSync { stations: starts, full: false });
     }
 

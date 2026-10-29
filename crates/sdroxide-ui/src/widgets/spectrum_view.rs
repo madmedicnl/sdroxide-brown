@@ -1277,8 +1277,8 @@ fn offset_edge_hint(lo: f64, hi: f64, hz: f64) -> Option<OffsetHint> {
 /// The label, with the arrow on the side the offset lies.
 fn offset_hint_text(hint: OffsetHint) -> String {
     match hint {
-        OffsetHint::Left(d) => format!("\u{25c0} tones {d:.0} Hz"),
-        OffsetHint::Right(d) => format!("{d:.0} Hz tones \u{25b6}"),
+        OffsetHint::Left(d) => tr!("spectrum-offset-left", hz = format!("{d:.0}")),
+        OffsetHint::Right(d) => tr!("spectrum-offset-right", hz = format!("{d:.0}")),
     }
 }
 

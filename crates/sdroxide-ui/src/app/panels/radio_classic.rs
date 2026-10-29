@@ -14,6 +14,7 @@
 //!
 //! The plan and the decisions are in `docs/internal/RADIO-CLASSIC-PLAN.md`.
 
+use crate::i18n::{Tr, tr};
 use std::collections::VecDeque;
 
 use eframe::egui::{self, Align, Align2, Color32, FontId, Pos2, Rect, RichText, Stroke, StrokeKind, vec2};
@@ -211,6 +212,38 @@ fn group_rows(group: Group) -> Vec<(&'static str, Vec<Preset>)> {
                 Preset::channel("CH 19", 27.185, Mode::Am),
             ],
         )],
+    }
+}
+
+/// The group chips' captions, translated at draw time (the table keeps English).
+fn group_tr(label: &str) -> String {
+    match label {
+        "BROADCAST" => tr!("rc-group-broadcast"),
+        "HAM" => tr!("rc-group-ham"),
+        "AIR" => tr!("rc-group-air"),
+        "MARINE" => tr!("rc-group-marine"),
+        other => other.to_string(),
+    }
+}
+
+/// A row caption of the band groups, translated at draw time.
+fn caption_tr(caption: &str) -> String {
+    match caption {
+        "OL / OM · FM" => tr!("rc-cap-lw-mw-fm"),
+        "OC · SHORTWAVE" => tr!("rc-cap-shortwave"),
+        "AMATEUR BANDS" => tr!("rc-cap-amateur-bands"),
+        "AIRBAND" => tr!("rc-cap-airband"),
+        "MARINE VHF · MF" => tr!("rc-cap-marine"),
+        "CITIZENS BAND" => tr!("rc-cap-cb"),
+        other => other.to_string(),
+    }
+}
+
+/// A preset button's label, translated at draw time where it has a word in it.
+fn preset_tr(label: &str) -> String {
+    match label {
+        "FM ext 64–87.5" => tr!("rc-preset-fm-ext"),
+        other => other.to_string(),
     }
 }
 
@@ -659,13 +692,13 @@ impl SdroxideApp {
             // ends where the other two do instead of stopping short.
             let gap = ((rect.height() - 300.0) / 6.0).clamp(0.0, 16.0);
             ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
-            ui.label(RichText::new("RADIO CLASSIC").strong().size(14.0).color(ink.strong));
+            ui.label(RichText::new(tr!("rc-radio-classic")).strong().size(14.0).color(ink.strong));
             ui.add_space(2.0 + gap);
 
-            crate::chrome::menu_caption(ui, "Bands");
+            crate::chrome::menu_caption(ui, &tr!("rc-bands"));
             ui.horizontal_wrapped(|ui| {
                 for (g, label) in Group::ALL {
-                    if crate::chrome::chip(ui, self.radio_classic.group == g, label).clicked() {
+                    if crate::chrome::chip(ui, self.radio_classic.group == g, group_tr(label)).clicked() {
                         self.radio_classic.group = g;
                     }
                 }
@@ -673,14 +706,14 @@ impl SdroxideApp {
 
             for (caption, row) in group_rows(self.radio_classic.group) {
                 ui.add_space(gap);
-                crate::chrome::menu_caption(ui, caption);
+                crate::chrome::menu_caption(ui, &caption_tr(caption));
                 ui.horizontal_wrapped(|ui| {
                     for p in row {
                         let lit = match p.band {
                             Some(b) if b != Band::Gen => band == b && p.holds(hz),
                             _ => p.holds(hz),
                         };
-                        if crate::chrome::chip(ui, lit, p.label.as_str()).clicked() && !lit {
+                        if crate::chrome::chip(ui, lit, preset_tr(p.label.as_str())).clicked() && !lit {
                             match p.band {
                                 Some(b) => cmds.push(Command::SetBand(b)),
                                 None => {
@@ -697,7 +730,7 @@ impl SdroxideApp {
             }
 
             ui.add_space(gap);
-            crate::chrome::menu_caption(ui, "Mode");
+            crate::chrome::menu_caption(ui, &tr!("vdl2-mode"));
             ui.horizontal_wrapped(|ui| {
                 for (label, m) in MODES {
                     if crate::chrome::chip(ui, mode == m, label).clicked() && mode != m {
@@ -707,7 +740,7 @@ impl SdroxideApp {
             });
 
             ui.add_space(gap);
-            crate::chrome::menu_caption(ui, "Mem · Programs");
+            crate::chrome::menu_caption(ui, &tr!("rc-mem-programs"));
             self.rc_memories(ui, cmds, hz, mode);
         });
     }
@@ -720,7 +753,7 @@ impl SdroxideApp {
                 let lit = m.mode == mode && m.freq_hz.round() as i64 == rounded;
                 let label = format!("{} · {:.3}", m.name, m.freq_hz / 1e6);
                 if crate::chrome::chip(ui, lit, label)
-                    .on_hover_text("Recall: band, mode, frequency and filter at once")
+                    .on_hover_text(tr!("rc-recall-band-mode-frequency-and"))
                     .clicked()
                 {
                     cmds.push(Command::RecallMemory(m.id));
@@ -728,14 +761,14 @@ impl SdroxideApp {
             }
             if self.memories.is_empty() {
                 ui.label(
-                    RichText::new("no memories yet — store one with MEM in the top bar")
+                    RichText::new(tr!("rc-no-memories-yet-store-one-with-mem"))
                         .size(11.0)
                         .color(theme::gray(130)),
                 );
             }
             // The same window the top bar opens, with its stations to pick from.
-            if crate::chrome::chip(ui, self.schedule.show, "PROGRAMS")
-                .on_hover_text("Broadcast schedule — what is on, when and where")
+            if crate::chrome::chip(ui, self.schedule.show, tr!("schedule-title"))
+                .on_hover_text(tr!("rc-broadcast-schedule-what-is-on-when"))
                 .clicked()
             {
                 self.schedule.show = !self.schedule.show;
@@ -808,7 +841,7 @@ impl SdroxideApp {
         p.text(
             head.right_bottom() + vec2(-10.0, -6.0),
             Align2::RIGHT_BOTTOM,
-            "MODE",
+            tr!("settings-tle-mode"),
             FontId::proportional(10.0),
             ink.dim,
         );
@@ -869,34 +902,34 @@ impl SdroxideApp {
             self.radio_classic.sql_last = rx.squelch_db;
         }
         let presets = mode.filter_presets();
-        let items: [(&str, String, String); 4] = [
+        let items: [(String, String, String); 4] = [
             (
-                "BW",
+                "BW".to_string(),
                 if bw >= 1000.0 {
                     format!("{:.1} kHz", bw / 1000.0)
                 } else {
                     format!("{bw:.0} Hz")
                 },
                 if presets.is_empty() {
-                    "BW — this mode has one fixed passband".to_string()
+                    tr!("rc-bw-this-mode-has-one-fixed")
                 } else {
-                    "BW — click: next filter · right-click: previous · wheel: step".to_string()
+                    tr!("rc-bw-click-next-filter-right-click")
                 },
             ),
             (
-                "STEP",
+                tr!("rc-step"),
                 format!("{:.0}", self.ui_settings.tune_step_hz),
-                "STEP — click: next tuning step · right-click: previous · wheel: step".to_string(),
+                tr!("rc-step-click-next-tuning-step-right"),
             ),
             (
-                "AGC",
-                rx.agc.label().to_uppercase(),
-                "AGC — click: next speed · right-click: previous · wheel: step".to_string(),
+                "AGC".to_string(),
+                rx.agc.tr().to_uppercase(),
+                tr!("rc-agc-click-next-speed-right-click"),
             ),
             (
-                "SQL",
-                if open { "OPEN".to_string() } else { format!("{:.0} dB", rx.squelch_db) },
-                "SQL — click: open / back to the last threshold · wheel: raise or lower the gate"
+                "SQL".to_string(),
+                if open { tr!("rc-open") } else { format!("{:.0} dB", rx.squelch_db) },
+                tr!("rc-sql-click-open-back-to-the-last")
                     .to_string(),
             ),
         ];
@@ -909,7 +942,7 @@ impl SdroxideApp {
                 vec2(cell_w, boxes.height()),
             );
             let resp = ui
-                .interact(r, ui.id().with(("radio-classic-box", *cap)), egui::Sense::click())
+                .interact(r, ui.id().with(("radio-classic-box", cap.as_str())), egui::Sense::click())
                 .on_hover_text(hint.as_str());
             // One notch per wheel event, whatever the smoothing makes of it.
             let notches = if resp.hovered() {
@@ -934,7 +967,7 @@ impl SdroxideApp {
             p.text(
                 r.left_top() + vec2(5.0, 3.0),
                 Align2::LEFT_TOP,
-                *cap,
+                cap.as_str(),
                 FontId::proportional(8.5),
                 ink.dim,
             );
@@ -1102,7 +1135,7 @@ impl SdroxideApp {
         p.text(
             rect.right_top() + vec2(-8.0, 6.0),
             Align2::RIGHT_TOP,
-            "S-METER",
+            tr!("rc-s-meter"),
             FontId::proportional(10.0),
             ink.dim,
         );
@@ -1247,7 +1280,7 @@ impl SdroxideApp {
             .iter()
             .find(|m| m.mode == mode && m.freq_hz.round() as i64 == hz.round() as i64);
         if let Some(m) = memory {
-            let label = format!("MEM {}", m.id);
+            let label = tr!("rc-mem-n", id = m.id);
             x = pill(p, Pos2::new(x, inner.top() + 3.0), &label, ink.strong, ink.red) + 8.0;
         }
         p.text(
@@ -1327,7 +1360,7 @@ impl SdroxideApp {
         ui.painter().text(
             Pos2::new(inner.center().x, hint_y),
             Align2::CENTER_TOP,
-            "wheel on a digit · click upper/lower half ± · right-click zero · double-click to type",
+            tr!("rc-wheel-on-a-digit-click-upper-lower"),
             FontId::proportional(9.5),
             ink.dim,
         );
@@ -1398,8 +1431,8 @@ impl SdroxideApp {
             chips.push(("", "TA".into(), ink.red));
         }
         match r.music {
-            Some(true) => chips.push(("", "MUSIC ♪".into(), ink.line)),
-            Some(false) => chips.push(("", "SPEECH".into(), ink.line)),
+            Some(true) => chips.push(("", tr!("rc-music").into(), ink.line)),
+            Some(false) => chips.push(("", tr!("rc-speech").into(), ink.line)),
             None => {}
         }
         if !r.af.is_empty() {
@@ -1460,13 +1493,13 @@ fn stereo_chip(hz: f64, mode: Mode, locked: bool) -> Option<bool> {
 /// What the STEREO chip says on hover, and — dark — why it is dark.
 fn stereo_note(rx: &sdroxide_types::RxState, lit: bool) -> String {
     if lit {
-        "Stereo — the 19 kHz pilot is locked".into()
+        tr!("rc-stereo-the-19-khz-pilot-is-locked").into()
     } else if !rx.wfm_stereo {
-        "Mono — the broadcast stereo decode is switched off (ST in the top bar)".into()
+        tr!("rc-mono-the-broadcast-stereo-decode").into()
     } else if rx.noise_reduction.is_on() {
-        "Mono — noise reduction is on, and stereo yields to it".into()
+        tr!("rc-mono-noise-reduction-is-on-and").into()
     } else {
-        "Mono — no 19 kHz pilot: the station sends mono, or the signal is too weak".into()
+        tr!("rc-mono-no-19-khz-pilot-the-station").into()
     }
 }
 
@@ -1505,7 +1538,7 @@ fn false_stereo(rms_db: [f32; 2], bands: &[u8]) -> [f32; 2] {
 fn stereo_pill(p: &egui::Painter, at: Pos2, lit: bool, ink: &Ink) -> Rect {
     let (text, edge, fill) =
         if lit { (ink.ground, ink.accent, Some(ink.accent)) } else { (ink.dim, ink.line, None) };
-    pill_rect(p, at, "STEREO", text, edge, fill)
+    pill_rect(p, at, &tr!("rc-stereo"), text, edge, fill)
 }
 
 /// `w` points wide, in the middle of `outer` (all of it when it is wider).

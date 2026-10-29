@@ -103,28 +103,19 @@ impl SdroxideApp {
                 (tr!("wefax-phasing").to_string(), theme::YELLOW())
             } else if st.receiving {
                 (
-                    format!(
-                        "receiving {:.0} min · {} lines",
-                        f64::from(st.lines) / st.lpm.value(),
-                        st.lines
+                    tr!(
+                        "wefax-receiving-progress",
+                        min = format!("{:.0}", f64::from(st.lines) / st.lpm.value()),
+                        lines = st.lines
                     ),
                     theme::GREEN(),
                 )
             } else if self.wefax.has_live() {
                 (tr!("wefax-lines-held", live_size = self.wefax.live_size().1), theme::CYAN_DIM())
             } else {
-                ("listening".to_string(), theme::LINE_LIT())
+                (tr!("wefax-listening"), theme::LINE_LIT())
             };
-            ui.label(RichText::new(text).color(colour).size(11.0)).on_hover_text(
-                "Waiting for a chart.\n\n\
-                 WEFAX is a timetable, not a conversation: a station sends its charts at set \
-                 times, so a chosen frequency is quiet for most of the day — that is normal. \
-                 Use the STATIONS button to pick one and check the time.\n\n\
-                 If a signal is there but the picture comes out one flat tone (all grey, all \
-                 black or all white), it is the tuning or the speed — use the +0 Hz readout \
-                 and the IOC/speed control, and check the STATIONS entry matches what is \
-                 being sent.",
-            );
+            ui.label(RichText::new(text).color(colour).size(11.0)).on_hover_text(tr!("wefax-status-hint"));
 
             // The tuning readout. A correctly tuned receiver puts the
             // subcarrier's excursions around 1900 Hz; several hundred hertz off
@@ -147,13 +138,11 @@ impl SdroxideApp {
             // by exactly what the decoder is measuring, so the subcarrier lands
             // back on 1900 Hz.
             if off.abs() > CENTRE_THRESHOLD_HZ as f32
-                && crate::chrome::chip(ui, false, "CENTRE")
-                    .on_hover_text(format!(
-                        "Nudge the dial {} Hz so the subcarrier sits on 1900 Hz again — the \
-                         receiver is {} Hz off, which is what turns the chart into a white \
-                         page.",
-                        if off > 0.0 { "+" } else { "" },
-                        format_args!("{off:.0}"),
+                && crate::chrome::chip(ui, false, tr!("wefax-centre"))
+                    .on_hover_text(tr!(
+                        "wefax-centre-hint",
+                        sign = if off > 0.0 { "+" } else { "" },
+                        off = format!("{off:.0}")
                     ))
                     .clicked()
             {
@@ -168,31 +157,20 @@ impl SdroxideApp {
             // so its greys come from the 1500 / 2300 Hz tones and not from how
             // strong the signal is. This scales the decoder's thresholds
             // instead, and 0 is the reference behaviour. Persisted in DigiConfig.
-            ui.label(RichText::new("Sensitivity").size(10.0).weak());
+            ui.label(RichText::new(tr!("panels-sensitivity")).size(10.0).weak());
             {
                 let mut v = self.digi_cfg_edit.wefax_rx_sensitivity;
                 let resp =
                     crate::chrome::slider(ui, egui::Slider::new(&mut v, -5..=5).fixed_decimals(0))
-                        .on_hover_text(
-                            "Sensitivity — how readily the decoder starts and keeps a chart.\n\n\
-                     Auto uses the thresholds measured from the chart's own phasing signal, \
-                     which is the reference 0.\n\n\
-                     + accepts weaker, fainter or noisier charts; − waits for a clean signal \
-                     before it starts.\n\n\
-                     Not volume and not contrast: a fax is frequency modulated, so the greys \
-                     come from the 1500 / 2300 Hz tones, not from how strong the signal is.",
-                        );
+                        .on_hover_text(tr!("wefax-sensitivity-hint"));
                 if resp.changed() {
                     self.digi_cfg_edit.wefax_rx_sensitivity = v;
                     self.digi_cfg_edit.wefax_rx_auto = v == 0;
                     cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
                 }
             }
-            if crate::chrome::chip(ui, self.digi_cfg_edit.wefax_rx_auto, "Auto")
-                .on_hover_text(
-                    "Returns to the reference thresholds (0) and leaves the decoder's own \
-                     measurements in charge. Highlighted while active.",
-                )
+            if crate::chrome::chip(ui, self.digi_cfg_edit.wefax_rx_auto, tr!("sstv-auto"))
+                .on_hover_text(tr!("wefax-auto-hint"))
                 .clicked()
             {
                 self.digi_cfg_edit.wefax_rx_auto = true;
@@ -232,13 +210,7 @@ impl SdroxideApp {
             ui.add_space(8.0);
             let auto_start = self.digi_cfg_edit.wefax_auto_start;
             if crate::chrome::chip(ui, auto_start, tr!("wefax-auto-start"))
-                .on_hover_text(
-                    "Begin a chart when the 300 Hz (IOC 576) or 675 Hz start tone is heard, \
-                     or, if the tone was lost in a fade or under a carrier, when a few \
-                     seconds of the phasing signal arrive — and end the one in progress and \
-                     phase the new one when the next transmission arrives, whether or not a \
-                     stop tone came first. A carrier on the channel starts nothing.",
-                )
+                .on_hover_text(tr!("wefax-auto-start-hint"))
                 .clicked()
             {
                 self.digi_cfg_edit.wefax_auto_start = !auto_start;
@@ -303,11 +275,11 @@ impl SdroxideApp {
             use crate::wefax::Zoom;
             let zoom = self.wefax.zoom;
             for (face, z, hint) in [
-                ("FIT", Zoom::FitWidth, tr!("wefax-scale-chart-panel-width")),
-                (&tr!("wefax-whole"), Zoom::Whole, tr!("wefax-shrink-chart-until-all-view")),
-                ("50%", Zoom::Fixed(0.5), tr!("wefax-half-size")),
-                ("1:1", Zoom::Fixed(1.0), tr!("wefax-one-screen-pixel-per-fax")),
-                ("2×", Zoom::Fixed(2.0), tr!("wefax-twice-size-scroll-move-around")),
+                (tr!("wefax-fit"), Zoom::FitWidth, tr!("wefax-scale-chart-panel-width")),
+                (tr!("wefax-whole"), Zoom::Whole, tr!("wefax-shrink-chart-until-all-view")),
+                ("50%".to_string(), Zoom::Fixed(0.5), tr!("wefax-half-size")),
+                ("1:1".to_string(), Zoom::Fixed(1.0), tr!("wefax-one-screen-pixel-per-fax")),
+                ("2×".to_string(), Zoom::Fixed(2.0), tr!("wefax-twice-size-scroll-move-around")),
             ] {
                 if crate::chrome::chip(ui, zoom == z, face).on_hover_text(hint).clicked() {
                     self.wefax.zoom = z;
@@ -321,14 +293,11 @@ impl SdroxideApp {
             // the rest keeps appending would scramble it (issue #239).
             let held = self.wefax.has_live() && !st.receiving;
             ui.add_enabled_ui(held, |ui| {
-                if crate::chrome::chip(ui, false, "ROTATE 180°")
+                if crate::chrome::chip(ui, false, tr!("wefax-rotate-180"))
                     .on_hover_text(if held {
-                        "Rotate the chart on screen 180° — for a picture that has arrived \
-                         upside down. Turns the picture you see; save it afterwards to keep \
-                         the turn."
+                        tr!("wefax-rotate-hint")
                     } else {
-                        "Rotate the chart on screen 180°. Available once the chart is complete \
-                         — turning a picture that is still arriving would scramble it."
+                        tr!("wefax-rotate-unavailable-hint")
                     })
                     .clicked()
                 {
@@ -387,7 +356,7 @@ impl SdroxideApp {
             if super::save_chip_with(
                 ui,
                 payload.is_some(),
-                "Save the chart on screen to this computer, as far as it has arrived",
+                &tr!("wefax-save-chart-hint"),
             )
             .clicked()
             {
@@ -490,11 +459,7 @@ impl SdroxideApp {
                             None => {
                                 ui.centered_and_justified(|ui| {
                                     ui.label(
-                                        RichText::new(
-                                            "Tune a fax schedule in USB and wait for the chart to \
-                                     begin (start tone or phasing signal), or press START to \
-                                     begin mid-chart.",
-                                        )
+                                        RichText::new(tr!("wefax-waiting-for-chart"))
                                         .color(theme::LINE_LIT())
                                         .size(11.5),
                                     );
@@ -798,18 +763,15 @@ impl SdroxideApp {
         let dial = self.state.active_freq_hz();
         let Some((_, carrier_khz)) = WefaxStation::at_dial(dial) else { return };
         ui.label(
-            RichText::new(format!(
-                "carrier {carrier_khz:.1} · dial {:.1} kHz (USB −1.9k)",
-                dial / 1000.0
+            RichText::new(tr!(
+                "wefax-carrier-dial-note",
+                carrier = format!("{carrier_khz:.1}"),
+                dial = format!("{:.1}", dial / 1000.0)
             ))
             .size(10.0)
             .color(crate::theme::CYAN_DIM()),
         )
-        .on_hover_text(
-            "The station chip names the published carrier; the radiofax subcarrier sits \
-             1900 Hz above it, so the dial is deliberately 1.9 kHz lower. Tune the dial to \
-             the carrier itself and the signal falls outside the passband.",
-        );
+        .on_hover_text(tr!("wefax-carrier-note-hint"));
     }
 
     /// A saved chart, full size, in its own window.

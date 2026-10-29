@@ -4112,7 +4112,6 @@ bands-condx = AUSBR.
 bands-paths = WEGE
 bands-reach = REICHW.
 bands-best = BEST
-bands-condx-global-forecast-rest-what = AUSBR. ist eine weltweite Vorhersage; der Rest ist, was tatsächlich gehört wurde. Eine leere Zeile heißt, dass nichts dekodiert wurde — was heißen kann, dass das Band zu war, oder nur, dass niemand darauf war.
 bands-ibp-beacons = IBP-BAKEN
 bands-meteor-showers = METEORSCHAUER
 bands-peak = SPITZE
@@ -4401,7 +4400,6 @@ macros-remove-button = Diese Taste entfernen
 ## gridtracker (src/app/grid_tracker.rs)
 
 gridtracker-grid-tracker = LOCATOR-TRACKER
-gridtracker-shade-squares-heard-live-decode = Die Quadrate schattieren, die auf der Live-Dekodierliste gehört wurden, nicht nur die im Logbuch — was jetzt auf Sendung ist, in Cyan unter den gearbeiteten Quadraten.
 gridtracker-drag-pan-wheel-zoom-amber = Ziehen zum Schwenken, Rad zum Zoomen. Bernstein = gearbeitet, Grün = bestätigt, Cyan = gehört.
 
 ## remote (src/remote.rs)
@@ -4576,13 +4574,10 @@ awards-confirmed = { $value } bestätigt
 
 bands-forecast-hamqsl-com-old = · Vorhersage von HAMQSL.com, { $value } alt
 bands-ncdxf-iaru-next-beacon-s = NCDXF/IARU · nächste Bake in { $now } s
-bands-hearing-means-path-open-each = { $callsign } bei { $location } — ihn zu hören heißt, dass der Weg auf { $band } offen ist. Jede Bake steigt alle 10 s ein Band höher, daher ändert sich diese Zeile in jedem Zeitschlitz.
 bands-radiants-placed = Radianten für { $lat }°, { $lon }° eingetragen
 bands-zhr = ZHR { $zhr }
 bands-radiant = Radiant { $alt_deg }° { $az_deg }
 bands-radiant-down = Radiant unten ({ $alt_deg }°)
-bands-km-s-parent-peak-rate =
-    { $value } ({ $code }) — { $velocity_kms } km/s, Mutterkörper { $parent }. Spitzenrate ZHR { $zhr } um { $peak }.
 
     Ein Radiant über dem Horizont heißt, dass die Spuren Sie erreichen können; ein schneller Schauer hinterlässt länger lebende ionisierte Spuren für Meteorstreuung auf 6 m und 2 m sowie die kurzen Öffnungen auf 10 m.
 
@@ -5445,3 +5440,3603 @@ upload-naming-original = Originaler Dateiname
 wheel-action-zoom = Zoomen
 wheel-action-tune = Abstimmen
 wheel-action-none = Nichts
+
+settings-alerts-say = SAGEN
+
+settings-alerts-say-hint = Diese Meldung vorlesen lassen
+
+settings-alerts-say-need-voice = Wählen Sie Stimme oder Ton + Stimme, um sie zu hören
+
+settings-alerts-say-voice-off = Schalten Sie die Stimme unter Einstellungen → Oberfläche → Sprachansagen ein
+
+settings-alerts-speaks = spricht: { $text }
+
+settings-picup-keep = behalten
+
+jtty-starting-receiver = JTTY-Empfänger wird gestartet…
+
+jtty-receive-audio-level = Empfangs-Audiopegel
+
+jtty-sending = {" "}SENDET{" "}
+
+jtty-sent-once-note = Die Nachricht wird einmal gesendet, wenn Sie TX drücken — JTTY ist asynchron, es gibt also keine Periode zu warten und nichts wiederholt sich.
+
+signalid-title = SIGNAL-ID
+
+signalid-tuned-now = Jetzt abgestimmt
+
+signalid-passband = Durchlassbereich { $bw }
+
+signalid-band = { $band }-Band
+
+signalid-find = Suchen
+
+signalid-find-hint = FT8, Meteor, Wetter, Flugzeug…
+
+signalid-candidates = { $n } Kandidaten für diese Frequenz
+
+signalid-matches = { $n } Treffer für „{ $query }“
+
+signalid-nothing-fits = Nichts im Katalog passt zu dieser Frequenz, Betriebsart und diesem Durchlassbereich.
+
+signalid-no-match = Kein Katalogeintrag passt dazu.
+
+signalid-open-url = { $url } öffnen
+
+windows-chip-del = LÖSCH
+
+windows-chip-edt = ÄNDERN
+
+windows-chip-ren = UMBEN
+
+windows-chip-rec = AUFN
+
+windows-name-hint = Name
+
+windows-waterfall-marks = Wasserfall
+
+windows-stacked = gestapelt
+
+jtty-listening-note = Hört zu. JTTY-Aussendungen können jederzeit beginnen — eine Nachricht erscheint hier kurz nach dem Empfang.
+
+extras-title = EXTRAS
+
+extras-receivers = Empfänger
+
+extras-dab-hint = DAB-/DAB+-Digitalradio — der Player öffnet sich unter dem Wasserfall
+
+extras-aircraft-watch-hint = FLUGZEUGE — ein Flugzeug auf Ihrer Beobachtungsliste ist in der Luft; die Beobachtungsansicht öffnen
+
+extras-aircraft-hint = FLUGZEUGE — die Karte dessen, was das Funkgerät hört: Flugzeuge und Radiosonden, in einem abtrennbaren Fenster
+
+extras-radio-hint = RADIO CLASSIC — eine klassische Radioansicht zum Rundfunkhören: Bänder, Speicher, Sendername und RadioText. Sie dockt in den Sprachbetriebsarten unter dem Wasserfall an; unter Einstellungen → Abtrennbar kommt sie in ein eigenes Fenster
+
+extras-antenna = ANTENNE
+
+extras-antenna-hint = ANTENNE — Schnittlängen und SWR für Dipol, Vertikal, Groundplane, Schleife oder Yagi
+
+recjobs-title = AUFNAHMEN
+
+recjobs-finished = „{ $name }“ beendet
+
+recjobs-skipped = „{ $name }“ übersprungen — es wird bereits aufgenommen
+
+recjobs-recording-name = Aufnahme von „{ $name }“
+
+recjobs-new-job = + NEUER AUFTRAG
+
+recjobs-recording = ● Aufnahme läuft
+
+recjobs-none = Keine geplanten Aufnahmen — mit + NEUER AUFTRAG einen hinzufügen.
+
+recjobs-done = erledigt
+
+recjobs-edit = bearbeiten
+
+recjobs-del = löschen
+
+recjobs-station = Sender
+
+recjobs-station-hint = BBC World Service
+
+recjobs-kind = Art
+
+recjobs-start-utc = Start (UTC)
+
+recjobs-for = Dauer
+
+recjobs-save = SPEICHERN
+
+recjobs-kind-audio = Audio
+
+recjobs-kind-iq = I/Q
+
+recjobs-kind-both = Beides
+
+panels-sensitivity = Empfindlichkeit
+
+navtex-hunting = Suche
+
+navtex-hunting-hint =
+    Es wird noch nichts gelesen.
+    
+    Fast immer liegt es an der Abstimmung. Geben Sie die angegebene Zahl (518) NICHT in das Frequenzfeld ein: NAVTEX wird als Kanal angegeben, und dieses Programm hört knapp darunter. Klicken Sie stattdessen oben auf die Schaltfläche 518 — sie stellt die richtige Frequenz für Sie ein (516,300).
+    
+    Wenn eindeutig ein starkes Signal da ist, der Text aber trotzdem Unsinn bleibt, drücken Sie REV: Es kommt seitenverkehrt an.
+    
+    Bedenken Sie auch: NAVTEX folgt einem Fahrplan und ist kein Gespräch — eine Küstenfunkstelle sendet alle vier Stunden zehn Minuten lang, Stille ist also meistens normal. Sie müssen zuhören, wenn Ihre Station an der Reihe ist. Und 518 kHz wird nur nachts lebendig — ein ruhiges Band am Tag ist kein defekter Decoder.
+
+navtex-sensitivity-hint =
+    Empfindlichkeit — wie bereitwillig der Decoder ein Signal aufnimmt und hält.
+    
+    Auto verwendet die Referenzschwellen (0), das Verhalten im Auslieferungszustand.
+    
+    + akzeptiert ein schwächeres oder verrauschteres Signal; − wartet auf ein saubereres, bevor Synchronisation gemeldet wird, wodurch Rauschen nicht als Zeichen gelesen wird.
+    
+    Keine Lautstärke: NAVTEX ist FSK, die Graustufen stammen aus den Tönen, nicht aus der Signalstärke.
+
+navtex-auto-hint = Kehrt zu den Referenzschwellen (0) zurück. Hervorgehoben, solange aktiv.
+
+navtex-tune-dial-usb-below-channel = Stellt die Frequenz hier ein (USB, 1,710 kHz unter dem Kanal).
+
+settings-audio-your-audio = Ihr Audio
+
+settings-audio-your-audio-why = Die Lautsprecher, über die Sie hören, und das Mikrofon, über das Ihre Stimme hinausgeht. Sie gehören zu diesem Rechner und nicht zu einem Funkgerät, gelten also für jedes Gerät, mit dem Sie arbeiten.
+
+settings-audio-browser-note = Die Audiogeräte werden hier im Browser gewählt, nicht in diesem Fenster – die Seite fragt den Browser nach Lautsprechern und Mikrofon. Die Soundkarten-Einstellungen Ihrer Station weiter unten auf dieser Seite gelten weiterhin.
+
+settings-audio-speakers = Lautsprecher
+
+settings-audio-channels-hint = Auf welchen Lautsprecherkanal bzw. welche Kanäle der empfangene Ton gelangt. Links oder Rechts schaltet den anderen stumm, um nur auf einer Seite zu hören.
+
+settings-audio-microphone-note = Das Mikrofon trägt Ihre Stimme hinaus, wenn das Gerät per Ton (MCW) oder per VOX getastet wird. Tastet Ihr Gerät stattdessen selbst über CAT, wird das Mikrofon beim Senden gar nicht benutzt und diese Zeile ändert nichts.
+
+settings-audio-stream-out = Audio nach außen streamen
+
+settings-audio-stream-out-why = Sendet, was dieses Funkgerät empfängt, über das Netzwerk an ein anderes Programm – einen Decoder, einen Rekorder, einen zweiten Rechner –, ohne Umweg über eine Soundkarte.
+
+settings-audio-send-to-hint =
+    `Host:Port`. Mono, 16 Bit, mit der Empfangsrate, ein Datagramm pro Audioblock, und es ist das Audio des **Aufnahmeabgriffs**: AF-Lautstärke, MUTE und Senden beeinflussen es nicht, denn ein externer Decoder will das Signal des Funkgeräts und nicht Ihre Kopfhörerlautstärke.
+    
+    Eine numerische Adresse, kein Hostname. Leer bedeutet aus.
+
+settings-audio-send-to-note = `127.0.0.1:7355` sendet es an ein anderes Programm auf diesem Rechner; die eigene Adresse dieses Rechners sendet es über das Netzwerk.
+
+settings-audio-radio-audio = Audio dieses Funkgeräts
+
+settings-audio-radio-audio-why = Die Soundkarte zwischen diesem Funkgerät und diesem Rechner. Sie gehört zum Funkgerät und nicht zum Rechner: Zwei Geräte können sich den Rechner teilen und trotzdem verschiedene Karten brauchen, daher bleiben diese Einstellungen bei dem Gerät, von dem aus Sie die Einstellungen geöffnet haben.
+
+settings-audio-no-cards-yet = Dieser Rechner hat seine Soundkarten noch nicht gemeldet. Die Namen können unten trotzdem eingetippt werden; eine Liste erscheint, sobald die Geräte abgefragt wurden.
+
+settings-audio-rescan = Soundkarten neu suchen
+
+settings-audio-rescan-hint =
+    Fragt den Rechner erneut, welche Soundkarten er hat. Es wird nichts geöffnet, daher ist es beim Empfang ungefährlich.
+    
+    Nach dem Anstecken eines Codecs verwenden. Das Funkgerät wird dabei nicht neu geöffnet – das ist Übernehmen / Neu verbinden im Reiter Funkgerät – und eine vom Soundserver umbenannte Karte lässt sich so nicht reparieren; das wird am Funkgerät gemeldet.
+
+settings-audio-from-radio = Vom Funkgerät
+
+settings-audio-to-radio = Zum Funkgerät
+
+settings-audio-radio-note = { "*" }*Vom Funkgerät** ist das, was Ihr Gerät ausgibt – ein USB-Audioausgang oder die Kopfhörerbuchse eines Empfängers an den Line-Eingang einer Soundkarte. **Zum Funkgerät** ist das, worauf das Gerät für Ihre Stimme hört, und so tastet das Programm ein Gerät auch per Ton: Lassen Sie es leer, wird das Mikrofon des Geräts verwendet, falls es eines hat.
+
+settings-audio-recording = Aufnahme
+
+settings-audio-recording-why = Wohin Audioaufnahmen, geplante Aufnahmen und rohe I/Q-Mitschnitte geschrieben werden.
+
+enigma-need-more = mehr Geheimtext zum Arbeiten eingeben
+
+enigma-title = ENIGMA
+
+enigma-no-cables = keine Kabel
+
+enigma-thin = dünn
+
+enigma-rotor = Walze
+
+enigma-window-hint = Grundstellung — klicken, um die Walze weiterzudrehen
+
+enigma-input-hint = tippen oder die Tasten oben benutzen
+
+enigma-clear = LÖSCHEN
+
+enigma-copy = KOPIEREN ⇄
+
+enigma-solve-note = LÖSEN — einen Geheimtext einfügen. Für einen gesteckten Text ein erwartetes Wort (Crib) angeben; ohne Crib löst der Solver eine Maschine ohne Steckerverbindungen.
+
+enigma-crib = Crib
+
+enigma-solve = LÖSEN
+
+enigma-flaw = Ein Buchstabe wird nie in sich selbst verschlüsselt — dafür sorgt die Umkehrwalze. Das ist die Schwäche der echten Maschine, und darauf stützt sich der Solver beim Beschneiden.
+
+settings-audio-takes-over-speakers = { "*" }*Diese Lautsprecher sind ein Gerät des Soundservers, keine Soundkarte.** Wer sie benutzt, macht sie auch zum Wiedergabegerät für *alles andere* auf diesem Rechner – andere Programme spielen dann ebenfalls darüber. PipeWire erlaubt einem Programm hier nicht, sein eigenes Wiedergabeziel zu wählen, das ist also unvermeidlich. Zum Ändern: eine Soundkarte wählen oder den Standard des Rechners zurücksetzen (`wpctl set-default <Name>`) und neu suchen.
+
+settings-audio-takes-over-microphone = { "*" }*Dieses Mikrofon ist ein Gerät des Soundservers, keine Soundkarte.** Wer es benutzt, macht es auch zum Aufnahmegerät für *alles andere* auf diesem Rechner – andere Programme nehmen dann ebenfalls darüber auf. PipeWire erlaubt einem Programm nicht, seine eigene Aufnahmequelle zu wählen, das ist also unvermeidlich. Zum Ändern: eine Soundkarte wählen oder den Standard des Rechners zurücksetzen (`wpctl set-default <Name>`) und neu suchen.
+
+settings-audio-currently-chosen = ⚠  Aktuell gewählt: { $device }
+
+knowncalls-no-table = Diese Betriebsart führt keine Rufzeichentabelle. Es ist ein FT8/FT4-Decoder, der Rufzeichen hasht — alles andere hat hier nichts anzuzeigen.
+
+knowncalls-not-asked = Noch nicht abgefragt — AKTUALISIEREN drücken.
+
+knowncalls-nobody = Noch niemand. Eine Station wird aufgenommen, sobald ihr Rufzeichen im Klartext zu hören ist — ein CQ, ein Rapport mit beiden Rufzeichen im Klartext oder ein einfacher 11-m-Anruf.
+
+knowncalls-title = BEKANNTE STATIONEN
+
+knowncalls-intro = Jedes Rufzeichen, das ein gehashtes <...> auf diesem Empfänger derzeit benennen kann. Ein Hash lässt sich nicht rückwärts lesen — eine Station erscheint hier erst, wenn ihr Rufzeichen im Klartext zu hören war, wofür ein einfacher 11-m-Anruf dient.
+
+knowncalls-find-hint = Rufzeichen, Land, Präfix…
+
+knowncalls-refresh = AKTUALISIEREN
+
+knowncalls-capped = die neuesten { $shown } von { $total } — AKTUALISIEREN zum erneuten Abfragen, die Liste ist eine Momentaufnahme
+
+knowncalls-known = { $shown } bekannt
+
+knowncalls-matches =
+    { $n } { $n ->
+        [one] Treffer
+       *[other] Treffer
+    }
+
+knowncalls-no-match = Keine bekannte Station passt dazu.
+
+knowncalls-no-country = kein Land — kein Rufzeichen, das diese Tabelle kennt
+
+classic-controls = STEUERUNG
+
+classic-fold-the-column-away-to-a-rail-on = Die Spalte zu einer Leiste links einklappen. Anzeige und Messer bleiben in der Leiste, und die Schaltfläche zum Wiederöffnen sitzt auf der Leiste.
+
+classic-click-to-open-or-close-this = Klicken, um diesen Abschnitt zu öffnen oder zu schließen. Auf einen anderen Abschnitt ziehen, um ihn zu verschieben – die Reihenfolge wird gemerkt.
+
+classic-bring-the-control-column-back = Die Bedienspalte wieder einblenden.
+
+classic-no-radio = kein Funkgerät
+
+classic-rate = Rate
+
+classic-dial = Frequenz
+
+classic-receive = Empfang
+
+classic-listening-screen = Hörbildschirm
+
+classic-radio-settings = FUNKGERÄT-EINSTELLUNGEN
+
+classic-the-backend-the-sample-rate-the = Das Backend, die Abtastrate, die Antenne, der Konverter und die eigene Kalibrierung dieses Funkgeräts – Einstellungen → Funkgerät, wo sie schon immer waren. Die Spalte zeigt ihre Werte, statt die Bedienelemente ein zweites Mal anzubieten.
+
+classic-counted-in-steps-not-decibels-what = In Stufen gezählt, nicht in Dezibel: Was eine Stufe wert ist, bestimmt der Empfänger selbst, und beim SDRplay hängt es zusätzlich vom Band ab. Rechts bedeutet weiterhin mehr Verstärkung.
+
+classic-the-plutosdr-s-own-agc-is-setting = Die AGC des PlutoSDR selbst stellt diese Verstärkung ein, daher bewirkt der Regler nichts. Stellen Sie Einstellungen → Funkgerät → AGC auf Manuell, um sie hier zu steuern.
+
+classic-squelch = Rauschsperre
+
+classic-gate-the-audio-below-this-power-in = Sperrt das Audio unterhalb dieser Leistung im Empfangsdurchlass, in dBFS. Links ist offen. Über dem Rauschen und unter dem Signal einstellen.
+
+classic-this-radio-has-not-reported-what = Dieses Funkgerät hat noch nicht gemeldet, was es kann – die Verbindung ist geschlossen oder es hat nicht geantwortet.
+
+classic-open-the-link-in-the-radio-strip = Öffnen Sie die Verbindung in der Funkgeräteleiste, dann erscheinen hier die Sendebedienelemente.
+
+classic-this-device-receives-only-it-has = Dieses Gerät empfängt nur: Es hat keinen Sender, den dieses Programm tasten könnte.
+
+classic-transmit-is-offered-by-a-rig-with = Senden bietet ein Gerät mit Steuer- oder Audiopfad – Einstellungen → Funkgerät.
+
+classic-transmit-is-off-for-this-radio-s = Senden ist für den Bildschirm dieses Funkgeräts ausgeschaltet.
+
+classic-settings-radio-show-transmit = Einstellungen → Funkgerät → „Sendebedienelemente anzeigen“ blendet sie wieder ein.
+
+classic-key = Taste
+
+classic-controlled-envelope-ssb-how-much = SSB mit kontrollierter Hüllkurve: wie viel Sprachverarbeitung angewendet wird. Höher ist lauter und flacher, auf Kosten etwas mehr Splatter zu beiden Seiten.
+
+classic-holding-the-squelch-open-click-to = Rauschsperre wird offen gehalten. Klicken, um die vorherige Schwelle wiederherzustellen.
+
+classic-click-to-hold-the-squelch-open-to = Klicken, um die Rauschsperre offen zu halten – um zu hören, ob etwas da ist – und erneut klicken, um sie genau wie vorher wiederherzustellen.
+
+panels-received = Empfangen
+
+panels-text = Text
+
+panels-hex = Hex
+
+panels-nothing-received-yet = Noch nichts empfangen.
+
+panels-payload = Nutzdaten
+
+panels-blocks = Blöcke
+
+panels-sequence = Sequenz
+
+uvpacket-starting-receiver = UVPacket-Empfänger wird gestartet…
+
+uvpacket-frames-count = { $n } Frames
+
+uvpacket-frames-count-hint = Seit dem Start des Empfängers dekodierte Frames.
+
+uvpacket-intro = Ein Paketmodus für private VHF/UHF-Gruppen. Stellen Sie die Frequenz auf den Kanal der Gruppe ein; der Untermodus wird aus jedem Frame erkannt.
+
+uvpacket-nothing-yet = Noch nichts. UVPacket ist zwischen den Aussendungen still — lassen Sie es auf einem Kanal und warten Sie auf einen Burst.
+
+uvpacket-app-seq = App { $app } · Seq { $seq }
+
+uvpacket-click-read-frame = Klicken, um den ganzen Frame zu lesen.
+
+uvpacket-bps-net = { $bps } bit/s netto
+
+uvpacket-sub-mode = Untermodus
+
+uvpacket-app-type = App-Typ
+
+uvpacket-payload-bytes = { $n } Bytes
+
+dsc-starting-receiver = DSC-Empfänger wird gestartet…
+
+dsc-seq-tone = { $n } Seq · Ton { $pct } %
+
+dsc-seq-tone-hint = Sequenzen, die ihre Endmarke erreicht haben, und wie sauber sich die beiden Töne trennen.
+
+dsc-nothing-yet = Noch nichts. DSC ist zwischen den Schiffen still — lassen Sie es auf einem Kanal und warten Sie auf einen Burst.
+
+panels-marginal = grenzwertig
+
+dsc-marginal-hint = Ein Zeichen hat die BCH-Prüfung nicht bestanden — die angezeigten Felder können falsch sein.
+
+dsc-click-read-sequence = Klicken, um die ganze Sequenz zu lesen.
+
+panels-marginal-caps = GRENZWERTIG
+
+dsc-marginal-caps-hint = Mindestens ein Zeichen hat die BCH-Prüfung nicht bestanden. Die Sequenz wird angezeigt, weil ein unvollständig eingegangener Notruf trotzdem lesenswert ist.
+
+dsc-category = Kategorie
+
+dsc-nature = Art
+
+dsc-caller-mmsi = MMSI Anrufer
+
+dsc-target-mmsi = MMSI Ziel
+
+dsc-alert-time = Alarmzeit
+
+dsc-working-ch = Arbeitskanal
+
+dsc-raw-symbols = Rohsymbole
+
+dsc-none = (keine)
+
+settings-general-device-type-name = …oder den Namen eintippen – leer bedeutet Systemstandard
+
+settings-general-signed-in-station = Angemeldete Station
+
+settings-general-sign-out-hint = Vergisst die Anmeldung dieses Geräts. Die Station fragt bei der nächsten Verbindung erneut; diese bleibt bis zum Schließen bestehen.
+
+settings-general-recordings-remote = Aufnahmen werden auf dem Rechner geschrieben, an dem das Funkgerät hängt. Legen Sie den Ordner dort fest.
+
+settings-general-folder = Ordner
+
+settings-general-choose = WÄHLEN…
+
+settings-general-choose-hint = Den Ordner wählen, in den Aufnahmen geschrieben werden
+
+settings-general-default = STANDARD
+
+settings-general-default-hint = Zurück zum Standard – Ihr Musikordner oder das Konfigurationsverzeichnis, wenn das System keinen hat
+
+settings-general-recordings-dir-note = Wohin Audioaufnahmen, geplante Aufnahmen und rohe I/Q-Mitschnitte geschrieben werden. Standard: der Unterordner sdroxide Ihres Musikordners oder der Ordner recordings im Konfigurationsverzeichnis, wenn das System keinen Musikordner bereitstellt.
+
+setup-suffix-cq = { " " }CQ
+
+setup-suffix-tries = { " " }Versuche
+
+setup-window = Fenster
+
+setup-south = Süd
+
+setup-west = West
+
+setup-message-templates = Nachrichtenvorlagen  { $tokens }
+
+setup-ft8-decoder-effort-hint =
+    Wie gründlich der FT8-Decoder bei schwachen Signalen arbeitet.
+    
+    Fast — ein Durchgang, keine Signalsubtraktion: am schnellsten, wenigste Dekodierungen.
+    Normal — einfache Subtraktion in mehreren Durchgängen: ~0,4 s bei vollem Slot, einige Dekodierungen weniger als Deep.
+    Deep — der Durchgang mit Zwischenspeicherung aus WSJT-X: ~1,2 s und die meisten Dekodierungen (Standard).
+    
+    Nur der zweite Schwung an Dekodierungen wird gesteuert; der einfache Durchgang wird immer zuerst ausgegeben, eine Antwort wird dadurch also nie aufgehalten.
+
+setup-auto-cq-repeats-hint = Wie viele CQ-Rufe ein Durchlauf sendet, bevor er endet. 0 bedeutet kein eigenes Limit: Sendewächter und Inaktivitätsstopp begrenzen den Durchlauf trotzdem.
+
+setup-auto-cq-then-listen-hint = Nach diesen CQ-Rufen von AUTO CQ auf AUTO RX umschalten und weiter hören, statt ganz anzuhalten. Aus: Der Durchlauf endet.
+
+setup-auto-call-retries-hint = Wie oft eine Station gerufen wird, bevor der Durchlauf aufgibt und in der Warteschlange weitergeht.
+
+setup-auto-session-hint = Wie lange ein unbeaufsichtigter Durchlauf höchstens dauern darf, egal womit er gerade beschäftigt ist. 0 bedeutet kein eigenes Limit.
+
+setup-serial-contests-hint = Contests mit laufender Nummer — ARRL RTTY Roundup und CQ WPX über FT8: ein Rapport und eine laufende Nummer (oder ein US-Bundesstaat), ohne Locator. CQ wird als CQ RU gesendet.
+
+setup-tx-level-fm-hint =
+    Mit welchem Pegel der Burst dieses Modus an ein Funkgerät übergeben wird, das ihn selbst moduliert — und bei FM ist das der Hub, denn ein FM-Sender setzt den Audiopegel in Frequenzhub um und hat keine ALC, die ihn bremst. 1200-Baud-Packet braucht etwa 3 kHz, wo Sprache 5 braucht; Vollaussteuerung an einem für Sprache eingestellten Dateneingang übersteuert den Hub — was für einen Zuhörer völlig normal klingt und bei niemandem dekodiert. Regeln Sie herunter, bis andere Stationen Sie melden, oder stellen Sie den Pegel am Funkgerät ein.
+    
+    Dieser Pegel gilt nur für diesen Modus. Ein nie eingestellter Modus beginnt mit dem FM-Wert, die Seitenband-Modi mit ihrem eigenen — ein für 1200 Baud eingestellter Hub landet also nie bei FT8.
+
+setup-tx-level-ssb-hint =
+    Mit welchem Pegel die Aussendung dieses Modus an ein Funkgerät übergeben wird, das sie selbst moduliert — ein CAT-Gerät an seiner Soundkarte, ein FLEX, ein Icom über seinen Netzwerkport. Im Seitenband ist das die Aussteuerung des Modulators: Regeln Sie herunter, bis die ALC des Geräts sich kaum noch bewegt, und stellen Sie die Leistung am Funkgerät ein, denn arbeitende ALC bei einem Modus mit konstanter Hüllkurve erzeugt Splatter. Die Aussteuerung erreicht hier das Leistungsregister des Geräts, nicht dessen Audio — das ist also der Pegel.
+    
+    Dieser Pegel gilt nur für diesen Modus: FT8, RTTY, PSK und MCW behalten jeweils ihren eigenen, weil sie den Modulator nicht gleich belasten. Derselbe Regler liegt in der Sendeleiste, erreichbar, während Sie senden.
+
+setup-repeats-hint-base = Unbeantwortete Rufe an eine Station, bevor weitergegangen wird. CQ-Rufe sind ausgenommen.
+
+setup-repeats-hint-duration = { " " }Bei der Slotlänge von { $mode } ({ $slot } s) sind das etwa { $mins } min.
+
+setup-repeats-hint-disables = { " " }0 schaltet es ab.
+
+setup-repeats-hint-11m = { " " }Auf 11 m beendet dies auch eine CQ-Serie: Der Sendewächter schneidet sie nicht ab, weil eine Station, die auf ein CQ antwortet, innerhalb von etwa 30 s erwartet wird und eine Uhr eine frische Serie nicht von einer veralteten unterscheiden kann.
+
+setup-symbol-home-station = Heimstation
+
+setup-symbol-car = Auto
+
+setup-symbol-truck = Lastwagen
+
+setup-symbol-van = Transporter
+
+setup-symbol-motorcycle = Motorrad
+
+setup-symbol-bicycle = Fahrrad
+
+setup-symbol-person-on-foot = Person zu Fuß
+
+setup-symbol-motorhome = Wohnmobil
+
+setup-symbol-boat = Boot
+
+setup-symbol-yacht = Yacht
+
+setup-symbol-light-aircraft = Leichtflugzeug
+
+setup-symbol-balloon = Ballon
+
+setup-symbol-digipeater = Digipeater
+
+setup-symbol-i-gate = I-Gate
+
+setup-symbol-repeater = Relais
+
+setup-symbol-weather-station = Wetterstation
+
+setup-symbol-hospital = Krankenhaus
+
+setup-symbol-portable-campsite = Portabel / Campingplatz
+
+settings-general-sign-out = ABMELDEN
+
+settings-general-fallback-password = In diesem Browser wird ein Passwort für { $stations } gemerkt, weil kein Anmelde-Cookie akzeptiert wurde. Ältere Stationen tun das; es ist nicht dasselbe.
+
+settings-general-device-hint-speakers = Der genaue Name, unter dem Ihre Lautsprecher geöffnet werden. Wählen Sie ihn aus der Liste, wenn er dort steht; tippen Sie ihn ein, wenn die Liste ihn nicht zeigt – ein Soundserver kann ein Gerät anbieten, das die Host-API nicht auflistet. Leer verwendet den Systemstandard.
+
+settings-general-device-hint-microphone = Der genaue Name, unter dem Ihr Mikrofon geöffnet wird. Wählen Sie ihn aus der Liste, wenn er dort steht; tippen Sie ihn ein, wenn die Liste ihn nicht zeigt – ein Soundserver kann ein Gerät anbieten, das die Host-API nicht auflistet. Leer verwendet den Systemstandard.
+
+settings-general-device-hint-radio-rx = Der genaue Name, unter dem der Empfangston dieses Funkgeräts geöffnet wird. Wählen Sie ihn aus der Liste, wenn er dort steht; tippen Sie ihn ein, wenn die Liste ihn nicht zeigt – ein Soundserver kann ein Gerät anbieten, das die Host-API nicht auflistet. Leer verwendet den Systemstandard.
+
+settings-general-device-hint-radio-tx = Der genaue Name, unter dem der Sendeton dieses Funkgeräts geöffnet wird. Wählen Sie ihn aus der Liste, wenn er dort steht; tippen Sie ihn ein, wenn die Liste ihn nicht zeigt – ein Soundserver kann ein Gerät anbieten, das die Host-API nicht auflistet. Leer verwendet den Systemstandard.
+
+settings-general-device-hint-other = Der genaue Name, unter dem das Gerät geöffnet wird. Wählen Sie ihn aus der Liste, wenn er dort steht; tippen Sie ihn ein, wenn die Liste ihn nicht zeigt – ein Soundserver kann ein Gerät anbieten, das die Host-API nicht auflistet. Leer verwendet den Systemstandard.
+
+settings-general-cb-world = Welt / Freiband — 80 Kanäle
+
+settings-general-cb-cept = CEPT / EU — 40 Kanäle
+
+settings-general-cb-germany = Deutschland — 80 Kanäle
+
+settings-general-cb-uk = Vereinigtes Königreich — 27/81, 40 Kanäle
+
+settings-general-cb-us = Vereinigte Staaten — 40 Kanäle
+
+settings-general-cb-australia = Australien — 40 Kanäle
+
+settings-general-cb-pmr446 = PMR446 — 16 Kanäle (446 MHz)
+
+settings-general-cb-dpmr446 = dPMR446 — 32 Kanäle (446 MHz)
+
+wefax-receiving-progress = Empfang { $min } min · { $lines } Zeilen
+
+wefax-listening = hört zu
+
+wefax-status-hint =
+    Warte auf eine Karte.
+    
+    WEFAX folgt einem Fahrplan und ist kein Gespräch: Eine Station sendet ihre Karten zu festen Zeiten, eine gewählte Frequenz ist also den größten Teil des Tages still — das ist normal. Wählen Sie mit der Schaltfläche STATIONS eine Station aus und prüfen Sie die Zeit.
+    
+    Wenn ein Signal da ist, das Bild aber einfarbig flach ausfällt (ganz grau, ganz schwarz oder ganz weiß), liegt es an der Abstimmung oder der Geschwindigkeit — nutzen Sie die Anzeige +0 Hz und die IOC-/Geschwindigkeitseinstellung und prüfen Sie, ob der Eintrag unter STATIONS zum Gesendeten passt.
+
+wefax-centre = ZENTRIEREN
+
+wefax-centre-hint = Verschiebt die Frequenz um { $sign }{ $off } Hz, damit der Hilfsträger wieder bei 1900 Hz liegt — der Empfänger liegt { $off } Hz daneben, wodurch die Karte zur weißen Seite wird.
+
+wefax-sensitivity-hint =
+    Empfindlichkeit — wie bereitwillig der Decoder eine Karte startet und hält.
+    
+    Auto verwendet die aus dem Phasensignal der Karte selbst gemessenen Schwellen, das ist die Referenz 0.
+    
+    + akzeptiert schwächere, blassere oder verrauschtere Karten; − wartet vor dem Start auf ein sauberes Signal.
+    
+    Weder Lautstärke noch Kontrast: Ein Fax ist frequenzmoduliert, die Grautöne stammen aus den Tönen 1500 / 2300 Hz, nicht aus der Signalstärke.
+
+wefax-auto-hint = Kehrt zu den Referenzschwellen (0) zurück und überlässt die Steuerung den eigenen Messungen des Decoders. Hervorgehoben, solange aktiv.
+
+wefax-auto-start-hint = Beginnt eine Karte, wenn der Starton mit 300 Hz (IOC 576) oder 675 Hz zu hören ist oder, falls der Ton in einem Schwund oder unter einem Träger unterging, wenn einige Sekunden des Phasensignals eintreffen — und beendet die laufende Karte und phast die neue ein, sobald die nächste Aussendung eintrifft, ob zuvor ein Stoppton kam oder nicht. Ein Träger auf dem Kanal startet nichts.
+
+wefax-fit = PASSEN
+
+wefax-rotate-180 = 180° DREHEN
+
+wefax-rotate-hint = Dreht die Karte auf dem Bildschirm um 180° — für ein Bild, das auf dem Kopf angekommen ist. Dreht das angezeigte Bild; speichern Sie es danach, um die Drehung zu behalten.
+
+wefax-rotate-unavailable-hint = Dreht die Karte auf dem Bildschirm um 180°. Verfügbar, sobald die Karte vollständig ist — ein noch eintreffendes Bild zu drehen, würde es durcheinanderbringen.
+
+wefax-save-chart-hint = Speichert die Karte auf dem Bildschirm auf diesem Computer, soweit sie angekommen ist
+
+wefax-waiting-for-chart = Stellen Sie einen Fax-Fahrplan in USB ein und warten Sie auf den Beginn der Karte (Starton oder Phasensignal), oder drücken Sie START, um mitten in der Karte zu beginnen.
+
+wefax-carrier-dial-note = Träger { $carrier } · Frequenz { $dial } kHz (USB −1,9k)
+
+wefax-carrier-note-hint = Der Stationschip nennt den veröffentlichten Träger; der Radiofax-Hilfsträger liegt 1900 Hz darüber, deshalb steht die Frequenz bewusst 1,9 kHz tiefer. Stellen Sie die Frequenz auf den Träger selbst ein, fällt das Signal aus dem Durchlassbereich.
+
+contest-title = CONTEST
+
+contest-intro = Einen Contest wählen und eintragen, was Sie senden. Das Logbuch funktioniert in jeder Betriebsart — den Austausch für CW oder SSB eintippen; die FT8-Seite füllt ihn selbst aus, wenn der Contest ein FT8-Format hat.
+
+contest-you-send = { "  " }Sie senden: { $exchange }
+
+contest-they-send = { "  " }die Gegenstation sendet: { $exchange }
+
+contest-cb-note = CB-/11-m-Aktivität: ein Rapport und ein Freitext-Austausch — Kanal, Name oder Gebiet der Aktivität dort eintragen.
+
+contest-your-exchange = Ihr Austausch
+
+contest-start = START
+
+contest-score-line = QSO { $qsos } · { $points } Pkt · { $mults } Mult · ERGEBNIS { $total }
+
+contest-rate = { $r10 } in 10 Min · { $r60 }/h
+
+contest-stop = STOPP
+
+contest-estimate = das Ergebnis ist eine Schätzung — der Veranstalter entscheidet
+
+contest-call = RUFZEICHEN
+
+contest-dupe = DUPE
+
+contest-sent = GESENDET
+
+contest-rcvd = EMPFANGEN
+
+contest-sending = sende { $rst }
+
+contest-sending-ours = sende { $rst } { $ours }
+
+contest-log = LOG
+
+playback-radio-n = { " " }· Radio { $n }
+
+playback-no-stamp = kein Zeitstempel im Namen — wird in der aktuellen Betriebsart abgespielt
+
+playback-title = WIEDERGABE — aufgenommenes Audio
+
+playback-find-hint = Betriebsart, MHz, Datum, Name…
+
+playback-refresh-hint = Aufnahmeordner erneut einlesen
+
+playback-asking = Aufnahmen werden bei der Station angefragt…
+
+playback-folder = Ordner: { $dir }
+
+playback-none = Noch keine Aufnahmen. REC → MP3 oder WAV drücken, während etwas auf Sendung ist; die Datei erscheint hier, benannt nach Uhrzeit, Frequenz und Betriebsart.
+
+playback-on = ▶ AKTIV
+
+playback-play = ▶ ABSPIELEN
+
+playback-iq-hint = Eine I/Q-Aufnahme, kein Audio. Die Wiedergabe nimmt das vom Rekorder geschriebene Audio; eine I/Q-Aufnahme wird mit --file abgespielt.
+
+playback-not-while-tx = Nicht während des Sendens
+
+playback-play-hint = Diese Aufnahme von Anfang an in die Decoder einspielen
+
+playback-busy-playing = Wird abgespielt — vor dem Löschen stoppen
+
+playback-busy-recording = Wird noch aufgenommen — vor dem Löschen REC beenden
+
+playback-delete-ask = LÖSCHEN?
+
+playback-delete-hint-armed = Erneut drücken, um diese Datei endgültig zu löschen. Das lässt sich nicht rückgängig machen.
+
+playback-delete-hint = Diese Aufnahme aus dem Ordner löschen (fragt vorher noch einmal nach)
+
+playback-strip-label = ▶ WIEDERGABE
+
+playback-not-live = nicht live — das Funkgerät pausiert
+
+playback-carry-on = Wiedergabe fortsetzen
+
+playback-pause = ⏸ PAUSE
+
+playback-pause-hint = Pause — die Decoder hören Stille, bis Sie fortsetzen
+
+playback-again = ↺ NOCHMAL
+
+playback-again-hint = Zurück zum Anfang — ein neuer Versuch für ein Bild oder eine Dekodierung
+
+playback-loop = SCHLEIFE
+
+playback-loop-hint = Am Dateiende wieder von vorn beginnen
+
+playback-stop = ■ STOPP
+
+playback-stop-hint = Wiedergabe beenden und das Funkgerät in den vorherigen Zustand zurückversetzen
+
+playback-files = DATEIEN
+
+playback-end-of-file = Dateiende
+
+playback-paused = pausiert
+
+playback-recorded-on-mode = Aufgenommen auf { $mhz } MHz in { $mode } — Frequenz und Betriebsart wurden aus dem Dateinamen übernommen.
+
+playback-recorded-on = Aufgenommen auf { $mhz } MHz — Frequenz und Betriebsart wurden aus dem Dateinamen übernommen.
+
+playback-no-dial-mode = Der Name enthält weder Frequenz noch Betriebsart, daher wird in der aktuellen Betriebsart abgespielt — den Decoder im Betriebsartenmenü wählen.
+
+playback-format-stereo = { $rate } Hz, Stereo — der linke (Empfangs-)Kanal wird abgespielt.
+
+playback-format-mono = { $rate } Hz, Mono — der einzige Kanal wird abgespielt.
+
+playback-stopped = Gestoppt: { $fault }
+
+playback-intro = Eine Aufnahme in die Decoder einspielen — SSTV, CW, RTTY, PSK, FT8 und jede andere Betriebsart, die aus Audio dekodiert. Das Funkgerät pausiert während der Wiedergabe, Frequenz und Betriebsart wechseln zu denen der Aufnahme, und STOPP stellt das Funkgerät wieder her. Die Betriebsart während der Wiedergabe wechseln, um einen anderen Decoder auszuprobieren.
+
+packet-callsign-hint = Rufzeichen
+
+packet-via-hint = via
+
+aprs-filter-hint = Filter
+
+aprs-msg-sent = gesendet
+
+aprs-msg-ack = quittiert
+
+aprs-msg-rejected = abgelehnt
+
+aprs-reply-chip = antw.
+
+aprs-to-hint = an
+
+aprs-message-hint = Nachricht
+
+aprs-raw-chip = ROH
+
+fsq-to-button = AN
+
+fsq-del-chip = LÖSCH
+
+macros-column-key = Taste
+
+macros-column-button = Taste
+
+macros-column-sends = sendet
+
+macros-label-hint = Beschriftung
+
+macros-add = NEU
+
+macros-note-placeholders = { $mycall } und { $mygrid } werden beim Senden der Nachricht eingesetzt.
+
+macros-buttons-note = Jede Taste sendet ihren ganzen Text auf einmal. F1–F9 lösen die ersten neun aus, solange nichts auf dem Bildschirm die Tastatur belegt.
+
+widgets-new-entity-band = Neue Entität auf { $band_label }
+
+widgets-worked-before-band = Auf { $band_label } bereits gearbeitet
+
+widgets-worked-before-any = Bereits gearbeitet
+
+vdl2-col-sig = SIG
+
+vdl2-col-age = ALTER
+
+vdl2-command = Befehl
+
+vdl2-response = Antwort
+
+vdl2-frame-hint = Frame
+
+vdl2-suffix-messages = { " " }Nachrichten
+
+vdl2-suffix-stations = { " " }Stationen
+
+ale-words-count = { $n } Wörter
+
+ale-waiting-audio = Warte auf Audio…
+
+ale-no-words-yet = Noch keine Wörter. Stimmen Sie einen ALE-Kanal ab (z. B. 8992 oder 11175 kHz USB) und warten Sie auf einen Ruf.
+
+atchat-role-master = MASTER
+
+atchat-role-backup = BACKUP
+
+atchat-me = ich
+
+dab-sub-channel = { " " }· Subkanal { $n }
+
+dab-starting-receiver = DAB-Empfänger wird gestartet …
+
+dab-no-ensemble-yet = noch kein Ensemble benannt — gibt es auf diesem Kanal eine DAB-Aussendung?
+
+dab-window-stats = { $mhz } MHz · { $frames } Frames · { $fibs } FIBs
+
+dab-volume-meter-hint = Der Sender, wie Sie ihn hören, links und rechts — und die Lautstärke: Ziehen Sie oder klicken Sie entlang der Balken, oder nutzen Sie das Mausrad. Nach einem Klick ändern die Pfeiltasten sie schrittweise. Funktioniert auch bei mit dem Schloss gesperrtem Bildschirm.
+
+rade-searching = Suche
+
+rfpaint-swl-note = RF Paint ist ein reiner Sendemodus — im SWL gibt es nichts anzuzeigen.
+
+cw-hand-key-arm-hint = Scharfen Sie den Keyer und nutzen Sie die USB-Paddle. Die Kontakte gehen an die Engine, die Punkte und Striche mit der Sendegeschwindigkeit erzeugt — hier und nicht im Panel, damit das Timing nicht auf ein Bild gerundet wird. Das Sendefeld ist gesperrt, solange dies aktiv ist, und wartender Text wird verworfen. Eine Handtaste an derselben Buchse funktioniert ebenfalls: Wählen Sie den Typ Handtaste.
+
+cw-own-keyer-hint =
+    Dieses Funkgerät sendet aus seinem eigenen Keyer: Der Text geht über den Steuerport und das Gerät taktet die Elemente, es gibt also nichts zwischen Hand und Äther, das eine Taste ansteuern könnte — weder eine Paddle noch eine Handtaste.
+    
+    Zum Handtasten stellen Sie CW-Tastung unter Einstellungen → Funkgerät auf „Soundkarte (MCW)“. Das Gerät bleibt dann auf einem Seitenband, und der Mithörton des Keyers wird als Audio gesendet; das ist der Weg, den die Handtaste ansteuert.
+
+cw-no-paddle-found = keine Paddle gefunden — wählen Sie eine unter Einstellungen → CW
+
+cw-msg-hint = Ihre eigenen Nachrichtentasten — ein Contest-Austausch, eine Antwort mit Name und QTH, TNX 73 GL. Jede sendet ihren ganzen Text auf einmal, und F1–F9 drücken die ersten neun. Sie gehören zur Konfiguration der Station, ein entfernter Client hat sie also auch.
+
+wspr-clear-rx = RX LÖSCHEN
+
+wspr-rx-count = { $n } rx
+
+wspr-sort-dist = DIST
+
+wspr-sort-country = LAND
+
+wspr-tx-enable = TX AKTIV
+
+wspr-stop-tx = TX STOPP
+
+wspr-listening-as = Hört zu als { $call } in { $sent } — eingestellt im Reiter Allgemein der Einstellungen.
+
+wspr-set-callsign-grid-label-spots = Tragen Sie Ihr Rufzeichen und Ihren Locator im Reiter Allgemein der Einstellungen ein, um Ihre Spots zu kennzeichnen.
+
+schedule-source-mine = eigene
+
+schedule-all-of-them = alle
+
+schedule-title = PROGRAMME
+
+schedule-at = Um
+
+schedule-now-chip = JETZT
+
+schedule-set-time = Zeit setzen
+
+schedule-find-hint = BBC, 6185, 15,4 MHz…
+
+schedule-target = Zielgebiet
+
+schedule-any = beliebig
+
+schedule-source = Quelle
+
+schedule-all-hint = Alle heruntergeladenen Sendepläne in einem Bestand. Eine Station, die in zwei davon steht, erscheint doppelt — genau dafür ist dieses Fenster da; das Panadapter zeigt nur einen Namen.
+
+schedule-favs = ★ FAVORITEN
+
+schedule-favs-hint = Nur die mit einem Stern markierten Stationen
+
+schedule-all-favs = ⭐ ALLE
+
+schedule-all-favs-hint = Alle Stationen des Sendeplans als Favoriten markieren und ihre Beschriftungen im Wasserfall zeigen, solange es eingeschaltet ist. Erneut klicken, um alle Favoriten zu löschen.
+
+schedule-solar-time = SONNENZEIT
+
+schedule-solar-time-hint = Pro Zeile die Ortszeit am Sender anzeigen — die Sonnenzeit, vier Minuten pro Längengrad, keine bürgerliche Zeitzone. Sie kennt weder Sommerzeit noch Zonengrenzen und heißt deshalb Sonnenzeit statt Ortszeit.
+
+schedule-map = KARTE
+
+schedule-map-hint = HÖREN öffnen — dieser Sendeplan als Karte. Eine Station darauf wählen, aufschreiben, was Sie gehört haben, und loggen. Die gewählte Station wird übernommen
+
+schedule-on-air = { $count } auf Sendung um { $time } UTC
+
+schedule-now = jetzt
+
+schedule-solar-hover = { $local } Sonnenzeit vor Ort bei { $site }, { $lon }°
+
+schedule-favourite-hint = Diese Station als Favorit markieren
+
+rc-radio-classic = RADIO CLASSIC
+
+rc-bands = Bänder
+
+rc-mem-programs = Speicher · Programme
+
+rc-recall-band-mode-frequency-and = Abrufen: Band, Modus, Frequenz und Filter auf einmal
+
+rc-no-memories-yet-store-one-with-mem = noch keine Speicher – einen mit MEM in der oberen Leiste ablegen
+
+rc-broadcast-schedule-what-is-on-when = Sendeplan – was läuft, wann und wo
+
+rc-bw-this-mode-has-one-fixed = BW – dieser Modus hat einen festen Durchlassbereich
+
+rc-bw-click-next-filter-right-click = BW – Klick: nächster Filter · Rechtsklick: vorheriger · Rad: Schritt
+
+rc-step = SCHRITT
+
+rc-step-click-next-tuning-step-right = SCHRITT – Klick: nächster Abstimmschritt · Rechtsklick: vorherige · Rad: Schritt
+
+rc-agc-click-next-speed-right-click = AGC – Klick: nächste Geschwindigkeit · Rechtsklick: vorherige · Rad: Schritt
+
+rc-open = OFFEN
+
+rc-sql-click-open-back-to-the-last = SQL – Klick: öffnen / zurück zur letzten Schwelle · Rad: Schwelle anheben oder absenken
+
+rc-s-meter = S-METER
+
+rc-wheel-on-a-digit-click-upper-lower = Rad auf einer Ziffer · Klick obere/untere Hälfte ± · Rechtsklick Null · Doppelklick zum Eintippen
+
+rc-music = MUSIK ♪
+
+rc-speech = SPRACHE
+
+rc-stereo-the-19-khz-pilot-is-locked = Stereo – der 19-kHz-Pilotton ist verriegelt
+
+rc-mono-the-broadcast-stereo-decode = Mono – die Stereo-Dekodierung des Rundfunks ist ausgeschaltet (ST in der oberen Leiste)
+
+rc-mono-noise-reduction-is-on-and = Mono – die Rauschminderung ist an, und Stereo weicht ihr
+
+rc-mono-no-19-khz-pilot-the-station = Mono – kein 19-kHz-Pilotton: Der Sender sendet mono, oder das Signal ist zu schwach
+
+rc-stereo = STEREO
+
+rc-group-broadcast = RUNDFUNK
+
+rc-group-ham = AMATEUR
+
+rc-group-air = FLUG
+
+rc-group-marine = SEEFUNK
+
+rc-cap-lw-mw-fm = LW / MW · UKW
+
+rc-cap-shortwave = KW · KURZWELLE
+
+rc-cap-amateur-bands = AMATEURFUNKBÄNDER
+
+rc-cap-airband = FLUGFUNK
+
+rc-cap-marine = SEEFUNK UKW · MF
+
+rc-cap-cb = JEDERMANNFUNK
+
+rc-preset-fm-ext = UKW erw. 64–87.5
+
+rc-mem-n = SP { $id }
+
+controls-action-tune = VFO abstimmen
+
+controls-action-rit-offset = RIT-Versatz
+
+controls-action-xit-offset = XIT-Versatz
+
+controls-action-volume = Lautstärke
+
+controls-action-sub-volume = Sub-RX-Lautstärke
+
+controls-action-squelch = Squelch
+
+controls-action-filter-width = Filterbreite
+
+controls-action-filter-shift = Filterverschiebung
+
+controls-action-agc-max-gain = AGC-Maximalverstärkung
+
+controls-action-manual-gain = Manuelle Verstärkung (AGC aus)
+
+controls-action-tx-drive = TX-Aussteuerung
+
+controls-action-tune-drive = Abstimm-Aussteuerung
+
+controls-action-mic-gain = Mikrofonverstärkung
+
+controls-action-digi-audio-freq = Digi-Audio-Versatz
+
+controls-action-spectrum-zoom = Spektrum-Zoom
+
+controls-action-spectrum-pan = Spektrum verschieben
+
+controls-action-spectrum-floor = Spektrum-Untergrenze
+
+controls-action-spectrum-ceiling = Spektrum-Obergrenze
+
+controls-action-ptt = PTT
+
+controls-action-tune-carrier = TUNE-Träger
+
+controls-action-mute = Stumm
+
+controls-action-noise-blanker = Störaustaster
+
+controls-action-nr-cycle = Rauschminderung (umschalten)
+
+controls-action-auto-notch = Auto-Notch
+
+controls-action-binaural = Binauraler Ton
+
+controls-action-agc-cycle = AGC (umschalten)
+
+controls-action-sub-rx = Zweitempfänger
+
+controls-action-split = Split
+
+controls-action-rit-enable = RIT ein/aus
+
+controls-action-xit-enable = XIT ein/aus
+
+controls-action-rit-clear = RIT löschen
+
+controls-action-xit-clear = XIT löschen
+
+controls-action-vfo-toggle = VFO A/B umschalten
+
+controls-action-swap-vfos = A↔B tauschen
+
+controls-action-copy-a-to-b = A→B kopieren
+
+controls-action-band-up = Band aufwärts
+
+controls-action-band-down = Band abwärts
+
+controls-action-mode-next = Nächste Betriebsart
+
+controls-action-mode-prev = Vorherige Betriebsart
+
+controls-action-record-toggle = Aufnahme ein/aus
+
+controls-action-abort-tx = Senden abbrechen
+
+controls-action-cw-straight = CW-Handtaste
+
+controls-action-voice-stop = Sprach-Keyer stoppen
+
+controls-action-tone-burst = 1750-Hz-Rufton
+
+controls-action-fit-span = Bereich anpassen
+
+controls-action-zoom-in = Vergrößern
+
+controls-action-zoom-out = Verkleinern
+
+controls-action-peak-hold = Spitzenwert halten
+
+controls-action-spectrum-collapse = Spektrum einklappen
+
+controls-action-waterfall-collapse = Wasserfall einklappen
+
+controls-action-waterfall-flip = Wasserfall umkehren
+
+controls-action-toggle-help = Handbuch-Fenster
+
+controls-action-toggle-settings = Einstellungsfenster
+
+controls-action-toggle-logbook = Logbuch-Fenster
+
+controls-action-toggle-spots = Spots-Fenster
+
+controls-action-toggle-memories = Speicher-Fenster
+
+controls-action-toggle-voice = Sprach-Keyer-Fenster
+
+controls-action-workspaces = Arbeitsbereiche-Fenster
+
+controls-action-speak-status = Status ansagen
+
+controls-action-speak-repeat = Letzte Ansage wiederholen
+
+controls-action-speech-silence = Ansage stoppen
+
+controls-action-speech-toggle = Ansagen ein/aus
+
+controls-action-broadcast-labels = Sendernamen (eingestellt / ganzes Band)
+
+controls-action-select-vfo = VFO { $vfo } wählen
+
+controls-action-band = Band { $band }
+
+controls-action-mode = Betriebsart { $mode }
+
+controls-action-recall-memory = Speicher { $n } abrufen
+
+controls-action-voice-slot = Sprach-Keyer-Platz { $n }
+
+controls-group-tuning = Abstimmung
+
+controls-group-receive = Empfang
+
+controls-group-transmit = Senden
+
+controls-group-display = Anzeige
+
+controls-group-windows = Fenster
+
+controls-group-speech = Sprache
+
+controls-midi-note = Note
+
+controls-midi-cc = CC
+
+controls-midi-pitch-bend = Pitch Bend
+
+controls-midi-program = Programm
+
+controls-midi-any = alle
+
+controls-midi-msg = { $kind } { $data }  Kanal { $ch }
+
+controls-midi-msg-pitch-bend = Pitch Bend  Kanal { $ch }
+
+settings-controls-down = runter
+
+settings-controls-rev = umk.
+
+antenna-antenna = ANTENNE
+
+antenna-cutting-lengths = Schnittlängen
+
+antenna-the-frequency-to-cut-for = Die Frequenz, für die zugeschnitten wird
+
+antenna-solve-impedance-and-gain = Impedanz und Gewinn berechnen
+
+antenna-run-the-method-of-moments-solver = Startet den Momentenmethoden-Solver auf den Vorlagen – reale Speiseimpedanz, SWR und Gewinn. Dauert einige Sekunden.
+
+antenna-yagi-stack = Yagi-Stockung
+
+antenna-optimize-yagi-for = Yagi optimieren auf
+
+antenna-optimizing = Optimiere…
+
+antenna-optimize-yagi = Yagi optimieren
+
+antenna-tune-the-yagi-s-element-lengths = Stimmt Elementlängen und Abstände der Yagi auf das gewählte Ziel ab. Ein lokaler Hill-Climb in einem Hintergrund-Thread; das Fenster bleibt dabei bedienbar.
+
+antenna-solved = Gelöst
+
+antenna-azimuth-pattern = Azimutdiagramm
+
+antenna-3d-drag-to-rotate = 3D – zum Drehen ziehen
+
+antenna-optimized-yagi = Optimierte Yagi
+
+antenna-obstacles-approximate = Hindernisse (näherungsweise)
+
+antenna-trees = Bäume
+
+antenna-in-leaf = belaubt
+
+antenna-ridge = Bergkamm
+
+dab-channel-received-mhz = Empfangener Kanal { $channel } { $mhz }
+
+dab-no-channel-received = Kein Kanal empfangen
+
+dab-channel-received = Empfangener Kanal { $channel }
+
+dab-slideshow = DIASHOW
+
+dab-no-picture-yet = der Sender hat noch kein Bild gesendet
+
+dab-no-station-chosen = kein Sender gewählt
+
+dab-no-logo-yet = noch kein Logo
+
+dab-playing = ▶ wird wiedergegeben
+
+dab-chosen = gewählt
+
+dab-no-text-yet = der Sender hat noch keinen Text gesendet
+
+dab-clear-channel-hint = Löscht diesen Kanal und seine Sender. SCAN findet ihn wieder.
+
+dab-clear-all-channels = × alle Kanäle löschen
+
+dab-clear-all-channels-hint = Vergisst alle Kanäle und ihre Sender. SCAN findet sie wieder; die Sterne bleiben.
+
+dab-n-stations = { $n } Sender
+
+dab-scanning-progress = Suche { $channel } · { $at }/{ $n } · { $found } gefunden
+
+dab-clear-station-hint = Entfernt diesen Sender aus der Liste. Der nächste SCAN bringt ihn zurück, wenn das Ensemble ihn noch trägt.
+
+dab-prev = ZURÜCK
+
+dab-prev-hint = Der vorherige Sender in der Liste.
+
+dab-preset = FAVORIT
+
+dab-preset-hint = Versieht diesen Sender mit einem Stern oder nimmt ihm den Stern wieder.
+
+dab-next = WEITER
+
+dab-next-hint = Der nächste Sender in der Liste.
+
+dab-pty-hint = Zeigt in der Liste die Programmart jedes Senders an.
+
+dab-stop-sweep-hint = Beendet die Suche hier. Was bisher gefunden wurde, bleibt erhalten.
+
+dab-scan-hint = Durchläuft jeden Block des Bands III und behält die, die Sender enthalten.
+
+swl-title = SWL-LOGBUCH
+
+swl-new = + NEU
+
+swl-jobs = AUFTRÄGE
+
+swl-jobs-hint = Geplante Aufnahmen — ein Band zu einer festgelegten Zeit aufnehmen
+
+swl-sigid = SIGNAL-ID
+
+swl-sigid-hint = Was ist auf dieser Frequenz? Ein Leitfaden für Signale nach Frequenz, Betriebsart und Bandbreite
+
+swl-replay = REPLAY
+
+swl-replay-hint = Die letzten zwei Minuten statt live abspielen — die gerade verpasste Senderkennung nachhören
+
+swl-report = BERICHT
+
+swl-report-hint = Diesen Empfang als Bericht kopieren, der an die Station geschickt wird
+
+swl-stats-heard = { $n } gehört
+
+swl-stats-reported = { $n } berichtet
+
+swl-stats-qsl = { $n } QSL
+
+swl-stats-pirates = { $n } Piraten
+
+swl-stats-hint = Das ganze Logbuch — die Anzeigefilter ändern daran nichts
+
+swl-antenna = Antenne
+
+swl-antenna-hint = Langdraht 20 m, MLA-30-Schleife, Mini-Whip …
+
+swl-antenna-tip = Kommt in die Zeile „Antenna:“ des Empfangsberichts
+
+swl-tone = Klang
+
+swl-tone-on = ein
+
+swl-tone-bass = Bass
+
+swl-tone-mid = Mitten
+
+swl-tone-treble = Höhen
+
+swl-report-copied = Bericht in die Zwischenablage kopiert — in Ihr Mailprogramm einfügen. Es konnte kein Mailprogramm geöffnet werden.
+
+swl-show = Anzeigen
+
+swl-find-hint = Station, Sprache, Standort …
+
+swl-find-tip = Passt auf Station, Sprache, Senderstandort und Notizen
+
+swl-all-bands = Alle Bänder
+
+swl-all-days = Alle Tage
+
+swl-pirates-only = Nur Piraten
+
+swl-pirates-only-tip = Nur die unlizenzierten Fänge
+
+swl-adif-tip = Das ganze Logbuch als ADIF speichern — Empfangsdatensätze, keine Verbindungen
+
+swl-csv-tip = Das ganze Logbuch als CSV speichern, eine Zeile pro Empfang
+
+swl-shown-of = { $shown } von { $n }
+
+swl-empty = Noch nichts geloggt — eine Station einstellen und + NEU drücken.
+
+swl-transmitted-from = gesendet von { $site }
+
+swl-click-to-copy = (zum Kopieren klicken)
+
+swl-addr-btn = Adr.
+
+swl-mail-btn = Mail
+
+swl-mark-sent = gesendet
+
+swl-recall = rcl
+
+swl-recall-tip = Zu dieser Frequenz und Betriebsart zurückkehren — nachsehen, ob die Station wieder da ist
+
+swl-edit = bearbeiten
+
+swl-del = löschen
+
+swl-no-match = Kein Empfang passt zum Filter — LÖSCHEN zeigt alle.
+
+swl-form-new = NEUER EMPFANG
+
+swl-form-edit = EMPFANG BEARBEITEN
+
+swl-station-hint = Radio Taiwan International
+
+swl-language-hint = Deutsch
+
+swl-received = Empfangen in
+
+swl-received-hint = Ihr Locator
+
+swl-email = E-Mail
+
+swl-email-hint = Empfangsberichte
+
+swl-email-tip = Kommt in die Zeile „Send to:“ des Berichts
+
+swl-postal = Postanschrift
+
+swl-postal-hint = Straße, Ort, Land
+
+swl-postal-tip = Ersatzadresse für den Bericht, wenn es keine E-Mail gibt
+
+swl-heard = Gehört
+
+swl-smeter = S-Meter
+
+swl-report-label = Rapport
+
+swl-judged = bewertet
+
+swl-report-sent = Bericht gesendet
+
+swl-not-yet = noch nicht
+
+swl-qsl-received = QSL erhalten
+
+swl-awaiting = ausstehend
+
+swl-notes = Notizen
+
+swl-notes-hint = Programmnotizen
+
+swl-pirate = Pirat
+
+swl-pirate-tip = Eine unlizenzierte Sendung — eine Station, die außerhalb jeder Zuteilung sendet. Das Logbuch markiert sie mit einer Piratenflagge.
+
+swl-mail-why-no-address =
+    Diese Station hat keine E-Mail-Adresse — im Fenster SENDEPLAN nachschlagen oder hier eine eintragen, dann wird dies verfügbar.
+    
+    Ein Empfangsbericht ist eine Höflichkeit, die eine Station liest und mit einer QSL-Karte beantwortet; ohne Adresse gibt es kein Ziel, an das er geschickt werden könnte.
+
+swl-mail-why-bad-address = Diese E-Mail-Adresse ist keine einzelne Adresse und wird deshalb nicht verwendet — ein Bericht an einen Fremden, der die Station nie gehört hat, ist schlimmer als keiner.
+
+swl-mail-why-ok =
+    Den Empfangsbericht schreiben und in Ihrem Mailprogramm öffnen.
+    
+    Bild und Tonausschnitt hängen Sie dort selbst an — dieses Programm kann keine Datei in eine Nachricht legen.
+
+swl-mail-report = BERICHT PER MAIL…
+
+antenna-feed-ohms = Speisung ≈ { $r } Ω
+
+antenna-takeoff = Abstrahlwinkel { $deg }°
+
+antenna-director = Direktor { $n }
+
+antenna-reflector = Reflektor
+
+antenna-driven = Strahler
+
+antenna-gap = Abstand { $v } m
+
+antenna-az = Az
+
+antenna-depth = Tiefe
+
+antenna-height = Höhe
+
+antenna-attenuation = Dämpfung in Richtung 0°: { $att } dB
+
+morse-no-paddle-found-connect-one-then = keine Taste gefunden – eine anschließen und diesen Bereich neu öffnen
+
+morse-send-with-a-paddle-played-here = Mit einer Paddle senden – hier abgespielt, nie gesendet
+
+morse-no-paddle-found-in-dev-input-by-id = Keine Paddle in /dev/input/by-id gefunden. Eine anschließen und diesen Bereich neu öffnen. Ein Keyer-Kästchen, das seine zwei Kontakte meldet (oft als Maustasten), funktioniert; eines, das selbst iambisch tastet und Tastendrücke sendet, nicht.
+
+morse-reverse = TAUSCHEN
+
+morse-swap-dit-and-dah-the-switch-on = Vertauscht Punkt und Strich. Der Schalter vieler Paddles tut das an der Taste selbst; dies ist für den Fall, dass er in der anderen Stellung steht.
+
+morse-stop-key = TASTE STOPPEN
+
+morse-start-key = TASTE STARTEN
+
+morse-key-the-character-above-the-keyer = Taste das Zeichen oben. Der Keyer macht Punkte und Striche sauber – Sie wählen die Paddle und wie lange Sie pausieren. Ein Antippen ist ein Element; halten wiederholt es.
+
+morse-the-sending-drill-needs-a-linux = Die Sendeübung braucht einen Linux-Desktop und eine Paddle.
+
+panels-float-chip-hint = FLOAT — dieses Panel als schwebendes Panel herauslösen und dem Wasserfall den Platz zurückgeben; der Andock-Chip darauf setzt es zurück
+
+panels-map-style-radar = Radar — dunkler Grund, Land gefüllt. Der Hintergrund, vor dem ein Luftlagebild gelesen wird
+
+panels-map-style-terrain = Gelände — Land aufgehellt und erwärmt, damit es als Boden wirkt, Grenzen abgedunkelt
+
+panels-map-style-chart = Karte — helles Land, hervorgehobene Grenzen und ein Gradnetz, der aeronautische Look
+
+panels-heard-me-chip = GEHÖRT
+
+panels-heard-me-hint = Umkreist jede Station, die auf dem aktuellen Band gemeldet hat, dieses Rufzeichen gehört zu haben, laut PSK Reporter, am Locator des Meldenden platziert. Das Gegenteil der PSK-Spots: Das sind Stationen, die dieses Funkgerät hört. Stündlich aktualisiert, mit der letzten Stunde; erfordert den PSK-Feed unter Einstellungen → Spots und ein Rufzeichen im Reiter Allgemein.
+
+panels-period-label = Periode
+
+panels-sub-mode-label = Untermodus
+
+panels-front-end-overloading = ⚠ EINGANGSSTUFE ÜBERSTEUERT — HF-Verstärkung (LNA/ZF) verringern oder Antenne versetzen
+
+panels-front-end-overloading-hint = Der Empfänger wird über die Vollaussteuerung hinaus getrieben, das Audio ist daher laut, enthält aber kein Signal — solange das anhält, wird nichts dekodiert. Verringern Sie die HF-/LNA-Verstärkung (mehr Dämpfung), senken Sie die ZF-Verstärkung oder aktivieren Sie die AGC. Meist ist ein starker Sender in der Nähe oder ein anderes Gerät auf demselben Band die Ursache.
+
+panels-enigma-hint = Enigma-Maschine — verschlüsseln Sie eine Nachricht an einer Frontplatte aus Kriegszeiten und lösen Sie einen aus der Luft mitgeschriebenen Geheimtext
+
+panels-slot-bar-heard-hint = Folgt dem Ton in den Lautsprechern: weiß, solange ein Frame zu hören ist, grün, sobald er geendet hat, und zurück zum Anfang, wenn der nächste beginnt. Die Zeiten sind die des Modus, ein kürzerer Frame füllt die Leiste also trotzdem.
+
+
+morse-send-correct = richtig: { $want }
+
+morse-send-heard = gehört { $got }, gewünscht { $want }
+
+morse-send-received = empfangen: { $text }
+
+amp-title-model = PA · { $model }
+
+amp-state-off = AUS
+
+amp-state-on = EIN
+
+amp-relay-dn = AB
+
+amp-relay-up = AUF
+
+amp-band-unknown = UNB
+
+amp-needle-top = OBEN
+
+decodes-not-uploaded = ⚠ { $services } nicht hochgeladen
+
+decodes-not-uploaded-hint = Der Kontakt steht im lokalen Logbuch, aber das Hochladen ist fehlgeschlagen. Prüfen Sie Token und Verbindung unter Einstellungen → Spots und laden Sie ihn dann aus dem Logbuch erneut hoch.
+
+decodes-logged-to = ↑ geloggt bei { $services }
+
+decodes-logged-to-hint = Auch in die Online-Logbücher hochgeladen, die jeden neuen Kontakt übernehmen sollen.
+
+decodes-known = BEKANNT
+
+decodes-known-hint = Jedes Rufzeichen, das ein gehashtes <...> hier derzeit auflösen kann, mit seinem Land. Ein Hash lässt sich nicht rückwärts lesen — eine Station erscheint erst, nachdem sie ihr Rufzeichen buchstabiert gesendet hat, wofür ein nackter Anruf auf 11 m da ist.
+
+decodes-ignored-clear = { $n } ignoriert · löschen
+
+decodes-auto-tx-frequency-hint =
+    Wählt unsere Sendefrequenz automatisch: die ruhigste Stelle in der Periode, in der wir senden, statt der Frequenz dessen, dem wir antworten — er sendet in der anderen Periode, seine Frequenz sagt also nichts darüber, wer da ist, wenn wir tasten. Aus hält die Frequenz NICHT: Es antwortet auf der Frequenz der gerufenen Station. Zum Halten verwenden Sie Hold TX.
+    
+    Ein Band ist ausgenommen: Auf 11 m ist es bei WSJT-CB üblich, einen CQ-Ruf auf dem eigenen Ton des Rufenden zu beantworten und den ganzen Kontakt über dort zu bleiben; die Suche entfällt also, und eine Antwort auf einen CQ-Ruf bleibt auf der Frequenz, auf der er gehört wurde, egal ob dies ein- oder ausgeschaltet ist.
+
+decodes-muted-caps = STUMM
+
+decodes-muted-hint = Für diese Sitzung stummgeschaltet — klicken, um es wieder zu hören
+
+decodes-ignore-hint = Ignoriert diese Station für den Rest der Sitzung: Sie verschwindet aus der Dekodierliste, löst keine Alarme mehr aus und wird dem Automatikmodus nie angeboten. In ihrem Namen wird nichts gesendet oder hochgeladen, und ein Neustart von sdroxide bringt sie zurück.
+
+decodes-qso-complete-hint = Der Kontakt ist abgeschlossen und im lokalen Logbuch. Er bleibt einige Minuten hier stehen, damit die Schlussnachricht erneut gesendet werden kann, falls die Gegenstation ihre wiederholt — mehr ist nicht geschuldet.
+
+decodes-slot-even = gerade
+
+decodes-slot-odd = ungerade
+
+decodes-before = vor
+
+decodes-after = nach
+
+decodes-beam-hint = Richtet die Antenne auf den Locator dieser Station aus
+
+decodes-queue-next = nächster
+
+decodes-queue-waiting = wartet
+
+decodes-session-qso-count = Sitzung: { $session } QSO
+
+decodes-setup-hint = EINRICHTUNG — die Stationskennung und die Vorlagen, die diese QSO-Modi gemeinsam nutzen
+
+decodes-auto-armed-hint =
+    { $role } ist scharf. Klicken zum Stoppen.
+    
+    { $note }
+    
+    Schritt der Engine: { $step } — eine Station, die auf einen CQ-Ruf antwortet, wird nur in CallingCq ohne laufenden Kontakt übernommen.
+
+decodes-auto-rx-hint = Beantwortet unbeaufsichtigt den CQ-Ruf einer neuen Station und ruft selbst nie CQ. Beantwortet werden nur Rufzeichen, die noch nicht im Logbuch stehen. Der Sende-Watchdog taktet es, und der Inaktivitätsstopp entschärft es.
+
+decodes-auto-continuous-hint = Der gesamte Ablauf, unbeaufsichtigt: das QSO beenden, wer Sie ruft arbeiten, eine CQ rufende Station beantworten und nur CQ rufen, wenn sonst nichts ansteht. Läuft, bis Sie es stoppen{ $until }. { $bound }
+
+decodes-auto-or-minutes-up = { " " }oder { $n } Minuten abgelaufen sind
+
+decodes-auto-cq-run-unlimited = Jede CQ-Serie hat kein eigenes Rufzahl-Limit.
+
+decodes-auto-cq-run-bounded = Jede CQ-Serie ist durch ihre eigene Rufzahl begrenzt.
+
+decodes-auto-no-call-limit = Kein eigenes Rufzahl-Limit — der Watchdog und der Inaktivitätsstopp beenden die Serie.
+
+decodes-auto-after-calls-listen = Nach { $repeats } Rufen wechselt es zu AUTO RX und hört weiter zu.
+
+decodes-auto-after-calls-stop = Nach { $repeats } Rufen hört es auf.
+
+decodes-auto-cq-hint = Ruft unbeaufsichtigt CQ und arbeitet, wer antwortet. { $bound } Ist die Serie zu kurz, hört Sie ein ruhiges Band nie; ist sie zu lang, sendet der Sender auf einer Frequenz, auf der niemand antwortet.
+
+decodes-auto-stopped-by-operator = { $role } vom Bediener gestoppt
+
+decodes-cont = dauer
+
+settings-servers-decoded-text-udp = Dekodierter Text über UDP
+
+settings-servers-decoded-text-udp-note = Eine JSON-Zeile pro Dekodierung, für ein eigenes Skript: die FT8-Familie, WSPR und die dekodierten Zeilen jeder Tastaturbetriebsart (CW, RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell), jeweils mit der Dialfrequenz, auf der sie gehört wurde. Der WSJT-X-Broadcast oben ist ein Logger-Protokoll und hat für diese Betriebsarten keine Nachricht – deshalb gibt es diesen Ausgang gesondert.
+
+settings-servers-decoded-text-udp-hint = Host:Port, über UDP. Leer bedeutet aus – der Standard. Nur Ausgabe: nichts auf diesem Socket kann das Funkgerät beeinflussen. Ein Name wird beim Drücken von ÜBERNEHMEN aufgelöst.
+
+settings-servers-rotator-note = Richtet eine motorisierte Antenne auf den Satelliten aus, auf den Sie eingerastet sind, oder von Hand über das ROTATOR-Fenster und die Karten. Standard ist ein Hamlib-rotctld-Daemon (z. B. „rotctld -m 603 -r /dev/ttyUSB0“ für einen GS-232B-Rotor oder „rotctld -m 1“ zum Ausprobieren ohne Hardware) – ein Daemon deckt jeden von Hamlib unterstützten Rotor ab. Ein Controller an einer seriellen Schnittstelle kann auch direkt angesteuert werden.
+
+settings-servers-connection = Verbindung
+
+settings-servers-rotctld-port-hint = 4533 ist der Standard von rotctld
+
+settings-servers-baud-hint = Die meisten Controller laufen mit 9600
+
+settings-servers-pstrotator-note = Der eigene UDP-Port von PSTRotator. Schalten Sie in dessen Setup UDP Control ein; er nimmt Befehle auf diesem Port an und antwortet auf dem nächsten.
+
+settings-servers-el = El
+
+settings-servers-persist-re-connect-rotator = Speichern und neu mit dem Rotor verbinden
+
+settings-servers-tci-note = Lässt TCI-fähige Programme dieses Funkgerät steuern: Frequenz- und Betriebsartensteuerung, Breitband-IQ, Empfangston und Sendeton. Wählen Sie in WSJT-X den Gerätetyp SunSDR (TCI), richten Sie ihn auf diese Adresse und stellen Sie PTT auf TCI.
+
+settings-servers-decoded-text-udp-format = Jede Zeile ist ein Datagramm, durch Zeilenumbruch abgeschlossen: { $example }
+
+settings-servers-transport-rotctld = Hamlib rotctld (TCP)
+
+settings-servers-transport-easycomm = EasyComm II (seriell)
+
+settings-servers-transport-gs232 = Yaesu GS-232 (seriell)
+
+settings-servers-transport-pstrotator = PSTRotator (UDP)
+
+spots-active = AKTIV
+
+spots-closing = SCHLIESST
+
+spots-none-left-in-the-window = keine mehr im Zeitfenster
+
+spots-openings = ÖFFNUNGEN
+
+spots-band-opening-detections-paths = Banderöffnungs-Erkennung: Strecken, deren jüngste Aktivität ihre eigene 3-Stunden-Basislinie überschritten hat
+
+spots-save-the-spots-you-can-see-as-a = Speichert die sichtbaren Spots als KML-Datei – für Google Earth und jedes andere Kartenwerkzeug, das sie liest. Nur die eingeschalteten Filter und nur Spots mit Position, denn eine Nadel ohne Koordinaten sitzt am falschen Ende der Welt.
+
+spots-no-spots-to-save-the-filters-are = Keine Spots zum Speichern – alle Filter sind aus
+
+spots-bc-all = BC ALLE
+
+spots-bc-tuned = BC ABGESTIMMT
+
+spots-which-broadcasters-the-waterfall =
+    Welche Rundfunksender das **Wasserfalldiagramm** benennt.
+    
+    { "**" }BC ABGESTIMMT** ist die Voreinstellung und bebepips Regel: der Name des Senders, auf den Sie abgestimmt sind, sonst nichts – ein von Ende zu Ende beschriftetes Band ist eine Wand aus Namen über dem Durchlassbereich, den Sie lesen wollen.
+    
+    { "**" }BC ALLE** benennt jeden Sender, den der Sendeplan gerade auf Sendung hat, wo auch immer er liegt – das ist, was man beim Durchsuchen eines Bandes will, nicht beim Hören eines Senders. Es sagt nichts darüber, ob der BC-Chip oben überhaupt Rundfunksender anzeigt.
+
+app-rx-only-hint = Dieses Funkgerät kann nur empfangen — es hat keinen Sender, den man tasten könnte.
+
+spots-n-calls = { $n } Rufzeichen
+
+spots-opening-hover = { $band }-Strecke von { $from } nach { $to }: Das letzte 15-Minuten-Fenster übertraf die 3-Stunden-Basislinie der Strecke – jüngste Anrufer: { $calls }
+
+
+spots-download-unsupported = { $source } konnte auf dieser Plattform nicht heruntergeladen werden
+
+spots-kml-partial = { $placed } von { $total } gespeichert – der Rest hat keine Position und kann nicht angeheftet werden
+
+spots-net-log = NETZ-LOG ({ $n })
+
+decodes-beam = DREHEN
+
+settings-radio-no-answer-yet = Warte auf den Rechner, an dem das Funkgerät angeschlossen ist: Diese Bedienelemente fragen nach dessen Hardware und Netzwerk, und er beantwortet jeweils nur eine Frage.
+
+settings-radio-elad-no-baud = das Funkgerät kennt keine Baudrate von { $baud } — stattdessen wird { $default } verwendet
+
+settings-radio-elad-antenna-rx-only = Nur RX
+
+settings-radio-rx-only-n = Nur RX{ $n }
+
+settings-radio-ng-level = nG-Pegel
+
+settings-radio-ng-level-hint =
+    nG fügt zwei Befehle hinzu, die die Firmware 2.00x nicht hat, und hier lassen sie sich als einzige Stelle einstellen: nG beantwortet und speichert keinen von beiden, daher sendet sdroxide sie bei jedem Öffnen der Verbindung neu.
+    
+    Lautstärke ist der Pegel, den das Funkgerät in den USB-Strom schickt. nG nimmt dieses Audio nach VOL und AGC; hier lässt sich also ein Decoder korrigieren, der zu wenig oder zu viel sieht – nicht am Mixer des Computers.
+    
+    Die Verstärkungsregelung ist die AGC-Einstellung des Funkgeräts selbst. Auto setzt sie für jede digitale Betriebsart auf DIGI und sonst auf On – so verlangen es die Hinweise von nG für FT8: Die Verstärkung bleibt dann in den Sendepausen der Gegenstation stehen, statt hineinzuregeln.
+
+settings-radio-ng-volume-hint = 0–31, als `AG0nn;`. Der Pegel, den das Funkgerät an den Computer streamt.
+
+settings-radio-gain-control = Verstärkungsregelung
+
+settings-radio-speaker = Lautsprecher
+
+settings-radio-on-while-streaming = An während des Streamings
+
+settings-radio-ng-speaker-hint = Ausgeschaltet schaltet es den eigenen Lautsprecher des Funkgeräts während des Streamings ab (`UA2;`), sodass der Ton nur in sdroxide zu hören ist. 2.00x kannte diese Form nicht.
+
+settings-radio-ng-agc-auto = Auto (DIGI in Datenbetriebsarten)
+
+settings-radio-ng-agc-off = Aus
+
+settings-radio-ng-agc-on = An (schnell)
+
+settings-radio-sound-card-note = Welche Soundkarte den Ton dieses Funkgeräts führt, wird unter **Audio** eingestellt, zusammen mit Ihren eigenen Lautsprechern und Ihrem Mikrofon – es sind dieselben Einstellungen für jedes Funkgerät, daher eine einzige Seite.
+
+settings-radio-no-control-cable-audio-page = Dieses Funkgerät hat kein Steuerkabel — es tastet sich per VOX selbst, daher gibt es keine PTT zu befehlen. Senden ist Audio in das Mikrofon des Funkgeräts, weshalb sich das Sendeaudio des Funkgeräts auf der Seite „Audio“ befindet und nicht hier.
+
+settings-radio-sound-card-note-short = Welche Soundkarte den Ton führt, wird unter **Audio** eingestellt.
+
+settings-radio-control-link = Steuerverbindung
+
+settings-radio-atsmini-host-hint =
+    Der Ad-hoc-TCP-Server des Empfängers: `atsmini.local` (mDNS) oder seine IP. Am Gerät: Settings → TCP Port → Ad hoc, mit WLAN auf Connect, AP+Connect oder AP Only.
+    
+    `atsmini.local` benötigt einen mDNS-Resolver (Avahi/nss-mdns) auf diesem Rechner. Kommt die Steuerverbindung nicht zustande, steht die IP auf dem WLAN-Bildschirm des Geräts – geben Sie stattdessen diese ein.
+
+settings-radio-atsmini-find-hint = Das Netzwerk dieses Rechners nach dem Steuerport des Empfängers durchsuchen
+
+settings-radio-tcp-port = TCP-Port
+
+settings-radio-tcp-port-hint = Die Firmware verwendet standardmäßig 60000.
+
+settings-radio-atsmini-receive-only = Nur Empfang: Der Si4732 demoduliert in Hardware, daher wird die hier gewählte Betriebsart dem Gerät befohlen, und alles andere – Detektion, Dekodierung, das Logbuch – geschieht auf diesem Computer.
+
+settings-radio-atsmini-tuning-note =
+    Die Abstimmung folgt dem eigenen Bandzyklus des Empfängers, daher hinkt die Anzeige Ihrem Scrollen einen Moment hinterher – am meisten, wenn die Frequenz in ein anderes Band wechselt. Lassen Sie sie sich setzen, bevor Sie weiterscrollen, dann landet sie immer auf der gewünschten Frequenz.
+    
+    Die Abstimmschrittweite des Empfängers ist seine eigene (das STEP-Bedienelement oben): Eine feinere Änderung wird im Gerät weggerundet, und die Anzeige springt auf den Schritt zurück, auf dem sie tatsächlich gelandet ist.
+
+settings-radio-live-controls = Direktsteuerung
+
+settings-radio-atsmini-vol = LAUT
+
+settings-radio-atsmini-step = SCHRITT
+
+settings-radio-atsmini-sent-at-once = Wird sofort an das Gerät gesendet. VOL ist die eigene Lautstärke des Empfängers (sein Knopf und der des Si4732), nicht der AF-Regler von sdroxide.
+
+settings-radio-refresh = Aktualisieren
+
+settings-radio-read-99-slots = Die 99 Speicherplätze des Empfängers auslesen
+
+settings-radio-tune-radio-slot = Dieses Funkgerät auf den Speicherplatz abstimmen
+
+settings-radio-no-slots-stored = Im Empfänger sind keine Speicherplätze belegt.
+
+settings-radio-press-refresh-slots = Drücken Sie Aktualisieren, um die Speicherplätze des Empfängers auszulesen.
+
+settings-radio-icomnet-receive-hint = AF: Das Funkgerät demoduliert und sdroxide zeigt das Audioband. 12-kHz-ZF: Das Funkgerät sendet stattdessen seine DRM-Zwischenfrequenz und sdroxide demoduliert, wodurch dessen eigene Filter, Rauschminderung und Decoder auf etwa ±12 kHz zum Einsatz kommen. In beiden Fällen ist das breite Wasserfalldiagramm der Scope des Funkgeräts selbst – kein Icom gibt I/Q aus.
+
+settings-radio-copy-icom-session-hint = Kopiert die letzte Sitzung dieses Funkgeräts – seinen Verbindungsaufbau und seine CI-V-Aufzeichnung – für einen Fehlerbericht in die Zwischenablage (oder in eine Datei, wenn der Browser einer Seite das Kopieren nicht erlaubt). Die dieses Funkgeräts, nicht die der Station: Bei zwei Icoms im LAN antwortet jeder Reiter zu seiner eigenen Adresse.
+
+settings-radio-copy-protocol-trace-hint = Kopiert die Protokollaufzeichnung der letzten Sitzung für einen Fehlerbericht in die Zwischenablage (oder in eine Datei, wenn der Browser einer Seite das Kopieren nicht erlaubt).
+
+settings-radio-copy-trace-device-hint = Kopiert die Aufzeichnung der letzten Sitzung für einen Fehlerbericht in die Zwischenablage (oder in eine Datei, wenn der Browser einer Seite das Kopieren nicht erlaubt): jeder Befehl, der mit dem Gerät ausgetauscht wurde, und die ersten Bytes des Abtaststroms.
+
+settings-radio-copy-trace-receiver-hint = Kopiert die Aufzeichnung der letzten Sitzung für einen Fehlerbericht in die Zwischenablage (oder in eine Datei, wenn der Browser einer Seite das Kopieren nicht erlaubt): jeder Befehl, der mit dem Empfänger ausgetauscht wurde, und die ersten Bytes des Abtaststroms.
+
+settings-radio-pluto-choose-receiver = Bitte wählen Sie Ihren Empfänger
+
+settings-radio-dab-rate-hint = Wählen Sie 2.500 Msps, wenn Sie DAB/DAB+ dekodieren möchten
+
+settings-radio-rx888-dab-rate-hint = Wählen Sie 80.0 Msps und die Breite 2.500 MHz (1/32), wenn Sie DAB/DAB+ dekodieren möchten
+
+settings-radio-pluto-both-chains-hint = Um auf beiden Antennen zu hören: Fügen Sie ein zweites Funkgerät mit derselben Adresse hinzu und stellen Sie es auf RX2. Beide Funkgeräte teilen sich dieselbe Frequenz.
+
+settings-radio-duplex-tdd-hint =
+    Ob der AD9361 beide Richtungen gleichzeitig betreibt (FDD, so startet ein Pluto und so hat sdroxide ihn immer belassen) oder jeweils nur eine (TDD).
+    
+    Lassen Sie FDD eingestellt, außer Sie wollen die PTT-Pins unten – TDD ist es, was diese schaltet, und es schließt den Vollduplex oben aus. Wirkt nach „Übernehmen“.
+    
+    PlutoSDR: Vollduplex ist aus – TDD schaltet jeweils nur eine Richtung frei, und davon werden die GPO-Sende-Empfangs-Pins geschaltet. Stellen Sie die PTT-Pins auf Off und das Duplex auf FDD, um während einer Aussendung mitzuhören.
+
+settings-radio-fm-mw-notch = FM/MW-Kerbe
+
+settings-radio-fm-mw-notch-hint = Hardware-Kerbe über dem UKW-Rundfunkband (88–108 MHz) und den Mittelwellenbändern, wenn ein lokaler Sender alles andere übersteuert. Wirkt sofort.
+
+scanner-broadcast-band = Rundfunkband
+
+scanner-all = ALLE
+
+scanner-stop-only-on-channels-that-sound = Nur auf Kanälen anhalten, die nach einem sprechenden Menschen klingen: Eine Stimme ist periodisch, füllt das Sprachband und steigt und fällt einige Male pro Sekunde, was ein Träger, ein Pfeifton oder ein Datenburst nicht tut. Jeder Kandidat wird mindestens eine halbe Sekunde angehört, denn so lange dauert es, eine Silbe zu hören.
+
+scanner-nothing-in-this-scan-is-in-a-mode = Nichts in diesem Suchlauf liegt in einem Modus, der Sprache überträgt – eine Stimmsuche würde hier laufen und nie anhalten, daher wird sie erst angeboten, wenn es einen gibt. FM, AM und die Seitenbänder übertragen Stimmen; die digitalen Modi nicht.
+
+scanner-voice = STIMME
+
+scanner-stop-only-where-somebody-is = nur anhalten, wo jemand spricht
+
+scanner-no-voice-to-look-for-in-these = in diesen Modi gibt es keine Stimme zu suchen
+
+scanner-sql = SQL
+
+scanner-how-long-to-stay-on-a-candidate = Wie lange auf einem Kandidaten verweilt wird, bevor er beurteilt wird. Die Stimmprüfung braucht mindestens so viel: Eine Stimme ist ein Rhythmus aus Silben, und eine halbe Sekunde sind zwei davon.
+
+scanner-listening-for-a-voice = höre auf eine Stimme…
+
+scanner-scan-band-hover = { $name } durchsuchen ({ $lo }-{ $hi } kHz)
+
+scanner-range-to = bis
+
+scanner-mode-no-speech = { $mode } überträgt keine Sprache – diese Kanäle werden übersprungen
+
+scanner-voice-holding = Stimme { $score } · jemand spricht
+
+scanner-voice-passed = { $mhz } MHz übersprungen · Stimme { $score }
+
+aircraft-hfdl-aircraft = HFDL-Flugzeug { $id }
+
+aircraft-no-icao = keine ICAO-Adresse (HFDL)
+
+aircraft-provenance = { $source }, vor { $age }
+
+aircraft-label-flight = Flug
+
+aircraft-label-registration = Kennzeichen
+
+aircraft-label-position = Position
+
+aircraft-label-altitude = Höhe
+
+aircraft-label-speed = Geschwindigkeit
+
+aircraft-label-track = Kurs
+
+aircraft-label-last-message = Letzte Nachricht
+
+aircraft-label-type = Typ
+
+aircraft-label-operator = Betreiber
+
+aircraft-label-origin = Herkunft
+
+aircraft-label-destination = Ziel
+
+aircraft-label-online = Online
+
+aircraft-missing-flight = noch nicht gehört — ADS-B oder VDL2 übertragen es
+
+aircraft-missing-registration = noch nicht gehört — nur VDL2 überträgt es
+
+aircraft-missing-position = noch nicht gehört — ADS-B oder ein VDL2- oder HFDL-Positionsbericht
+
+aircraft-missing-adsb = noch nicht gehört — ADS-B überträgt es
+
+aircraft-missing-message = noch keine — VDL2 oder ACARS-Audio, sobald VDL2 das Flugzeug benannt hat
+
+aircraft-online-unavailable-disabled = online nicht verfügbar — die Station hat das Relay nicht eingeschaltet
+
+aircraft-online-unavailable-no-station = online nicht verfügbar — keine Station zum Fragen; die Funkdaten sind alles, was es gibt
+
+aircraft-online-unavailable-unauthorized = online nicht verfügbar — nicht an der Station angemeldet
+
+aircraft-switch-no-answer = die Station hat nicht geantwortet
+
+aircraft-switch-not-signed-in = nicht an der Station angemeldet
+
+aircraft-switch-refused = die Station hat die Anfrage abgelehnt
+
+aircraft-switch-too-old = die Station bietet diesen Schalter nicht an (zu alt?)
+
+aircraft-switch-failed = die Station konnte es nicht ändern
+
+aircraft-online-source = adsbdb, über die Station
+
+aircraft-asking-station = Station wird gefragt
+
+aircraft-provenance-radio = Funk
+
+aircraft-provenance-radio-online = Funk + online
+
+aircraft-provenance-online = online
+
+aircraft-photo-credit = Foto: { $photographer } / Planespotters
+
+rotor-no-antenna-rotator-is-configured = Es ist kein Antennenrotor eingerichtet.
+
+rotor-set-one-up-in-settings-servers-a = Richten Sie einen unter Einstellungen ▸ Server ein – ein Hamlib-rotctld-Dienst oder ein Controller an einer seriellen Schnittstelle. Dann richten Sie die Strahlkeule über diese Skala, über ein Rufzeichen oder über die Karte aus.
+
+rotor-halt-the-antenna-where-it-is = Antenne dort anhalten, wo sie ist
+
+rotor-park = PARKEN
+
+rotor-hand-the-antenna-back-to-the = Gibt die Antenne an die Satellitenverfolgung zurück – sie folgt dem Satelliten und parkt, wenn keiner da ist.
+
+rotor-point = AUSRICHTEN
+
+rotor-dx-country = DX-Land
+
+rotor-set-your-grid-locator-settings = Stellen Sie Ihren Locator ein (Einstellungen ▸ Allgemein), um auf ein Land auszurichten.
+
+rotor-connected = Verbunden – Antenne bei { $az }°
+
+rotor-not-connected-why = Nicht verbunden: { $e }
+
+rotor-beam = Strahl { $az }° Az  { $el }° El
+
+rotor-target = Ziel { $az }° / { $el }°
+
+rotor-park-hover = Zur Parkposition schwenken ({ $az }° / { $el }°)
+
+rotor-country-bearing = { $name } — Peilung { $az }°
+
+aircraft-switch-no-station = es gibt keine Station zum Umschalten
+
+aircraft-title = FLUGZEUGE
+
+aircraft-mode-adsb-hover = ADS-B, 1090 MHz — Flugzeuge mit Position, Höhe und Geschwindigkeit
+
+aircraft-mode-hfdl-hover = HFDL, HF-Datenlink — Flugzeuge über Ozeanen und Polen, aus ihren Positionsmeldungen
+
+aircraft-mode-vdl2-hover = VDL2, VHF-Datenlink — Nachrichten von Flugzeugen; wenige enthalten eine Position
+
+aircraft-mode-acars-hover = ACARS — Kurznachrichten zwischen Flugzeug und Boden
+
+aircraft-badge-online = online
+
+aircraft-badge-history = Verlauf
+
+aircraft-stats-total =
+    { $n } { $n ->
+        [one] Flugzeug
+       *[other] Flugzeuge
+    }
+
+aircraft-stats-most-first = Häufigste zuerst
+
+aircraft-stats-empty = Noch keine Flugzeuge. Die Tabellen füllen sich aus ADS-B, VDL2, HFDL und ACARS; nichts davon braucht das Internet.
+
+aircraft-stats-relay-note = Modell, Betreiber und Route zählen nur die Flugzeuge, zu denen das Relay geantwortet hat — eine Karte unter Karten öffnen, um eines nachzuschlagen.
+
+aircraft-stats-known-kinds = { $known } bekannt · { $kinds } Arten
+
+aircraft-and-more = und { $more } weitere
+
+aircraft-show = Anzeigen
+
+aircraft-aviation = Luftfahrt
+
+aircraft-cards-chip = Karten { $n }
+
+aircraft-cards-hover = Jedes auf ADS-B, VDL2, HFDL und ACARS gehörte Flugzeug, je eine Karte — zehn Minuten aufbewahrt, in welcher Betriebsart das Funkgerät auch gerade ist
+
+aircraft-watch-chip = Beobachten { $n }{ $suffix }
+
+aircraft-watch-hover = Flugzeuge, über die Sie benachrichtigt werden wollten, nach Rufzeichen oder Kennzeichen — die Liste wird von der Station geführt, und ein Alarm erscheint, wenn eines auf Sendung geht
+
+aircraft-stats-chip = Statistik
+
+aircraft-stats-hover = Die häufigsten Kategorien, Fluggesellschaften, Modelle, Betreiber und Routen unter den Flugzeugen, die diese Station kennt — zuerst aus dem Funk gezählt, ergänzt durch die Karten des Relays
+
+aircraft-export = Exportieren
+
+aircraft-export-csv-hover = Die Flugzeuge als CSV-Tabelle für eine Tabellenkalkulation speichern: die letzten 24 Stunden der Station, falls sie einen Verlauf führt, sonst das jetzt Gehörte. Ohne Positionen.
+
+aircraft-export-json-hover = Die Flugzeuge als JSON speichern: die letzten 24 Stunden der Station, falls sie einen Verlauf führt, sonst das jetzt Gehörte. Ohne Positionen.
+
+aircraft-watch-intro = Rufzeichen und Kennzeichen, über die Sie benachrichtigt werden wollen. Die Liste wird von der Station geführt und ist daher auf jedem Bildschirm dieselbe; ein Alarm kommt, wenn eines erscheint oder nach zehn Minuten Sendepause zurückkehrt.
+
+aircraft-watch-needs-station = Die Beobachtungsliste wird von der Station geführt, mit der Sie verbunden sind. Verbinden Sie sich mit einer, um sie zu nutzen.
+
+aircraft-watch-reading = Liste wird gelesen…
+
+aircraft-watch-cannot-read = Liste kann nicht gelesen werden: { $why }.
+
+aircraft-watch-input-hint = KLM1234 oder PH-BXA
+
+aircraft-watch-add = Hinzufügen
+
+aircraft-watch-sending = Wird gesendet…
+
+aircraft-watch-empty = Noch nichts auf der Liste.
+
+aircraft-watch-on-air = jetzt auf Sendung
+
+aircraft-watch-remove = Entfernen
+
+aircraft-watch-alerts = Alarme
+
+aircraft-watch-clear = Löschen
+
+aircraft-watch-none-yet = Noch keine.
+
+aircraft-cards-empty = Noch kein Flugzeug gehört. Die Karten füllen sich aus ADS-B, VDL2, HFDL und ACARS — eine davon drücken und zuhören. Nichts davon braucht das Internet.
+
+aircraft-cards-no-match = Kein Flugzeug passt zu „{ $query }“.
+
+aircraft-history-hover = Zeigen, wo dieses Flugzeug am letzten Tag war, aus der eigenen Aufzeichnung der Station. Es fragt Ihre Station, nie das Internet.
+
+aircraft-copy-summary = Zusammenfassung kopieren
+
+aircraft-copy-summary-hover = Diese Karte als Text kopieren: was bekannt ist und woher jede Zeile stammt. Position und letzte Nachricht bleiben weg.
+
+aircraft-asking-station-dots = Station wird gefragt…
+
+aircraft-online-turn-on = Online-Abfrage einschalten
+
+aircraft-online-turn-on-hover = Fotos, Typ, Betreiber und Route stammen von adsbdb und Planespotters. Ihre Station fragt sie für Sie ab, und nur wenn dies eingeschaltet ist; sie merkt sich Ihre Wahl. Sonst verlässt nichts die Station.
+
+aircraft-online-turn-off = Online-Abfrage ausschalten
+
+aircraft-online-turn-off-hover = Die Station daran hindern, adsbdb und Planespotters abzufragen.
+
+aircraft-not-changed = Nicht geändert: { $why }.
+
+aircraft-loading-photo = Foto wird geladen…
+
+aircraft-radio-is-on = Das Funkgerät steht auf { $mode } — { $label } drücken, um zuzuhören. Das ist, was { $label } zuvor gehört hat.
+
+aircraft-no-adsb = Noch kein ADS-B gehört.
+
+aircraft-hfdl-off = Der HFDL-Decoder ist aus — HFDL drücken, um ihn einzuschalten.
+
+aircraft-vdl2-starting = VDL2-Decoder wird gestartet…
+
+aircraft-no-view = { $label } hat hier keine Ansicht.
+
+textmodem-waiting-modem = warte auf das Modem…
+
+textmodem-locked = EINGERASTET
+
+textmodem-no-frame = KEIN FRAME
+
+textmodem-locked-hint = Ein Frame wird verfolgt. Er wird nur akzeptiert, wenn sich die über zwölf Frames gefaltete Synchronisationskorrelation deutlich von ihrem eigenen Nullwert abhebt und die Autokorrelation der Framelänge anzeigt, dass ein Frame vorhanden ist.
+
+textmodem-sync-readout = Sync { $sync } (Null { $null })
+
+textmodem-sync-hint = Die differenzielle Synchronisationskorrelation, über jede Framephase gefaltet, und der Median über diese Phasen — der Nullwert, den sie übertreffen muss. Über Funk gemessen: 0,85 bei einem 4285 gegenüber 0,14 bei einem starken PSK-Träger einer anderen Betriebsart.
+
+textmodem-frame-readout = Frame { $acf }
+
+textmodem-frame-hint = Wie viel eines Frames sich einen Frame später wiederholt. Ein 4285 wiederholt seine 80 Synchronisationssymbole, also 0,3-0,6; der Träger einer anderen Betriebsart misst etwa 0,03.
+
+textmodem-refs-readout = Ref { $a }/{ $b }/{ $c }
+
+textmodem-refs-hint = Die Konzentrationen der drei Referenzblöcke nach dem Entwürfeln. Vor dem Verwürfeln sind sie alle Symbol 0, ein korrekter Frame lässt daher jeden auf einen Punkt zusammenfallen — 0,7 und mehr. Sechzehn Rauschsymbole ergeben 0,25.
+
+textmodem-rate-hint = Was die Konstellation aussagen kann. Jede ungecodete Rate teilt ihre Konstellation mit einer gecodeten, die gecodeten Raten brauchen also Anhang E, um unterschieden zu werden — und ihre Nutzdaten brauchen die FEC aus Anhang E, um gelesen zu werden.
+
+textmodem-offset-frames = { $offset } Hz · { $n } Frames
+
+textmodem-offset-frames-hint = Der Trägerversatz, auf den sich die Referenzblöcke einigen, und wie viele Frames in dieser Sitzung demoduliert wurden.
+
+textmodem-som-readout = SOM { $best }/32 · { $n } Nachr.
+
+textmodem-som-hint = Das Nachrichtenanfangsmuster aus Anhang E und wie nahe die Ausgabe des Decoders ihm gekommen ist. Rauschen liegt bei etwa 16 von 32; eine gecodete Aussendung erreicht die Zwanziger, selbst wenn ein Schwund die Übereinstimmung verhindert, und eine Übereinstimmung benennt die gecodete Rate und startet eine Nachricht. Code und Interleaver dekodieren ein erzeugtes Signal exakt, aber über Funk wurde noch keine gecodete Station gelesen; eine Übereinstimmung hier ist also das Erste, was man bei einer solchen erwarten darf.
+
+textmodem-rx-only = NUR RX
+
+textmodem-rx-only-hint = Der Decoder dieser Betriebsart ist portiert und liest seine Aufnahmen; der Modulator ist noch nicht geschrieben, deshalb ist die Sendehälfte abgeschaltet, statt nachträglich abzulehnen.
+
+textmodem-msg-hint = Ihre eigenen Nachrichtentasten — Arbeitsbedingungen, das Wetter, eine Standardantwort. Jede sendet ihren ganzen Text auf einmal, und F1–F9 drücken die ersten neun. Sie gehören zur Konfiguration der Station, ein entfernter Client hat sie also auch.
+
+textmodem-weather-chip = {" "}WETTER { $n }{" "}
+
+textmodem-weather-hint =
+    Dekodierte SYNOP- und SHIP-Meldungen, die auf diesem Band gehört wurden.
+    
+    Sie werden hier statt in der Dekodierliste aufbewahrt, weil die Zahlen allein nichts bedeuten — und weil man später meist das Wetter an einer Position vor drei Stunden sucht.
+    
+    Sie werden im RTTY-Text beim Eintreffen gefunden, die Betriebsart muss also auf Shift und Baudrate der Station eingestellt sein. Eine Landstation sendet keine Position, diese Zeilen enthalten also Stationsnummer und Zahlen, aber keine Koordinaten; eine Schiffsmeldung bringt ihre eigenen mit.
+
+textmodem-olivia-reverse-hint = Kehrt die Tonreihenfolge in beide Richtungen um. Eine Station, die verkehrt sendet, wird als Rauschen gelesen, bis dies eingeschaltet ist.
+
+textmodem-olivia-tones-raised = (Olivias { $n } → 4)
+
+textmodem-ifk-reverse-hint = Kehrt die Tonschritte um. IFK+ trägt seine Daten im Schritt zwischen aufeinanderfolgenden Tönen, eine auf dem entgegengesetzten Seitenband empfangene Station hat daher lauter negative Schritte und wird als Rauschen gelesen, bis dies eingeschaltet ist.
+
+textmodem-domino-hint = { $name } — { $baud } Baud, 18 Töne, inkrementelle Frequenztastung ohne Vorwärtsfehlerkorrektur
+
+textmodem-mt63-long-hint = MT63-{ $label }, { $bw } Hz breit — die lange Verschachtelung verteilt einen Burst auf { $chars } Zeichen
+
+textmodem-mt63-short-hint = MT63-{ $label }, { $bw } Hz breit, kurze Verschachtelung — die kurze Verschachtelung verteilt einen Burst auf { $chars } Zeichen
+
+textmodem-mt63-not-offered = 1K und 500L noch nicht angeboten
+
+textmodem-mt63-not-offered-hint = MT63-1K und die lange 500-Hz-Verschachtelung werden mit dem Batch-Decoder gelesen, aber noch nicht mit dem Live-Empfänger: Die Synchronisation sucht Symbolphase und Polarität, aber nicht die Bandmitte, und eine Suche, die das tut, tauschte nachweislich eine Variante gegen eine andere ein. Siehe docs/internal/MODE-PROGRESS.md.
+
+textmodem-mfsk-caveat-mfsk8 = { " " }— die Korpusaufnahme verliert eine Textstrecke; der Decoder ist derselbe wie bei allen anderen Varianten
+
+textmodem-mfsk-caveat-mfsk11 = { " " }— die Korpusaufnahme verliert ihre erste Gruppe durch das Anlaufen des Resamplers
+
+textmodem-mfsk-hint = { $label } — { $baud } Baud, { $tones } Töne, { $bw } Hz breit{ $caveat }
+
+textmodem-mfsk-reverse-hint = Kehrt die Tonreihenfolge um. Eine Station, die auf dem entgegengesetzten Seitenband empfangen wird, kommt an ihrer Mitte gespiegelt an und wird als Rauschen gelesen, bis dies eingeschaltet ist.
+
+textmodem-psk-family = Familie
+
+textmodem-psk-family-plain-hint = Die eigentliche PSK31-Familie: ein differenzieller Träger, keine Vorwärtsfehlerkorrektur
+
+textmodem-psk-family-bpsk63f-hint = Der robuste Code mit 62,5 Baud, ohne Interleaver — die einzige gecodete Betriebsart, die fldigi ohne einen sendet
+
+textmodem-psk-family-robust-hint = Ein Träger mit dem robusten Code und einem 2x2xN-Interleaver
+
+textmodem-psk-family-multi-hint = Mehrere Träger, der Varicode von PSK31 und **kein** Code — breiter und schneller, und es braucht ein sauberes Signal
+
+textmodem-psk-family-robust-multi-hint = Mehrere Träger **und** der robuste Code: die breiteste und robusteste der PSK-Betriebsarten
+
+textmodem-psk-baud-fast-hint = { $baud } Baud — wird erst nach etwa einer Sekunde gelesen: Bei dieser Rate beträgt die Einrastzeit des Empfängers ein Drittel einer Nachricht
+
+textmodem-psk-baud-hint = { $baud } Baud
+
+textmodem-psk-modulation = Modulation
+
+textmodem-psk-bpsk-hint = Ein Bit pro Symbol, differenziell detektiert
+
+textmodem-psk-qpsk-hint = Zwei Bits pro Symbol mit einem Code der Rate 1/2, also ein Datenbit pro Symbol: dieselbe Textrate wie BPSK bei gleicher Geschwindigkeit, mit halb so vielen Fehlern
+
+textmodem-psk-8psk-hint = Drei Bits pro Symbol, kein Code: die schnellste der drei bei jeder Geschwindigkeit und die am wenigsten robuste. Nur Empfang — es gibt keinen Achtphasen-Sender. An einem synthetischen Signal nachgewiesen: Die 8PSK-Aufnahmen im Testkorpus ergeben keine saubere Konstellation
+
+textmodem-psk-coded = gecodet
+
+textmodem-psk-no-code = ohne Code
+
+textmodem-psk-coded-hint =
+    { $baud } Baud, { $n } { $n ->
+            [one] Träger
+           *[other] Träger
+        }, { $code }, { $bw } Hz breit — nur Empfang: der gecodete PSK-Sender ist nicht geschrieben
+
+textmodem-psk-wide-bank-hint = { "*" }*Diese breite Bank dekodiert noch nicht.** Ihre Träger liegen so dicht beieinander, dass das Filter des Empfängers bei der Eingangsrate sie nicht trennen kann; die schmaleren Bänke lesen ihre eigenen Aufnahmen durchaus. Nichts von dem, was Sie hier hören, geht verloren — es liegt am Eingangsteil, nicht am Signal.
+
+textmodem-hell-slant = Schräglage
+
+textmodem-hell-slant-hint = Feinabgleich des Empfangs-Abtasttakts. Eine Aufnahme, deren Punkte 0,4 % zu lang ankommen — eine gewöhnliche Soundkarte und das, was die Hell-Aufnahme von SkySweep misst — braucht etwa -4000. Stellen Sie so lange nach, bis die Zeichen aufrecht stehen.
+
+settings-net-rbn-enabled-hint = Liest die Skimmer der ganzen Welt und speist damit die Ausbreitungskarte. So zeigt die Karte Bänder, auf denen dieses Funkgerät nicht mithört. Es wird nichts gesendet, kein Konto ist nötig, und das Rufzeichen aus dem Reiter Allgemein wird verwendet. RBN-Spots erscheinen nicht in der Spot-Liste – sie sind Messungen, keine Einladungen. Der Host ist nicht an reversebeacon.net gebunden: Jeder Knoten mit demselben Telnet-Feed genügt.
+
+settings-net-rbn-port-hint = Bei reversebeacon.net ist 7000 der CW/RTTY-Feed, 7001 der FT8/FT4-Feed
+
+settings-net-wavelog-intro = Wavelog ist ein Logbuch, das **Sie** betreiben, unter einer Adresse, die Sie angeben. Hier geloggte Kontakte werden an den gewählten Stationsstandort hochgeladen, und Kontakte, die es schon enthält, können zurückgeholt werden, damit „schon gearbeitet“ auch QSOs kennt, die mit einem anderen Programm, einem anderen Gerät oder dem eigenen Webformular gemacht wurden.
+
+settings-net-wavelog-address-hint = Wo die Wavelog-Startseite liegt: https://log.example.org oder die LAN-Adresse. /index.php wird in beiden Fällen akzeptiert.
+
+settings-net-wavelog-key-hint = Ein API-Schlüssel von der API-Seite von Wavelog. Zum Hochladen braucht es einen Schlüssel mit Lese-/Schreibrecht; ein reiner Lese-Schlüssel kann nur herunterladen.
+
+settings-net-pick-one = auswählen
+
+settings-net-test-to-list-locations = Verbindung testen, um die Standorte aufzulisten
+
+settings-net-trust = VERTRAUEN
+
+settings-net-trust-hint = { "*" }*Dieses** Zertifikat und kein anderes für diesen Server akzeptieren. Eine Festlegung statt „alles akzeptieren“: Ändert es sich, wird die Verbindung abgelehnt und das gemeldet, statt stillschweigend zu dem zu gehen, was unter der Adresse antwortet.
+
+settings-net-test-wavelog = Wavelog testen
+
+settings-net-test-wavelog-hint = Fragt den Server, ob diese Adresse und dieser Schlüssel funktionieren, und listet seine Stationsstandorte. Übernimmt zuerst die Einstellungen; protokolliert nichts.
+
+settings-net-wavelog-download = Kontakte von Wavelog herunterladen
+
+settings-net-every-min = Alle (Min.)
+
+settings-net-locations = Standorte
+
+settings-net-download-now = Jetzt herunterladen
+
+settings-net-download-now-hint = Holt, was Wavelog seit dem letzten Download hinzugefügt hat, und markiert Kontakte, die es schon hat, als hochgeladen. Nichts, was bereits im Logbuch steht, wird geändert.
+
+settings-net-wavelog-upload-note = Nur **hier** geloggte Kontakte werden automatisch hochgeladen; Wavelogs eigener Rückstand wird durch Anhaken eines QSOs im Logbuch gesendet, sodass nichts diesen Rechner verlässt, was Sie nicht gewählt haben.
+
+settings-net-broadcast-note = Die auf dem Wasserfall beschrifteten Lang- und Kurzwellensender. Jede Quelle unten wird für die laufende Sendeperiode heruntergeladen und beim Wechsel der Periode neu geladen. Alle landen in **einem Speicher**, sodass der Quellen-Filter des SENDEPLAN-Fensters eine davon oder alle zeigt.
+
+settings-net-downloaded = heruntergeladen
+
+settings-net-schedules = Sendepläne
+
+settings-net-schedule-yours = Ihre
+
+settings-net-download = Herunterladen
+
+settings-net-hfcc-hint = HFCC veröffentlicht die Sendernamen in einer separaten Datei, daher braucht es beide. Solange das nicht der Fall ist, wird das gemeldet, statt einen Sendeplan aus bloßen Rufzeichen zu laden.
+
+settings-net-refetch-hint = Die Kopie dieser Periode erneut laden und die zwischengespeicherte ersetzen
+
+settings-net-from-file = Aus Datei…
+
+settings-net-aoki-file-hint = Den Aoki-Sendeplan aus einer selbst gespeicherten Datei übernehmen – dem .zip, das Aoki veröffentlicht, oder der .txt darin. Die Seite zieht mit der Periode um, deshalb gibt es das hier.
+
+settings-net-eibi-file-hint = Den EiBi-Sendeplan aus der sked-.csv übernehmen, die auf diesem Rechner gespeichert ist
+
+settings-net-filter-aoki = Aoki-Sendeplan
+
+settings-net-filter-eibi = EiBi-Sendeplan
+
+settings-net-download-all = Jetzt alles herunterladen
+
+settings-net-download-all-hint = Jede abrufbare Quelle laden und die bereits funktionierenden behalten
+
+settings-net-own-list-note = Ihre eigene Liste ist ein **Sendeplan** – was Sie zu hören erwarten –, nicht das Empfangsprotokoll, das festhält, was Sie tatsächlich gehört haben. Importieren Sie sie unten oder bearbeiten Sie die Datei.
+
+settings-net-import-list = Meine Senderliste importieren…
+
+settings-net-import-list-hint = Liest eine CSV oder eine einfache Senderliste und führt sie mit der Datei oben zusammen. Frequenzen können in kHz oder MHz stehen; die Einheit ergibt sich aus der Zahl.
+
+settings-net-filter-station-lists = Senderlisten
+
+settings-net-dx-status = DX — { $body }
+
+settings-net-pin-own = eigenes — { $pin }…
+
+settings-net-schedule-rows = { $name } { $n } Sendungen
+
+settings-net-schedule-not-downloaded = { $name }     nicht heruntergeladen
+
+settings-net-schedule-imported = { $source } { $season } — { $n } Sendungen, jetzt im Speicher
+
+settings-net-stations-imported =
+    { $n ->
+        [one] { $n } Sender in Ihrer Liste, jetzt im Speicher
+       *[other] { $n } Sender in Ihrer Liste, jetzt im Speicher
+    }
+
+txaudio-natural = Natürlich
+
+txaudio-ragchews-and-local-contacts-the = Plaudereien und lokale Verbindungen: der Rauschminderer, ein sanfter Expander in den Pausen, leichte Kompression. Klingt wie Sie, minus den Raum.
+
+txaudio-ssb-everyday = SSB Alltag
+
+txaudio-everyday-ssb-100-hz-2-9-khz-a = Alltags-SSB: 100 Hz – 2,9 kHz, etwas Präsenz um 2 kHz, mäßige Kompression.
+
+txaudio-ssb-punch-dx = SSB Punch / DX
+
+txaudio-weak-signals-and-pileups-a-narrow = Schwache Signale und Pile-ups: eine schmale Stimme von 300 Hz – 2,7 kHz mit kräftiger Präsenzanhebung, in einen schnellen Kompressor mit dem Phasendreher getrieben, für die größte Sprechleistung, die der Sender hat. Kein Hi-Fi.
+
+txaudio-ssb-punch-for-hours-in-a-noisy = SSB-Punch für Stunden in einer lauten Station: Der Rauschminderer und ein hartes Gate halten Lüfter und den nächsten Operator aus Ihren Pausen heraus, und der Kompressor arbeitet noch härter.
+
+txaudio-essb-hi-fi = ESSB / Hi-Fi
+
+txaudio-wide-ssb-or-am-50-hz-4-khz-with = Breite SSB oder AM: 50 Hz – 4 kHz mit erhaltenen Tiefen, sanfter Kompression und einem De-Esser. Braucht ein ebenso breites Sendefilter – und ein ruhiges Band.
+
+txaudio-fm-repeater = FM / Relais
+
+txaudio-fm-a-steep-300-hz-high-pass-keeps = FM: Ein steiler Hochpass bei 300 Hz hält die Stimme vom CTCSS-Ton fern, die Höhen enden bei 3 kHz für den Kanal, und der Begrenzer hält den Hub.
+
+txaudio-mobile-noisy-shack = Mobil / lauter Shack
+
+txaudio-fans-engine-traffic-the-denoiser-a = Lüfter, Motor, Verkehr: der Rauschminderer, ein steiler Hochpass bei 150 Hz und ein hartes Gate, mit genug Kompression, um über dem Rest zu liegen.
+
+txaudio-digital-voice-2 = Digitale Sprache
+
+txaudio-freedv-rade-the-denoiser-and = FreeDV / RADE: nur der Rauschminderer und sanfte Pegelung, kein EQ – der Vocoder bevorzugt natürliche Sprache. Schaltet DIGITALE SPRACHE ein.
+
+txaudio-imported-2 = Importiert
+
+frame-no-contrast-fit = Kein Kontrast — Klick für FIT
+
+frame-levels-hidden-hint = Boden und Decke der Anzeige liegen jenseits von allem auf dem Bildschirm, der Wasserfall ist deshalb einfarbig. Klicken Sie, um sie an das anzupassen, was das Funkgerät hört.
+
+frame-bw-waterfall = BW Wasserfall · { $span }
+
+frame-bw-waterfall-unknown = BW Wasserfall · —
+
+frame-every-module-own-window = jedes Modul hat sein eigenes Fenster
+
+frame-window-chip-hint = WINDOW — dieses Fenster in ein eigenes Betriebssystem-Fenster verschieben, etwa auf einen anderen Monitor
+
+frame-dock-panel-pane-hint = DOCK — dieses Panel in den Bereich unter dem Wasserfall zurückholen
+
+frame-dock-panel-hint = DOCK — dieses Panel wieder unter den Wasserfall setzen
+
+frame-dock-spectrum-hint = DOCK — dieses Spektrum ins Hauptfenster zurückholen, genauso wie dieses Fenster zu schließen, ohne das Schließfeld suchen zu müssen.
+
+frame-dock-band-menu-hint = DOCK — die Band- und Modusauswahl ins Hauptfenster zurückholen, genauso wie dieses Fenster zu schließen, ohne das Schließfeld suchen zu müssen.
+
+frame-dock-rotator-hint = DOCK — den Rotor ins Hauptfenster zurückholen, genauso wie dieses Fenster zu schließen, ohne das Schließfeld suchen zu müssen.
+
+frame-module-panadapter = Panadapter
+
+frame-module-panel = Panel
+
+frame-module-controls = Bedienelemente
+
+frame-module-aux-panadapter = Aux-Panadapter
+
+frame-module-band-mode = Band & Modus
+
+frame-module-rotator = Antennenrotor
+
+frame-detached-title = { $flavor } — { $name }
+
+frame-workspace-missing = Kein Arbeitsbereich { $n } gespeichert — speichern Sie einen unter Einstellungen › Oberfläche › Arbeitsbereiche, dann ruft diese Taste ihn auf.
+
+frame-no-operating-panel = Kein Bedienpanel in { $mode } — es ist abgedockt, und dieser Modus hat keines.
+
+frame-rx-only-nudge = Dieses Funkgerät kann nur empfangen — es hat keinen Sender. Sendebedienelemente ausblenden und den Hörbildschirm verwenden?
+
+frame-listening-controls = Hörbedienung
+
+frame-listening-controls-hint = Blendet die Sendebedienelemente aus und schaltet dieses Funkgerät auf den Hörbildschirm um (Einstellungen → Funkgerät). Es wird nichts neu abgestimmt, der Decoder läuft weiter.
+
+frame-update-available = SDR Oxide Brown { $tag } ist verfügbar — Sie nutzen { $version }.
+
+frame-download = Herunterladen
+
+frame-download-hint = Öffnet die Release-Seite in Ihrem Browser
+
+frame-tuning-catching-up = Abstimmung läuft — das Funkgerät holt auf
+
+frame-roll-up-hint = Einrollen — nur die Titelleiste behalten und dem Wasserfall den Platz zurückgeben
+
+frame-unroll-hint = Ausrollen — das Panel wieder anzeigen
+
+frame-window-panel-hint = WINDOW — diesem Panel ein eigenes Fenster geben, das auf einen anderen Monitor gelegt werden kann
+
+frame-panel-window-title = { $mode } — Panel
+
+frame-auto-stopped-stop-control = Auto gestoppt: ein Stopp-Bedienelement wurde benutzt
+
+frame-dont-show-again = Nicht mehr anzeigen
+
+frame-dont-show-again-hint = Merkt sich diese Bestätigung auf diesem Bildschirm. Die Sperre bleibt aus, solange die Engine mit --oob-tx läuft — es verhindert nur, dass die Warnung erneut angezeigt wird.
+
+frame-cb-window-title = ⚠  11 m (CB) — KEIN AMATEURFUNKBAND
+
+frame-cb-about-to-allow = Sie sind dabei, das Senden auf dem 11-m-Band freizugeben.
+
+frame-cb-not-amateur = 11 m ist kein Amateurfunkband. Es ist ein eigener Funkdienst mit eigenen Kanälen, Betriebsarten, Leistungsgrenzen und zugelassenen Geräten, die sich von Land zu Land unterscheiden. Das Senden dort unterliegt den Regeln des Landes, aus dem Sie funken.
+
+frame-cb-only-continue = Fahren Sie nur fort, wenn Sie wissen, was Ihr Land auf 27 MHz erlaubt, und sich daran halten — Sie bleiben für die Aussendung verantwortlich.
+
+frame-cancel = Abbrechen
+
+frame-saved-to-profile = im Profil { $name } gespeichert
+
+frame-saved-as-default = als Standard dieser Station gespeichert (der Server hat kein Passwort, jeder Client bekommt also dies)
+
+frame-bindings-offer-title = Dieses Profil enthält Tastenbelegungen
+
+frame-bindings-offer-profile = Das Profil, mit dem Sie angemeldet sind ({ $name }), speichert Tasten- und Mausbelegungen auf dem Server, und dieser Browser verwendet sie nicht. Das ist die sichere Voreinstellung — an einer gemeinsam genutzten Station ist auch die Tastatur geteilt, und wenn eine Anmeldung das PTT oder die Leertaste einer anderen übernimmt, ist das eine echte Gefahr.
+
+frame-bindings-offer-default = Das Standardprofil dieser Station speichert Tasten- und Mausbelegungen auf dem Server, und dieser Browser verwendet sie nicht. Das ist die sichere Voreinstellung — an einer gemeinsam genutzten Station ist auch die Tastatur geteilt, und wenn eine Anmeldung das PTT oder die Leertaste einer anderen übernimmt, ist das eine echte Gefahr.
+
+frame-bindings-offer-choice = Verwenden Sie sie hier oder lassen Sie sie. In beiden Fällen erfahren Sie, was geschehen ist, und ohne Ihre Wahl wird nichts geändert.
+
+frame-bindings-use = Belegungen dieses Profils verwenden
+
+frame-bindings-keep-mine = Meine behalten (und nicht mehr fragen)
+
+frame-bindings-using-profile = verwendet die für dieses Profil gespeicherten Tastenbelegungen
+
+frame-bindings-keeping-own = die eigenen Tastenbelegungen dieses Geräts bleiben; es wird nicht mehr gefragt
+
+frame-look-back-to-profile = zurück zum für dieses Profil gespeicherten Erscheinungsbild
+
+frame-look-none-stored = für dieses Profil ist noch kein Erscheinungsbild gespeichert — speichern Sie zuerst eines
+
+frame-antenna-rotator-caption = ANTENNENROTOR
+
+bands-condx-global-forecast-rest-what = CONDX ist eine globale Vorhersage. WSPR ist, was das weltweite WSPR-Netz gehört hat (wspr.live); PATHS, REACH und BEST ist, was diese Station und das RBN gehört haben. Eine leere Zeile bedeutet, dass nichts dekodiert wurde – das Band war vielleicht geschlossen, oder es war einfach niemand darauf.
+
+bands-km-s-parent-peak-rate =
+    { $name } ({ $code }) — { $velocity_kms } km/s, Mutterkörper { $parent }. Maximum ZHR { $zhr } um { $peak }.
+    
+    Ein Radiant über dem Horizont bedeutet, dass die Spuren Sie erreichen können; ein schneller Strom hinterlässt langlebigere ionisierte Spuren für Meteorscatter auf 6 m und 2 m sowie die kurzen Öffnungen auf 10 m/11 m.
+
+bands-hearing-means-path-open-each = { $callsign } in { $location } — sie zu hören heißt, dass die { $band }-Strecke offen ist. 10m (28,200 MHz) ist der nächstliegende Amateurband-Ersatz für die Bedingungen auf 11 m. Jede Bake steigt alle 10 s ein Band höher, daher ändert sich diese Zeile in jedem Zeitfenster.
+
+bands-wspr-activity-old = · WSPR-Aktivität { $age } alt (wspr.live)
+
+bands-psk-activity-old = · PSK-Aktivität { $age } alt
+
+bands-activity-hover =
+    Globale Aktivität auf { $band } in den letzten 15 Minuten, laut { $source }:
+    { $paths } Empfangsberichte · { $tx } Sender · { $rx } Empfänger
+    
+    { $note }
+    
+    Heller dargestellt, je aktiver das Band ist; es besagt, dass das Band irgendwo gehört wird, nicht dass es für Sie offen ist.
+
+bands-derived-hover =
+    { $band } gehört nicht zu den von HAMQSL.com bewerteten Bändern; dies ist das veröffentlichte Urteil der Gruppe { $group }, als nächster Ersatz gelesen.
+    
+    Eine Vorhersage, keine Messung Ihrer eigenen Strecke.
+
+bands-wspr-note = Das weltweite WSPR-Netz – Baken für schwache Signale.
+
+bands-psk-note = Empfangsberichte der Aktivitätsmodi: FT8, FT4 und das CW/RTTY-Reporting, das die WSPR-Baken nicht abdecken.
+
+aircraft-history-reason-disabled = die Station hat ihren Verlauf nicht eingeschaltet
+
+aircraft-history-reason-unauthorized = die Station verlangt eine Anmeldung
+
+aircraft-history-reason-no-station = der Verlauf wird von der Station geführt, mit der Sie verbunden sind
+
+aircraft-history-reason-unknown = die Antwort der Station wurde nicht verstanden
+
+aircraft-history-show = Verlauf anzeigen
+
+aircraft-history-hide = Verlauf ausblenden
+
+aircraft-label-history = Verlauf
+
+aircraft-label-first-heard = Zuerst gehört
+
+aircraft-label-last-heard = Zuletzt gehört
+
+aircraft-label-track-points = Spurpunkte
+
+aircraft-label-highest = Höchster
+
+aircraft-label-callsigns = Rufzeichen
+
+aircraft-label-registrations = Kennzeichen
+
+aircraft-history-nothing-kept = für dieses Flugzeug ist noch nichts gespeichert
+
+aircraft-history-by-station = von dieser Station
+
+aircraft-history-kept-24h = für die letzten 24 h gespeichert
+
+aircraft-history-of-kept = der gespeicherten Punkte
+
+aircraft-history-used-24h = in den letzten 24 h verwendet
+
+aircraft-history-seen-24h = in den letzten 24 h gesehen
+
+aircraft-history-looked-up = vor { $age } nachgeschlagen
+
+aircraft-alert-on-air-as = { $entry } ist auf Sendung, als { $callsign }
+
+aircraft-alert-on-air = { $entry } ist auf Sendung
+
+aircraft-watch-already = Schon auf der Liste.
+
+aircraft-watch-absent = Nicht auf der Liste.
+
+aircraft-watch-invalid = Weder Rufzeichen noch Kennzeichen: 3 bis 10 Buchstaben oder Ziffern.
+
+aircraft-watch-full = Die Liste ist voll: 100 Flugzeuge.
+
+multi-module-windows = MODULFENSTER
+
+multi-in-its-own-window = EIGENES FENSTER
+
+multi-docked = ANGEDOCKT
+
+multi-dock-all-windows = ALLE FENSTER ANDOCKEN
+
+multi-bring-every-module-window-back = Holt jedes Modulfenster zurück ins Hauptfenster
+
+multi-undock-all-windows = ALLE FENSTER ABDOCKEN
+
+multi-put-every-module-in-a-window-of = Legt jedes Modul in ein eigenes Fenster – das Hauptfenster behält Spektrum und Dekoder
+
+multi-two-radios-side-by-side-need-a = Zwei Funkgeräte nebeneinander brauchen ein breiteres Fenster – dieser Bildschirm zeigt jeweils eines
+
+multi-the-station-s-windows-some-modules = Die Fenster der Station – einige Module befinden sich in eigenen Systemfenstern. Hier öffnen, um das zu ändern.
+
+multi-put-a-module-in-its-own-window-sp1 = Legen Sie ein Modul in ein eigenes Fenster – SP1 oder AUX SP auf einem anderen Monitor, die RX-Steuerung daneben. Dieselben Zeilen stehen unter Einstellungen → Oberfläche → Abgedockt.
+
+multi-module-sp1 = SP1 — das Spektrum
+
+multi-module-sp2 = SP2 (AUX) — ein zweites Spektrum
+
+multi-module-panel = Bedienfeld
+
+multi-module-controls = RX-Steuerung
+
+multi-module-band-mode = Band & Modus
+
+multi-module-rotor = Antennenrotor
+
+multi-bring-back = { $name } zurück ins Hauptfenster holen
+
+multi-put-own-window = { $name } in ein eigenes Systemfenster legen – mit eigener App-ID, damit eine Fensterregel es an einen Monitor heften kann
+
+multi-windows-chip = FENSTER
+
+aircraft-stats-category = Kategorie
+
+aircraft-stats-airline = Fluggesellschaft
+
+aircraft-stats-model = Modell
+
+aircraft-stats-operator = Betreiber
+
+aircraft-stats-route = Route
+
+aircraft-stats-src-no-station = Gezählt werden die jetzt gehörten Flugzeuge. Die Station, mit der Sie sich verbinden, führt den letzten Tag.
+
+aircraft-stats-src-asking = Die Station wird nach dem letzten Tag gefragt…
+
+aircraft-stats-src-ready = Die von der Station gespeicherten letzten 24 h, zusammen mit den jetzt gehörten Flugzeugen.
+
+aircraft-stats-src-disabled = Die Station hat ihren Verlauf nicht eingeschaltet — gezählt werden die jetzt gehörten Flugzeuge.
+
+aircraft-stats-src-reason = { $reason } — gezählt werden die jetzt gehörten Flugzeuge.
+
+aircraft-export-saved-station = { $name } gespeichert: die letzten 24 Stunden der Station.
+
+aircraft-export-saved-local = { $reason }: stattdessen wurden die { $n } in den letzten zehn Minuten gehörten Flugzeuge gespeichert.
+
+login-remember-this-station = Diese Station merken
+
+login-remember-me = MERKEN
+
+login-this-station-keeps-your-sign-in = Diese Station behält Ihre Anmeldung, nicht diese Seite – nichts auszufüllen auf den anderen Funkgeräten und nichts zu vergessen, wenn Sie gehen.
+
+login-not-this-time-this-browser-forgets = Diesmal nicht: Dieser Browser vergisst sie beim Schließen, Sie werden in der nächsten Sitzung erneut gefragt, und nichts von dieser Anmeldung bleibt auf dem Gerät.
+
+aircraft-label-range = Entfernung
+
+aircraft-label-vertical = Vertikal
+
+aircraft-label-emergency = Notfall
+
+aircraft-from-your-station = von Ihrer Station
+
+aircraft-footer-disabled = online nicht verfügbar — Relay an der Station aus
+
+aircraft-footer-no-station = online nicht verfügbar — keine Station zum Fragen
+
+aircraft-footer-unauthorized = online nicht verfügbar — nicht angemeldet
+
+aircraft-hover-close = Schließen (Esc)
+
+aircraft-hover-lookup = Online nachschlagen
+
+aircraft-hover-lookup-hint = Das Relay dieser Station nach diesem Flugzeug fragen: Typ, Betreiber, Route und ein Foto. Es wird nichts gefragt, bevor Sie drücken.
+
+aircraft-hover-lookup-waiting = eine andere Abfrage läuft — eine nach der anderen
+
+aircraft-hover-history-hint = Wo dieses Flugzeug am letzten Tag war, aus der eigenen Aufzeichnung Ihrer Station. Es fragt Ihre Station, nie das Internet.
+
+auto-stopped-reason = Auto gestoppt: { $reason }
+
+auto-stopped-idle = Auto gestoppt: { $mins } Minuten ohne Bedienung
+
+auto-answering = { $role }: antworte { $call }
+
+auto-caller-went-away = Auto: ein Anrufer ist weg
+
+auto-nobody-left = Auto: niemand mehr zum Antworten
+
+auto-calling-cq = { $role }: rufe CQ (Nr. { $n })
+
+auto-cq-no-answer = Auto CQ: keine Antwort nach { $limit } Rufen – höre zu (Auto RX)
+
+auto-listening = { $role }: höre zu
+
+auto-role-stopped = { $role } gestoppt: { $sentence }
+
+auto-rx-listening = Auto RX: höre zu
+
+auto-cq-calling = Auto CQ: rufe CQ
+
+auto-cont-running = Auto CONT: läuft
+
+aircraft-search-missing-online = { $missing } von { $total } Flugzeugen ohne Online-Daten — ihre Karte öffnen
+
+aircraft-search-shown-of = { $shown } von { $total }
+
+aircraft-search-help =
+    Die bereits gehörten Flugzeuge durchsuchen: Adresse (ICAO), Rufzeichen, Kennzeichen, Typ, Betreiber oder Kategorie. Mehrere Wörter müssen alle passen. Ein Wort lässt sich mit icao: call: reg: type: op: auf ein Feld beschränken — zum Beispiel  reg:PH op:KLM.
+    Typ und Betreiber stammen aus der Online-Abfrage der Station und werden nur für Flugzeuge gefunden, deren Karte abgefragt wurde. Die Suche fragt nichts an.
+
+aircraft-search-hint = suchen
+
+aircraft-search-clear = Suche löschen
+
+gridtracker-shade-squares-heard-live-decode = Das einfärben, was in der Live-Dekodierliste gehört wird, nicht nur das, was im Log steht. Die Hörer-Version der Karte: was jetzt in der Luft ist, in Cyan unter den Marken der gearbeiteten Stationen.
+
+gridtracker-grid-ham = RASTER/AMATEUR
+
+gridtracker-maidenhead-squares-what-a-ham-log = Maidenhead-Felder – was ein Amateurfunk-Log enthält. Hier landen keine CB-Rufzeichen: Ein Austausch auf 11 m enthält ein Land, nie einen Locator.
+
+gridtracker-country-cb = LAND/CB
+
+gridtracker-dxcc-countries-at-their-nominal = DXCC-Länder an ihrem nominalen Mittelpunkt – was ein CB-Log enthält, da ein Austausch auf 11 m keinen Locator hat. Auch keine Amateurfunk-Rufzeichen: Das sind Länder, keine Felder.
+
+colouredit-paste-a-colour-code-rrggbb-or-r-g = Einen Farbcode einfügen (#RRGGBB oder r, g, b) – oder Cmd/Strg+V auf dem Farbfeld
+
+cwkey-thread-failed = Der CW-Tasten-Thread konnte nicht gestartet werden: { $error }
+
+cwkey-grab-failed = Die Taste konnte nicht exklusiv belegt werden – ihre Kontakte können auch in anderen Fenstern klicken (nutzt ein anderes Programm sie?)
+
+ignore-muted-hover =
+    Für diese Sitzung stummgeschaltet: { $names }.
+    
+    Eine stummgeschaltete Station verschwindet aus der Dekodierliste, löst keine Alarme aus, wird nicht vorgelesen und dem Auto-Modus nie als Station zum Antworten angeboten. In ihrem Namen wird nichts gesendet oder hochgeladen, und die Liste wird beim Schließen von sdroxide vergessen – es gibt keine gespeicherte Kopie, also bleibt nach einem Abend des Hörens nichts versteckt.
+    
+    Klicken, um alle wieder einzuschalten, oder die −-Taste in einer ihrer Zeilen drücken.
+
+js8-setup-hint = EINRICHTUNG — Rufzeichen, Gruppen, Autoantwort, Bakenintervall und Statusmeldung
+
+logbook-contest-logger-a-session-dupes-a = Contest-Logger – eine Sitzung, Dupes, Live-Punktestand und Cabrillo
+
+logbook-up-chip = HOCH
+
+net-wavelog-stopped = gestoppt: { $error }
+
+net-wavelog-download-stopped = Wavelog-Download gestoppt: { $error }
+
+net-wavelog-new-already-here = { $added } neu, { $matched } schon vorhanden
+
+net-wavelog-fill-in-first = zuerst müssen die Adresse und der API-Schlüssel ausgefüllt werden
+
+net-wavelog-no-station-location = kein Stationsstandort zum Herunterladen – zuerst die Verbindung testen
+
+publicsdr-could-not-connect = in dieser Sitzung nicht verbindbar
+
+publicsdr-use-chip = NUTZEN
+
+weather-title = WETTERMELDUNGEN
+
+weather-intro = Verschlüsselte Wettermeldungen von Schiffen und Landstationen, in RTTY auf 4583, 7646 und 10100,8 kHz. SHIP kommt gegen 02:00 und 07:35 UTC, SYNOP gegen 00:35 und 12:10. Eine Meldung wird hier statt in der Dekodierliste aufbewahrt, weil die Zahlen allein nichts bedeuten.
+
+weather-nothing-decoded = Noch nichts dekodiert. Es bleibt nur, RTTY zu einer der obigen Zeiten laufen zu lassen – das sind die ruhigsten Stunden auf dem Band.
+
+weather-head-call-day-hour = { $call } — { $day }. um { $hour }:00 UTC
+
+weather-head-day = um { $day }:00 UTC
+
+weather-head-report = Meldung
+
+weather-not-reported = { $label }: nicht gemeldet
+
+weather-in-their-words = in ihren Worten: { $remark }
+
+weather-ago-now = gerade eben
+
+weather-ago-minute = vor einer Minute
+
+weather-ago-minutes = vor { $m } Minuten
+
+weather-ago-hours =
+    vor { $h } { $h ->
+            [one] Stunde
+           *[other] Stunden
+        }
+
+weather-ago-days = vor { $d } Tagen
+
+sat-off-only-satellites-with = Aus: nur Satelliten mit hinterlegten Frequenzen – die, die Sie arbeiten können – und die, die Sie selbst eingefügt haben. An: jeder Satellit, den die Station verfolgt, meist solche, die niemand hören kann.
+
+adsbmap-tune-hint = Doppelklick zum Abstimmen · Umschalt für die andere Frequenz
+
+adsbmap-airport-large = großer Flughafen · Höhe { $elev }
+
+adsbmap-airport-medium = mittlerer Flughafen · Höhe { $elev }
+
+adsbmap-from-station = { $dist }  { $bear }° von Ihrer Station
+
+adsbmap-aircraft-within =
+    { $n } { $n ->
+        [one] Flugzeug
+       *[other] Flugzeuge
+    } im Umkreis von { $dist }
+
+adsbmap-navaid-mw = { $khz } kHz (Mittelwelle)
+
+adsbmap-click-to-close = auf die Karte klicken, zum Schließen
+
+settings-ui-broadcast-stations-hint =
+    Welche Rundfunksender das HÖREN-Fenster und der Wasserfall beschriften dürfen.
+    
+    { "**" }In diesem Ausschnitt** war das Verhalten jedes Bildschirms, bevor es eine Wahl war: eine halbe Spanne zu jeder Seite der Frequenz, was ein Etikett auf diesem Wasserfall abdecken sollte. **Das ganze Band** zeigt alles, was der Sendeplan mit Position enthält – das, was ein Hörer sucht, der ein Band durchstöbert –, auf Kosten einer volleren Karte.
+
+settings-ui-waterfall-labels = Wasserfall-Beschriftung
+
+settings-ui-tuned-only = Nur Eingestellte
+
+settings-ui-tuned-only-hint = Nur den Sender nennen, auf den Sie eingestellt sind – ein Name für das, was Sie hören, statt einer Wand von Namen über dem Durchlassbereich.
+
+settings-ui-whole-band = Das ganze Band
+
+settings-ui-whole-band-hint = Jeden Sender nennen, den der Sendeplan gerade auf Sendung hat, wo er auch liegt. Das, was man beim Durchstöbern eines Bandes will statt beim Hören eines Senders – und entsprechend voller. Auch im SPOTS-Fenster, als BC ALL.
+
+settings-ui-classic-ui = Klassische Oberfläche
+
+settings-ui-classic-ui-hint =
+    Legt alle Bedienelemente in eine Spalte links mit einklappbaren Gruppen, wie es SDR++ und SDR++Brown tun, und gibt alles Übrige dem Bild. Gleiche Bedienelemente, gleiche Einstellungen, so angeordnet, wie es die meisten Kurzwellenhörer schon gewohnt sind.
+    
+    Dazu braucht es ein Fenster, das breit genug ist, um dem Wasserfall seinen Anteil zu lassen: darunter entfällt die Spalte und die Leiste wird wie gewohnt gezeichnet; das Panel wird am rechten Rand breiter oder schmaler gezogen. Ausgeschaltet wird die eigene Leiste des Programms genau wie zuvor verwendet.
+
+settings-ui-classic-ui-check = Bedienelemente in einer linken Spalte
+
+settings-ui-updates = Updates
+
+settings-ui-updates-check = beim Start nach neuer Version suchen
+
+settings-ui-updates-hint = Fragt beim Start einmal die GitHub-Releases des Forks nach der neuesten Version und zeigt ein Banner, wenn sie neuer als dieser Build ist. Nur vollständige Releases zählen – der Nightly ist eine Vorabversion –, und „aus“ bedeutet überhaupt keine ausgehende Anfrage.
+
+settings-ui-undocked = Abgedockt — eigenes Fenster
+
+settings-ui-docked = In diesem Fenster angedockt
+
+settings-ui-dock-all-hint = Holt jedes abgedockte Fenster zurück in dieses.
+
+settings-ui-undock-all-hint = Setzt jedes Modul in ein eigenes Fenster – das Hauptfenster behält das Spektrum und die Decoder. Ein Modul ohne Inhalt, etwa das Bedienpanel in einer Sprachbetriebsart, öffnet kein Fenster.
+
+settings-ui-spectrum-line = Spektrumlinie
+
+settings-ui-spectrum-line-hint = Die Farbe unter der Spektrumlinie und wie sie schattiert wird: Einfarbig ist durchgehend eine Farbe, Verlauf ist unten voll und blendet nach oben aus, Gemischt ist in der unteren Hälfte voll und blendet über die obere Hälfte aus. Die Linie selbst bleibt cyan. Der FILL-Chip im SPEC-Popup schaltet die Füllung um, seine Linienzeile wählt die Schattierung.
+
+settings-ui-fill = Füllung
+
+settings-ui-fill-colour = Farbe
+
+settings-ui-simple-ui = Einfache Oberfläche
+
+settings-ui-simple-ui-hint =
+    Blendet die erweiterten Extras in der oberen Leiste aus: die 3D-Ansicht, die Skimmer, die Umschalter für Spektrum-/Wasserfall-Ebenen, Diplomverfolgung, Satelliten, ISM-Dekodierung und Funk-E-Mail. Die Bedienelemente, nach denen ein CB-Funker oder Kurzwellenhörer greift – Abstimmung, Betriebsart, Lautstärke, Squelch, Bandbreite, der Wasserfall, Speicher, Suchlauf –, bleiben alle.
+    
+    Nichts wird abgeschaltet, nur versteckt: Schalten Sie das wieder ein, um die Chips zurückzuholen.
+
+settings-ui-simple-ui-check = erweiterte Chips ausblenden
+
+settings-ui-wake-lock = Bildschirm wachhalten
+
+settings-ui-wake-lock-hint =
+    Hält den Bildschirm an, solange diese Seite im Vordergrund ist, damit ein Telefon oder Tablet, das auf dem Wasserfall liegt, nicht nach einer Minute ohne Berührung dunkel wird und sich sperrt. Empfang, Audio und Dekodierung brauchen das nicht – sie laufen so oder so weiter –, es dient der Lesbarkeit des Bildschirms.
+    
+    Passt zum Vorhängeschloss in den Telefon- und Tablet-Leisten: Sperren Sie den Bildschirm gegen versehentliche Berührungen und halten Sie ihn beleuchtet.
+    
+    Der Browser nimmt die Sperre zurück, sobald die Seite verborgen wird – anderer Tab oder die Ein-Taste des Telefons – und sie wird erneut angefordert, sobald die Seite zurück ist. Nötig sind ein Browser, der es kann, und eine sichere Seite (https oder localhost); die Zeile neben dem Kästchen sagt, wenn es nicht verfügbar ist oder abgelehnt wurde. Es kostet Akku, daher ist es aus, bis Sie es verlangen. Das installierte Programm auf einem Computer folgt stattdessen den Energieeinstellungen des Systems.
+
+settings-ui-wake-lock-check = Bildschirm anlassen
+
+settings-ui-sound-welcome = Ton-Hinweis
+
+settings-ui-sound-welcome-hint =
+    Wenn die Webseite geöffnet wird – neue Sitzung oder Neuladen mit F5 –, spielt der Browser keinen Ton, bis Sie die Seite berühren. Das ist die Regel des Browsers, und ohne ein Wort auf dem Bildschirm wirkt eine frische Sitzung, als ginge sie nicht.
+    
+    Ist dies an, sagt das eine Meldung in der Bildschirmmitte: 🔇 Tippen, klicken oder eine Taste drücken, um den Ton zu starten. Der erste Klick, Tipp oder Tastendruck – überall, mit Maus, Touchpad, Finger oder Tastatur – schließt sie und startet den Ton und tut sonst nichts: Er stimmt nicht ab, drückt keinen Knopf und löst keinen Shortcut aus. Sie erscheint nur beim Öffnen der Seite, nie wieder während der Sitzung, was auch später mit dem Ton geschieht.
+    
+    Schalten Sie es aus, sobald Sie wissen, was zu tun ist: Der Ton wartet weiter auf Ihre erste Berührung, die dann ganz normal wirkt. Wird mit Ihrem Profil auf dem Server gespeichert. Standardmäßig an.
+
+settings-ui-sound-welcome-check = Willkommensmeldung für den Ton
+
+settings-ui-sound-welcome-browser-only = nur im Browser – das installierte Programm spielt Ton ohne Berührung
+
+settings-ui-profile-screen = Bildschirm folgt Ihrem Profil
+
+settings-ui-profile-screen-hint =
+    Als Remote-Client von `sdroxide --server` wird das *Aussehen* dieses Bildschirms – Theme, Layout, Wasserfall und Spektrum, Schriften, Einfache Oberfläche, die Kartenebenen, die eigene Ansicht des Panadapters – mit dem Profil gespeichert, mit dem Sie angemeldet sind, und kommt auf jedem Rechner zurück, statt bei den Standardwerten zu beginnen.
+    
+    { "**" }Auf dem Server gespeichert, und zwar laufend, solange Sie angemeldet sind** – es gibt nichts zu drücken. Das ist Absicht: Auf Browser-Speicher ist kein Verlass, weil `persist()` in jedem Browser anders funktioniert und eine dort gehaltene Sitzung von niemandem zurückgesetzt werden kann, der nicht an diesem Gerät sitzt. Ein Profil auf dem Server ist eine Datei, die der Betreiber der Station zurückspielen kann.
+    
+    Auf einem Server **ohne Passwort** ist jeder Client dasselbe Profil, daher wird nichts geschrieben, außer Sie drücken die Schaltfläche unten – das Theme des einen Betreibers darf nicht das des nächsten werden. Nichts, was zum Rechner gehört, wird je gespeichert, und ein lokales Funkgerät ist nicht betroffen.
+
+settings-ui-save-to-profile = Im Profil speichern
+
+settings-ui-back-to-profile = Zurück zum Profil
+
+settings-ui-carry-bindings = Tastenbelegungen mitführen
+
+settings-ui-carry-bindings-hint =
+    Behält Ihre Tastatur- und Mausbelegungen ebenfalls mit dem Profil auf dem Server, damit sie der Anmeldung zwischen Browsern und Geräten folgen – dieselbe Idee wie beim Bildschirm oben, für die Tasten.
+    
+    { "**" }NICHT EMPFOHLEN, und standardmäßig aus.** An einer Station, die sich mehrere Personen teilen, wird die Tastatur mitgeteilt: Ein Profil mit Belegungen kann PTT, Leertaste oder Abstimmtasten eines anderen Betreibers umbelegen, sobald es sich anmeldet, und das Einschalten kann weitere Folgen haben, die jetzt nicht offensichtlich sind. Schalten Sie es nur ein, wenn der Server Ihnen allein gehört und Sie von mehreren eigenen Geräten zugreifen.
+    
+    Nur im Fork: Das ist kein Upstream-Feature. Die Bildschirmeinstellungen oben wandern immer mit; dies ist das einzige Opt-in hier.
+
+settings-ui-carry-bindings-on = an — NICHT EMPFOHLEN
+
+settings-ui-carry-bindings-off = mitführen (nicht empfohlen)
+
+settings-ui-carry-bindings-title = Tastenbelegungen auf dem Server mitführen?
+
+settings-ui-carry-bindings-body =
+    Das speichert Ihre Tastatur- und Mausbelegungen mit Ihrem Profil auf dem Server, damit sie Ihrer Anmeldung zwischen Browsern und Geräten folgen.
+    
+    An einer Station, die andere Personen nutzen, wird die Tastatur mitgeteilt. Ein Profil mit Belegungen kann PTT, Leertaste oder Abstimmtasten eines anderen Betreibers allein durch die Anmeldung umbelegen – und das Einschalten kann weitere Folgen haben, die jetzt nicht offensichtlich sind.
+    
+    Deshalb wird es nicht empfohlen. Schalten Sie es nur ein, wenn der Server Ihnen allein gehört.
+
+settings-ui-carry-bindings-confirm = Verstanden – trotzdem mitführen
+
+settings-ui-start-swl = Im SWL-Modus starten
+
+settings-ui-start-swl-hint =
+    Öffnet jede Sitzung mit bereits eingeschaltetem SWL-Modus, sodass die Oberfläche eines Hörers das ist, womit das Programm startet – für jedes Funkgerät, denn das ist eine Einstellung des Bildschirms und nicht eines Geräts.
+    
+    Der Schalter je Gerät ist unter Einstellungen → Funkgerät → Sendebedienelemente; eine Station mit einem Hörgerät und einem Transceiver stellt dort das Hörgerät ein und lässt dies aus. Die Benutzung dieses Schalters schaltet diesen Startwert für die Sitzung ab. `--swl` hat immer Vorrang.
+
+settings-ui-start-swl-check = mit eingeschaltetem SWL-Modus starten
+
+settings-ui-listen-hides-tx = HÖREN-Reiter blendet Senden aus
+
+settings-ui-listen-hides-tx-hint =
+    Die Wahl von **HÖREN** im Band-/Betriebsarten-Menü blendet alle Sendebedienelemente dieses Reiters aus, und die Wahl von **BETRIEB** bringt zurück, was die eigene Einstellung dieses Geräts sagt.
+    
+    Es kann keinen Sender einschalten. Ein auf Empfang beschränktes Gerät bleibt empfangsbeschränkt, und Bandsperre und Außerhalb-des-Bandes-Warnung bleiben unberührt.
+    
+    Das Bandmenü merkt sich den zuletzt gewählten Reiter, eine auf Hören belassene Station kommt also hörend zurück – die Sendebedienelemente sind auch beim nächsten Start ausgeblendet, und die Wahl von BETRIEB bringt sie zurück. Standardmäßig aus, weil es die Bedeutung des Reiters ändert; es fragt einmal nach.
+
+settings-ui-listen-hides-tx-check = Senden im HÖREN-Reiter ausblenden
+
+settings-ui-listen-hides-tx-title = Der HÖREN-Reiter blendet die Sendebedienelemente aus
+
+settings-ui-listen-hides-tx-body =
+    Im HÖREN-Reiter verschwinden die Sendebedienelemente; unter BETRIEB kommen sie genau so zurück, wie die eigene Einstellung dieses Geräts sie hinterlassen hat.
+    
+    Es schaltet nichts frei. Es ist eine Ansicht derselben Station, daher bleiben Bandsperre, Außerhalb-des-Bandes-Warnung und Sendegrenzen unberührt.
+    
+    Der Reiter wird gemerkt: Eine auf HÖREN belassene Station startet auf HÖREN, mit weiterhin ausgeblendeten Sendebedienelementen, bis BETRIEB gewählt wird.
+    
+    Gut zu wissen: Eine auf HÖREN belassene Station empfängt weiter auf dem, was der Reiter eingestellt hat, und ein verborgenes Bedienelement ist kein abgeschaltetes – das Senden ist aus, weil die Einstellungen es so sagen, nicht weil der Knopf außer Sicht ist.
+
+settings-ui-listen-hides-tx-confirm = Verstanden – bei HÖREN ausblenden
+
+settings-ui-swl-mode = SWL-Modus
+
+settings-ui-swl-mode-hint =
+    Blendet alle Sendebedienelemente für dieses Funkgerät aus – PTT, CALL CQ, TX-Pegel, SEND, BEACON, alles – und tauscht die Amateurfunk-Extras der Leiste (Spots, Diplome) gegen die des Hörers (SENDEPLAN und SWL-LOG, das Empfangsprotokoll). Derselbe Schalter wie unter Einstellungen → Funkgerät → Sendebedienelemente, und zwar je Gerät: Ein Hörstick kann in diesem Modus sein, während der Transceiver daneben seinen Sender behält.
+    
+    Die Hardware kann weiterhin senden; dies blendet nur die Bedienelemente aus. `--swl` erzwingt es für alle Geräte für die Dauer des Laufs.
+    
+    Wird mit Übernehmen wirksam.
+
+settings-ui-swl-mode-check = alle Sendebedienelemente ausblenden
+
+settings-ui-report-picture = Berichtsbild
+
+settings-ui-report-picture-hint =
+    Das Bild, das ein Empfangsbericht trägt, wenn Sie ihn an einen Sender schicken – Ihre eigene Karte, ein Foto, was der Sender sehen soll. Ein Bild für die Station, für jeden Bericht verwendet.
+    
+    Lassen Sie es leer, geht der Bericht als reiner Text, was ein völlig guter Bericht ist.
+
+settings-ui-report-picture-none = keins – der Bericht geht als Text
+
+settings-ui-choose = Wählen…
+
+settings-ui-report-picture-pick = Das Bild auf diesem Rechner auswählen
+
+settings-ui-report-note = Berichtsnotiz
+
+settings-ui-report-note-hint = Ihre Standardnotiz, in jeden Empfangsbericht vorausgefüllt – wer Sie sind, womit Sie hören, alles, was ein Sender einmal statt pro Brief wissen will. Klartext in einer einfachen Datei: kein Geheimnis.
+
+settings-ui-report-note-hint-text = optional – z. B. „Details auf Anfrage“
+
+sstv-keep-dial = FREQUENZ HALTEN
+
+sstv-keep-dial-on-hint = An: Die Wahl von SSTV lässt die Frequenz dort, wo Sie abgestimmt haben, der Decoder arbeitet also auf jeder Frequenz. Die veröffentlichten SSTV-Frequenzen stehen weiterhin im ⇵-Auswahlfeld. Klicken, um wieder auf der SSTV-Frequenz des Bandes zu landen.
+
+sstv-keep-dial-off-hint = Aus: Die Wahl von SSTV verschiebt die Frequenz auf die SSTV-Frequenz des Bandes, wenn Sie mehr als 3 kHz von einer entfernt sind. Klicken, um die Frequenz stattdessen dort zu lassen, wo Sie abgestimmt haben, und SSTV auf jeder Frequenz zu dekodieren. Eine Abstimmung nach der Wahl von SSTV wird in keinem Fall rückgängig gemacht.
+
+sstv-clear-rx = Rx löschen
+
+sstv-clear-rx-hint = Löscht das aktuell in der LIVE-Ansicht gezeigte Bild. Der Decoder läuft weiter — mit RX neu starten verwerfen Sie ein laufendes Bild und warten auf den nächsten Header.
+
+sstv-sensitivity-hint = Stellt den Signalpegel ein, der dem SSTV-Decoder zugeführt wird. 0 = aktueller automatischer Pegel (Auto). Negative Werte dämpfen, positive verstärken. Auf Auto klicken, um zum automatischen Pegel zurückzukehren.
+
+sstv-auto-level-hint = Kehrt zum automatischen Pegel (Referenz 0) zurück und deaktiviert die manuelle Einstellung. Hervorgehoben, solange aktiv.
+
+sstv-audio-present-no-header = Audio vorhanden · noch kein SSTV-Header
+
+sstv-editor = Editor…
+
+sstv-editor-hint = Das Bild selbst gestalten: verschiebbarer Text, beliebige Schriftart, ein Streifen quer oder längs im Bild
+
+sstv-save-image-as = Bild speichern unter…
+
+sstv-save-copy-asks-file = Speichert eine Kopie auf diesem Computer — fragt nach der Datei
+
+sstv-picture-still-loading = Das Bild wird noch geladen
+
+sstv-share-hint-direct = Dieses Bild an jemanden senden — WhatsApp, Telegram oder alles andere auf diesem Gerät
+
+sstv-share-hint-save = Dieses Bild speichern und eine Nachricht zum Versenden öffnen
+
+sstv-share-picture = Bild teilen…
+
+sstv-reupload-hint = Dieses Bild wieder aussenden — lädt Sendeplatz { $slot }
+
+sstv-radio-cannot-transmit = Dieses Funkgerät kann nicht senden
+
+sstv-reupload = Erneut senden
+
+sstv-unidentified = nicht identifiziert
+
+sstv-send-picture = Dieses Bild senden
+
+sstv-qsl-to = An
+
+sstv-the-card = Die Karte
+
+sstv-the-card-hint = Diese Angaben kommen auf eine gedruckte Karte neben dem Bild. Bleibt eine leer, wird sie einfach nicht gezeichnet — eine Karte nennt nie einen Rapport, den niemand gegeben hat.
+
+sstv-date-utc = Datum (UTC)
+
+sstv-rst-sent = RST gesendet
+
+sstv-rst-received = RST empfangen
+
+sstv-qsl-note = Notiz
+
+sstv-add-address = Zum Senden eine Adresse eintragen.
+
+sstv-saves-opens-mail-hint = Speichert das Bild und öffnet Ihr Mailprogramm — dort ist das Anhängen ein Klick.
+
+sstv-browser-cannot-attach-hint = Ein Browser-Tab kann keine Datei an eine Nachricht anhängen, daher speichert dies das Bild und öffnet die Nachricht; fügen Sie den Anhang von Hand hinzu.
+
+sstv-save-open-mail = Bild speichern & Mail öffnen
+
+sstv-mail-not-opened = Bild gespeichert und Nachricht kopiert — fügen Sie sie in Ihr Mailprogramm ein. Es konnte kein Mailprogramm geöffnet werden.
+
+sstv-qsl-saved-where-chosen = { $name } (dort gespeichert, wo Sie es gewählt haben)
+
+sstv-qsl-downloaded = { $name } — in den Download-Ordner dieses Browsers heruntergeladen
+
+sstv-picture-editor = Bildeditor
+
+sstv-slot-n = Platz { $n }
+
+sstv-slot-layers-hint = Die eigenen Ebenen dieses Sendeplatzes
+
+sstv-station-overlay = Stationseinblendung
+
+sstv-station-overlay-hint = Ein Satz Ebenen, den jeder Platz unter seinen eigenen zeichnet — das Rufzeichen, in der Ecke Ihrer Wahl. Einmal eingestellt, wird er mit dem eigenen Text jedes Platzes kombiniert, statt ihn zu ersetzen.
+
+sstv-draw-under-slot = unter diesem Platz zeichnen
+
+sstv-draw-under-slot-hint = Zeichnet die Stationseinblendung unter den eigenen Ebenen dieses Platzes. Aus bei einem Bild, das die Kennung schon trägt — meist ein erneut gesendetes Mosaik —, damit sie nicht doppelt aufgestempelt wird.
+
+sstv-overlay-note = Die Stationseinblendung: Jeder Platz zeichnet diese Ebenen unter seinen eigenen. Ziehen Sie eine Zeile im Bild, um sie zu verschieben.
+
+sstv-slot-text-note = Der eigene Text dieses Platzes, gezeichnet dort, wo Sie ihn hinsetzen. Ziehen Sie eine Zeile im Bild, um sie zu verschieben; der Streifen einer Zeile wandert mit.
+
+sstv-no-picture-in-slot = Kein Bild in diesem Platz — laden Sie unten eines
+
+sstv-base = Basis
+
+sstv-base-hint = Über das Bild welches Platzes diese Ebenen gezeichnet werden
+
+sstv-compose-over-hint = Über dem Bild dieses Platzes gestalten
+
+sstv-slot-empty = Dieser Platz ist leer
+
+sstv-picture-btn = Bild…
+
+sstv-load-picture-hint = Lädt ein Bild in diesen Platz
+
+sstv-use-received = Empfangenes nehmen
+
+sstv-use-received-hint = Legt das gerade eingetroffene Bild unter diese Ebenen, damit eine Antwort sein Bild und Ihr Rufzeichen trägt
+
+sstv-received-now-base = das empfangene Bild ist jetzt die Basis
+
+sstv-add-text = ＋ Text
+
+sstv-add-strip = ＋ Streifen
+
+sstv-n-lines =
+    { $n } { $n ->
+            [one] Zeile
+           *[other] Zeilen
+        }
+
+sstv-draw-this-line = Diese Zeile zeichnen
+
+sstv-strip-paren = (Streifen)
+
+sstv-draw-later-hint = Zeichnet diese Zeile später als die darüber stehenden
+
+sstv-draw-earlier-hint = Zeichnet diese Zeile früher
+
+sstv-copy = Kopieren
+
+sstv-face = Schrift
+
+sstv-colour = Farbe
+
+sstv-line-text-hint = was die Zeile sagt
+
+sstv-the-letters = Die Buchstaben
+
+sstv-composer-outline = Kontur
+
+sstv-the-edge = Der Rand um sie
+
+sstv-placement = Platzierung
+
+sstv-down-frame = längs im Bild
+
+sstv-down-frame-hint = Dreht die Zeile um eine Vierteldrehung, sodass sie abwärts gelesen wird — ein Rufzeichen am Bildrand entlang
+
+sstv-strip = Streifen
+
+sstv-behind = dahinter
+
+sstv-behind-hint = Ein Farbstreifen hinter der Zeile, quer oder längs über das Bild, auf die Zeile zentriert
+
+sstv-strip-first-edge = Der Streifen an seinem ersten Rand
+
+sstv-thickness = Dicke
+
+adsbpanel-paths = PFADE
+
+adsbpanel-paths-hint = Den Weg jedes Flugs als eine Linie zeichnen — wo er war, wo er ist, wohin er fliegt. Aus, wird die Spur stattdessen als Punktreihe gezeichnet.
+
+adsbpanel-nav = NAV
+
+adsbpanel-nav-hint = Flughäfen und Funknavigationshilfen unter dem Bild, aus den eingebauten Tabellen — große Flughäfen immer, mittlere näher heran, und die Navigationshilfen, sobald die Ansicht so eng ist, dass eine Station ein Ort ist. Die Mittelwellenbaken, die man hören kann, werden in einer eigenen Farbe gezeichnet.
+
+adsbpanel-units = Einheiten
+
+adsbpanel-units-hint = Wie Höhe, Geschwindigkeit, Steigrate und Entfernung in den Flugzeugansichten geschrieben werden. Der Decoder und die Exporte bleiben unberührt.
+
+adsbpanel-age = ALTER
+
+touchlock-locked-hover = Bildschirm gegen versehentliche Berührungen gesperrt. Zum Entsperren hier 3 Sekunden halten.
+
+touchlock-unlocked-hover = Sperrt den Bildschirm gegen versehentliche Berührungen: Frequenz, Band, Modus, Filter und Wasserfall reagieren nicht mehr auf einen Finger. Empfang und Audio laufen weiter. Zum Entsperren 3 Sekunden halten. Nach dem Entsperren ruht das Schloss 10 Sekunden, bevor ein Tippen es wieder sperrt, damit der Finger, der es geöffnet hat, es nicht sofort wieder schließt.
+
+touchlock-hold = HALTEN { $s } s…
+
+touchlock-unlocked = ENTSPERRT
+
+touchlock-locked-hold = GESPERRT · 3 s halten
+
+touchlock-unlocked-relock = ENTSPERRT · Sperre in { $s } s
+
+wake-held = Bildschirm bleibt an
+
+wake-asking = frage den Browser…
+
+wake-unsupported = hier nicht verfügbar – braucht einen Browser, der es kann, und eine https-Seite
+
+wake-refused = vom Browser abgelehnt (Energiesparen?)
+
+wake-native = nur im Browser – das installierte Programm folgt den Energieeinstellungen des Systems
+
+tooltipcopy-copied = ✔ Kopiert
+
+chrome-hide-message-hover = Diese Meldung dauerhaft ausblenden. An Ihren Einstellungen ändert sich nichts, und der Rat steht im Handbuch.
+
+chrome-close-message-hover = Diese Meldung schließen. Sonst ändert sich nichts.
+
+settings-ui-window-label = Fenster { $module }
+
+settings-ui-undock-hint =
+    Abgedockt wandert dieses Modul in ein eigenes Fenster, und das Hauptfenster gibt den Platz an das Übrige zurück – legen Sie den Wasserfall auf einen zweiten Monitor oder die Bedienelemente auf einen dritten. Schließen des Fensters dockt es wieder an.
+    
+    Unter Wayland kommt die Größe zurück, aber der Compositor entscheidet, wohin ein Fenster kommt: Machen Sie es schwebend und heften Sie es mit einer Fensterregel für die app-id „{ $app_id }“ an einen Monitor.
+
+settings-ui-workspace-restore-out = Diese Anordnung wiederherstellen – { $n } Modul(e) in eigenen Fenstern
+
+settings-ui-profile-in-use-named = in Benutzung: das Profil { $name }
+
+settings-ui-profile-in-use-default = in Benutzung: der Standard dieser Station
+
+settings-ui-profile-not-in-use = noch nicht in Benutzung – für diese Anmeldung ist nichts gespeichert
+
+settings-ui-module-panadapter = Panadapter
+
+settings-ui-module-controls = Bedienelemente
+
+settings-ui-module-aux = AUX SP (zweites Spektrum)
+
+settings-ui-module-band-menu = Band- und Betriebsartenwahl
+
+settings-ui-broadcast-scope-in-view = In diesem Ausschnitt
+
+settings-ui-fill-fixed = Einfarbig
+
+settings-ui-fill-gradient = Verlauf
+
+settings-ui-fill-mixed = Gemischt
+
+settings-ui-spot-kind-heard-me = GEHÖRT
+
+settings-ui-wake-held = Bildschirm bleibt an
+
+settings-ui-wake-asking = Browser wird gefragt…
+
+settings-ui-wake-unsupported = hier nicht verfügbar – braucht einen Browser mit dieser Funktion und eine https-Seite
+
+settings-ui-wake-refused = vom Browser abgelehnt (Energiesparen?)
+
+settings-ui-wake-native = nur im Browser – das installierte Programm folgt den Energieeinstellungen des Systems
+
+settings-ui-workspaces = Arbeitsbereiche
+
+settings-ui-workspaces-note = Eine benannte Fensteranordnung – welche Module in eigenen Fenstern sind und wo diese Fenster liegen. Speichern Sie die aktuelle oder holen Sie eine gespeicherte zurück. Bis zu zehn.
+
+settings-ui-workspaces-none = Noch keine Arbeitsbereiche gespeichert.
+
+settings-ui-workspace-restore-home = Diese Anordnung wiederherstellen – alle Module im Hauptfenster
+
+settings-ui-workspace-forget = Diesen Arbeitsbereich vergessen
+
+settings-ui-workspace-name = diese Anordnung benennen
+
+settings-ui-workspace-save = AKTUELLE SPEICHERN
+
+settings-ui-workspace-full = Zehn Arbeitsbereiche sind das Limit von SDRuno; löschen Sie zuerst einen
+
+settings-ui-workspace-save-hint = Die aktuelle Anordnung unter diesem Namen speichern
+
+settings-ui-workspace-name-first = Geben Sie zuerst einen Namen ein
+
+sstv-composer-fade = Verlauf
+
+sstv-layouts = LAYOUTS
+
+sstv-name-layout-hint = Layout benennen
+
+sstv-keep-layout-hint = Speichert dieses Layout unter diesem Namen
+
+sstv-layout-renamed = umbenannt in „{ $name }“
+
+sstv-layout-saved-as = gespeichert als „{ $name }“
+
+sstv-rename-cancelled = Umbenennen abgebrochen
+
+sstv-no-layouts-yet = Noch keine gespeicherten Layouts — benennen Sie oben eines.
+
+sstv-load-layout-hint = Lädt dieses Layout in das, was Sie bearbeiten
+
+sstv-layout-loaded = „{ $name }“ geladen
+
+sstv-rename-layout-hint = „{ $name }“ umbenennen
+
+sstv-layout-renaming = „{ $name }“ wird umbenannt
+
+sstv-duplicate-layout-hint = „{ $name }“ duplizieren
+
+sstv-layout-copy-name = { $name } Kopie
+
+sstv-layout-duplicated = dupliziert als „{ $name }“
+
+sstv-forget-layout-hint = Das Layout „{ $name }“ vergessen
+
+sstv-layout-forgot = „{ $name }“ vergessen
+
+sstv-mosaic-header = Mosaik aus empfangenen Bildern
+
+sstv-mosaic-nothing = Noch nichts empfangen — ein Mosaik wird aus Bildern der Galerie gebaut.
+
+sstv-mosaic-picked = { $n } von { $max } gewählt, in dieser Reihenfolge angeordnet — die Reihenfolge ist die Rasterposition. Jedes Bild behält seine Form; die Lücken sind schwarz.
+
+sstv-mosaic-earlier-hint = Verschiebt dieses Bild um eine Zelle nach vorn
+
+sstv-mosaic-later-hint = Verschiebt dieses Bild um eine Zelle nach hinten
+
+sstv-mosaic-max = { $n } ist das Maximum eines Mosaiks
+
+sstv-mosaic-compose = In diesen Platz gestalten
+
+sstv-mosaic-compose-hint = Baut das Mosaik und lädt es als Bild in diesen Platz; die empfangenen Originale bleiben unberührt
+
+sstv-mosaic-composed = { $n } Bilder in Platz { $slot } gestaltet
+
+sstv-clear-picks = Auswahl löschen
+
+sstv-composed-saved = gespeichert
+
+sstv-send = Senden
+
+sstv-send-now-hint = Sendet diese Gestaltung jetzt
+
+sstv-composed-sending = sendet
+
+sstv-forget = Verwerfen
+
+sstv-forget-hint = Leert das Dokument dieser Voreinstellung — Bannerstreifen und einfache Beschriftung übernehmen wieder das Bild
+
+sstv-forget-done = geleert — Banner und Beschriftung sind zurück
+
+sstv-copy-to-slot = In Platz kopieren
+
+sstv-copy-to-slot-hint = Gibt einem anderen Platz dieses Bild und diesen Text, damit es von dort gesendet werden kann
+
+sstv-copied-into-slot = in Platz { $n } kopiert
+
+sstv-word-strip = Streifen
+
+sstv-word-text = Text
+
+sstv-text-size = Textgröße
+
+sstv-text-size-hint = Der Bannertext als Prozentsatz der eigenen Streifengröße. 100 % ist, was es immer war; ein QSO braucht ein nach verrauschter Dekodierung lesbares Rufzeichen, und dies skaliert die Schrift, ohne den Streifen höher zu machen.
+
+sstv-placement-hint = An welchem Rand der Streifen gezeichnet wird. Die Nachrichteneinblendung beginnt am gegenüberliegenden Ende, ein Banner unten lässt also den oberen Bildteil für Text frei.
+
+sstv-top = Oben
+
+sstv-bottom = Unten
+
+topbar-ptt-hold-hint = Zum Senden gedrückt halten — ein Klick rastet es ein, der nächste Druck löst es
+
+topbar-mode-offset-hint = Dieser Modus arbeitet das Signal { $where } der Anzeige. Die Zahl ist die Anzeige, weil Sie diese abstimmen; das Signal liegt bei { $mhz } MHz.
+
+topbar-above-the-dial = oberhalb
+
+topbar-below-the-dial = unterhalb
+
+topbar-step-chip-hint = Wie weit ein Druck die Anzeige verschiebt. Tippen für die nächste Schrittweite: 10 Hz, 100 Hz, 500 Hz, 1, 2,5, 5, 6,25, 9, 10, 12,5 und 25 kHz. Die Zeile lässt sich unter Einstellungen › Oberfläche abschalten.
+
+topbar-mem-chip-hint = Speicherkanäle — eine gespeicherte Frequenz abrufen
+
+topbar-disp-menu-hint = Das Panadapter — seine zwei Ebenen, deren Geschwindigkeit und Detail, Spitzenwerthaltung — sowie Wasserfallpegel, Ansichtsoptionen und die Skimmer
+
+topbar-phone-menu-hint = Alles, was die Telefonleiste nicht zeigt: Bänder, Modi, Empfänger und Sender, die Dekodierfenster, Einstellungen und das Handbuch
+
+topbar-group-band = Band
+
+topbar-group-system = System
+
+topbar-caption-diversity = Diversity
+
+topbar-group-decode-windows = Dekodierfenster
+
+topbar-group-extras = Extras
+
+topbar-grid-tracker-hint = Grid-Tracker — gearbeitete Maidenhead-Felder auf einer Karte
+
+topbar-settings-chip-hint = Einstellungen — Geräteverstärkung, Antennen, Audiogeräte
+
+topbar-windows-chip-hint =
+    ▣  Links: alle Modulfenster zurückholen
+    Rechts: die Liste der Modulfenster
+
+topbar-manual-chip-hint = Benutzerhandbuch (F1)
+
+topbar-module-windows-title = Modulfenster
+
+topbar-wname-panadapter = SP1 — das Spektrum
+
+topbar-wname-aux = SP2 (AUX) — ein zweites Spektrum
+
+topbar-wname-panel = Bedienpanel
+
+topbar-wname-controls = RX-Bedienung
+
+topbar-wname-band-menu = Band & Modus
+
+topbar-wname-rotor = Antennenrotor
+
+topbar-wstate-put-back = { $name } wieder in dieses Fenster setzen
+
+topbar-wstate-floating-panel-only = Schwebend ist ein Zustand nur des Bedienpanels — ein Spektrum oder eine Konsole hat in diesem Fenster nur einen Platz
+
+topbar-wstate-float = { $name } aus dem Bereich lösen und über diesem Fenster schweben lassen
+
+topbar-wstate-no-panel = Kein Bedienpanel in { $mode } — das gilt in einem Modus, der eines hat
+
+topbar-wstate-own-window = { $name } ein eigenes Fenster geben, auf einem beliebigen Monitor
+
+topbar-wstate-here-now = { $name } ist jetzt hier
+
+topbar-dock-all = ALLE ANDOCKEN
+
+topbar-dock-all-hint = Alle Modulfenster zurück in dieses Fenster holen
+
+topbar-undock-all = ALLE ABDOCKEN
+
+topbar-undock-all-hint = Jedes Modul in ein eigenes Fenster setzen — dieses Fenster bleibt als Spektrum und Decoder
+
+topbar-rx-tx-freq = RX { $rx }   TX { $tx } MHz
+
+topbar-band-dock-hint = DOCK — die Band- und Modusauswahl neben dem Wasserfall geöffnet lassen, statt dieses Popup jedes Mal zu schließen
+
+topbar-band-window-hint = WINDOW — die Band- und Modusauswahl in einem eigenen Fenster öffnen, so breit Sie möchten, auf einem beliebigen Monitor neben dem Wasserfall
+
+topbar-band-return-popup-hint = DOCK — die Auswahl in das Popup der oberen Leiste zurückgeben, wo es sich nach jeder Wahl schließt
+
+topbar-band-window2-hint = WINDOW — die Auswahl in einem eigenen Fenster öffnen, so breit Sie möchten, auf einem beliebigen Monitor
+
+topbar-squelch-held-hint = Die Rauschsperre wird offen gehalten. Klicken Sie, um die vorherige Schwelle wiederherzustellen.
+
+topbar-squelch-hold-hint = Klicken Sie, um die Rauschsperre offen zu halten — um zu hören, ob etwas da ist — und erneut, um sie genau wie vorher wiederherzustellen.
+
+topbar-changed-tone = Klang
+
+topbar-changed-loudness = LOUDNESS
+
+topbar-nr-chip-hint =
+    Rauschminderung: { $strength } — { $engine }
+    
+    { $advice }
+    
+    Klicken, um die Stärke durchzuschalten: Niedrig / Mittel / Hoch / Aus. Das Verfahren steht in der Zeile darunter.
+
+topbar-nr-off-narrow-hint = Die Rauschminderung ist aus. In der Zeile darunter stehen fünf Entstörer zur Wahl — RNNoise, DeepFilterNet3, spectral-bleach, NR2 und das ursprüngliche Spektralverfahren — und ein Klick hier schaltet sie mit einer Stärke ein. Beginnen Sie bei Sprache mit RNNoise.
+
+topbar-eq-tone-hover = Klang: Bässe { $bass } dB, Mitten { $mid } dB, Höhen { $treble } dB
+
+topbar-eq-closed-hover = Klang — ein Dreiband-Equalizer für das Empfangsaudio. Zum Öffnen klicken
+
+topbar-eq-loudness-on = LOUDNESS an
+
+topbar-stereo-yields-hint = WFM-Stereo ist aus, solange Rauschminderung oder Auto-Notch laufen — sie würden die beiden Kanäle verschmieren. Schalten Sie sie ab, um Stereo zu hören
+
+topbar-stereo-playback-hint = Stereo: Die Aufnahme wird wie aufgenommen auf beiden Ohren wiedergegeben. Klicken Sie, um Mono zu erzwingen
+
+topbar-stereo-mono-recording-hint = Diese Aufnahme ist mono — es gibt keinen zweiten Kanal zum Abspielen
+
+topbar-preset-edges = { $lo } … { $hi } Hz
+
+topbar-caption-tone = Klang
+
+topbar-eq-on = an
+
+topbar-eq-bass = Bässe
+
+topbar-eq-mid = Mitten
+
+topbar-eq-treble = Höhen
+
+topbar-eq-remembered = Gemerkt für { $mode } — jeder Modus behält seinen eigenen.
+
+topbar-loudness-hint = Hebt die Bässe (und etwas die Höhen) an, wenn Sie die Lautstärke verringern, damit ein leiser Lautsprecher voll klingt. Funktioniert mit oder ohne Klangregelung; bei voller Lautstärke wirkungslos und nie lauter als volle Lautstärke. Standardmäßig aus und für den aktuellen Modus gemerkt.
+
+topbar-caption-record-audio = Audio aufnehmen
+
+topbar-stop-recording-after-min = Aufnahme nach { $minutes } Minuten beenden
+
+topbar-caption-play-back = Wiedergabe
+
+topbar-recordings-chip = ▶ AUFNAHMEN…
+
+topbar-recordings-hint = Eine Aufnahme in die Decoder zurückspielen — ein verpasstes SSTV-Bild, ein schwaches RTTY- oder CW-Signal, ein FT8-Slot — mit Wasserfall und Dekodierprotokoll, als wäre es auf Sendung. Das Funkgerät tritt währenddessen zurück.
+
+topbar-ant-label = ANT
+
+topbar-pwr-label = PWR
+
+topbar-drive-less = weniger
+
+topbar-drive-more = mehr
+
+topbar-fill-hint = Färbt den Bereich unter der Spektrumlinie, unten voll und nach oben zur Linie ausblendend, sodass ein Signal durch seine Masse ebenso auffällt wie durch seine Kontur. Die Farbe wird unter Einstellungen → Oberfläche → Spektrumlinie gewählt. Auf der 3D-Fläche nicht gezeichnet.
+
+topbar-group-spectrum = Spektrum
+
+topbar-group-waterfall = Wasserfall
+
+topbar-freeze-on-tx-hint = Hält den Wasserfall während Ihrer eigenen Aussendung an und setzt ihn dort fort, wo er stehen blieb — das Bild ist dann eine durchgehende Empfangshistorie statt eines Blocks aus Zeilen mit Ihrem Träger (oder, bei einem Gerät, das den Empfänger beim Senden stummschaltet, Zeilen mit Rauschen, das es nie gab). Die Spektrumlinie bleibt unberührt. Nützlich bei einem Modus, in dem Sie oft senden, damit die Übertragung der Gegenstation nicht von Ihrer eigenen vom Bildschirm geschoben wird.
+
+topbar-fft-chip-hint = Wasserfallpegel und Kontrast, FFT-Größe und Laufrichtung
+
+topbar-caption-waterfall = Wasserfall
+
+topbar-flatten-hint = Gleicht den Rauschteppich über das Band an: Ein Abschnitt, der leiser ist als seine Nachbarn, wird zu deren Boden hin angehoben, sodass ein schwaches Signal auf einem belebten Band sichtbar wird. Es wird nur angehoben — ein Träger wird nie abgesenkt — und nie um mehr als 20 dB. Die Spektrumkurve darüber bleibt genau wie gemessen.
+
+topbar-log-swl-hover = Empfangslog — gehörte Stationen, mit SINPO/SIO
+
+topbar-programs-hint = Sendeplan — was läuft, wann und wo
+
+topbar-listen-hint = Was in diesem Bereich läuft, auf einer Karte — Station wählen, abstimmen, aufschreiben, was Sie gehört haben, und loggen
+
+topbar-spots-hint = Live-Spots — PSK Reporter (und, außerhalb des SWL-Modus, DX-Cluster, POTA und SOTA)
+
+topbar-sigid-hint = Was liegt auf dieser Frequenz? Ein Signalführer nach Frequenz, Modus und Bandbreite
+
+topbar-extras-hint = EXTRAS — DAB und die anderen Empfänger, in einem abtrennbaren Fenster
+
+topbar-fill-style-caption = Linie
+
+topbar-fill-style-hint = Wie die Farbe unter der Spektrumlinie schattiert wird. Die Farbe selbst wird unter Einstellungen → Oberfläche → Spektrumlinie gewählt.
+
+topbar-fill-fixed = FEST
+
+topbar-fill-fixed-hint = Eine Farbe, überall unter der Linie gleich
+
+topbar-fill-gradient = VERLAUF
+
+topbar-fill-gradient-hint = Unten im Spektrum voll, nach oben ausblendend
+
+topbar-fill-mixed = GEMISCHT
+
+topbar-fill-mixed-hint = In der unteren Hälfte voll, über die obere Hälfte ausblendend
+
+topbar-fill-switch-on = Schalten Sie FILL ein, um dies einzustellen
+
+topbar-nothing = nichts
+
+topbar-olivia-unconfirmed = OLIVIA — der Empfang funktioniert, das Senden ist mit anderen Programmen nicht getestet. Dieser Decoder liest andere Stationen (über Funk bestätigt), Sie können also ein Olivia-QSO mitschreiben. Unsere eigene Aussendung läuft nun durch unseren eigenen Empfänger, wurde aber weder von fldigi noch von MultiPSK gelesen, und eine Vorzeichenkonvention weicht vom fldigi-Quelltext ab — prüfen Sie also die erste Runde, statt eine Antwort zu erwarten.
+
+topbar-dab-bandwidth = DAB / DAB+, über Funk erprobt. Es braucht 2,5 Msps Bandbreite am Eingang, bevor Audio zu hören ist: Bei den 1,536 MHz, die ein Ensemble belegt, liegt der Empfänger an der Untergrenze seines ADC und verliert Samples, und eine DAB-Dekodierung braucht einen lückenlosen Strom, sodass das Ensemble nie einrastet und Sie nichts hören. Stellen Sie zuerst die Abtastrate des Funkgeräts auf 2,500 Msps.
+
+topbar-stanag-unproven = STANAG 4285 — nur Empfang. Die Identifikation ist über Funk erprobt: Ein 4285 rastet ein, sein 106,67-ms-Rahmen wird gemessen und seine Referenzblöcke kollabieren, sodass das Panel sagen kann, was auf der Frequenz liegt und mit welcher Rate. Das Lesen seines *Texts* ist über Funk nicht erprobt: Code und Interleaver aus Anhang E dekodieren ein erzeugtes Signal exakt, aber noch keine codierte Station wurde mitgeschrieben. Ein erscheinender codierter Text ist echt; kein Text bedeutet, dass die Station unverschlüsselt leer ist oder verschlüsselten Verkehr trägt, was der Normalfall ist.
+
+topbar-cis11-unproven = CIS-11 (TORG-11) — nur Empfang. Der russische meteorologische Fernschreiber: 2-FSK mit 100 Baud, etwa 500 Hz Shift und ein 11-Bit-Zeichen mit einem Bit ungerader Parität. Was belegt ist, wurde an echten Aufnahmen gemessen: Der Empfänger findet seine Töne selbst und liest eine Ruhesendung mit 121 von 123 Zeichen mit gültiger Parität. Ungeklärt ist, wie sich die zehn Datenbits auf Zeichen verteilen; das Panel zeigt daher die Bits neben seiner ITA-2-Lesung — und der Verkehr selbst ist verschlüsselt, was der Normalfall ist.
+
+topbar-thor-unproven = THOR — die Empfangsseite liest fldigi-Aussendungen noch nicht. Der Decoder arbeitet mit seinem eigenen Modulator, aber weder eine Aufnahme über Funk noch eine Referenzaufnahme wurde mitgeschrieben; betrachten Sie das Angezeigte also als vorläufig.
+
+topbar-mode-not-on-band = { $mode } wird auf { $band } nicht verwendet — wählen Sie ein passendes Band
+
+topbar-radio-classic-hint = RADIO CLASSIC — ein klassisches Radiogesicht zum Rundfunkhören. Beim Einschalten bekommt es den Empfänger: Die anderen Modi und ihre Fenster werden geschlossen
+
+topbar-ats-bands-caption = Vom Empfänger angebotene Bänder
+
+topbar-ats-band-hover = { $name } — { $mhz } MHz, standardmäßig { $mode }. Schaltet den Empfänger auf dieses Band.
+
+topbar-caption-mode = Modus
+
+topbar-caption-digital = Digital
+
+topbar-ats-receive-only = Nur Empfang — der Si4732 demoduliert in Hardware, es gibt nichts zu tasten.
+
+topbar-band-forecast-derived =
+    { $band }: ≈{ $verdict } ({ $time ->
+            [day] Tag
+           *[night] Nacht
+        }) — Urteil der veröffentlichten Gruppe { $group }, der nächste Ersatz; HAMQSL.com bewertet für { $band } selbst nichts. Eine Vorhersage, keine Messung Ihres eigenen Pfades.
+
+topbar-keypad-readout-khz = { $digits } kHz
+
+topbar-caption-band-keypad = Bandentastatur
+
+topbar-keypad-bands = Bänder
+
+topbar-keypad-bands-hint = Die Tasten benennen Bänder: Drücken Sie eine, um dorthin zu wechseln, im aktuellen Modus. Die Rückkehr von MHz löscht das Eingegebene.
+
+topbar-keypad-mhz-hint = Geben Sie eine Frequenz auf den Tasten in Kilohertz ein: 14074 ist 14,074 MHz. ENTER sendet sie, CLEAR leert die Eingabe.
+
+topbar-keypad-key-stay = In { $mode } bleiben und auf { $mhz } MHz abstimmen — wo es auf { $band } gearbeitet wird.
+
+topbar-keypad-key-go = Zu { $band } wechseln.
+
+topbar-keypad-clear = Löschen
+
+topbar-keypad-clear-typing-hint = Die eingegebene Frequenz leeren. Die Tasten bleiben in MHz.
+
+topbar-keypad-clear-bands-hint = Nichts eingegeben — die Tasten stehen auf Bändern, wo ein Druck zu einem Band wechselt.
+
+topbar-keypad-enter = Eingabe
+
+topbar-keypad-enter-empty-hint = Noch nichts eingegeben. Die Tasten sind in MHz — drücken Sie sie zuerst.
+
+topbar-keypad-enter-ok-hint = Auf { $mhz } MHz abstimmen und zu den Bandtasten zurückkehren.
+
+topbar-keypad-enter-range-hint = { $mhz } MHz liegt außerhalb dessen, was dieses Funkgerät empfängt ({ $ranges } MHz).
+
+topbar-nothing-published = nichts veröffentlicht
+
+topbar-tab-listen = HÖREN
+
+topbar-tab-operate = FUNKBETRIEB
+
+topbar-listen-tab-note = Dieser Reiter kann auch die Sendebedienelemente ausblenden: Aktivieren Sie „TX im Reiter HÖREN ausblenden“ unter Einstellungen → Oberfläche
+
+topbar-caption-show-bands = Bänder anzeigen
+
+topbar-band-filter-hint = Nur die { $filter }-Bänder in der Liste darunter anzeigen. Erneut klicken, um alle Bänder anzuzeigen.
+
+topbar-show-every-band = alle anzeigen
+
+topbar-all-chip = ALLE
+
+topbar-all-chip-hint = Allgemeiner Empfang: das Band löschen und die Anzeige überall hingehen lassen. Nicht dasselbe wie der Bandfilter, der nur diese Liste einengt.
+
+topbar-caption-sw-metre-bands = KW-Meterbänder
+
+topbar-metre-band-hint = Auf die Mitte des Rundfunkbands { $name } abstimmen
+
+topbar-caption-wideband = Breitband
+
+topbar-caption-cb = 11M/CB
+
+topbar-caption-experimental = Experimentell (unerprobt)
+
+topbar-caption-receive-modes = Empfangsmodi
+
+topbar-wav-hint = Dasselbe Audio als unkomprimiertes 16-Bit-PCM mit 48 kHz — etwa 11 MB pro Minute in Stereo. Für einen Editor oder einen eigenen Decoder.
+
+topbar-mode-offset-hint-side = Dieser Modus arbeitet das Signal { $side } der Anzeige. Die Zahl ist die Anzeige, weil Sie diese abstimmen; das Signal liegt bei { $mhz } MHz.
+
+levelslider-hover =
+    Wasserfall-Pegel
+    Untergrenze { $floor } dB · Obergrenze { $ceil } dB
+    
+    Ziehen oder scrollen zum Aufhellen oder Abdunkeln; Umschalt für Kontrast.
+    Bewegen schaltet die Auto-Anpassung (FIT) aus.
+
+smeter-audio-level-hover =
+    Audiopegel: { $dbfs } dBFS{ $over }.
+    
+    Dieses Funkgerät hat **kein eigenes S-Meter zum Melden**, daher ist dies der Pegel des gesendeten Audios – hier gemessen, mit bereits angewandter AGC und Rauschsperre des Geräts. Er folgt dem Audio, nicht der HF: Rauschen auf der Soundkarte, eine Funkmaus neben dem Gerät oder das Pumpen der AGC bewegen ihn, obwohl sich das Signal nicht geändert hat.
+
+smeter-audio-over = (S9 + { $over } dB auf der Audioskala)
+
+spectrum-offset-left = ◀ Töne { $hz } Hz
+
+spectrum-offset-right = { $hz } Hz Töne ▶
+
+worldmap-no-snr = kein SNR
+
+solar-tune-the-radio-to-this-downlink = Das Funkgerät auf diese Downlink-Frequenz abstimmen
+
+qo100-width-label = Breite
+
+qo100-park-label = Parken
+
+qo100-led-carrier = Träger
+
+qo100-led-sync = Sync
+
+scanner-stopped = gestoppt
+
+ism-band-label = Band
+
+amp-none = keiner
+
+colormap-classic = Klassisch
+
+colormap-viridis = Viridis
+
+colormap-gray = Grau
+
+colormap-icom = Icom
+
+colormap-neon = Neon
+
+colormap-synthwave = Synthwave
+
+colormap-matrix = Matrix
+
+colormap-tron = Tron
+
+colormap-amber = Bernstein
+
+colormap-rainbow = Regenbogen
+
+colormap-blue = Blau
+
+colormap-calmer = Ruhiger
+
+colormap-compline = Komplet
+
+colormap-lauds = Laudes
+
+settings-cb-wide-calls-hint =
+    Akzeptiert die weitere 11-m-Rufzeichenform { $wide } – drei Buchstaben in der Mitte, bis zu vier Ziffern danach – neben { $narrow } von WSJT-CB. Experimentell: WSJT-CB selbst lehnt die weitere Form ab, ein Rufzeichen, das sie braucht, wird von einer WSJT-CB-Station möglicherweise nicht verstanden; es erweitert eher, was diese Station hört, als was sie zuverlässig senden kann. Aus behält die exakte WSJT-CB-Grammatik.
+    
+    Dieser Schalter ändert die *Form*, nicht die *Länge*: Ein 11-m-Rufzeichen hat weiterhin 11 Zeichen einschließlich jedes Suffixes /P, /MM oder /QRP, daher passt 19DCG3733/P und 19TST1001/QRP nicht.
+
+settings-idle-stop-disable = DEAKTIVIEREN
+
+settings-xvtr-tx-off-hint =
+    Aus beim Umsetzen: nur Empfang – die Zeile ist ein Konverter, kein Transverter, und auf diesem Band wird nichts gesendet.
+    
+    Über denselben Konverter: Er arbeitet in beide Richtungen, und das Senden verwendet denselben Versatz.
+
+settings-xvtr-drive-hint =
+    Eine Obergrenze für die Sendeaussteuerung, solange dieser Transverter gewählt ist, in Prozent des Maximums. Der ZF-Eingang eines Transverters verträgt Milliwatt, und die für die eigenen Bänder des Funkgeräts passende Aussteuerung würde ihn zerstören – daher ist dies das wichtigste Feld der Zeile. 100 % bedeutet keine Begrenzung.
+    
+    Ihre Drive-Einstellung wird darunter gehalten statt verschoben, sodass der KW-Wert zurückkommt, wenn die Frequenz das Band verlässt.
+
+settings-brown-build-note = Die Brown-Ausgabe von sdroxide: das Originalprogramm plus das 11-m-Jedermannfunkband, Kurzwellenhören und Dekodieren. Läuft als gewöhnliche Amateurfunkstation mit diesen zusätzlichen Bändern und Werkzeugen.
+
+settings-gain-by-band = Eingangsverstärkung pro Band merken
+
+settings-gain-by-band-hint =
+    Behält für jedes Band eine eigene Empfangsverstärkung und stellt sie wieder her, wenn die Frequenz in dieses Band wechselt. Stellen Sie Ihre KW-Verstärkung einmal ein und die für 11 m oder UKW einmal; das Funkgerät folgt dem Band.
+    
+    Standardmäßig aus. Solange aus, gilt überall eine Verstärkung, genau wie bisher. Beim Einschalten wird das aktuelle Band gespeichert, damit kein Band ohne Wert ist; ein nie eingestelltes Band behält die aktuelle Verstärkung.
+
+settings-callsign-grid-note = Ihr Rufzeichen und Locator, gemeinsam für FT8/FT4/FT2, SSTV-Bildkopfzeilen, die digitalen CB-Betriebsarten und das Logbuch. Das ist die Identität, die **sendet** – ein CB-Rufzeichen, wenn Sie 11 m arbeiten, sonst ein Amateurfunk-Rufzeichen. Womit ein **Empfangsbericht** unterschrieben wird, steht im Feld **Melden als (SWL)** im Reiter Spots. Auch im FT8-/SSTV-Einrichtungsdialog bearbeitbar.
+
+settings-cb-grammar = Rufzeichen-Grammatik 11 m / WSJT-CB
+
+settings-cb-wide-calls = WEITE CB-RUFZEICHEN — EXPERIMENTELL
+
+settings-cb-wide-calls-note = Einschalten, wenn Ihre 11-m-Gemeinschaft Dreibuchstabengruppen oder vierstellige Gerätenummern verwendet. Gilt für Dekodierung und Senden der digitalen CB-Betriebsarten. In beiden Fällen darf ein 11-m-Rufzeichen höchstens **11 Zeichen** haben, Suffix eingeschlossen – 19DC3733/P passt, 19TST1001/QRP nicht.
+
+settings-cb-plan-hint = In welchem Kanalplan die Frequenzanzeige liest: die Pläne des 11-m-Jedermannfunks und die des PMR446 auf 446 MHz. Nur die Kanalnummern und der Kanal, auf dem das Band öffnet, ändern sich – die Bandgrenzen bleiben, ein Wechsel verschiebt also nie, was empfängt oder sendet. Die Kanalnummer wird in der Abstimmzeile gezeichnet, wann immer die Frequenz auf einem Kanal des Plans liegt.
+
+settings-cb-allow-tx = Senden auf 11 m (CB) erlauben
+
+settings-cb-allow-tx-hint = Die Amateurband-Sperre verweigert das Senden auf jedem Band, das keine Amateurfunkzuteilung ist, und 11 m ist eines: ein eigener Funkdienst mit eigenen Regeln und eigenen zugelassenen Geräten. Das Einschalten erlaubt das Senden dort – und nirgendwo sonst; die Rundfunkbänder bleiben empfangsbeschränkt. Beim ersten Mal werden Sie um Bestätigung gebeten.
+
+settings-cb-licence-note = CB-Funk ist in vielen Ländern genehmigungsfrei, aber nicht in allen, und erlaubte Kanäle, Betriebsarten und Leistung unterscheiden sich. Die Nutzung des Bandes unterliegt den Regeln des Landes, in dem Sie sich befinden.
+
+settings-radio-callsign-hint =
+    Das Rufzeichen, unter dem dieses Funkgerät sendet, loggt und Spots meldet. Leer lassen, um das Stationsrufzeichen aus dem Reiter Allgemein zu verwenden – der Standard, richtig für eine Station mit einer Identität.
+    
+    Setzen Sie es bei einem Gerät, das jemand anderes ist: ein CB-Rufzeichen am 11-m-Gerät, ein Amateurfunk-Rufzeichen am KW-Gerät, jedes behält sein eigenes. Das Rufzeichen aus Allgemein bleibt die Rückfallebene für jedes Gerät ohne eigenes.
+    
+    Empfangs-*Berichte* können weiterhin mit der SWL-Nummer aus dem Reiter Spots unterschrieben werden, was dies nicht ändert.
+    
+    Wird mit Übernehmen wirksam.
+
+settings-radio-swap-iq-own = Diese Schnittstelle hat ihre eigene I/Q-Invertierung in ihrem Abschnitt weiter unten auf dieser Seite – verwenden Sie diese.
+
+settings-radio-swap-iq-hint =
+    Invertiert I/Q dieses Empfängers vor der Demodulation. Verwenden Sie es, wenn I und Q eines Empfängers vertauscht sind und SSB auf dem falschen Seitenband herauskommt (LSB als USB gehört), mit am Dial gespiegeltem Spektrum.
+    
+    Eine Eigenschaft der Hardware, nicht dessen, wer angemeldet ist.
+    
+    Wird mit Übernehmen wirksam.
+
+settings-radio-transmit-controls = Sendebedienelemente
+
+settings-radio-hide-tx-all = alle ausblenden (SWL-Modus)
+
+settings-radio-hide-tx-hint =
+    Blendet alle Sendebedienelemente für *dieses* Funkgerät aus – PTT, CALL CQ, TX-Pegel, SEND, BEACON, alles – und tauscht die Amateurfunk-Extras der Leiste (Spots, Diplome) gegen die des Hörers (SENDEPLAN und SWL-LOG, das Empfangsprotokoll). Je Gerät: Ein Hörstick an der Langdrahtantenne kann in diesem Modus sein, während der Transceiver daneben seinen Sender behält.
+    
+    Die Hardware kann weiterhin senden; dies blendet nur die Bedienelemente aus. `--swl` erzwingt es für alle Geräte für die Dauer des Laufs.
+    
+    Wird mit Übernehmen wirksam.
+
+settings-radio-auto-mode = Automatikmodus
+
+settings-radio-auto-stop-label = Stopp nach Inaktivität
+
+settings-radio-auto-stop-hint-long =
+    Wie lange der unbeaufsichtigte FT8/FT4/FT2-Sequenzer ohne Eingabe des Bedieners laufen darf, bevor er sich entschärft. Je Gerät: Ein Gerät kann länger laufen gelassen werden als ein anderes.
+    
+    Beim PlutoSDR reicht es bis zu sechs Stunden, und DEAKTIVIEREN schaltet den Stopp ganz ab: Der Automatikmodus läuft dann, bis Sie ihn stoppen. Sende-Watchdog und Bandsperre gelten weiterhin.
+    
+    Wird mit Übernehmen wirksam.
+
+settings-radio-auto-stop-hint =
+    Wie lange der unbeaufsichtigte FT8/FT4/FT2-Sequenzer ohne Eingabe des Bedieners laufen darf, bevor er sich entschärft. Je Gerät: Ein Gerät kann länger laufen gelassen werden als ein anderes.
+    
+    Absichtlich auf 45 Minuten begrenzt – der Automatikmodus ist für eine kurze Pause da, nicht um eine Station ohne jemanden dahinter einen Contest fahren zu lassen.
+    
+    Wird mit Übernehmen wirksam.
+
+settings-radio-smeter-calib = S-Meter-Kalibrierung
+
+settings-tx-eq = Sende-Equalizer
+
+settings-tx-eq-hint = Ein parametrischer 3-Band-Equalizer auf dem Mikrofonton, vor dem Modulator. Nur Sprachbetriebsarten (SSB/AM/FM); digitale Betriebsarten und CW führen synthetisierten oder getasteten Ton, der ihn nie erreicht. Standardmäßig aus und flach beim Einschalten, daher ändert das Einschalten nichts auf dem Band, bis ein Band unten tatsächlich bewegt wird. Wirkt sofort.
+
+settings-tx-eq-low-hint = Senkt/hebt Rumpeln und Griffgeräusche.
+
+settings-tx-eq-mid = Mittenanhebung
+
+settings-tx-eq-mid-hint = Präsenz: eine schmale Anhebung oder Absenkung irgendwo im Sprachband.
+
+settings-tx-eq-high-hint = Brillanz / De-Essing.
+
+settings-cb-call-too-long = ⚠ Zu lang für 11 m – { $len } Zeichen, und FT8 überträgt für ein CB-Rufzeichen 11, *einschließlich* eines Suffixes /P, /MM oder /QRP. Dieses Aktivierungsrufzeichen kann nicht gesendet werden. 19DC3733/P (10) passt; 19TST1001/QRP (13) nicht.
+
+settings-cb-plan-note = 11 m (CB) ist nicht überall dasselbe Band. Dies wählt, die Kanäle welches Landes die 11-m-Anzeige liest: { $plan }. Nur die Kanäle und der Kanal, auf dem das Band öffnet, ändern sich – die Bandgrenzen bleiben weit, ein Planwechsel ändert also nie, was empfängt oder sendet. Gilt für jedes Funkgerät dieser Station.
+
+settings-cw-enter-mode = Wechseln Sie einmal in CW (oder eine digitale Betriebsart), um die gespeicherten Werte zu laden.
+
+settings-cw-where-from = Quelle:
+
+settings-cw-straight-key-hint = Die Belegung `CW-Handtaste` (standardmäßig Leertaste) wird gelesen, solange KEY im CW-Panel an ist. Ein Kontakt, also eine Handtaste – die App dekodiert das eigene Timing des Bedieners.
+
+settings-cw-speed = Tempo:
+
+settings-cw-speed-note = die Punkt- und Strichlänge des Keyers
+
+settings-cw-key-tx = SENDER TASTEN
+
+settings-cw-key-tx-hint = Aus: Die Taste steuert nur den lokalen Trainer. An: Sie tastet das Funkgerät über den gewöhnlichen Handtastenpfad, mit Bandsperre und Watchdog drumherum.
+
+settings-cw-key-self-note = Für ein Gerät, das selbst tastet, stellen Sie Einstellungen → Funkgerät → CW-Tastung auf `Soundkarte (MCW)`: Handtastung wird auf dem Keyer-Pfad des Geräts absichtlich abgelehnt.
+
+settings-detachable-windows = Abdockbare Fenster
+
+settings-detachable-windows-note = Ein Panel in ein eigenes Betriebssystemfenster herausziehen. Schließen des Fensters dockt es wieder an.
+
+settings-tool-windows = Werkzeugfenster
+
+settings-tool-windows-note = In schwebende Fenster umgewandelte Panels. Ihr geöffneter Zustand wird gemerkt.
+
+settings-tool-window-scanner = SCANNER
+
+settings-tool-window-memories = SPEICHER
+
+settings-tool-window-playback = WIEDERGABE
+
+settings-tool-window-open = Offen
+
+settings-tool-window-closed = Geschlossen
+
+settings-detachable-native-only = Abdockbare Fenster gibt es nur in der nativen App.
+
+settings-psk-reporter-band-hint = Der Bandaktivitäts-Feed: auf dem aktuellen Band gehörte Stationen, als farbige Punkte gezeichnet. Aktiviert auch die Abfrage „wer hat mich gehört“ hinter dem HEARD-ME-Chip der Karte – ebenfalls stündlich neu geholt.
+
+settings-psk-upload-hint = Meldet an pskreporter.info, was diese Station hört, damit sie dort als Empfänger erscheint. Verwendet Rufzeichen und Locator aus dem Reiter Allgemein oder die SWL-Nummer unten, falls gesetzt.
+
+settings-swl-report-as = Melden als (SWL)
+
+settings-swl-report-as-hint = Die eigene Identität des Hörers für Empfangsberichte – eine registrierte SWL-Nummer, eine Clubnummer, ein Name. Wenn gesetzt, unterschreibt sie, was diese Station *hört* (Uploads zu PSK Reporter und WSPRnet und der Empfangsbericht, den das SWL-Log ausgibt), statt des Rufzeichens. Leer lassen, um mit dem Rufzeichen zu melden. Sie wird nie gesendet, tastet nie ein Funkgerät und benennt nie ein QSO oder einen Spotter, sodass auch ein Hörer ohne Rufzeichen berichten kann.
+
+settings-wsjtcb-spot-server = WSJT-CB-Spot-Server
+
+settings-wsjtcb-report = Meine 11-m-Dekodierungen an den WSJT-CB-Spot-Server melden
+
+settings-wsjtcb-report-hint = Sendet jeden auf dem 11-m-Band dekodierten Spot an den Spot-Dienst der CB-Gemeinschaft (xzgroup.net) – denselben Server, an den auch der eigene WSJT-CB-Client senden kann. Standardmäßig aus: Es ist ein Drittanbieterdienst, und nichts wird gesendet, bis Sie es verlangen. Ihr Rufzeichen ist der Spotter; PSK Reporter ist der separate Schalter oben.
+
+settings-eqsl-qth-hint = In welches QTH-Profil ein Upload einsortiert wird – nur nötig, wenn das Konto mehrere hat, sonst leer lassen.
+
+settings-log11dx-api-url = API-URL
+
+settings-log11dx-api-token = API-Token
+
+settings-log11dx-note = Beides stammt von Ihrer LOG11DX-Profilseite. Die eigene WSJT-X-Brücke wird nicht gebraucht: sdroxide loggt das QSO und sendet es direkt dorthin. Die Seite maskiert das Token, kopieren Sie es also beim Erzeugen – es wird wie die anderen Zugangsdaten in net.json gespeichert.
+
+settings-pan-attached-note =
+    Sein Spektrum, sein Wasserfall und alles, was davon abgelesen wird, liegen im Reiter jenes Funkgeräts, weshalb es keinen eigenen hat. Die Schnittstelleneinstellungen oben gehören weiterhin diesem Gerät und gelten – drücken Sie nach dem Ändern Übernehmen / Neu verbinden, dann starten beide Geräte zusammen neu.
+    
+    Um es wieder allein zu nutzen, leeren Sie das Feld Panadapter-Empfänger auf der Seite jenes Geräts.
+
+settings-pan-source-hint =
+    Welches Funkgerät für dieses empfängt. Es verlässt die Reiterleiste, solange es verliehen ist – sein Frontend gehört zur Engine dieses Geräts – und kommt sofort zurück, wenn dies auf Keins steht.
+    
+    Wird mit Übernehmen wirksam.
+
+settings-pan-offset-hint =
+    Wie weit über der Frequenz dieses Funkgeräts der Empfänger sitzt, in Hertz. 0 für einen Empfänger an derselben Antenne; die Zwischenfrequenz bei einem ZF-Abgriff – 9000000 für eine 9-MHz-ZF, 70455000 für eine 70,455-MHz-ZF.
+    
+    Das ist nicht das Feld Konverter oben, das das Funkgerät neu abstimmt, und nicht der I/Q-Mittenversatz des CAT-Reiters, der die eigene Soundkarte dieses Geräts betrifft. Nichts, was hier eingetippt wird, wird je an eines der beiden Geräte gesendet.
+    
+    Wird mit Übernehmen wirksam.
+
+settings-cw-device = Gerät:
+
+settings-cw-device-none = (keines gefunden)
+
+settings-cw-device-auto = auto (erstes mit Namen „key“)
+
+settings-cw-reverse-hint = Punkt und Strich vertauschen, für den Schalter am Paddle selbst.
+
+settings-cw-key-type = Tastentyp:
+
+settings-cw-key-straight = HANDTASTE
+
+settings-cw-key-iambic-a = IAMBIC A
+
+settings-cw-key-iambic-b = IAMBIC B
+
+settings-cw-usb-note = Ein Keyer-Kästchen, das seine zwei Kontakte meldet (oft als Maustasten), funktioniert; eines, das selbst iambic macht und fertige Tastungen sendet, nicht. Solange die Taste scharf ist, wird das Gerät exklusiv genommen, damit seine Kontakte nicht in anderen Fenstern klicken.
+
+settings-cw-usb-linux = Ein USB-Paddle braucht einen Linux-Desktop.
+
+settings-smeter-zero = 0 (wie gemessen)
+
+settings-smeter-cal-hint =
+    Korrigiert das S-Meter dieses Funkgeräts, wenn es zu hoch oder zu niedrig anzeigt, in S-Stufen zu 6 dB.
+    
+    Ein negativer Wert senkt die Anzeige – bei einem Messgerät, das zu viel zeigt, ein Rauschteppich bei S5, wo S2 sein sollte. Ein positiver Wert hebt sie. 0 ist das Messgerät wie gemessen.
+    
+    Nur die Anzeige bewegt sich: Zeiger, S- und dBm-Werte, der Pegel, von dem ein Empfangsbericht ausgeht, und das gesprochene S-Meter. Signal, Squelch, Aufnahme und Dekoder bleiben unberührt.
+    
+    Mit diesem Gerät auf dem Rechner gespeichert, an dem es hängt, und wirkt sofort.
+
+settings-rbn-n = Reverse Beacon Network { $n }
+
+settings-rbn-same-feed = Reverse Beacon Network 1 und 2 nutzen beide { $host }:{ $port } – jeder Spot kommt doppelt an. Geben Sie ihnen verschiedene Ports (7000 CW/RTTY, 7001 FT8/FT4) oder schalten Sie eines ab.
+
+settings-rx-site-station = An der Station
+
+settings-rx-site-elsewhere = Anderswo
+
+settings-remote-tab-note =
+    Die Station erscheint als Reiter neben den hier bereits geöffneten Funkgeräten, und die Reiterleiste oben im Fenster schaltet zwischen ihnen um (⊞ setzt zwei nebeneinander). Schließen Sie sie über die Liste oben im Reiter Funkgerät – das legt auf; am Server wird nichts geändert.
+    
+    Fragt der Server nach Benutzername und Passwort, erscheint sein Anmeldebildschirm im neuen Reiter. Eine einfache ws://-Verbindung verschlüsselt davon nichts; im offenen Internet leiten Sie sie daher über ein VPN oder einen SSH-Tunnel oder terminieren HTTPS vor dem Server und haken oben Sicher an.
+
+settings-cw-source-keyboard = TASTATUR
+
+settings-cw-source-usb = USB-PADDLE

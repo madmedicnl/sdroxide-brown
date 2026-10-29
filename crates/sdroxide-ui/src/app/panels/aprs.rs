@@ -172,7 +172,7 @@ impl SdroxideApp {
                                 .range(0..=120)
                                 .speed(0.25)
                                 .custom_formatter(|n, _| {
-                                    if n < 1.0 { "off".into() } else { format!("{n:.0} min") }
+                                    if n < 1.0 { tr!("topbar-off") } else { format!("{n:.0} min") }
                                 }),
                         )
                         .on_hover_text(
@@ -186,7 +186,7 @@ impl SdroxideApp {
                         crate::chrome::chip_accent(
                             ui,
                             false,
-                            RichText::new(" BEACON ").strong(),
+                            RichText::new(tr!("aprs-beacon")).strong(),
                             theme::GREEN(),
                             theme::INK_ON_CYAN(),
                         )
@@ -231,7 +231,7 @@ impl SdroxideApp {
             crate::chrome::row_tail(ui, |ui| {
                 ui.add(
                     egui::TextEdit::singleline(&mut self.aprs_filter)
-                        .hint_text("filter")
+                        .hint_text(tr!("aprs-filter-hint"))
                         .desired_width(74.0),
                 );
             });
@@ -637,7 +637,7 @@ impl SdroxideApp {
                 }
             }
             crate::chrome::row_tail(ui, |ui| {
-                if crate::chrome::chip(ui, self.aprs_show_traffic, RichText::new("RAW").size(9.5))
+                if crate::chrome::chip(ui, self.aprs_show_traffic, RichText::new(tr!("aprs-raw-chip")).size(9.5))
                     .on_hover_text(tr!("aprs-every-frame-channel-arrived-other"))
                     .clicked()
                 {
@@ -719,17 +719,17 @@ impl SdroxideApp {
                                     tr!("aprs-sent-retried-still-waiting-acknowledged"),
                                 ),
                                 AprsMsgState::Sent => (
-                                    "sent".to_string(),
+                                    tr!("aprs-msg-sent"),
                                     theme::CYAN_DIM(),
                                     tr!("aprs-air-waiting-acknowledged"),
                                 ),
                                 AprsMsgState::Acked => (
-                                    "ack".to_string(),
+                                    tr!("aprs-msg-ack"),
                                     theme::GREEN(),
                                     tr!("aprs-acknowledged-far-end"),
                                 ),
                                 AprsMsgState::Rejected => (
-                                    "rejected".to_string(),
+                                    tr!("aprs-msg-rejected"),
                                     theme::ALERT(),
                                     tr!("aprs-refused-far-end-not-retried"),
                                 ),
@@ -747,7 +747,7 @@ impl SdroxideApp {
                                     .on_hover_text(tip);
                             }
                         } else if !m.id.is_empty()
-                            && crate::chrome::chip(ui, false, RichText::new("reply").size(9.0))
+                            && crate::chrome::chip(ui, false, RichText::new(tr!("aprs-reply-chip")).size(9.0))
                                 .clicked()
                         {
                             self.aprs_target = m.from.clone();
@@ -763,7 +763,7 @@ impl SdroxideApp {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 let to = ui.add(
                     egui::TextEdit::singleline(&mut self.aprs_target)
-                        .hint_text("to")
+                        .hint_text(tr!("aprs-to-hint"))
                         .desired_width(78.0)
                         .font(egui::TextStyle::Monospace),
                 );
@@ -773,7 +773,7 @@ impl SdroxideApp {
                 let room = (ui.available_width() - 56.0).max(60.0);
                 let text = ui.add(
                     egui::TextEdit::singleline(&mut self.aprs_draft)
-                        .hint_text("message")
+                        .hint_text(tr!("aprs-message-hint"))
                         .desired_width(room)
                         .char_limit(MSG_MAX),
                 );
@@ -785,7 +785,7 @@ impl SdroxideApp {
                     crate::chrome::chip_accent(
                         ui,
                         false,
-                        RichText::new(" SEND ").size(10.0).strong(),
+                        RichText::new(tr!("aprs-send")).size(10.0).strong(),
                         theme::GREEN(),
                         theme::INK_ON_CYAN(),
                     )

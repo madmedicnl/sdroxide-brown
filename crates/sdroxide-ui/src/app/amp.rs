@@ -691,7 +691,7 @@ impl SdroxideApp {
             return;
         }
         let mut open = self.show_amp;
-        let title = format!("AMP · {}", self.amp_status.model.short());
+        let title = tr!("amp-title-model", model = self.amp_status.model.short());
         let mut st = self.amp_status.clone();
         // In bypass, what the amplifier doesn't measure comes from the radio.
         let tx = self.meters.as_ref().and_then(|m| m.tx.as_ref());
@@ -1030,14 +1030,14 @@ fn amp_panel_inner(
             // Green when keyed with the radio, the program's neutral blue in
             // standby: lit either way so the state can be told at a glance,
             // but never yellow or red, which only ever mean a warning (AJ3G).
-            let (mode, fill) = if r.ptt { ("PTT", theme::GREEN()) } else { ("OFF", theme::CYAN()) };
+            let (mode, fill) = if r.ptt { ("PTT".to_string(), theme::GREEN()) } else { (tr!("amp-state-off"), theme::CYAN()) };
             // SAFETY INTERLOCK (docs/hardrock/safety-interlocks.md, #4): no
             // OFF to PTT while the radio drives harder than the amplifier's
             // drive limit, as a 100 W radio running barefoot through the
             // bypassed amp does. The link checks again before sending.
             let overdriven = !r.ptt && r.drive_w > limits.drive_warn_w;
             let ptt =
-                ui.add_enabled_ui(!overdriven, |ui| button(ui, s, true, mode, Some(fill))).inner;
+                ui.add_enabled_ui(!overdriven, |ui| button(ui, s, true, &mode, Some(fill))).inner;
             corner_mark(ui.painter(), ptt.rect, s, theme::INK_ON_BRIGHT());
             if ptt
                 .on_hover_text(tr!("amp-ptt-keys-amplifier-radio-off"))
@@ -1072,16 +1072,16 @@ fn amp_panel_inner(
                 actions.push(AmpAction::SetAntenna(if r.antenna == 2 { 1 } else { 2 }));
             }
             ui.add_space(6.0 * s);
-            if relay_button(ui, "DN", &tr!("amp-band-down")) {
+            if relay_button(ui, &tr!("amp-relay-dn"), &tr!("amp-band-down")) {
                 actions.push(AmpAction::BandDown);
             }
             ui.label(
-                RichText::new(r.band.map_or("UNK", amp_band_label))
+                RichText::new(r.band.map_or_else(|| tr!("amp-band-unknown"), |b| amp_band_label(b).to_string()))
                     .size(15.0 * s)
                     .strong()
                     .color(theme::YELLOW()),
             );
-            if relay_button(ui, "UP", &tr!("amp-band-up")) {
+            if relay_button(ui, &tr!("amp-relay-up"), &tr!("amp-band-up")) {
                 actions.push(AmpAction::BandUp);
             }
         });
@@ -1148,14 +1148,14 @@ fn amp_panel_inner(
             actions.push(AmpAction::Tune);
         }
         let (on_byp, fill) =
-            if atu.active { ("ON", theme::GREEN()) } else { ("BYP", theme::CYAN()) };
+            if atu.active { (tr!("amp-state-on"), theme::GREEN()) } else { ("BYP".to_string(), theme::CYAN()) };
         // SAFETY INTERLOCK (docs/hardrock/safety-interlocks.md, #2): the
         // tuner's relays must not be switched with RF on them. Doing so
         // made AJ3G's HR500 raise its RFL flag (17 Oct 2026); it stresses the
         // output devices and pits the contacts. The link checks again (#1).
         let rf = rf_present(&r);
         if inside
-            .add_enabled_ui(!rf, |ui| button(ui, s, true, on_byp, Some(fill)))
+            .add_enabled_ui(!rf, |ui| button(ui, s, true, &on_byp, Some(fill)))
             .inner
             .on_hover_text(tr!("amp-put-tuner-line-bypass"))
             .on_disabled_hover_text(not_while_tx())
@@ -1167,11 +1167,11 @@ fn amp_panel_inner(
         if atu.tuning || !bypassed {
             ui.horizontal(|ui| {
                 let state = if atu.tuning {
-                    tr!("amp-tuning").to_string()
+                    tr!("amp-tuning")
                 } else if let Some(res) = &atu.last_result {
                     res.clone()
                 } else {
-                    "ON".into()
+                    tr!("amp-state-on")
                 };
                 let col = if atu.tuning {
                     theme::CYAN()
@@ -1205,7 +1205,7 @@ fn amp_panel_inner(
 fn pickers(ui: &mut egui::Ui, i: usize, pair: &mut Pair, s: f32) {
     let pt = 12.0 * s;
     ui.horizontal(|ui| {
-        ui.label(RichText::new("TOP").size(pt).color(theme::TEXT()));
+        ui.label(RichText::new(tr!("amp-needle-top")).size(pt).color(theme::TEXT()));
         let mut top = pair.top;
         dot(ui, top_ink(), s);
         egui::ComboBox::from_id_salt(("amp-top", i))
@@ -1222,7 +1222,7 @@ fn pickers(ui: &mut egui::Ui, i: usize, pair: &mut Pair, s: f32) {
         ui.add_space(8.0 * s);
         ui.label(RichText::new(tr!("amp-bottom")).size(pt).color(theme::TEXT()));
         let mut bottom = pair.bottom;
-        let shown = bottom.map_or("none", |b| b.label());
+        let shown = bottom.map_or_else(|| tr!("amp-none"), |b| b.label().to_string());
         dot(ui, if bottom.is_some() { bottom_ink() } else { theme::LINE() }, s);
         egui::ComboBox::from_id_salt(("amp-bottom", i))
             .width(64.0 * s)
@@ -1477,19 +1477,19 @@ fn link_line(ui: &mut egui::Ui, st: &AmpStatus, s: f32, transmitting: bool) {
     let trips = st.alerts.trips();
     let hot = st.readings.is_some_and(|r| st.model.limits().over_temp(&r));
     let (text, col) = if st.connected && hot {
-        (tr!("amp-off-line-over-temperature").to_string(), theme::ALERT())
+        (tr!("amp-off-line-over-temperature"), theme::ALERT())
     } else if st.connected && st.alerts.tripped {
         let why =
             if trips.is_empty() { String::new() } else { format!(" · {}", trips.join(", ")) };
         (tr!("amp-tripped", why = why), theme::ALERT())
     } else if st.connected && transmitting {
-        (tr!("amp-connected-transmitting").to_string(), theme::GREEN())
+        (tr!("amp-connected-transmitting"), theme::GREEN())
     } else if st.connected {
-        (tr!("amp-connected").to_string(), theme::GREEN())
+        (tr!("amp-connected"), theme::GREEN())
     } else if let Some(e) = &st.error {
         (e.clone(), theme::ALERT())
     } else {
-        (tr!("amp-connecting").to_string(), theme::YELLOW())
+        (tr!("amp-connecting"), theme::YELLOW())
     };
     ui.label(RichText::new(text).size(12.0 * s).color(col));
 }
@@ -1807,7 +1807,7 @@ fn lc_network(p: &egui::Painter, rect: Rect, s: f32, n: AtuNetwork, model: AmpMo
     let (l_text, c_text) = match model.atu_scale() {
         Some(sc) => (
             if n.l_step == 0 {
-                tr!("amp-no-inductance-needed").to_string()
+                tr!("amp-no-inductance-needed")
             } else {
                 tr!(
                     "amp-h-step",
@@ -1816,7 +1816,7 @@ fn lc_network(p: &egui::Painter, rect: Rect, s: f32, n: AtuNetwork, model: AmpMo
                 )
             },
             if n.c_step == 0 {
-                tr!("amp-no-capacitance-needed").to_string()
+                tr!("amp-no-capacitance-needed")
             } else {
                 tr!(
                     "amp-pf-step",

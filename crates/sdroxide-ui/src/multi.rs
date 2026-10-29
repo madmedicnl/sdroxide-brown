@@ -163,6 +163,20 @@ enum StripAction {
     UndockAll,
 }
 
+/// A detachable module's name in the Windows menu, in the interface language.
+#[cfg(not(target_arch = "wasm32"))]
+fn module_window_name(m: sdroxide_types::DetachableModule) -> String {
+    use sdroxide_types::DetachableModule as M;
+    match m {
+        M::Panadapter => tr!("multi-module-sp1"),
+        M::AuxPanadapter => tr!("multi-module-sp2"),
+        M::Panel => tr!("multi-module-panel"),
+        M::Controls => tr!("multi-module-controls"),
+        M::BandMenu => tr!("multi-module-band-mode"),
+        M::Rotor => tr!("multi-module-rotor"),
+    }
+}
+
 /// The **WINDOWS** menu's body: one row per module, and a way to bring them all
 /// home. A free function over [`sdroxide_types::UiSettings`] and the action list,
 /// so the strip can draw it from `&self` and let the write happen where the
@@ -174,23 +188,19 @@ fn windows_menu_body(
     actions: &mut Vec<StripAction>,
 ) {
     use sdroxide_types::DetachableModule as M;
-    ui.label(RichText::new("MODULE WINDOWS").color(crate::theme::CYAN()).size(11.0).strong());
+    ui.label(RichText::new(tr!("multi-module-windows")).color(crate::theme::CYAN()).size(11.0).strong());
     ui.separator();
     for m in M::ALL {
         let out = ui_settings.is_detached(m);
         ui.horizontal(|ui| {
-            ui.label(RichText::new(m.window_name()).size(12.0));
+            ui.label(RichText::new(module_window_name(m)).size(12.0));
             crate::chrome::row_tail(ui, |ui| {
                 let chip =
-                    crate::chrome::chip(ui, out, if out { "IN ITS OWN WINDOW" } else { "DOCKED" })
+                    crate::chrome::chip(ui, out, if out { tr!("multi-in-its-own-window") } else { tr!("multi-docked") })
                         .on_hover_text(if out {
-                            format!("Bring {} back into the main window", m.window_name())
+                            tr!("multi-bring-back", name = module_window_name(m))
                         } else {
-                            format!(
-                                "Put {} in its own OS window — its own app-id, so a window rule \
-                             can pin it to a monitor",
-                                m.window_name()
-                            )
+                            tr!("multi-put-own-window", name = module_window_name(m))
                         });
                 if chip.clicked() {
                     actions.push(StripAction::SetDetached { module: m, on: !out });
@@ -207,17 +217,16 @@ fn windows_menu_body(
         ui.separator();
         ui.horizontal(|ui| {
             if any_out
-                && crate::chrome::chip(ui, false, "DOCK ALL WINDOWS")
-                    .on_hover_text("Bring every module window back into the main window")
+                && crate::chrome::chip(ui, false, tr!("multi-dock-all-windows"))
+                    .on_hover_text(tr!("multi-bring-every-module-window-back"))
                     .clicked()
             {
                 actions.push(StripAction::DockAll);
             }
             if any_in
-                && crate::chrome::chip(ui, false, "UNDOCK ALL WINDOWS")
+                && crate::chrome::chip(ui, false, tr!("multi-undock-all-windows"))
                     .on_hover_text(
-                        "Put every module in a window of its own — the main window is left as \
-                         the spectrum and the decoders",
+                        tr!("multi-put-every-module-in-a-window-of"),
                     )
                     .clicked()
             {
@@ -1051,7 +1060,7 @@ impl MultiApp {
                     } else if splittable {
                         tr!("multi-open-radio-split-view-own")
                     } else {
-                        "Two radios side by side need a wider window — this screen shows one at a time".to_string()
+                        tr!("multi-two-radios-side-by-side-need-a")
                     };
                     let split = split.on_hover_text(tip);
                     if splittable && split.clicked() {
@@ -1133,13 +1142,11 @@ impl MultiApp {
             use sdroxide_types::DetachableModule as M;
             let ui_settings = self.tabs[self.focused].app.ui_settings_for_windows();
             let any_out = M::ALL.iter().any(|m| ui_settings.is_detached(*m));
-            let btn = crate::chrome::chip(ui, any_out, RichText::new("🪟 WINDOWS").size(12.0))
+            let btn = crate::chrome::chip(ui, any_out, RichText::new(format!("🪟 {}", tr!("multi-windows-chip"))).size(12.0))
                 .on_hover_text(if any_out {
-                    "The station's windows — some modules are in their own OS windows. \
-                     Open this to change that."
+                    tr!("multi-the-station-s-windows-some-modules")
                 } else {
-                    "Put a module in its own window — SP1 or AUX SP on another monitor, \
-                     the RX control beside them. The same rows are in Settings → UI → Undocked."
+                    tr!("multi-put-a-module-in-its-own-window-sp1")
                 });
             let popup_id = egui::Popup::default_response_id(&btn);
             let before = actions.len();
@@ -1222,7 +1229,7 @@ impl MultiApp {
         // this screen asked for, putting it in front of the operator.
         self.tabs[self.focused]
             .app
-            .show_notice(tr!("multi-asked-station-another-radio").to_string());
+            .show_notice(tr!("multi-asked-station-another-radio"));
     }
 
     /// Take a tab's radio out of the roster of the station it belongs to.

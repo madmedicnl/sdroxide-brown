@@ -39,16 +39,30 @@ pub(in crate::app) fn region_combo(ui: &mut egui::Ui, region: &mut Region) {
 /// band's edges are left wide, so switching plans never changes what receives
 /// or transmits.
 pub(in crate::app) fn cb_plan_combo(ui: &mut egui::Ui, plan: &mut CbPlan) {
-    ComboBox::from_id_salt("cb-plan").width(360.0).selected_text(plan.label()).show_styled(
+    ComboBox::from_id_salt("cb-plan").width(360.0).selected_text(cb_plan_label(*plan)).show_styled(
         ui,
         |ui| {
             for p in CbPlan::ALL {
-                if ui.selectable_label(*plan == p, p.label()).clicked() {
+                if ui.selectable_label(*plan == p, cb_plan_label(p)).clicked() {
                     *plan = p;
                 }
             }
         },
     );
+}
+
+/// A CB / PMR plan's name in the interface's language.
+pub(in crate::app) fn cb_plan_label(plan: CbPlan) -> String {
+    match plan {
+        CbPlan::World => tr!("settings-general-cb-world"),
+        CbPlan::Cept => tr!("settings-general-cb-cept"),
+        CbPlan::Germany80 => tr!("settings-general-cb-germany"),
+        CbPlan::Uk27_81 => tr!("settings-general-cb-uk"),
+        CbPlan::Us => tr!("settings-general-cb-us"),
+        CbPlan::Australia => tr!("settings-general-cb-australia"),
+        CbPlan::Pmr446 => tr!("settings-general-cb-pmr446"),
+        CbPlan::Dpmr446 => tr!("settings-general-cb-dpmr446"),
+    }
 }
 
 /// A device dropdown ("System default" + names); calls `pick(Some(name)|None)`.
@@ -59,7 +73,7 @@ pub(in crate::app) fn device_combo(
     selected: &Option<String>,
     mut pick: impl FnMut(Option<String>),
 ) {
-    let shown = selected.clone().unwrap_or_else(|| "System default".into());
+    let shown = selected.clone().unwrap_or_else(|| tr!("settings-general-system-default").into());
     ComboBox::from_id_salt(id).width(300.0).selected_text(shown).show_styled(ui, |ui| {
         if ui.selectable_label(selected.is_none(), tr!("settings-general-system-default")).clicked()
         {
@@ -107,16 +121,18 @@ pub(in crate::app) fn device_field(
             egui::TextEdit::singleline(&mut text)
                 .id(egui::Id::new(id).with("typed"))
                 .desired_width(super::audio::DEVICE_WIDTH)
-                .hint_text("…or type the name — empty is the system default"),
+                .hint_text(tr!("settings-general-device-type-name")),
         );
         if resp.changed() {
             *selected = (!text.is_empty()).then_some(text);
         }
-        resp.on_hover_text(format!(
-            "The exact name {what} is opened by. Pick it from the list when it is there; type it \
-             when the list does not show it — a sound server can offer a device the host API \
-             does not enumerate. Empty uses the system default."
-        ));
+        resp.on_hover_text(match what {
+            "speakers" => tr!("settings-general-device-hint-speakers"),
+            "microphone" => tr!("settings-general-device-hint-microphone"),
+            "radio-rx" => tr!("settings-general-device-hint-radio-rx"),
+            "radio-tx" => tr!("settings-general-device-hint-radio-tx"),
+            _ => tr!("settings-general-device-hint-other"),
+        });
     });
 }
 
@@ -131,7 +147,7 @@ pub(in crate::app) fn device_field(
 /// does the wrong half.
 pub(in crate::app) fn signed_in_station(ui: &mut egui::Ui, station: &str) {
     let station_key = crate::login::station_key(station);
-    ui.label(RichText::new("Signed-in station").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(RichText::new(tr!("settings-general-signed-in-station")).size(14.0).strong().color(crate::theme::CYAN()));
     ui.add_space(6.0);
     ui.label(RichText::new(station_key.clone()).size(11.5).weak());
     ui.add_space(8.0);
@@ -141,7 +157,7 @@ pub(in crate::app) fn signed_in_station(ui: &mut egui::Ui, station: &str) {
         sign_out = crate::chrome::chip_accent(
             ui,
             false,
-            RichText::new(" SIGN OUT ").strong().size(12.0),
+            RichText::new(format!(" {} ", tr!("settings-general-sign-out"))).strong().size(12.0),
             crate::theme::ALERT(),
             crate::theme::INK_ON_CYAN(),
         )
@@ -154,8 +170,7 @@ pub(in crate::app) fn signed_in_station(ui: &mut egui::Ui, station: &str) {
         ui.add_space(4.0);
         super::note_at(
             ui,
-            "Forgets this device's sign-in. The station has to ask again on the next \
-                 connection; this one stays up until you close it.",
+            &tr!("settings-general-sign-out-hint"),
             Some(11.0),
         );
     } else {
@@ -164,10 +179,9 @@ pub(in crate::app) fn signed_in_station(ui: &mut egui::Ui, station: &str) {
         // station's password that the operator believes it does not.
         ui.add_space(6.0);
         ui.label(
-            RichText::new(format!(
-                "Remembering a password in this browser for {}, because it answered no sign-in \
-                 cookie. Older stations do this; it is not the same thing.",
-                fallback.join(", ")
+            RichText::new(tr!(
+                "settings-general-fallback-password",
+                stations = fallback.join(", ")
             ))
             .size(11.0)
             .color(crate::theme::gray(140)),
@@ -290,13 +304,7 @@ pub(in crate::app) fn settings_rx_audio_gain(
     ui.add(
         egui::Label::new(
             RichText::new(
-                "Extra gain on everything this radio sends to the speakers, on top of the \
-                 volume control. Leave it at 0 dB unless the radio is quiet at full volume: the \
-                 volume rail's top is the audio as it arrives, so it can turn a radio down but \
-                 never up, and some transceivers' USB sound output sits well below full scale.\n\n\
-                 Go up 6 dB at a time. Too much clips — the audio is limited at full scale rather \
-                 than allowed to wrap round, so overdoing it sounds harsh rather than loud. \
-                 Recordings are taken ahead of this and are not affected.",
+                tr!("settings-general-extra-gain-everything-radio-sends"),
             )
             .size(10.5)
             .color(crate::theme::gray(140)),
@@ -483,8 +491,7 @@ impl SdroxideApp {
         if self.ctrl.engine_is_remote() {
             ui.label(
                 RichText::new(
-                    "Recordings are written on the machine the radio is attached to. Set the \
-                     folder there.",
+                    tr!("settings-general-recordings-remote"),
                 )
                 .size(10.5)
                 .color(crate::theme::gray(140)),
@@ -492,23 +499,22 @@ impl SdroxideApp {
             return;
         }
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Folder").size(11.0).color(crate::theme::gray(150)));
+            ui.label(RichText::new(tr!("settings-general-folder")).size(11.0).color(crate::theme::gray(150)));
             ui.label(
                 RichText::new(self.recordings_dir.display().to_string())
                     .size(10.5)
                     .monospace()
                     .color(crate::theme::gray(180)),
             );
-            if crate::chrome::chip(ui, false, RichText::new("CHOOSE…").size(10.5))
-                .on_hover_text("Pick the folder recordings are written to")
+            if crate::chrome::chip(ui, false, RichText::new(tr!("settings-general-choose")).size(10.5))
+                .on_hover_text(tr!("settings-general-choose-hint"))
                 .clicked()
             {
                 *choose = true;
             }
-            if crate::chrome::chip(ui, false, RichText::new("DEFAULT").size(10.5))
+            if crate::chrome::chip(ui, false, RichText::new(tr!("settings-general-default")).size(10.5))
                 .on_hover_text(
-                    "Go back to the default — your music folder, or the config directory when \
-                     the system has none",
+                    tr!("settings-general-default-hint"),
                 )
                 .clicked()
             {
@@ -519,9 +525,7 @@ impl SdroxideApp {
         ui.add(
             egui::Label::new(
                 RichText::new(
-                    "Where the audio recordings, the scheduled recordings and the raw I/Q captures \
-                     are written. Default: your music folder's sdroxide subfolder, or the config \
-                     directory's recordings folder when the system exposes no music folder.",
+                    tr!("settings-general-recordings-dir-note"),
                 )
                 .size(10.5)
                 .color(crate::theme::gray(140)),
@@ -664,15 +668,7 @@ impl SdroxideApp {
         ui.add_space(6.0);
         super::note_rich(
             ui,
-            "Stops the transmission when the radio reports an SWR at or above this figure, and \
-                 keeps transmit locked out until you acknowledge it. Catches a disconnected \
-                 antenna, a failed feeder, or a switch left on the wrong port.\n\n\
-                 Tuning is treated differently, because feeding a mismatch is the point of it: an \
-                 antenna tuner gets double the limit and about five seconds before the guard \
-                 applies at all. A manual tuner that takes longer than that wants the guard \
-                 switched off for the session.\n\n\
-                 Needs a rig that reports SWR over CAT. Ignores the first fifth of a second of \
-                 each transmission, and does not wait for high power.",
+            &tr!("settings-general-stops-transmission-when-radio-reports"),
             Some(10.5),
             None,
         );

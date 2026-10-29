@@ -432,21 +432,18 @@ fn grid_tracker_body<'a>(
         // countries, a ham wants squares, and a mixed log can look
         // at either.
         if ui
-            .selectable_label(tracker.mode == TrackerMode::Grid, "GRID/HAM")
+            .selectable_label(tracker.mode == TrackerMode::Grid, tr!("gridtracker-grid-ham"))
             .on_hover_text(
-                "Maidenhead squares — what a ham log carries. No CB calls land here: \
-                 an 11 m exchange carries a country, never a locator.",
+                tr!("gridtracker-maidenhead-squares-what-a-ham-log"),
             )
             .clicked()
         {
             tracker.mode = TrackerMode::Grid;
         }
         if ui
-            .selectable_label(tracker.mode == TrackerMode::Country, "COUNTRY/CB")
+            .selectable_label(tracker.mode == TrackerMode::Country, tr!("gridtracker-country-cb"))
             .on_hover_text(
-                "DXCC countries at their nominal centre — what a CB log carries, \
-                 since an 11 m exchange has no locator in it. No ham calls land \
-                 here either: this is countries, not squares.",
+                tr!("gridtracker-dxcc-countries-at-their-nominal"),
             )
             .clicked()
         {
@@ -454,20 +451,18 @@ fn grid_tracker_body<'a>(
         }
         ui.separator();
         ui.label(
-            egui::RichText::new(format!("{worked_n} worked")).color(theme::YELLOW()).monospace(),
+            egui::RichText::new(tr!("gridtracker-worked", worked = worked_n)).color(theme::YELLOW()).monospace(),
         );
         ui.label(
-            egui::RichText::new(format!("{confirmed} confirmed")).color(theme::GREEN()).monospace(),
+            egui::RichText::new(tr!("gridtracker-confirmed", confirmed = confirmed)).color(theme::GREEN()).monospace(),
         );
         if ui
             .selectable_label(
                 tracker.show_heard,
-                egui::RichText::new(format!("{heard_n} heard")).color(theme::CYAN()).monospace(),
+                egui::RichText::new(tr!("gridtracker-heard", heard = heard_n)).color(theme::CYAN()).monospace(),
             )
             .on_hover_text(
-                "Shade what is heard on the live decode list, not only what is in \
-                 the log. A listener's version of the map: what is on the air now, \
-                 in cyan under the worked marks.",
+                tr!("gridtracker-shade-squares-heard-live-decode"),
             )
             .clicked()
         {

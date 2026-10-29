@@ -25,33 +25,27 @@ pub(in crate::app) fn rbn_block(
     cmds: &mut String,
 ) {
     net_heading(ui, title);
-    crate::chrome::checkbox(ui, &mut cfg.enabled, "Enabled").on_hover_text(
-        "Read the world's skimmers and feed the propagation map with them. This is \
-         what makes the map show bands this radio is not listening to. It puts \
-         nothing on the air, needs no account, and uses the callsign from the \
-         General tab. RBN spots do not appear in the spot list — they are \
-         measurements, not invitations. The host is not tied to \
-         reversebeacon.net: any node that speaks the same telnet feed will do.",
+    crate::chrome::checkbox(ui, &mut cfg.enabled, tr!("settings-enabled")).on_hover_text(
+        tr!("settings-net-rbn-enabled-hint"),
     );
-    net_row(ui, "Host", &mut cfg.host, 220.0);
+    net_row(ui, &tr!("settings-host"), &mut cfg.host, 220.0);
     ui.horizontal(|ui| {
-        ui.add_sized([96.0, 22.0], egui::Label::new("Port"));
+        ui.add_sized([96.0, 22.0], egui::Label::new(tr!("settings-port")));
         ui.add(egui::DragValue::new(&mut cfg.port).range(1..=65535))
-            .on_hover_text("On reversebeacon.net, 7000 is the CW/RTTY feed, 7001 the FT8/FT4 one");
+            .on_hover_text(tr!("settings-net-rbn-port-hint"));
     });
-    net_row(ui, "Login call", &mut cfg.login, 140.0);
+    net_row(ui, &tr!("settings-login-call"), &mut cfg.login, 140.0);
     ui.horizontal(|ui| {
-        ui.add_sized([96.0, 22.0], egui::Label::new("Commands"));
+        ui.add_sized([96.0, 22.0], egui::Label::new(tr!("settings-commands")));
         crate::chrome::field(
             ui,
             egui::TextEdit::multiline(cmds)
                 .desired_rows(2)
-                .hint_text("one per line, e.g. set/filter cont=eu")
+                .hint_text(tr!("settings-one-per-line-e-g-2"))
                 .desired_width(220.0),
         )
         .on_hover_text(
-            "Sent after login. The place to narrow the feed — without a filter this is \
-             every skimmer on Earth.",
+            tr!("settings-sent-after-login-place-narrow"),
         );
     });
 }
@@ -64,7 +58,7 @@ pub(in crate::app) fn dx_cluster_status(ui: &mut egui::Ui, status: &Option<Strin
     if let Some(s) = status
         && let Some(body) = s.strip_prefix("Cluster:")
     {
-        ui.label(RichText::new(format!("DX — {}", body.trim_start())).weak());
+        ui.label(RichText::new(tr!("settings-net-dx-status", body = body.trim_start())).weak());
     }
 }
 
@@ -84,24 +78,22 @@ pub(in crate::app) fn wavelog_section(
 ) {
     super::note_rich(
         ui,
-        "Wavelog is a logbook **you** run, at an address you give it. Contacts logged here          are uploaded to the station location you pick, and contacts it already holds can be          pulled back so \"worked before\" knows about QSOs made from another program, another          rig or its own web form.",
+        &tr!("settings-net-wavelog-intro"),
         Some(11.0),
         None,
     );
-    net_row(ui, "Address", &mut cfg.url, 300.0);
+    net_row(ui, &tr!("settings-wavelog-address"), &mut cfg.url, 300.0);
     ui.label(
         RichText::new(
-            "Where the Wavelog front page is: https://log.example.org, or its LAN address. \
-             /index.php is accepted either way.",
+            tr!("settings-net-wavelog-address-hint"),
         )
         .size(10.5)
         .color(crate::theme::gray(140)),
     );
-    net_secret(ui, "API key", &mut cfg.api_key, 220.0);
+    net_secret(ui, &tr!("settings-wavelog-api-key"), &mut cfg.api_key, 220.0);
     ui.label(
         RichText::new(
-            "An API key from Wavelog's own API page. A read/write key is needed to upload; \
-             a read-only one can only download.",
+            tr!("settings-net-wavelog-key-hint"),
         )
         .size(10.5)
         .color(crate::theme::gray(140)),
@@ -113,11 +105,11 @@ pub(in crate::app) fn wavelog_section(
     let stations = app.wavelog_probe.as_ref().map(|p| p.stations.clone()).unwrap_or_default();
     ui.horizontal(|ui| {
         if !stations.is_empty() {
-            ui.add_sized([96.0, 22.0], egui::Label::new("Station"));
+            ui.add_sized([96.0, 22.0], egui::Label::new(tr!("settings-station")));
             let current = stations.iter().find(|s| s.id == cfg.station_id).map(|s| s.name.clone());
             egui::ComboBox::from_id_salt("wavelog-station")
                 .width(220.0)
-                .selected_text(current.unwrap_or_else(|| "pick one".into()))
+                .selected_text(current.unwrap_or_else(|| tr!("settings-net-pick-one").into()))
                 .show_ui(ui, |ui| {
                     for st in &stations {
                         let label = if st.callsign.trim().is_empty() {
@@ -129,9 +121,9 @@ pub(in crate::app) fn wavelog_section(
                     }
                 });
         } else {
-            ui.add_sized([96.0, 22.0], egui::Label::new("Station"));
+            ui.add_sized([96.0, 22.0], egui::Label::new(tr!("settings-station")));
             ui.label(
-                RichText::new("test the connection to list the locations")
+                RichText::new(tr!("settings-net-test-to-list-locations"))
                     .size(10.5)
                     .color(crate::theme::gray(150)),
             );
@@ -140,17 +132,15 @@ pub(in crate::app) fn wavelog_section(
     // The pin, when the server answered with a certificate of its own.
     if let Some(pin) = app.wavelog_probe.as_ref().and_then(|p| p.untrusted_cert.clone()) {
         ui.horizontal(|ui| {
-            ui.add_sized([96.0, 22.0], egui::Label::new("Certificate"));
+            ui.add_sized([96.0, 22.0], egui::Label::new(tr!("settings-picup-certificate")));
             ui.label(
-                RichText::new(format!("its own — {}…", &pin[..pin.len().min(16)]))
+                RichText::new(tr!("settings-net-pin-own", pin = &pin[..pin.len().min(16)]))
                     .size(10.5)
                     .color(crate::theme::YELLOW()),
             );
-            if crate::chrome::chip(ui, !cfg.cert_sha256.is_empty(), "TRUST")
+            if crate::chrome::chip(ui, !cfg.cert_sha256.is_empty(), tr!("settings-net-trust"))
                 .on_hover_text(
-                    "Accept **this** certificate and no other, for this server. A pin rather \
-                     than \"accept anything\": if it ever changes, the connection is refused \
-                     and said so rather than quietly going to whatever answers at that address.",
+                    tr!("settings-net-trust-hint"),
                 )
                 .clicked()
             {
@@ -162,10 +152,9 @@ pub(in crate::app) fn wavelog_section(
     ui.horizontal(|ui| {
         let pending = app.login_tests_pending.contains(&sdroxide_types::LoginTarget::Wavelog);
         if ui
-            .add_enabled(!pending, egui::Button::new("Test Wavelog"))
+            .add_enabled(!pending, egui::Button::new(tr!("settings-net-test-wavelog")))
             .on_hover_text(
-                "Ask the server whether this address and key work, and list its station \
-                 locations. Applies the settings first; logs nothing.",
+                tr!("settings-net-test-wavelog-hint"),
             )
             .clicked()
         {
@@ -186,12 +175,12 @@ pub(in crate::app) fn wavelog_section(
     });
 
     ui.add_space(6.0);
-    crate::chrome::checkbox(ui, &mut cfg.download, "Download contacts from Wavelog");
+    crate::chrome::checkbox(ui, &mut cfg.download, tr!("settings-net-wavelog-download"));
     ui.add_enabled_ui(cfg.download, |ui| {
-        net_row_int(ui, "Every (min)", &mut cfg.sync_interval_min);
+        net_row_int(ui, &tr!("settings-net-every-min"), &mut cfg.sync_interval_min);
         if !stations.is_empty() {
             ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("Locations").size(11.0));
+                ui.label(RichText::new(tr!("settings-net-locations")).size(11.0));
                 for st in &stations {
                     let mut on = cfg.download_station_ids.contains(&st.id)
                         || (cfg.download_station_ids.is_empty() && st.id == cfg.station_id);
@@ -223,11 +212,10 @@ pub(in crate::app) fn wavelog_section(
         if ui
             .add_enabled(
                 cfg.is_configured() && !app.wavelog_sync_running,
-                egui::Button::new("Download now"),
+                egui::Button::new(tr!("settings-net-download-now")),
             )
             .on_hover_text(
-                "Bring in what Wavelog has added since the last download, and mark contacts \
-                 it already holds as uploaded. Nothing already in the logbook is changed.",
+                tr!("settings-net-download-now-hint"),
             )
             .clicked()
         {
@@ -239,9 +227,7 @@ pub(in crate::app) fn wavelog_section(
     });
     super::note_at(
         ui,
-        "Only contacts logged **here** are uploaded automatically; Wavelog's own backlog is \
-         sent by ticking a QSO in the logbook, so nothing leaves this machine that you did \
-         not choose.",
+        &tr!("settings-net-wavelog-upload-note"),
         Some(10.5),
     );
 }
@@ -294,7 +280,7 @@ pub(in crate::app) fn operator_identity_note(
                 .color(Color32::from_rgb(230, 170, 60)),
         );
     } else {
-        super::note(ui, &format!("{call} / {grid}  — set on the General tab"));
+        super::note(ui, &tr!("settings-net-call-grid-set-on-general", call = call, grid = grid));
     }
 }
 
@@ -368,7 +354,12 @@ pub(in crate::app) fn settings_freedv_tab(
     } else if enabled && digi_seeded {
         super::note(
             ui,
-            &format!("Reporting as {call} / {grid} — SDRoxide {}", env!("CARGO_PKG_VERSION")),
+            &tr!(
+                "settings-net-reporting-as",
+                call = call,
+                grid = grid,
+                version = env!("CARGO_PKG_VERSION")
+            ),
         );
         super::note(ui, &tr!("settings-net-callsign-grid-are-set-general"));
     }
@@ -410,10 +401,7 @@ pub(in crate::app) fn broadcast_stations_settings(
     let (season, cached) = sdroxide_config::broadcast_schedule_status();
     super::note(
         ui,
-        "The longwave and shortwave stations labelled on the waterfall. Every source \
-             below is downloaded for the current broadcasting season and re-downloaded when \
-             the season turns. They all go into **one store**, so the SCHEDULE window's \
-             Source filter shows one of them or all of them.",
+        &tr!("settings-net-broadcast-note"),
     );
     ui.horizontal(|ui| {
         ui.label(
@@ -428,7 +416,7 @@ pub(in crate::app) fn broadcast_stations_settings(
         let (text, colour) = if fetching {
             (tr!("settings-net-downloading"), crate::theme::YELLOW())
         } else if cached {
-            ("downloaded".to_string(), crate::theme::GREEN())
+            (tr!("settings-net-downloaded").to_string(), crate::theme::GREEN())
         } else {
             (tr!("settings-net-using-built-copy"), crate::theme::gray(150))
         };
@@ -465,14 +453,14 @@ pub(in crate::app) fn broadcast_stations_settings(
     // count for what are now three downloads, so a source that silently failed
     // looks exactly like one that worked — which is the whole failure this page
     // is for.
-    ui.label(RichText::new("Schedules").strong());
+    ui.label(RichText::new(tr!("settings-net-schedules")).strong());
     ui.end_row();
     for (source, rows) in sdroxide_config::cached_broadcast_sources() {
         let name = match source {
-            sdroxide_types::ScheduleSource::Eibi => "EiBi",
-            sdroxide_types::ScheduleSource::Aoki => "Aoki",
-            sdroxide_types::ScheduleSource::Hfcc => "HFCC",
-            sdroxide_types::ScheduleSource::User => "yours",
+            sdroxide_types::ScheduleSource::Eibi => "EiBi".to_string(),
+            sdroxide_types::ScheduleSource::Aoki => "Aoki".to_string(),
+            sdroxide_types::ScheduleSource::Hfcc => "HFCC".to_string(),
+            sdroxide_types::ScheduleSource::User => tr!("settings-net-schedule-yours"),
         };
         ui.horizontal(|ui| {
             // **Every source is listed, always.** A row that appeared only once it
@@ -480,8 +468,12 @@ pub(in crate::app) fn broadcast_stations_settings(
             // Aoki get downloaded?" — render as *nothing at all*, which is how it
             // went unnoticed the first time.
             let text = match rows {
-                Some(n) => format!("{name:<6} {n:>6} transmissions"),
-                None => format!("{name:<6}     not downloaded"),
+                Some(n) => tr!(
+                    "settings-net-schedule-rows",
+                    name = format!("{name:<6}"),
+                    n = format!("{n:>6}")
+                ),
+                None => tr!("settings-net-schedule-not-downloaded", name = format!("{name:<6}")),
             };
             ui.label(RichText::new(text).monospace().size(11.0).color(match rows {
                 Some(_) => crate::theme::gray(190),
@@ -489,14 +481,12 @@ pub(in crate::app) fn broadcast_stations_settings(
             }));
             let can = !fetching && source != sdroxide_types::ScheduleSource::User;
             if ui
-                .add_enabled(can, egui::Button::new("Download"))
+                .add_enabled(can, egui::Button::new(tr!("settings-net-download")))
                 .on_hover_text(match source {
                     sdroxide_types::ScheduleSource::Hfcc => {
-                        "HFCC publishes its station names in a separate file, so this \
-                         needs both. Until it does, it says so rather than loading \
-                         a schedule of bare callsigns."
+                        tr!("settings-net-hfcc-hint")
                     }
-                    _ => "Fetch this season's copy again, replacing the cached one",
+                    _ => tr!("settings-net-refetch-hint"),
                 })
                 .clicked()
             {
@@ -513,27 +503,25 @@ pub(in crate::app) fn broadcast_stations_settings(
                 source,
                 sdroxide_types::ScheduleSource::Eibi | sdroxide_types::ScheduleSource::Aoki
             ) && ui
-                .add_enabled(!fetching, egui::Button::new("From file…"))
+                .add_enabled(!fetching, egui::Button::new(tr!("settings-net-from-file")))
                 .on_hover_text(match source {
                     sdroxide_types::ScheduleSource::Aoki => {
-                        "Take Aoki's schedule from a file you saved yourself — the .zip \
-                         Aoki publishes, or the .txt from inside it. Its site moves with \
-                         the season, which is why this is here."
+                        tr!("settings-net-aoki-file-hint")
                     }
-                    _ => "Take EiBi's schedule from its sked .csv, saved on this machine",
+                    _ => tr!("settings-net-eibi-file-hint"),
                 })
                 .clicked()
                 && let Some(path) = rfd::FileDialog::new()
-                    .add_filter("Aoki schedule", &["zip", "txt"])
-                    .add_filter("EiBi schedule", &["csv"])
+                    .add_filter(tr!("settings-net-filter-aoki"), &["zip", "txt"])
+                    .add_filter(tr!("settings-net-filter-eibi"), &["csv"])
                     .pick_file()
             {
                 *import = Some(match sdroxide_config::import_schedule_file(&path) {
-                    Ok(got) => Ok(format!(
-                        "{} {} — {} transmissions, now in the store",
-                        got.source.label(),
-                        got.season,
-                        got.stations
+                    Ok(got) => Ok(tr!(
+                        "settings-net-schedule-imported",
+                        source = got.source.label(),
+                        season = got.season,
+                        n = got.stations
                     )),
                     Err(e) => Err(e),
                 });
@@ -551,9 +539,9 @@ pub(in crate::app) fn broadcast_stations_settings(
             *reload = true;
         }
         if ui
-            .add_enabled(!fetching, egui::Button::new("Download all now"))
+            .add_enabled(!fetching, egui::Button::new(tr!("settings-net-download-all")))
             .on_hover_text(
-                "Fetch every source that can be fetched, keeping the ones that already work",
+                tr!("settings-net-download-all-hint"),
             )
             .clicked()
         {
@@ -562,25 +550,23 @@ pub(in crate::app) fn broadcast_stations_settings(
     });
     super::note_at(
         ui,
-        "Your own list is a **schedule** — what you expect to hear — not the reception \
-             log, which records what you actually did hear. Import it below, or edit the file.",
+        &tr!("settings-net-own-list-note"),
         Some(11.0),
     );
     ui.horizontal(|ui| {
         if ui
-            .add_enabled(!fetching, egui::Button::new("Import my station list…"))
+            .add_enabled(!fetching, egui::Button::new(tr!("settings-net-import-list")))
             .on_hover_text(
-                "Read a CSV or a plain list of stations and merge it into the file above. \
-                 Frequencies may be kHz or MHz; the unit is read from the number.",
+                tr!("settings-net-import-list-hint"),
             )
             .clicked()
         {
             if let Some(path) = rfd::FileDialog::new()
-                .add_filter("Station lists", &["csv", "txt", "json"])
+                .add_filter(tr!("settings-net-filter-station-lists"), &["csv", "txt", "json"])
                 .pick_file()
             {
                 *import = Some(match sdroxide_config::import_broadcast_stations(&path) {
-                    Ok(n) => Ok(format!("{n} stations in your list, now in the store")),
+                    Ok(n) => Ok(tr!("settings-net-stations-imported", n = n)),
                     Err(e) => Err(e),
                 });
                 *reload = true;

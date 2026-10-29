@@ -253,7 +253,7 @@ impl crate::app::SdroxideApp {
             if ui.add_enabled(!busy, egui::Button::new(tr!("winlink-compose"))).clicked() {
                 self.mail.draft = Some(MailDraft::default());
             }
-            if ui.selectable_label(self.mail.log_open, "LOG").clicked() {
+            if ui.selectable_label(self.mail.log_open, tr!("topbar-chip-log")).clicked() {
                 self.mail.log_open = !self.mail.log_open;
             }
         });
@@ -469,7 +469,7 @@ impl crate::app::SdroxideApp {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let left = ui.cursor().max.x;
                         if ui
-                            .small_button("DEL")
+                            .small_button(tr!("windows-chip-del"))
                             .on_hover_text(tr!("winlink-delete-message"))
                             .clicked()
                         {

@@ -66,7 +66,7 @@ pub(in crate::app) fn settings_relay_tab(
             ui.label(tr!("settings-relay-hardware"));
             ComboBox::from_id_salt("relay-link")
                 .width(260.0)
-                .selected_text(cfg.link.label())
+                .selected_text(cfg.link.tr())
                 .show_styled(ui, |ui| {
                     for l in [
                         RelayLink::Off,
@@ -77,7 +77,7 @@ pub(in crate::app) fn settings_relay_tab(
                         RelayLink::Gpio,
                         RelayLink::Command,
                     ] {
-                        if ui.selectable_label(cfg.link == l, l.label()).clicked() {
+                        if ui.selectable_label(cfg.link == l, l.tr()).clicked() {
                             cfg.link = l;
                         }
                     }
@@ -371,10 +371,10 @@ pub(in crate::app) fn settings_relay_tab(
             ui.label(tr!("settings-relay-if-will-not-answer"));
             ComboBox::from_id_salt("relay-failsafe")
                 .width(260.0)
-                .selected_text(cfg.fail_safe.label())
+                .selected_text(cfg.fail_safe.tr())
                 .show_styled(ui, |ui| {
                     for f in [FailSafe::RefuseTx, FailSafe::WarnOnly] {
-                        if ui.selectable_label(cfg.fail_safe == f, f.label()).clicked() {
+                        if ui.selectable_label(cfg.fail_safe == f, f.tr()).clicked() {
                             cfg.fail_safe = f;
                         }
                     }
@@ -416,10 +416,10 @@ pub(in crate::app) fn settings_relay_tab(
                 ui.label(tr!("settings-relay-line"));
                 ComboBox::from_id_salt("relay-sense-line")
                     .width(260.0)
-                    .selected_text(cfg.sense.line.label())
+                    .selected_text(cfg.sense.line.tr())
                     .show_styled(ui, |ui| {
                         for l in [SenseLine::Off, SenseLine::Cts, SenseLine::Dsr, SenseLine::Dcd] {
-                            if ui.selectable_label(cfg.sense.line == l, l.label()).clicked() {
+                            if ui.selectable_label(cfg.sense.line == l, l.tr()).clicked() {
                                 cfg.sense.line = l;
                             }
                         }
@@ -466,11 +466,7 @@ pub(in crate::app) fn settings_relay_tab(
     );
     super::note(
         ui,
-        "Choose “TX closes” so that the *de-energised* contact is the state you want when \
-             the board is unplugged, the computer is off, or sdroxide is not running. Wired so \
-             that de-energised means grounded, a dead relay leaves the SDR deaf — annoying, and \
-             safe. Wired the other way, a dead relay plus one transmission is a dead front end. \
-             With a real amplifier behind it, take the first.",
+        &tr!("settings-relay-choose-tx-closes-so-de"),
     );
     ui.label(RichText::new(tr!("settings-relay-choose-tx-closes-so-de")).weak());
     ui.add_space(6.0);
@@ -541,12 +537,7 @@ fn relay_band_table(ui: &mut egui::Ui, cfg: &mut RelayConfig) {
     ui.add_space(2.0);
     super::note(
         ui,
-        "One control word per band: bit 0 is contact 1, bit 1 contact 2 and so on, matching \
-             the numbering above. RX follows the receive dial's band; TX the band of whichever \
-             radio keyed, switched in on each contact's lead before RF and back after its hold \
-             — give them the same value for a filter that does not care which way the RF is \
-             going, and different ones for a receive-only preamp bypass or a transmit-only LPF \
-             bank. Bands left at 0 assert nothing. Applies on Apply / reconnect.",
+        &tr!("settings-relay-one-control-word-per-band"),
     );
     ui.add_space(2.0);
     ui.label(RichText::new(tr!("settings-relay-one-control-word-per-band")).weak());

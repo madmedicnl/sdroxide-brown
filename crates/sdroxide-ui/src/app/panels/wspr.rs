@@ -245,16 +245,16 @@ impl SdroxideApp {
                         heard_us2 = heard_us
                     )
                 } else {
-                    format!("{} rx", self.wspr_spots.len())
+                    tr!("wspr-rx-count", n = self.wspr_spots.len())
                 };
                 ui.label(RichText::new(label).size(10.0).color(crate::theme::gray(120)));
-                if crate::chrome::chip(ui, false, RichText::new("CLEAR RX").size(9.5)).clicked()
+                if crate::chrome::chip(ui, false, RichText::new(tr!("wspr-clear-rx")).size(9.5)).clicked()
                     && !self.wspr_spots.is_empty()
                 {
                     self.wspr_spots.clear();
                 }
-                for (mode, name) in [(1u8, "DIST"), (2u8, "COUNTRY")] {
-                    let resp = crate::chrome::chip(ui, self.wspr_sort == mode, RichText::new(name).size(9.5));
+                for (mode, name) in [(1u8, tr!("wspr-sort-dist")), (2u8, tr!("wspr-sort-country"))] {
+                    let resp = crate::chrome::chip(ui, self.wspr_sort == mode, RichText::new(&name).size(9.5));
                     if resp.clicked() {
                         self.wspr_sort = if self.wspr_sort == mode { 0 } else { mode };
                     }
@@ -512,7 +512,7 @@ impl SdroxideApp {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 ui.label(RichText::new(tr!("wspr-transmit")).size(9.5).color(crate::theme::CYAN_DIM()));
                 let cur = self.digi_cfg_edit.wspr_tx_percent;
-                for (pct, label) in [(0u8, "OFF"), (10, "10%"), (20, "20%"), (33, "33%"), (50, "50%")] {
+                for (pct, label) in [(0u8, tr!("ism-off")), (10, "10%".to_string()), (20, "20%".to_string()), (33, "33%".to_string()), (50, "50%".to_string())] {
                     // Off is the resting state and reads as one; anything else puts
                     // a carrier on the air, so it is accented like the other
                     // controls in this program that do.
@@ -524,7 +524,7 @@ impl SdroxideApp {
                                 ui,
                                 tx_ok,
                                 cur == pct,
-                                label,
+                                &label,
                                 Some(10.5),
                                 crate::theme::PINK(),
                                 crate::theme::INK_ON_CYAN(),
@@ -534,15 +534,13 @@ impl SdroxideApp {
                     };
                     if resp
                         .on_hover_text(if pct == 0 {
-                            tr!("wspr-receive-only-2").to_string()
+                            tr!("wspr-receive-only-2")
                         } else {
-                            format!(
-                                "Beacon in one two-minute slot out of every {} — {pct}% of them, \
-                                 evenly spaced — at {}. Which slot the cycle starts on is drawn from \
-                                 your callsign, so two stations running this program do not start \
-                                 together.",
-                                (100 + pct as u32 / 2) / pct as u32,
-                                power_label(self.digi_cfg_edit.wspr_power_dbm),
+                            tr!(
+                                "wspr-beacon-one-two-minute-slot",
+                                pct = (100 + pct as u32 / 2) / pct as u32,
+                                pct2 = pct,
+                                wspr_power_dbm = power_label(self.digi_cfg_edit.wspr_power_dbm)
                             )
                         })
                         .clicked()
@@ -558,7 +556,7 @@ impl SdroxideApp {
                     ui,
                     tx_ok,
                     cur > 0,
-                    "TX ENABLE",
+                    &tr!("wspr-tx-enable"),
                     Some(10.5),
                     crate::theme::PINK(),
                     crate::theme::INK_ON_CYAN(),
@@ -567,7 +565,7 @@ impl SdroxideApp {
                     self.digi_cfg_edit.wspr_tx_percent = 20;
                     cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
                 }
-                let stop_resp = crate::chrome::chip(ui, cur == 0, RichText::new("STOP TX").size(10.5));
+                let stop_resp = crate::chrome::chip(ui, cur == 0, RichText::new(tr!("wspr-stop-tx")).size(10.5));
                 if stop_resp.clicked() && cur > 0 && self.digi_cfg_seeded {
                     self.digi_cfg_edit.wspr_tx_percent = 0;
                     cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
@@ -584,7 +582,7 @@ impl SdroxideApp {
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                ui.label(RichText::new("POWER").size(9.5).color(crate::theme::CYAN_DIM()));
+                ui.label(RichText::new(tr!("wspr-power")).size(9.5).color(crate::theme::CYAN_DIM()));
                 let cur = sdroxide_types::round_power_dbm(self.digi_cfg_edit.wspr_power_dbm);
                 let mut chosen = None;
                 egui::ComboBox::from_id_salt("wspr-power")
@@ -702,21 +700,20 @@ impl SdroxideApp {
         let grid = self.digi_cfg_edit.my_grid.trim();
         let identity = if call.is_empty() || grid.is_empty() {
             if self.swl_mode() {
-                "Set your callsign and grid on the General tab of Settings to label your spots."
-                    .to_string()
+                tr!("wspr-set-callsign-grid-label-spots")
             } else {
                 tr!("wspr-set-your-callsign-grid-general")
                     .to_string()
             }
         } else if self.swl_mode() {
             let sent = sdroxide_types::wspr_grid4(grid).unwrap_or_else(|| grid.to_string());
-            format!("Listening as {call} in {sent} — set on the General tab of Settings.")
+            tr!("wspr-listening-as", call = call, sent = sent)
         } else {
             // The locator as it will go out: a six-character one is sent as
             // its first four, and saying so here is less surprising than
             // letting the operator find it on a spot page.
             let sent = sdroxide_types::wspr_grid4(grid).unwrap_or_else(|| grid.to_string());
-            format!("Transmitting as {call} in {sent} — set on the General tab of Settings.")
+            tr!("wspr-transmitting-set-general-tab-settings", call = call, sent = sent)
         };
         ui.label(RichText::new(identity).size(10.0).color(if call.is_empty() || grid.is_empty() {
             crate::theme::YELLOW()

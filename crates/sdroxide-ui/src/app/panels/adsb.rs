@@ -222,7 +222,7 @@ impl SdroxideApp {
         );
         ui.horizontal_wrapped(|ui| {
             ui.set_min_height(20.0);
-            ui.label(RichText::new("AIRCRAFT").strong().size(10.5).color(theme::CYAN()));
+            ui.label(RichText::new(tr!("aircraft-title")).strong().size(10.5).color(theme::CYAN()));
             let counts = found.visible.as_ref().map(|v| (v.len(), found.total));
             aircraft_search::search_box(
                 ui,
@@ -336,7 +336,7 @@ impl SdroxideApp {
                 if let Some(ft) = a.altitude_ft {
                     rows.push((
                         tr!("adsb-row-altitude").to_string(),
-                        format!("{} barometric", sdroxide_types::AirUnits::current().altitude(ft)),
+                        tr!("adsb-ft-barometric", ft = sdroxide_types::AirUnits::current().altitude(ft)),
                     ));
                 }
                 if let Some(ft) = a.gnss_altitude_ft {
@@ -441,23 +441,15 @@ impl SdroxideApp {
             // The two layers the picture is read *for*: where the flight has
             // been and is going, and what is on the ground under it.
             let mut layers = self.adsb_map.layers;
-            if crate::chrome::chip(ui, layers.paths, RichText::new("PATHS").size(9.5))
-                .on_hover_text(
-                    "Draw each flight's path as one line — where it has been, through where it is, \
-                 into where it is going. Off, the track is drawn as a trail of dots instead.",
-                )
+            if crate::chrome::chip(ui, layers.paths, RichText::new(tr!("adsbpanel-paths")).size(9.5))
+                .on_hover_text(tr!("adsbpanel-paths-hint"))
                 .clicked()
             {
                 layers.paths = !layers.paths;
                 self.adsb_map.layers = layers;
             }
-            if crate::chrome::chip(ui, layers.nav, RichText::new("NAV").size(9.5))
-                .on_hover_text(
-                    "Airports and radio navigation aids under the picture, from the built-in \
-                     tables — large airports always, medium ones closer in, and the navaids once \
-                     the view is tight enough for a station to be a place. The medium-wave \
-                     beacons, which are the ones you can hear, are drawn in their own colour.",
-                )
+            if crate::chrome::chip(ui, layers.nav, RichText::new(tr!("adsbpanel-nav")).size(9.5))
+                .on_hover_text(tr!("adsbpanel-nav-hint"))
                 .clicked()
             {
                 layers.nav = !layers.nav;
@@ -611,15 +603,12 @@ impl SdroxideApp {
     fn adsb_setup_body(&mut self, ui: &mut egui::Ui, cfg: &mut sdroxide_types::AdsbSettings) {
         crate::chrome::window_body_bg(ui);
         egui::Grid::new("adsb-cfg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-            ui.label("Units");
+            ui.label(tr!("adsbpanel-units"));
             self.air_units_picker(ui);
             ui.end_row();
             ui.label("");
             ui.label(
-                RichText::new(
-                    "How altitude, speed, climb rate and distance are written in the \
-                     aircraft views. The decoder and the exports are not affected.",
-                )
+                RichText::new(tr!("adsbpanel-units-hint"))
                 .size(10.0)
                 .weak(),
             );
@@ -657,7 +646,7 @@ impl SdroxideApp {
                 ui.add(
                     egui::DragValue::new(&mut cfg.history_points)
                         .range(0..=sdroxide_types::ADSB_TRACK_MAX as u16)
-                        .suffix(" points"),
+                        .suffix(tr!("adsb-points")),
                 );
                 ui.label(RichText::new(tr!("adsb-history-dots-behind-each-target")).size(9.5).weak());
             });
@@ -686,7 +675,7 @@ impl SdroxideApp {
 
             ui.label(tr!("adsb-track-most"));
             ui.add(
-                egui::DragValue::new(&mut cfg.max_aircraft).range(10..=2000).suffix(" aircraft"),
+                egui::DragValue::new(&mut cfg.max_aircraft).range(10..=2000).suffix(tr!("adsb-aircraft-2")),
             );
             ui.end_row();
         });
@@ -721,7 +710,7 @@ fn adsb_head_row(ui: &mut egui::Ui, have_home: bool, sort: &mut AdsbSort, desc: 
             (cols.sqk, R, "SQK", None),
             (cols.sig, R, "SIG", Some(AdsbSort::Signal)),
             (cols.range, R, units.distance_head(), Some(AdsbSort::Range)),
-            (cols.age, R, "AGE", Some(AdsbSort::Heard)),
+            (cols.age, R, &tr!("adsbpanel-age"), Some(AdsbSort::Heard)),
         ],
         sort,
         desc,

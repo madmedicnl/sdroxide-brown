@@ -5,6 +5,7 @@
 //! tested. Nothing here reads the network: a field nobody has heard is shown as
 //! "—" with the reason, so an empty line is never a silent one.
 
+use crate::i18n::tr;
 use super::aircraft_registry::{AircraftCard, AircraftRegistry, FallbackKey, Source, Stamped};
 
 /// Which card is meant: an ICAO address, or an HFDL aircraft that never gave one.
@@ -47,6 +48,36 @@ pub(in crate::app) fn source_label(s: Source) -> &'static str {
     }
 }
 
+/// A line's label as drawn. The label itself stays the English key the rows
+/// are matched by; only what is shown is translated.
+pub(in crate::app) fn field_label(label: &str) -> String {
+    match label {
+        "Flight" => tr!("aircraft-label-flight"),
+        "Registration" => tr!("aircraft-label-registration"),
+        "Position" => tr!("aircraft-label-position"),
+        "Altitude" => tr!("aircraft-label-altitude"),
+        "Speed" => tr!("aircraft-label-speed"),
+        "Track" => tr!("aircraft-label-track"),
+        "Last message" => tr!("aircraft-label-last-message"),
+        "Type" => tr!("aircraft-label-type"),
+        "Operator" => tr!("aircraft-label-operator"),
+        "Origin" => tr!("aircraft-label-origin"),
+        "Destination" => tr!("aircraft-label-destination"),
+        "Online" => tr!("aircraft-label-online"),
+        "Range" => tr!("aircraft-label-range"),
+        "Vertical" => tr!("aircraft-label-vertical"),
+        "Emergency" => tr!("aircraft-label-emergency"),
+        "History" => tr!("aircraft-label-history"),
+        "First heard" => tr!("aircraft-label-first-heard"),
+        "Last heard" => tr!("aircraft-label-last-heard"),
+        "Track points" => tr!("aircraft-label-track-points"),
+        "Highest" => tr!("aircraft-label-highest"),
+        "Callsigns" => tr!("aircraft-label-callsigns"),
+        "Registrations" => tr!("aircraft-label-registrations"),
+        other => other.to_string(),
+    }
+}
+
 pub(in crate::app) fn fmt_position(lat: f64, lon: f64) -> String {
     let ns = if lat < 0.0 { 'S' } else { 'N' };
     let ew = if lon < 0.0 { 'W' } else { 'E' };
@@ -63,7 +94,7 @@ pub(in crate::app) fn title(key: &CardKey, card: &AircraftCard) -> String {
     }
     match key {
         CardKey::Icao(icao) => format!("ICAO {}", icao_hex(*icao)),
-        CardKey::Fallback(FallbackKey::AircraftId(id)) => format!("HFDL aircraft {id}"),
+        CardKey::Fallback(FallbackKey::AircraftId(id)) => tr!("aircraft-hfdl-aircraft", id = id),
         CardKey::Fallback(FallbackKey::Flight(f)) => f.clone(),
     }
 }
@@ -79,7 +110,7 @@ pub(in crate::app) fn detail(key: &CardKey, card: &AircraftCard) -> String {
                 _ => hex,
             }
         }
-        CardKey::Fallback(_) => "no ICAO address (HFDL)".to_string(),
+        CardKey::Fallback(_) => tr!("aircraft-no-icao"),
     }
 }
 
@@ -130,7 +161,11 @@ pub(in crate::app) fn lookup<'a>(
 
 /// `"ADS-B, 12s ago"`.
 fn provenance<T>(s: &Stamped<T>, now: i64) -> String {
-    format!("{}, {} ago", source_label(s.source), super::util::fmt_age(now - s.at))
+    tr!(
+        "aircraft-provenance",
+        source = source_label(s.source),
+        age = super::util::fmt_age(now - s.at)
+    )
 }
 
 fn line<T>(
@@ -149,48 +184,48 @@ fn line<T>(
 /// The fixed set of lines for a card, a missing field included.
 pub(in crate::app) fn lines(card: &AircraftCard, now: i64) -> Vec<Line> {
     vec![
-        line("Flight", &card.flight, now, |v| v.clone(), "not heard yet — ADS-B or VDL2 carry it"),
+        line("Flight", &card.flight, now, |v| v.clone(), &tr!("aircraft-missing-flight")),
         line(
             "Registration",
             &card.registration,
             now,
             |v| v.clone(),
-            "not heard yet — only VDL2 carries it",
+            &tr!("aircraft-missing-registration"),
         ),
         line(
             "Position",
             &card.position,
             now,
             |&(lat, lon)| fmt_position(lat, lon),
-            "not heard yet — ADS-B, or a VDL2 or HFDL position report",
+            &tr!("aircraft-missing-position"),
         ),
         line(
             "Altitude",
             &card.altitude_ft,
             now,
             |v| sdroxide_types::AirUnits::current().altitude(*v),
-            "not heard yet — ADS-B carries it",
+            &tr!("aircraft-missing-adsb"),
         ),
         line(
             "Speed",
             &card.ground_speed_kt,
             now,
             |v| sdroxide_types::AirUnits::current().speed(*v),
-            "not heard yet — ADS-B carries it",
+            &tr!("aircraft-missing-adsb"),
         ),
         line(
             "Track",
             &card.track_deg,
             now,
             |v| format!("{v:.0}°"),
-            "not heard yet — ADS-B carries it",
+            &tr!("aircraft-missing-adsb"),
         ),
         line(
             "Last message",
             &card.last_message,
             now,
             |v| v.clone(),
-            "none yet — VDL2, or ACARS audio once VDL2 has named the aircraft",
+            &tr!("aircraft-missing-message"),
         ),
     ]
 }

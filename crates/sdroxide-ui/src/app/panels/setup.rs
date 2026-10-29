@@ -4,7 +4,7 @@
 //! panels share, reachable from any of them. The identity half is the same
 //! store the Settings dialog's General tab edits.
 
-use crate::i18n::{Tr, tr};
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::Band;
 use sdroxide_types::Command;
@@ -154,13 +154,13 @@ impl SdroxideApp {
                             .add(
                                 egui::DragValue::new(&mut cfg.packet_paclen)
                                     .range(16..=256)
-                                    .suffix(" bytes"),
+                                    .suffix(tr!("setup-bytes")),
                             )
                             .on_hover_text(
                                 tr!("setup-most-single-frame-carries-shorter"),
                             )
                             .changed();
-                        ui.label(RichText::new("window").weak());
+                        ui.label(RichText::new(tr!("setup-window")).weak());
                         let window_max = if cfg.packet_ext_seq { 127 } else { 7 };
                         changed |= ui
                             .add(
@@ -277,7 +277,7 @@ impl SdroxideApp {
                     .size(10.0)
                     .color(crate::theme::ALERT())
                 } else {
-                    RichText::new(format!("Transmits as {call}")).size(10.0).weak()
+                    RichText::new(tr!("setup-transmits-as", call = call)).size(10.0).weak()
                 });
                 ui.end_row();
 
@@ -295,7 +295,7 @@ impl SdroxideApp {
                         let tint =
                             if on { crate::theme::YELLOW() } else { crate::theme::CYAN_DIM() };
                         self.aprs_icons.paint(ui, r, sym.kind(), tint);
-                        if resp.on_hover_text(*label).clicked() {
+                        if resp.on_hover_text(aprs_symbol_label(label)).clicked() {
                             cfg.aprs_symbol = sym;
                             changed = true;
                         }
@@ -390,7 +390,7 @@ impl SdroxideApp {
                         &mut self.aprs_lat_buf,
                         grid_lat,
                         90.0,
-                        "south",
+                        tr!("setup-south"),
                     ),
                     (
                         tr!("setup-longitude"),
@@ -398,7 +398,7 @@ impl SdroxideApp {
                         &mut self.aprs_lon_buf,
                         grid_lon,
                         180.0,
-                        "west",
+                        tr!("setup-west"),
                     ),
                 ] {
                     ui.label(label);
@@ -429,10 +429,7 @@ impl SdroxideApp {
                             .desired_width(96.0)
                             .text_color_opt(parsed.is_none().then(crate::theme::ALERT));
                         if crate::chrome::field(ui, edit)
-                            .on_hover_text(format!(
-                                "Decimal degrees, negative for {hemi}. Paste one \
-                                 straight off a map."
-                            ))
+                            .on_hover_text(tr!("setup-decimal-degrees", hemisphere = hemi))
                             .changed()
                             && let Some(d) = parsed
                             && (d - *value).abs() > f64::EPSILON
@@ -671,15 +668,7 @@ impl SdroxideApp {
                     });
                     changed |= row.inner;
                     row.response.on_hover_text(
-                        "How hard the FT8 decoder works for weak signals.\n\n\
-                         Fast — one pass, no signal subtraction: quickest, fewest \
-                         decodes.\n\
-                         Normal — flat multi-pass subtraction: ~0.4 s on a busy slot, a \
-                         few decodes short of Deep.\n\
-                         Deep — WSJT-X's checkpointed pass: ~1.2 s and the most decodes \
-                         (the default).\n\n\
-                         Only the second batch of decodes is governed; the plain pass is \
-                         always emitted first, so a reply is never held up by it.",
+                        tr!("setup-ft8-decoder-effort-hint"),
                     );
                     ui.end_row();
                 }
@@ -714,7 +703,7 @@ impl SdroxideApp {
                     .add(
                         egui::DragValue::new(&mut cfg.max_tx_repeats)
                             .range(0..=30)
-                            .suffix(" calls"),
+                            .suffix(tr!("setup-calls")),
                     )
                     .on_hover_text(repeats_hover_text(
                         mode,
@@ -738,18 +727,15 @@ impl SdroxideApp {
                         .add(
                             egui::DragValue::new(&mut cfg.auto_cq_repeats)
                                 .range(0..=100)
-                                .suffix(" cq"),
+                                .suffix(tr!("setup-suffix-cq")),
                         )
                         .on_hover_text(
-                            "How many CQ calls one run makes before it ends. 0 is no limit of \
-                             its own: the transmit watchdog and the inactivity stop still \
-                             bound the run.",
+                            tr!("setup-auto-cq-repeats-hint"),
                         )
                         .changed();
                     changed |= crate::chrome::checkbox(ui, &mut cfg.auto_cq_then_listen, "")
                         .on_hover_text(
-                            "After those CQ calls, switch AUTO CQ to AUTO RX and keep listening \
-                             rather than stopping altogether. Off, the run stops.",
+                            tr!("setup-auto-cq-then-listen-hint"),
                         )
                         .changed();
                     ui.add_space(6.0);
@@ -757,11 +743,10 @@ impl SdroxideApp {
                         .add(
                             egui::DragValue::new(&mut cfg.auto_call_retries)
                                 .range(1..=5)
-                                .suffix(" tries"),
+                                .suffix(tr!("setup-suffix-tries")),
                         )
                         .on_hover_text(
-                            "How many times one station is called before the run gives up on \
-                             it and moves down the queue.",
+                            tr!("setup-auto-call-retries-hint"),
                         )
                         .changed();
                     ui.add_space(6.0);
@@ -772,8 +757,7 @@ impl SdroxideApp {
                                 .suffix(" min"),
                         )
                         .on_hover_text(
-                            "How long an unattended run may last, whatever it is working on. 0 \
-                             is no limit of its own.",
+                            tr!("setup-auto-session-hint"),
                         )
                         .changed();
                 });
@@ -791,10 +775,7 @@ impl SdroxideApp {
                                     tr!("setup-european-vhf-contests-send-signal")
                                 }
                                 sdroxide_types::ContestMode::RttyRoundup => {
-                                    "Serial contests — ARRL RTTY Roundup and CQ WPX \
-                                     over FT8: a signal report and a serial number \
-                                     (or a US state), with no locator. CQ goes out \
-                                     as CQ RU.".to_string()
+                                    tr!("setup-serial-contests-hint")
                                 }
                             })
                             .changed();
@@ -863,7 +844,7 @@ impl SdroxideApp {
                         .add(
                             egui::DragValue::new(&mut cfg.fox_slots)
                                 .range(1..=sdroxide_types::FOX_MAX_SLOTS)
-                                .suffix(" at once"),
+                                .suffix(tr!("setup-once")),
                         )
                         .on_hover_text(
                             tr!("setup-simultaneous-transmissions-spaced-60-hz"),
@@ -898,31 +879,9 @@ impl SdroxideApp {
                                 .suffix(" dB"),
                         )
                         .on_hover_text(if fm {
-                            "How loud this mode's burst is handed to a radio that \
-                             modulates it itself — and on FM that is the deviation, \
-                             because an FM transmitter turns audio level into frequency \
-                             swing and has no ALC to catch it. 1200 baud packet wants \
-                             about 3 kHz where voice wants 5, so full scale into a data \
-                             input set for voice over-deviates — which sounds completely \
-                             normal to a listener and decodes for nobody. Turn it down \
-                             until other stations report you, or set the level at the \
-                             radio.\n\nThis level belongs to this mode alone. A mode you \
-                             have never set starts from the FM figure, and the sideband \
-                             modes start from their own — so a deviation set for 1200 \
-                             baud never lands on FT8."
+                            tr!("setup-tx-level-fm-hint")
                         } else {
-                            "How loud this mode's over is handed to a radio that \
-                             modulates it itself — a CAT rig on its sound card, a FLEX, \
-                             an Icom on its network port. On sideband this is drive into \
-                             the modulator: bring it down until the rig's ALC is barely \
-                             moving and set the power at the radio, because ALC riding \
-                             on a constant-envelope mode is what splatters. Drive \
-                             reaches the rig's power register here, not its audio, so \
-                             this is the level.\n\nThis level belongs to this mode \
-                             alone: FT8, RTTY, PSK and MCW each keep their own, because \
-                             they do not load a modulator the same way. The same rail is \
-                             on the transmit strip, where you can reach it while you are \
-                             transmitting."
+                            tr!("setup-tx-level-ssb-hint")
                         })
                         .changed()
                     {
@@ -942,7 +901,7 @@ impl SdroxideApp {
         if !mode.is_aprs() && !swl {
             ui.separator();
             ui.label(
-                RichText::new("Message templates  {MYCALL} {MYGRID} {DX} {REPORT}")
+                RichText::new(tr!("setup-message-templates", tokens = "{MYCALL} {MYGRID} {DX} {REPORT}"))
                     .size(10.5)
                     .color(crate::theme::gray(150)),
             );
@@ -967,6 +926,32 @@ impl SdroxideApp {
         if changed {
             cmds.push(Command::SetDigiConfig(cfg.clone()));
         }
+    }
+}
+
+/// The on-screen name of one of [`APRS_COMMON_SYMBOLS`] (the table keeps the
+/// English identity; a `const` cannot call `tr!`).
+fn aprs_symbol_label(english: &str) -> String {
+    match english {
+        "Home station" => tr!("setup-symbol-home-station"),
+        "Car" => tr!("setup-symbol-car"),
+        "Truck" => tr!("setup-symbol-truck"),
+        "Van" => tr!("setup-symbol-van"),
+        "Motorcycle" => tr!("setup-symbol-motorcycle"),
+        "Bicycle" => tr!("setup-symbol-bicycle"),
+        "Person on foot" => tr!("setup-symbol-person-on-foot"),
+        "Motorhome" => tr!("setup-symbol-motorhome"),
+        "Boat" => tr!("setup-symbol-boat"),
+        "Yacht" => tr!("setup-symbol-yacht"),
+        "Light aircraft" => tr!("setup-symbol-light-aircraft"),
+        "Balloon" => tr!("setup-symbol-balloon"),
+        "Digipeater" => tr!("setup-symbol-digipeater"),
+        "I-gate" => tr!("setup-symbol-i-gate"),
+        "Repeater" => tr!("setup-symbol-repeater"),
+        "Weather station" => tr!("setup-symbol-weather-station"),
+        "Hospital" => tr!("setup-symbol-hospital"),
+        "Portable / campsite" => tr!("setup-symbol-portable-campsite"),
+        other => other.to_string(),
     }
 }
 
@@ -1006,25 +991,21 @@ const APRS_COMMON_SYMBOLS: &[(char, char, &str)] = &[
 /// A call goes out every **other** slot: transmitting in the slot straight after
 /// your own doubles with the echo of it, so the interval is two slots.
 fn repeats_hover_text(mode: sdroxide_types::Mode, repeats: u32, on_11m: bool) -> String {
-    let mut s =
-        String::from("Unanswered calls to one station before moving on. Calling CQ is exempt.");
+    let mut s = tr!("setup-repeats-hint-base");
     if repeats > 0 {
         if let Some(t) = mode.slot_timing() {
             let mins = repeats as f64 * t.slot_s * 2.0 / 60.0;
-            s.push_str(&format!(
-                " At {}'s slot length ({} s) that is about {mins:.0} min.",
-                mode.label(),
-                t.slot_s
+            s.push_str(&tr!(
+                "setup-repeats-hint-duration",
+                mode = mode.label(),
+                slot = t.slot_s,
+                mins = format!("{mins:.0}")
             ));
         }
     }
-    s.push_str(" 0 disables it.");
+    s.push_str(&tr!("setup-repeats-hint-disables"));
     if on_11m {
-        s.push_str(
-            " On 11 m this is also what ends a CQ run: the transmit watchdog does not cut \
-             one, because a station answering a CQ is expected inside about 30 s and a clock \
-             cannot tell a young run from a stale one.",
-        );
+        s.push_str(&tr!("setup-repeats-hint-11m"));
     }
     s
 }

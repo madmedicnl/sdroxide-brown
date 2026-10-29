@@ -51,44 +51,36 @@ pub(in crate::app) fn settings_ui_tab(
         // that waterfall and wrong for a whole-band map: a listener at 6190 kHz
         // with 20 kHz of span was told there were four stations in the world.
         use sdroxide_types::BroadcastScope as B;
-        ui.label("Broadcast stations");
+        ui.label(tr!("settings-broadcast-stations"));
         ComboBox::from_id_salt("ui-broadcast-scope")
-            .selected_text(cfg.broadcast_scope.label())
+            .selected_text(broadcast_scope_label(cfg.broadcast_scope))
             .show_styled(ui, |ui| {
                 for scope in [B::InView, B::WholeBand] {
-                    ui.selectable_value(&mut cfg.broadcast_scope, scope, scope.label());
+                    ui.selectable_value(&mut cfg.broadcast_scope, scope, broadcast_scope_label(scope));
                 }
             })
             .response
             .on_hover_text(
-                "Which broadcasting stations the LISTEN window and the waterfall label may \
-                 show.\n\n**On this span** is what every screen did before this was a \
-                 choice: half a span either side of the dial, which is what a label on that \
-                 waterfall should cover. **The whole band** shows everything the schedule \
-                 holds with a position on it, which is what a listener browsing a band is \
-                 looking for — at the cost of a busier map.",
+                tr!("settings-ui-broadcast-stations-hint"),
             );
         // The **other** question about broadcasters, and the one the operator kept
         // having to answer with ⭐ ALL: whether the waterfall names the station the
         // dial is on or the whole band. The chip is in the SPOTS window, where it
         // is used; this is beside the scope combo because that is where a
         // preference is looked for.
-        ui.label("Waterfall labels");
+        ui.label(tr!("settings-ui-waterfall-labels"));
         ui.horizontal(|ui| {
-            if crate::chrome::chip(ui, !cfg.broadcast_labels_all, "Tuned only")
+            if crate::chrome::chip(ui, !cfg.broadcast_labels_all, tr!("settings-ui-tuned-only"))
                 .on_hover_text(
-                    "Name the station you are tuned to, and nothing else — one name, for the \
-                     thing you are listening to, rather than a wall of names over a passband.",
+                    tr!("settings-ui-tuned-only-hint"),
                 )
                 .clicked()
             {
                 cfg.broadcast_labels_all = false;
             }
-            if crate::chrome::chip(ui, cfg.broadcast_labels_all, "The whole band")
+            if crate::chrome::chip(ui, cfg.broadcast_labels_all, tr!("settings-ui-whole-band"))
                 .on_hover_text(
-                    "Name every broadcaster the schedule has on air now, wherever it sits. \
-                     What you want while browsing a band rather than listening to one \
-                     station, and busier for it. Also on the SPOTS window, as BC ALL.",
+                    tr!("settings-ui-whole-band-hint"),
                 )
                 .clicked()
             {
@@ -109,28 +101,17 @@ pub(in crate::app) fn settings_ui_tab(
     ui.add_space(6.0);
     egui::Grid::new("ui-grid").num_columns(2).spacing([12.0, 8.0]).min_row_height(ui.spacing().interact_size.y).show(ui, |ui| {
         ui.label(tr!("settings-ui-layout"));
-        enum_combo(ui, "ui-layout", &mut cfg.layout, &LayoutMode::ALL, LayoutMode::label);
+        enum_combo(ui, "ui-layout", &mut cfg.layout, &LayoutMode::ALL, LayoutMode::tr);
         ui.end_row();
 
         // The two arrangements of the desktop. It is beside Layout because it
         // is the same kind of choice — where things live on this screen — and
         // not under it, because it is not a size: the column is offered at
         // every desktop size and left out where there is no room for it.
-        ui.label("Classic UI").on_hover_text(
-            "Put every control in one column down the left with the groups folding away, \
-             the way SDR++ and SDR++Brown lay theirs out, and give the picture everything \
-             else. Same controls, same settings, arranged the way most short-wave \
-             listeners already have in their hands.\n\n\
-             It needs a window wide enough to keep the waterfall its share: below that the \
-             column is left out and the strip is drawn as usual, and the panel is dragged \
-             wider or narrower from its right edge. Off, this program's own strip is used \
-             exactly as before.",
+        ui.label(tr!("settings-ui-classic-ui")).on_hover_text(
+            tr!("settings-ui-classic-ui-hint"),
         );
-        crate::chrome::checkbox(ui, &mut cfg.classic_ui, "controls in a left column");
-        ui.end_row();
-
-        ui.label("Theme");
-        enum_combo(ui, "ui-theme", &mut cfg.theme, &UiTheme::ALL, UiTheme::label);
+        crate::chrome::checkbox(ui, &mut cfg.classic_ui, tr!("settings-ui-classic-ui-check"));
         ui.end_row();
 
         ui.label(tr!("settings-ui-theme"));
@@ -141,16 +122,14 @@ pub(in crate::app) fn settings_ui_tab(
         enum_combo(ui, "ui-btn-style", &mut cfg.button_style, &ChromeStyle::ALL, ChromeStyle::tr);
         ui.end_row();
 
-        ui.label("Updates");
+        ui.label(tr!("settings-ui-updates"));
         crate::chrome::checkbox(
             ui,
             &mut cfg.check_for_updates,
-            "check for a new release at start-up",
+            tr!("settings-ui-updates-check"),
         )
         .on_hover_text(
-            "Asks the fork's GitHub Releases for the latest release once at start-up, and \
-             shows a banner if it is newer than this build. Only full releases count — the \
-             nightly is a pre-release — and off means no outbound call at all.",
+            tr!("settings-ui-updates-hint"),
         );
         ui.end_row();
 
@@ -164,27 +143,19 @@ pub(in crate::app) fn settings_ui_tab(
             use sdroxide_types::DetachableModule;
             for module in DetachableModule::ALL {
                 let mut on = cfg.is_detached(module);
-                ui.label(format!("{} window", module.label()));
+                ui.label(tr!("settings-ui-window-label", module = module_label(module)));
                 ComboBox::from_id_salt(("ui-undocked", module))
                     .selected_text(if on {
-                        "Undocked — its own window"
+                        tr!("settings-ui-undocked")
                     } else {
-                        "Docked in this window"
+                        tr!("settings-ui-docked")
                     })
                     .show_styled(ui, |ui| {
-                        ui.selectable_value(&mut on, false, "Docked in this window");
-                        ui.selectable_value(&mut on, true, "Undocked — its own window");
+                        ui.selectable_value(&mut on, false, tr!("settings-ui-docked"));
+                        ui.selectable_value(&mut on, true, tr!("settings-ui-undocked"));
                     })
                     .response
-                    .on_hover_text(format!(
-                        "Undocked, this module moves into its own window and the main \
-                         window gives the space back to what is left — put the waterfall on \
-                         a second monitor, or the controls on a third. Closing its window \
-                         docks it again.\n\nOn Wayland the size comes back but the \
-                         compositor decides where a window goes: float it and pin it to a \
-                         monitor with a window rule matching app-id \"{}\".",
-                        module.app_id(),
-                    ));
+                    .on_hover_text(tr!("settings-ui-undock-hint", app_id = module.app_id()));
                 cfg.set_detached(module, on);
                 ui.end_row();
             }
@@ -198,9 +169,9 @@ pub(in crate::app) fn settings_ui_tab(
                 ui.label("");
                 ui.horizontal(|ui| {
                     if any_out
-                        && crate::chrome::chip(ui, false, "DOCK ALL WINDOWS")
+                        && crate::chrome::chip(ui, false, tr!("multi-dock-all-windows"))
                             .on_hover_text(
-                                "Bring every undocked window back into this one.",
+                                tr!("settings-ui-dock-all-hint"),
                             )
                             .clicked()
                     {
@@ -209,11 +180,9 @@ pub(in crate::app) fn settings_ui_tab(
                         }
                     }
                     if any_in
-                        && crate::chrome::chip(ui, false, "UNDOCK ALL WINDOWS")
+                        && crate::chrome::chip(ui, false, tr!("multi-undock-all-windows"))
                             .on_hover_text(
-                                "Put every module in a window of its own — the main window is \
-                                 left as the spectrum and the decoders. A module with nothing to \
-                                 show, like the operating panel in a voice mode, opens no window.",
+                                tr!("settings-ui-undock-all-hint"),
                             )
                             .clicked()
                     {
@@ -252,7 +221,7 @@ pub(in crate::app) fn settings_ui_tab(
                 .on_hover_text(
                     tr!("settings-ui-tuning-buttons-show", "hint"),
                 );
-            super::note(ui, &format!("Step: {}", cfg.tune_step_label()));
+            super::note(ui, &tr!("settings-ui-tuning-step", step = cfg.tune_step_label()));
         });
         ui.end_row();
 
@@ -293,23 +262,19 @@ pub(in crate::app) fn settings_ui_tab(
         });
         ui.end_row();
 
-        ui.label("Spectrum line").on_hover_text(
-            "The colour under the spectrum line, and how it is shaded: Fixed is one \
-             colour throughout, Gradient is full at the bottom and fades out towards \
-             the top, Mixed is full in the lower half and fades across the upper half. \
-             The line itself stays cyan. The FILL chip in the SPEC popup switches the \
-             fill, and its line row picks the shading.",
+        ui.label(tr!("settings-ui-spectrum-line")).on_hover_text(
+            tr!("settings-ui-spectrum-line-hint"),
         );
         ui.horizontal(|ui| {
-            crate::chrome::checkbox(ui, &mut cfg.spectrum_fill, "Fill");
+            crate::chrome::checkbox(ui, &mut cfg.spectrum_fill, tr!("settings-ui-fill"));
             ui.add_enabled_ui(cfg.spectrum_fill, |ui| {
-                ui.label("colour");
+                ui.label(tr!("settings-ui-fill-colour"));
                 ui.color_edit_button_srgb(&mut cfg.spectrum_fill_color);
                 ComboBox::from_id_salt("ui-spectrum-fill-style")
-                    .selected_text(cfg.spectrum_fill_style.label())
+                    .selected_text(fill_style_label(cfg.spectrum_fill_style))
                     .show_styled(ui, |ui| {
                         for s in sdroxide_types::SpectrumFillStyle::ALL {
-                            ui.selectable_value(&mut cfg.spectrum_fill_style, s, s.label());
+                            ui.selectable_value(&mut cfg.spectrum_fill_style, s, fill_style_label(s));
                         }
                     });
             });
@@ -327,13 +292,13 @@ pub(in crate::app) fn settings_ui_tab(
             ui.horizontal_wrapped(|ui| {
                 for kind in SpotKind::ALL {
                     ui.color_edit_button_srgb(&mut cfg.spot_colors[kind.index()])
-                        .on_hover_text(format!("Colour for {} spots", kind.label()));
+                        .on_hover_text(tr!("settings-ui-spot-colour", kind = spot_kind_label(kind)));
                     let [r, g, b] = cfg.spot_colors[kind.index()];
                     // Tinted with what was just picked, so the row is its own
                     // preview — a colour that vanishes into the panel here would
                     // vanish into the waterfall too.
                     ui.label(
-                        RichText::new(kind.label())
+                        RichText::new(spot_kind_label(kind))
                             .size(11.0)
                             .strong()
                             .color(crate::theme::data_ink((r, g, b))),
@@ -361,10 +326,10 @@ pub(in crate::app) fn settings_ui_tab(
             ui.horizontal_wrapped(|ui| {
                 for kind in BandplanKind::ALL {
                     ui.color_edit_button_srgb(&mut cfg.bandplan_colors[kind.index()])
-                        .on_hover_text(format!("Colour for {} allocations", kind.label()));
+                        .on_hover_text(tr!("settings-ui-bandplan-colour", kind = kind.tr()));
                     let [r, g, b] = cfg.bandplan_colors[kind.index()];
                     ui.label(
-                        RichText::new(kind.label())
+                        RichText::new(kind.tr())
                             .size(11.0)
                             .strong()
                             .color(crate::theme::data_ink((r, g, b))),
@@ -398,75 +363,42 @@ pub(in crate::app) fn settings_ui_tab(
         enum_combo(ui, "ui-menu-font", &mut cfg.menu_font_size, &FontSize::ALL, FontSize::tr);
         ui.end_row();
 
-        ui.label("Simple UI").on_hover_text(
-            "Hide the advanced extras from the top strip: the 3D view, the \
-             skimmers, the spectrum/waterfall layer switches, award tracking, \
-             satellites, ISM decoding and radio email. The controls a CB \
-             operator or a short-wave listener reaches for — tuning, mode, \
-             volume, squelch, bandwidth, the waterfall, memories, scanning — \
-             all stay.\n\n\
-             Nothing is turned off, only hidden: switch this back on to bring \
-             the chips back.",
+        ui.label(tr!("settings-ui-simple-ui")).on_hover_text(
+            tr!("settings-ui-simple-ui-hint"),
         );
-        crate::chrome::checkbox(ui, &mut cfg.simple_ui, "hide advanced chips");
+        crate::chrome::checkbox(ui, &mut cfg.simple_ui, tr!("settings-ui-simple-ui-check"));
         ui.end_row();
 
-        ui.label("Wake lock").on_hover_text(
-            "Keep the screen on while this page is in front, so a phone or \
-             tablet left on the waterfall does not dim and lock itself after a \
-             minute without a touch. Reception, audio and decoding do not need \
-             it — they carry on either way — it is so the screen stays \
-             readable.\n\n\
-             Pairs with the padlock on the phone and tablet strips: lock the \
-             screen against stray fingers, and keep it lit.\n\n\
-             The browser takes the lock back whenever the page is hidden — \
-             another tab, or the phone's own power button — and it is asked for \
-             again as soon as the page is back. It needs a browser that has it \
-             and a secure page (https, or localhost); the line beside the box \
-             says when it is not available or was refused. It costs battery, so \
-             it is off until you ask. The installed program on a computer \
-             follows the system's own power settings instead.",
+        ui.label(tr!("settings-ui-wake-lock")).on_hover_text(
+            tr!("settings-ui-wake-lock-hint"),
         );
         ui.horizontal(|ui| {
-            crate::chrome::checkbox(ui, &mut cfg.keep_screen_on, "keep the screen on");
+            crate::chrome::checkbox(ui, &mut cfg.keep_screen_on, tr!("settings-ui-wake-lock-check"));
             let status = crate::wake_lock::status(cfg.keep_screen_on);
-            if !status.label().is_empty() {
+            if !wake_label(status).is_empty() {
                 let ink = if status.is_problem() {
                     crate::theme::YELLOW()
                 } else {
                     ui.visuals().weak_text_color()
                 };
-                ui.label(egui::RichText::new(status.label()).small().color(ink));
+                ui.label(egui::RichText::new(wake_label(status)).small().color(ink));
             }
         });
         ui.end_row();
 
-        ui.label("Sound welcome").on_hover_text(
-            "When the web page opens — a new session, or a reload with F5 — \
-             the browser plays no sound until you touch the page. That is the \
-             browser's rule, and without a word on screen a fresh session \
-             looks as if it does not work.\n\n\
-             With this on, a message in the middle of the screen says so: \
-             🔇 Tap, click or press a key anywhere to start the sound. The \
-             first click, tap or key — anywhere, with a mouse, a touchpad, a \
-             finger or the keyboard — closes it and starts the sound, and does \
-             nothing else: it does not tune, press a button or run a \
-             shortcut. It is shown only when the page opens, never again \
-             during the session, whatever happens to the sound later.\n\n\
-             Turn it off once you know what to do: the sound still waits for \
-             your first touch, and that touch then works as usual. Kept with \
-             your profile on the server. On by default.",
+        ui.label(tr!("settings-ui-sound-welcome")).on_hover_text(
+            tr!("settings-ui-sound-welcome-hint"),
         );
         ui.horizontal(|ui| {
             crate::chrome::checkbox(
                 ui,
                 &mut cfg.sound_welcome,
-                egui::RichText::new("welcome message for the sound").color(crate::theme::YELLOW()),
+                egui::RichText::new(tr!("settings-ui-sound-welcome-check")).color(crate::theme::YELLOW()),
             );
             if !crate::sound_welcome::available() {
                 ui.label(
                     egui::RichText::new(
-                        "browser only — the installed program plays sound without a touch",
+                        tr!("settings-ui-sound-welcome-browser-only"),
                     )
                     .small()
                     .color(crate::theme::YELLOW()),
@@ -478,29 +410,14 @@ pub(in crate::app) fn settings_ui_tab(
 
         ui.end_row();
 
-        ui.label("Screen follows your profile").on_hover_text(
-            "When you are a remote client of `sdroxide --server`, the *look* of \
-             this screen — theme, layout, waterfall and spectrum, fonts, Simple \
-             UI, the map layers, the panadapter's own view — is kept with the \
-             profile you signed in as, so it comes back on any machine instead \
-             of starting from defaults.\n\n\
-             **Saved on the server, and saved as you go while you are signed \
-             in** — there is nothing to press. That is deliberate: browser \
-             storage cannot be relied on, because `persist()` behaves \
-             differently in every browser, and a session kept there cannot be \
-             reset by anyone who is not at that device. A profile on the server \
-             is a file the station's operator can put back.\n\n\
-             On a server with **no password** every client is the same profile, \
-             so nothing is written unless you press the button below — one \
-             operator's theme must not become the next one's. Nothing that \
-             belongs to the machine is ever stored, and a local radio is \
-             unaffected.",
+        ui.label(tr!("settings-ui-profile-screen")).on_hover_text(
+            tr!("settings-ui-profile-screen-hint"),
         );
         ui.horizontal(|ui| {
-            if ui.button("Save to profile").clicked() {
+            if ui.button(tr!("settings-ui-save-to-profile")).clicked() {
                 profile_action.set(Some(ProfileAction::Save));
             }
-            if ui.button("Back to profile").clicked() {
+            if ui.button(tr!("settings-ui-back-to-profile")).clicked() {
                 profile_action.set(Some(ProfileAction::Revert));
             }
         });
@@ -508,9 +425,9 @@ pub(in crate::app) fn settings_ui_tab(
         // save that says nothing is a save nobody can trust.
         ui.label(
             RichText::new(match profile_from {
-                Some(Some(name)) => format!("in use: the profile {name}"),
-                Some(None) => "in use: this station's default".to_string(),
-                None => "not in use yet — nothing stored for this login".to_string(),
+                Some(Some(name)) => tr!("settings-ui-profile-in-use-named", name = name.as_str()),
+                Some(None) => tr!("settings-ui-profile-in-use-default"),
+                None => tr!("settings-ui-profile-not-in-use"),
             })
             .weak()
             .small(),
@@ -527,19 +444,8 @@ pub(in crate::app) fn settings_ui_tab(
         // reaching it from several of their own devices wants their keys to
         // follow them. The answer to a shared station is the acknowledgement
         // and the default, not taking the feature away.
-        ui.label("Carry control bindings").on_hover_text(
-            "Also keep your keyboard and mouse bindings with the profile on the \
-             server, so they follow the login between browsers and devices — \
-             the same idea as the screen above, for the keys.\n\n\
-             **NOT RECOMMENDED, and off by default.** On a station several \
-             people share, the keyboard is shared with it: a profile that \
-             carries bindings can rebind another operator's PTT, Space or \
-             tuning keys the moment it signs in, and turning this on may have \
-             other effects that are not obvious now. Turn it on only where the \
-             server is yours alone and you reach it from several devices of \
-             your own.\n\n\
-             Fork-only: this is not an upstream feature. The screen settings \
-             above always travel; this is the only opt-in here.",
+        ui.label(tr!("settings-ui-carry-bindings")).on_hover_text(
+            tr!("settings-ui-carry-bindings-hint"),
         );
         {
             // The opt-in is not a plain checkbox: turning it ON must be
@@ -554,9 +460,9 @@ pub(in crate::app) fn settings_ui_tab(
                         ui,
                         &mut shown,
                         if was {
-                            "on — NOT RECOMMENDED"
+                            tr!("settings-ui-carry-bindings-on")
                         } else {
-                            "carry them (not recommended)"
+                            tr!("settings-ui-carry-bindings-off")
                         },
                     );
                     if resp.clicked() {
@@ -581,32 +487,25 @@ pub(in crate::app) fn settings_ui_tab(
                     |ui| {
                         ui.set_max_width(470.0);
                         ui.heading(
-                            RichText::new("Carry control bindings on the server?")
+                            RichText::new(tr!("settings-ui-carry-bindings-title"))
                                 .color(crate::theme::ALERT()),
                         );
                         ui.add_space(6.0);
                         ui.label(
-                            "This stores your keyboard and mouse bindings with your profile on \
-                             the server, so they follow your login between browsers and devices.\n\n\
-                             On a station other people use, the keyboard is shared with it. A \
-                             profile that carries bindings can rebind another operator's PTT, \
-                             Space or tuning keys simply by signing in — and enabling this may \
-                             have other effects that are not obvious now.\n\n\
-                             That is why it is not recommended. Turn it on only if the server \
-                             is yours alone.",
+                            tr!("settings-ui-carry-bindings-body"),
                         );
                         ui.add_space(10.0);
                         ui.horizontal(|ui| {
                             if ui
                                 .button(
-                                    RichText::new("I understand — carry them anyway")
+                                    RichText::new(tr!("settings-ui-carry-bindings-confirm"))
                                         .color(crate::theme::ALERT()),
                                 )
                                 .clicked()
                             {
                                 enable = true;
                             }
-                            if ui.button("Cancel").clicked() {
+                            if ui.button(tr!("settings-wavelog-cancel")).clicked() {
                                 cancel = true;
                             }
                         });
@@ -623,16 +522,10 @@ pub(in crate::app) fn settings_ui_tab(
         }
         ui.end_row();
 
-        ui.label("Start in SWL mode").on_hover_text(
-            "Open every session with SWL mode already on, so a listener's \
-             screen is what the program comes up as — for every radio, this \
-             being the screen's preference rather than a radio's.\n\n\
-             The per-radio switch is Settings → Radio → Transmit controls, so \
-             a station with one listening radio and one transceiver sets the \
-             listening one there and leaves this off. Using that switch turns \
-             this seed off for the session. `--swl` always wins.",
+        ui.label(tr!("settings-ui-start-swl")).on_hover_text(
+            tr!("settings-ui-start-swl-hint"),
         );
-        crate::chrome::checkbox(ui, &mut cfg.start_swl, "start with SWL mode on");
+        crate::chrome::checkbox(ui, &mut cfg.start_swl, tr!("settings-ui-start-swl-check"));
         ui.end_row();
 
         // Issue #146: the LISTEN tab in the band/mode menu carrying the listening
@@ -640,22 +533,13 @@ pub(in crate::app) fn settings_ui_tab(
         // — the reporter's own words were "I accept this operating mode at my own
         // risk", and the person who wrote them is the one who has to read what it
         // does not do.
-        ui.label("LISTEN tab hides transmit").on_hover_text(
-            "Picking **LISTEN** in the band/mode menu hides every transmit control on \
-             that tab, and picking **OPERATE** puts back whatever this radio's own \
-             setting says.\n\n\
-             It cannot turn a transmitter on. A radio configured receive-only stays \
-             receive-only, and the band lockout and the out-of-band warning are \
-             untouched.\n\n\
-             The band menu remembers which tab it was left on, so a station left \
-             listening comes back listening — the transmit controls are hidden at \
-             the next start too, and picking OPERATE brings them back. Off by \
-             default because it changes what the tab means; it asks once.",
+        ui.label(tr!("settings-ui-listen-hides-tx")).on_hover_text(
+            tr!("settings-ui-listen-hides-tx-hint"),
         );
         {
             let confirm_id = egui::Id::new("listen-tab-hides-tx-confirm");
             let mut shown = cfg.listen_tab_hides_tx;
-            let resp = crate::chrome::checkbox(ui, &mut shown, "hide TX on the LISTEN tab");
+            let resp = crate::chrome::checkbox(ui, &mut shown, tr!("settings-ui-listen-hides-tx-check"));
             let was = cfg.listen_tab_hides_tx;
             if resp.changed() {
                 if shown && !was {
@@ -673,35 +557,25 @@ pub(in crate::app) fn settings_ui_tab(
                     |ui| {
                         ui.set_max_width(470.0);
                         ui.heading(
-                            RichText::new("The LISTEN tab will hide the transmit controls")
+                            RichText::new(tr!("settings-ui-listen-hides-tx-title"))
                                 .color(crate::theme::ALERT()),
                         );
                         ui.add_space(6.0);
                         ui.label(
-                            "On the LISTEN tab the transmit controls disappear; on OPERATE \
-                             they come back exactly as this radio's own setting left them.\n\n\
-                             It does not enable anything. It is a view of the same station, \
-                             so the band lockout, the out-of-band warning and the transmit \
-                             rails are untouched.\n\n\
-                             The tab is remembered: a station left on LISTEN starts on LISTEN, \
-                             with the transmit controls still hidden, until OPERATE is picked.\n\n\
-                             Worth knowing: a station left on LISTEN still receives on \
-                             whatever the tab has tuned, and a control that is hidden is \
-                             not a control that is off — transmission is off because the \
-                             settings say so, not because the button is out of sight.",
+                            tr!("settings-ui-listen-hides-tx-body"),
                         );
                         ui.add_space(10.0);
                         ui.horizontal(|ui| {
                             if ui
                                 .button(
-                                    RichText::new("I understand — hide them on LISTEN")
+                                    RichText::new(tr!("settings-ui-listen-hides-tx-confirm"))
                                         .color(crate::theme::ALERT()),
                                 )
                                 .clicked()
                             {
                                 enable = true;
                             }
-                            if ui.button("Cancel").clicked() {
+                            if ui.button(tr!("settings-wavelog-cancel")).clicked() {
                                 cancel = true;
                             }
                         });
@@ -724,19 +598,13 @@ pub(in crate::app) fn settings_ui_tab(
         // there is nothing to set, so the row is left out rather than shown
         // dead.
         if let Some(radio) = radio {
-            ui.label("SWL mode").on_hover_text(
-                "Hide every transmit control for this radio — the PTT, CALL CQ, TX level, \
-                 SEND, BEACON, all of it — and swap the strip's ham extras (spots, awards) \
-                 for the listener's (SCHEDULE and SWL LOG, the reception log). The same switch as Settings → Radio \
-                 → Transmit controls, and per radio: a listening dongle can sit in this mode \
-                 while the transceiver beside it keeps its transmitter.\n\n\
-                 The hardware can still transmit; this only hides the controls. `--swl` \
-                 forces it on for every radio for the run.\n\nTakes effect on Apply.",
+            ui.label(tr!("settings-ui-swl-mode")).on_hover_text(
+                tr!("settings-ui-swl-mode-hint"),
             );
             // The checkbox reflects the whole per-radio SWL state (the
             // start-in-SWL seed *or* `hide_tx`), so a session that came up in
             // SWL mode reads as "on" and one toggle turns it off, not two.
-            if crate::chrome::checkbox(ui, swl_hide, "hide all transmit controls").changed() {
+            if crate::chrome::checkbox(ui, swl_hide, tr!("settings-ui-swl-mode-check")).changed() {
                 radio.hide_tx = *swl_hide;
             }
             ui.end_row();
@@ -752,11 +620,8 @@ pub(in crate::app) fn settings_ui_tab(
         // never resolve to a file, so the row is left out rather than shown
         // dead — the same rule the rest of this crate follows for paths.
         if !cfg!(target_arch = "wasm32") {
-            ui.label("Report picture").on_hover_text(
-                "The picture a reception report carries when you mail it to a broadcaster — \
-                 your own card, a photograph, whatever you want the station to see. One \
-                 image for the station, used for every report.\n\nLeave it unset and the \
-                 report goes as plain text, which is a perfectly good report.",
+            ui.label(tr!("settings-ui-report-picture")).on_hover_text(
+                tr!("settings-ui-report-picture-hint"),
             );
             // Whatever the picker thread found, taken once and cleared so it is
             // applied exactly once.
@@ -769,45 +634,33 @@ pub(in crate::app) fn settings_ui_tab(
                 ui.add(
                     egui::TextEdit::singleline(&mut report.picture)
                         .desired_width(240.0)
-                        .hint_text("none — the report goes as text"),
+                        .hint_text(tr!("settings-ui-report-picture-none")),
                 );
-                if crate::chrome::chip(ui, false, "Choose…")
-                    .on_hover_text("Pick the picture on this computer")
+                if crate::chrome::chip(ui, false, tr!("settings-ui-choose"))
+                    .on_hover_text(tr!("settings-ui-report-picture-pick"))
                     .clicked()
                 {
                     pick_report_picture(report_pick);
                 }
                 if !report.picture.is_empty()
-                    && crate::chrome::chip(ui, false, "Clear").clicked()
+                    && crate::chrome::chip(ui, false, tr!("sstv-clear")).clicked()
                 {
                     report.picture.clear();
                 }
             });
-            ui.label("Report note").on_hover_text(
-                "Your standing note, pre-filled into every reception report — who you are, \
-                 what you listen on, anything a station asks once rather than per letter. \
-                 Plain text in a plain file: not a secret.",
+            ui.label(tr!("settings-ui-report-note")).on_hover_text(
+                tr!("settings-ui-report-note-hint"),
             );
             crate::chrome::field(
                 ui,
                 egui::TextEdit::multiline(&mut report.message)
                     .desired_width(380.0)
                     .desired_rows(3)
-                    .hint_text("optional — e.g. \"Details on request\""),
+                    .hint_text(tr!("settings-ui-report-note-hint-text")),
             );
         }
 
-        ui.label(tr!("settings-ui-cities")).on_hover_text(
-            "Draw the world's cities — a dot per place, with its name beside it \
-             where there is room — on the flat maps: FT8/WSPR, APRS, ADS-B and \
-             AIS.\n\n\
-             They are most of what says *where* a dot is on a map of the whole \
-             world, and they are also the busiest thing on it. Turn them off if \
-             the names are getting in the way of the stations you are reading. \
-             The 3D globe is unaffected — its cities are night-side lights \
-             rather than markers, and nothing there is written across a \
-             contact.",
-        );
+        ui.label(tr!("settings-ui-cities")).on_hover_text(tr!("settings-ui-cities", "hint"));
         crate::chrome::checkbox(ui, &mut cfg.map_cities, tr!("settings-ui-cities-show"));
         ui.end_row();
     });
@@ -865,7 +718,7 @@ pub(in crate::app) fn speech_settings(
             .spacing([12.0, 8.0])
             .min_row_height(ui.spacing().interact_size.y)
             .show(ui, |ui| {
-                ui.label("Voice");
+                ui.label(tr!("speech-voice"));
                 let shown = if cfg.voice.is_empty() {
                     tr!("speech-voice-shipped").to_string()
                 } else {
@@ -918,7 +771,7 @@ pub(in crate::app) fn speech_settings(
                     "speech-verbosity",
                     &mut cfg.verbosity,
                     &Verbosity::ALL,
-                    Verbosity::label,
+                    Verbosity::tr,
                 );
                 ui.end_row();
 
@@ -1017,8 +870,8 @@ pub(in crate::app) fn speech_settings(
             ui.label(RichText::new(tr!("speech-reading-text")).strong());
             ui.end_row();
             ui.horizontal(|ui| {
-                crate::chrome::checkbox(ui, &mut cfg.text.cw, "CW");
-                crate::chrome::checkbox(ui, &mut cfg.text.rtty_psk, "RTTY, PSK, Olivia, THOR, FSQ");
+                crate::chrome::checkbox(ui, &mut cfg.text.cw, tr!("speech-text-cw"));
+                crate::chrome::checkbox(ui, &mut cfg.text.rtty_psk, tr!("speech-text-rtty-psk"));
             });
             crate::chrome::checkbox(
                 ui,
@@ -1030,63 +883,6 @@ pub(in crate::app) fn speech_settings(
                 ui,
                 &tr!("speech-text-note"),
             );
-
-            ui.add_space(8.0);
-            ui.label(RichText::new("Tuning up").strong());
-            ui.end_row();
-            crate::chrome::checkbox(
-                ui,
-                &mut cfg.tune.swr_while_tuning,
-                "Read the SWR out while TUNE is held",
-            );
-            ui.add_enabled_ui(cfg.tune.swr_while_tuning, |ui| {
-                ui.horizontal(|ui| {
-                    crate::chrome::checkbox(ui, &mut cfg.text.cw, tr!("speech-text-cw"));
-                    crate::chrome::checkbox(
-                        ui,
-                        &mut cfg.text.rtty_psk,
-                        tr!("speech-text-rtty-psk"),
-                    );
-                });
-            });
-            crate::chrome::checkbox(
-                ui,
-                &mut cfg.tune.summary_after_tune,
-                "Report the best match on release",
-            );
-            crate::chrome::checkbox(
-                ui,
-                &mut cfg.tune.alarm_always,
-                "Warn about high SWR during any transmission",
-            );
-
-            ui.add_space(8.0);
-            ui.label(RichText::new("How things are read").strong());
-            ui.end_row();
-            egui::Grid::new("speech-style")
-                .num_columns(2)
-                .spacing([12.0, 6.0])
-                .min_row_height(ui.spacing().interact_size.y)
-                .show(ui, |ui| {
-                    ui.label("Frequencies");
-                    crate::app::settings::enum_combo(
-                        ui,
-                        "speech-freq-style",
-                        &mut cfg.freq_style,
-                        &FreqStyle::ALL,
-                        FreqStyle::label,
-                    );
-                    ui.end_row();
-                    ui.label("Callsigns");
-                    crate::app::settings::enum_combo(
-                        ui,
-                        "speech-call-style",
-                        &mut cfg.callsign_style,
-                        &CallsignStyle::ALL,
-                        CallsignStyle::label,
-                    );
-                    ui.end_row();
-                });
 
             ui.add_space(8.0);
             ui.label(RichText::new(tr!("speech-tuning-up")).strong());
@@ -1164,7 +960,7 @@ pub(in crate::app) fn pick_report_picture(
         .name("sdroxide-report-pick".into())
         .spawn(move || {
             if let Some(path) =
-                rfd::FileDialog::new().add_filter("Image", &["png", "jpg", "jpeg"]).pick_file()
+                rfd::FileDialog::new().add_filter(tr!("widgets-image"), &["png", "jpg", "jpeg"]).pick_file()
             {
                 if let Ok(mut g) = inbox.lock() {
                     *g = Some(path.to_string_lossy().into_owned());
@@ -1201,18 +997,17 @@ pub(in crate::app) fn workspaces_section(
     name: &mut String,
 ) {
     use sdroxide_types::{WORKSPACE_MAX, Workspace};
-    ui.label(RichText::new("Workspaces").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(RichText::new(tr!("settings-ui-workspaces")).size(14.0).strong().color(crate::theme::CYAN()));
     ui.add_space(2.0);
     super::note_at(
         ui,
-        "A named window arrangement — which modules are in their own windows and where \
-             those windows are. Save the one you have, or put a saved one back. Up to ten.",
+        &tr!("settings-ui-workspaces-note"),
         Some(11.0),
     );
     ui.add_space(6.0);
 
     if workspaces.is_empty() {
-        super::note_at(ui, "No workspaces saved yet.", Some(11.0));
+        super::note_at(ui, &tr!("settings-ui-workspaces-none"), Some(11.0));
     }
     let mut apply: Option<usize> = None;
     let mut delete: Option<usize> = None;
@@ -1221,14 +1016,14 @@ pub(in crate::app) fn workspaces_section(
             let out = ws.slots.iter().filter(|s| s.detached).count();
             let chip =
                 crate::chrome::chip(ui, false, ws.name.as_str()).on_hover_text(if out == 0 {
-                    "Put this arrangement back — every module in the main window".to_string()
+                    tr!("settings-ui-workspace-restore-home").to_string()
                 } else {
-                    format!("Put this arrangement back — {out} module(s) in their own window(s)")
+                    tr!("settings-ui-workspace-restore-out", n = out)
                 });
             if chip.clicked() {
                 apply = Some(i);
             }
-            if crate::chrome::chip(ui, false, "×").on_hover_text("Forget this workspace").clicked()
+            if crate::chrome::chip(ui, false, "×").on_hover_text(tr!("settings-ui-workspace-forget")).clicked()
             {
                 delete = Some(i);
             }
@@ -1240,18 +1035,18 @@ pub(in crate::app) fn workspaces_section(
         crate::chrome::field_sized(
             ui,
             egui::vec2(220.0, 0.0),
-            egui::TextEdit::singleline(name).hint_text("name this arrangement"),
+            egui::TextEdit::singleline(name).hint_text(tr!("settings-ui-workspace-name")),
         );
         let named = !name.trim().is_empty();
         let full = workspaces.len() >= WORKSPACE_MAX;
         let can_save = named && !full;
-        let save = crate::chrome::chip_enabled(ui, can_save, false, "SAVE CURRENT").on_hover_text(
+        let save = crate::chrome::chip_enabled(ui, can_save, false, &tr!("settings-ui-workspace-save")).on_hover_text(
             if full {
-                format!("Ten workspaces is the limit SDRuno keeps; delete one first")
+                tr!("settings-ui-workspace-full")
             } else if named {
-                "Save the arrangement you have now under this name".to_string()
+                tr!("settings-ui-workspace-save-hint").to_string()
             } else {
-                "Type a name first".to_string()
+                tr!("settings-ui-workspace-name-first").to_string()
             },
         );
         if save.clicked() {
@@ -1272,6 +1067,54 @@ pub(in crate::app) fn workspaces_section(
     }
     if let Some(i) = apply {
         workspaces[i].apply(cfg);
+    }
+}
+
+/// A detachable module's name in the settings rows, in the interface language.
+fn module_label(m: sdroxide_types::DetachableModule) -> String {
+    use sdroxide_types::DetachableModule as M;
+    match m {
+        M::Panadapter => tr!("settings-ui-module-panadapter"),
+        M::Panel => tr!("multi-module-panel"),
+        M::Controls => tr!("settings-ui-module-controls"),
+        M::AuxPanadapter => tr!("settings-ui-module-aux"),
+        M::BandMenu => tr!("settings-ui-module-band-menu"),
+        M::Rotor => tr!("multi-module-rotor"),
+    }
+}
+
+fn broadcast_scope_label(s: sdroxide_types::BroadcastScope) -> String {
+    match s {
+        sdroxide_types::BroadcastScope::InView => tr!("settings-ui-broadcast-scope-in-view"),
+        sdroxide_types::BroadcastScope::WholeBand => tr!("settings-ui-whole-band"),
+    }
+}
+
+fn fill_style_label(s: sdroxide_types::SpectrumFillStyle) -> String {
+    use sdroxide_types::SpectrumFillStyle as F;
+    match s {
+        F::Fixed => tr!("settings-ui-fill-fixed"),
+        F::Gradient => tr!("settings-ui-fill-gradient"),
+        F::Mixed => tr!("settings-ui-fill-mixed"),
+    }
+}
+
+fn spot_kind_label(k: SpotKind) -> String {
+    match k {
+        SpotKind::HeardMe => tr!("settings-ui-spot-kind-heard-me"),
+        other => other.label().to_string(),
+    }
+}
+
+fn wake_label(s: crate::wake_lock::WakeStatus) -> String {
+    use crate::wake_lock::WakeStatus as W;
+    match s {
+        W::Off => String::new(),
+        W::Held => tr!("settings-ui-wake-held"),
+        W::Asking => tr!("settings-ui-wake-asking"),
+        W::Unsupported => tr!("settings-ui-wake-unsupported"),
+        W::Refused => tr!("settings-ui-wake-refused"),
+        W::Native => tr!("settings-ui-wake-native"),
     }
 }
 

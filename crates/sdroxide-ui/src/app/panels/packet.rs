@@ -264,7 +264,7 @@ impl SdroxideApp {
                         ui,
                         egui::TextEdit::singleline(&mut self.packet_target)
                             .desired_width(84.0)
-                            .hint_text("callsign"),
+                            .hint_text(tr!("packet-callsign-hint")),
                     );
                     if resp.changed() {
                         self.packet_target = self.packet_target.to_uppercase();
@@ -274,7 +274,7 @@ impl SdroxideApp {
                         ui,
                         egui::TextEdit::singleline(&mut self.packet_via)
                             .desired_width(120.0)
-                            .hint_text("via"),
+                            .hint_text(tr!("packet-via-hint")),
                     )
                     .on_hover_text(
                         tr!("packet-digipeaters-nearest-first-separated-commas"),
@@ -291,7 +291,7 @@ impl SdroxideApp {
                         crate::chrome::chip_accent(
                             ui,
                             false,
-                            RichText::new(" DISCONNECT ").strong(),
+                            RichText::new(tr!("packet-disconnect")).strong(),
                             theme::ALERT(),
                             theme::INK_ON_CYAN(),
                         )
@@ -307,7 +307,7 @@ impl SdroxideApp {
                     crate::chrome::chip_accent(
                         ui,
                         false,
-                        RichText::new(" CONNECT ").strong(),
+                        RichText::new(tr!("packet-connect")).strong(),
                         theme::GREEN(),
                         theme::INK_ON_CYAN(),
                     )
@@ -327,7 +327,7 @@ impl SdroxideApp {
                 }
 
                 crate::chrome::row_tail(ui, |ui| {
-                    if crate::chrome::chip(ui, false, RichText::new(" CLEAR ").size(10.5))
+                    if crate::chrome::chip(ui, false, RichText::new(tr!("packet-clear")).size(10.5))
                         .on_hover_text(
                             tr!("packet-empty-transcript-link-untouched-connected"),
                         )
@@ -401,7 +401,7 @@ impl SdroxideApp {
                     crate::chrome::chip_accent(
                         ui,
                         false,
-                        RichText::new(" SEND ").size(10.0).strong(),
+                        RichText::new(tr!("packet-send")).size(10.0).strong(),
                         theme::GREEN(),
                         theme::INK_ON_CYAN(),
                     )

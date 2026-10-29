@@ -137,13 +137,13 @@ pub(in crate::app) fn worked_before_line(
     if novelty.new_dxcc {
         (tr!("widgets-new-entity-never-worked-any").to_string(), crate::theme::PINK())
     } else if novelty.new_dxcc_band {
-        (format!("New entity on {band_label}"), crate::theme::YELLOW())
+        (tr!("widgets-new-entity", band_label = band_label), crate::theme::YELLOW())
     } else if novelty.new_grid {
         (tr!("widgets-new-grid-square").to_string(), crate::theme::CYAN())
     } else if novelty.new_call {
         (tr!("widgets-not-worked-before").to_string(), crate::theme::CYAN_DIM())
     } else if novelty.dupe {
-        (format!("Worked before on {band_label}"), crate::theme::gray(130))
+        (tr!("widgets-worked-before", band_label = band_label), crate::theme::gray(130))
     } else if band.is_empty() {
         // No ADIF band for this one, so "not on this band" is a question with no
         // answer — and on 11 m it is a nonsense one, since a CB callsign exists
@@ -151,7 +151,7 @@ pub(in crate::app) fn worked_before_line(
         // been worked on. ADIF has no 11 m enumeration (`adif_band` returns ""
         // for 24.99–28.0 MHz on purpose), which is also why a worked-before CB
         // station could never reach the dupe branch above.
-        ("Worked before".to_string(), crate::theme::gray(150))
+        (tr!("widgets-worked-before-any"), crate::theme::gray(150))
     } else {
         (tr!("widgets-worked-before-but-not-band").to_string(), crate::theme::gray(150))
     }

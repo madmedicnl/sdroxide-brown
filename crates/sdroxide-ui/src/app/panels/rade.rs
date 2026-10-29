@@ -83,7 +83,7 @@ impl SdroxideApp {
                 } else if rade.sync {
                     tr!("rade-sync")
                 } else {
-                    String::from("searching")
+                    tr!("rade-searching")
                 })
                 .size(12.0)
                 .strong()

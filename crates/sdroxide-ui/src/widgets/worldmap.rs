@@ -1113,7 +1113,7 @@ pub fn show(
                 s.call,
                 s.freq_hz / 1e6,
                 if s.mode.trim().is_empty() { String::new() } else { format!("{} · ", s.mode) },
-                s.snr_db.map(|d| format!("{d:+} dB")).unwrap_or_else(|| "no SNR".into()),
+                s.snr_db.map(|d| format!("{d:+} dB")).unwrap_or_else(|| tr!("worldmap-no-snr")),
             ));
         }
         // Draw the liaison (path) from home to each reporter that heard us,

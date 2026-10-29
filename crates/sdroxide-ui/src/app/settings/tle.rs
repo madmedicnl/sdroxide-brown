@@ -88,7 +88,7 @@ fn settings_tle_subscriptions(ui: &mut egui::Ui, io: &mut SettingsIo) {
                     ui,
                     egui::TextEdit::singleline(&mut sub.name)
                         .desired_width(120.0)
-                        .hint_text("name"),
+                        .hint_text(tr!("settings-name")),
                 );
                 crate::chrome::field(
                     ui,
@@ -234,7 +234,7 @@ fn settings_tle_pasted(ui: &mut egui::Ui, io: &mut SettingsIo) {
                     .on_hover_text(tr!("settings-tle-track-one"));
                 crate::chrome::field(
                     ui,
-                    egui::TextEdit::singleline(&mut t.name).desired_width(180.0).hint_text("name"),
+                    egui::TextEdit::singleline(&mut t.name).desired_width(180.0).hint_text(tr!("settings-name")),
                 );
                 match t.problem() {
                     Some(p) => {
@@ -406,7 +406,7 @@ fn settings_tle_freqs(ui: &mut egui::Ui, io: &mut SettingsIo) {
                 );
                 crate::chrome::field(
                     ui,
-                    egui::TextEdit::singleline(&mut f.name).desired_width(180.0).hint_text("name"),
+                    egui::TextEdit::singleline(&mut f.name).desired_width(180.0).hint_text(tr!("settings-name")),
                 );
                 ui.label(
                     RichText::new(tr!("settings-tle-links", n = f.links.len()))
@@ -510,7 +510,7 @@ fn settings_tle_freqs(ui: &mut egui::Ui, io: &mut SettingsIo) {
             ui,
             egui::TextEdit::singleline(&mut io.sat_ui.new_freq_name)
                 .desired_width(160.0)
-                .hint_text("name"),
+                .hint_text(tr!("settings-name")),
         );
         if ui.button(tr!("settings-tle-satellite")).clicked() {
             match io.sat_ui.new_freq_id.trim().parse::<u64>() {

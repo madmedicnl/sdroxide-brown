@@ -122,7 +122,9 @@ use self::settings::{SatEditState, SettingsTab, TestOutcome};
 /// Every operating panel has one, and a disabled button with no explanation
 /// reads as a broken one — the reason it is dead is a property of the radio,
 /// not of the panel, so it is worded once here rather than per mode.
-const RX_ONLY_HINT: &str = "This radio can only receive — it has no transmitter to key.";
+fn rx_only_hint_text() -> String {
+    tr!("app-rx-only-hint")
+}
 
 /// How long after a connection drops the first redial goes out, in seconds.
 /// Short enough that a station restarting is a blink; long enough that the
@@ -134,7 +136,7 @@ pub(in crate::app) const RETRY_MIN_S: f64 = 1.0;
 /// radio back within half a minute of it coming up.
 pub(in crate::app) const RETRY_MAX_S: f64 = 30.0;
 
-/// Attach [`RX_ONLY_HINT`] to a control greyed *because* this radio cannot
+/// Attach [`rx_only_hint_text`] to a control greyed *because* this radio cannot
 /// transmit.
 ///
 /// Only then: several of these controls are also greyed for reasons of their
@@ -142,7 +144,7 @@ pub(in crate::app) const RETRY_MAX_S: f64 = 30.0;
 /// and naming the receiver there would be the wrong answer to "why can't I
 /// press this". `tx_ok` is [`SdroxideApp::tx_capable`] at the call site.
 pub(in crate::app) fn rx_only_hint(resp: egui::Response, tx_ok: bool) -> egui::Response {
-    if tx_ok { resp } else { resp.on_disabled_hover_text(RX_ONLY_HINT) }
+    if tx_ok { resp } else { resp.on_disabled_hover_text(rx_only_hint_text()) }
 }
 
 /// Draw a control that puts this station on the air: as `add` draws it on a
@@ -151,7 +153,7 @@ pub(in crate::app) fn rx_only_hint(resp: egui::Response, tx_ok: bool) -> egui::R
 ///
 /// For the controls whose only condition is that there *is* a transmitter. One
 /// that is also greyed for a reason of its own keeps its own
-/// `add_enabled_ui` and passes the response through [`rx_only_hint`], so the
+/// `add_enabled_ui` and passes the response through [`rx_only_hint_text`], so the
 /// two reasons do not end up wearing each other's explanation.
 pub(in crate::app) fn tx_gated(
     ui: &mut egui::Ui,

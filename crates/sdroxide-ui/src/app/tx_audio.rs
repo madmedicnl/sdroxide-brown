@@ -349,9 +349,9 @@ fn header(
             cmds.push(Command::TxVoiceTestPlay(!playing));
         }
         let what = match test {
-            TxVoiceTest::Recording => tr!("txaudio-recording").to_string(),
+            TxVoiceTest::Recording => tr!("txaudio-recording"),
             _ if test_len > 0.0 => tr!("txaudio-phrase-length", secs = format!("{test_len:.1}")),
-            _ => tr!("txaudio-no-phrase-yet").to_string(),
+            _ => tr!("txaudio-no-phrase-yet"),
         };
         ui.label(RichText::new(what).weak().size(11.5));
 
@@ -427,7 +427,7 @@ fn level_row(
                 cmds.push(Command::TxVoiceTestLive(TxVoiceLive::Off));
             }
             st.level_note = Some(if lost {
-                tr!("txaudio-auto-set-stopped-microphone-was").to_string()
+                tr!("txaudio-auto-set-stopped-microphone-was")
             } else {
                 match auto_level(&a.peaks, v.input_gain_db) {
                     Ok((gain, loud)) => {
@@ -491,7 +491,7 @@ fn level_row(
                     secs = format!("{:.0}", (AUTO_LEVEL_S - (now - a.started)).max(0.0).ceil())
                 )
             }
-            None => tr!("txaudio-auto-set").to_string(),
+            None => tr!("txaudio-auto-set"),
         };
         let b = ui.add_enabled(!transmitting || measuring, egui::Button::new(label)).on_hover_text(
             tr!(
@@ -527,7 +527,7 @@ fn level_row(
 /// The Mic control's 0..=1 as the gain it applies: 50 % is unity, the top +6 dB.
 fn mic_gain_text(x: f32) -> String {
     if x <= 0.001 {
-        tr!("txaudio-db").to_string()
+        tr!("txaudio-db")
     } else {
         format!("{:+.1} dB", 20.0 * (2.0 * x).log10())
     }
@@ -1315,7 +1315,7 @@ fn meter_strip(ui: &mut egui::Ui, v: &TxVoiceState, m: TxVoiceMeters) {
         ui.add_space(16.0);
         ui.vertical(|ui| {
             let gr = |on: bool, g: f32| {
-                if on { format!("{g:5.1}") } else { tr!("txaudio-off").to_string() }
+                if on { format!("{g:5.1}") } else { tr!("txaudio-off") }
             };
             ui.label(
                 RichText::new(tr!(
@@ -1339,9 +1339,9 @@ fn meter_strip(ui: &mut egui::Ui, v: &TxVoiceState, m: TxVoiceMeters) {
 
 /// One built-in starting point.
 struct Preset {
-    name: &'static str,
+    name: String,
     /// What it is for, for the button's hover.
-    about: &'static str,
+    about: String,
     voice: TxVoiceState,
 }
 
@@ -1559,53 +1559,43 @@ fn starting_points() -> Vec<Preset> {
     };
     vec![
         Preset {
-            name: "Natural",
-            about: "Ragchews and local contacts: the denoiser, a gentle expander in the pauses, \
-                    light compression. Sounds like you, minus the room.",
+            name: tr!("txaudio-natural"),
+            about: tr!("txaudio-ragchews-and-local-contacts-the"),
             voice: natural,
         },
         Preset {
-            name: "SSB everyday",
-            about: "Everyday SSB: 100 Hz – 2.9 kHz, a little presence around 2 kHz, \
-                    moderate compression.",
+            name: tr!("txaudio-ssb-everyday"),
+            about: tr!("txaudio-everyday-ssb-100-hz-2-9-khz-a"),
             voice: ssb,
         },
         Preset {
-            name: "SSB punch / DX",
-            about: "Weak signals and pileups: a narrow 300 Hz – 2.7 kHz voice with a strong \
-                    presence lift, driven into a fast compressor with the phase rotator, for \
-                    the most talk power the transmitter has. Not hi-fi.",
+            name: tr!("txaudio-ssb-punch-dx"),
+            about: tr!("txaudio-weak-signals-and-pileups-a-narrow"),
             voice: punch,
         },
         Preset {
-            name: "Contest",
-            about: "SSB punch for hours in a noisy station: the denoiser and a hard gate keep \
-                    fans and the next operator out of your pauses, and the compressor works \
-                    harder still.",
+            name: tr!("setup-contest"),
+            about: tr!("txaudio-ssb-punch-for-hours-in-a-noisy"),
             voice: contest,
         },
         Preset {
-            name: "ESSB / hi-fi",
-            about: "Wide SSB or AM: 50 Hz – 4 kHz with the low end kept, gentle compression \
-                    and a de-esser. Needs a transmit filter that wide — and a quiet band.",
+            name: tr!("txaudio-essb-hi-fi"),
+            about: tr!("txaudio-wide-ssb-or-am-50-hz-4-khz-with"),
             voice: essb,
         },
         Preset {
-            name: "FM / repeater",
-            about: "FM: a steep 300 Hz high-pass keeps the voice clear of the CTCSS tone, the \
-                    top stops at 3 kHz for the channel, and the limiter holds deviation.",
+            name: tr!("txaudio-fm-repeater"),
+            about: tr!("txaudio-fm-a-steep-300-hz-high-pass-keeps"),
             voice: fm,
         },
         Preset {
-            name: "Mobile / noisy shack",
-            about: "Fans, engine, traffic: the denoiser, a steep high-pass at 150 Hz and a hard \
-                    gate, with enough compression to sit above what is left.",
+            name: tr!("txaudio-mobile-noisy-shack"),
+            about: tr!("txaudio-fans-engine-traffic-the-denoiser-a"),
             voice: mobile,
         },
         Preset {
-            name: "Digital voice",
-            about: "FreeDV / RADE: the denoiser and gentle levelling only, no EQ — the vocoder \
-                    prefers natural speech. Turns DIGITAL VOICE on.",
+            name: tr!("txaudio-digital-voice-2"),
+            about: tr!("txaudio-freedv-rade-the-denoiser-and"),
             voice: digital,
         },
     ]
@@ -1633,7 +1623,7 @@ fn pick_up_import(ui: &mut TxAudioUi) {
             Ok(mut p) => {
                 p.voice = p.voice.clamped();
                 if p.name.trim().is_empty() {
-                    p.name = "Imported".into();
+                    p.name = tr!("txaudio-imported-2").into();
                 }
                 let name = p.name.clone();
                 match ui.profiles.iter().position(|q| q.name == p.name) {
@@ -1722,7 +1712,7 @@ fn profiles_page(ui: &mut egui::Ui, st: &mut TxAudioUi, v: &mut TxVoiceState) {
     ui.label(RichText::new(tr!("txaudio-set-your-level-auto-set")).weak().size(11.0));
     ui.horizontal_wrapped(|ui| {
         for p in starting_points() {
-            if ui.button(p.name).on_hover_text(p.about).clicked() {
+            if ui.button(&p.name).on_hover_text(&p.about).clicked() {
                 preset = Some(p.voice);
                 st.note = Some(tr!("txaudio-loaded-preset", name = p.name.to_string()));
             }

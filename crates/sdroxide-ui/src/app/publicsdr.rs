@@ -58,7 +58,7 @@ fn entry_row(
 ) -> Option<PickAction> {
     let blocked = e
         .blocked_reason()
-        .or_else(|| dead.then(|| "could not connect this session".to_string()));
+        .or_else(|| dead.then(|| tr!("publicsdr-could-not-connect")));
     let mut action = None;
     let dim = crate::theme::gray(if blocked.is_some() { 100 } else { 170 });
     let net_col = match e.network {
@@ -192,7 +192,7 @@ fn entry_row(
                             {
                                 action = Some(PickAction::NewRadio);
                             }
-                            if crate::chrome::chip(ui, false, "USE")
+                            if crate::chrome::chip(ui, false, tr!("publicsdr-use-chip"))
                                 .on_hover_text(tr!(
                                     "publicsdr-point-radio-receiver-replacing-whatever"
                                 ))
@@ -509,10 +509,7 @@ impl SdroxideApp {
                 .collect::<Vec<_>>()
                 .join(" · ");
             ui.label(
-                RichText::new(format!(
-                    "{} receivers · {per_net} · fetched {age} ago",
-                    dir.entries.len(),
-                ))
+                RichText::new(tr!("publicsdr-receivers-fetched-ago", entries = dir.entries.len(), per_net = per_net, age = age))
                 .size(11.0)
                 .color(crate::theme::gray(150)),
             );
@@ -528,10 +525,10 @@ impl SdroxideApp {
             let (text, colour) = match rows.len() {
                 0 => (tr!("publicsdr-no-match").to_string(), crate::theme::ALERT()),
                 n if n > MAX_ROWS => (
-                    format!("showing {shown} of {n} — search to narrow it"),
+                    tr!("publicsdr-showing-search-narrow", shown = shown, n = n),
                     crate::theme::YELLOW(),
                 ),
-                n => (format!("{n} match"), crate::theme::YELLOW()),
+                n => (tr!("publicsdr-match", n = n), crate::theme::YELLOW()),
             };
             ui.label(RichText::new(text).color(colour).size(10.0));
         }

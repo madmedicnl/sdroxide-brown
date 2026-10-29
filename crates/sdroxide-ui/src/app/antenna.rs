@@ -3,6 +3,7 @@
 //! ground plane, loop, Yagi), an on-demand method-of-moments solve of the
 //! presets, and a Yagi optimizer. It lives in the EXTRAS launcher.
 
+use crate::i18n::tr;
 use eframe::egui;
 
 use antenna_model::obstacle::{Obstacle, attenuation_db};
@@ -114,7 +115,7 @@ impl super::SdroxideApp {
             return;
         }
         self.antenna_poll();
-        let show = self.tool_window(ctx, "antenna", "ANTENNA", [420.0, 720.0], true, |me, ui| {
+        let show = self.tool_window(ctx, "antenna", &tr!("antenna-antenna"), [420.0, 720.0], true, |me, ui| {
             me.antenna_body(ui);
         });
         self.show_antenna = show;
@@ -134,13 +135,13 @@ impl super::SdroxideApp {
 
     fn antenna_body(&mut self, ui: &mut egui::Ui) {
         crate::chrome::window_body_bg(ui);
-        crate::chrome::menu_caption(ui, "Cutting lengths");
+        crate::chrome::menu_caption(ui, &tr!("antenna-cutting-lengths"));
         ui.horizontal(|ui| {
-            ui.label("Frequency");
+            ui.label(tr!("speech-cat-frequency"));
             let mut mhz = self.antenna_freq_mhz;
             if ui
                 .add(egui::DragValue::new(&mut mhz).speed(0.05).range(0.05..=3000.0))
-                .on_hover_text("The frequency to cut for")
+                .on_hover_text(tr!("antenna-the-frequency-to-cut-for"))
                 .changed()
             {
                 self.antenna_freq_mhz = mhz;
@@ -154,16 +155,15 @@ impl super::SdroxideApp {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.horizontal(|ui| {
                 if ui
-                    .button("Solve impedance and gain")
+                    .button(tr!("antenna-solve-impedance-and-gain"))
                     .on_hover_text(
-                        "Run the method-of-moments solver on the presets — the real feed \
-                         impedance, SWR and gain. Takes a few seconds.",
+                        tr!("antenna-run-the-method-of-moments-solver"),
                     )
                     .clicked()
                 {
                     self.antenna_solve();
                 }
-                ui.label("Yagi stack");
+                ui.label(tr!("antenna-yagi-stack"));
                 for n in [1, 2, 4] {
                     let sel = self.antenna_stack == n;
                     if ui.selectable_label(sel, format!("{n}×")).clicked() {
@@ -174,7 +174,7 @@ impl super::SdroxideApp {
             });
 
             ui.horizontal(|ui| {
-                ui.label("Optimize Yagi for");
+                ui.label(tr!("antenna-optimize-yagi-for"));
                 for obj in Objective::ALL {
                     let sel = self.antenna_objective == obj;
                     if ui.selectable_label(sel, obj.label()).clicked() {
@@ -187,13 +187,11 @@ impl super::SdroxideApp {
             #[cfg(target_arch = "wasm32")]
             let optimizing = false;
             if optimizing {
-                ui.label(egui::RichText::new("Optimizing…").italics());
+                ui.label(egui::RichText::new(tr!("antenna-optimizing")).italics());
             } else if ui
-                .button("Optimize Yagi")
+                .button(tr!("antenna-optimize-yagi"))
                 .on_hover_text(
-                    "Tune the Yagi's element lengths and gaps against the chosen \
-                     objective. A local hill-climb on a background thread; the \
-                     window stays usable while it runs.",
+                    tr!("antenna-tune-the-yagi-s-element-lengths"),
                 )
                 .clicked()
             {
@@ -215,7 +213,7 @@ impl super::SdroxideApp {
                     }
                     if let Some((r, x)) = d.feed_z {
                         ui.horizontal(|ui| {
-                            ui.label(format!("feed ≈ {r:.0} Ω"));
+                            ui.label(tr!("antenna-feed-ohms", r = format!("{r:.0}")));
                             ui.add_space(8.0);
                             ui.monospace(format!("SWR {:.2}", antenna_model::swr_50(r, x)));
                         });
@@ -226,7 +224,7 @@ impl super::SdroxideApp {
 
             if let Some(rows) = &self.antenna_solved {
                 ui.separator();
-                crate::chrome::menu_caption(ui, "Solved");
+                crate::chrome::menu_caption(ui, &tr!("antenna-solved"));
                 for row in rows {
                     ui.group(|ui| {
                         ui.label(egui::RichText::new(&row.name).strong());
@@ -238,7 +236,7 @@ impl super::SdroxideApp {
                             ui.monospace(format!("{:.1} dBi", row.gain));
                             ui.add_space(8.0);
                             ui.monospace(
-                                egui::RichText::new(format!("takeoff {:.0}°", row.takeoff)).weak(),
+                                egui::RichText::new(tr!("antenna-takeoff", deg = format!("{:.0}", row.takeoff))).weak(),
                             );
                         });
                     });
@@ -248,7 +246,7 @@ impl super::SdroxideApp {
 
             if !self.antenna_patterns.is_empty() {
                 ui.separator();
-                crate::chrome::menu_caption(ui, "Azimuth pattern");
+                crate::chrome::menu_caption(ui, &tr!("antenna-azimuth-pattern"));
                 let mut sel = self.antenna_pattern_sel;
                 let names: Vec<&str> =
                     self.antenna_patterns.iter().map(|(n, _)| n.as_str()).collect();
@@ -264,14 +262,14 @@ impl super::SdroxideApp {
                     pattern_plot(ui, name, cut);
                 }
                 if let Some((verts, nt, np)) = self.antenna_surfaces.get(self.antenna_pattern_sel) {
-                    ui.small("3D — drag to rotate");
+                    ui.small(tr!("antenna-3d-drag-to-rotate"));
                     surface_plot(ui, verts, *nt, *np, &mut self.antenna_yaw, &mut self.antenna_pitch);
                 }
             }
 
             if let Some((a, score)) = &self.antenna_optimized {
                 ui.separator();
-                crate::chrome::menu_caption(ui, "Optimized Yagi");
+                crate::chrome::menu_caption(ui, &tr!("antenna-optimized-yagi"));
                 ui.label(format!(
                     "{}: {}",
                     self.antenna_objective.label(),
@@ -282,16 +280,16 @@ impl super::SdroxideApp {
                     let len = (w.to[0] - w.from[0]).abs();
                     let gap = if i == 0 { 0.0 } else { w.from[1] - y };
                     let label = match i {
-                        0 => "reflector".to_string(),
-                        1 => "driven".to_string(),
-                        n => format!("director {}", n - 1),
+                        0 => tr!("antenna-reflector"),
+                        1 => tr!("antenna-driven"),
+                        n => tr!("antenna-director", n = n - 1),
                     };
                     ui.horizontal(|ui| {
                         ui.label(label);
                         ui.add_space(8.0);
                         ui.monospace(format!("{len:.2} m"));
                         if i > 0 {
-                            ui.monospace(egui::RichText::new(format!("  gap {gap:.2} m")).weak());
+                            ui.monospace(egui::RichText::new(format!("  {}", tr!("antenna-gap", v = format!("{gap:.2}")))).weak());
                         }
                     });
                     y = w.from[1];
@@ -301,17 +299,17 @@ impl super::SdroxideApp {
             // Obstacles: a coarse, labelled attenuation model (vegetation and
             // knife-edge), not a terrain solver.
             ui.separator();
-            crate::chrome::menu_caption(ui, "Obstacles (approximate)");
+            crate::chrome::menu_caption(ui, &tr!("antenna-obstacles-approximate"));
             let mut obstacles: Vec<Obstacle> = Vec::new();
             ui.horizontal(|ui| {
                 let mut on = self.antenna_trees.is_some();
-                if ui.checkbox(&mut on, "Trees").changed() {
+                if ui.checkbox(&mut on, tr!("antenna-trees")).changed() {
                     self.antenna_trees = if on { Some((0.0, 40.0, true)) } else { None };
                 }
                 if let Some((az, depth, leaf)) = &mut self.antenna_trees {
-                    ui.add(egui::DragValue::new(az).speed(1.0).range(0.0..=359.0).prefix("az "));
-                    ui.add(egui::DragValue::new(depth).speed(1.0).range(0.0..=400.0).prefix("depth "));
-                    ui.checkbox(leaf, "in leaf");
+                    ui.add(egui::DragValue::new(az).speed(1.0).range(0.0..=359.0).prefix(format!("{} ", tr!("antenna-az"))));
+                    ui.add(egui::DragValue::new(depth).speed(1.0).range(0.0..=400.0).prefix(format!("{} ", tr!("antenna-depth"))));
+                    ui.checkbox(leaf, tr!("antenna-in-leaf"));
                 }
             });
             if let Some((az, depth, leaf)) = self.antenna_trees {
@@ -325,12 +323,12 @@ impl super::SdroxideApp {
             }
             ui.horizontal(|ui| {
                 let mut on = self.antenna_ridge.is_some();
-                if ui.checkbox(&mut on, "Ridge").changed() {
+                if ui.checkbox(&mut on, tr!("antenna-ridge")).changed() {
                     self.antenna_ridge = if on { Some((0.0, 50.0)) } else { None };
                 }
                 if let Some((az, height)) = &mut self.antenna_ridge {
-                    ui.add(egui::DragValue::new(az).speed(1.0).range(0.0..=359.0).prefix("az "));
-                    ui.add(egui::DragValue::new(height).speed(1.0).range(0.0..=500.0).prefix("height "));
+                    ui.add(egui::DragValue::new(az).speed(1.0).range(0.0..=359.0).prefix(format!("{} ", tr!("antenna-az"))));
+                    ui.add(egui::DragValue::new(height).speed(1.0).range(0.0..=500.0).prefix(format!("{} ", tr!("antenna-height"))));
                 }
             });
             if let Some((az, height)) = self.antenna_ridge {
@@ -343,7 +341,7 @@ impl super::SdroxideApp {
             }
             if !obstacles.is_empty() {
                 let att = attenuation_db(&obstacles, 0.0, self.antenna_freq_mhz * 1e6);
-                ui.label(format!("attenuation on the 0° bearing: {att:.1} dB"));
+                ui.label(tr!("antenna-attenuation", att = format!("{att:.1}")));
             }
         });
     }

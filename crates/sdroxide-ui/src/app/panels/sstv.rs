@@ -920,18 +920,11 @@ impl SdroxideApp {
                                 // the decoder listens.
                                 ui.add_enabled_ui(self.digi_cfg_seeded, |ui| {
                                     let keep = self.digi_cfg_edit.sstv_keep_dial;
-                                    if crate::chrome::chip(ui, keep, "KEEP DIAL")
+                                    if crate::chrome::chip(ui, keep, tr!("sstv-keep-dial"))
                                         .on_hover_text(if keep {
-                                            "On: choosing SSTV leaves the dial where you tuned, \
-                                             so the decoder works on any frequency. The published \
-                                             SSTV frequencies are still in the ⇵ picker. Click to \
-                                             go back to landing on the band's SSTV frequency."
+                                            tr!("sstv-keep-dial-on-hint")
                                         } else {
-                                            "Off: choosing SSTV moves the dial onto the band's \
-                                             SSTV frequency when you are more than 3 kHz from \
-                                             one. Click to keep the dial where you tuned instead, \
-                                             and decode SSTV on any frequency. Tuning after \
-                                             choosing SSTV is never undone either way."
+                                            tr!("sstv-keep-dial-off-hint")
                                         })
                                         .clicked()
                                     {
@@ -940,7 +933,7 @@ impl SdroxideApp {
                                     }
                                 });
                                 let auto_label = if self.sstv.auto {
-                                    format!("Auto ({})", self.sstv.tx_mode.label())
+                                    tr!("sstv-auto-mode", mode = self.sstv.tx_mode.label())
                                 } else {
                                     tr!("sstv-auto").to_string()
                                 };
@@ -994,7 +987,7 @@ impl SdroxideApp {
                                     // signal and the receiver looks broken
                                     // (issue #421).
                                     ui.label(
-                                        RichText::new(format!("{bad} — not decoded"))
+                                        RichText::new(tr!("sstv-not-decoded", what = bad))
                                             .size(10.5)
                                             .strong()
                                             .color(crate::theme::ALERT()),
@@ -1004,7 +997,7 @@ impl SdroxideApp {
                                     );
                                 } else if let Some(m) = st.detected {
                                     ui.label(
-                                        RichText::new(format!("last: {}", m.label()))
+                                        RichText::new(tr!("sstv-last", mode = m.label()))
                                             .size(10.0)
                                             .weak(),
                                     );
@@ -1148,9 +1141,7 @@ impl SdroxideApp {
                             // pair keeps them together and wraps.
                             ui.horizontal_wrapped(|ui| {
                                 if crate::chrome::chip(ui, false, tr!("sstv-restart-rx"))
-                                    .on_hover_text(
-                                        "Abandon the picture being received and listen for the                                          next header. For a transmission that started decoding                                          in the wrong mode — the receiver is otherwise committed                                          until that mode runs out.",
-                                    )
+                                    .on_hover_text(tr!("sstv-abandon-picture-being-received-listen"))
                                     .clicked()
                                 {
                                     cmds.push(Command::SstvRestartRx);
@@ -1163,12 +1154,8 @@ impl SdroxideApp {
                                 // still on screen is wiped so the next one can be
                                 // seen arriving, and an in-progress decode keeps
                                 // running (use Restart RX to abandon it).
-                                if crate::chrome::chip(ui, false, "Clear Rx")
-                                    .on_hover_text(
-                                        "Clear the picture currently shown in the LIVE view. \
-                                         The decoder keeps running — use Restart RX to abandon \
-                                         an in-progress picture and listen for the next header.",
-                                    )
+                                if crate::chrome::chip(ui, false, tr!("sstv-clear-rx"))
+                                    .on_hover_text(tr!("sstv-clear-rx-hint"))
                                     .clicked()
                                 {
                                     self.sstv.rx_color = None;
@@ -1185,7 +1172,7 @@ impl SdroxideApp {
                             // 681"*. Its own wrapped row and a capped slider is
                             // what keeps it inside the column at every width.
                             ui.horizontal_wrapped(|ui| {
-                                ui.label(RichText::new("Sensitivity").size(10.0).weak());
+                                ui.label(RichText::new(tr!("panels-sensitivity")).size(10.0).weak());
                                 {
                                     let mut v = self.digi_cfg_edit.sstv_rx_sensitivity;
                                     ui.spacing_mut().slider_width = 90.0;
@@ -1193,12 +1180,7 @@ impl SdroxideApp {
                                         ui,
                                         egui::Slider::new(&mut v, -5..=5).fixed_decimals(0),
                                     )
-                                    .on_hover_text(
-                                        "Adjusts the signal level fed to the SSTV decoder. \
-                                         0 = current automatic level (Auto). Negative values \
-                                         attenuate, positive values boost. Click Auto to return \
-                                         to the automatic level.",
-                                    );
+                                    .on_hover_text(tr!("sstv-sensitivity-hint"));
                                     if resp.changed() {
                                         self.digi_cfg_edit.sstv_rx_sensitivity = v;
                                         self.digi_cfg_edit.sstv_rx_auto = v == 0;
@@ -1210,10 +1192,7 @@ impl SdroxideApp {
                                     self.digi_cfg_edit.sstv_rx_auto,
                                     tr!("sstv-auto"),
                                 )
-                                .on_hover_text(
-                                    "Returns to the automatic level (reference 0) and \
-                                     disables manual adjustment. Highlighted while active.",
-                                )
+                                .on_hover_text(tr!("sstv-auto-level-hint"))
                                 .clicked()
                                 {
                                     self.digi_cfg_edit.sstv_rx_auto = true;
@@ -1270,7 +1249,7 @@ impl SdroxideApp {
                                         // was the case: no audio at all, wrong
                                         // level, or a signal we cannot read all
                                         // look identical from in here.
-                                        "audio present · no SSTV header yet".to_string()
+                                        tr!("sstv-audio-present-no-header")
                                     } else {
                                         tr!("sstv-no-low-audio")
                                     };
@@ -1301,9 +1280,9 @@ impl SdroxideApp {
                                 } else if self.sstv.dir.is_empty() {
                                     tr!("sstv-decoded-pictures-collect-here").to_string()
                                 } else {
-                                    format!(
-                                        "Decoded pictures are saved {} and collect here.",
-                                        self.store_where(&self.sstv.dir),
+                                    tr!(
+                                        "sstv-saved-where",
+                                        place = self.store_where(&self.sstv.dir)
                                     )
                                 };
                                 ui.label(RichText::new(msg).size(11.0).weak());
@@ -1359,7 +1338,7 @@ impl SdroxideApp {
                                     if older > 0 && self.sstv.received.len() >= GALLERY_MAX {
                                         ui.add_space(4.0);
                                         ui.label(
-                                            RichText::new(format!("{older} older in the store"))
+                                            RichText::new(tr!("sstv-older-in-store", n = older))
                                                 .size(9.5)
                                                 .weak(),
                                         );
@@ -1368,7 +1347,7 @@ impl SdroxideApp {
                                         let label = if self.sstv.page_pending {
                                             tr!("sstv-loading").to_string()
                                         } else {
-                                            format!("{older} older — load more")
+                                            tr!("sstv-older-load-more", n = older)
                                         };
                                         if crate::chrome::chip(ui, false, label).clicked()
                                             && !self.sstv.page_pending
@@ -1398,7 +1377,7 @@ impl SdroxideApp {
             // ── RIGHT: transmit compositor, full height ──
             if !self.swl_mode() && pane.is_none_or(|p| p != 0) {
             ui.allocate_ui(egui::vec2(tx_w, full_h), |ui| {
-                sstv_section(ui, "TRANSMIT", egui::vec2(tx_w, full_h), |ui| {
+                sstv_section(ui, &tr!("sstv-transmit"), egui::vec2(tx_w, full_h), |ui| {
                     // The compositor is a fixed stack — the five slots, the
                     // load buttons, the preview, the message box and the
                     // transmit controls — and none of it can be dropped
@@ -1533,11 +1512,8 @@ impl SdroxideApp {
                             // The composer is the fuller answer to the same
                             // need: text you can put anywhere, not just a strip
                             // at an edge.
-                            if crate::chrome::chip(ui, self.sstv.composer_open, "Editor…")
-                                .on_hover_text(
-                                    "Compose the picture itself: movable text, any face, a strip \
-                                     across or down the frame",
-                                )
+                            if crate::chrome::chip(ui, self.sstv.composer_open, tr!("sstv-editor"))
+                                .on_hover_text(tr!("sstv-editor-hint"))
                                 .clicked()
                             {
                                 self.sstv.composer_open = !self.sstv.composer_open;
@@ -1671,7 +1647,7 @@ impl SdroxideApp {
                                     crate::chrome::chip(
                                         ui,
                                         false,
-                                        RichText::new(" ABORT TX ").size(15.0).strong(),
+                                        RichText::new(tr!("sstv-abort-tx")).size(15.0).strong(),
                                     )
                                 })
                                 .inner;
@@ -1806,13 +1782,13 @@ impl SdroxideApp {
                             } else if r.full.is_none() {
                                 ui.label(RichText::new(tr!("sstv-loading-full-size")).size(10.0).weak());
                             } else if savable
-                                && crate::chrome::chip(ui, false, "Save image as…")
+                                && crate::chrome::chip(ui, false, tr!("sstv-save-image-as"))
                                     // Says what it does: it asks where. "Save
                                     // picture…" read as "it has saved one",
                                     // which is exactly how a picture's worth of
                                     // clicks go somewhere unexpected.
                                     .on_hover_text(
-                                        "Save a copy on this computer — it asks which file",
+                                        tr!("sstv-save-copy-asks-file"),
                                     )
                                     .clicked()
                             {
@@ -1839,14 +1815,13 @@ impl SdroxideApp {
                             let qsl_ok = savable;
                             let direct = crate::download::can_share_file();
                             let share_tip = if !qsl_ok {
-                                "The picture is still loading"
+                                tr!("sstv-picture-still-loading")
                             } else if direct {
-                                "Send this picture to someone — WhatsApp, Telegram, or anything \
-                 else on this device"
+                                tr!("sstv-share-hint-direct")
                             } else {
-                                "Save this picture and open a message to send it"
+                                tr!("sstv-share-hint-save")
                             };
-                            let qsl = crate::chrome::chip(ui, false, "Share picture…")
+                            let qsl = crate::chrome::chip(ui, false, tr!("sstv-share-picture"))
                                 .on_hover_text(share_tip);
                             if qsl_ok && qsl.clicked() {
                                 let bytes = self.sstv.full_png.clone();
@@ -1890,16 +1865,13 @@ impl SdroxideApp {
                             // with the reason rather than offered and
                             // refused — the same rule the TX button follows.
                             let reupload_tip = if self.tx_capable() {
-                                format!(
-                                    "Send this picture back out — loads transmit slot {}",
-                                    self.sstv.selected_slot + 1
-                                )
+                                tr!("sstv-reupload-hint", slot = self.sstv.selected_slot + 1)
                             } else {
-                                "This radio cannot transmit".to_string()
+                                tr!("sstv-radio-cannot-transmit")
                             };
                             if savable {
                                 let ru = self.tx_capable();
-                                if crate::chrome::chip(ui, ru, "Re-upload")
+                                if crate::chrome::chip(ui, ru, tr!("sstv-reupload"))
                                     .on_hover_text(reupload_tip)
                                     .clicked()
                                 {
@@ -1938,7 +1910,8 @@ impl SdroxideApp {
                         // carried; SSTV knows none of that, and says nothing.
                         if let Some(m) = &r.entry.rifp {
                             ui.add_space(4.0);
-                            let from = m.sender.as_deref().unwrap_or("unidentified");
+                            let unidentified = tr!("sstv-unidentified");
+                            let from = m.sender.as_deref().unwrap_or(&unidentified);
                             ui.label(
                                 RichText::new(tr!(
                                     "sstv-bit-octets-chunks-first-pass",
@@ -2051,7 +2024,7 @@ impl SdroxideApp {
         // button that opens a composer with nothing in it. Said in the window
         // too, so the limit is visible before anyone is surprised by it.
         let can_attach = !cfg!(target_arch = "wasm32");
-        egui::Window::new("Send this picture")
+        egui::Window::new(tr!("sstv-send-picture"))
             .id(crate::layout::salted_id(ctx, "Send this picture"))
             .open(&mut open)
             .collapsible(false)
@@ -2068,11 +2041,11 @@ impl SdroxideApp {
                     ui.label(RichText::new(note).size(10.0).color(crate::theme::YELLOW()));
                 }
                 ui.add_space(4.0);
-                ui.label(RichText::new("To").size(10.5).strong());
+                ui.label(RichText::new(tr!("sstv-qsl-to")).size(10.5).strong());
                 ui.text_edit_singleline(&mut qsl.to);
-                ui.label(RichText::new("Subject").size(10.5).strong());
+                ui.label(RichText::new(tr!("winlink-subject-2")).size(10.5).strong());
                 ui.text_edit_singleline(&mut qsl.subject);
-                ui.label(RichText::new("Message").size(10.5).strong());
+                ui.label(RichText::new(tr!("sstv-message")).size(10.5).strong());
                 ui.add(
                     egui::TextEdit::multiline(&mut qsl.body)
                         .desired_width(ui.available_width())
@@ -2082,29 +2055,25 @@ impl SdroxideApp {
                 // The exchange, in the order it reads on the card. A QSL
                 // somebody can pin up carries the report and the date; without
                 // these the card is a photograph with a callsign on it.
-                ui.label(RichText::new("The card").size(10.5).strong());
+                ui.label(RichText::new(tr!("sstv-the-card")).size(10.5).strong());
                 ui.label(
-                    RichText::new(
-                        "These go on a printed card beside the picture. Leave any of them \
-                         blank and it is simply not drawn — a card never reports a report \
-                         nobody gave.",
-                    )
+                    RichText::new(tr!("sstv-the-card-hint"))
                     .size(10.0)
                     .weak(),
                 );
                 egui::Grid::new("qsl-exchange").num_columns(2).spacing([12.0, 4.0]).show(
                     ui,
                     |ui| {
-                        ui.label(RichText::new("Date (UTC)").size(10.0));
+                        ui.label(RichText::new(tr!("sstv-date-utc")).size(10.0));
                         ui.text_edit_singleline(&mut qsl.date);
                         ui.end_row();
-                        ui.label(RichText::new("RST sent").size(10.0));
+                        ui.label(RichText::new(tr!("sstv-rst-sent")).size(10.0));
                         ui.text_edit_singleline(&mut qsl.rst_tx);
                         ui.end_row();
-                        ui.label(RichText::new("RST received").size(10.0));
+                        ui.label(RichText::new(tr!("sstv-rst-received")).size(10.0));
                         ui.text_edit_singleline(&mut qsl.rst_rx);
                         ui.end_row();
-                        ui.label(RichText::new("Note").size(10.0));
+                        ui.label(RichText::new(tr!("sstv-qsl-note")).size(10.0));
                         ui.text_edit_singleline(&mut qsl.comment);
                         ui.end_row();
                     },
@@ -2113,26 +2082,20 @@ impl SdroxideApp {
                 let addressed = qsl.to.contains('@') && !qsl.to.contains(char::is_whitespace);
                 if !addressed {
                     ui.label(
-                        RichText::new("Add an address to send this.")
+                        RichText::new(tr!("sstv-add-address"))
                             .size(10.0)
                             .color(crate::theme::YELLOW()),
                     );
                 }
                 if can_attach {
                     ui.label(
-                        RichText::new(
-                            "Saves the picture and opens your mail client — attaching it is \
-                             one click there.",
-                        )
+                        RichText::new(tr!("sstv-saves-opens-mail-hint"))
                         .size(10.0)
                         .weak(),
                     );
                 } else {
                     ui.label(
-                        RichText::new(
-                            "A browser tab cannot attach a file to a message, so this saves the \
-                             picture and opens the message; add the attachment by hand.",
-                        )
+                        RichText::new(tr!("sstv-browser-cannot-attach-hint"))
                         .size(10.0)
                         .weak(),
                     );
@@ -2151,12 +2114,12 @@ impl SdroxideApp {
                     // does more than it says is the same fault as one that does
                     // less — the operator gets a mail window they did not ask
                     // for and cannot account for.
-                    let send_label = "Save picture & open mail";
-                    if crate::chrome::chip(ui, addressed, send_label).clicked() && addressed {
+                    let send_label = tr!("sstv-save-open-mail");
+                    if crate::chrome::chip(ui, addressed, &send_label).clicked() && addressed {
                         send = true;
                         close = true;
                     }
-                    if crate::chrome::chip(ui, false, "Cancel").clicked() {
+                    if crate::chrome::chip(ui, false, tr!("frame-cancel")).clicked() {
                         close = true;
                     }
                 });
@@ -2184,11 +2147,7 @@ impl SdroxideApp {
                 // nothing is lost when there is no mail handler either.
                 ctx.copy_text(body);
                 if !crate::download::open_external(&link) {
-                    self.sstv.qsl_note = Some(
-                        "Picture saved and the message copied — paste it into your mail \
-                         program. No mail handler could be opened."
-                            .into(),
-                    );
+                    self.sstv.qsl_note = Some(tr!("sstv-mail-not-opened"));
                 }
             }
         }
@@ -2436,7 +2395,7 @@ impl SdroxideApp {
         let mut send_now = false;
         let mut new_slot: Option<usize> = None;
         let mut note: Option<String> = None;
-        egui::Window::new("Picture editor")
+        egui::Window::new(tr!("sstv-picture-editor"))
             .id(crate::layout::salted_id(ctx, "Picture editor"))
             .open(&mut open)
             .collapsible(false)
@@ -2453,20 +2412,16 @@ impl SdroxideApp {
                     if crate::chrome::chip(
                         ui,
                         !editing_overlay,
-                        &format!("Slot {}", self.sstv.selected_slot + 1),
+                        &tr!("sstv-slot-n", n = self.sstv.selected_slot + 1),
                     )
-                    .on_hover_text("This transmit slot's own layers")
+                    .on_hover_text(tr!("sstv-slot-layers-hint"))
                     .clicked()
                     {
                         self.sstv.editing_overlay = false;
                         dirty = true;
                     }
-                    if crate::chrome::chip(ui, editing_overlay, "Station overlay")
-                        .on_hover_text(
-                            "One set of layers every slot draws underneath its own — the \
-                             callsign, in the corner you like. Set once, composed with each \
-                             slot's own text rather than replacing it.",
-                        )
+                    if crate::chrome::chip(ui, editing_overlay, tr!("sstv-station-overlay"))
+                        .on_hover_text(tr!("sstv-station-overlay-hint"))
                         .clicked()
                     {
                         self.sstv.editing_overlay = true;
@@ -2476,14 +2431,10 @@ impl SdroxideApp {
                     let mut on = self.sstv.presets.slot(self.sstv.selected_slot).apply_overlay;
                     let resp = ui
                         .add_enabled_ui(!editing_overlay, |ui| {
-                            crate::chrome::checkbox(ui, &mut on, "draw it under this slot")
+                            crate::chrome::checkbox(ui, &mut on, &tr!("sstv-draw-under-slot"))
                         })
                         .inner
-                        .on_hover_text(
-                            "Draw the station overlay under this slot's own layers. Off for a \
-                             picture that already carries the identification — a retransmitted \
-                             mosaic, usually — so it is not stamped twice.",
-                        );
+                        .on_hover_text(tr!("sstv-draw-under-slot-hint"));
                     if resp.changed() {
                         cmds.push(Command::ImageSetOverlay {
                             slot: self.sstv.selected_slot as u8,
@@ -2494,11 +2445,9 @@ impl SdroxideApp {
                 ui.add_space(4.0);
                 ui.label(
                     RichText::new(if editing_overlay {
-                        "The station overlay: every slot draws these layers under its own. \
-                         Drag a line on the picture to move it."
+                        tr!("sstv-overlay-note")
                     } else {
-                        "This slot's own text, drawn where you put it. Drag a line on the \
-                         picture to move it; a line's strip moves with it."
+                        tr!("sstv-slot-text-note")
                     })
                     .size(10.5)
                     .weak(),
@@ -2527,7 +2476,7 @@ impl SdroxideApp {
                             ui.painter().text(
                                 rect.center(),
                                 egui::Align2::CENTER_CENTER,
-                                "No picture in this slot — load one below",
+                                &tr!("sstv-no-picture-in-slot"),
                                 egui::FontId::proportional(12.0),
                                 crate::theme::gray(150),
                             );
@@ -2602,16 +2551,16 @@ impl SdroxideApp {
 
                         // ── what is under the text ────────────────────────
                         ui.horizontal_wrapped(|ui| {
-                            ui.label(RichText::new("Base").size(10.5).weak())
-                                .on_hover_text("Which slot's picture these layers are drawn over");
+                            ui.label(RichText::new(tr!("sstv-base")).size(10.5).weak())
+                                .on_hover_text(tr!("sstv-base-hint"));
                             for i in 0..IMAGE_SLOTS {
                                 let sel = self.sstv.selected_slot == i;
                                 let has = self.sstv.presets.slot(i).has_picture();
                                 if crate::chrome::chip(ui, sel, &format!("{}", i + 1))
                                     .on_hover_text(if has {
-                                        "Compose over this slot's picture"
+                                        tr!("sstv-compose-over-hint")
                                     } else {
-                                        "This slot is empty"
+                                        tr!("sstv-slot-empty")
                                     })
                                     .clicked()
                                     && !sel
@@ -2623,8 +2572,8 @@ impl SdroxideApp {
                         ui.add_space(4.0);
                         ui.horizontal_wrapped(|ui| {
                             let sel = self.sstv.selected_slot;
-                            if crate::chrome::chip(ui, false, "Picture…")
-                                .on_hover_text("Load a picture into this slot")
+                            if crate::chrome::chip(ui, false, tr!("sstv-picture-btn"))
+                                .on_hover_text(tr!("sstv-load-picture-hint"))
                                 .clicked()
                             {
                                 self.sstv.pick_target = Some(sel);
@@ -2639,18 +2588,15 @@ impl SdroxideApp {
                                 );
                             let use_received = ui
                                 .add_enabled_ui(received.is_some(), |ui| {
-                                    crate::chrome::chip(ui, false, "Use received")
+                                    crate::chrome::chip(ui, false, tr!("sstv-use-received"))
                                 })
                                 .inner
-                                .on_hover_text(
-                                    "Put the picture that just arrived under these layers, so a \
-                                     reply carries his picture and your call",
-                                );
+                                .on_hover_text(tr!("sstv-use-received-hint"));
                             if use_received.clicked()
                                 && let Some(png) = received
                             {
                                 self.sstv.set_slot(sel, png, cmds);
-                                note = Some("the received picture is now the base".into());
+                                note = Some(tr!("sstv-received-now-base"));
                             }
                         });
                     });
@@ -2662,7 +2608,7 @@ impl SdroxideApp {
                     ui.vertical(|ui| {
                         ui.set_min_width(300.0);
                         ui.horizontal(|ui| {
-                            if crate::chrome::chip(ui, false, "＋ Text").clicked() {
+                            if crate::chrome::chip(ui, false, tr!("sstv-add-text")).clicked() {
                                 doc.layers.push(TextLayer {
                                     text: "TEXT".into(),
                                     px: 28,
@@ -2671,7 +2617,7 @@ impl SdroxideApp {
                                 self.sstv.composer_sel = Some(doc.layers.len() - 1);
                                 dirty = true;
                             }
-                            if crate::chrome::chip(ui, false, "＋ Strip").clicked() {
+                            if crate::chrome::chip(ui, false, tr!("sstv-add-strip")).clicked() {
                                 // A strip is a line with its own band and no
                                 // text: the plain banner, for a picture that
                                 // wants colour behind something else.
@@ -2691,11 +2637,7 @@ impl SdroxideApp {
                         // glance — the list scrolls, and a scrollbar alone does not
                         // say whether there are five or fifteen.
                         ui.label(
-                            RichText::new(format!(
-                                "{} line{}",
-                                doc.layers.len(),
-                                if doc.layers.len() == 1 { "" } else { "s" }
-                            ))
+                            RichText::new(tr!("sstv-n-lines", n = doc.layers.len()))
                             .size(9.5)
                             .color(crate::theme::CYAN_DIM()),
                         );
@@ -2708,7 +2650,7 @@ impl SdroxideApp {
                                         let mut shown = !doc.layers[i].hidden;
                                         if ui
                                             .checkbox(&mut shown, "")
-                                            .on_hover_text("Draw this line")
+                                            .on_hover_text(tr!("sstv-draw-this-line"))
                                             .changed()
                                         {
                                             doc.layers[i].hidden = !shown;
@@ -2716,7 +2658,7 @@ impl SdroxideApp {
                                         }
                                         let text = doc.layers[i].text.clone();
                                         let label = if text.trim().is_empty() {
-                                            "(strip)".to_string()
+                                            tr!("sstv-strip-paren")
                                         } else {
                                             crate::app::util::shorten(&text, 26).to_string()
                                         };
@@ -2736,7 +2678,7 @@ impl SdroxideApp {
                             ui.horizontal(|ui| {
                                 if ui
                                     .add_enabled(i > 0, egui::Button::new("↑"))
-                                    .on_hover_text("Draw this line later than the ones above it")
+                                    .on_hover_text(tr!("sstv-draw-later-hint"))
                                     .clicked()
                                 {
                                     doc.layers.swap(i, i - 1);
@@ -2745,21 +2687,21 @@ impl SdroxideApp {
                                 }
                                 if ui
                                     .add_enabled(i + 1 < doc.layers.len(), egui::Button::new("↓"))
-                                    .on_hover_text("Draw this line earlier")
+                                    .on_hover_text(tr!("sstv-draw-earlier-hint"))
                                     .clicked()
                                 {
                                     doc.layers.swap(i, i + 1);
                                     self.sstv.composer_sel = Some(i + 1);
                                     dirty = true;
                                 }
-                                if crate::chrome::chip(ui, false, "Copy").clicked() {
+                                if crate::chrome::chip(ui, false, tr!("sstv-copy")).clicked() {
                                     let mut l = doc.layers[i].clone();
                                     l.y = (l.y + 0.08).min(1.0);
                                     doc.layers.insert(i + 1, l);
                                     self.sstv.composer_sel = Some(i + 1);
                                     dirty = true;
                                 }
-                                if crate::chrome::chip(ui, false, "Delete").clicked() {
+                                if crate::chrome::chip(ui, false, tr!("txaudio-delete")).clicked() {
                                     doc.layers.remove(i);
                                     self.sstv.composer_sel = if doc.layers.is_empty() {
                                         None
@@ -2775,12 +2717,12 @@ impl SdroxideApp {
                                 .num_columns(2)
                                 .spacing([10.0, 6.0])
                                 .show(ui, |ui| {
-                                    ui.label("Text");
+                                    ui.label(tr!("panels-text"));
                                     if crate::chrome::field(
                                         ui,
                                         egui::TextEdit::singleline(&mut l.text)
                                             .desired_width(250.0)
-                                            .hint_text("what the line says"),
+                                            .hint_text(tr!("sstv-line-text-hint")),
                                     )
                                     .changed()
                                     {
@@ -2788,7 +2730,7 @@ impl SdroxideApp {
                                     }
                                     ui.end_row();
 
-                                    ui.label("Face");
+                                    ui.label(tr!("sstv-face"));
                                     egui::ComboBox::from_id_salt("composer-face")
                                         .selected_text(l.face.label())
                                         .width(180.0)
@@ -2804,7 +2746,7 @@ impl SdroxideApp {
                                         });
                                     ui.end_row();
 
-                                    ui.label("Size");
+                                    ui.label(tr!("sstv-size"));
                                     let resp = crate::chrome::slider(
                                         ui,
                                         egui::Slider::new(&mut l.px, 8..=96).suffix(" px"),
@@ -2812,14 +2754,14 @@ impl SdroxideApp {
                                     dirty |= resp.changed();
                                     ui.end_row();
 
-                                    ui.label("Colour");
+                                    ui.label(tr!("sstv-colour"));
                                     ui.horizontal(|ui| {
                                         dirty |= ui
                                             .color_edit_button_srgb(&mut l.ink)
-                                            .on_hover_text("The letters")
+                                            .on_hover_text(tr!("sstv-the-letters"))
                                             .changed();
                                         let mut outlined = l.outline.is_some();
-                                        if crate::chrome::checkbox(ui, &mut outlined, "outline")
+                                        if crate::chrome::checkbox(ui, &mut outlined, &tr!("sstv-composer-outline"))
                                             .changed()
                                         {
                                             l.outline = outlined.then_some([0, 0, 0]);
@@ -2828,36 +2770,30 @@ impl SdroxideApp {
                                         if let Some(oc) = &mut l.outline {
                                             dirty |= ui
                                                 .color_edit_button_srgb(oc)
-                                                .on_hover_text("The edge around them")
+                                                .on_hover_text(tr!("sstv-the-edge"))
                                                 .changed();
                                         }
                                     });
                                     ui.end_row();
 
-                                    ui.label("Placement");
+                                    ui.label(tr!("sstv-placement"));
                                     if crate::chrome::checkbox(
                                         ui,
                                         &mut l.vertical,
-                                        "down the frame",
+                                        &tr!("sstv-down-frame"),
                                     )
-                                    .on_hover_text(
-                                        "Turn the line a quarter turn, so it reads downwards — \
-                                             a call down the side of the picture",
-                                    )
+                                    .on_hover_text(tr!("sstv-down-frame-hint"))
                                     .changed()
                                     {
                                         dirty = true;
                                     }
                                     ui.end_row();
 
-                                    ui.label("Strip");
+                                    ui.label(tr!("sstv-strip"));
                                     ui.horizontal(|ui| {
                                         let mut banded = l.band.is_some();
-                                        if crate::chrome::checkbox(ui, &mut banded, "behind")
-                                            .on_hover_text(
-                                                "A strip of colour behind the line, across the \
-                                                 picture or down it, centred on the line",
-                                            )
+                                        if crate::chrome::checkbox(ui, &mut banded, &tr!("sstv-behind"))
+                                            .on_hover_text(tr!("sstv-behind-hint"))
                                             .changed()
                                         {
                                             l.band = banded.then(|| Strip {
@@ -2870,10 +2806,10 @@ impl SdroxideApp {
                                         if let Some(b) = &mut l.band {
                                             dirty |= ui
                                                 .color_edit_button_srgb(&mut b.fill)
-                                                .on_hover_text("The strip, at its first edge")
+                                                .on_hover_text(tr!("sstv-strip-first-edge"))
                                                 .changed();
                                             let mut grad = b.fill2.is_some();
-                                            if crate::chrome::checkbox(ui, &mut grad, "fade")
+                                            if crate::chrome::checkbox(ui, &mut grad, &tr!("sstv-composer-fade"))
                                                 .changed()
                                             {
                                                 b.fill2 = grad.then_some([0, 0, 0]);
@@ -2886,7 +2822,7 @@ impl SdroxideApp {
                                     });
                                     ui.end_row();
                                     if let Some(b) = &mut l.band {
-                                        ui.label("Thickness");
+                                        ui.label(tr!("sstv-thickness"));
                                         let resp = crate::chrome::slider(
                                             ui,
                                             egui::Slider::new(&mut b.thickness, 4..=120)
@@ -2903,7 +2839,7 @@ impl SdroxideApp {
                         // **Saved here, in the engine**, so the console, a browser
                         // tab and next week's session all have the same layouts.
                         ui.label(
-                            RichText::new("LAYOUTS")
+                            RichText::new(tr!("sstv-layouts"))
                                 .size(9.5)
                                 .strong()
                                 .color(crate::theme::CYAN_DIM()),
@@ -2912,15 +2848,15 @@ impl SdroxideApp {
                             ui.add(
                                 egui::TextEdit::singleline(&mut self.sstv.template_name)
                                     .desired_width(150.0)
-                                    .hint_text("name this layout"),
+                                    .hint_text(tr!("sstv-name-layout-hint")),
                             );
                             let named = !self.sstv.template_name.trim().is_empty();
                             let save = ui
                                 .add_enabled_ui(named && doc.is_active(), |ui| {
-                                    crate::chrome::chip(ui, false, "Save")
+                                    crate::chrome::chip(ui, false, tr!("txaudio-save"))
                                 })
                                 .inner
-                                .on_hover_text("Keep this layout under that name");
+                                .on_hover_text(tr!("sstv-keep-layout-hint"));
                             if save.clicked() {
                                 let new = sdroxide_types::LayoutTemplate::clean_name(
                                     &self.sstv.template_name,
@@ -2932,9 +2868,9 @@ impl SdroxideApp {
                                     && old != new
                                 {
                                     cmds.push(Command::ImageDeleteTemplate { name: old });
-                                    note = Some(format!("renamed to {new:?}"));
+                                    note = Some(tr!("sstv-layout-renamed", name = new.as_str()));
                                 } else {
-                                    note = Some(format!("saved as {new:?}"));
+                                    note = Some(tr!("sstv-layout-saved-as", name = new.as_str()));
                                 }
                                 cmds.push(Command::ImageSaveTemplate {
                                     name: new,
@@ -2943,16 +2879,16 @@ impl SdroxideApp {
                                 self.sstv.template_name.clear();
                             }
                             if self.sstv.template_renaming.is_some()
-                                && crate::chrome::chip(ui, false, "Cancel").clicked()
+                                && crate::chrome::chip(ui, false, tr!("frame-cancel")).clicked()
                             {
                                 self.sstv.template_renaming = None;
                                 self.sstv.template_name.clear();
-                                note = Some("rename cancelled".into());
+                                note = Some(tr!("sstv-rename-cancelled"));
                             }
                         });
                         if self.sstv.presets.templates.is_empty() {
                             ui.label(
-                                RichText::new("No saved layouts yet — name one above.")
+                                RichText::new(tr!("sstv-no-layouts-yet"))
                                     .size(10.0)
                                     .weak(),
                             );
@@ -2961,32 +2897,32 @@ impl SdroxideApp {
                             let templates = self.sstv.presets.templates.clone();
                             for t in templates {
                                 let load = crate::chrome::chip(ui, false, &t.name)
-                                    .on_hover_text("Load this layout into what you are editing");
+                                    .on_hover_text(tr!("sstv-load-layout-hint"));
                                 if load.clicked() {
                                     doc = t.composer.clone();
                                     dirty = true;
                                     send_now = true;
-                                    note = Some(format!("loaded {:?}", t.name));
+                                    note = Some(tr!("sstv-layout-loaded", name = t.name.as_str()));
                                 }
                                 if ui
                                     .add(egui::Button::new("✎").small())
-                                    .on_hover_text(format!("Rename {:?}", t.name))
+                                    .on_hover_text(tr!("sstv-rename-layout-hint", name = t.name.as_str()))
                                     .clicked()
                                 {
                                     // Into the name field, with the old name kept:
                                     // Save then renames rather than duplicating.
                                     self.sstv.template_name = t.name.clone();
                                     self.sstv.template_renaming = Some(t.name.clone());
-                                    note = Some(format!("renaming {:?}", t.name));
+                                    note = Some(tr!("sstv-layout-renaming", name = t.name.as_str()));
                                 }
                                 if ui
                                     .add(egui::Button::new("⧉").small())
-                                    .on_hover_text(format!("Duplicate {:?}", t.name))
+                                    .on_hover_text(tr!("sstv-duplicate-layout-hint", name = t.name.as_str()))
                                     .clicked()
                                 {
                                     // A copy under a free name, so nothing is
                                     // overwritten by a duplicate.
-                                    let base = format!("{} copy", t.name);
+                                    let base = tr!("sstv-layout-copy-name", name = t.name.as_str());
                                     let mut name = base.clone();
                                     let mut n = 2u32;
                                     while self.sstv.presets.templates.iter().any(|x| x.name == name)
@@ -2998,17 +2934,17 @@ impl SdroxideApp {
                                         name: sdroxide_types::LayoutTemplate::clean_name(&name),
                                         composer: t.composer.clone(),
                                     });
-                                    note = Some(format!("duplicated as {name:?}"));
+                                    note = Some(tr!("sstv-layout-duplicated", name = name.as_str()));
                                 }
                                 if ui
                                     .add(egui::Button::new("✕").small())
-                                    .on_hover_text(format!("Forget the layout {:?}", t.name))
+                                    .on_hover_text(tr!("sstv-forget-layout-hint", name = t.name.as_str()))
                                     .clicked()
                                 {
                                     cmds.push(Command::ImageDeleteTemplate {
                                         name: t.name.clone(),
                                     });
-                                    note = Some(format!("forgot {:?}", t.name));
+                                    note = Some(tr!("sstv-layout-forgot", name = t.name.as_str()));
                                 }
                             }
                         });
@@ -3018,7 +2954,7 @@ impl SdroxideApp {
                         // **Several received pictures into one frame** — the case
                         // the operator asks for: the four the other station
                         // missed, retransmitted together.
-                        egui::CollapsingHeader::new("Mosaic from received pictures")
+                        egui::CollapsingHeader::new(tr!("sstv-mosaic-header"))
                             .id_salt("composer-mosaic")
                             .show(ui, |ui| {
                                 let names: Vec<String> = self
@@ -3030,22 +2966,17 @@ impl SdroxideApp {
                                     .collect();
                                 if names.is_empty() {
                                     ui.label(
-                                        RichText::new(
-                                            "Nothing received yet — a mosaic is built from \
-                                             pictures in the gallery.",
-                                        )
+                                        RichText::new(tr!("sstv-mosaic-nothing"))
                                         .size(10.0)
                                         .weak(),
                                     );
                                     return;
                                 }
                                 ui.label(
-                                    RichText::new(format!(
-                                        "Picked {} of {}, laid out in this order — the order \
-                                         is the grid position. Each picture keeps its shape; \
-                                         the gaps are black.",
-                                        self.sstv.mosaic_picks.len(),
-                                        crate::sstv_composer::MOSAIC_MAX
+                                    RichText::new(tr!(
+                                        "sstv-mosaic-picked",
+                                        n = self.sstv.mosaic_picks.len(),
+                                        max = crate::sstv_composer::MOSAIC_MAX
                                     ))
                                     .size(10.0)
                                     .weak(),
@@ -3067,7 +2998,7 @@ impl SdroxideApp {
                                             );
                                             if ui
                                                 .add_enabled(i > 0, egui::Button::new("◀").small())
-                                                .on_hover_text("Move this picture one cell earlier")
+                                                .on_hover_text(tr!("sstv-mosaic-earlier-hint"))
                                                 .clicked()
                                             {
                                                 self.sstv.mosaic_picks.swap(i, i - 1);
@@ -3077,7 +3008,7 @@ impl SdroxideApp {
                                                     i + 1 < picks.len(),
                                                     egui::Button::new("▶").small(),
                                                 )
-                                                .on_hover_text("Move this picture one cell later")
+                                                .on_hover_text(tr!("sstv-mosaic-later-hint"))
                                                 .clicked()
                                             {
                                                 self.sstv.mosaic_picks.swap(i, i + 1);
@@ -3105,9 +3036,9 @@ impl SdroxideApp {
                                                     name: name.clone(),
                                                 });
                                             } else {
-                                                self.sstv.mosaic_note = Some(format!(
-                                                    "{} is the most a mosaic holds",
-                                                    crate::sstv_composer::MOSAIC_MAX
+                                                self.sstv.mosaic_note = Some(tr!(
+                                                    "sstv-mosaic-max",
+                                                    n = crate::sstv_composer::MOSAIC_MAX
                                                 ));
                                             }
                                         }
@@ -3122,13 +3053,10 @@ impl SdroxideApp {
                                             .all(|n| self.sstv.mosaic_pngs.contains_key(n));
                                     let go = ui
                                         .add_enabled_ui(ready, |ui| {
-                                            crate::chrome::chip(ui, false, "Compose into this slot")
+                                            crate::chrome::chip(ui, false, tr!("sstv-mosaic-compose"))
                                         })
                                         .inner
-                                        .on_hover_text(
-                                            "Build the mosaic and load it into this slot as its \
-                                             picture; the received originals are untouched",
-                                        );
+                                        .on_hover_text(tr!("sstv-mosaic-compose-hint"));
                                     if go.clicked() {
                                         let mut cells = Vec::new();
                                         for n in &self.sstv.mosaic_picks {
@@ -3156,14 +3084,14 @@ impl SdroxideApp {
                                         if let Some(png) = crate::sstv::encode_png(&rgb, w, h) {
                                             let slot = self.sstv.selected_slot;
                                             self.sstv.set_slot(slot, png, cmds);
-                                            note = Some(format!(
-                                                "{} pictures composed into slot {}",
-                                                refs.len(),
-                                                slot + 1
+                                            note = Some(tr!(
+                                                "sstv-mosaic-composed",
+                                                n = refs.len(),
+                                                slot = slot + 1
                                             ));
                                         }
                                     }
-                                    if crate::chrome::chip(ui, false, "Clear picks").clicked() {
+                                    if crate::chrome::chip(ui, false, tr!("sstv-clear-picks")).clicked() {
                                         self.sstv.mosaic_picks.clear();
                                     }
                                 });
@@ -3192,16 +3120,16 @@ impl SdroxideApp {
                                         &png,
                                         crate::download::Mime::Png,
                                     );
-                                    note = Some("saved".into());
+                                    note = Some(tr!("sstv-composed-saved"));
                                 }
                             }
                             let tx_ok = self.tx_capable();
                             let send = ui
                                 .add_enabled_ui(tx_ok && has_picture && doc.is_active(), |ui| {
-                                    crate::chrome::chip(ui, false, "Send")
+                                    crate::chrome::chip(ui, false, tr!("sstv-send"))
                                 })
                                 .inner
-                                .on_hover_text("Transmit this composition now");
+                                .on_hover_text(tr!("sstv-send-now-hint"));
                             if send.clicked()
                                 && let Some(png) = self.sstv.compose_png(dims)
                             {
@@ -3214,20 +3142,17 @@ impl SdroxideApp {
                                 } else {
                                     Command::SstvTx { mode: self.sstv.tx_mode, png }
                                 });
-                                note = Some("sending".into());
+                                note = Some(tr!("sstv-composed-sending"));
                             }
-                            if crate::chrome::chip(ui, false, "Forget")
-                                .on_hover_text(
-                                    "Empty this preset's document — the banner strip and the plain \
-                                     caption are back in charge of its picture",
-                                )
+                            if crate::chrome::chip(ui, false, tr!("sstv-forget"))
+                                .on_hover_text(tr!("sstv-forget-hint"))
                                 .clicked()
                             {
                                 doc.layers.clear();
                                 self.sstv.composer_sel = None;
                                 dirty = true;
                                 send_now = true;
-                                note = Some("cleared — the banner and the caption are back".into());
+                                note = Some(tr!("sstv-forget-done"));
                             }
                         });
                         // **Save the composition into another spot.** The document
@@ -3235,11 +3160,8 @@ impl SdroxideApp {
                         // the picture under it: the other slot then sends the
                         // same picture, and can still be edited there.
                         ui.horizontal_wrapped(|ui| {
-                            ui.label(RichText::new("Copy to slot").size(10.5).weak())
-                                .on_hover_text(
-                                    "Give another slot this picture and this text, so it can be \
-                                     sent from there",
-                                );
+                            ui.label(RichText::new(tr!("sstv-copy-to-slot")).size(10.5).weak())
+                                .on_hover_text(tr!("sstv-copy-to-slot-hint"));
                             for n in 0..IMAGE_SLOTS {
                                 if n != self.sstv.selected_slot
                                     && crate::chrome::chip(ui, false, &format!("{}", n + 1))
@@ -3252,7 +3174,7 @@ impl SdroxideApp {
                                     if let Some(png) = self.sstv.compose_png(dims) {
                                         self.sstv.set_slot(n, png, cmds);
                                     }
-                                    note = Some(format!("copied into slot {}", n + 1));
+                                    note = Some(tr!("sstv-copied-into-slot", n = n + 1));
                                 }
                             }
                         });
@@ -3386,13 +3308,13 @@ impl SdroxideApp {
                                         .color_edit_button_srgb(&mut cfg.sstv_banner_fill)
                                         .on_hover_text(tr!("sstv-strip-top-edge-fades-black"))
                                         .changed();
-                                    ui.label(RichText::new("strip").size(10.5).weak());
+                                    ui.label(RichText::new(tr!("sstv-word-strip")).size(10.5).weak());
                                     ui.add_space(8.0);
                                     changed |= ui
                                         .color_edit_button_srgb(&mut cfg.sstv_banner_ink)
                                         .on_hover_text(tr!("sstv-both-texts"))
                                         .changed();
-                                    ui.label(RichText::new("text").size(10.5).weak());
+                                    ui.label(RichText::new(tr!("sstv-word-text")).size(10.5).weak());
                                 });
                                 ui.end_row();
 
@@ -3473,7 +3395,7 @@ impl SdroxideApp {
                                         .color_edit_button_srgb(&mut cfg.sstv_style.message_ink)
                                         .on_hover_text(tr!("sstv-slot-message-s-text-colour"))
                                         .changed();
-                                    ui.label(RichText::new("text").size(10.5).weak());
+                                    ui.label(RichText::new(tr!("sstv-word-text")).size(10.5).weak());
                                     ui.add_space(8.0);
                                     changed |= crate::chrome::checkbox(
                                         ui,
@@ -3508,12 +3430,7 @@ impl SdroxideApp {
                                 // the wrong lever for that: it eats picture. The
                                 // strip also belongs at whichever edge the
                                 // operator's picture has least of.
-                                ui.label("Text size").on_hover_text(
-                                    "The banner text as a percentage of the strip's own size. \
-                                     100% is what it has always been; a QSO needs the call \
-                                     readable after a noisy decode, and this scales the \
-                                     lettering without making the strip taller.",
-                                );
+                                ui.label(tr!("sstv-text-size")).on_hover_text(tr!("sstv-text-size-hint"));
                                 let resp = crate::chrome::slider(
                                     ui,
                                     egui::Slider::new(&mut cfg.sstv_banner_text_pct, 50..=250)
@@ -3522,17 +3439,13 @@ impl SdroxideApp {
                                 changed |=
                                     resp.drag_stopped() || (resp.changed() && !resp.dragged());
                                 ui.end_row();
-                                ui.label("Placement").on_hover_text(
-                                    "Which edge the strip is drawn along. The message overlay \
-                                     starts at the opposite end, so a banner at the bottom \
-                                     leaves the top of the picture for text.",
-                                );
+                                ui.label(tr!("sstv-placement")).on_hover_text(tr!("sstv-placement-hint"));
                                 ui.horizontal(|ui| {
                                     let mut bottom = cfg.sstv_banner_bottom;
-                                    if crate::chrome::chip(ui, !bottom, "Top").clicked() {
+                                    if crate::chrome::chip(ui, !bottom, tr!("sstv-top")).clicked() {
                                         bottom = false;
                                     }
-                                    if crate::chrome::chip(ui, bottom, "Bottom").clicked() {
+                                    if crate::chrome::chip(ui, bottom, tr!("sstv-bottom")).clicked() {
                                         bottom = true;
                                     }
                                     if bottom != cfg.sstv_banner_bottom {
@@ -3917,7 +3830,7 @@ pub(in crate::app) fn qsl_default_path(name: &str) -> String {
         Ok(dir) => dir.join(name).to_string_lossy().into_owned(),
         // No pictures folder to name (an unusual home layout). Saying so beats
         // inventing a path that does not exist.
-        Err(_) => format!("{name} (saved where you chose)"),
+        Err(_) => tr!("sstv-qsl-saved-where-chosen", name = name),
     }
 }
 
@@ -3927,7 +3840,7 @@ pub(in crate::app) fn qsl_default_path(name: &str) -> String {
 /// browser knows, so the honest wording says that rather than guessing.
 #[cfg(target_arch = "wasm32")]
 pub(in crate::app) fn qsl_default_path(name: &str) -> String {
-    format!("{name} — downloaded to this browser's download folder")
+    tr!("sstv-qsl-downloaded", name = name)
 }
 
 /// A short reception note above the operator's message.

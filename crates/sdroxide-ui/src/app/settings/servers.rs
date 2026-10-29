@@ -145,15 +145,12 @@ pub(in crate::app) fn settings_wsjtx_tab(
     ui.end_row();
     ui.add_space(6.0);
     ui.label(
-        RichText::new("Decoded text over UDP").size(13.0).strong().color(crate::theme::CYAN()),
+        RichText::new(tr!("settings-servers-decoded-text-udp")).size(13.0).strong().color(crate::theme::CYAN()),
     );
     ui.add_space(4.0);
     super::note(
         ui,
-        "One JSON line per decode, for a script of your own: the FT8 family, WSPR and every \
-             keyboard mode's decoded lines (CW, RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell), \
-             each with the dial it was heard on. The WSJT-X broadcast above is a logger's protocol and \
-             has no message for those modes, which is why this exists separately.",
+        &tr!("settings-servers-decoded-text-udp-note"),
     );
     ui.add_space(4.0);
     ui.label(RichText::new(tr!("settings-servers-cw-panel-s-copy-plain")).weak());
@@ -172,8 +169,7 @@ pub(in crate::app) fn settings_wsjtx_tab(
                         .hint_text("127.0.0.1:9999"),
                 )
                 .on_hover_text(
-                    "host:port, over UDP. Empty is off — the default. Output only: nothing on \
-                     this socket can touch the radio. A name is resolved when you press APPLY.",
+                    tr!("settings-servers-decoded-text-udp-hint"),
                 );
                 ui.end_row();
             });
@@ -181,9 +177,7 @@ pub(in crate::app) fn settings_wsjtx_tab(
     if !decode_udp.trim().is_empty() {
         super::note(
             ui,
-            "Each line is one datagram, newline-terminated: \
-                 {\"time\":…,\"unix\":…,\"kind\":\"text\",\"mode\":\"RTTY\",\
-                 \"dial_hz\":…,\"freq_hz\":…,\"text\":\"…\"}",
+            &tr!("settings-servers-decoded-text-udp-format", example = "{\"time\":…,\"unix\":…,\"kind\":\"text\",\"mode\":\"RTTY\",\"dial_hz\":…,\"freq_hz\":…,\"text\":\"…\"}"),
         );
     }
 
@@ -359,11 +353,7 @@ pub(in crate::app) fn settings_rotator_tab(
     }
     super::note(
         ui,
-        "Points a motorized antenna at the satellite you are locked onto, or by hand from \
-             the ROTATOR window and the maps. The default is a Hamlib rotctld daemon (run e.g. \
-             \u{201c}rotctld -m 603 -r /dev/ttyUSB0\u{201d} for a GS-232B rotator, or \
-             \u{201c}rotctld -m 1\u{201d} to try it without hardware) — one daemon covers every \
-             rotator Hamlib drives. A controller on a serial port can also be driven directly.",
+        &tr!("settings-servers-rotator-note"),
     );
     ui.add_space(6.0);
     crate::chrome::checkbox(ui, &mut cfg.enabled, tr!("settings-servers-enable"));
@@ -374,23 +364,23 @@ pub(in crate::app) fn settings_rotator_tab(
             .spacing([12.0, 6.0])
             .min_row_height(ui.spacing().interact_size.y)
             .show(ui, |ui| {
-                ui.label("Connection");
+                ui.label(tr!("settings-servers-connection"));
                 egui::ComboBox::from_id_salt("rotator-transport")
                     .selected_text(match cfg.transport {
-                        T::Rotctld => "Hamlib rotctld (TCP)",
-                        T::EasyComm2 => "EasyComm II (serial)",
-                        T::Gs232 => "Yaesu GS-232 (serial)",
-                        T::PsRotator => "PSTRotator (UDP)",
+                        T::Rotctld => tr!("settings-servers-transport-rotctld"),
+                        T::EasyComm2 => tr!("settings-servers-transport-easycomm"),
+                        T::Gs232 => tr!("settings-servers-transport-gs232"),
+                        T::PsRotator => tr!("settings-servers-transport-pstrotator"),
                     })
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut cfg.transport, T::Rotctld, "Hamlib rotctld (TCP)");
+                        ui.selectable_value(&mut cfg.transport, T::Rotctld, tr!("settings-servers-transport-rotctld"));
                         ui.selectable_value(
                             &mut cfg.transport,
                             T::EasyComm2,
-                            "EasyComm II (serial)",
+                            tr!("settings-servers-transport-easycomm"),
                         );
-                        ui.selectable_value(&mut cfg.transport, T::Gs232, "Yaesu GS-232 (serial)");
-                        ui.selectable_value(&mut cfg.transport, T::PsRotator, "PSTRotator (UDP)");
+                        ui.selectable_value(&mut cfg.transport, T::Gs232, tr!("settings-servers-transport-gs232"));
+                        ui.selectable_value(&mut cfg.transport, T::PsRotator, tr!("settings-servers-transport-pstrotator"));
                     });
                 ui.end_row();
 
@@ -407,11 +397,11 @@ pub(in crate::app) fn settings_rotator_tab(
 
                         ui.label(tr!("settings-servers-port"));
                         ui.add(egui::DragValue::new(&mut cfg.port).range(1..=65535))
-                            .on_hover_text("4533 is rotctld's default");
+                            .on_hover_text(tr!("settings-servers-rotctld-port-hint"));
                         ui.end_row();
                     }
                     T::EasyComm2 | T::Gs232 => {
-                        ui.label("Serial port");
+                        ui.label(tr!("settings-radio-serial-port"));
                         crate::chrome::field(
                             ui,
                             egui::TextEdit::singleline(&mut cfg.serial_port)
@@ -420,9 +410,9 @@ pub(in crate::app) fn settings_rotator_tab(
                         );
                         ui.end_row();
 
-                        ui.label("Baud");
+                        ui.label(tr!("settings-amp-baud"));
                         ui.add(egui::DragValue::new(&mut cfg.baud).range(1200..=115200))
-                            .on_hover_text("Most controllers run at 9600");
+                            .on_hover_text(tr!("settings-servers-baud-hint"));
                         ui.end_row();
                     }
                     T::PsRotator => {
@@ -431,8 +421,7 @@ pub(in crate::app) fn settings_rotator_tab(
                         // it — no serial port, no baud.
                         ui.label("");
                         ui.label(
-                            "PSTRotator's own UDP port. In its Setup, turn UDP Control on; \
-                         it answers commands on this port and replies on the next one.",
+                            tr!("settings-servers-pstrotator-note"),
                         );
                     }
                 }
@@ -472,9 +461,9 @@ pub(in crate::app) fn settings_rotator_tab(
                 if let Some((az, el)) = cfg.park.as_mut() {
                     ui.label("");
                     ui.horizontal(|ui| {
-                        ui.label("az");
+                        ui.label(tr!("antenna-az"));
                         ui.add(egui::DragValue::new(az).range(0.0..=360.0).suffix("°"));
-                        ui.label("el");
+                        ui.label(tr!("settings-servers-el"));
                         ui.add(egui::DragValue::new(el).range(0.0..=90.0).suffix("°"));
                     });
                     ui.end_row();
@@ -517,7 +506,7 @@ pub(in crate::app) fn settings_rotator_tab(
         crate::theme::GREEN(),
         crate::theme::INK_ON_CYAN(),
     )
-    .on_hover_text("Persist and (re)connect to the rotator")
+    .on_hover_text(tr!("settings-servers-persist-re-connect-rotator"))
     .clicked()
     {
         *apply = true;
@@ -646,7 +635,7 @@ pub(in crate::app) fn settings_tci_server_tab(
         crate::theme::GREEN(),
         crate::theme::INK_ON_CYAN(),
     )
-    .on_hover_text("Persist and (re)bind the server")
+    .on_hover_text(tr!("settings-servers-persist-re-bind-server"))
     .clicked()
     {
         *apply = true;
@@ -655,8 +644,6 @@ pub(in crate::app) fn settings_tci_server_tab(
     ui.add_space(8.0);
     super::note(
         ui,
-        "Lets TCI-capable programs drive this radio: frequency and mode control, wideband IQ, \
-             receive audio, and transmit audio. In WSJT-X choose the SunSDR (TCI) rig type, point \
-             it at this address, and set PTT to TCI.",
+        &tr!("settings-servers-tci-note"),
     );
 }

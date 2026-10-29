@@ -677,7 +677,7 @@ impl SdroxideApp {
         // rather than inside the tab arm because `qo100_body` needs `&mut self`
         // and the state lives on `self`.
         let mut qo100 = std::mem::take(&mut self.qo100_win);
-        let show = self.tool_window(ctx, "sat", "SATELLITE", [560.0, 680.0], true, |me, ui| {
+        let show = self.tool_window(ctx, "sat", &tr!("sat-satellite"), [560.0, 680.0], true, |me, ui| {
             me.sat_body(ui, &mut win, &mut qo100, cmds);
         });
         self.show_sat = show;
@@ -1118,10 +1118,8 @@ impl SdroxideApp {
             if !win.search.is_empty() && ui.small_button("×").clicked() {
                 win.search.clear();
             }
-            crate::chrome::checkbox(ui, &mut win.all, "all satellites").on_hover_text(
-                "Off: only satellites with frequencies on file — the ones you can work — and \
-                 any you pasted in yourself. On: every satellite the station tracks, which is \
-                 mostly ones nobody can hear.",
+            crate::chrome::checkbox(ui, &mut win.all, &tr!("settings-tle-all-satellites")).on_hover_text(
+                tr!("sat-off-only-satellites-with"),
             );
             if qth.is_none() {
                 ui.label(

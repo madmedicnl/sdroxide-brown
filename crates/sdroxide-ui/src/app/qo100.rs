@@ -421,7 +421,7 @@ impl SdroxideApp {
                 ui,
                 reachable,
                 cfg.enabled,
-                if cfg.enabled { "ON" } else { "OFF" },
+                &if cfg.enabled { tr!("amp-state-on") } else { tr!("ism-off") },
             );
             if run.clicked() {
                 cfg.enabled = !cfg.enabled;
@@ -463,7 +463,7 @@ impl SdroxideApp {
             auto.on_hover_text(tr!("qo100-auto-correct-let-tracker-adjust"));
 
             ui.add_space(8.0);
-            ui.label(RichText::new("width").size(10.0).color(theme::CYAN_DIM()));
+            ui.label(RichText::new(tr!("qo100-width-label")).size(10.0).color(theme::CYAN_DIM()));
             if ui
                 .small_button("−")
                 .on_hover_text(tr!("qo100-narrower-search-smaller-slice"))
@@ -501,7 +501,7 @@ impl SdroxideApp {
         // 1 kHz clicks; the low edge cannot cross within PARK_MIN_SPAN of the
         // high one, or the tracker loses the room it needs for both lobes.
         ui.horizontal(|ui| {
-            ui.label(RichText::new("park").size(10.0).color(theme::CYAN_DIM()));
+            ui.label(RichText::new(tr!("qo100-park-label")).size(10.0).color(theme::CYAN_DIM()));
             if ui.small_button(tr!("qo100-lo")).clicked() {
                 cfg.park_lo_hz = (cfg.park_lo_hz - PARK_STEP_HZ).max(PARK_MIN_HZ);
             }
@@ -693,7 +693,7 @@ impl SdroxideApp {
                             )
                         }
                     } else {
-                        tr!("qo100-need-longer-run-estimates").to_string()
+                        tr!("qo100-need-longer-run-estimates")
                     })
                     .size(10.0)
                     .monospace()
@@ -834,8 +834,8 @@ impl SdroxideApp {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.label(RichText::new(tr!("qo100-decode")).size(9.5).color(theme::CYAN_DIM()));
-                led(ui, "carrier", s.carrier_seen);
-                led(ui, "sync", s.sync_seen);
+                led(ui, &tr!("qo100-led-carrier"), s.carrier_seen);
+                led(ui, &tr!("qo100-led-sync"), s.sync_seen);
                 led(ui, "CRC", s.crc_ok);
                 if s.sync_bit_errors != u8::MAX {
                     // Always shown: sync passing (≤3) but CRC never lighting
@@ -1047,10 +1047,10 @@ fn status_line(enabled: bool, status: Option<&Qo100Status>, remote: bool) -> Str
         return String::new();
     }
     if remote {
-        return tr!("qo100-decoder-runs-receiving-station-readout").to_string();
+        return tr!("qo100-decoder-runs-receiving-station-readout");
     }
     match status {
-        None => tr!("qo100-starting").to_string(),
+        None => tr!("qo100-starting"),
         Some(s) if s.locked => {
             tr!(
                 "qo100-locked-block-tried-locked",
@@ -1059,7 +1059,7 @@ fn status_line(enabled: bool, status: Option<&Qo100Status>, remote: bool) -> Str
             )
         }
         Some(s) if s.blocks_tried == 0 => {
-            tr!("qo100-searching-first-window-fills-after").to_string()
+            tr!("qo100-searching-first-window-fills-after")
         }
         Some(s) => tr!("qo100-searching-block-tried-none-locked", blocks_tried = s.blocks_tried),
     }

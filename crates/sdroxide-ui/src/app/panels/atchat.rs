@@ -113,7 +113,7 @@ impl SdroxideApp {
                     "BACKUP" => theme::YELLOW(),
                     _ => theme::gray(140),
                 };
-                ui.label(RichText::new(role).size(10.5).strong().color(colour));
+                ui.label(RichText::new(match role.as_str() { "MASTER" => tr!("atchat-role-master"), "BACKUP" => tr!("atchat-role-backup"), other => other.to_string() }).size(10.5).strong().color(colour));
             }
             if let Some(m) = &st.master {
                 ui.label(
@@ -366,7 +366,7 @@ impl SdroxideApp {
                     }
                     shown += 1;
                     let when = hms(c.when);
-                    let who = if c.own { "me".to_string() } else { c.from.clone() };
+                    let who = if c.own { tr!("atchat-me") } else { c.from.clone() };
                     let tag = format!("<{who}>");
                     let colour = if c.own { theme::GREEN() } else { theme::TEXT() };
                     ui.horizontal_wrapped(|ui| {

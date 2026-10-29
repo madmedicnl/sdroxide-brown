@@ -216,7 +216,7 @@ impl SdroxideApp {
                 .inner_margin(egui::Margin { left: 10, right: 8, top: 6, bottom: 7 })
                 .show(ui, |ui| {
                     ui.label(
-                        RichText::new("RF Paint is a transmit-only mode — nothing to show in SWL.")
+                        RichText::new(tr!("rfpaint-swl-note"))
                             .size(11.0)
                             .weak(),
                     );

@@ -126,7 +126,7 @@ impl SdroxideApp {
             let already = self.hfdl_channels.contains(&cur_khz);
             let add = crate::chrome::chip(ui, false, RichText::new("+").size(13.0));
             let add = if already {
-                add.on_hover_text(format!("{cur_khz} kHz is already one of your chips"))
+                add.on_hover_text(tr!("hfdl-khz-already-has-chip", cur_khz = cur_khz))
             } else {
                 add.on_hover_text(tr!("hfdl-save-current-channel-khz-one", cur_khz = cur_khz))
             };

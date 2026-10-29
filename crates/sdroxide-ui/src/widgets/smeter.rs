@@ -209,19 +209,14 @@ pub fn hover_text(meters: Option<&Meters>, audio_level: bool) -> String {
         // needle moves when the *audio* moves, which is why a noise on the
         // sound card, a wireless mouse near the rig, or the rig's own AGC
         // pumping all swing it while the signal has not changed at all.
-        out.push_str(&format!(
-            "Audio level: {:.0} dBFS{}{}.\n\nThis radio has **no S-meter of its own to \
-             report**, so this is the level of the audio it sends — measured here, with the \
-             rig's own AGC and squelch already applied. It follows the audio, not the RF: \
-             noise on the sound card, a wireless mouse near the rig, or the AGC pumping will \
-             all move it while the signal has not changed.",
-            m.s_dbm,
-            if over > 0.0 {
-                format!(" (S9 + {over:.0} dB on the audio scale)")
+        out.push_str(&tr!(
+            "smeter-audio-level-hover",
+            dbfs = format!("{:.0}", m.s_dbm),
+            over = if over > 0.0 {
+                format!(" {}", tr!("smeter-audio-over", over = format!("{over:.0}")))
             } else {
                 String::new()
             },
-            "",
         ));
         return out;
     }

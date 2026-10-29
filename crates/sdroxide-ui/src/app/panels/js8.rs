@@ -304,10 +304,7 @@ impl SdroxideApp {
                     self.float_operating_panel();
                 }
                 if crate::chrome::chip(ui, self.show_digi_settings, "⚙")
-                    .on_hover_text(
-                        "SETUP — callsign, groups, the auto-reply, the beacon interval and the \
-                         status message",
-                    )
+                    .on_hover_text(tr!("js8-setup-hint"))
                     .clicked()
                 {
                     self.show_digi_settings = !self.show_digi_settings;
