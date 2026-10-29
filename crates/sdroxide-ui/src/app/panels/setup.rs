@@ -42,7 +42,7 @@ impl SdroxideApp {
         // The window is keyed by its English title, which is what egui keyed
         // it by before the title was translated: the position it was left
         // at survives, and a change of language does not move it.
-        let (title, key) = if mode.is_aprs() {
+        let (title, _key) = if mode.is_aprs() {
             (tr!("setup-aprs-setup"), "APRS Setup".to_string())
         } else if mode.is_packet() {
             (tr!("setup-packet-setup"), "Packet Setup".to_string())

@@ -11,7 +11,7 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app::alerts::AlertStatus;
 use crate::app::settings::enum_combo;
 use crate::app::settings::general::device_combo;
-use sdroxide_types::{AlertEvent, AlertReply, AlertSettings, AlertSound};
+use sdroxide_types::{AlertEvent, AlertReply, AlertSettings};
 
 pub(in crate::app) fn alerts_settings(
     ui: &mut egui::Ui,

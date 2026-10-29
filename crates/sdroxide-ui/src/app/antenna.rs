@@ -55,7 +55,7 @@ fn pattern_plot(ui: &mut egui::Ui, name: &str, cut: &[(f64, f64)]) {
     let max_g = cut.iter().map(|&(_, g)| g).fold(f64::NEG_INFINITY, f64::max);
     // Draw filled pattern — radius is the relative field (10^((G-Gmax)/20)),
     // so nulls land near zero and the peak at the rim.
-    let mut n = cut.len();
+    let n = cut.len();
     for i in 0..n {
         let (az1, g1) = cut[i];
         let (az2, g2) = cut[(i + 1) % n];
