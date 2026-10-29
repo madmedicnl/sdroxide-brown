@@ -86,6 +86,7 @@ Open issues: 13 (re-measured 2026-10-29).
 - 2026-10-29 — Antenna calculator (MoM solver, presets, 3D, Yagi optimizer)
 - 2026-10-29 — FT8 auto queue UI
 - 2026-10-29 — Grey-line gradient confirmed
+- 2026-10-29 — S-meter troubleshooting (wireless mouse RFI) added to manual
 - 2026-10-29 — STANAG 4285 finished (coded payload not implemented — legal)
 - 2026-10-29 — Olivia proven (RX+TX)
 - 2026-10-29 — S-meter still an issue
