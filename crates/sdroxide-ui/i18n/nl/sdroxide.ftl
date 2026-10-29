@@ -4190,6 +4190,8 @@ acars-blocks-framed-blocks-whose-check = Blokken die zijn geframed, en blokken w
 acars-starting-acars-receiver = de ACARS-ontvanger wordt gestart…
 acars-channel = KANAAL
 acars-tune-dial-here = Stem hier af.
+
+acars-channel-out-of-range = Buiten het ontvangstbereik van deze radio.
 acars-nothing-yet-acars-quiet-between = Nog niets. ACARS is stil tussen vliegtuigen — laat het op een kanaal staan en wacht op een burst.
 acars-check-failed = controle mislukt
 acars-block-check-sequence-did-not = De blokcontrolesequentie kwam niet overeen — de tekst kan fout zijn.

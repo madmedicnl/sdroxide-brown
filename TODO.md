@@ -76,6 +76,7 @@ v2.2.0.3_brown. Open PRs: 3 (#318, #339, #341). Open issues: 15 (re-measured 202
 - AppImage — beslissing nodig.
 
 ## Recently done
+- 2026-10-29 — ACARS channel chips tune the VFO in use, light the real channel, grey out unreachable ones (added by madmedicnl, owned by Roy)
 - 2026-10-29 — Language selector in Settings → UI with Apply button (PR #339, #331)
 - 2026-10-29 — S-meter calibration removed from UI and reading (PR #341, #340)
 - 2026-10-29 — SSTV received-image viewer nav + composer text transfer (PR #333)
