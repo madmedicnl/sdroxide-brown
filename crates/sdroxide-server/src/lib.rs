@@ -16,6 +16,7 @@
 //! the latest state/caps/memories so a new session can be greeted instantly.
 
 mod aircraft;
+mod adsb_overlay;
 mod auth;
 mod history;
 mod watchlist;
@@ -305,6 +306,9 @@ pub(crate) struct Station {
     pub auth: Arc<auth::AuthGate>,
     /// The relay behind `/aircraft-info`, switched on or off for the life of the process.
     pub aircraft: Arc<aircraft::AircraftHub>,
+    /// The relay behind `/adsb-overlay`: live aircraft positions from adsb.lol,
+    /// fetched by the station on behalf of its clients.
+    pub adsb_overlay: Arc<adsb_overlay::AdsbOverlayRelay>,
     /// What the station remembers of each aircraft for a day, fed by every
     /// radio and served on `/aircraft-history`. Off unless the operator
     /// switched it on.
@@ -659,6 +663,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         solar: Arc::new(solar::SolarHub::default()),
         auth: Arc::new(auth::AuthGate::new(params.access)),
         aircraft: Arc::new(aircraft::AircraftHub::start(params.aircraft_online)),
+        adsb_overlay: Arc::new(adsb_overlay::AdsbOverlayRelay::new()),
         history: Arc::new(history::HistoryHub::start()),
         watch: Arc::new(watchlist::WatchHub::start()),
         probes: Arc::new(probe::ProbeHub::start(params.probe)),
@@ -711,6 +716,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         .route("/aircraft-photo/{icao}", get(aircraft::photo_route))
         .route("/aircraft-photo", axum::routing::delete(aircraft::photo_release))
         .route("/aircraft-online", get(aircraft::switch_get).post(aircraft::switch_post))
+        .route("/adsb-overlay", get(adsb_overlay::overlay_get))
         .route("/aircraft-history", get(history::list_route))
         .route("/aircraft-history/{icao}", get(history::one_route))
         .route("/aircraft-export", get(history::export_route))
@@ -747,7 +753,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
 fn is_root_route(path: &str) -> bool {
     match path {
         "/ws" | "/solar-ws" | "/radios" | "/aircraft-history" | "/aircraft-export"
-        | "/aircraft-online" | "/aircraft-photo" | "/aircraft-watch" => true,
+        | "/aircraft-online" | "/aircraft-photo" | "/aircraft-watch" | "/adsb-overlay" => true,
         // Whatever follows is the question, and a bad one is the endpoint's to
         // refuse with a 400, not the static handler's to answer with a page.
         _ if path

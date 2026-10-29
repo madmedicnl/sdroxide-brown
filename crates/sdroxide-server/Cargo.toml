@@ -49,11 +49,11 @@ triple_buffer = "9.0.0"
 # the rest of the config, so the server writes them through the same store the
 # native program does rather than hand-rolling the file.
 sdroxide-config = { path = "../sdroxide-config" }
+ureq = "3.4.0"
 
 [dev-dependencies]
 # Only to POST to /signin in the end-to-end cookie test — the one thing here
 # that speaks plain HTTP. Already in the tree at this version.
-ureq = "3.4.0"
 # The server only uses the engine, not SoapySDR device handling — leave
 # `soapy` for the top-level binary to decide.
 sdroxide-radio = { path = "../sdroxide-radio", default-features = false }

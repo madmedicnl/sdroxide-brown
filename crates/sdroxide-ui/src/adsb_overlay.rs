@@ -28,8 +28,9 @@ pub struct AdsbOverlay {
     pub enabled: bool,
     pub last_fetch: f64,
     pub fetching: bool,
+    pub fetch_failed: bool,
     #[cfg(not(target_arch = "wasm32"))]
-    rx: Option<Receiver<Vec<OverlayAircraft>>>,
+    rx: Option<Receiver<(Vec<OverlayAircraft>, bool)>>,
 }
 
 impl AdsbOverlay {
@@ -43,18 +44,21 @@ impl AdsbOverlay {
     }
 
     /// Start a fetch. Returns immediately; result arrives via poll().
-    pub fn start_fetch(&mut self, lat: f64, lon: f64, radius_nm: f64) {
+    /// `station` is the station URL (peer URL); the fetch goes through the
+    /// station's relay, never directly to adsb.lol.
+    pub fn start_fetch(&mut self, station: &str, lat: f64, lon: f64, radius_nm: f64) {
         if self.fetching {
             return;
         }
         self.fetching = true;
-        let (tx, rx) = channel::<Vec<OverlayAircraft>>();
+        let (tx, rx) = channel::<(Vec<OverlayAircraft>, bool)>();
+        let station = station.to_string();
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.rx = Some(rx);
             std::thread::spawn(move || {
-                let result = fetch_sync(lat, lon, radius_nm);
-                let _ = tx.send(result);
+                let (result, failed) = fetch_sync(&station, lat, lon, radius_nm);
+                let _ = tx.send((result, failed));
             });
         }
         #[cfg(target_arch = "wasm32")]
@@ -67,8 +71,9 @@ impl AdsbOverlay {
     pub fn poll(&mut self, now: f64) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(rx) = &self.rx {
-            if let Ok(result) = rx.try_recv() {
+            if let Ok((result, failed)) = rx.try_recv() {
                 self.aircraft = result;
+                self.fetch_failed = failed;
                 self.last_fetch = now;
                 self.fetching = false;
                 self.rx = None;
@@ -80,11 +85,12 @@ impl AdsbOverlay {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn fetch_sync(lat: f64, lon: f64, radius_nm: f64) -> Vec<OverlayAircraft> {
-    let url = format!(
-        "https://api.adsb.lol/v2/lat/{}/lon/{}/dist/{}",
-        lat, lon, radius_nm as i32
-    );
+fn fetch_sync(station: &str, lat: f64, lon: f64, radius_nm: f64) -> (Vec<OverlayAircraft>, bool) {
+    let base = match crate::login::http_base(station) {
+        Some(b) => b,
+        None => return (Vec::new(), true),
+    };
+    let url = format!("{}/adsb-overlay?lat={}&lon={}&radius={}", base, lat, lon, radius_nm as i32);
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(std::time::Duration::from_secs(12)))
         .build()
@@ -92,13 +98,59 @@ fn fetch_sync(lat: f64, lon: f64, radius_nm: f64) -> Vec<OverlayAircraft> {
     match agent.get(&url).call() {
         Ok(mut resp) => {
             if let Ok(body) = resp.body_mut().with_config().limit(1024 * 1024).read_to_string() {
-                parse_response(&body)
+                (parse_server_response(&body), false)
             } else {
-                Vec::new()
+                (Vec::new(), true)
             }
         }
-        Err(_) => Vec::new(),
+        Err(_) => (Vec::new(), true),
     }
+}
+
+fn parse_server_response(body: &str) -> Vec<OverlayAircraft> {
+    let mut result = Vec::new();
+    let mut depth = 0;
+    let mut obj_start = None;
+    for (i, c) in body.char_indices() {
+        match c {
+            '{' => {
+                if depth == 0 {
+                    obj_start = Some(i);
+                }
+                depth += 1;
+            }
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    if let Some(start) = obj_start {
+                        let obj = &body[start..=i];
+                        if let Some(ac) = parse_overlay_aircraft(obj) {
+                            result.push(ac);
+                        }
+                    }
+                    obj_start = None;
+                }
+            }
+            _ => {}
+        }
+    }
+    result
+}
+
+fn parse_overlay_aircraft(obj: &str) -> Option<OverlayAircraft> {
+    let hex = extract_str(obj, "hex")?;
+    let lat = extract_f64(obj, "lat")?;
+    let lon = extract_f64(obj, "lon")?;
+    Some(OverlayAircraft {
+        hex,
+        callsign: extract_str(obj, "flight"),
+        lat,
+        lon,
+        alt_ft: extract_i32(obj, "alt_baro"),
+        gs_kt: extract_f64(obj, "gs"),
+        track_deg: extract_f64(obj, "track"),
+        squawk: extract_str(obj, "squawk"),
+    })
 }
 
 fn parse_response(body: &str) -> Vec<OverlayAircraft> {

@@ -887,7 +887,7 @@ pub fn show(
     }
 
     // ── overlay aircraft (adsb.lol) ──
-    // Drawn as circles: green if also received locally, orange if only in the
+    // Drawn as spearheads: green if also received locally, orange if only in the
     // database. This makes it visible which aircraft the receiver is missing.
     // Hover shows callsign and altitude.
     let mut overlay_hover: Option<usize> = None;
@@ -910,7 +910,8 @@ pub fn show(
         if !rect.contains(c) {
             continue;
         }
-        let local = u32::from_str_radix(&o.hex, 16).ok()
+        let local = u32::from_str_radix(&o.hex, 16)
+            .ok()
             .map(|h| aircraft.iter().any(|a| a.icao == h))
             .unwrap_or(false);
         let color = if local {
@@ -924,15 +925,17 @@ pub fn show(
         let (s, co) = (track.sin(), track.cos());
         // Spearhead (arrowhead) pointing in the track direction.
         let pts = [
-            c + eframe::egui::vec2(0.0 * co - (-r) * s, 0.0 * s + (-r) * co),   // tip
-            c + eframe::egui::vec2((-r * 0.7) * co - (r * 0.5) * s, (-r * 0.7) * s + (r * 0.5) * co), // left base
-            c + eframe::egui::vec2((-r * 0.7) * co - (-r * 0.5) * s, (-r * 0.7) * s + (-r * 0.5) * co), // right base
+            c + eframe::egui::vec2(0.0 * co - (-r) * s, 0.0 * s + (-r) * co), // tip
+            c + eframe::egui::vec2(
+                (-r * 0.7) * co - (r * 0.5) * s,
+                (-r * 0.7) * s + (r * 0.5) * co,
+            ), // left base
+            c + eframe::egui::vec2(
+                (-r * 0.7) * co - (-r * 0.5) * s,
+                (-r * 0.7) * s + (-r * 0.5) * co,
+            ), // right base
         ];
-        p.add(eframe::egui::Shape::convex_polygon(
-            pts.to_vec(),
-            color,
-            eframe::egui::Stroke::NONE,
-        ));
+        p.add(eframe::egui::Shape::convex_polygon(pts.to_vec(), color, eframe::egui::Stroke::NONE));
         // Outline.
         let mut outline: Vec<eframe::egui::Pos2> = pts.to_vec();
         if let Some(first) = outline.first().copied() {
@@ -952,7 +955,13 @@ pub fn show(
             o.gs_kt.map(|g| format!("{:.0}", g)).unwrap_or_else(|| "?".into()),
         );
         // Draw a small label near the cursor.
-        p.text(c + eframe::egui::vec2(6.0, -6.0), eframe::egui::Align2::LEFT_BOTTOM, tip, eframe::egui::FontId::proportional(10.0), eframe::egui::Color32::WHITE);
+        p.text(
+            c + eframe::egui::vec2(6.0, -6.0),
+            eframe::egui::Align2::LEFT_BOTTOM,
+            tip,
+            eframe::egui::FontId::proportional(10.0),
+            eframe::egui::Color32::WHITE,
+        );
     }
 
     // ── the data blocks ──

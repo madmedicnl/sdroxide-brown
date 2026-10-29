@@ -72,7 +72,10 @@ impl SdroxideApp {
                 let now_f = now as f64;
                 self.adsb_overlay.poll(now_f);
                 if self.adsb_overlay.should_fetch(now_f) {
-                    self.adsb_overlay.start_fetch(lat, lon, 250.0);
+                    let station = self.ctrl.peer_url().unwrap_or_default();
+                    if !station.is_empty() {
+                        self.adsb_overlay.start_fetch(&station, lat, lon, 250.0);
+                    }
                 }
             }
         }
@@ -173,18 +176,27 @@ impl SdroxideApp {
                 self.adsb_overlay.enabled = !self.adsb_overlay.enabled;
             }
             if self.adsb_overlay.enabled {
-                if self.adsb_overlay.aircraft.is_empty() {
+                if self.ctrl.peer_url().is_none() {
+                    slot(ui, 120.0, "needs station", theme::gray(120));
+                } else if self.adsb_overlay.aircraft.is_empty() {
                     if self.adsb_home().is_none() {
                         slot(ui, 120.0, "set grid square", theme::gray(120));
                     } else if self.adsb_overlay.fetching {
                         slot(ui, 80.0, "fetching…", theme::gray(120));
                     } else if self.adsb_overlay.last_fetch == 0.0 {
                         slot(ui, 80.0, "waiting", theme::gray(120));
+                    } else if self.adsb_overlay.fetch_failed {
+                        slot(ui, 100.0, "fetch failed", theme::gray(120));
                     } else {
                         slot(ui, 100.0, "0 overlay", theme::gray(120));
                     }
                 } else {
-                    slot(ui, 100.0, &format!("{} overlay", self.adsb_overlay.aircraft.len()), theme::gray(120));
+                    slot(
+                        ui,
+                        100.0,
+                        &format!("{} overlay", self.adsb_overlay.aircraft.len()),
+                        theme::gray(120),
+                    );
                 }
             }
 
@@ -531,11 +543,8 @@ impl SdroxideApp {
         // it: an aid is amplitude modulated and a lane mode cannot carry it, so a
         // station parked on a dial still in ADS-B would be silence and then
         // retuned. A/B is the switch between the plane and the ground station.
-        let overlay: Vec<crate::adsb_overlay::OverlayAircraft> = if self.adsb_overlay.enabled {
-            self.adsb_overlay.aircraft.clone()
-        } else {
-            Vec::new()
-        };
+        let overlay: Vec<crate::adsb_overlay::OverlayAircraft> =
+            if self.adsb_overlay.enabled { self.adsb_overlay.aircraft.clone() } else { Vec::new() };
         if let Some(t) = crate::adsb_map::show(
             ui,
             state,
