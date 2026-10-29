@@ -3572,6 +3572,14 @@ struct Engine {
     text_feed_seen: String,
     /// How many VDL2 messages have already been sent to the decoded-text feed.
     vdl2_feed_seen: usize,
+    /// How many NAVTEX messages have already been sent to the decoded-text feed.
+    navtex_feed_seen: usize,
+    /// How many ACARS messages have already been sent to the decoded-text feed.
+    acars_feed_seen: usize,
+    /// How many DSC messages have already been sent to the decoded-text feed.
+    dsc_feed_seen: usize,
+    /// How many HFDL log entries have already been sent to the decoded-text feed.
+    hfdl_feed_seen: usize,
     /// The band the last tick saw, so a crossing into another one can be told
     /// from the tuning about inside a band that goes on all session. See
     /// [`Engine::poll_band_change`].
@@ -5096,6 +5104,10 @@ fn engine_thread(
         decode_udp: String::new(),
         text_feed_seen: String::new(),
         vdl2_feed_seen: 0,
+        navtex_feed_seen: 0,
+        acars_feed_seen: 0,
+        dsc_feed_seen: 0,
+        hfdl_feed_seen: 0,
         rigctld: None,
         rigctld_cfg: RigctldConfig::default(),
         rigctld_err: None,
@@ -7943,6 +7955,98 @@ impl Engine {
         self.vdl2_feed_seen = st.messages.len();
     }
 
+    /// NAVTEX messages, one per decoded message. The summary includes the
+    /// station, subject, serial and body.
+    fn feed_navtex(&mut self, st: &sdroxide_types::DigiStatus) {
+        if self.decode_feed.is_none() {
+            return;
+        }
+        let Some(ns) = &st.navtex else { return };
+        if ns.messages.len() < self.navtex_feed_seen {
+            self.navtex_feed_seen = 0;
+        }
+        for m in &ns.messages[self.navtex_feed_seen..] {
+            let text = format!("ZCZC {}{}{} {}", m.station, m.kind, m.serial, m.text);
+            self.send_feed(FeedLine {
+                unix: m.at,
+                kind: "decode",
+                mode: "NAVTEX",
+                dial_hz: self.state.rx_freq_hz(),
+                freq_hz: self.state.rx_freq_hz(),
+                audio_hz: None,
+                snr_db: None,
+                dt: None,
+                text: &text,
+            });
+        }
+        self.navtex_feed_seen = ns.messages.len();
+    }
+
+    /// ACARS messages, one per decoded message.
+    fn feed_acars(&mut self, st: &sdroxide_types::DigiStatus) {
+        if self.decode_feed.is_none() { return; }
+        let Some(as_) = &st.acars else { return };
+        if as_.messages.len() < self.acars_feed_seen { self.acars_feed_seen = 0; }
+        for m in &as_.messages[self.acars_feed_seen..] {
+            let text = format!("{} {} {}", m.label, m.address, m.text);
+            self.send_feed(FeedLine {
+                unix: m.at,
+                kind: "decode",
+                mode: "ACARS",
+                dial_hz: self.state.rx_freq_hz(),
+                freq_hz: self.state.rx_freq_hz(),
+                audio_hz: None,
+                snr_db: None,
+                dt: None,
+                text: &text,
+            });
+        }
+        self.acars_feed_seen = as_.messages.len();
+    }
+
+    /// DSC messages, one per decoded sequence.
+    fn feed_dsc(&mut self, st: &sdroxide_types::DigiStatus) {
+        if self.decode_feed.is_none() { return; }
+        let Some(ds) = &st.dsc else { return };
+        if ds.messages.len() < self.dsc_feed_seen { self.dsc_feed_seen = 0; }
+        for m in &ds.messages[self.dsc_feed_seen..] {
+            let text = format!("{:?} {} -> {}", m.message.category, m.message.self_mmsi, m.message.target_mmsi);
+            self.send_feed(FeedLine {
+                unix: m.at,
+                kind: "decode",
+                mode: "DSC",
+                dial_hz: self.state.rx_freq_hz(),
+                freq_hz: self.state.rx_freq_hz(),
+                audio_hz: None,
+                snr_db: None,
+                dt: None,
+                text: &text,
+            });
+        }
+        self.dsc_feed_seen = ds.messages.len();
+    }
+
+    /// HFDL log entries, one per decoded event.
+    fn feed_hfdl(&mut self, st: &sdroxide_types::HfdlStatus) {
+        if self.decode_feed.is_none() { return; }
+        if st.log.len() < self.hfdl_feed_seen { self.hfdl_feed_seen = 0; }
+        for e in &st.log[self.hfdl_feed_seen..] {
+            let text = format!("{} {}", e.kind, e.gs.as_deref().unwrap_or(""));
+            self.send_feed(FeedLine {
+                unix: e.unix,
+                kind: "decode",
+                mode: "HFDL",
+                dial_hz: e.freq_khz as f64 * 1000.0,
+                freq_hz: e.freq_khz as f64 * 1000.0,
+                audio_hz: None,
+                snr_db: e.snr_db.map(f64::from),
+                dt: None,
+                text: &text,
+            });
+        }
+        self.hfdl_feed_seen = st.log.len();
+    }
+
     /// Broadcast the station's state as WSJT-X reports it.
     fn wsjtx_status(&self, s: &sdroxide_types::DigiStatus) {
         let Some(w) = &self.wsjtx else { return };
@@ -8049,6 +8153,9 @@ impl Engine {
                     // swapped back on the way out.
                     self.wsjtx_status(&s);
                     self.feed_text(&s, dial);
+                    self.feed_navtex(&s);
+                    self.feed_acars(&s);
+                    self.feed_dsc(&s);
                     s.config.my_call = self.digi_config.my_call.clone();
                     s.config.my_grid = self.digi_config.my_grid.clone();
                     let _ = self.event_tx.send(RadioEvent::Ft8Status(s));
@@ -12600,6 +12707,7 @@ impl Engine {
     fn poll_hfdl(&mut self) {
         let Some(c) = self.hfdl.as_ref() else { return };
         let Some(status) = c.poll() else { return };
+        self.feed_hfdl(&status);
         let _ = self.event_tx.send(RadioEvent::HfdlStatus(status));
     }
 
