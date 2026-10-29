@@ -86,11 +86,13 @@ one entry per work item.
 ## Task tracking (Kanban + TODO)
 
 - Every task started goes into `TODO.md` under **Now** (one line: what, why,
-  where it came from) and the board's **In Progress** before starting.
+  where it came from) **and** the GitHub Projects board's **In Progress**
+  before starting. Both must be updated — not just one.
 - Every task finished moves in `TODO.md` to **Recently done** (today's date,
-  one line) and to the board's **Achieved**; remove from In Progress.
-- Every task blocked goes under **Waiting on other people** with the single
-  question.
+  one line) **and** to the board's **Done**; remove from In Progress. Both
+  must be updated.
+- Every task blocked goes under **Waiting on other people** in `TODO.md` with
+  the single question, and to the board's **Blocked**.
 - **Issues take priority over development.** Check open issues before starting
   new work. A report against an area is a new report about a specific fault.
 - **Each task must name who added it and who owns it.** Format:
