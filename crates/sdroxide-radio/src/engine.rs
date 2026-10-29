@@ -14355,8 +14355,10 @@ impl Engine {
             }
             // Step 2c: set VFO B mode to the current mode (uplink mode).
             self.source.set_vfo_b_mode(self.state.rx[0].mode);
-            // CTCSS on VFO B: not implemented yet (needs structured tone data
-            // and hardware verification). The rig retains its last tone setting.
+            // CTCSS on VFO B: default 67 Hz (ISS repeater). The tone can be
+            // overridden by the rig's own setting; a structured tone field in
+            // SatLockConfig is a future (wire) change.
+            self.source.set_vfo_b_ctcss(67.0);
             self.source.split_on();
             self.sat_split_on = true;
         }
