@@ -377,9 +377,14 @@ impl BitPhase {
 
     fn disagree_limit(&self) -> u32 {
         if self.sensitivity >= 0 {
-            ((6u32 as f64 * (1.0 + 0.1 * f64::from(self.sensitivity))).round() as u32).clamp(3, 12)
+            // Drop sync sooner after invalid characters (DK8JV #257): a
+            // transmission that stops and another that starts share no phase,
+            // and without a tighter limit the receiver stays latched on the old
+            // one. Keep the clamp floor at 2 so a single bad slot does not
+            // drop a real signal.
+            ((3u32 as f64 * (1.0 + 0.1 * f64::from(self.sensitivity))).round() as u32).clamp(2, 6)
         } else {
-            ((6u32 as f64 * self.sens_k()).round() as u32).clamp(2, 12)
+            ((3u32 as f64 * self.sens_k()).round() as u32).clamp(2, 6)
         }
     }
     /// Forget the character phase — the signal it was found in has gone.
