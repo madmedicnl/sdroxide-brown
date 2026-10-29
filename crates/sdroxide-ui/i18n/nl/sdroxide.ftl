@@ -6111,9 +6111,9 @@ rc-music = MUZIEK ♪
 
 rc-speech = SPRAAK
 
-rc-stereo-the-19-khz-pilot-is-locked = Stereo — de 19 kHz-pilot is vergrendeld
+rc-stereo-the-19-khz-pilot-is-locked = Stereo — de 19 kHz-pilot is vergrendeld — klik voor mono
 
-rc-mono-the-broadcast-stereo-decode = Mono — de stereodecodering van de omroep is uitgeschakeld (ST in de bovenbalk)
+rc-mono-the-broadcast-stereo-decode = Mono — de stereodecodering van de omroep is uitgeschakeld — klik om in te schakelen
 
 rc-mono-noise-reduction-is-on-and = Mono — ruisonderdrukking staat aan, en stereo wijkt ervoor
 

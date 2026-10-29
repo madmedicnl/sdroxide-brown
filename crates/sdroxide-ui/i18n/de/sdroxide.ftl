@@ -6097,9 +6097,9 @@ rc-music = MUSIK ♪
 
 rc-speech = SPRACHE
 
-rc-stereo-the-19-khz-pilot-is-locked = Stereo – der 19-kHz-Pilotton ist verriegelt
+rc-stereo-the-19-khz-pilot-is-locked = Stereo – der 19-kHz-Pilotton ist verriegelt – Klick für Mono
 
-rc-mono-the-broadcast-stereo-decode = Mono – die Stereo-Dekodierung des Rundfunks ist ausgeschaltet (ST in der oberen Leiste)
+rc-mono-the-broadcast-stereo-decode = Mono – die Stereo-Dekodierung des Rundfunks ist ausgeschaltet – Klick zum Einschalten
 
 rc-mono-noise-reduction-is-on-and = Mono – die Rauschminderung ist an, und Stereo weicht ihr
 

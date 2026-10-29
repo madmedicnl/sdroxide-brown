@@ -746,3 +746,32 @@ fn wideband_preview() {
     img.save(&out).expect("write the preview");
     println!("wrote {out}");
 }
+
+/// With ST switched off the pilot still locks, but the sound is mono: the meter
+/// is a false stereo and the lamp is dark — it was lit over a mono meter.
+#[test]
+fn st_off_with_a_pilot_is_mono_on_the_meter_and_dark_on_the_lamp() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, _sent) = recorded(Mode::Wfm);
+    app.state.vfo_a_hz = 98e6;
+    app.state.rx[0].wfm_stereo = false;
+    app.meters = Some(fm_meters(true));
+    let [l, r] = needles(&mut app, &ctx);
+    assert!((l - r).abs() > 0.5, "ST off but the meter reads stereo: {l} {r}");
+}
+
+/// The STEREO lamp is the ST switch: a click flips the decode.
+#[test]
+fn a_click_on_the_stereo_lamp_flips_the_decode() {
+    let _guard = crate::multi::frame_test_lock();
+    let (ctx, mut app, sent) = recorded(Mode::Wfm);
+    app.state.vfo_a_hz = 98e6;
+    app.state.rx[0].wfm_stereo = true;
+    app.meters = Some(fm_meters(true));
+    assert!(click(&ctx, &mut app, "STEREO"), "no STEREO lamp");
+    assert!(sent.lock().unwrap().iter().any(|c| matches!(
+        c,
+        sdroxide_types::Command::SetWfmStereo { on: false, .. }
+    )));
+    assert!(!app.state.rx[0].wfm_stereo);
+}

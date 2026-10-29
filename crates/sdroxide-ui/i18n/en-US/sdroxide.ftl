@@ -6113,9 +6113,9 @@ rc-music = MUSIC ♪
 
 rc-speech = SPEECH
 
-rc-stereo-the-19-khz-pilot-is-locked = Stereo — the 19 kHz pilot is locked
+rc-stereo-the-19-khz-pilot-is-locked = Stereo — the 19 kHz pilot is locked — click for mono
 
-rc-mono-the-broadcast-stereo-decode = Mono — the broadcast stereo decode is switched off (ST in the top bar)
+rc-mono-the-broadcast-stereo-decode = Mono — the broadcast stereo decode is switched off — click to switch it on
 
 rc-mono-noise-reduction-is-on-and = Mono — noise reduction is on, and stereo yields to it
 

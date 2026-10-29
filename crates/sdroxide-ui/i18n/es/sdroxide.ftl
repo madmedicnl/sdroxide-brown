@@ -6098,9 +6098,9 @@ rc-music = MÚSICA ♪
 
 rc-speech = VOZ
 
-rc-stereo-the-19-khz-pilot-is-locked = Estéreo: el piloto de 19 kHz está enganchado
+rc-stereo-the-19-khz-pilot-is-locked = Estéreo: el piloto de 19 kHz está enganchado; clic para mono
 
-rc-mono-the-broadcast-stereo-decode = Mono: la decodificación estéreo de la emisora está desactivada (ST en la barra superior)
+rc-mono-the-broadcast-stereo-decode = Mono: la decodificación estéreo de la emisora está desactivada: clic para activarla
 
 rc-mono-noise-reduction-is-on-and = Mono: la reducción de ruido está activada y el estéreo cede ante ella
 
