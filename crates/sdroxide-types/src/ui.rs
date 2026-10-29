@@ -1684,7 +1684,6 @@ impl Default for UiSettings {
             tool_windows_repaired: 0,
             session_qso_sort: 0,
             session_qso_sort_desc: true,
->>>>>>> b8cd5cf2 (Add SESSION QSOs panel (sortable, live, export ADIF/CSV/TXT))
         }
     }
 }
