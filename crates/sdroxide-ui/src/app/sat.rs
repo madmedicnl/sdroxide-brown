@@ -574,6 +574,31 @@ fn pass_diagram(ui: &mut egui::Ui, curve: &PassCurve, now: i64, height: f32) {
 /// The mode a link's published emission maps onto. Satellite SSB convention
 /// is USB on the downlink, whatever the band. An SSTV downlink is FM on V/UHF,
 /// and tuning it as plain NFM would leave the picture undecoded (#622).
+/// Parse a CTCSS tone from a SatLink's note (e.g. "CTCSS 67.0 Hz").
+fn parse_ctcss_hz(note: &str) -> Option<f64> {
+    let lower = note.to_lowercase();
+    if let Some(idx) = lower.find("ctcss") {
+        let rest = &note[idx..];
+        // Find the number after "CTCSS"
+        let mut num_str = String::new();
+        let mut found_dot = false;
+        for c in rest.chars().skip(5) {
+            if c.is_ascii_digit() {
+                num_str.push(c);
+            } else if c == '.' && !found_dot {
+                num_str.push(c);
+                found_dot = true;
+            } else if !num_str.is_empty() {
+                break;
+            }
+        }
+        if !num_str.is_empty() {
+            return num_str.parse().ok();
+        }
+    }
+    None
+}
+
 fn mode_for_link(l: &sdroxide_types::SatLink) -> Mode {
     let m = l.mode.to_ascii_uppercase();
     let sstv = m.contains("SSTV") || l.label.to_ascii_uppercase().contains("SSTV");
@@ -1381,6 +1406,7 @@ impl SdroxideApp {
                     downlink_hz: lock_downlink_hz(link, self.state.active_freq_hz()),
                     uplink: SatUplink::from_link(link),
                     doppler: true,
+                    ctcss_hz: parse_ctcss_hz(&link.note),
                     rotator: win.sent.as_ref().map(|c| c.rotator).unwrap_or(true),
                 };
                 cmds.push(Command::SetMode {
