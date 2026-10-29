@@ -3572,14 +3572,19 @@ struct Engine {
     text_feed_seen: String,
     /// How many VDL2 messages have already been sent to the decoded-text feed.
     vdl2_feed_seen: i64,
+    vdl2_feed_seen_count: usize,
     /// How many NAVTEX messages have already been sent to the decoded-text feed.
     navtex_feed_seen: i64,
+    navtex_feed_seen_count: usize,
     /// How many ACARS messages have already been sent to the decoded-text feed.
     acars_feed_seen: i64,
+    acars_feed_seen_count: usize,
     /// How many DSC messages have already been sent to the decoded-text feed.
     dsc_feed_seen: i64,
+    dsc_feed_seen_count: usize,
     /// How many HFDL log entries have already been sent to the decoded-text feed.
     hfdl_feed_seen: i64,
+    hfdl_feed_seen_count: usize,
     /// The band the last tick saw, so a crossing into another one can be told
     /// from the tuning about inside a band that goes on all session. See
     /// [`Engine::poll_band_change`].
@@ -5104,10 +5109,15 @@ fn engine_thread(
         decode_udp: String::new(),
         text_feed_seen: String::new(),
         vdl2_feed_seen: 0,
+        vdl2_feed_seen_count: 0,
         navtex_feed_seen: 0,
+        navtex_feed_seen_count: 0,
         acars_feed_seen: 0,
+        acars_feed_seen_count: 0,
         dsc_feed_seen: 0,
+        dsc_feed_seen_count: 0,
         hfdl_feed_seen: 0,
+        hfdl_feed_seen_count: 0,
         rigctld: None,
         rigctld_cfg: RigctldConfig::default(),
         rigctld_err: None,
@@ -7935,12 +7945,28 @@ impl Engine {
         if self.decode_feed.is_none() {
             return;
         }
-        // The log is a rolling window; if it shrank (cleared), start over.
-        if !st.messages.is_empty() && st.messages[0].at > self.vdl2_feed_seen {
-            self.vdl2_feed_seen = 0;
+        let msgs = &st.messages;
+        if msgs.is_empty() {
+            return;
         }
-        let start = st.messages.iter().position(|m| m.at > self.vdl2_feed_seen).unwrap_or(st.messages.len());
-        for m in &st.messages[start..] {
+        if self.vdl2_feed_seen > 0 && msgs[0].at > self.vdl2_feed_seen {
+            self.vdl2_feed_seen = 0;
+            self.vdl2_feed_seen_count = 0;
+        }
+        if self.vdl2_feed_seen_count > msgs.len() {
+            self.vdl2_feed_seen = 0;
+            self.vdl2_feed_seen_count = 0;
+        }
+        let mut start = msgs.len();
+        for (i, m) in msgs.iter().enumerate() {
+            if m.at > self.vdl2_feed_seen
+                || (m.at == self.vdl2_feed_seen && i >= self.vdl2_feed_seen_count)
+            {
+                start = i;
+                break;
+            }
+        }
+        for m in &msgs[start..] {
             self.send_feed(FeedLine {
                 unix: m.at,
                 kind: "decode",
@@ -7953,7 +7979,10 @@ impl Engine {
                 text: &m.summary(),
             });
         }
-        if let Some(m) = st.messages.last() { self.vdl2_feed_seen = m.at; }
+        if let Some(m) = msgs.last() {
+            self.vdl2_feed_seen = m.at;
+            self.vdl2_feed_seen_count = msgs.iter().filter(|m| m.at == self.vdl2_feed_seen).count();
+        }
     }
 
     /// NAVTEX messages, one per decoded message. The summary includes the
@@ -7963,11 +7992,28 @@ impl Engine {
             return;
         }
         let Some(ns) = &st.navtex else { return };
-        if !ns.messages.is_empty() && ns.messages[0].at > self.navtex_feed_seen {
-            self.navtex_feed_seen = 0;
+        let msgs = &ns.messages;
+        if msgs.is_empty() {
+            return;
         }
-        let start = ns.messages.iter().position(|m| m.at > self.navtex_feed_seen).unwrap_or(ns.messages.len());
-        for m in &ns.messages[start..] {
+        if self.navtex_feed_seen > 0 && msgs[0].at > self.navtex_feed_seen {
+            self.navtex_feed_seen = 0;
+            self.navtex_feed_seen_count = 0;
+        }
+        if self.navtex_feed_seen_count > msgs.len() {
+            self.navtex_feed_seen = 0;
+            self.navtex_feed_seen_count = 0;
+        }
+        let mut start = msgs.len();
+        for (i, m) in msgs.iter().enumerate() {
+            if m.at > self.navtex_feed_seen
+                || (m.at == self.navtex_feed_seen && i >= self.navtex_feed_seen_count)
+            {
+                start = i;
+                break;
+            }
+        }
+        for m in &msgs[start..] {
             let text = format!("ZCZC {}{}{} {}", m.station, m.kind, m.serial, m.text);
             self.send_feed(FeedLine {
                 unix: m.at,
@@ -7981,16 +8027,40 @@ impl Engine {
                 text: &text,
             });
         }
-        if let Some(m) = ns.messages.last() { self.navtex_feed_seen = m.at; }
+        if let Some(m) = msgs.last() {
+            self.navtex_feed_seen = m.at;
+            self.navtex_feed_seen_count = msgs.iter().filter(|m| m.at == self.navtex_feed_seen).count();
+        }
     }
 
     /// ACARS messages, one per decoded message.
     fn feed_acars(&mut self, st: &sdroxide_types::DigiStatus) {
-        if self.decode_feed.is_none() { return; }
+        if self.decode_feed.is_none() {
+            return;
+        }
         let Some(as_) = &st.acars else { return };
-        if !as_.messages.is_empty() && as_.messages[0].at > self.acars_feed_seen { self.acars_feed_seen = 0; }
-        let start = as_.messages.iter().position(|m| m.at > self.acars_feed_seen).unwrap_or(as_.messages.len());
-        for m in &as_.messages[start..] {
+        let msgs = &as_.messages;
+        if msgs.is_empty() {
+            return;
+        }
+        if self.acars_feed_seen > 0 && msgs[0].at > self.acars_feed_seen {
+            self.acars_feed_seen = 0;
+            self.acars_feed_seen_count = 0;
+        }
+        if self.acars_feed_seen_count > msgs.len() {
+            self.acars_feed_seen = 0;
+            self.acars_feed_seen_count = 0;
+        }
+        let mut start = msgs.len();
+        for (i, m) in msgs.iter().enumerate() {
+            if m.at > self.acars_feed_seen
+                || (m.at == self.acars_feed_seen && i >= self.acars_feed_seen_count)
+            {
+                start = i;
+                break;
+            }
+        }
+        for m in &msgs[start..] {
             let text = format!("{} {} {}", m.label, m.address, m.text);
             self.send_feed(FeedLine {
                 unix: m.at,
@@ -8004,17 +8074,41 @@ impl Engine {
                 text: &text,
             });
         }
-        if let Some(m) = as_.messages.last() { self.acars_feed_seen = m.at; }
+        if let Some(m) = msgs.last() {
+            self.acars_feed_seen = m.at;
+            self.acars_feed_seen_count = msgs.iter().filter(|m| m.at == self.acars_feed_seen).count();
+        }
     }
 
     /// DSC messages, one per decoded sequence.
     fn feed_dsc(&mut self, st: &sdroxide_types::DigiStatus) {
-        if self.decode_feed.is_none() { return; }
+        if self.decode_feed.is_none() {
+            return;
+        }
         let Some(ds) = &st.dsc else { return };
-        if !ds.messages.is_empty() && ds.messages[0].at > self.dsc_feed_seen { self.dsc_feed_seen = 0; }
-        let start = ds.messages.iter().position(|m| m.at > self.dsc_feed_seen).unwrap_or(ds.messages.len());
-        for m in &ds.messages[start..] {
-            let text = format!("{:?} {} -> {}", m.message.category, m.message.self_mmsi, m.message.target_mmsi);
+        let msgs = &ds.messages;
+        if msgs.is_empty() {
+            return;
+        }
+        if self.dsc_feed_seen > 0 && msgs[0].at > self.dsc_feed_seen {
+            self.dsc_feed_seen = 0;
+            self.dsc_feed_seen_count = 0;
+        }
+        if self.dsc_feed_seen_count > msgs.len() {
+            self.dsc_feed_seen = 0;
+            self.dsc_feed_seen_count = 0;
+        }
+        let mut start = msgs.len();
+        for (i, m) in msgs.iter().enumerate() {
+            if m.at > self.dsc_feed_seen
+                || (m.at == self.dsc_feed_seen && i >= self.dsc_feed_seen_count)
+            {
+                start = i;
+                break;
+            }
+        }
+        for m in &msgs[start..] {
+            let text = format!("{} {} -> {}", m.message.category.label(), m.message.self_mmsi, m.message.target_mmsi);
             self.send_feed(FeedLine {
                 unix: m.at,
                 kind: "decode",
@@ -8027,15 +8121,49 @@ impl Engine {
                 text: &text,
             });
         }
-        if let Some(m) = ds.messages.last() { self.dsc_feed_seen = m.at; }
+        if let Some(m) = msgs.last() {
+            self.dsc_feed_seen = m.at;
+            self.dsc_feed_seen_count = msgs.iter().filter(|m| m.at == self.dsc_feed_seen).count();
+        }
     }
 
     /// HFDL log entries, one per decoded event.
     fn feed_hfdl(&mut self, st: &sdroxide_types::HfdlStatus) {
-        if self.decode_feed.is_none() { return; }
-        if !st.log.is_empty() && st.log[0].unix > self.hfdl_feed_seen { self.hfdl_feed_seen = 0; }
-        let start = st.log.iter().position(|e| e.unix > self.hfdl_feed_seen).unwrap_or(st.log.len());
-        for e in &st.log[start..] {
+        if self.decode_feed.is_none() {
+            return;
+        }
+        let log = &st.log;
+        if log.is_empty() {
+            return;
+        }
+        // HFDL log is sorted newest-first (push_front). New entries are at
+        // the front. Rolling window: if the last (oldest) entry is newer
+        // than what we last saw, the window rolled.
+        if self.hfdl_feed_seen > 0 && log[log.len() - 1].unix > self.hfdl_feed_seen {
+            self.hfdl_feed_seen = 0;
+            self.hfdl_feed_seen_count = 0;
+        }
+        if self.hfdl_feed_seen_count > log.len() {
+            self.hfdl_feed_seen = 0;
+            self.hfdl_feed_seen_count = 0;
+        }
+        // Count new entries from the front.
+        let mut new_count = 0;
+        for e in log {
+            if e.unix > self.hfdl_feed_seen {
+                new_count += 1;
+            } else if e.unix == self.hfdl_feed_seen {
+                let seen_so_far = log.iter().take(new_count).filter(|e| e.unix == self.hfdl_feed_seen).count();
+                if seen_so_far < self.hfdl_feed_seen_count {
+                    new_count += 1;
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        for e in &log[..new_count] {
             let text = format!("{} {}", e.kind, e.gs.as_deref().unwrap_or(""));
             self.send_feed(FeedLine {
                 unix: e.unix,
@@ -8049,7 +8177,10 @@ impl Engine {
                 text: &text,
             });
         }
-        if let Some(e) = st.log.last() { self.hfdl_feed_seen = e.unix; }
+        if new_count > 0 {
+            self.hfdl_feed_seen = log[0].unix;
+            self.hfdl_feed_seen_count = log.iter().filter(|e| e.unix == self.hfdl_feed_seen).count();
+        }
     }
 
     /// Broadcast the station's state as WSJT-X reports it.
