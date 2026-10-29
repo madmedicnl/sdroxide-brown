@@ -397,12 +397,13 @@ fn rows_after(n: u32) -> usize {
     app.radio_classic.wf.len()
 }
 
-/// The little waterfall scrolls at half the speed it did — one row for every
-/// two spectrum frames — and keeps ten times as many rows.
+/// The little waterfall scrolls one and a half times as fast as it did at one
+/// row for two spectrum frames — three rows for every four — and keeps ten
+/// times as many rows as it first did.
 #[test]
-fn the_scope_waterfall_runs_at_half_speed_and_keeps_ten_times_the_rows() {
+fn the_scope_waterfall_runs_three_rows_in_four_and_keeps_four_hundred() {
     let _guard = crate::multi::frame_test_lock();
-    assert_eq!(rows_after(20), 10, "twenty frames should leave ten rows");
+    assert_eq!(rows_after(20), 15, "twenty frames should leave fifteen rows");
     assert_eq!(rows_after(1200), 400, "the waterfall keeps 400 rows");
 }
 
