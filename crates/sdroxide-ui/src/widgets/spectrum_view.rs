@@ -4524,3 +4524,231 @@ mod offset_hint_tests {
         assert_eq!(offset_edge_hint(0.0, 1000.0, -0.4), None, "and on the other side");
     }
 }
+
+/// Frame-by-frame simulation of CTR under zoom: "CTR on = the dial is always in
+/// the middle of the waterfall", checked on every frame of a fast and a slow
+/// zoom in and out over the whole bandwidth, for a wheel or pinch about the
+/// pointer (anywhere on the picture) and for the keyboard (about the middle).
+///
+/// `Sim::frame` mirrors, step for step, what `show` does between the zoom
+/// gesture and the end-of-frame clamp (the CTR block and `clamp_to`). Keep the
+/// two in line: the point of the harness is to read the view *as drawn*, i.e.
+/// after the whole frame, which is what the operator sees.
+#[cfg(test)]
+mod ctr_zoom_sim {
+    use super::*;
+    use std::collections::VecDeque;
+
+    const WIDTH: f32 = 1000.0;
+    const DEV_SPAN: f64 = 2_500_000.0;
+    const DIAL: f64 = 14_100_000.0;
+
+    /// One front end: it answers a `SetCenter` `lag` frames later, and a
+    /// zero-IF one (`guard` > 0) will not put its LO nearer the dial than that.
+    struct Sim {
+        view: ViewState,
+        state: RadioState,
+        pan: WindowPan,
+        engine_center: f64,
+        in_flight: VecDeque<(usize, f64)>,
+        lag: usize,
+        guard: f64,
+        asked: Option<CtrAsk>,
+        centred_at: Option<(f64, f64)>,
+    }
+
+    /// What the operator sees at the end of one frame.
+    struct Seen {
+        /// Dial minus the middle of the view, in Hz.
+        off_hz: f64,
+        span: f64,
+        mid: f64,
+    }
+
+    impl Sim {
+        fn new(lag: usize, guard: f64) -> Self {
+            let mut state = RadioState { sample_rate: DEV_SPAN, ..RadioState::default() };
+            state.center_hz = DIAL;
+            state.vfo_a_hz = DIAL;
+            let mut view = ViewState::default();
+            view.center_on_vfo = true;
+            view.fit(DIAL, DEV_SPAN);
+            Sim {
+                view,
+                state,
+                pan: WindowPan::of(Some(&sdroxide_types::DeviceCaps::default()), DIAL),
+                engine_center: DIAL,
+                in_flight: VecDeque::new(),
+                lag,
+                guard,
+                asked: None,
+                centred_at: None,
+            }
+        }
+
+        fn engine_step(&mut self) {
+            for (left, _) in self.in_flight.iter_mut() {
+                *left = left.saturating_sub(1);
+            }
+            while self.in_flight.front().is_some_and(|&(left, _)| left == 0) {
+                let (_, hz) = self.in_flight.pop_front().unwrap();
+                // guarded_center: the LO stays a guard away from the dial.
+                self.engine_center = if self.guard > 0.0 && (hz - DIAL).abs() < self.guard {
+                    DIAL + self.guard
+                } else {
+                    hz
+                };
+            }
+        }
+
+        /// One frame: the front end's snapshot, one zoom step about `x`, then
+        /// the CTR block and the clamp as `show` runs them.
+        fn frame(&mut self, x: f32, factor: f64) -> Seen {
+            self.engine_step();
+            self.state.center_hz = self.engine_center;
+            let mut dev_center = self.state.center_hz;
+            let (zoom_center, zoom_span) = self.pan.view_bounds(dev_center, DEV_SPAN);
+            let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(WIDTH, 400.0));
+            let mut cmds = Vec::new();
+            let view = &mut self.view;
+            let state = &mut self.state;
+
+            if factor != 1.0 {
+                zoom_about(view, x, &rect, factor, DEV_SPAN);
+            }
+
+            // --- mirror of the CTR block in `show` ---
+            let vfo = state.active_freq_hz();
+            let mut asked = self.asked;
+            if let Some(ask) = asked {
+                match ctr_settle(view, vfo, ask, dev_center, zoom_center, zoom_span) {
+                    CtrSettle::Waiting => {}
+                    CtrSettle::Done { refitted } => {
+                        asked = None;
+                        if refitted {
+                            self.centred_at = Some((vfo, view.span()));
+                        }
+                    }
+                }
+            }
+            if asked.is_none() && centring_due(self.centred_at, vfo, view.span()) {
+                let over = center_on_dial(view, vfo, zoom_center, zoom_span, rect.width());
+                let before = dev_center;
+                pan_center(&mut dev_center, state, over, self.pan, &mut cmds);
+                if dev_center != before {
+                    asked = Some(CtrAsk {
+                        center: dev_center,
+                        view_lo: view.view_lo_hz,
+                        view_hi: view.view_hi_hz,
+                    });
+                }
+                self.centred_at = Some((vfo, view.span()));
+            }
+            self.asked = asked;
+            let (clamp_center, clamp_span) = self.pan.view_bounds(dev_center, DEV_SPAN);
+            view.clamp_to(clamp_center, clamp_span);
+            // --- end of mirror ---
+
+            for c in cmds {
+                if let Command::SetCenter(hz) = c {
+                    self.in_flight.push_back((self.lag, hz));
+                }
+            }
+            let mid = (self.view.view_lo_hz + self.view.view_hi_hz) / 2.0;
+            Seen { off_hz: DIAL - mid, span: self.view.span(), mid }
+        }
+    }
+
+    /// Run `frames_in` frames of `factor_in`, then as many of `1/factor_in`
+    /// back out (past the point it started from, to the end of the window),
+    /// with `settle` still frames at the end. Returns the first failure.
+    fn run(x: f32, factor_in: f64, lag: usize, guard: f64) -> Result<(), String> {
+        let mut sim = Sim::new(lag, guard);
+        let floor = (DEV_SPAN / 1024.0).max(1_000.0);
+        let frames = ((floor / DEV_SPAN).ln() / factor_in.ln()).ceil() as usize + 5;
+        let name = format!("x={x} factor={factor_in} lag={lag} guard={guard}");
+        let mut prev: Option<Seen> = None;
+        for i in 0..(2 * frames + 10) {
+            let going_in = i < frames;
+            let factor = if going_in {
+                factor_in
+            } else if i < 2 * frames {
+                1.0 / factor_in
+            } else {
+                1.0
+            };
+            let seen = sim.frame(x, factor);
+            // 1. The dial is in the middle of what is drawn, every frame.
+            //    One display column is the most the eye could forgive.
+            let tol = seen.span / WIDTH as f64;
+            if seen.off_hz.abs() > tol {
+                return Err(format!(
+                    "{name}: frame {i} ({}): dial {:+.0} Hz off the middle (tolerance {tol:.0} Hz)",
+                    if going_in { "zoom in" } else { "zoom out" },
+                    seen.off_hz
+                ));
+            }
+            // 2. No stutter: the span never goes against the gesture.
+            if let Some(p) = &prev {
+                let against = if factor < 1.0 {
+                    seen.span > p.span * 1.0001
+                } else if factor > 1.0 {
+                    seen.span < p.span * 0.9999
+                } else {
+                    false
+                };
+                if against {
+                    return Err(format!(
+                        "{name}: frame {i}: span went the wrong way ({} -> {})",
+                        p.span, seen.span
+                    ));
+                }
+                // 3. The middle of the view does not jump while the dial is still.
+                if (seen.mid - p.mid).abs() > seen.span / WIDTH as f64 * 2.0 {
+                    return Err(format!(
+                        "{name}: frame {i}: the view middle jumped {:+.0} Hz in one frame",
+                        seen.mid - p.mid
+                    ));
+                }
+            }
+            prev = Some(seen);
+        }
+        Ok(())
+    }
+
+    fn sweep(factor_in: f64) {
+        let mut failures = Vec::new();
+        // Pointer on the left, the middle (= keyboard) and the right; a front
+        // end that answers at once and one that takes a few frames; an
+        // ordinary one and a zero-IF one that holds its LO a guard off the dial.
+        for x in [100.0, 500.0, 900.0] {
+            for lag in [0, 3] {
+                for guard in [0.0, 300_000.0] {
+                    if let Err(e) = run(x, factor_in, lag, guard) {
+                        failures.push(e);
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "CTR left the middle:\n{}", failures.join("\n"));
+    }
+
+    /// Notch after notch of a fast wheel or a quick pinch.
+    #[test]
+    fn a_fast_zoom_keeps_the_dial_in_the_middle() {
+        sweep(0.8);
+    }
+
+    /// A few per cent a frame: one notch of a wheel at its slowest.
+    #[test]
+    fn a_wheel_zoom_keeps_the_dial_in_the_middle() {
+        sweep(0.98);
+    }
+
+    /// A finger creeping apart: below `ZOOM_EPS` a frame, where the span moves
+    /// without ever crossing the threshold in one step.
+    #[test]
+    fn a_slow_pinch_keeps_the_dial_in_the_middle() {
+        sweep(0.9995);
+    }
+}
