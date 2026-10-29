@@ -63,6 +63,22 @@ pub(in crate::app) fn place(
     }
 }
 
+/// The picture of the arrow in the panel's corner, or `None` where it has
+/// nowhere to go: a panel that is a window only because the slot under the
+/// waterfall is taken has nowhere to dock, and a phone has no room to float.
+pub(in crate::app) fn detach_icon(
+    placed: RadioClassicPlace,
+    detached: bool,
+    phone: bool,
+) -> Option<crate::chrome::WindowIcon> {
+    use crate::chrome::WindowIcon;
+    match placed {
+        RadioClassicPlace::Docked if !phone => Some(WindowIcon::Out),
+        RadioClassicPlace::Window if detached => Some(WindowIcon::Dock),
+        _ => None,
+    }
+}
+
 // ───────────────────────────────────────────────────────────────── the bands
 
 /// The groups of the left column's first row.
@@ -356,6 +372,9 @@ fn s_reading(s_dbm: f32) -> String {
 
 /// Where Radio Classic tunes the very first time, in WFM.
 const FIRST_HZ: f64 = 100e6;
+/// The detach arrow in the panel's corner.
+const ICON_W: f32 = 22.0;
+const ICON_H: f32 = 16.0;
 /// After it takes the receiver, how long the station's state is not believed
 /// over the panel's own: a message sent before the commands were applied can
 /// still be on its way.
@@ -637,6 +656,33 @@ impl SdroxideApp {
             || self.radio_classic.bars.iter().any(|b| *b > 0.01)
             || self.audio_level.is_some();
         crate::repaint::after_ms(ui.ctx(), if moving { 33 } else { 250 });
+        self.rc_detach_icon(ui, outer);
+    }
+
+    /// The arrow in the panel's top-right corner: docked it lifts the panel out
+    /// into a window, detached it puts it back — the same two pictures and
+    /// hints every other panel wears, so it need not be found in Settings.
+    fn rc_detach_icon(&mut self, ui: &mut egui::Ui, outer: Rect) {
+        use crate::chrome::{WindowIcon, chip_window_icon_sized};
+        let phone = crate::layout::tier(ui.ctx()) == crate::layout::Tier::Phone;
+        let mode = self.state.rx[0].mode;
+        let placed = place(self.ui_settings.radio_classic_on, self.show_radio_classic, mode, phone);
+        let Some(icon) = detach_icon(placed, self.show_radio_classic, phone) else { return };
+        let hover = match icon {
+            WindowIcon::Dock => tr!("frame-dock-panel-pane-hint"),
+            _ => tr!("panels-float-chip-hint"),
+        };
+        let size = vec2(ICON_W, ICON_H);
+        let at = Rect::from_min_size(Pos2::new(outer.right() - size.x - 4.0, outer.top() + 3.0), size);
+        let clicked = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(at), |ui| {
+                chip_window_icon_sized(ui, icon, size).on_hover_text(hover).clicked()
+            })
+            .inner;
+        if clicked {
+            // The frame's `sync!` carries the flag into the saved windows bit.
+            self.show_radio_classic = !self.show_radio_classic;
+        }
     }
 
     // ───────────────────────────────────────────────── the receiver is its own

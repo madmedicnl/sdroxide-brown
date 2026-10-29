@@ -655,6 +655,10 @@ pub struct SdroxideApp {
     show_aircraft: bool,
     aircraft_epoch: u32,
     aircraft_was_open: bool,
+    schedule_epoch: u32,
+    schedule_was_open: bool,
+    memories_epoch: u32,
+    memories_was_open: bool,
     /// The mode whose map the AIRCRAFT window shows when the radio is on another.
     aircraft_view: sdroxide_types::Mode,
     /// The AIRCRAFT window shows the merged aircraft cards instead of a map, and
@@ -2218,6 +2222,10 @@ impl SdroxideApp {
             show_aircraft: false,
             aircraft_epoch: 0,
             aircraft_was_open: false,
+            schedule_epoch: 0,
+            schedule_was_open: false,
+            memories_epoch: 0,
+            memories_was_open: false,
             aircraft_view: sdroxide_types::Mode::Adsb,
             aircraft_cards: false,
             aircraft_stats_view: false,

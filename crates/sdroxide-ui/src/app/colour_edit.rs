@@ -32,8 +32,15 @@ pub(in crate::app) fn colour_edit(ui: &mut egui::Ui, col: &mut [u8; 3]) -> bool 
     let swatch = ui.color_edit_button_srgb(col);
     changed |= swatch.changed();
     let id = swatch.id.with("paste");
-    let paste = crate::chrome::chip(ui, false, egui::RichText::new("PST").size(11.0))
-        .on_hover_text(tr!("colouredit-paste-a-colour-code-rrggbb-or-r-g"));
+    // Small: this sits on every row of the memory list, and a roomy chip beside
+    // each swatch widened the window the list lives in.
+    let paste = crate::chrome::chip_sized(
+        ui,
+        false,
+        egui::RichText::new("PST").size(8.0),
+        egui::vec2(22.0, 14.0),
+    )
+    .on_hover_text(tr!("colouredit-paste-a-colour-code-rrggbb-or-r-g"));
     if swatch.clicked() {
         ui.data_mut(|d| d.insert_temp(id, true));
     }

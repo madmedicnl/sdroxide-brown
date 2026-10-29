@@ -106,6 +106,45 @@ impl super::SdroxideApp {
         self.remember_tool_geometry(ctx, "extras", pos, size);
     }
 
+    /// A tool window that keeps where the operator left it, as AIRCRAFT does:
+    /// it opens at `own` until it has been moved or resized, and then at that
+    /// place on every platform and in every session. `epoch` changes with each
+    /// opening, so egui holds no geometry of its own for it and the remembered
+    /// one is what applies. Returns whether it is still open.
+    pub(in crate::app) fn remembered_tool_window(
+        &mut self,
+        ctx: &egui::Context,
+        id: &'static str,
+        title: &str,
+        own: [f32; 2],
+        floor: [f32; 2],
+        epoch: u32,
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        if !self.tool_windows.contains_key(id) {
+            let os = self.tool_geometry_slots(id).1.to_owned();
+            self.tool_windows.insert(id, super::ToolWindowState { undocked: false, window: os });
+        }
+        let screen = ctx.content_rect();
+        let frame =
+            egui::Rect::from_min_max(egui::pos2(screen.left(), self.top_bar_bottom), screen.max);
+        let saved = *self.tool_geometry_slots(id).0;
+        let (pos, size) = tool_place_at(
+            saved,
+            frame,
+            screen,
+            egui::vec2(own[0], own[1]),
+            egui::vec2(floor[0], floor[1]),
+        );
+        self.tool_place = Some(super::ToolPlace { pos, size, epoch });
+        self.tool_rect = None;
+        let open = self.tool_window_sized(ctx, id, title, own, floor, false, true, body);
+        self.tool_place = None;
+        self.remember_tool_geometry(ctx, id, pos, size);
+        open
+    }
+
     /// The remembered docked and detached places of a tool window that keeps
     /// them, by its window id.
     fn tool_geometry_slots(
@@ -116,6 +155,12 @@ impl super::SdroxideApp {
         match id {
             "aircraft" => {
                 (&mut self.ui_settings.aircraft_window, &mut self.ui_settings.aircraft_os_window)
+            }
+            "schedule" => {
+                (&mut self.ui_settings.schedule_window, &mut self.ui_settings.schedule_os_window)
+            }
+            "memories" => {
+                (&mut self.ui_settings.memories_window, &mut self.ui_settings.memories_os_window)
             }
             _ => (&mut self.ui_settings.extras_window, &mut self.ui_settings.extras_os_window),
         }

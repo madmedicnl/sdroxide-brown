@@ -1264,6 +1264,22 @@ pub struct UiSettings {
     /// (native only).
     #[serde(default)]
     pub aircraft_os_window: Option<DetachedWindow>,
+    /// Where the PROGRAMS window last was, docked in the main window — the same
+    /// remembered place and size as [`Self::extras_window`]. `None` until the
+    /// operator has moved or resized it: it then opens at its own size.
+    #[serde(default)]
+    pub schedule_window: Option<DetachedWindow>,
+    /// The same for the PROGRAMS window once detached into its own OS window
+    /// (native only).
+    #[serde(default)]
+    pub schedule_os_window: Option<DetachedWindow>,
+    /// Where the MEMORIES window last was, docked in the main window.
+    #[serde(default)]
+    pub memories_window: Option<DetachedWindow>,
+    /// The same for the MEMORIES window once detached into its own OS window
+    /// (native only).
+    #[serde(default)]
+    pub memories_os_window: Option<DetachedWindow>,
     /// Also carry this remote client's **control bindings** in the server
     /// profile, as well as its screen (which always travels — see
     /// `ClientScreen`).
@@ -1794,6 +1810,10 @@ impl Default for UiSettings {
             extras_os_window: None,
             aircraft_window: None,
             aircraft_os_window: None,
+            schedule_window: None,
+            schedule_os_window: None,
+            memories_window: None,
+            memories_os_window: None,
             client_share_bindings: false,
             client_bindings_declined: false,
             dismissed_advisories: 0,
