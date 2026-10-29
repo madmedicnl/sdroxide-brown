@@ -258,6 +258,18 @@ pub fn available_ports() -> Vec<String> {
 /// Per-family framing. `parse` consumes complete frames from a rolling buffer.
 trait Protocol: Send {
     fn set_freq(&mut self, hz: f64) -> Vec<u8>;
+    /// Set VFO B's frequency. Returns the frames to send.
+    fn set_freq_vfo_b(&mut self, _hz: f64) -> Vec<Vec<u8>> {
+        Vec::new()
+    }
+    /// Switch split on. Returns the frames to send.
+    fn split_on(&mut self) -> Vec<Vec<u8>> {
+        Vec::new()
+    }
+    /// Switch split off. Returns the frames to send.
+    fn split_off(&mut self) -> Vec<Vec<u8>> {
+        Vec::new()
+    }
     fn set_mode(&mut self, m: Mode) -> Vec<u8>;
     /// CAT-command PTT (only used when `PttMethod::Cat`).
     fn ptt(&self, on: bool) -> Vec<u8>;
@@ -903,6 +915,18 @@ impl Protocol for Civ {
         self.seen_freq = Some(hz.round());
         civ::set_freq_frame(self.radio, hz)
     }
+
+    fn set_freq_vfo_b(&mut self, hz: f64) -> Vec<Vec<u8>> {
+        civ::set_freq_vfo_b_frames(self.radio, hz)
+    }
+
+    fn split_on(&mut self) -> Vec<Vec<u8>> {
+        vec![civ::split_on_frame(self.radio)]
+    }
+
+    fn split_off(&mut self) -> Vec<Vec<u8>> {
+        vec![civ::split_off_frame(self.radio)]
+    }
     fn set_mode(&mut self, m: Mode) -> Vec<u8> {
         self.seen_mode = Some(civ::mode_to_civ(m));
         civ::set_mode_frames(self.radio, m, self.data_sub).concat()
@@ -1367,6 +1391,12 @@ fn make_protocol(cfg: &CatConfig) -> Box<dyn Protocol> {
 
 enum CatCmd {
     Freq(f64),
+    /// Set VFO B's frequency (SAT uplink).
+    FreqVfoB(f64),
+    /// Switch split on.
+    SplitOn,
+    /// Switch split off.
+    SplitOff,
     Mode(Mode),
     Ptt(bool),
     /// Text for the rig's own keyer to send.
@@ -1464,6 +1494,21 @@ pub struct CatHandle {
 impl CatHandle {
     pub fn set_freq(&self, hz: f64) {
         let _ = self.cmd_tx.send(CatCmd::Freq(hz));
+    }
+
+    /// Set VFO B's frequency (Yaesu `FB…;`, Icom select-B + set + select-A).
+    pub fn set_freq_vfo_b(&self, hz: f64) {
+        let _ = self.cmd_tx.send(CatCmd::FreqVfoB(hz));
+    }
+
+    /// Switch the rig's split on.
+    pub fn split_on(&self) {
+        let _ = self.cmd_tx.send(CatCmd::SplitOn);
+    }
+
+    /// Switch the rig's split off.
+    pub fn split_off(&self) {
+        let _ = self.cmd_tx.send(CatCmd::SplitOff);
     }
     pub fn set_mode(&self, m: Mode) {
         let _ = self.cmd_tx.send(CatCmd::Mode(m));
@@ -3041,6 +3086,23 @@ fn serial_thread(
                     Ok(CatCmd::Freq(hz)) => {
                         pending_freq = Some(hz); // coalesce
                         dial_hz = Some(hz);
+                    }
+                    Ok(CatCmd::FreqVfoB(hz)) => {
+                        // Set VFO B's frequency. Yaesu: FB…;  Icom: select B, set, select A.
+                        let frames = protocol.set_freq_vfo_b(hz);
+                        for f in frames {
+                            let _ = write_frame(&mut *port, &mut *protocol, &f, &mut last_write, &mut io);
+                        }
+                    }
+                    Ok(CatCmd::SplitOn) => {
+                        for f in protocol.split_on() {
+                            let _ = write_frame(&mut *port, &mut *protocol, &f, &mut last_write, &mut io);
+                        }
+                    }
+                    Ok(CatCmd::SplitOff) => {
+                        for f in protocol.split_off() {
+                            let _ = write_frame(&mut *port, &mut *protocol, &f, &mut last_write, &mut io);
+                        }
                     }
                     Ok(CatCmd::Mode(m)) => {
                         if let Some(mm) = mode_cmd(m, dial_hz) {

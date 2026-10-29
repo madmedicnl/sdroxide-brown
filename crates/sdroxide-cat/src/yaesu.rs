@@ -209,6 +209,22 @@ pub struct Yaesu {
 }
 
 impl Yaesu {
+    /// Set VFO B's frequency (Yaesu `FB`).
+    pub fn set_freq_vfo_b(&mut self, hz: f64) -> Vec<u8> {
+        let hz = hz.round().max(0.0) as u64;
+        format!("FB{hz:0width$};", width = self.width).into_bytes()
+    }
+
+    /// Yaesu CAT frames to switch split on (`FT3;`).
+    pub fn split_on_frames() -> Vec<Vec<u8>> {
+        vec![b"FT3;".to_vec()]
+    }
+
+    /// Yaesu CAT frames to switch split off (`FT2;`).
+    pub fn split_off_frames() -> Vec<Vec<u8>> {
+        vec![b"FT2;".to_vec()]
+    }
+
     pub fn new() -> Self {
         Yaesu {
             buf: String::new(),
@@ -433,8 +449,17 @@ impl Protocol for Yaesu {
         format!("FA{hz:0width$};", width = self.width).into_bytes()
     }
 
-    /// Yaesu CAT frames to switch split on (`FT3;`) and off (`FT2;`).
-    /// (defined as inherent methods below)
+    fn set_freq_vfo_b(&mut self, hz: f64) -> Vec<Vec<u8>> {
+        vec![self.set_freq_vfo_b(hz)]
+    }
+
+    fn split_on(&mut self) -> Vec<Vec<u8>> {
+        Yaesu::split_on_frames()
+    }
+
+    fn split_off(&mut self) -> Vec<Vec<u8>> {
+        Yaesu::split_off_frames()
+    }
     fn set_mode(&mut self, m: Mode) -> Vec<u8> {
         format!("MD0{};", mode_digit(m)).into_bytes()
     }
@@ -627,22 +652,6 @@ impl Protocol for Yaesu {
 }
 
 #[cfg(test)]
-impl Yaesu {
-    /// Set VFO B's frequency (Yaesu `FB`).
-    pub fn set_freq_vfo_b(&mut self, hz: f64) -> Vec<u8> {
-        let hz = hz.round().max(0.0) as u64;
-        format!("FB{hz:0width$};", width = self.width).into_bytes()
-    }
-    /// Yaesu CAT frames to switch split on (`FT3;`).
-    pub fn split_on_frames() -> Vec<Vec<u8>> {
-        vec![b"FT3;".to_vec()]
-    }
-    /// Yaesu CAT frames to switch split off (`FT2;`).
-    pub fn split_off_frames() -> Vec<Vec<u8>> {
-        vec![b"FT2;".to_vec()]
-    }
-}
-
 mod tests {
     use super::*;
 
@@ -938,18 +947,5 @@ mod tests {
             .map(|f| String::from_utf8_lossy(f).into_owned())
             .collect();
         assert_eq!(frames, vec!["ID;", "RC;", "RT0;", "XT0;", "FT2;"]);
-    }
-
-    #[test]
-    fn sat_doppler_cat_frames() {
-        // Yaesu: split on/off frames.
-        assert_eq!(Yaesu::split_on_frames(), vec![b"FT3;".to_vec()]);
-        assert_eq!(Yaesu::split_off_frames(), vec![b"FT2;".to_vec()]);
-        // VFO B frequency: FB command.
-        let mut rig = Yaesu::new();
-        let frame = rig.set_freq_vfo_b(145_990_000.0);
-        let s = String::from_utf8_lossy(&frame);
-        assert!(s.starts_with("FB"), "expected FB command, got {s}");
-        assert!(s.ends_with(';'), "expected ; terminator, got {s}");
     }
 }

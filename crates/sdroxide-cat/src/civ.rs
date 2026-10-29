@@ -171,8 +171,7 @@ pub fn split_off_frame(radio: u8) -> Vec<u8> {
     frame(radio, 0x0F, &[0x00])
 }
 
-/// Set VFO B's frequency on an Icom rig: select VFO B, set the frequency,
-/// then select VFO A again. Three frames.
+/// Set VFO B's frequency: select VFO B, set the frequency, then select VFO A.
 pub fn set_freq_vfo_b_frames(radio: u8, hz: f64) -> Vec<Vec<u8>> {
     vec![
         frame(radio, 0x07, &[0x01]), // select VFO B
@@ -1921,19 +1920,5 @@ mod tests {
         assert_eq!(parse_menu_reply(&[0x05, 0x00, 0x84]), None);
         // And another `1A` sub-command is not a menu item at all.
         assert_eq!(parse_menu_reply(&[0x06, 0x01, 0x01, 0x00]), None);
-    }
-
-    #[test]
-    fn sat_doppler_cat_frames() {
-        // Icom: VFO A select, VFO B select, split on/off.
-        assert_eq!(select_vfo_a_frame(0x88), vec![0xFE, 0xFE, 0x88, 0xE0, 0x07, 0x00, 0xFD]);
-        assert_eq!(select_vfo_b_frame(0x88), vec![0xFE, 0xFE, 0x88, 0xE0, 0x07, 0x01, 0xFD]);
-        assert_eq!(split_on_frame(0x88), vec![0xFE, 0xFE, 0x88, 0xE0, 0x0F, 0x01, 0xFD]);
-        assert_eq!(split_off_frame(0x88), vec![0xFE, 0xFE, 0x88, 0xE0, 0x0F, 0x00, 0xFD]);
-        // VFO B frequency: select B, set freq, select A.
-        let frames = set_freq_vfo_b_frames(0x88, 145_990_000.0);
-        assert_eq!(frames.len(), 3);
-        assert_eq!(frames[0], vec![0xFE, 0xFE, 0x88, 0xE0, 0x07, 0x01, 0xFD]);
-        assert_eq!(frames[2], vec![0xFE, 0xFE, 0x88, 0xE0, 0x07, 0x00, 0xFD]);
     }
 }

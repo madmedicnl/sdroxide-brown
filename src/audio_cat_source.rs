@@ -1015,6 +1015,18 @@ impl IqSource for AudioCatSource {
         }
     }
 
+    fn set_vfo_b_freq(&mut self, hz: f64) {
+        self.cat.set_freq_vfo_b(hz);
+    }
+
+    fn split_on(&mut self) {
+        self.cat.split_on();
+    }
+
+    fn split_off(&mut self) {
+        self.cat.split_off();
+    }
+
     /// The rig's synthesiser is the centre of the I/Q it sends us: there is no
     /// second oscillator to park somewhere and tune away from — so the dial the
     /// operator asks for is commanded at the radio and the window follows it

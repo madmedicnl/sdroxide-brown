@@ -183,6 +183,15 @@ pub trait IqSource: Send {
         0.0
     }
 
+    /// Set VFO B's frequency (CAT rigs only). No-op on non-CAT front ends.
+    fn set_vfo_b_freq(&mut self, _hz: f64) {}
+
+    /// Switch the rig's split on (CAT rigs only). No-op on non-CAT front ends.
+    fn split_on(&mut self) {}
+
+    /// Switch the rig's split off (CAT rigs only). No-op on non-CAT front ends.
+    fn split_off(&mut self) {}
+
     /// Blocking read. Returns the number of samples written to `buf`;
     /// 0 means a timeout (caller should just retry).
     fn read(&mut self, buf: &mut [Complex32]) -> Result<usize>;
