@@ -419,14 +419,20 @@ fn ctr_settle(
     if (dev_center - ask.center).abs() < 0.5 {
         return CtrSettle::Waiting;
     }
+    CtrSettle::Done { refitted: narrow_about_dial(view, vfo, win_center, win_span) }
+}
+
+/// Narrow `view`, symmetrically about `vfo`, to the widest one the window can
+/// hold centred there. `true` when it had to be narrowed.
+fn narrow_about_dial(view: &mut ViewState, vfo: f64, win_center: f64, win_span: f64) -> bool {
     let (lo, hi) = (win_center - win_span / 2.0, win_center + win_span / 2.0);
     let half = (vfo - lo).min(hi - vfo);
     if half > 0.0 && 2.0 * half < view.span() {
         view.view_lo_hz = vfo - half;
         view.view_hi_hz = vfo + half;
-        return CtrSettle::Done { refitted: true };
+        return true;
     }
-    CtrSettle::Done { refitted: false }
+    false
 }
 
 /// How much the span has to change before a zoom counts as one, as a fraction
@@ -2221,6 +2227,18 @@ pub fn show_ext(
                     }
                 }
             }
+        }
+        // A request still in flight must not leave the dial wherever a zoom
+        // about the pointer put it: slide the view onto the dial inside the
+        // window it already has, without asking the front end again, and tell
+        // the pending request that this is the view CTR left.
+        if let Some(ask) = asked.as_mut()
+            && off_centre(view, vfo, rect.width())
+        {
+            center_on_dial(view, vfo, zoom_center, zoom_span, rect.width());
+            narrow_about_dial(view, vfo, zoom_center, zoom_span);
+            ask.view_lo = view.view_lo_hz;
+            ask.view_hi = view.view_hi_hz;
         }
         let centred_at: Option<(f64, f64)> = ui.data(|d| d.get_temp(centring_id)).unwrap_or(None);
         // Only re-centre when no front-end request is still in flight: a rapid
@@ -4648,6 +4666,14 @@ mod ctr_zoom_sim {
                     }
                 }
             }
+            if let Some(ask) = asked.as_mut()
+                && off_centre(view, vfo, rect.width())
+            {
+                center_on_dial(view, vfo, zoom_center, zoom_span, rect.width());
+                narrow_about_dial(view, vfo, zoom_center, zoom_span);
+                ask.view_lo = view.view_lo_hz;
+                ask.view_hi = view.view_hi_hz;
+            }
             if asked.is_none()
                 && (centring_due(self.centred_at, vfo, view.span())
                     || off_centre(view, vfo, rect.width()))
@@ -4807,6 +4833,47 @@ mod ctr_zoom_sim {
                 seen.off_hz
             );
         }
+    }
+
+    /// The bench: HackRF at 2.5 Msps tuned 175 kHz below the dial, with the
+    /// window fixed there when the zoom starts, so CTR's first retune request is
+    /// still in flight during the zoom. Wheel about a pointer off the middle,
+    /// in and out, fast and slow. The dial stays within a column of the middle.
+    #[test]
+    fn a_zoom_with_a_retune_in_flight_keeps_the_dial_in_the_middle() {
+        let mut failures = Vec::new();
+        for lag in [0usize, 3, 8] {
+            for factor in [0.8, 0.9, 0.98] {
+                for x in [100.0f32, 300.0, 900.0] {
+                    let mut sim = Sim::new(lag, 0.0);
+                    sim.engine_center = DIAL - 175_670.0;
+                    sim.state.center_hz = sim.engine_center;
+                    sim.view.fit(sim.engine_center, DEV_SPAN);
+                    let n = (((DEV_SPAN / 1024.0) / DEV_SPAN).ln() / f64::ln(factor)).ceil()
+                        as usize
+                        + 5;
+                    for i in 0..(2 * n + lag + 8) {
+                        let f = if i < n {
+                            factor
+                        } else if i < 2 * n {
+                            1.0 / factor
+                        } else {
+                            1.0
+                        };
+                        let seen = sim.frame(x, f);
+                        let tol = seen.span / WIDTH as f64;
+                        if seen.off_hz.abs() > tol {
+                            failures.push(format!(
+                                "lag={lag} factor={factor} x={x} frame {i}: span {:.0}, dial {:+.0} Hz off",
+                                seen.span, seen.off_hz
+                            ));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "CTR left the middle:\n{}", failures.join("\n"));
     }
 
     /// Notch after notch of a fast wheel or a quick pinch.
