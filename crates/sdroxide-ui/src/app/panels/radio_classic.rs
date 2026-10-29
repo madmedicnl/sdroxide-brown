@@ -1305,7 +1305,8 @@ impl SdroxideApp {
         // signal in two ears, and its meter is given a false stereo — the
         // picture only, the sound is not touched.
         let (hz, mode) = (self.state.active_freq_hz(), self.state.rx[0].mode);
-        let real = stereo_chip(hz, mode, self.meters.is_some_and(|m| m.stereo)) == Some(true)
+        let pilot = self.meters.is_some_and(|m| m.stereo);
+        let real = stereo_chip(hz, mode, stereo_playing(&self.state.rx[0], pilot)) == Some(true)
             || self.state.sub_rx_enabled;
         let rms = fresh.map(|l| if real { l.rms_db } else { false_stereo(l.rms_db, &l.bands) });
         self.radio_classic.vu.step(rms, dt);
@@ -1354,11 +1355,21 @@ impl SdroxideApp {
         let tag_rect =
             p.text(inner.left_top(), Align2::LEFT_TOP, tag, FontId::proportional(24.0), ink.amber);
         let mut x = tag_rect.right() + 12.0;
-        if let Some(lit) = stereo_chip(hz, mode, self.meters.is_some_and(|m| m.stereo)) {
+        let pilot = self.meters.is_some_and(|m| m.stereo);
+        if let Some(lit) = stereo_chip(hz, mode, stereo_playing(&self.state.rx[0], pilot)) {
             let at = Pos2::new(x, inner.top() + 3.0);
             let r = stereo_pill(p, at, lit, ink);
-            ui.interact(r, ui.id().with("radio-classic-stereo"), egui::Sense::hover())
-                .on_hover_text(stereo_note(&self.state.rx[0], lit));
+            // Lit means stereo; a click is the top bar's ST switch, so the
+            // panel never needs it.
+            let resp = ui
+                .interact(r, ui.id().with("radio-classic-stereo"), egui::Sense::click())
+                .on_hover_text(stereo_note(&self.state.rx[0], lit))
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            if resp.clicked() {
+                let on = !self.state.rx[0].wfm_stereo;
+                self.state.rx[0].wfm_stereo = on; // optimistic echo
+                cmds.push(Command::SetWfmStereo { rx: RxId::Main, on });
+            }
             x = r.right() + 8.0;
         }
         let memory = self
@@ -1583,10 +1594,18 @@ impl SdroxideApp {
 }
 
 /// The STEREO chip: `Some(lit)` on the FM broadcast band (64–108 MHz in WFM),
-/// where a station may send stereo, lit while the 19 kHz pilot is locked; `None`
-/// everywhere else, which is mono.
-fn stereo_chip(hz: f64, mode: Mode, locked: bool) -> Option<bool> {
-    (mode == Mode::Wfm && (64e6..=108e6).contains(&hz)).then_some(locked)
+/// where a station may send stereo, lit while the sound is stereo
+/// ([`stereo_playing`]); `None` everywhere else, which is mono.
+fn stereo_chip(hz: f64, mode: Mode, stereo: bool) -> Option<bool> {
+    (mode == Mode::Wfm && (64e6..=108e6).contains(&hz)).then_some(stereo)
+}
+
+/// Whether the sound really is stereo: a pilot is locked **and** the decode is
+/// on and not yielded to noise reduction. The pilot alone is not enough — with
+/// ST switched off the pilot still locks and the sound is mono, and a lamp that
+/// read the pilot lit up over a mono meter.
+fn stereo_playing(rx: &sdroxide_types::RxState, pilot_locked: bool) -> bool {
+    pilot_locked && rx.wfm_stereo && !rx.noise_reduction.is_on()
 }
 
 /// What the STEREO chip says on hover, and — dark — why it is dark.
@@ -2089,6 +2108,19 @@ mod tests {
         assert_eq!(stereo_chip(150e6, Mode::Wfm, true), None);
         assert_eq!(stereo_chip(63.9e6, Mode::Wfm, true), None);
         assert_eq!(stereo_chip(98e6, Mode::Nfm, true), None);
+    }
+
+    #[test]
+    fn the_stereo_lamp_needs_the_decode_on_as_well_as_the_pilot() {
+        let mut rx = sdroxide_types::RxState::with_mode(Mode::Wfm);
+        rx.wfm_stereo = true;
+        assert!(stereo_playing(&rx, true));
+        assert!(!stereo_playing(&rx, false), "no pilot: mono");
+        rx.wfm_stereo = false;
+        assert!(!stereo_playing(&rx, true), "ST off: the pilot locks and the sound is mono");
+        rx.wfm_stereo = true;
+        rx.noise_reduction = sdroxide_types::NrLevel::Medium;
+        assert!(!stereo_playing(&rx, true), "stereo yields to noise reduction");
     }
 
     #[test]
