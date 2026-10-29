@@ -27,12 +27,12 @@ use std::time::SystemTime;
 
 use sdroxide_dsp::NavtexRx;
 use sdroxide_types::{
-    DigiConfig, DigiStatus, Mode, NavtexMessage, NavtexStatus, QsoStep, TranscriptLine,
-    NAVTEX_MESSAGE_MAX,
+    DigiConfig, DigiStatus, Mode, NAVTEX_MESSAGE_MAX, NavtexMessage, NavtexStatus, QsoStep,
+    TranscriptLine,
 };
 
-use crate::controller::DigiAction;
 use crate::DigiEngine;
+use crate::controller::DigiAction;
 
 /// Characters of loose text kept — what was decoded outside any message.
 const TEXT_CAP: usize = 8_000;
@@ -43,14 +43,6 @@ const TEXT_CAP: usize = 8_000;
 /// was. Either way the text so far is worth keeping and the next `ZCZC` must
 /// not append to it.
 const BODY_CAP: usize = 20_000;
-
-fn sensitivity(cfg: &DigiConfig) -> i8 {
-    if cfg.navtex_rx_auto {
-        0
-    } else {
-        cfg.navtex_rx_sensitivity
-    }
-}
 
 pub struct NavtexController {
     cfg: DigiConfig,
@@ -73,14 +65,9 @@ impl NavtexController {
         Self::new_with_config_dir(cfg, tap_rate, None)
     }
 
-    pub fn new_with_config_dir(
-        cfg: DigiConfig,
-        tap_rate: f64,
-        config_dir: Option<std::path::PathBuf>,
-    ) -> Self {
+    pub fn new_with_config_dir(cfg: DigiConfig, tap_rate: f64, config_dir: Option<std::path::PathBuf>) -> Self {
         let mut rx = NavtexRx::new(tap_rate);
         rx.set_reverse(cfg.navtex_reverse);
-        rx.set_sensitivity(sensitivity(&cfg));
         let mut ctrl = NavtexController {
             cfg,
             rx,
@@ -98,9 +85,7 @@ impl NavtexController {
 
     /// Load persisted messages from disk, if any.
     fn load_messages(&mut self) {
-        let Some(dir) = &self.config_dir else {
-            return;
-        };
+        let Some(dir) = &self.config_dir else { return; };
         let path = dir.join("navtex_messages.json");
         if let Ok(data) = std::fs::read_to_string(&path) {
             if let Ok(msgs) = serde_json::from_str::<Vec<NavtexMessage>>(&data) {
@@ -112,9 +97,7 @@ impl NavtexController {
 
     /// Persist the current messages to disk.
     fn save_messages(&self) {
-        let Some(dir) = &self.config_dir else {
-            return;
-        };
+        let Some(dir) = &self.config_dir else { return; };
         let path = dir.join("navtex_messages.json");
         if let Ok(data) = serde_json::to_string_pretty(&self.messages) {
             let _ = std::fs::write(&path, data);
@@ -250,7 +233,6 @@ impl NavtexController {
 
     fn digi_status(&self) -> DigiStatus {
         DigiStatus {
-            stanag: None,
             mode: Mode::Navtex,
             step: QsoStep::Idle,
             dx_call: None,
@@ -276,6 +258,7 @@ impl NavtexController {
             uvpacket: None,
             jtty: None,
             ale: None,
+            stanag: None,
             aprs: None,
             js8: None,
             atchat: None,
@@ -368,12 +351,6 @@ impl DigiEngine for NavtexController {
     fn set_config(&mut self, cfg: DigiConfig) {
         if cfg.navtex_reverse != self.cfg.navtex_reverse {
             self.rx.set_reverse(cfg.navtex_reverse);
-            self.status_dirty = true;
-        }
-        if cfg.navtex_rx_sensitivity != self.cfg.navtex_rx_sensitivity
-            || cfg.navtex_rx_auto != self.cfg.navtex_rx_auto
-        {
-            self.rx.set_sensitivity(sensitivity(&cfg));
             self.status_dirty = true;
         }
         self.cfg = cfg;
