@@ -14,6 +14,9 @@ and release asset names stay shared with upstream. Origin: `madmedicnl/sdroxide-
 
 ## Fork rules
 
+- Contributions to code and ideas are always greatly appreciated, but
+  **madmedicnl has the final say and can overrule** any decision.
+
 - Work happens here. When a choice is between a ham workflow and a CB/listening
   one, this fork takes the CB/listening one.
 - Never merge `upstream/main`. Upstream is behind us. Reading upstream is safe
