@@ -596,7 +596,7 @@ pub(in crate::app) fn broadcast_stations_settings(
 ) {
     super::note(
         ui,
-        tr!("settings-net-broadcast-stations-labelled-waterfall-come"),
+        &tr!("settings-net-broadcast-stations-labelled-waterfall-come"),
     );
 }
 
