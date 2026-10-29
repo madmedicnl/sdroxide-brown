@@ -3690,6 +3690,7 @@ impl SdroxideApp {
                     ("ALE".to_string(), crate::app::frame::TW_ALE),
                     (tr!("rfpaint-rf-paint"), crate::app::frame::TW_RFPAINT),
                     (tr!("pane-image"), crate::app::frame::TW_IMAGE),
+                    (tr!("settings-tool-window-session-qsos"), crate::app::frame::TW_SESSION_QSOS),
                 ];
                 for (name, bit) in tool_windows {
                     let mut on = (io.ui_edit.tool_windows_open & bit) != 0;

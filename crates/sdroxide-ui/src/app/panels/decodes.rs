@@ -1244,6 +1244,25 @@ impl SdroxideApp {
                 },
             );
         }
+        ui.scope_builder(
+            egui::UiBuilder::new()
+.max_rect(zone(2.0))
+.layout(egui::Layout::right_to_left(egui::Align::Center)),
+            |ui| {
+                if crate::chrome::chip(ui, self.show_session_qsos, &tr!("decodes-live-log")).clicked() {
+                    self.show_session_qsos = !self.show_session_qsos;
+                    if self.show_session_qsos {
+                        self.ui_settings.tool_windows_open |= crate::app::frame::TW_SESSION_QSOS;
+                    } else {
+                        self.ui_settings.tool_windows_open &= !crate::app::frame::TW_SESSION_QSOS;
+                    }
+                    crate::app::persist::persist_ui_settings(&self.ui_settings);
+                }
+                if crate::chrome::chip(ui, self.show_digi_settings, &tr!("decodes-setup")).clicked() {
+                    self.show_digi_settings = !self.show_digi_settings;
+                }
+            },
+        );
         ui.add_space(5.0);
         // World map — its height is a user-draggable fraction of the QSO area,
         // clamped so the station card + a usable transcript + the action buttons

@@ -5336,7 +5336,7 @@ extras-radio-hint = RADIO CLASSIC — une façade de radio classique pour l'éco
 
 extras-antenna = ANTENNE
 
-extras-antenna-hint = ANTENNE — longueurs de coupe et ROS pour un dipôle, une verticale, un ground plane, une boucle ou une Yagi
+extras-antenna-hint = ANTENNE (expérimental/bêta) — longueurs de coupe, impédance au point d'alimentation et diagramme pour les antennes filaires, verticales et Yagi courantes
 
 recjobs-title = ENREGISTREMENTS
 
@@ -6316,25 +6316,11 @@ antenna-cutting-lengths = Longueurs de coupe
 
 antenna-the-frequency-to-cut-for = La fréquence pour laquelle couper
 
-antenna-solve-impedance-and-gain = Calculer impédance et gain
-
-antenna-run-the-method-of-moments-solver = Lance le solveur par méthode des moments sur les modèles — l'impédance réelle au point d'alimentation, le ROS et le gain. Prend quelques secondes.
-
-antenna-yagi-stack = Empilement Yagi
-
-antenna-optimize-yagi-for = Optimiser la Yagi pour
-
 antenna-optimizing = Optimisation…
-
-antenna-optimize-yagi = Optimiser la Yagi
 
 antenna-tune-the-yagi-s-element-lengths = Ajuste les longueurs et espacements des éléments de la Yagi selon l'objectif choisi. Une montée locale sur un thread d'arrière-plan ; la fenêtre reste utilisable pendant ce temps.
 
 antenna-solved = Résolu
-
-antenna-azimuth-pattern = Diagramme en azimut
-
-antenna-3d-drag-to-rotate = 3D — faire glisser pour tourner
 
 antenna-optimized-yagi = Yagi optimisée
 
@@ -8865,3 +8851,73 @@ pane-frame = TRAME
 pane-frames = TRAMES
 
 pane-words = MOTS
+
+antenna-feed-z0 = Z0 ligne :
+
+antenna-feed-z0-hint = Impédance de la ligne/du système pour le ROS (50 Ω typique)
+
+antenna-height-label = Hauteur :
+
+antenna-height-hint = Hauteur du point d'alimentation/de l'antenne au-dessus du sol (influe sur l'angle de départ et le diagramme)
+
+antenna-m-agl = m sol
+
+antenna-apply = Appliquer
+
+antenna-apply-hint = Lance le solveur par méthode des moments sur les préréglages.
+
+antenna-yagi-optimizer = Optimiseur Yagi
+
+antenna-stack = Empilement :
+
+antenna-objective = Objectif :
+
+antenna-optimize = Optimiser
+
+antenna-swr-value = ROS { $v }
+
+antenna-swr-ref = ROS { $v } ({ $z }Ω)
+
+antenna-radiation-pattern = Diagramme de rayonnement
+
+antenna-view = Vue
+
+antenna-view-front = Face
+
+antenna-view-side = Côté
+
+antenna-view-top = Dessus
+
+antenna-3d-hint = 3D : glisser pour tourner • chaleur = intensité du champ
+
+antenna-yagi-x = Yagi ×{ $n }
+
+settings-tool-window-session-qsos = QSO DE SESSION
+
+sessionqso-time = Heure
+
+sessionqso-call = Indicatif
+
+sessionqso-grid = Locator
+
+sessionqso-band = Bande
+
+sessionqso-mode = Mode
+
+sessionqso-rst-s = RST E
+
+sessionqso-rst-r = RST R
+
+sessionqso-country = Pays
+
+sessionqso-dist = Dist
+
+sessionqso-final = Final
+
+sessionqso-count = { $n } QSO cette session
+
+sessionqso-include-cw = Inclure le CW
+
+decodes-live-log = JOURNAL EN DIRECT
+
+decodes-setup = ⚙ RÉGLAGES

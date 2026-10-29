@@ -719,6 +719,7 @@ impl SdroxideApp {
                             {
                                 self.pending_uploads.push((qso_id, adif, targets));
                             }
+                            self.session_qso_ids.insert(rec.id);
                             self.qso_log.push(rec);
                             // A hand-entered contact is one worked this session
                             // too; an ADIF import is not, and does not count.

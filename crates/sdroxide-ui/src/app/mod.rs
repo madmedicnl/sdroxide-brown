@@ -73,6 +73,7 @@ pub(in crate::app) mod recording_jobs;
 pub(in crate::app) mod rotor;
 pub(in crate::app) mod sat;
 pub(in crate::app) mod save_text;
+pub(in crate::app) mod session_qsos;
 pub(in crate::app) mod scanner;
 pub(in crate::app) mod schedule;
 pub(in crate::app) mod settings;
@@ -616,6 +617,7 @@ pub struct SdroxideApp {
     /// working at (MHz).
     show_antenna: bool,
     antenna_freq_mhz: f64,
+    antenna_height_m: f64,
     /// The MoM solve of the presets at `antenna_freq_mhz`, once asked for — see
     /// [`antenna`]. Memory only.
     antenna_solved: Option<Vec<antenna::SolvedRow>>,
@@ -630,13 +632,17 @@ pub struct SdroxideApp {
     /// How many Yagi copies to stack in the solve (1, 2 or 4) — see [`antenna`].
     antenna_stack: u32,
     /// The azimuth cuts of the solved presets, and which one the pattern shows.
-    antenna_patterns: Vec<(String, Vec<(f64, f64)>)>,
+    antenna_patterns: Vec<(String, [Vec<(f64, f64)>; 3])>,
+    antenna_pattern_view: usize,
     antenna_pattern_sel: usize,
     /// The 3D pattern surfaces (parallel to `antenna_patterns`), and the view
     /// rotation.
     antenna_surfaces: Vec<(Vec<[f64; 3]>, usize, usize)>,
+    antenna_wires: Vec<Vec<([f64; 3], [f64; 3])>>,
     antenna_yaw: f32,
     antenna_pitch: f32,
+    /// Feedline impedance for SWR display.
+    antenna_z0: f64,
     /// A Yagi optimization running on a background thread, and its result
     /// channel. Native-only — the browser has no threads and just skips the
     /// optimizer.
@@ -935,6 +941,7 @@ pub struct SdroxideApp {
     /// reports back how many characters have been sent so we colour them green).
     text_tx: String,
     qso_log: Vec<QsoRecord>,
+    session_qso_ids: std::collections::HashSet<u64>,
     /// The listener's reception log (`swl_log.json`) — separate from the QSO
     /// log on purpose. See [`crate::app::swl_log`].
     pub(in crate::app) swl_log: Vec<sdroxide_types::SwlEntry>,
@@ -1340,6 +1347,8 @@ pub struct SdroxideApp {
     flags: crate::flags::Flags,
     /// Logbook overlay open state, and the in-progress new/edit entry (if any).
     show_logbook: bool,
+    /// SESSION QSOs window open state.
+    show_session_qsos: bool,
     /// Which stored set the last `RadioEvent::ClientSettings` came from —
     /// a profile name, or `None` for the station default. `None` also before
     /// any has arrived, which the Settings label reads as "not using any".
@@ -2187,6 +2196,7 @@ impl SdroxideApp {
             extras_was_open: false,
             show_antenna: false,
             antenna_freq_mhz: 27.265,
+            antenna_height_m: 10.0,
             antenna_solved: None,
             antenna_objective: antenna_model::optimize::Objective::Gain,
             antenna_optimized: None,
@@ -2195,9 +2205,12 @@ impl SdroxideApp {
             antenna_stack: 1,
             antenna_patterns: Vec::new(),
             antenna_pattern_sel: 0,
+            antenna_pattern_view: 0,
             antenna_surfaces: Vec::new(),
+            antenna_wires: Vec::new(),
             antenna_yaw: -0.6,
             antenna_pitch: 0.4,
+            antenna_z0: 50.0,
             #[cfg(not(target_arch = "wasm32"))]
             antenna_optimizing: false,
             #[cfg(not(target_arch = "wasm32"))]
@@ -2307,6 +2320,7 @@ impl SdroxideApp {
             weather: Default::default(),
             text_tx: String::new(),
             qso_log: load_qso_log(storage),
+            session_qso_ids: std::collections::HashSet::new(),
             swl_log: load_swl_log(storage),
             swl_report: load_swl_report(),
             swl_report_note: None,
@@ -2468,6 +2482,7 @@ impl SdroxideApp {
             digi_free_text: String::new(),
             flags: Default::default(),
             show_logbook: false,
+            show_session_qsos: false,
             client_settings_from: None,
             client_save_last: 0.0,
             client_settings_stored: None,

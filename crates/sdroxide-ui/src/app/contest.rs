@@ -354,6 +354,7 @@ impl SdroxideApp {
         }
         let call = rec.call.clone();
         self.last_logged_qso_id = Some(rec.id);
+        self.session_qso_ids.insert(rec.id);
         self.qso_log.push(rec);
         self.session_qsos += 1;
         crate::app::persist::persist_qso_log(&self.qso_log);

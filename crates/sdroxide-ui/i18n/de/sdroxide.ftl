@@ -5323,7 +5323,7 @@ extras-radio-hint = RADIO CLASSIC — eine klassische Radioansicht zum Rundfunkh
 
 extras-antenna = ANTENNE
 
-extras-antenna-hint = ANTENNE — Schnittlängen und SWR für Dipol, Vertikal, Groundplane, Schleife oder Yagi
+extras-antenna-hint = ANTENNE (experimentell/Beta) — Schnittlängen, Speisepunktimpedanz und Diagramm für gängige Draht-, Vertikal- und Yagi-Antennen
 
 recjobs-title = AUFNAHMEN
 
@@ -6303,25 +6303,11 @@ antenna-cutting-lengths = Schnittlängen
 
 antenna-the-frequency-to-cut-for = Die Frequenz, für die zugeschnitten wird
 
-antenna-solve-impedance-and-gain = Impedanz und Gewinn berechnen
-
-antenna-run-the-method-of-moments-solver = Startet den Momentenmethoden-Solver auf den Vorlagen – reale Speiseimpedanz, SWR und Gewinn. Dauert einige Sekunden.
-
-antenna-yagi-stack = Yagi-Stockung
-
-antenna-optimize-yagi-for = Yagi optimieren auf
-
 antenna-optimizing = Optimiere…
-
-antenna-optimize-yagi = Yagi optimieren
 
 antenna-tune-the-yagi-s-element-lengths = Stimmt Elementlängen und Abstände der Yagi auf das gewählte Ziel ab. Ein lokaler Hill-Climb in einem Hintergrund-Thread; das Fenster bleibt dabei bedienbar.
 
 antenna-solved = Gelöst
-
-antenna-azimuth-pattern = Azimutdiagramm
-
-antenna-3d-drag-to-rotate = 3D – zum Drehen ziehen
 
 antenna-optimized-yagi = Optimierte Yagi
 
@@ -8852,3 +8838,73 @@ pane-frame = FRAME
 pane-frames = FRAMES
 
 pane-words = WÖRTER
+
+antenna-feed-z0 = Speise-Z0:
+
+antenna-feed-z0-hint = Leitungs-/Systemimpedanz für das SWR (typisch 50 Ω)
+
+antenna-height-label = Höhe:
+
+antenna-height-hint = Höhe von Speisepunkt/Antenne über Grund (beeinflusst Abstrahlwinkel und Diagramm)
+
+antenna-m-agl = m ü. Grund
+
+antenna-apply = Anwenden
+
+antenna-apply-hint = Führt den Momentenmethoden-Solver auf den Voreinstellungen aus.
+
+antenna-yagi-optimizer = Yagi-Optimierer
+
+antenna-stack = Stockung:
+
+antenna-objective = Ziel:
+
+antenna-optimize = Optimieren
+
+antenna-swr-value = SWR { $v }
+
+antenna-swr-ref = SWR { $v } ({ $z }Ω)
+
+antenna-radiation-pattern = Strahlungsdiagramm
+
+antenna-view = Ansicht
+
+antenna-view-front = Vorne
+
+antenna-view-side = Seite
+
+antenna-view-top = Oben
+
+antenna-3d-hint = 3D: ziehen zum Drehen • Wärme = Feldstärke
+
+antenna-yagi-x = Yagi ×{ $n }
+
+settings-tool-window-session-qsos = SITZUNGS-QSOs
+
+sessionqso-time = Zeit
+
+sessionqso-call = Rufzeichen
+
+sessionqso-grid = Locator
+
+sessionqso-band = Band
+
+sessionqso-mode = Modus
+
+sessionqso-rst-s = RST G
+
+sessionqso-rst-r = RST E
+
+sessionqso-country = Land
+
+sessionqso-dist = Entf.
+
+sessionqso-final = Letzte
+
+sessionqso-count = { $n } QSO in dieser Sitzung
+
+sessionqso-include-cw = CW einbeziehen
+
+decodes-live-log = LIVE-LOG
+
+decodes-setup = ⚙ SETUP

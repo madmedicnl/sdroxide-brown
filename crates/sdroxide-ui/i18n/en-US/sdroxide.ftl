@@ -5339,7 +5339,7 @@ extras-radio-hint = RADIO CLASSIC — a classic radio face for broadcast listeni
 
 extras-antenna = ANTENNA
 
-extras-antenna-hint = ANTENNA — cutting lengths and SWR for a dipole, vertical, ground plane, loop or Yagi
+extras-antenna-hint = ANTENNA (Experimental/Beta) — cutting lengths, feedpoint impedance and pattern for common wire/vertical/Yagi antennas
 
 recjobs-title = RECORDINGS
 
@@ -6319,25 +6319,11 @@ antenna-cutting-lengths = Cutting lengths
 
 antenna-the-frequency-to-cut-for = The frequency to cut for
 
-antenna-solve-impedance-and-gain = Solve impedance and gain
-
-antenna-run-the-method-of-moments-solver = Run the method-of-moments solver on the presets — the real feed impedance, SWR and gain. Takes a few seconds.
-
-antenna-yagi-stack = Yagi stack
-
-antenna-optimize-yagi-for = Optimize Yagi for
-
 antenna-optimizing = Optimizing…
-
-antenna-optimize-yagi = Optimize Yagi
 
 antenna-tune-the-yagi-s-element-lengths = Tune the Yagi's element lengths and gaps against the chosen objective. A local hill-climb on a background thread; the window stays usable while it runs.
 
 antenna-solved = Solved
-
-antenna-azimuth-pattern = Azimuth pattern
-
-antenna-3d-drag-to-rotate = 3D — drag to rotate
 
 antenna-optimized-yagi = Optimized Yagi
 
@@ -8864,3 +8850,73 @@ pane-frame = FRAME
 pane-frames = FRAMES
 
 pane-words = WORDS
+
+antenna-feed-z0 = Feed Z0:
+
+antenna-feed-z0-hint = Feedline/system impedance for SWR (50 Ω typical)
+
+antenna-height-label = Height:
+
+antenna-height-hint = Feedpoint/antenna height above ground (affects takeoff/pattern)
+
+antenna-m-agl = m AGL
+
+antenna-apply = Apply
+
+antenna-apply-hint = Run the method-of-moments solver on the presets.
+
+antenna-yagi-optimizer = Yagi Optimizer
+
+antenna-stack = Stack:
+
+antenna-objective = Objective:
+
+antenna-optimize = Optimize
+
+antenna-swr-value = SWR { $v }
+
+antenna-swr-ref = SWR { $v } ({ $z }Ω)
+
+antenna-radiation-pattern = Radiation Pattern
+
+antenna-view = View
+
+antenna-view-front = Front
+
+antenna-view-side = Side
+
+antenna-view-top = Top
+
+antenna-3d-hint = 3D drag to rotate • heat = field strength
+
+antenna-yagi-x = Yagi ×{ $n }
+
+settings-tool-window-session-qsos = SESSION QSOs
+
+sessionqso-time = Time
+
+sessionqso-call = Call
+
+sessionqso-grid = Grid
+
+sessionqso-band = Band
+
+sessionqso-mode = Mode
+
+sessionqso-rst-s = RST S
+
+sessionqso-rst-r = RST R
+
+sessionqso-country = Country
+
+sessionqso-dist = Dist
+
+sessionqso-final = Final
+
+sessionqso-count = { $n } QSO this session
+
+sessionqso-include-cw = Include CW
+
+decodes-live-log = LIVE LOG
+
+decodes-setup = ⚙ SETUP
