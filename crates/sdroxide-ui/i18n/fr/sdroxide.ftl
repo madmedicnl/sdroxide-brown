@@ -8921,3 +8921,13 @@ sessionqso-include-cw = Inclure le CW
 decodes-live-log = JOURNAL EN DIRECT
 
 decodes-setup = ⚙ RÉGLAGES
+
+schedule-colour-all = Couleur
+
+schedule-colour-all-hint = Couleur des étiquettes de la cascade pour toutes les stations — remplace celles choisies par station
+
+schedule-colour-station-hint = Couleur de l'étiquette de cette station sur la cascade
+
+schedule-colour-reset = DÉFAUT
+
+schedule-colour-reset-hint = Retour à la couleur d'origine pour toutes les stations, en oubliant les choix faits

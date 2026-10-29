@@ -8908,3 +8908,13 @@ sessionqso-include-cw = CW einbeziehen
 decodes-live-log = LIVE-LOG
 
 decodes-setup = ⚙ SETUP
+
+schedule-colour-all = Farbe
+
+schedule-colour-all-hint = Farbe der Wasserfall-Beschriftung für alle Sender – ersetzt die einzeln gewählten
+
+schedule-colour-station-hint = Farbe der Wasserfall-Beschriftung dieses Senders
+
+schedule-colour-reset = STANDARD
+
+schedule-colour-reset-hint = Zurück zur Standardfarbe für alle Sender, die gewählten Farben werden vergessen

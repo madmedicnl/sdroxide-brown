@@ -8909,3 +8909,13 @@ sessionqso-include-cw = Incluir CW
 decodes-live-log = REGISTRO EN VIVO
 
 decodes-setup = ⚙ AJUSTES
+
+schedule-colour-all = Color
+
+schedule-colour-all-hint = Color de las etiquetas de la cascada para todas las emisoras: sustituye las elegidas por emisora
+
+schedule-colour-station-hint = Color de la etiqueta de esta emisora en la cascada
+
+schedule-colour-reset = DEFECTO
+
+schedule-colour-reset-hint = Volver al color original de todas las emisoras, olvidando las elegidas

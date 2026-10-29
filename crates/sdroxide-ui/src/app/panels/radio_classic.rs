@@ -20,7 +20,7 @@ use std::collections::VecDeque;
 use eframe::egui::{self, Align, Align2, Color32, FontId, Pos2, Rect, RichText, Stroke, StrokeKind, vec2};
 use sdroxide_types::{
     AUDIO_BANDS, AgcMode, Band, Command, Mode, RdsData, RxId, SQUELCH_CLOSED_DB, SQUELCH_OPEN_DB,
-    broadcast, byte_to_unit, pty_name,
+    BroadcastStation, MemoryChannel, broadcast, byte_to_unit, pty_name,
 };
 
 use crate::app::SdroxideApp;
@@ -259,17 +259,70 @@ const MODES: [(&str, Mode); 6] = [
 
 // ──────────────────────────────────────────────────────────── what is on show
 
-/// The name the big line shows: the station's own on FM, the memory's or the
+/// What the right-hand display writes about the station on the dial: the big
+/// line, an optional small line above it and small lines under it.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct StationLines {
+    /// The big line, in capitals.
+    big: String,
+    /// The small line over it.
+    above: Option<String>,
+    /// The small lines under it, in order.
+    below: Vec<String>,
+}
+
+/// What the big line shows: the station's own name on FM, the memory's or the
 /// schedule's everywhere else (and on FM too while the station sends no name).
-fn station_name(
+///
+/// * A **schedule** row is its metre band and name on the big line, with what
+///   the table says about the transmission — language, country, site — above.
+/// * A **memory** is its name, with its frequency and mode under it.
+/// * A name that carries a bracket ("Klara (Sint-Pieters-Leeuw)") keeps the
+///   bracket in small type under the name.
+fn station_lines(
     mode: Mode,
     ps: Option<&str>,
-    memory: Option<&str>,
-    schedule: Option<&str>,
-) -> Option<String> {
+    memory: Option<&MemoryChannel>,
+    schedule: Option<&BroadcastStation>,
+) -> Option<StationLines> {
     let ps = ps.map(str::trim).filter(|s| !s.is_empty());
-    let own = if mode == Mode::Wfm { ps } else { None };
-    own.or(memory).or(schedule).map(str::to_string)
+    let named = |name: &str| {
+        let (main, note) = split_name(name);
+        StationLines {
+            big: main.to_uppercase(),
+            above: None,
+            below: note.map(str::to_string).into_iter().collect(),
+        }
+    };
+    if let Some(ps) = ps.filter(|_| mode == Mode::Wfm) {
+        return Some(named(ps));
+    }
+    if let Some(m) = memory {
+        let mut lines = named(&m.name);
+        lines.below.push(format!("{:.6} MHz {}", m.freq_hz / 1e6, mode_label(m.mode)));
+        return Some(lines);
+    }
+    schedule.map(|s| {
+        let big = match broadcast::metre_band(s.freq_khz) {
+            Some(band) => format!("{band} {}", s.name.to_uppercase()),
+            None => s.name.to_uppercase(),
+        };
+        let above = [s.lang.as_str(), s.country.as_str(), s.site.as_str()]
+            .iter()
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        StationLines { big, above: (!above.is_empty()).then_some(above), below: Vec::new() }
+    })
+}
+
+/// The mode as the display writes it.
+fn mode_label(mode: Mode) -> String {
+    MODES
+        .iter()
+        .find(|(_, m)| *m == mode)
+        .map_or_else(|| format!("{mode:?}").to_uppercase(), |(l, _)| (*l).to_string())
 }
 
 /// The width of the three columns for a panel `w` wide, with the gap between
@@ -322,9 +375,39 @@ const LEVEL_FRESH_S: f32 = 0.4;
 /// Rows kept by the mini waterfall, and the bins in each.
 const WF_ROWS: usize = 400;
 const WF_BINS: usize = 96;
-/// One spectrum frame in this many becomes a row: the scope runs at half the
-/// speed it did, and ten times the rows make the picture finer, not faster.
-const WF_EVERY: u32 = 2;
+/// Of every [`WF_OF`] spectrum frames, [`WF_KEEP`] become a row: three in four,
+/// so the scope runs one and a half times as fast as it did at one in two. The
+/// ten times as many rows make the picture finer, not faster.
+const WF_KEEP: u32 = 3;
+const WF_OF: u32 = 4;
+/// The least span the scope zooms to, in Hz — a CW filter is a few hundred.
+const SCOPE_MIN_SPAN_HZ: f64 = 1_000.0;
+/// Room left around the filter's edges, as a fraction of its width.
+const SCOPE_MARGIN: f64 = 0.1;
+
+/// The part of the spectrum the scope draws, `(lo_hz, span_hz)`: the receive
+/// filter with a margin round it, so the bandwidth in use fills the width —
+/// all of a broadcast channel on WFM, a few kHz of a voice filter on SSB.
+fn scope_window(hz: f64, filter_lo: f32, filter_hi: f32) -> (f64, f64) {
+    let (lo, hi) = (f64::from(filter_lo.min(filter_hi)), f64::from(filter_lo.max(filter_hi)));
+    let span = ((hi - lo) * (1.0 + 2.0 * SCOPE_MARGIN)).max(SCOPE_MIN_SPAN_HZ);
+    let centre = hz + (lo + hi) / 2.0;
+    (centre - span / 2.0, span)
+}
+
+/// The level of `bins` (spread over `span_hz` from `lo_hz`) at `f`, read with a
+/// straight line between the neighbouring bins so a narrow window over coarse
+/// bins is a slope and not a staircase. Nothing outside the frame.
+fn level_at(bins: &[u8], lo_hz: f64, span_hz: f64, f: f64) -> u8 {
+    let x = (f - lo_hz) / span_hz * bins.len() as f64 - 0.5;
+    if x < -0.5 || x > bins.len() as f64 - 0.5 {
+        return 0;
+    }
+    let i = x.floor().max(0.0) as usize;
+    let j = (i + 1).min(bins.len() - 1);
+    let t = (x - i as f64).clamp(0.0, 1.0);
+    (f64::from(bins[i]) * (1.0 - t) + f64::from(bins[j]) * t).round() as u8
+}
 
 /// The panel's own state: what has to live between frames.
 pub(in crate::app) struct State {
@@ -335,8 +418,11 @@ pub(in crate::app) struct State {
     peaks: Vec<f32>,
     pub(in crate::app) wf: VecDeque<Vec<u8>>,
     wf_seq: Option<u32>,
-    /// Spectrum frames seen, to keep one in [`WF_EVERY`].
+    /// Spectrum frames seen, to keep [`WF_KEEP`] in every [`WF_OF`].
     wf_tick: u32,
+    /// The span the rows were made for: a row of another one does not line up
+    /// with them.
+    wf_span: f64,
     /// The waterfall as a picture, and what it was drawn for: its height in
     /// pixels and the three colours it is made from.
     wf_tex: Option<egui::TextureHandle>,
@@ -371,6 +457,7 @@ impl Default for State {
             wf: VecDeque::new(),
             wf_seq: None,
             wf_tick: 0,
+            wf_span: 0.0,
             wf_tex: None,
             wf_drawn: None,
             wf_dirty: false,
@@ -385,16 +472,25 @@ impl Default for State {
 }
 
 impl State {
-    /// Take a new spectrum row: one in [`WF_EVERY`] is kept, newest first, up to
-    /// [`WF_ROWS`]. Returns whether the picture changed.
+    /// Take a new spectrum row: [`WF_KEEP`] of every [`WF_OF`] are kept, newest
+    /// first, up to [`WF_ROWS`]. Returns whether the picture changed.
     fn wf_push(&mut self, row: Vec<u8>) -> bool {
-        let keep = self.wf_tick.is_multiple_of(WF_EVERY);
+        let keep = self.wf_tick % WF_OF < WF_KEEP;
         self.wf_tick = self.wf_tick.wrapping_add(1);
         if keep {
             self.wf.push_front(row);
             self.wf.truncate(WF_ROWS);
         }
         keep
+    }
+
+    /// The scope now shows `span_hz`: rows made for another span are cleared.
+    fn wf_span_is(&mut self, span_hz: f64) {
+        if (self.wf_span - span_hz).abs() > span_hz * 0.01 {
+            self.wf_span = span_hz;
+            self.wf.clear();
+            self.wf_dirty = true;
+        }
     }
 }
 
@@ -528,11 +624,11 @@ impl SdroxideApp {
         }
         let hz = self.state.active_freq_hz();
         let mode = self.state.rx[0].mode;
-        let name = self.rc_name(hz, mode, now);
+        let lines = self.rc_name(hz, mode, now);
 
         self.rc_left(ui, left, cmds, &ink, hz, mode);
-        self.rc_middle(ui, mid, cmds, &ink, hz, mode, name.as_deref());
-        self.rc_right(ui, right, cmds, &ink, hz, mode, name.as_deref(), now);
+        self.rc_middle(ui, mid, cmds, &ink, hz, mode, lines.as_ref());
+        self.rc_right(ui, right, cmds, &ink, hz, mode, lines.as_ref(), now);
 
         // Bars, needles and the marquee move between messages: ask for frames
         // only while there is something to move (and once a second for the
@@ -661,17 +757,14 @@ impl SdroxideApp {
         }
     }
 
-    /// The name on the big line, from what is known about the dial.
-    fn rc_name(&self, hz: f64, mode: Mode, now: i64) -> Option<String> {
+    /// The lines the station is written in, from what is known about the dial.
+    fn rc_name(&self, hz: f64, mode: Mode, now: i64) -> Option<StationLines> {
         let rounded = hz.round() as i64;
-        let memory = self
-            .memories
-            .iter()
-            .find(|m| m.mode == mode && m.freq_hz.round() as i64 == rounded)
-            .map(|m| m.name.as_str());
-        let scheduled = broadcast::at_dial(&self.broadcast, hz, now).map(|s| s.name.as_str());
+        let memory =
+            self.memories.iter().find(|m| m.mode == mode && m.freq_hz.round() as i64 == rounded);
+        let scheduled = broadcast::at_dial(&self.broadcast, hz, now);
         let ps = self.rds.as_ref().and_then(|r| r.ps.as_deref());
-        station_name(mode, ps, memory, scheduled)
+        station_lines(mode, ps, memory, scheduled)
     }
 
     // ───────────────────────────────────────────────────────────── left column
@@ -787,7 +880,7 @@ impl SdroxideApp {
         ink: &Ink,
         hz: f64,
         mode: Mode,
-        name: Option<&str>,
+        name: Option<&StationLines>,
     ) {
         let vu_w = vu_meter::WIDTH_COMPACT.max(64.0);
         let main =
@@ -806,7 +899,7 @@ impl SdroxideApp {
             // The name proper, without its bracket, on one line.
             let room = head.width() - 20.0 - if range.is_some() { 96.0 } else { 0.0 };
             let mut job = egui::text::LayoutJob::single_section(
-                split_name(n).0.to_uppercase(),
+                n.big.clone(),
                 egui::TextFormat::simple(FontId::proportional(14.0), ink.amber),
             );
             job.wrap = egui::text::TextWrapping {
@@ -827,14 +920,10 @@ impl SdroxideApp {
                 ink.dim,
             );
         }
-        let mode_label = MODES
-            .iter()
-            .find(|(_, m)| *m == mode)
-            .map_or_else(|| format!("{mode:?}"), |(l, _)| (*l).to_string());
         p.text(
             head.center() + vec2(0.0, 8.0),
             Align2::CENTER_CENTER,
-            mode_label,
+            mode_label(mode),
             FontId::proportional((head_h * 0.52).clamp(24.0, 46.0)),
             ink.accent,
         );
@@ -862,7 +951,7 @@ impl SdroxideApp {
             Pos2::new(main.right(), meter.top() - 6.0),
         );
         if scope.height() > 30.0 {
-            self.rc_scope(ui, scope, ink, hz, mode);
+            self.rc_scope(ui, scope, ink, hz);
         }
         self.rc_smeter(ui, meter, ink);
 
@@ -1034,13 +1123,10 @@ impl SdroxideApp {
     }
 
     /// The mini spectrum and its waterfall, around the dial.
-    fn rc_scope(&mut self, ui: &mut egui::Ui, rect: Rect, ink: &Ink, hz: f64, mode: Mode) {
+    fn rc_scope(&mut self, ui: &mut egui::Ui, rect: Rect, ink: &Ink, hz: f64) {
         let rx = &self.state.rx[0];
-        let half = if mode == Mode::Wfm {
-            150_000.0
-        } else {
-            ((rx.filter_hi - rx.filter_lo).abs() as f64 * 1.5).clamp(6_000.0, 60_000.0)
-        };
+        let (win_lo, win_span) = scope_window(hz, rx.filter_lo, rx.filter_hi);
+        self.radio_classic.wf_span_is(win_span);
         let held = self.frame.clone().or_else(|| self.radio_classic.frame.clone());
         if let Some(frame) = held.as_ref()
             && self.radio_classic.wf_seq != Some(frame.seq)
@@ -1048,13 +1134,11 @@ impl SdroxideApp {
             && frame.span_hz > 0.0
         {
             self.radio_classic.wf_seq = Some(frame.seq);
-            let n = frame.bins.len();
             let lo = frame.center_hz - frame.span_hz / 2.0;
             let row: Vec<u8> = (0..WF_BINS)
                 .map(|i| {
-                    let f = hz - half + 2.0 * half * (i as f64 + 0.5) / WF_BINS as f64;
-                    let at = ((f - lo) / frame.span_hz * n as f64).floor();
-                    if at < 0.0 || at >= n as f64 { 0 } else { frame.bins[at as usize] }
+                    let f = win_lo + win_span * (i as f64 + 0.5) / WF_BINS as f64;
+                    level_at(&frame.bins, lo, frame.span_hz, f)
                 })
                 .collect();
             if self.radio_classic.wf_push(row) {
@@ -1110,8 +1194,10 @@ impl SdroxideApp {
                 Color32::WHITE,
             );
         }
-        // The dial's own mark, at the centre.
-        let x = rect.center().x;
+        // The dial's own mark, where the dial falls in the window: the centre
+        // on a symmetric filter, off to one side on SSB.
+        let x = (rect.left() + rect.width() * ((hz - win_lo) / win_span) as f32)
+            .clamp(rect.left(), rect.right());
         p.line_segment(
             [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
             Stroke::new(1.0, ink.amber.gamma_multiply(0.6)),
@@ -1249,7 +1335,7 @@ impl SdroxideApp {
         ink: &Ink,
         hz: f64,
         mode: Mode,
-        name: Option<&str>,
+        name: Option<&StationLines>,
         now: i64,
     ) {
         {
@@ -1376,30 +1462,43 @@ impl SdroxideApp {
             ink.dim,
         );
 
-        // Row 3: the station name at its size; what it carries in brackets
-        // ("Belgien Klara (Sint-Pieters-Leeuw Nahe Brüssel)") goes under it in
-        // the small type of the RadioText line, in the same colour. A name
-        // that is still too long for the column wraps onto a second line.
+        // Row 3: the station name at its size, in the small type of the
+        // RadioText line around it: what the table says about a scheduled
+        // transmission over it, and under it the bracket of a long name and a
+        // memory's frequency and mode, all in the same colour. A name that is
+        // still too long for the column wraps onto a second line.
         let name_y = hint_y + 18.0;
         let name_size = (h * 0.1).clamp(20.0, 40.0);
-        let (main, note) = split_name(name.unwrap_or("—"));
-        let galley = ui
-            .painter()
-            .layout_job(name_job(&main.to_uppercase(), name_size, inner.width(), ink.amber));
-        let mut name_h = galley.size().y;
-        ui.painter().galley(Pos2::new(inner.center().x, name_y), galley, ink.amber);
-        if let Some(note) = note {
+        let small = |text: &str| {
             let mut job = egui::text::LayoutJob::single_section(
-                note.to_string(),
+                text.to_string(),
                 egui::TextFormat::simple(FontId::proportional(15.0), ink.amber),
             );
             job.wrap.max_width = inner.width();
             job.wrap.max_rows = 1;
             job.halign = Align::Center;
-            let galley = ui.painter().layout_job(job);
-            ui.painter().galley(Pos2::new(inner.center().x, name_y + name_h + 2.0), galley.clone(), ink.amber);
-            name_h += galley.size().y + 2.0;
+            ui.painter().layout_job(job)
+        };
+        let mut y = name_y;
+        if let Some(above) = name.and_then(|n| n.above.as_deref()) {
+            let galley = small(above);
+            let gh = galley.size().y;
+            ui.painter().galley(Pos2::new(inner.center().x, y), galley, ink.amber);
+            y += gh + 2.0;
         }
+        let big = name.map_or("—", |n| n.big.as_str());
+        let galley = ui.painter().layout_job(name_job(big, name_size, inner.width(), ink.amber));
+        let big_h = galley.size().y;
+        ui.painter().galley(Pos2::new(inner.center().x, y), galley, ink.amber);
+        y += big_h;
+        for line in name.map(|n| n.below.as_slice()).unwrap_or_default() {
+            let galley = small(line);
+            let gh = galley.size().y;
+            y += 2.0;
+            ui.painter().galley(Pos2::new(inner.center().x, y), galley, ink.amber);
+            y += gh;
+        }
+        let name_h = y - name_y;
 
         // Row 4: RadioText.
         let rt_rect = Rect::from_min_size(
@@ -1772,23 +1871,74 @@ mod tests {
         assert_eq!(place(true, false, Mode::Wfm, true), Window, "a phone has no room to dock");
     }
 
+    fn memory(name: &str, hz: f64, mode: Mode) -> MemoryChannel {
+        MemoryChannel {
+            id: 1,
+            name: name.into(),
+            freq_hz: hz,
+            mode,
+            filter_lo: 0.0,
+            filter_hi: 0.0,
+            folder: None,
+            rtty: None,
+            repeater: None,
+            antenna: None,
+            color: None,
+        }
+    }
+
+    fn tropical() -> BroadcastStation {
+        BroadcastStation {
+            name: "Tropical R.Program 4TRP".into(),
+            freq_khz: 2355.0,
+            lang: "English".into(),
+            country: "Australia".into(),
+            site: "Kuranda QLD".into(),
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn on_fm_the_name_is_the_stations_and_elsewhere_the_memorys_or_the_schedules() {
-        let name = |m, ps, mem, sch| station_name(m, ps, mem, sch);
-        assert_eq!(
-            name(Mode::Wfm, Some("EUROPE 1"), Some("M3"), None).as_deref(),
-            Some("EUROPE 1")
-        );
+        let big = |m, ps, mem: Option<&MemoryChannel>, sch: Option<&BroadcastStation>| {
+            station_lines(m, ps, mem, sch).map(|l| l.big)
+        };
+        let m3 = memory("M3", 99.0e6, Mode::Wfm);
+        let bbc = BroadcastStation { name: "BBC".into(), freq_khz: 9410.0, ..Default::default() };
+        assert_eq!(big(Mode::Wfm, Some("EUROPE 1"), Some(&m3), None).as_deref(), Some("EUROPE 1"));
         // A station that sends no name falls back to the memory, then the schedule.
-        assert_eq!(name(Mode::Wfm, Some("  "), Some("M3"), Some("BBC")).as_deref(), Some("M3"));
-        assert_eq!(name(Mode::Wfm, None, None, Some("BBC")).as_deref(), Some("BBC"));
+        assert_eq!(big(Mode::Wfm, Some("  "), Some(&m3), Some(&bbc)).as_deref(), Some("M3"));
+        assert_eq!(big(Mode::Wfm, None, None, Some(&bbc)).as_deref(), Some("31m BBC"));
         // Off FM the RDS name is never used, even if one is lying around.
-        assert_eq!(name(Mode::Am, Some("EUROPE 1"), None, Some("RFI")).as_deref(), Some("RFI"));
+        let rfi = BroadcastStation { name: "RFI".into(), freq_khz: 9410.0, ..Default::default() };
+        assert_eq!(big(Mode::Am, Some("EUROPE 1"), None, Some(&rfi)).as_deref(), Some("31m RFI"));
+        let r3 = memory("Radio 3", 9.41e6, Mode::Am);
         assert_eq!(
-            name(Mode::Am, Some("EUROPE 1"), Some("Radio 3"), Some("RFI")).as_deref(),
-            Some("Radio 3")
+            big(Mode::Am, Some("EUROPE 1"), Some(&r3), Some(&rfi)).as_deref(),
+            Some("RADIO 3")
         );
-        assert_eq!(name(Mode::Usb, None, None, None), None);
+        assert_eq!(big(Mode::Usb, None, None, None), None);
+    }
+
+    #[test]
+    fn a_scheduled_station_is_band_and_name_big_and_what_it_says_about_itself_above() {
+        let lines = station_lines(Mode::Am, None, None, Some(&tropical())).unwrap();
+        assert_eq!(lines.big, "120m TROPICAL R.PROGRAM 4TRP");
+        assert_eq!(lines.above.as_deref(), Some("English Australia Kuranda QLD"));
+        assert!(lines.below.is_empty());
+        // What the table leaves empty is not written as a gap.
+        let bare = BroadcastStation { site: String::new(), ..tropical() };
+        let lines = station_lines(Mode::Am, None, None, Some(&bare)).unwrap();
+        assert_eq!(lines.above.as_deref(), Some("English Australia"));
+    }
+
+    #[test]
+    fn a_memory_is_its_name_big_and_its_dial_and_mode_under_it() {
+        let m = memory("Qso MATIN", 3.6e6, Mode::Lsb);
+        let lines = station_lines(Mode::Lsb, None, Some(&m), None).unwrap();
+        assert_eq!(lines.big, "QSO MATIN");
+        assert_eq!(lines.above, None);
+        assert_eq!(lines.below, vec!["3.600000 MHz LSB".to_string()]);
     }
 
     #[test]
@@ -1846,12 +1996,12 @@ mod tests {
     }
 
     #[test]
-    fn the_waterfall_keeps_one_row_in_two_up_to_four_hundred() {
+    fn the_waterfall_keeps_three_rows_in_four_up_to_four_hundred() {
         let mut st = State::default();
         for i in 0..20u8 {
             st.wf_push(vec![i; WF_BINS]);
         }
-        assert_eq!(st.wf.len(), 10);
+        assert_eq!(st.wf.len(), 15);
         // Newest first: the last kept frame is the 19th (index 18).
         assert_eq!(st.wf.front().map(|r| r[0]), Some(18));
         for _ in 0..2000 {
@@ -1859,6 +2009,42 @@ mod tests {
         }
         assert_eq!(st.wf.len(), WF_ROWS);
         assert_eq!(WF_ROWS, 400);
+    }
+
+    #[test]
+    fn the_scope_shows_the_filter_with_a_margin_round_it() {
+        // WFM: a wide filter fills the width, centred on the dial.
+        let (lo, span) = scope_window(100e6, -96_000.0, 96_000.0);
+        assert!((span - 192_000.0 * 1.2).abs() < 1.0);
+        assert!((lo + span / 2.0 - 100e6).abs() < 1.0);
+        // USB: the window sits over the passband, so the dial is near its left edge.
+        let (lo, span) = scope_window(14.2e6, 200.0, 2600.0);
+        assert!((span - 2400.0 * 1.2).abs() < 1.0);
+        assert!(lo > 14.2e6 - 100.0 && lo < 14.2e6 + 200.0);
+        assert!(lo + span > 14.2e6 + 2600.0);
+        // A narrow CW filter does not zoom past what the bins can show.
+        assert_eq!(scope_window(7.03e6, -50.0, 50.0).1, SCOPE_MIN_SPAN_HZ);
+    }
+
+    #[test]
+    fn a_level_between_two_bins_is_read_on_the_line_between_them() {
+        let bins = [0u8, 100, 200];
+        // Bin centres at lo + span * (0.5, 1.5, 2.5) / 3.
+        assert_eq!(level_at(&bins, 0.0, 3.0, 1.5), 100);
+        assert_eq!(level_at(&bins, 0.0, 3.0, 1.0), 50);
+        assert_eq!(level_at(&bins, 0.0, 3.0, -1.0), 0, "outside the frame");
+        assert_eq!(level_at(&bins, 0.0, 3.0, 4.0), 0, "outside the frame");
+    }
+
+    #[test]
+    fn rows_made_for_another_span_are_dropped() {
+        let mut st = State::default();
+        st.wf_span_is(10_000.0);
+        st.wf_push(vec![1; WF_BINS]);
+        st.wf_span_is(10_050.0);
+        assert_eq!(st.wf.len(), 1, "a hair of change keeps the picture");
+        st.wf_span_is(2_400.0);
+        assert!(st.wf.is_empty());
     }
 
     #[test]
