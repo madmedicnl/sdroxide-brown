@@ -4590,6 +4590,8 @@ mod ctr_zoom_sim {
         guard: f64,
         asked: Option<CtrAsk>,
         centred_at: Option<(f64, f64)>,
+        /// `SetCenter` commands sent so far.
+        sent: usize,
     }
 
     /// What the operator sees at the end of one frame.
@@ -4618,6 +4620,7 @@ mod ctr_zoom_sim {
                 guard,
                 asked: None,
                 centred_at: None,
+                sent: 0,
             }
         }
 
@@ -4697,6 +4700,7 @@ mod ctr_zoom_sim {
 
             for c in cmds {
                 if let Command::SetCenter(hz) = c {
+                    self.sent += 1;
                     self.in_flight.push_back((self.lag, hz));
                 }
             }
@@ -4874,6 +4878,46 @@ mod ctr_zoom_sim {
             }
         }
         assert!(failures.is_empty(), "CTR left the middle:\n{}", failures.join("\n"));
+    }
+
+    /// The wheel keeps turning once the view is as wide as it can go. Nothing
+    /// may move: not the span, not the middle, and no retune goes out.
+    #[test]
+    fn a_wheel_turned_on_past_the_widest_view_changes_nothing() {
+        let mut failures = Vec::new();
+        for lag in [0usize, 3] {
+            for guard in [0.0, 300_000.0] {
+                for factor in [1.02, 1.25] {
+                    for x in [100.0f32, 500.0, 900.0] {
+                        let mut sim = Sim::new(lag, guard);
+                        settled(&mut sim, 10);
+                        for _ in 0..40 {
+                            sim.frame(x, 0.8);
+                        }
+                        for _ in 0..80 {
+                            sim.frame(x, 1.0 / 0.8);
+                        }
+                        settled(&mut sim, lag + 6);
+                        let sent = sim.sent;
+                        let mut prev = sim.frame(x, 1.0);
+                        for i in 0..60 {
+                            let seen = sim.frame(x, factor);
+                            let moved = (seen.span - prev.span).abs() > seen.span * 1e-4
+                                || (seen.mid - prev.mid).abs() > seen.span / WIDTH as f64;
+                            if moved || sim.sent != sent {
+                                failures.push(format!(
+                                    "lag={lag} guard={guard} factor={factor} x={x} frame {i}: span {:.0}->{:.0}, mid {:+.0}, retunes {}",
+                                    prev.span, seen.span, seen.mid - prev.mid, sim.sent - sent
+                                ));
+                                break;
+                            }
+                            prev = seen;
+                        }
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "the view moved at the limit:\n{}", failures.join("\n"));
     }
 
     /// Notch after notch of a fast wheel or a quick pinch.
