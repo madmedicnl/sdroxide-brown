@@ -6215,6 +6215,137 @@ fn silent_mic_notice(what: &str) -> String {
     )
 }
 
+/// Rolling-window helper: given an oldest-first list of timestamps and the
+/// last (timestamp, count) we sent, return how many entries from the front are
+/// new. Handles capped windows (new entries push out old ones) and same-second
+/// entries arriving in separate batches.
+fn new_count_oldest_first(timestamps: &[i64], seen_at: i64, seen_count: usize) -> usize {
+    if timestamps.is_empty() {
+        return 0;
+    }
+    // Window rolled: first entry is newer than what we last saw.
+    let (seen_at, seen_count) = if seen_at > 0 && timestamps[0] > seen_at {
+        (0, 0)
+    } else if seen_count > timestamps.len() {
+        (0, 0)
+    } else {
+        (seen_at, seen_count)
+    };
+    let mut start = timestamps.len();
+    for (i, &t) in timestamps.iter().enumerate() {
+        if t > seen_at || (t == seen_at && i >= seen_count) {
+            start = i;
+            break;
+        }
+    }
+    timestamps.len() - start
+}
+
+/// Rolling-window helper: given a newest-first list of timestamps and the
+/// last (timestamp, count) we sent, return how many entries from the front are
+/// new.
+fn new_count_newest_first(timestamps: &[i64], seen_at: i64, seen_count: usize) -> usize {
+    if timestamps.is_empty() {
+        return 0;
+    }
+    // Window rolled: last (oldest) entry is newer than what we last saw.
+    let (seen_at, seen_count) = if seen_at > 0 && timestamps[timestamps.len() - 1] > seen_at {
+        (0, 0)
+    } else if seen_count > timestamps.len() {
+        (0, 0)
+    } else {
+        (seen_at, seen_count)
+    };
+    let mut new_count = 0;
+    for e in timestamps {
+        if *e > seen_at {
+            new_count += 1;
+        } else if *e == seen_at {
+            let seen_so_far = timestamps.iter().take(new_count).filter(|&x| *x == seen_at).count();
+            if seen_so_far < seen_count {
+                new_count += 1;
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    new_count
+}
+
+
+#[cfg(test)]
+mod feed_window_tests {
+    use super::*;
+
+    #[test]
+    fn oldest_first_basic() {
+        // First batch: all new.
+        assert_eq!(new_count_oldest_first(&[1, 2, 3], 0, 0), 3);
+        // Second batch, same data: nothing new.
+        assert_eq!(new_count_oldest_first(&[1, 2, 3], 3, 1), 0);
+    }
+
+    #[test]
+    fn oldest_first_capped_window() {
+        // Window capped at 3, new entries push out old ones.
+        // First: [1,2,3] → 3 new.
+        assert_eq!(new_count_oldest_first(&[1, 2, 3], 0, 0), 3);
+        // Second: [2,3,4] (1 rolled off, 4 new) → 1 new.
+        assert_eq!(new_count_oldest_first(&[2, 3, 4], 3, 1), 1);
+        // Third: [3,4,5] → 1 new.
+        assert_eq!(new_count_oldest_first(&[3, 4, 5], 4, 1), 1);
+    }
+
+    #[test]
+    fn oldest_first_same_second() {
+        // Two messages in the same second, arriving together.
+        assert_eq!(new_count_oldest_first(&[10, 10], 0, 0), 2);
+        // Same data again: nothing new.
+        assert_eq!(new_count_oldest_first(&[10, 10], 10, 2), 0);
+        // New message with same timestamp arrives in next batch.
+        assert_eq!(new_count_oldest_first(&[10, 10, 10], 10, 2), 1);
+    }
+
+    #[test]
+    fn oldest_first_window_roll() {
+        // Window rolled: first entry newer than seen.
+        assert_eq!(new_count_oldest_first(&[5, 6, 7], 3, 1), 3);
+    }
+
+    #[test]
+    fn newest_first_basic() {
+        // First batch: all new.
+        assert_eq!(new_count_newest_first(&[3, 2, 1], 0, 0), 3);
+        // Same data: nothing new.
+        assert_eq!(new_count_newest_first(&[3, 2, 1], 3, 1), 0);
+    }
+
+    #[test]
+    fn newest_first_new_entry() {
+        // New entry at front.
+        assert_eq!(new_count_newest_first(&[4, 3, 2, 1], 3, 1), 1);
+    }
+
+    #[test]
+    fn newest_first_same_second() {
+        // Two messages same second, arriving together.
+        assert_eq!(new_count_newest_first(&[10, 10], 0, 0), 2);
+        // Same data: nothing new.
+        assert_eq!(new_count_newest_first(&[10, 10], 10, 2), 0);
+        // New same-second entry in next batch.
+        assert_eq!(new_count_newest_first(&[10, 10, 10], 10, 2), 1);
+    }
+
+    #[test]
+    fn newest_first_window_roll() {
+        // Window rolled: oldest entry newer than seen.
+        assert_eq!(new_count_newest_first(&[7, 6, 5], 3, 1), 3);
+    }
+}
+
+
 impl Engine {
     fn run_audio(&mut self, iq: &[Complex32]) {
         // **The recorder is not the only consumer of this tap.**
