@@ -397,12 +397,13 @@ fn rows_after(n: u32) -> usize {
     app.radio_classic.wf.len()
 }
 
-/// The little waterfall scrolls at half the speed it did — one row for every
-/// two spectrum frames — and keeps ten times as many rows.
+/// The little waterfall scrolls one and a half times as fast as it did at one
+/// row for two spectrum frames — three rows for every four — and keeps ten
+/// times as many rows as it first did.
 #[test]
-fn the_scope_waterfall_runs_at_half_speed_and_keeps_ten_times_the_rows() {
+fn the_scope_waterfall_runs_three_rows_in_four_and_keeps_four_hundred() {
     let _guard = crate::multi::frame_test_lock();
-    assert_eq!(rows_after(20), 10, "twenty frames should leave ten rows");
+    assert_eq!(rows_after(20), 15, "twenty frames should leave fifteen rows");
     assert_eq!(rows_after(1200), 400, "the waterfall keeps 400 rows");
 }
 
@@ -758,4 +759,26 @@ fn the_corner_arrow_is_worn_only_where_it_has_somewhere_to_go() {
     assert_eq!(detach_icon(P::Window, false, false), None, "slot taken: nowhere to dock");
     assert_eq!(detach_icon(P::Docked, false, true), None, "no room to float on a phone");
     assert_eq!(detach_icon(P::Hidden, false, false), None);
+}
+
+/// A PROGRAMS row tunes the VFO the receiver is on, and the dial shows it at
+/// once — not VFO A whatever the receiver is on.
+#[test]
+fn a_programs_row_tunes_the_active_vfo() {
+    let _guard = crate::multi::frame_test_lock();
+    let (_ctx, mut app, _sent) = recorded(Mode::Wfm);
+    app.state.active_vfo = sdroxide_types::Vfo::B;
+    let station = sdroxide_types::BroadcastStation {
+        name: "Radio X".into(),
+        freq_khz: 6070.0,
+        ..Default::default()
+    };
+    let mut cmds = Vec::new();
+    app.tune_to_station(&station, &mut cmds);
+    assert!(cmds.iter().any(|c| matches!(
+        c,
+        sdroxide_types::Command::SetVfo { vfo: sdroxide_types::Vfo::B, hz } if *hz == 6_070_000.0
+    )));
+    assert_eq!(app.state.vfo_b_hz, 6_070_000.0);
+    assert_eq!(app.state.rx[0].mode, Mode::Am);
 }

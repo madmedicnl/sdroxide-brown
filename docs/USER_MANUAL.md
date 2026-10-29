@@ -1433,6 +1433,16 @@ measurement — a clipped carrier reads *lower* than it really is, so the number
 would be arguing with the warning next to it. Turn the RF gain down, or switch
 in an attenuator, until it goes.
 
+**Troubleshooting: the S-meter moves when you move the mouse.** On a CAT rig
+(USB audio, no IQ front end) the S-meter shows the *audio level*, not a real
+signal-strength measurement — the rig has no S-meter that SDRoxide can read.
+A wireless mouse radiates RF into the receiver (notably the CRT SS9900v and
+similar rigs) and that noise is picked up as audio, so both the number and the
+needle jump. This is a **hardware** problem, not a software bug. Fixes: use a
+wired mouse, move the mouse away from the rig and antenna, use a different USB
+port, or put a ferrite choke on the mouse cable. On an SDR with a real IQ front
+end the S-meter reads actual signal strength and is not affected.
+
 It is worth taking seriously even when nothing sounds wrong, because on FM
 almost nothing will: the audio stays clean well past the point where the data
 riding above it has already gone. See the RDS diagnostics tab

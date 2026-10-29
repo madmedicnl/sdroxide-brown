@@ -8918,3 +8918,13 @@ sessionqso-include-cw = CW opnemen
 decodes-live-log = LIVE LOG
 
 decodes-setup = ⚙ INSTELLEN
+
+schedule-colour-all = Kleur
+
+schedule-colour-all-hint = Kleur van de waterval-labels voor alle zenders — vervangt de per zender gekozen kleuren
+
+schedule-colour-station-hint = Kleur van het waterval-label van deze zender
+
+schedule-colour-reset = STANDAARD
+
+schedule-colour-reset-hint = Terug naar de standaardkleur voor alle zenders; de gekozen kleuren worden vergeten

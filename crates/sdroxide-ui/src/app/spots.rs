@@ -56,7 +56,7 @@ fn spot_haystack(s: &Spot) -> String {
 /// One clickable spot row for the spots window: kind badge, call, frequency,
 /// mode, age or schedule, and the park/summit/transmitter reference or comment.
 fn spot_row(ui: &mut egui::Ui, s: &Spot, now_utc: i64, needed: bool) -> egui::Response {
-    let kind_col = crate::theme::data_ink(crate::theme::spot_color(s.kind));
+    let kind_col = crate::theme::data_ink(crate::theme::spot_color_for(s));
     let gray = crate::theme::gray(150);
     let inner = egui::Frame::new()
         .fill(crate::theme::ROW_BG())

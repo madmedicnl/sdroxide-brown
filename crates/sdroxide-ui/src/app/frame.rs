@@ -853,6 +853,10 @@ impl eframe::App for SdroxideApp {
         // settings window write straight into `ui_settings`, and a colour has
         // to take on the frame it is chosen in or the picker feels dead.
         crate::theme::set_spot_colors(&self.ui_settings.spot_colors);
+        crate::theme::set_programs_colours(
+            self.ui_settings.programs_colour_all,
+            &self.ui_settings.programs_colours,
+        );
         crate::theme::set_bandplan_colors(&self.ui_settings.bandplan_colors);
         // …and whether the maps carry cities, which the four of them read
         // through one shared painter.
