@@ -3714,6 +3714,9 @@ struct Engine {
     /// [`Engine::tune_refused`] and the session written on the way out, and both
     /// have to treat zero as "no record" rather than as a frequency.
     good_vfo_hz: f64,
+    /// Last satellite CAT frequency sent to a CAT rig, for rate-limiting.
+    /// Zero means "nothing sent yet".
+    sat_cat_last_freq: f64,
     /// The centre an open attempt on this radio failed at, and which a later
     /// attempt should therefore not simply repeat.
     ///
@@ -5157,6 +5160,7 @@ fn engine_thread(
         // Where the source opened — or, when it never opened, what was last
         // recorded; see the note where that is worked out.
         good_vfo_hz: seeded_good_vfo_hz,
+        sat_cat_last_freq: 0.0,
         // Nothing has been refused yet on a front end that opened, so the first
         // attempt is made at the dial and only its failure arms the fallback.
         refused_center_hz: seeded_refused_center_hz,
@@ -7147,6 +7151,18 @@ impl Engine {
                 // end put there (`rig_cw_offset_hz`). Taking it back out is what
                 // stops the readout climbing by one pitch per poll.
                 let hz = hz - self.rig_cw_offset_hz();
+                // SAT Doppler (step 1, RX only): when a satellite lock is
+                // active with Doppler correction, the rig's VFO sits on the
+                // corrected downlink, not the nominal dial. If the rig reports
+                // that corrected frequency back, it is our own write's echo —
+                // not an operator dial move — so adopt nothing and keep the
+                // dial on its published frequency.
+                if self.sat_lock.as_ref().is_some_and(|l| l.track.corrections_active) {
+                    let good = self.good_vfo_hz;
+                    if (hz - good).abs() < 15.0 {
+                        return;
+                    }
+                }
                 match self.state.active_vfo {
                     Vfo::A => self.state.vfo_a_hz = hz,
                     Vfo::B => self.state.vfo_b_hz = hz,
@@ -14321,8 +14337,11 @@ impl Engine {
             return;
         };
         if self.audio_mode && cfg.doppler {
+            // Step 1 (RX Doppler): CAT rigs now get Doppler correction via CAT
+            // commands (rate-limited, never during TX). The notice is kept as a
+            // fallback for rigs where the CAT thread is not available.
             let _ = self.event_tx.send(RadioEvent::Notice(Some(
-                "CAT rig: satellite tracking runs, but Doppler correction needs an IQ front end"
+                "CAT rig: satellite RX Doppler correction via CAT (experimental)"
                     .into(),
             )));
         }
@@ -14492,7 +14511,7 @@ impl Engine {
                 t.uplink_hz = f_up;
                 t.visible = o.el_deg > 0.0;
                 t.stale_elements = false;
-                t.corrections_active = lock.cfg.doppler && !self.audio_mode;
+                t.corrections_active = lock.cfg.doppler;
                 (t.doppler_rx_hz, t.doppler_tx_hz) = if t.corrections_active {
                     (
                         sdroxide_types::doppler_rx_hz(f_down, o.range_rate_km_s),
@@ -18155,11 +18174,28 @@ impl Engine {
             // already receives `tx_freq_hz`.
             self.source.set_rit_hz(self.state.rit.effective_hz());
             let dial = self.state.active_freq_hz();
-            if self.source.set_center_hz(dial).is_ok() {
-                // The rig took the dial: this is where a refused tune goes back
-                // to. Tracked here rather than in `keep_vfo_in_span`, which a
-                // CAT rig never reaches.
-                self.note_frequency_taken(dial);
+            // SAT Doppler (step 1, RX only): for a CAT rig with an active lock
+            // and Doppler enabled, the rig's VFO is steered to the corrected
+            // downlink instead of the nominal dial. The dial itself stays on the
+            // published frequency so tuning stays relative to nominal.
+            // Rate-limited: only send when the correction has changed by more
+            // than 1 Hz (1 Hz resolution, per SP9TKN). Never during TX.
+            let corrected = if !self.tx_active
+                && self.sat_lock.as_ref().is_some_and(|l| l.track.corrections_active)
+            {
+                dial + self.sat_rx_doppler_hz()
+            } else {
+                dial
+            };
+            // Rate limit: only send if changed by > 1 Hz from last sent.
+            let should_send = (corrected - self.sat_cat_last_freq).abs() > 1.0
+                || self.sat_cat_last_freq == 0.0;
+            if should_send && self.source.set_center_hz(corrected).is_ok() {
+                // The rig took the (possibly corrected) frequency: this is where
+                // a refused tune goes back to. Tracked here rather than in
+                // `keep_vfo_in_span`, which a CAT rig never reaches.
+                self.note_frequency_taken(corrected);
+                self.sat_cat_last_freq = corrected;
             }
             self.update_display_center();
             return;

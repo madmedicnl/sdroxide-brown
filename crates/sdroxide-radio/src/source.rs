@@ -183,13 +183,6 @@ pub trait IqSource: Send {
         0.0
     }
 
-    /// The CAT handle, if this source drives a CAT-controlled rig. Used by the
-    /// satellite lock to steer the rig's VFO with Doppler-corrected
-    /// frequencies. Default `None` for every front end that is not a CAT rig.
-    fn cat_handle(&mut self) -> Option<&mut sdroxide_cat::CatHandle> {
-        None
-    }
-
     /// Blocking read. Returns the number of samples written to `buf`;
     /// 0 means a timeout (caller should just retry).
     fn read(&mut self, buf: &mut [Complex32]) -> Result<usize>;
