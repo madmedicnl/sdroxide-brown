@@ -4117,7 +4117,7 @@ smeter-ps = PS --
 ## multi (src/multi.rs)
 
 multi-tx = ● TX
-multi-link = VERBINDUNG
+multi-link = Power
 multi-mute-radio-s-audio = Audio dieses Funkgeräts stummschalten
 multi-close-radio-s-split-view = Die geteilte Ansicht dieses Funkgeräts schließen
 multi-open-radio-split-view-own = Dieses Funkgerät in einer eigenen geteilten Ansicht öffnen

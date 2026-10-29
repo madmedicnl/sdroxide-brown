@@ -4129,7 +4129,7 @@ smeter-ps = PS --
 ## multi (src/multi.rs)
 
 multi-tx = ● TX
-multi-link = LINK
+multi-link = Power
 multi-mute-radio-s-audio = Mute this radio's audio
 multi-close-radio-s-split-view = Close this radio's split view
 multi-open-radio-split-view-own = Open this radio in a split view of its own
