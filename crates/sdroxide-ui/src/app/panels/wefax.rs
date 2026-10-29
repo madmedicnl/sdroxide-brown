@@ -5,6 +5,7 @@
 //! the panel shows is a texture being written to rather than a finished image.
 //! The station chip tunes the well-known schedules without leaving the panel.
 
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::Command;
 
@@ -72,7 +73,7 @@ impl SdroxideApp {
         crate::repaint::after_ms(&ctx, 200);
 
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("WEFAX").size(12.0).strong().color(theme::CYAN()));
+            ui.label(RichText::new(tr!("wefax-wefax")).size(12.0).strong().color(theme::CYAN()));
             self.wefax_station_chip(ui, cmds);
             self.wefax_carrier_note(ui);
 
@@ -80,9 +81,9 @@ impl SdroxideApp {
             // for a quarter of an hour and you will almost always have tuned to
             // it after the start tone went by.
             let (face, hint) = if st.receiving {
-                (" ■ STOP ", "End the chart now and save what has arrived")
+                (tr!("wefax-stop"), tr!("wefax-end-chart-now-save-what"))
             } else {
-                (" ● START ", "Start a chart now, without waiting for a start tone")
+                (tr!("wefax-start"), tr!("wefax-start-chart-now-without-waiting"))
             };
             if crate::chrome::chip_accent(
                 ui,
@@ -99,31 +100,22 @@ impl SdroxideApp {
 
             // What the receiver is making of the signal.
             let (text, colour) = if st.phasing {
-                ("phasing…".to_string(), theme::YELLOW())
+                (tr!("wefax-phasing").to_string(), theme::YELLOW())
             } else if st.receiving {
                 (
-                    format!(
-                        "receiving {:.0} min · {} lines",
-                        f64::from(st.lines) / st.lpm.value(),
-                        st.lines
+                    tr!(
+                        "wefax-receiving-progress",
+                        min = format!("{:.0}", f64::from(st.lines) / st.lpm.value()),
+                        lines = st.lines
                     ),
                     theme::GREEN(),
                 )
             } else if self.wefax.has_live() {
-                (format!("{} lines held", self.wefax.live_size().1), theme::CYAN_DIM())
+                (tr!("wefax-lines-held", live_size = self.wefax.live_size().1), theme::CYAN_DIM())
             } else {
-                ("listening".to_string(), theme::LINE_LIT())
+                (tr!("wefax-listening"), theme::LINE_LIT())
             };
-            ui.label(RichText::new(text).color(colour).size(11.0)).on_hover_text(
-                "Waiting for a chart.\n\n\
-                 WEFAX is a timetable, not a conversation: a station sends its charts at set \
-                 times, so a chosen frequency is quiet for most of the day — that is normal. \
-                 Use the STATIONS button to pick one and check the time.\n\n\
-                 If a signal is there but the picture comes out one flat tone (all grey, all \
-                 black or all white), it is the tuning or the speed — use the +0 Hz readout \
-                 and the IOC/speed control, and check the STATIONS entry matches what is \
-                 being sent.",
-            );
+            ui.label(RichText::new(text).color(colour).size(11.0)).on_hover_text(tr!("wefax-status-hint"));
 
             // The tuning readout. A correctly tuned receiver puts the
             // subcarrier's excursions around 1900 Hz; several hundred hertz off
@@ -136,9 +128,7 @@ impl SdroxideApp {
                     .monospace(),
             )
             .on_hover_text(
-                "Subcarrier offset from 1900 Hz. Tune for roughly zero: the fax carrier is \
-                 1500 Hz black to 2300 Hz white, and a receiver a few hundred hertz off clips \
-                 the picture to solid black or solid white.",
+                tr!("wefax-subcarrier-offset-1900-hz-tune"),
             );
             // **A way to act on that number.** The readout turns yellow when the
             // offset is too large, and until now it could only tell the operator
@@ -148,13 +138,11 @@ impl SdroxideApp {
             // by exactly what the decoder is measuring, so the subcarrier lands
             // back on 1900 Hz.
             if off.abs() > CENTRE_THRESHOLD_HZ as f32
-                && crate::chrome::chip(ui, false, "CENTRE")
-                    .on_hover_text(format!(
-                        "Nudge the dial {} Hz so the subcarrier sits on 1900 Hz again — the \
-                         receiver is {} Hz off, which is what turns the chart into a white \
-                         page.",
-                        if off > 0.0 { "+" } else { "" },
-                        format_args!("{off:.0}"),
+                && crate::chrome::chip(ui, false, tr!("wefax-centre"))
+                    .on_hover_text(tr!(
+                        "wefax-centre-hint",
+                        sign = if off > 0.0 { "+" } else { "" },
+                        off = format!("{off:.0}")
                     ))
                     .clicked()
             {
@@ -169,31 +157,20 @@ impl SdroxideApp {
             // so its greys come from the 1500 / 2300 Hz tones and not from how
             // strong the signal is. This scales the decoder's thresholds
             // instead, and 0 is the reference behaviour. Persisted in DigiConfig.
-            ui.label(RichText::new("Sensitivity").size(10.0).weak());
+            ui.label(RichText::new(tr!("panels-sensitivity")).size(10.0).weak());
             {
                 let mut v = self.digi_cfg_edit.wefax_rx_sensitivity;
                 let resp =
                     crate::chrome::slider(ui, egui::Slider::new(&mut v, -5..=5).fixed_decimals(0))
-                        .on_hover_text(
-                            "Sensitivity — how readily the decoder starts and keeps a chart.\n\n\
-                     Auto uses the thresholds measured from the chart's own phasing signal, \
-                     which is the reference 0.\n\n\
-                     + accepts weaker, fainter or noisier charts; − waits for a clean signal \
-                     before it starts.\n\n\
-                     Not volume and not contrast: a fax is frequency modulated, so the greys \
-                     come from the 1500 / 2300 Hz tones, not from how strong the signal is.",
-                        );
+                        .on_hover_text(tr!("wefax-sensitivity-hint"));
                 if resp.changed() {
                     self.digi_cfg_edit.wefax_rx_sensitivity = v;
                     self.digi_cfg_edit.wefax_rx_auto = v == 0;
                     cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
                 }
             }
-            if crate::chrome::chip(ui, self.digi_cfg_edit.wefax_rx_auto, "Auto")
-                .on_hover_text(
-                    "Returns to the reference thresholds (0) and leaves the decoder's own \
-                     measurements in charge. Highlighted while active.",
-                )
+            if crate::chrome::chip(ui, self.digi_cfg_edit.wefax_rx_auto, tr!("sstv-auto"))
+                .on_hover_text(tr!("wefax-auto-hint"))
                 .clicked()
             {
                 self.digi_cfg_edit.wefax_rx_auto = true;
@@ -221,7 +198,7 @@ impl SdroxideApp {
             for i in sdroxide_types::WefaxIoc::ALL {
                 let on = self.digi_cfg_edit.wefax_ioc == i;
                 if crate::chrome::chip(ui, on, i.value().to_string())
-                    .on_hover_text(format!("{} pixels per line", i.width()))
+                    .on_hover_text(tr!("wefax-pixels-per-line", width = i.width()))
                     .clicked()
                     && !on
                 {
@@ -232,25 +209,16 @@ impl SdroxideApp {
 
             ui.add_space(8.0);
             let auto_start = self.digi_cfg_edit.wefax_auto_start;
-            if crate::chrome::chip(ui, auto_start, "AUTO START")
-                .on_hover_text(
-                    "Begin a chart when the 300 Hz (IOC 576) or 675 Hz start tone is heard, \
-                     or, if the tone was lost in a fade or under a carrier, when a few \
-                     seconds of the phasing signal arrive — and end the one in progress and \
-                     phase the new one when the next transmission arrives, whether or not a \
-                     stop tone came first. A carrier on the channel starts nothing.",
-                )
+            if crate::chrome::chip(ui, auto_start, tr!("wefax-auto-start"))
+                .on_hover_text(tr!("wefax-auto-start-hint"))
                 .clicked()
             {
                 self.digi_cfg_edit.wefax_auto_start = !auto_start;
                 changed = true;
             }
             let auto_stop = self.digi_cfg_edit.wefax_auto_stop;
-            if crate::chrome::chip(ui, auto_stop, "AUTO STOP")
-                .on_hover_text(
-                    "End it on the 450 Hz stop tone. Turn off to keep recording through a \
-                     station that sends several charts back to back.",
-                )
+            if crate::chrome::chip(ui, auto_stop, tr!("wefax-auto-stop"))
+                .on_hover_text(tr!("wefax-end-450-hz-stop-tone"))
                 .clicked()
             {
                 self.digi_cfg_edit.wefax_auto_stop = !auto_stop;
@@ -260,7 +228,7 @@ impl SdroxideApp {
             ui.add_space(8.0);
             // Phase nudge: for a chart whose phasing pulse was missed, which is
             // every chart you tune into halfway through.
-            ui.label(RichText::new("PHASE").color(theme::CYAN_DIM()).size(9.5).strong());
+            ui.label(RichText::new(tr!("wefax-phase")).color(theme::CYAN_DIM()).size(9.5).strong());
             // Labelled with the shift itself rather than with arrows. The
             // media glyphs this used to wear (⏪ ◀ ▶ ⏩) are not in Chakra
             // Petch, and the fallback the browser substitutes measures
@@ -269,7 +237,7 @@ impl SdroxideApp {
             // of a phone. The amount is what the hover text said anyway.
             for (face, px) in [("−100", -100), ("−10", -10), ("+10", 10), ("+100", 100)] {
                 if crate::chrome::chip(ui, false, face)
-                    .on_hover_text(format!("Shift the picture {px} pixels"))
+                    .on_hover_text(tr!("wefax-shift-picture-pixels", px = px))
                     .clicked()
                 {
                     // The decoder moves the lines still to come; this moves the
@@ -281,7 +249,7 @@ impl SdroxideApp {
             }
 
             ui.add_space(8.0);
-            ui.label(RichText::new("SLANT").color(theme::CYAN_DIM()).size(9.5).strong());
+            ui.label(RichText::new(tr!("wefax-slant")).color(theme::CYAN_DIM()).size(9.5).strong());
             let mut ppm = self.digi_cfg_edit.wefax_slant_ppm;
             if ui
                 .add(
@@ -291,11 +259,7 @@ impl SdroxideApp {
                         .suffix(" ppm")
                         .fixed_decimals(1),
                 )
-                .on_hover_text(
-                    "Sample-clock trim. If the chart leans to the left, increase this; to the \
-                     right, decrease it. A sound card a hundred ppm off walks a quarter-hour \
-                     chart most of a line sideways.",
-                )
+                .on_hover_text(tr!("wefax-sample-clock-trim-if-chart"))
                 .changed()
             {
                 self.digi_cfg_edit.wefax_slant_ppm = ppm;
@@ -307,15 +271,15 @@ impl SdroxideApp {
             // to finish before being allowed to look at the top of it is the
             // single most irritating thing about receiving fax.
             ui.add_space(8.0);
-            ui.label(RichText::new("VIEW").color(theme::CYAN_DIM()).size(9.5).strong());
+            ui.label(RichText::new(tr!("wefax-view")).color(theme::CYAN_DIM()).size(9.5).strong());
             use crate::wefax::Zoom;
             let zoom = self.wefax.zoom;
             for (face, z, hint) in [
-                ("FIT", Zoom::FitWidth, "Scale the chart to the panel width"),
-                ("WHOLE", Zoom::Whole, "Shrink the chart until all of it is in view at once"),
-                ("50%", Zoom::Fixed(0.5), "Half size"),
-                ("1:1", Zoom::Fixed(1.0), "One screen pixel per fax pixel — scroll for detail"),
-                ("2×", Zoom::Fixed(2.0), "Twice size; scroll to move around the chart"),
+                (tr!("wefax-fit"), Zoom::FitWidth, tr!("wefax-scale-chart-panel-width")),
+                (tr!("wefax-whole"), Zoom::Whole, tr!("wefax-shrink-chart-until-all-view")),
+                ("50%".to_string(), Zoom::Fixed(0.5), tr!("wefax-half-size")),
+                ("1:1".to_string(), Zoom::Fixed(1.0), tr!("wefax-one-screen-pixel-per-fax")),
+                ("2×".to_string(), Zoom::Fixed(2.0), tr!("wefax-twice-size-scroll-move-around")),
             ] {
                 if crate::chrome::chip(ui, zoom == z, face).on_hover_text(hint).clicked() {
                     self.wefax.zoom = z;
@@ -329,14 +293,11 @@ impl SdroxideApp {
             // the rest keeps appending would scramble it (issue #239).
             let held = self.wefax.has_live() && !st.receiving;
             ui.add_enabled_ui(held, |ui| {
-                if crate::chrome::chip(ui, false, "ROTATE 180°")
+                if crate::chrome::chip(ui, false, tr!("wefax-rotate-180"))
                     .on_hover_text(if held {
-                        "Rotate the chart on screen 180° — for a picture that has arrived \
-                         upside down. Turns the picture you see; save it afterwards to keep \
-                         the turn."
+                        tr!("wefax-rotate-hint")
                     } else {
-                        "Rotate the chart on screen 180°. Available once the chart is complete \
-                         — turning a picture that is still arriving would scramble it."
+                        tr!("wefax-rotate-unavailable-hint")
                     })
                     .clicked()
                 {
@@ -348,7 +309,9 @@ impl SdroxideApp {
             // rate is not what the station is actually sending — 90 taken for
             // 120 makes it a third too tall — and this pulls it back while the
             // operator works out which rate that is.
-            ui.label(RichText::new("HEIGHT").color(theme::CYAN_DIM()).size(9.5).strong());
+            ui.label(
+                RichText::new(tr!("wefax-height")).color(theme::CYAN_DIM()).size(9.5).strong(),
+            );
             let mut aspect = self.wefax.aspect;
             if ui
                 .add(
@@ -358,29 +321,22 @@ impl SdroxideApp {
                         .prefix("×")
                         .fixed_decimals(2),
                 )
-                .on_hover_text(
-                    "Stretch the picture vertically. A chart that came out squashed or stretched \
-                     is usually being decoded at the wrong line rate — this makes it readable, \
-                     and the LPM chips fix it properly. Double-click to type a value.",
-                )
+                .on_hover_text(tr!("wefax-stretch-picture-vertically-chart-came"))
                 .changed()
             {
                 self.wefax.aspect = aspect;
             }
             if (aspect - 1.0).abs() > 0.001
-                && crate::chrome::chip(ui, false, "RESET")
-                    .on_hover_text("Back to the picture's own proportions")
+                && crate::chrome::chip(ui, false, tr!("wefax-reset"))
+                    .on_hover_text(tr!("wefax-back-picture-s-own-proportions"))
                     .clicked()
             {
                 self.wefax.aspect = 1.0;
             }
 
             let follow = self.wefax.follow;
-            if crate::chrome::chip(ui, follow, "FOLLOW")
-                .on_hover_text(
-                    "Keep the newest lines in view. Scrolling up turns this off so you can read \
-                     what has already arrived; scrolling back to the bottom turns it on again.",
-                )
+            if crate::chrome::chip(ui, follow, tr!("wefax-follow"))
+                .on_hover_text(tr!("wefax-keep-newest-lines-view-scrolling"))
                 .clicked()
             {
                 self.wefax.follow = !follow;
@@ -400,7 +356,7 @@ impl SdroxideApp {
             if super::save_chip_with(
                 ui,
                 payload.is_some(),
-                "Save the chart on screen to this computer, as far as it has arrived",
+                &tr!("wefax-save-chart-hint"),
             )
             .clicked()
             {
@@ -503,11 +459,7 @@ impl SdroxideApp {
                             None => {
                                 ui.centered_and_justified(|ui| {
                                     ui.label(
-                                        RichText::new(
-                                            "Tune a fax schedule in USB and wait for the chart to \
-                                     begin (start tone or phasing signal), or press START to \
-                                     begin mid-chart.",
-                                        )
+                                        RichText::new(tr!("wefax-waiting-for-chart"))
                                         .color(theme::LINE_LIT())
                                         .size(11.5),
                                     );
@@ -562,7 +514,7 @@ impl SdroxideApp {
         // clipboard when you are about to go and look at it over there.
         let where_ = self.store_where(&dir);
         ui.horizontal(|ui| {
-            ui.label(RichText::new("SAVED").color(theme::CYAN_DIM()).size(9.5).strong());
+            ui.label(RichText::new(tr!("wefax-saved")).color(theme::CYAN_DIM()).size(9.5).strong());
             if self.wefax.total > 0 {
                 ui.label(
                     RichText::new(format!("{}", self.wefax.total))
@@ -571,8 +523,8 @@ impl SdroxideApp {
                 );
             }
             if !dir.is_empty()
-                && crate::chrome::chip(ui, false, RichText::new("PATH").size(9.5))
-                    .on_hover_text(format!("Charts are saved {where_}\n\nClick to copy the path"))
+                && crate::chrome::chip(ui, false, RichText::new(tr!("wefax-path")).size(9.5))
+                    .on_hover_text(tr!("wefax-charts-are-saved-click-copy", place = where_))
                     .clicked()
             {
                 ui.ctx().copy_text(dir.clone());
@@ -582,11 +534,11 @@ impl SdroxideApp {
         if self.wefax.gallery.is_empty() {
             ui.label(
                 RichText::new(if self.wefax.page_pending {
-                    "Reading the radio's charts…".to_string()
+                    tr!("wefax-reading-radio-s-charts").to_string()
                 } else if dir.is_empty() {
-                    "Finished charts collect here.".to_string()
+                    tr!("wefax-finished-charts-collect-here").to_string()
                 } else {
-                    format!("Finished charts are saved {where_} and collect here.")
+                    tr!("wefax-finished-charts-are-saved-collect", place = where_)
                 })
                 .color(theme::LINE_LIT())
                 .size(10.0),
@@ -665,12 +617,12 @@ impl SdroxideApp {
                             egui::StrokeKind::Inside,
                         );
                     }
-                    let resp = resp.on_hover_text(format!(
-                        "{}\n{} × {} pixels\n{}\n\nRight-click to delete",
-                        c.meta.map_or_else(|| c.name.clone(), |m| m.when_full()),
-                        c.size.0,
-                        c.size.1,
-                        c.name
+                    let resp = resp.on_hover_text(tr!(
+                        "wefax-pixels-right-click-delete",
+                        when_full = c.meta.map_or_else(|| c.name.clone(), |m| m.when_full()),
+                        size = c.size.0,
+                        size2 = c.size.1,
+                        value = c.name
                     ));
                     if resp.clicked() {
                         open = Some(i);
@@ -680,7 +632,7 @@ impl SdroxideApp {
                     // target would be pressed by accident.
                     resp.context_menu(|ui| {
                         ui.label(RichText::new(c.title()).color(theme::CYAN_DIM()).size(10.0));
-                        if ui.button("Delete this chart").clicked() {
+                        if ui.button(tr!("wefax-delete-chart")).clicked() {
                             delete = Some(c.name.clone());
                             ui.close();
                         }
@@ -695,15 +647,15 @@ impl SdroxideApp {
                     // them and this says how many. This client simply stops
                     // holding thumbnails somewhere.
                     ui.label(
-                        RichText::new(format!("{older} older in the store"))
+                        RichText::new(tr!("wefax-older-store", older = older))
                             .color(theme::LINE_LIT())
                             .size(9.5),
                     );
                 } else if older > 0 {
                     let label = if self.wefax.page_pending {
-                        "loading…".to_string()
+                        tr!("wefax-loading").to_string()
                     } else {
-                        format!("{older} older — load more")
+                        tr!("wefax-older-load-more", older = older)
                     };
                     if crate::chrome::chip(ui, false, RichText::new(label).size(9.5)).clicked()
                         && !self.wefax.page_pending
@@ -750,10 +702,10 @@ impl SdroxideApp {
             Some((s, f)) => {
                 format!("{} · {:.1}", s.name.split_whitespace().next().unwrap_or(""), f)
             }
-            None => "STATIONS".to_string(),
+            None => tr!("wefax-stations").to_string(),
         };
         let btn = crate::chrome::chip(ui, here.is_some(), RichText::new(face).size(11.0))
-            .on_hover_text("Broadcast radiofax schedules — picking one tunes the dial");
+            .on_hover_text(tr!("wefax-broadcast-radiofax-schedules-picking-one"));
 
         let mut pick = None;
         let resp = egui::Popup::from_toggle_button_response(&btn)
@@ -771,9 +723,10 @@ impl SdroxideApp {
                             let d = WefaxStation::dial_hz(f);
                             let on = (d - dial).abs() < WefaxStation::NEAR_HZ;
                             if crate::chrome::chip(ui, on, format!("{f:.1}"))
-                                .on_hover_text(format!(
-                                    "Published carrier {f:.1} kHz → dial {:.1} kHz USB",
-                                    d / 1000.0
+                                .on_hover_text(tr!(
+                                    "wefax-published-carrier-khz-dial-khz",
+                                    f = format!("{:.1}", f),
+                                    value = format!("{:.1}", d / 1000.0)
                                 ))
                                 .clicked()
                             {
@@ -784,13 +737,9 @@ impl SdroxideApp {
                     ui.add_space(2.0);
                 }
                 ui.label(
-                    RichText::new(
-                        "Frequencies are the published carrier; the dial goes 1.9 kHz below it, \
-                         which is done for you. Schedules change and stations close — treat this \
-                         as where to start looking, not a timetable.",
-                    )
-                    .color(crate::theme::LINE_LIT())
-                    .size(10.0),
+                    RichText::new(tr!("wefax-frequencies-are-published-carrier-dial"))
+                        .color(crate::theme::LINE_LIT())
+                        .size(10.0),
                 );
             });
         if let Some(r) = &resp {
@@ -814,18 +763,15 @@ impl SdroxideApp {
         let dial = self.state.active_freq_hz();
         let Some((_, carrier_khz)) = WefaxStation::at_dial(dial) else { return };
         ui.label(
-            RichText::new(format!(
-                "carrier {carrier_khz:.1} · dial {:.1} kHz (USB −1.9k)",
-                dial / 1000.0
+            RichText::new(tr!(
+                "wefax-carrier-dial-note",
+                carrier = format!("{carrier_khz:.1}"),
+                dial = format!("{:.1}", dial / 1000.0)
             ))
             .size(10.0)
             .color(crate::theme::CYAN_DIM()),
         )
-        .on_hover_text(
-            "The station chip names the published carrier; the radiofax subcarrier sits \
-             1900 Hz above it, so the dial is deliberately 1.9 kHz lower. Tune the dial to \
-             the carrier itself and the signal falls outside the passband.",
-        );
+        .on_hover_text(tr!("wefax-carrier-note-hint"));
     }
 
     /// A saved chart, full size, in its own window.
@@ -864,9 +810,9 @@ impl SdroxideApp {
         // A chart can be stored before the first listing has come back, so the
         // directory is not always known to name.
         let del_hint = if self.wefax.dir.is_empty() {
-            "Delete this chart from the store".to_string()
+            tr!("wefax-delete-chart-store").to_string()
         } else {
-            format!("Delete this chart {}", self.store_where(&self.wefax.dir))
+            tr!("wefax-delete-chart-2", dir = self.store_where(&self.wefax.dir))
         };
         let title = chart.title();
         let mut open = true;
@@ -885,19 +831,19 @@ impl SdroxideApp {
                 crate::chrome::window_body_bg(ui);
                 ui.horizontal(|ui| {
                     // Newer is up the list, older is down it.
-                    if crate::chrome::chip(ui, false, "◀ NEWER")
-                        .on_hover_text("The chart received after this one")
+                    if crate::chrome::chip(ui, false, tr!("wefax-newer"))
+                        .on_hover_text(tr!("wefax-chart-received-after-one"))
                         .clicked()
                     {
                         step = -1;
                     }
                     ui.label(
-                        RichText::new(format!("{} of {n}", i + 1))
+                        RichText::new(tr!("wefax-n-of-total", n = i + 1, total = n))
                             .color(crate::theme::CYAN_DIM())
                             .size(10.0),
                     );
-                    if crate::chrome::chip(ui, false, "OLDER ▶")
-                        .on_hover_text("The chart received before this one")
+                    if crate::chrome::chip(ui, false, tr!("wefax-older"))
+                        .on_hover_text(tr!("wefax-chart-received-before-one"))
                         .clicked()
                     {
                         step = 1;
@@ -905,20 +851,24 @@ impl SdroxideApp {
                     ui.add_space(8.0);
                     if gone {
                         ui.label(
-                            RichText::new("no longer in the store")
+                            RichText::new(tr!("wefax-no-longer-store"))
                                 .color(crate::theme::YELLOW())
                                 .size(10.0),
                         );
                     } else if !loaded {
                         ui.label(
-                            RichText::new("loading full size…")
+                            RichText::new(tr!("wefax-loading-full-size"))
                                 .color(crate::theme::CYAN_DIM())
                                 .size(10.0),
                         );
                     } else if savable
-                        && crate::chrome::chip(ui, false, RichText::new("SAVE").size(9.5))
-                            .on_hover_text("Save a copy of this chart on this computer")
-                            .clicked()
+                        && crate::chrome::chip(
+                            ui,
+                            false,
+                            RichText::new(tr!("wefax-save")).size(9.5),
+                        )
+                        .on_hover_text(tr!("wefax-save-copy-chart-computer"))
+                        .clicked()
                     {
                         save = true;
                     }
@@ -928,20 +878,20 @@ impl SdroxideApp {
                         crate::chrome::chip_accent(
                             ui,
                             true,
-                            RichText::new("SURE?").size(9.5),
+                            RichText::new(tr!("wefax-sure")).size(9.5),
                             crate::theme::PINK(),
                             crate::theme::INK_ON_CYAN(),
                         )
-                        .on_hover_text("Click again to delete this chart for good")
+                        .on_hover_text(tr!("wefax-click-again-delete-chart-good"))
                     } else {
-                        crate::chrome::chip(ui, false, RichText::new("DELETE").size(9.5))
+                        crate::chrome::chip(ui, false, RichText::new(tr!("wefax-delete")).size(9.5))
                             .on_hover_text(&del_hint)
                     };
                     if del.clicked() {
                         pressed_delete = true;
                     }
                     ui.label(RichText::new(&name).color(crate::theme::LINE_LIT()).size(10.0))
-                        .on_hover_text("The file this chart was saved as");
+                        .on_hover_text(tr!("wefax-file-chart-was-saved"));
                 });
                 ui.add_space(4.0);
                 egui::ScrollArea::both()

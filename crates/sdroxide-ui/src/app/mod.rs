@@ -41,6 +41,7 @@ pub(in crate::app) mod bands;
 /// off the desktop and a browser has one window with nowhere to put it.
 #[cfg(not(target_arch = "wasm32"))]
 pub(in crate::app) mod classic;
+mod colour_edit;
 pub(in crate::app) mod contest;
 #[cfg(all(not(target_arch = "wasm32"), target_os = "linux"))]
 pub(in crate::app) mod cw_key;
@@ -62,7 +63,6 @@ pub(in crate::app) mod logbook;
 pub(in crate::app) mod morse;
 pub(in crate::app) mod net;
 pub(in crate::app) mod panels;
-mod colour_edit;
 pub(crate) mod persist;
 pub(in crate::app) mod playback;
 pub(in crate::app) mod publicsdr;
@@ -92,6 +92,7 @@ mod weather;
 pub(in crate::app) mod windows;
 pub(in crate::app) mod winlink;
 
+use crate::i18n::tr;
 use std::sync::{Arc, Mutex};
 
 use eframe::egui;
@@ -122,7 +123,9 @@ use self::settings::{SatEditState, SettingsTab, TestOutcome};
 /// Every operating panel has one, and a disabled button with no explanation
 /// reads as a broken one — the reason it is dead is a property of the radio,
 /// not of the panel, so it is worded once here rather than per mode.
-const RX_ONLY_HINT: &str = "This radio can only receive — it has no transmitter to key.";
+fn rx_only_hint_text() -> String {
+    tr!("app-rx-only-hint")
+}
 
 /// How long after a connection drops the first redial goes out, in seconds.
 /// Short enough that a station restarting is a blink; long enough that the
@@ -134,7 +137,7 @@ pub(in crate::app) const RETRY_MIN_S: f64 = 1.0;
 /// radio back within half a minute of it coming up.
 pub(in crate::app) const RETRY_MAX_S: f64 = 30.0;
 
-/// Attach [`RX_ONLY_HINT`] to a control greyed *because* this radio cannot
+/// Attach [`rx_only_hint_text`] to a control greyed *because* this radio cannot
 /// transmit.
 ///
 /// Only then: several of these controls are also greyed for reasons of their
@@ -142,7 +145,7 @@ pub(in crate::app) const RETRY_MAX_S: f64 = 30.0;
 /// and naming the receiver there would be the wrong answer to "why can't I
 /// press this". `tx_ok` is [`SdroxideApp::tx_capable`] at the call site.
 pub(in crate::app) fn rx_only_hint(resp: egui::Response, tx_ok: bool) -> egui::Response {
-    if tx_ok { resp } else { resp.on_disabled_hover_text(RX_ONLY_HINT) }
+    if tx_ok { resp } else { resp.on_disabled_hover_text(rx_only_hint_text()) }
 }
 
 /// Draw a control that puts this station on the air: as `add` draws it on a
@@ -151,7 +154,7 @@ pub(in crate::app) fn rx_only_hint(resp: egui::Response, tx_ok: bool) -> egui::R
 ///
 /// For the controls whose only condition is that there *is* a transmitter. One
 /// that is also greyed for a reason of its own keeps its own
-/// `add_enabled_ui` and passes the response through [`rx_only_hint`], so the
+/// `add_enabled_ui` and passes the response through [`rx_only_hint_text`], so the
 /// two reasons do not end up wearing each other's explanation.
 pub(in crate::app) fn tx_gated(
     ui: &mut egui::Ui,
@@ -485,6 +488,11 @@ pub struct SdroxideApp {
     /// factor, for the same reason — and so the zoom is left alone in between,
     /// where it belongs to egui's own ctrl+plus / ctrl+minus.
     applied_ui_font: sdroxide_types::FontSize,
+    /// The interface language last loaded, for the same reason: the picker in
+    /// the UI tab takes effect on the next frame. Per tab like the look, so a
+    /// second tab holding the setting from before the change does not switch
+    /// the whole window back.
+    applied_language: sdroxide_types::UiLanguage,
     /// Spoken announcements: the state machine that decides what to say, and
     /// the synthesizer that says it. Always present — switched off, it holds a
     /// null sink and costs a comparison per event.
@@ -1815,7 +1823,7 @@ pub(crate) fn radio_name(roster: &[RadioChip], id: u32) -> String {
     roster
         .iter()
         .find(|c| c.id == id)
-        .map_or_else(|| format!("radio {}", id + 1), |c| c.display_name().to_string())
+        .map_or_else(|| tr!("app-radio", id = id + 1), |c| c.display_name().to_string())
 }
 
 /// A radio-management action requested from inside a tab (the settings
@@ -2008,6 +2016,7 @@ impl SdroxideApp {
         crate::theme::set_bandplan_colors(&ui_settings.bandplan_colors);
         crate::theme::set_map_cities(ui_settings.map_cities);
         crate::theme::set_ui_zoom(ui_settings.ui_zoom);
+        crate::i18n::set_language(ui_settings.language);
         crate::theme::apply(egui_ctx);
         // What this renderer will carry. Gathered here because it is the one
         // place that holds the render state and the controller at once, and
@@ -2132,6 +2141,7 @@ impl SdroxideApp {
             applied_look: (ui_settings.theme, ui_settings.button_style, ui_settings.window_style),
             classic_collapsed: false,
             applied_ui_font: ui_settings.menu_font_size,
+            applied_language: ui_settings.language,
             speech: speech::SpeechRuntime::new(load_speech_settings(storage)),
             speech_voices: Vec::new(),
             alerts: alerts::AlertRuntime::station(load_alerts_settings(storage)),
@@ -2466,7 +2476,8 @@ impl SdroxideApp {
             prop_heat: Default::default(),
             night_shade: Default::default(),
             wspr_spots: Vec::new(),
-            wspr_sort: 0,            pi4_spots: Vec::new(),
+            wspr_sort: 0,
+            pi4_spots: Vec::new(),
             digi_hover_ll: None,
             digi_free_text: String::new(),
             flags: Default::default(),
@@ -3400,36 +3411,36 @@ impl SdroxideApp {
         Some(match caps.driver.as_str() {
             "none" => return None,
             "cat" => "CAT".into(),
-            "hpsdr" => "HPSDR".into(),
+            "hpsdr" => tr!("app-hpsdr"),
             "tci" => "TCI".into(),
             "smartsdr" => "SmartSDR".into(),
             "pluto" => "PlutoSDR".into(),
-            "rtlsdr" => "RTL-SDR".into(),
+            "rtlsdr" => tr!("app-rtl-sdr"),
             // Named apart from the USB one: on a station with both, which tab
             // is the dongle on the mast is exactly what needs telling apart.
-            "rtltcp" => "RTL-SDR (rtl_tcp)".into(),
+            "rtltcp" => tr!("app-rtl-sdr-rtl-tcp"),
             // The two SpyServer interfaces are named apart for the same
             // reason: which tab is the low-bandwidth one is the thing an
             // operator running both needs to see at a glance.
             "spyserver" => "SpyServer".into(),
-            "spyserver-vfo" => "SpyServer (VFO)".into(),
+            "spyserver-vfo" => tr!("app-spyserver-vfo"),
             "rx888" => "RX-888".into(),
             // Distinct from the `"airspy"` arm below, which is SoapySDR's
             // driver for the R2 and Mini — a different radio entirely.
-            "airspyhf" => "Airspy HF+".into(),
-            "sdrplay" => "SDRplay".into(),
+            "airspyhf" => tr!("app-airspy-hf"),
+            "sdrplay" => tr!("app-sdrplay"),
             // One tab for the whole radio on an FDM-DUO: the USB receiver, the
             // CAT link and the transmit sound card.
-            "elad" => "ELAD".into(),
+            "elad" => tr!("app-elad"),
             // A SoapySDR device reports its Soapy driver name — the most
             // specific interface name there is. The common ones get their
             // proper spelling; the list is open-ended, so anything else is
             // capitalised as-is.
             "hackrf" => "HackRF".into(),
             "lime" => "LimeSDR".into(),
-            "airspy" => "Airspy".into(),
-            "sx" => "SXceiver".into(),
-            "uhd" => "USRP".into(),
+            "airspy" => tr!("app-airspy"),
+            "sx" => tr!("app-sxceiver"),
+            "uhd" => tr!("app-usrp"),
             other => {
                 let mut c = other.chars();
                 match c.next() {

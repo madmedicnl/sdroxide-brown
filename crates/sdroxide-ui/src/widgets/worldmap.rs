@@ -18,6 +18,7 @@
 //! wheel and pinch zoom about the pointer, and a double-click hands the view
 //! back to the auto-fit.
 
+use crate::i18n::tr;
 use eframe::egui::{
     Align2, Color32, CursorIcon, FontId, PointerButton, Pos2, Response, Sense, Stroke, Ui, Vec2,
     pos2, vec2,
@@ -1112,7 +1113,7 @@ pub fn show(
                 s.call,
                 s.freq_hz / 1e6,
                 if s.mode.trim().is_empty() { String::new() } else { format!("{} · ", s.mode) },
-                s.snr_db.map(|d| format!("{d:+} dB")).unwrap_or_else(|| "no SNR".into()),
+                s.snr_db.map(|d| format!("{d:+} dB")).unwrap_or_else(|| tr!("worldmap-no-snr")),
             ));
         }
         // Draw the liaison (path) from home to each reporter that heard us,
@@ -1227,7 +1228,7 @@ pub fn show(
         p.text(
             pos2(rect.right() - 5.0, rect.bottom() - 4.0),
             Align2::RIGHT_BOTTOM,
-            "DOUBLE-CLICK TO REFRAME",
+            tr!("worldmap-double-click-reframe"),
             FontId::proportional(9.0),
             map.hint,
         );

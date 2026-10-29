@@ -5,6 +5,7 @@
 //! Five buttons side by side is the room it is built for; DAB, AIRCRAFT and RADIO
 //! (the Radio Classic panel) are in it so far.
 
+use crate::i18n::tr;
 use eframe::egui;
 use sdroxide_types::{Command, Mode, RxId};
 
@@ -92,7 +93,7 @@ impl super::SdroxideApp {
         let show = self.tool_window_sized(
             ctx,
             "extras",
-            "EXTRAS",
+            &tr!("extras-title"),
             [EXTRAS_W, EXTRAS_H],
             [EXTRAS_W, 0.0],
             false,
@@ -192,15 +193,13 @@ impl super::SdroxideApp {
 
     fn extras_body(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
         crate::chrome::window_body_bg(ui);
-        crate::chrome::menu_caption(ui, "Receivers");
+        crate::chrome::menu_caption(ui, &tr!("extras-receivers"));
         let mode = self.state.rx[0].mode;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = SLOT_GAP;
             let dab =
                 crate::chrome::chip_sized(ui, mode == Mode::Dab, "DAB", egui::vec2(SLOT_W, SLOT_H))
-                    .on_hover_text(
-                        "DAB / DAB+ digital radio — the player opens below the waterfall",
-                    );
+                    .on_hover_text(tr!("extras-dab-hint"));
             if dab.clicked() {
                 cmds.push(Command::SetMode { rx: RxId::Main, mode: Mode::Dab });
             }
@@ -208,37 +207,30 @@ impl super::SdroxideApp {
             let air = crate::chrome::chip_sized(
                 ui,
                 self.show_aircraft,
-                format!("AIRCRAFT{}", super::aircraft_watch::chip_suffix(unseen)),
+                format!("{}{}", tr!("aircraft-title"), super::aircraft_watch::chip_suffix(unseen)),
                 egui::vec2(SLOT_W, SLOT_H),
             )
             .on_hover_text(if unseen > 0 {
-                "AIRCRAFT — an aircraft on your watch list is on the air; open the Watch view"
+                tr!("extras-aircraft-watch-hint")
             } else {
-                "AIRCRAFT — the map of what the radio hears: aircraft and radiosondes, \
-                 in a window you can detach"
+                tr!("extras-aircraft-hint")
             });
             if air.clicked() {
                 self.show_aircraft = !self.show_aircraft;
             }
             let rc_active = self.radio_classic_active();
-            let rc = crate::chrome::chip_sized(ui, rc_active, "RADIO", egui::vec2(SLOT_W, SLOT_H))
-                .on_hover_text(
-                    "RADIO CLASSIC — a classic radio face for broadcast listening: bands, \
-                 memories, the station name and RadioText. It docks under the waterfall \
-                 in the voice modes; Settings → Detachable puts it in a window",
-                );
+            let rc = crate::chrome::chip_sized(ui, rc_active, tr!("topbar-radio"), egui::vec2(SLOT_W, SLOT_H))
+                .on_hover_text(tr!("extras-radio-hint"));
             if rc.clicked() {
                 self.toggle_radio_classic();
             }
             let ant = crate::chrome::chip_sized(
                 ui,
                 self.show_antenna,
-                "ANTENNA",
+                tr!("extras-antenna"),
                 egui::vec2(SLOT_W, SLOT_H),
             )
-            .on_hover_text(
-                "ANTENNA (Experimental/Beta) — cutting lengths, feedpoint impedance and pattern for common wire/vertical/Yagi antennas",
-            );
+            .on_hover_text(tr!("extras-antenna-hint"));
             if ant.clicked() {
                 self.show_antenna = !self.show_antenna;
             }

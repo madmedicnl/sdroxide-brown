@@ -10,6 +10,7 @@
 //! unattended run must not depend on which pane or tab is on screen. The engine
 //! does the sequencing; this only ever starts the next contact.
 
+use crate::i18n::tr;
 use sdroxide_types::auto;
 use sdroxide_types::{Band, Command, QsoStep};
 
@@ -84,14 +85,14 @@ impl SdroxideApp {
         };
         let tx_permitted = self.auto_tx_permitted();
         if let Some(reason) = auto::auto_block_reason(mode, watchdog, tx_permitted) {
-            self.stop_auto(format!("auto stopped: {reason}"), cmds);
+            self.stop_auto(tr!("auto-stopped-reason", reason = reason), cmds);
             return;
         }
         if let Some(stop_s) = self.auto_idle_stop_s()
             && now - self.auto_last_activity >= stop_s
         {
             let mins = (stop_s / 60.0).round() as u32;
-            self.stop_auto(format!("auto stopped: {mins} minutes with no operator input"), cmds);
+            self.stop_auto(tr!("auto-stopped-idle", mins = mins), cmds);
             return;
         }
         // Only start a contact from a state that is genuinely free. `Idle` is
@@ -144,7 +145,7 @@ impl SdroxideApp {
             let rec = me.auto_attempts.get(&key).copied().unwrap_or((0, 0.0));
             me.auto_attempts.insert(key, auto::after_call(rec, me.digi_cfg_edit.auto_call_retries, now_unix));
             let label = me.auto_role.map_or("auto", |r| r.label());
-            me.auto_note = format!("{label}: answering {}", t.call);
+            me.auto_note = tr!("auto-answering", role = label, call = &t.call);
             cmds.push(Command::DigiStartQso {
                 from: t.call,
                 grid: t.grid,
@@ -156,14 +157,14 @@ impl SdroxideApp {
         match auto::plan(role, &facts) {
             auto::AutoStep::AnswerCaller => match caller_target {
                 Some(t) => start(self, t, cmds),
-                None => self.auto_note = "auto: a caller went away".into(),
+                None => self.auto_note = tr!("auto-caller-went-away"),
             },
             auto::AutoStep::AnswerCq => match cq_target {
                 Some(t) => start(self, t, cmds),
-                None => self.auto_note = "auto: nobody left to answer".into(),
+                None => self.auto_note = tr!("auto-nobody-left"),
             },
             auto::AutoStep::CallCq => {
-                self.auto_note = format!("{}: calling CQ (#{})", role.label(), cq_sent + 1);
+                self.auto_note = tr!("auto-calling-cq", role = role.label(), n = cq_sent + 1);
                 cmds.push(Command::DigiCallCq);
             }
             auto::AutoStep::Listen => {
@@ -177,9 +178,9 @@ impl SdroxideApp {
                     self.auto_role = Some(auto::AutoRole::Rx);
                     self.auto_cq = auto::CqCounter::default();
                     self.auto_note =
-                        format!("auto cq: no answer after {limit} calls — listening (auto rx)");
+                        tr!("auto-cq-no-answer", limit = limit);
                 } else {
-                    self.auto_note = format!("{}: listening", role.label());
+                    self.auto_note = tr!("auto-listening", role = role.label());
                 }
             }
             auto::AutoStep::Stop(reason) => {
@@ -190,7 +191,7 @@ impl SdroxideApp {
                     }
                 };
                 let sentence = reason.sentence(limit);
-                self.stop_auto(format!("{} stopped: {sentence}", role.label()), cmds);
+                self.stop_auto(tr!("auto-role-stopped", role = role.label(), sentence = sentence), cmds);
                 return;
             }
         }
@@ -335,9 +336,9 @@ impl SdroxideApp {
         self.auto_armed_at = now;
         self.auto_attempts.clear();
         self.auto_note = match role {
-            auto::AutoRole::Rx => "auto rx: listening".into(),
-            auto::AutoRole::Cq => "auto cq: calling CQ".into(),
-            auto::AutoRole::Continuous => "auto cont: running".into(),
+            auto::AutoRole::Rx => tr!("auto-rx-listening"),
+            auto::AutoRole::Cq => tr!("auto-cq-calling"),
+            auto::AutoRole::Continuous => tr!("auto-cont-running"),
         };
         true
     }

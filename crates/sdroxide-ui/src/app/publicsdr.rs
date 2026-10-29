@@ -25,6 +25,7 @@
 //! is somebody else's for the moment. Being told which is far better than a
 //! connection that fails for no visible reason.
 
+use crate::i18n::{Tr, tr};
 use eframe::egui::{self, RichText};
 use sdroxide_types::{Command, PublicSdrEntry, PublicSdrNetwork};
 
@@ -57,7 +58,7 @@ fn entry_row(
 ) -> Option<PickAction> {
     let blocked = e
         .blocked_reason()
-        .or_else(|| dead.then(|| "could not connect this session".to_string()));
+        .or_else(|| dead.then(|| tr!("publicsdr-could-not-connect")));
     let mut action = None;
     let dim = crate::theme::gray(if blocked.is_some() { 100 } else { 170 });
     let net_col = match e.network {
@@ -185,18 +186,16 @@ fn entry_row(
                             );
                         }
                         None => {
-                            if crate::chrome::chip(ui, false, "+ TAB")
-                                .on_hover_text("Open this receiver as a new radio, in its own tab")
+                            if crate::chrome::chip(ui, false, tr!("publicsdr-tab"))
+                                .on_hover_text(tr!("publicsdr-open-receiver-new-radio-own"))
                                 .clicked()
                             {
                                 action = Some(PickAction::NewRadio);
                             }
-                            if crate::chrome::chip(ui, false, "USE")
-                                .on_hover_text(
-                                    "Point *this* radio at the receiver, replacing whatever \
-                                     interface it is on now — asked again first, because that \
-                                     is a whole radio's worth of setting up",
-                                )
+                            if crate::chrome::chip(ui, false, tr!("publicsdr-use-chip"))
+                                .on_hover_text(tr!(
+                                    "publicsdr-point-radio-receiver-replacing-whatever"
+                                ))
                                 .clicked()
                             {
                                 action = Some(PickAction::ThisRadio);
@@ -209,15 +208,16 @@ fn entry_row(
         .response
         // Everything that did not earn a column of its own: the address to
         // connect to, the antenna, and what the receiver says it is.
-        .on_hover_text(format!(
-            "{}\n{}\nantenna: {}\n{}",
-            e.address,
-            e.device,
-            if e.antenna.is_empty() { "not stated" } else { &e.antenna },
-            match e.snr_db {
-                Some(snr) => format!("noise-floor score {snr}"),
-                None => format!("up to {:.0} kHz of I/Q", e.max_iq_rate / 1e3),
-            },
+        .on_hover_text(tr!(
+            "publicsdr-antenna",
+            address = e.address,
+            device = e.device,
+            antenna =
+                if e.antenna.is_empty() { tr!("publicsdr-not-stated") } else { e.antenna.clone() },
+            e3 = match e.snr_db {
+                Some(snr) => tr!("publicsdr-noise-floor-score", snr = snr),
+                None => tr!("publicsdr-up-khz-i-q", khz = format!("{:.0}", e.max_iq_rate / 1e3)),
+            }
         ));
     ui.add_space(1.0);
     action
@@ -254,19 +254,19 @@ fn confirm_panel(ui: &mut egui::Ui, blurb: &str) -> Option<Confirm> {
         ui.label(RichText::new(blurb).color(crate::theme::TEXT_STRONG()).size(12.0));
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            if crate::chrome::chip(ui, false, "REPLACE")
-                .on_hover_text("Point the radio you are on at this receiver")
+            if crate::chrome::chip(ui, false, tr!("publicsdr-replace"))
+                .on_hover_text(tr!("publicsdr-point-radio-you-are-receiver"))
                 .clicked()
             {
                 answer = Some(Confirm::Replace);
             }
-            if crate::chrome::chip(ui, false, "+ TAB INSTEAD")
-                .on_hover_text("Open the receiver as another radio and leave this one alone")
+            if crate::chrome::chip(ui, false, tr!("publicsdr-tab-instead"))
+                .on_hover_text(tr!("publicsdr-open-receiver-another-radio-leave"))
                 .clicked()
             {
                 answer = Some(Confirm::NewTab);
             }
-            if crate::chrome::chip(ui, false, "CANCEL").clicked() {
+            if crate::chrome::chip(ui, false, tr!("publicsdr-cancel")).clicked() {
                 answer = Some(Confirm::Cancel);
             }
         });
@@ -361,7 +361,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "public-sdrs",
-            "PUBLIC SDRS",
+            &tr!("publicsdr-public-sdrs"),
             [980.0, 520.0],
             self.show_public_sdrs,
             |me, ui| me.public_sdrs_body(ui, &mut refresh, &mut picked, &mut answer),
@@ -433,35 +433,31 @@ impl SdroxideApp {
                     self.public_sdr_nets_shown[i] = !self.public_sdr_nets_shown[i];
                 }
             }
-            if crate::chrome::chip(ui, self.public_sdr_free_only, "AVAILABLE")
+            if crate::chrome::chip(ui, self.public_sdr_free_only, tr!("publicsdr-available"))
                 .on_hover_text(
-                    "Hide receivers that are full, and the ones whose operator has \
-                     not opened any channels to apps other than a browser",
+                    tr!("publicsdr-hide-receivers-are-full-ones"),
                 )
                 .clicked()
             {
                 self.public_sdr_free_only = !self.public_sdr_free_only;
             }
-            if crate::chrome::chip(ui, self.public_sdr_in_band, "IN BAND")
-                .on_hover_text("Only receivers that cover the current dial frequency")
+            if crate::chrome::chip(ui, self.public_sdr_in_band, tr!("publicsdr-band"))
+                .on_hover_text(tr!("publicsdr-only-receivers-cover-current-dial"))
                 .clicked()
             {
                 self.public_sdr_in_band = !self.public_sdr_in_band;
             }
-            if crate::chrome::chip(ui, self.public_sdr_low_bw, "LOW BW")
+            if crate::chrome::chip(ui, self.public_sdr_low_bw, tr!("publicsdr-low-bw"))
                 .on_hover_text(
-                    "Take a SpyServer in its low-bandwidth shape: a narrow I/Q window \
-                     that follows the dial plus the server's own band view, instead of \
-                     megabits of wideband I/Q. No effect on a KiwiSDR, which has only \
-                     the one shape.",
+                    tr!("publicsdr-take-spyserver-low-bandwidth-shape"),
                 )
                 .clicked()
             {
                 self.public_sdr_low_bw = !self.public_sdr_low_bw;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if crate::chrome::chip(ui, false, "⟳ REFRESH")
-                    .on_hover_text("Fetch both directories again")
+                if crate::chrome::chip(ui, false, tr!("publicsdr-refresh"))
+                    .on_hover_text(tr!("publicsdr-fetch-both-directories-again"))
                     .clicked()
                 {
                     *refresh = true;
@@ -475,11 +471,11 @@ impl SdroxideApp {
                 ui,
                 egui::TextEdit::singleline(&mut self.public_sdr_search)
                     .desired_width(240.0)
-                    .hint_text("name, place, antenna, band")
+                    .hint_text(tr!("publicsdr-name-place-antenna-band"))
                     .text_color(crate::theme::TEXT_STRONG()),
             );
             if !self.public_sdr_search.trim().is_empty()
-                && ui.button("✕").on_hover_text("Clear the search").clicked()
+                && ui.button("✕").on_hover_text(tr!("publicsdr-clear-search")).clicked()
             {
                 self.public_sdr_search.clear();
             }
@@ -490,10 +486,9 @@ impl SdroxideApp {
             ui.add_space(8.0);
             ui.label(
                 RichText::new(if self.probes_answered {
-                    "Fetching the receiver lists…"
+                    tr!("publicsdr-fetching-receiver-lists")
                 } else {
-                    "The machine this radio is attached to does not answer \
-                     device questions, so it cannot fetch the lists either."
+                    tr!("publicsdr-machine-radio-attached-does-not")
                 })
                 .color(crate::theme::gray(140)),
             );
@@ -514,10 +509,7 @@ impl SdroxideApp {
                 .collect::<Vec<_>>()
                 .join(" · ");
             ui.label(
-                RichText::new(format!(
-                    "{} receivers · {per_net} · fetched {age} ago",
-                    dir.entries.len(),
-                ))
+                RichText::new(tr!("publicsdr-receivers-fetched-ago", entries = dir.entries.len(), per_net = per_net, age = age))
                 .size(11.0)
                 .color(crate::theme::gray(150)),
             );
@@ -531,12 +523,12 @@ impl SdroxideApp {
         if !self.public_sdr_search.trim().is_empty() || rows.len() > MAX_ROWS {
             let shown = rows.len().min(MAX_ROWS);
             let (text, colour) = match rows.len() {
-                0 => ("no match".to_string(), crate::theme::ALERT()),
+                0 => (tr!("publicsdr-no-match").to_string(), crate::theme::ALERT()),
                 n if n > MAX_ROWS => (
-                    format!("showing {shown} of {n} — search to narrow it"),
+                    tr!("publicsdr-showing-search-narrow", shown = shown, n = n),
                     crate::theme::YELLOW(),
                 ),
-                n => (format!("{n} match"), crate::theme::YELLOW()),
+                n => (tr!("publicsdr-match", n = n), crate::theme::YELLOW()),
             };
             ui.label(RichText::new(text).color(colour).size(10.0));
         }
@@ -557,7 +549,7 @@ impl SdroxideApp {
             if rows.is_empty() {
                 ui.add_space(8.0);
                 ui.label(
-                    RichText::new("nothing matches — try turning a filter chip back on")
+                    RichText::new(tr!("publicsdr-nothing-matches-try-turning-filter"))
                         .color(crate::theme::gray(120)),
                 );
             }
@@ -589,23 +581,22 @@ impl SdroxideApp {
         let this = match chip {
             Some(c) if !c.name.is_empty() => c.name.clone(),
             Some(c) => c.default_name.clone(),
-            None => "this radio".to_string(),
+            None => tr!("publicsdr-radio").to_string(),
         };
         let iface = self
             .radio_cfg
             .as_ref()
-            .map_or_else(|| "its interface".to_string(), |c| c.backend.label().to_string());
-        format!(
-            "Replace {this} with {}?\n\n\
-             {this} is on {iface}. Taking this receiver points the same tab at {} instead, \
-             renames it “{}”, and holds the dial to the {} the receiver \
-             publishes — nothing here transmits.\n\n\
-             The {iface} settings stay where they are, and so do the ranges stated for them: \
-             switching the interface back in Settings → Radio brings the radio back as it was.",
-            entry.name,
-            entry.address,
-            entry.name,
-            entry.range_label(),
+            .map_or_else(|| tr!("publicsdr-its-interface"), |c| c.backend.tr());
+        tr!(
+            "publicsdr-replace-taking-receiver-points-same",
+            this = this,
+            entry = entry.name,
+            this2 = this,
+            iface = iface,
+            address = entry.address,
+            entry2 = entry.name,
+            range_label = entry.range_label(),
+            iface2 = iface
         )
     }
 
@@ -630,12 +621,7 @@ impl SdroxideApp {
                     self.radio_cfg = self.ctrl.radio_config();
                 }
                 let Some(base) = self.radio_cfg.clone() else {
-                    self.show_notice(
-                        "This radio's configuration has not arrived from the machine it is on \
-                         yet, so there is nothing to point at the receiver — take it with + TAB \
-                         instead."
-                            .into(),
-                    );
+                    self.show_notice(tr!("publicsdr-radio-s-configuration-has-not"));
                     return;
                 };
                 let cfg = entry.radio_config(&base, self.public_sdr_low_bw);
@@ -667,11 +653,10 @@ impl SdroxideApp {
                 // changed under the operator, and silently getting it wrong is
                 // what issue #284 was.
                 let site = match entry.locator().as_str() {
-                    "" => " Its position is not published, so nothing it hears will be reported."
-                        .to_string(),
-                    g => format!(" Receptions will be reported from {g}."),
+                    "" => tr!("publicsdr-position-not-published-so-nothing").to_string(),
+                    g => tr!("publicsdr-receptions-will-reported", value = g),
                 };
-                self.show_notice(format!("Pointing this radio at {}…{site}", entry.name));
+                self.show_notice(tr!("publicsdr-pointing-radio", entry = entry.name, site = site));
                 self.show_public_sdrs = false;
             }
             PickAction::NewRadio => {
@@ -683,7 +668,7 @@ impl SdroxideApp {
                     station: self.station_key(),
                     preset: Some(Box::new(fresh)),
                 });
-                self.show_notice(format!("Opening {} as another radio…", entry.name));
+                self.show_notice(tr!("publicsdr-opening-another-radio", entry = entry.name));
             }
         }
     }

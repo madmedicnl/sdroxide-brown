@@ -5,6 +5,7 @@
 //! lets the operator sort by any column and export ADIF / TXT / CSV, with or
 //! without the CW contacts.
 
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::{Command, QsoRecord};
 
@@ -48,19 +49,19 @@ impl SessionQsoSort {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Time => "Time",
-            Self::Call => "Call",
-            Self::Grid => "Grid",
-            Self::Band => "Band",
-            Self::Mode => "Mode",
-            Self::RstSent => "RST S",
-            Self::RstRcvd => "RST R",
-            Self::Country => "Country",
-            Self::CqZone => "CQ",
-            Self::Distance => "Dist",
-            Self::Final => "Final",
+            Self::Time => tr!("sessionqso-time"),
+            Self::Call => tr!("sessionqso-call"),
+            Self::Grid => tr!("sessionqso-grid"),
+            Self::Band => tr!("sessionqso-band"),
+            Self::Mode => tr!("sessionqso-mode"),
+            Self::RstSent => tr!("sessionqso-rst-s"),
+            Self::RstRcvd => tr!("sessionqso-rst-r"),
+            Self::Country => tr!("sessionqso-country"),
+            Self::CqZone => "CQ".to_string(),
+            Self::Distance => tr!("sessionqso-dist"),
+            Self::Final => tr!("sessionqso-final"),
         }
     }
 }
@@ -70,7 +71,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "session-qsos",
-            "SESSION QSOs",
+            &tr!("settings-tool-window-session-qsos"),
             [960.0, 620.0],
             self.show_session_qsos,
             |me, ui| me.session_qsos_body(ctx, ui, cmds),
@@ -102,9 +103,9 @@ impl SdroxideApp {
         // CW toggle for export.
         let mut include_cw = true;
         ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("{} QSO this session", rows.len())).size(11.0).color(crate::theme::gray(150)));
+            ui.label(RichText::new(tr!("sessionqso-count", n = rows.len())).size(11.0).color(crate::theme::gray(150)));
             ui.separator();
-            chrome::checkbox(ui, &mut include_cw, "Include CW");
+            chrome::checkbox(ui, &mut include_cw, &tr!("sessionqso-include-cw"));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let have = !rows.is_empty();
                 ui.add_enabled_ui(have, |ui| {

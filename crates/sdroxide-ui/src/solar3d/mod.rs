@@ -35,6 +35,8 @@ mod state;
 
 // Everything below is the native host's: the browser's is in `app.rs`.
 #[cfg(not(target_arch = "wasm32"))]
+use crate::i18n::tr;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::{Arc, Mutex, MutexGuard};
 
 #[cfg(not(target_arch = "wasm32"))]

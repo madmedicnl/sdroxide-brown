@@ -20,6 +20,7 @@
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 
+use crate::i18n::tr;
 use eframe::egui;
 
 use super::aircraft_export::ExportStore;
@@ -85,7 +86,7 @@ pub(in crate::app) struct OnlineClient {
     /// A request is out and its answer not yet in.
     pub switch_asking: bool,
     /// Why the last request to switch did not work, if it did not.
-    pub switch_note: Option<&'static str>,
+    pub switch_note: Option<String>,
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
     thumbs: Vec<Thumb>,
@@ -261,7 +262,7 @@ impl OnlineClient {
     pub(in crate::app) fn ask_switch(&mut self, ctx: &egui::Context, peer: Option<&str>) {
         let Some(on) = self.switch_wanted.take() else { return };
         let Some(url) = peer.and_then(|p| aircraft_online::switch_url(p, on)) else {
-            self.switch_note = Some("there is no station to switch");
+            self.switch_note = Some(tr!("aircraft-switch-no-station"));
             return;
         };
         let station = peer.map(crate::login::station_key).unwrap_or_default();

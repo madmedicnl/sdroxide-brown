@@ -18,6 +18,7 @@
 //! [`super::aircraft_registry`] and worded by [`super::aircraft_card`], so the
 //! list survives a change of mode.
 
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::{Command, Mode, RxId};
 
@@ -39,7 +40,17 @@ const AIRCRAFT_MIN: [f32; 2] = [560.0, 320.0];
 struct AirMode {
     mode: Mode,
     label: &'static str,
-    hover: &'static str,
+}
+
+/// What a mode's button says when hovered.
+fn mode_hover(mode: Mode) -> String {
+    match mode {
+        Mode::Adsb => tr!("aircraft-mode-adsb-hover"),
+        Mode::Hfdl => tr!("aircraft-mode-hfdl-hover"),
+        Mode::Vdl2 => tr!("aircraft-mode-vdl2-hover"),
+        Mode::Acars => tr!("aircraft-mode-acars-hover"),
+        _ => String::new(),
+    }
 }
 
 /// The modes the window offers, in column order.
@@ -47,22 +58,18 @@ const MODES: &[AirMode] = &[
     AirMode {
         mode: Mode::Adsb,
         label: "ADS-B",
-        hover: "ADS-B, 1090 MHz — aircraft with their position, altitude and speed",
     },
     AirMode {
         mode: Mode::Hfdl,
         label: "HFDL",
-        hover: "HFDL, HF data link — aircraft over oceans and poles, from their position reports",
     },
     AirMode {
         mode: Mode::Vdl2,
         label: "VDL2",
-        hover: "VDL2, VHF data link — messages from aircraft; few carry a position",
     },
     AirMode {
         mode: Mode::Acars,
         label: "ACARS",
-        hover: "ACARS — short messages between aircraft and the ground",
     },
 ];
 
@@ -133,7 +140,7 @@ fn chip(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
 /// nothing for a gap, whose "—" says it.
 pub(in crate::app) fn badge_chip(ui: &mut egui::Ui, badge: Badge) {
     match badge_look(badge) {
-        Some((text, color)) => chip(ui, text, color),
+        Some((text, color)) => chip(ui, &text, color),
         None => {
             ui.label("");
         }
@@ -144,19 +151,19 @@ pub(in crate::app) fn badge_chip(ui: &mut egui::Ui, badge: Badge) {
 /// where the data comes from as a whole, and a green "radio" on every line
 /// repeated it ten times. Only the lines that are *not* from the radio are
 /// marked, which makes the mark mean something.
-pub(in crate::app) fn badge_look(badge: Badge) -> Option<(&'static str, egui::Color32)> {
+pub(in crate::app) fn badge_look(badge: Badge) -> Option<(String, egui::Color32)> {
     match badge {
         Badge::Radio | Badge::Missing => None,
-        Badge::Online => Some(("online", ONLINE_BLUE)),
-        Badge::History => Some(("history", HISTORY_VIOLET)),
+        Badge::Online => Some((tr!("aircraft-badge-online"), ONLINE_BLUE)),
+        Badge::History => Some((tr!("aircraft-badge-history"), HISTORY_VIOLET)),
     }
 }
 
 /// The badge at the top of the card: where its data comes from as a whole.
 pub(in crate::app) fn provenance_chip(ui: &mut egui::Ui, p: Provenance) {
     match p {
-        Provenance::Radio => chip(ui, p.label(), RADIO_GREEN),
-        Provenance::RadioOnline | Provenance::Online => chip(ui, p.label(), ONLINE_BLUE),
+        Provenance::Radio => chip(ui, &p.label(), RADIO_GREEN),
+        Provenance::RadioOnline | Provenance::Online => chip(ui, &p.label(), ONLINE_BLUE),
         Provenance::Nothing => {}
     }
 }
@@ -166,7 +173,7 @@ pub(in crate::app) fn provenance_chip(ui: &mut egui::Ui, p: Provenance) {
 fn rows_grid(ui: &mut egui::Ui, id: &str, rows: Vec<aircraft_online::Row>) {
     egui::Grid::new(id).num_columns(4).spacing([12.0, 4.0]).show(ui, |ui| {
         for r in rows {
-            ui.label(RichText::new(r.label).color(crate::theme::gray(160)));
+            ui.label(RichText::new(aircraft_card::field_label(r.label)).color(crate::theme::gray(160)));
             badge_chip(ui, r.badge);
             match r.badge {
                 Badge::Missing => ui.label(RichText::new(r.value).weak()),
@@ -186,9 +193,12 @@ const STATS_LABEL_W: f32 = 190.0;
 /// from, and one table each with its badge.
 fn stats_view(ui: &mut egui::Ui, stats: &Stats, note: &str, sort: &mut SortBy, h: f32) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new(format!("{} aircraft", stats.total)).strong());
+        ui.label(RichText::new(tr!("aircraft-stats-total", n = stats.total)).strong());
         ui.add_space(8.0);
-        for (s, label) in [(SortBy::Count, "Most first"), (SortBy::Name, "A\u{2013}Z")] {
+        for (s, label) in [
+            (SortBy::Count, tr!("aircraft-stats-most-first")),
+            (SortBy::Name, "A\u{2013}Z".to_string()),
+        ] {
             if ui.selectable_label(*sort == s, label).clicked() {
                 *sort = s;
             }
@@ -198,20 +208,14 @@ fn stats_view(ui: &mut egui::Ui, stats: &Stats, note: &str, sort: &mut SortBy, h
     if stats.total == 0 {
         ui.add_space(6.0);
         ui.label(
-            RichText::new(
-                "No aircraft yet. The tables fill from ADS-B, VDL2, HFDL and ACARS; nothing \
-                 here needs the internet.",
-            )
+            RichText::new(tr!("aircraft-stats-empty"))
             .size(11.5)
             .color(crate::theme::gray(160)),
         );
         return;
     }
     ui.label(
-        RichText::new(
-            "Model, operator and route count only the aircraft the relay has answered about \
-             \u{2014} open a card in Cards to look one up.",
-        )
+        RichText::new(tr!("aircraft-stats-relay-note"))
         .size(10.5)
         .color(crate::theme::gray(130)),
     );
@@ -223,11 +227,11 @@ fn stats_view(ui: &mut egui::Ui, stats: &Stats, note: &str, sort: &mut SortBy, h
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new(t.title).strong());
+                            ui.label(RichText::new(aircraft_stats::table_title(t.title)).strong());
                             badge_chip(ui, t.badge);
                         });
                         ui.label(
-                            RichText::new(format!("{} known \u{b7} {} kinds", t.known, t.distinct))
+                            RichText::new(tr!("aircraft-stats-known-kinds", known = t.known, kinds = t.distinct))
                                 .size(10.5)
                                 .color(crate::theme::gray(130)),
                         );
@@ -294,7 +298,7 @@ impl super::SdroxideApp {
         let show = self.tool_window_sized(
             ctx,
             "aircraft",
-            "AIRCRAFT",
+            &tr!("aircraft-title"),
             AIRCRAFT_SIZE,
             AIRCRAFT_MIN,
             false,
@@ -338,9 +342,9 @@ impl super::SdroxideApp {
                     ui.label(RichText::new("\u{25cf}").color(WATCH_AMBER));
                     ui.label(RichText::new(text).strong());
                     if more > 0 {
-                        ui.label(format!("and {more} more"));
+                        ui.label(tr!("aircraft-and-more", more = more));
                     }
-                    if ui.small_button("Show").clicked() {
+                    if ui.small_button(tr!("aircraft-show")).clicked() {
                         self.aircraft_watch_view = true;
                         self.aircraft_cards = false;
                     }
@@ -360,7 +364,7 @@ impl super::SdroxideApp {
                         .id_salt("aircraft_modes")
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            crate::chrome::menu_caption(ui, "Aviation");
+                            crate::chrome::menu_caption(ui, &tr!("aircraft-aviation"));
                             for m in MODES {
                                 let b = crate::chrome::chip_sized(
                                     ui,
@@ -374,7 +378,7 @@ impl super::SdroxideApp {
                                     m.label,
                                     egui::vec2(COLUMN_W - 8.0, BUTTON_H),
                                 )
-                                .on_hover_text(m.hover);
+                                .on_hover_text(mode_hover(m.mode));
                                 if b.clicked() {
                                     self.aircraft_view = m.mode;
                                     self.aircraft_cards = false;
@@ -393,13 +397,10 @@ impl super::SdroxideApp {
                             let b = crate::chrome::chip_sized(
                                 ui,
                                 self.aircraft_cards,
-                                format!("Cards {n}"),
+                                tr!("aircraft-cards-chip", n = n),
                                 egui::vec2(COLUMN_W - 8.0, BUTTON_H),
                             )
-                            .on_hover_text(
-                                "Every aircraft heard on ADS-B, VDL2, HFDL and ACARS, one card each — \
-                                 kept for ten minutes, whichever mode the radio is on now",
-                            );
+                            .on_hover_text(tr!("aircraft-cards-hover"));
                             if b.clicked() {
                                 self.aircraft_cards = !self.aircraft_cards;
                                 self.aircraft_watch_view = false;
@@ -410,14 +411,10 @@ impl super::SdroxideApp {
                             let b = crate::chrome::chip_sized(
                                 ui,
                                 self.aircraft_watch_view,
-                                format!("Watch {n}{}", aircraft_watch::chip_suffix(unseen)),
+                                tr!("aircraft-watch-chip", n = n, suffix = aircraft_watch::chip_suffix(unseen)),
                                 egui::vec2(COLUMN_W - 8.0, BUTTON_H),
                             )
-                            .on_hover_text(
-                                "Aircraft you asked to be told about, by callsign or registration — \
-                                 the list is kept by the station, and an alert is shown when one comes \
-                                 on the air",
-                            );
+                            .on_hover_text(tr!("aircraft-watch-hover"));
                             if b.clicked() {
                                 self.aircraft_watch_view = !self.aircraft_watch_view;
                                 self.aircraft_cards = false;
@@ -425,31 +422,24 @@ impl super::SdroxideApp {
                             let b = crate::chrome::chip_sized(
                                 ui,
                                 self.aircraft_stats_view,
-                                "Stats",
+                                tr!("aircraft-stats-chip"),
                                 egui::vec2(COLUMN_W - 8.0, BUTTON_H),
                             )
-                            .on_hover_text(
-                                "The most common categories, airlines, models, operators and routes \
-                                 among the aircraft this station knows — counted from the radio first, \
-                                 with the relay's cards as a complement",
-                            );
+                            .on_hover_text(tr!("aircraft-stats-hover"));
                             if b.clicked() {
                                 self.aircraft_stats_view = !self.aircraft_stats_view;
                                 self.aircraft_cards = false;
                             }
                             ui.add_space(6.0);
-                            crate::chrome::menu_caption(ui, "Export");
+                            crate::chrome::menu_caption(ui, &tr!("aircraft-export"));
                             for (format, hover) in [
                                 (
                                     Format::Csv,
-                                    "Save the aircraft as a CSV table for a spreadsheet: the station\u{2019}s \
-                                     last 24 hours if it keeps a history, else what is heard now. No \
-                                     positions.",
+                                    tr!("aircraft-export-csv-hover"),
                                 ),
                                 (
                                     Format::Json,
-                                    "Save the aircraft as JSON: the station\u{2019}s last 24 hours if it \
-                                     keeps a history, else what is heard now. No positions.",
+                                    tr!("aircraft-export-json-hover"),
                                 ),
                             ] {
                                 let label = format.ext().to_ascii_uppercase();
@@ -539,21 +529,14 @@ impl super::SdroxideApp {
         let now = crate::time::now_unix();
         let has_station = self.ctrl.peer_url().is_some();
         ui.label(
-            RichText::new(
-                "Callsigns and registrations you want to be told about. The list is kept by \
-                 the station, so it is the same from every screen; an alert comes when one \
-                 appears, or comes back after ten minutes off the air.",
-            )
+            RichText::new(tr!("aircraft-watch-intro"))
             .size(11.0)
             .color(crate::theme::gray(160)),
         );
         if !has_station {
             ui.add_space(6.0);
             ui.label(
-                RichText::new(
-                    "The watch list is kept by the station you are connected to. Connect to \
-                     one to use it.",
-                )
+                RichText::new(tr!("aircraft-watch-needs-station"))
                 .size(11.5)
                 .color(crate::theme::gray(160)),
             );
@@ -561,11 +544,11 @@ impl super::SdroxideApp {
         }
         match self.aircraft_online.watch.state() {
             WatchState::Idle | WatchState::Loading => {
-                ui.label(RichText::new("Reading the list\u{2026}").size(11.0).weak());
+                ui.label(RichText::new(tr!("aircraft-watch-reading")).size(11.0).weak());
             }
             WatchState::Unavailable(r) => {
                 ui.label(
-                    RichText::new(format!("Cannot read the list: {}.", r.note()))
+                    RichText::new(tr!("aircraft-watch-cannot-read", why = r.note()))
                         .size(11.0)
                         .color(WATCH_AMBER),
                 );
@@ -578,9 +561,9 @@ impl super::SdroxideApp {
             let r = ui.add(
                 egui::TextEdit::singleline(&mut self.aircraft_watch_input)
                     .desired_width(160.0)
-                    .hint_text("KLM1234 or PH-BXA"),
+                    .hint_text(tr!("aircraft-watch-input-hint")),
             );
-            let go = ui.button("Add").clicked()
+            let go = ui.button(tr!("aircraft-watch-add")).clicked()
                 || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
             if go {
                 if let Some(e) = aircraft_watch::add_edit(&self.aircraft_watch_input) {
@@ -590,7 +573,7 @@ impl super::SdroxideApp {
             }
         });
         if self.aircraft_online.watch.queued() > 0 {
-            ui.label(RichText::new("Sending\u{2026}").size(11.0).weak());
+            ui.label(RichText::new(tr!("aircraft-watch-sending")).size(11.0).weak());
         }
         if let Some(note) =
             self.aircraft_online.watch.last_outcome().and_then(aircraft_watch::outcome_note)
@@ -601,7 +584,7 @@ impl super::SdroxideApp {
         egui::ScrollArea::vertical().max_height((h - 60.0).max(80.0)).show(ui, |ui| {
             if entries.is_empty() {
                 ui.label(
-                    RichText::new("Nothing on the list yet.")
+                    RichText::new(tr!("aircraft-watch-empty"))
                         .size(11.5)
                         .color(crate::theme::gray(160)),
                 );
@@ -612,11 +595,11 @@ impl super::SdroxideApp {
                     for e in &entries {
                         ui.label(RichText::new(e).monospace());
                         if self.aircraft_tracker.is_on_air(e) {
-                            ui.label(RichText::new("on the air now").size(10.5).color(RADIO_GREEN));
+                            ui.label(RichText::new(tr!("aircraft-watch-on-air")).size(10.5).color(RADIO_GREEN));
                         } else {
                             ui.label("");
                         }
-                        if ui.small_button("Remove").clicked() {
+                        if ui.small_button(tr!("aircraft-watch-remove")).clicked() {
                             edit = Some(aircraft_watch::remove_edit(e));
                         }
                         ui.end_row();
@@ -625,13 +608,13 @@ impl super::SdroxideApp {
             );
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                ui.label(RichText::new("Alerts").strong());
-                if ui.small_button("Clear").clicked() {
+                ui.label(RichText::new(tr!("aircraft-watch-alerts")).strong());
+                if ui.small_button(tr!("aircraft-watch-clear")).clicked() {
                     self.aircraft_tracker.clear();
                 }
             });
             if self.aircraft_tracker.alerts().next().is_none() {
-                ui.label(RichText::new("None yet.").size(11.5).color(crate::theme::gray(160)));
+                ui.label(RichText::new(tr!("aircraft-watch-none-yet")).size(11.5).color(crate::theme::gray(160)));
             }
             for a in self.aircraft_tracker.alerts() {
                 ui.horizontal(|ui| {
@@ -685,10 +668,7 @@ impl super::SdroxideApp {
         if rows.is_empty() {
             ui.add_space(6.0);
             ui.label(
-                RichText::new(
-                    "No aircraft heard yet. Cards fill from ADS-B, VDL2, HFDL and ACARS — \
-                     press one of them and listen. Nothing here needs the internet.",
-                )
+                RichText::new(tr!("aircraft-cards-empty"))
                 .size(11.5)
                 .color(crate::theme::gray(160)),
             );
@@ -728,10 +708,7 @@ impl super::SdroxideApp {
         else {
             ui.add_space(6.0);
             ui.label(
-                RichText::new(format!(
-                    "No aircraft match \u{201c}{}\u{201d}.",
-                    self.aircraft_query.trim()
-                ))
+                RichText::new(tr!("aircraft-cards-no-match", query = self.aircraft_query.trim()))
                 .size(11.5)
                 .color(crate::theme::gray(160)),
             );
@@ -826,10 +803,7 @@ impl super::SdroxideApp {
                     );
                     if offer != HistoryOffer::Hidden {
                         ui.add_space(4.0);
-                        let b = ui.small_button(offer.label()).on_hover_text(
-                            "Show where this aircraft has been in the last day, from the \
-                             station's own record. It asks your station, never the internet.",
-                        );
+                        let b = ui.small_button(offer.label()).on_hover_text(tr!("aircraft-history-hover"));
                         if b.clicked() {
                             history_pressed = icao;
                         }
@@ -837,11 +811,8 @@ impl super::SdroxideApp {
                     let card_rows = aircraft_online::rows(card, &state, now);
                     ui.add_space(4.0);
                     if ui
-                        .small_button("Copy summary")
-                        .on_hover_text(
-                            "Copy this card as text: what is known, and where each line came from. \
-                             The position and the last message are left out.",
-                        )
+                        .small_button(tr!("aircraft-copy-summary"))
+                        .on_hover_text(tr!("aircraft-copy-summary-hover"))
                         .clicked()
                     {
                         let text = aircraft_share::summary_text(
@@ -870,7 +841,7 @@ impl super::SdroxideApp {
                                 ui.label(RichText::new(r.note()).size(10.5).weak());
                             }
                             HistoryState::Idle | HistoryState::Loading => {
-                                ui.label(RichText::new("asking the station…").size(10.5).weak());
+                                ui.label(RichText::new(tr!("aircraft-asking-station-dots")).size(10.5).weak());
                             }
                         }
                     }
@@ -905,26 +876,25 @@ impl super::SdroxideApp {
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             if self.aircraft_online.switch_asking {
-                ui.label(RichText::new("asking the station…").size(10.5).weak());
+                ui.label(RichText::new(tr!("aircraft-asking-station-dots")).size(10.5).weak());
             } else if !on {
-                let b = ui.button("Turn on online lookup").on_hover_text(
-                    "Photos, type, operator and route come from adsbdb and Planespotters. \
-                     Your station asks them for you, and only when this is on; it keeps \
-                     your choice. Nothing else leaves the station.",
-                );
+                let b = ui.button(tr!("aircraft-online-turn-on"))
+                    .on_hover_text(tr!("aircraft-online-turn-on-hover"));
                 if b.clicked() {
                     self.aircraft_online.want_switch(true);
                 }
             } else if ui
-                .small_button("Turn off online lookup")
-                .on_hover_text("Stop the station asking adsbdb and Planespotters.")
+                .small_button(tr!("aircraft-online-turn-off"))
+                .on_hover_text(tr!("aircraft-online-turn-off-hover"))
                 .clicked()
             {
                 self.aircraft_online.want_switch(false);
             }
-            if let Some(why) = self.aircraft_online.switch_note {
+            if let Some(why) = &self.aircraft_online.switch_note {
                 ui.label(
-                    RichText::new(format!("Not changed: {why}.")).size(10.5).color(WATCH_AMBER),
+                    RichText::new(tr!("aircraft-not-changed", why = why))
+                        .size(10.5)
+                        .color(WATCH_AMBER),
                 );
             }
         });
@@ -939,7 +909,7 @@ impl super::SdroxideApp {
                     ui.add(egui::Image::new(tex).max_height(140.0).corner_radius(3.0));
                 }
                 None => {
-                    ui.label(RichText::new("loading photo…").size(10.5).weak());
+                    ui.label(RichText::new(tr!("aircraft-loading-photo")).size(10.5).weak());
                 }
             }
         }
@@ -968,10 +938,10 @@ impl super::SdroxideApp {
         let label = MODES.iter().find(|m| m.mode == shown).map_or("", |m| m.label);
         if shown != active {
             ui.label(
-                RichText::new(format!(
-                    "The radio is on {} — press {label} to listen. This is what {label} heard \
-                     before.",
-                    active.label()
+                RichText::new(tr!(
+                    "aircraft-radio-is-on",
+                    mode = active.label(),
+                    label = label
                 ))
                 .size(11.0)
                 .color(crate::theme::YELLOW()),
@@ -982,13 +952,13 @@ impl super::SdroxideApp {
             Mode::Adsb => match self.adsb_status.as_deref().cloned() {
                 Some(st) => self.adsb_map_pane(ui, cmds, &st, now, map_h),
                 None => {
-                    ui.label(RichText::new("No ADS-B heard yet.").weak());
+                    ui.label(RichText::new(tr!("aircraft-no-adsb")).weak());
                 }
             },
             Mode::Hfdl => {
                 if !self.state.hfdl.enabled {
                     ui.label(
-                        RichText::new("The HFDL decoder is off — press HFDL to switch it on.")
+                        RichText::new(tr!("aircraft-hfdl-off"))
                             .size(11.0)
                             .color(crate::theme::YELLOW()),
                     );
@@ -1002,12 +972,12 @@ impl super::SdroxideApp {
             Mode::Vdl2 => match self.vdl2_status.as_deref().cloned() {
                 Some(st) => self.vdl2_columns(ui, &st, now, map_h),
                 None => {
-                    ui.label(RichText::new("Starting the VDL2 decoder…").weak());
+                    ui.label(RichText::new(tr!("aircraft-vdl2-starting")).weak());
                 }
             },
             Mode::Acars => self.acars_panel(ui, cmds, map_h),
             _ => {
-                ui.label(RichText::new(format!("{label} has no view here.")).weak());
+                ui.label(RichText::new(tr!("aircraft-no-view", label = label)).weak());
             }
         }
     }
@@ -1019,8 +989,8 @@ mod tests {
     fn only_lines_that_are_not_from_the_radio_wear_a_badge() {
         assert!(super::badge_look(Badge::Radio).is_none());
         assert!(super::badge_look(Badge::Missing).is_none());
-        assert_eq!(super::badge_look(Badge::Online).map(|b| b.0), Some("online"));
-        assert_eq!(super::badge_look(Badge::History).map(|b| b.0), Some("history"));
+        assert_eq!(super::badge_look(Badge::Online).map(|b| b.0.as_str().to_owned()), Some("online".to_string()));
+        assert_eq!(super::badge_look(Badge::History).map(|b| b.0.as_str().to_owned()), Some("history".to_string()));
     }
 
     use super::*;

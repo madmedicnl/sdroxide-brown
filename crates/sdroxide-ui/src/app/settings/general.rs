@@ -4,6 +4,7 @@
 //! the CAT / Audio interface, since every other backend carries its audio
 //! in-band.
 
+use crate::i18n::{Tr, tr};
 use eframe::egui::{self, Color32, ComboBox, RichText};
 use sdroxide_types::{
     CbPlan, Command, Region, RemoteAccess, SWR_LIMIT_MAX, SWR_LIMIT_MIN, swr_tune_limit,
@@ -20,11 +21,11 @@ use crate::chrome::StyledCombo;
 /// means nothing until you know it is the Americas, and the number is what
 /// every band-plan document and contest rule actually says.
 pub(in crate::app) fn region_combo(ui: &mut egui::Ui, region: &mut Region) {
-    ComboBox::from_id_salt("iaru-region").width(360.0).selected_text(region.label()).show_styled(
+    ComboBox::from_id_salt("iaru-region").width(360.0).selected_text(region.tr()).show_styled(
         ui,
         |ui| {
             for r in Region::ALL {
-                if ui.selectable_label(*region == r, r.label()).clicked() {
+                if ui.selectable_label(*region == r, r.tr()).clicked() {
                     *region = r;
                 }
             }
@@ -38,16 +39,30 @@ pub(in crate::app) fn region_combo(ui: &mut egui::Ui, region: &mut Region) {
 /// band's edges are left wide, so switching plans never changes what receives
 /// or transmits.
 pub(in crate::app) fn cb_plan_combo(ui: &mut egui::Ui, plan: &mut CbPlan) {
-    ComboBox::from_id_salt("cb-plan").width(360.0).selected_text(plan.label()).show_styled(
+    ComboBox::from_id_salt("cb-plan").width(360.0).selected_text(cb_plan_label(*plan)).show_styled(
         ui,
         |ui| {
             for p in CbPlan::ALL {
-                if ui.selectable_label(*plan == p, p.label()).clicked() {
+                if ui.selectable_label(*plan == p, cb_plan_label(p)).clicked() {
                     *plan = p;
                 }
             }
         },
     );
+}
+
+/// A CB / PMR plan's name in the interface's language.
+pub(in crate::app) fn cb_plan_label(plan: CbPlan) -> String {
+    match plan {
+        CbPlan::World => tr!("settings-general-cb-world"),
+        CbPlan::Cept => tr!("settings-general-cb-cept"),
+        CbPlan::Germany80 => tr!("settings-general-cb-germany"),
+        CbPlan::Uk27_81 => tr!("settings-general-cb-uk"),
+        CbPlan::Us => tr!("settings-general-cb-us"),
+        CbPlan::Australia => tr!("settings-general-cb-australia"),
+        CbPlan::Pmr446 => tr!("settings-general-cb-pmr446"),
+        CbPlan::Dpmr446 => tr!("settings-general-cb-dpmr446"),
+    }
 }
 
 /// A device dropdown ("System default" + names); calls `pick(Some(name)|None)`.
@@ -58,9 +73,10 @@ pub(in crate::app) fn device_combo(
     selected: &Option<String>,
     mut pick: impl FnMut(Option<String>),
 ) {
-    let shown = selected.clone().unwrap_or_else(|| "System default".into());
+    let shown = selected.clone().unwrap_or_else(|| tr!("settings-general-system-default").into());
     ComboBox::from_id_salt(id).width(300.0).selected_text(shown).show_styled(ui, |ui| {
-        if ui.selectable_label(selected.is_none(), "System default").clicked() {
+        if ui.selectable_label(selected.is_none(), tr!("settings-general-system-default")).clicked()
+        {
             pick(None);
         }
         for n in names {
@@ -105,16 +121,18 @@ pub(in crate::app) fn device_field(
             egui::TextEdit::singleline(&mut text)
                 .id(egui::Id::new(id).with("typed"))
                 .desired_width(super::audio::DEVICE_WIDTH)
-                .hint_text("…or type the name — empty is the system default"),
+                .hint_text(tr!("settings-general-device-type-name")),
         );
         if resp.changed() {
             *selected = (!text.is_empty()).then_some(text);
         }
-        resp.on_hover_text(format!(
-            "The exact name {what} is opened by. Pick it from the list when it is there; type it \
-             when the list does not show it — a sound server can offer a device the host API \
-             does not enumerate. Empty uses the system default."
-        ));
+        resp.on_hover_text(match what {
+            "speakers" => tr!("settings-general-device-hint-speakers"),
+            "microphone" => tr!("settings-general-device-hint-microphone"),
+            "radio-rx" => tr!("settings-general-device-hint-radio-rx"),
+            "radio-tx" => tr!("settings-general-device-hint-radio-tx"),
+            _ => tr!("settings-general-device-hint-other"),
+        });
     });
 }
 
@@ -129,7 +147,7 @@ pub(in crate::app) fn device_field(
 /// does the wrong half.
 pub(in crate::app) fn signed_in_station(ui: &mut egui::Ui, station: &str) {
     let station_key = crate::login::station_key(station);
-    ui.label(RichText::new("Signed-in station").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(RichText::new(tr!("settings-general-signed-in-station")).size(14.0).strong().color(crate::theme::CYAN()));
     ui.add_space(6.0);
     ui.label(RichText::new(station_key.clone()).size(11.5).weak());
     ui.add_space(8.0);
@@ -139,7 +157,7 @@ pub(in crate::app) fn signed_in_station(ui: &mut egui::Ui, station: &str) {
         sign_out = crate::chrome::chip_accent(
             ui,
             false,
-            RichText::new(" SIGN OUT ").strong().size(12.0),
+            RichText::new(format!(" {} ", tr!("settings-general-sign-out"))).strong().size(12.0),
             crate::theme::ALERT(),
             crate::theme::INK_ON_CYAN(),
         )
@@ -152,8 +170,7 @@ pub(in crate::app) fn signed_in_station(ui: &mut egui::Ui, station: &str) {
         ui.add_space(4.0);
         super::note_at(
             ui,
-            "Forgets this device's sign-in. The station has to ask again on the next \
-                 connection; this one stays up until you close it.",
+            &tr!("settings-general-sign-out-hint"),
             Some(11.0),
         );
     } else {
@@ -162,10 +179,9 @@ pub(in crate::app) fn signed_in_station(ui: &mut egui::Ui, station: &str) {
         // station's password that the operator believes it does not.
         ui.add_space(6.0);
         ui.label(
-            RichText::new(format!(
-                "Remembering a password in this browser for {}, because it answered no sign-in \
-                 cookie. Older stations do this; it is not the same thing.",
-                fallback.join(", ")
+            RichText::new(tr!(
+                "settings-general-fallback-password",
+                stations = fallback.join(", ")
             ))
             .size(11.0)
             .color(crate::theme::gray(140)),
@@ -186,13 +202,16 @@ pub(in crate::app) fn signed_in_station(ui: &mut egui::Ui, station: &str) {
 /// APPLY: the server re-reads the file for every sign-in, so there is no
 /// separate step for an APPLY to stand for.
 pub(in crate::app) fn remote_access_settings(ui: &mut egui::Ui, access: &mut RemoteAccess) {
-    ui.label(RichText::new("Remote access").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(
+        RichText::new(tr!("settings-general-remote-access"))
+            .size(14.0)
+            .strong()
+            .color(crate::theme::CYAN()),
+    );
     ui.add_space(6.0);
     super::note_at(
         ui,
-        "What a remote client — the browser page, or another sdroxide started with \
-             --connect — has to give before this station will let it operate. Applies in server \
-             mode (--server); the next sign-in picks up a change, with no restart.",
+        &tr!("settings-general-what-remote-client-browser-page"),
         Some(11.5),
     );
     ui.add_space(8.0);
@@ -201,13 +220,13 @@ pub(in crate::app) fn remote_access_settings(ui: &mut egui::Ui, access: &mut Rem
         .spacing([12.0, 8.0])
         .min_row_height(ui.spacing().interact_size.y)
         .show(ui, |ui| {
-            ui.label("Username");
+            ui.label(tr!("settings-general-username"));
             crate::chrome::field(
                 ui,
                 egui::TextEdit::singleline(&mut access.username).desired_width(200.0),
             );
             ui.end_row();
-            ui.label("Password");
+            ui.label(tr!("settings-general-password"));
             crate::chrome::field(
                 ui,
                 egui::TextEdit::singleline(&mut access.password)
@@ -222,34 +241,29 @@ pub(in crate::app) fn remote_access_settings(ui: &mut egui::Ui, access: &mut Rem
     if access.is_enforced() {
         if access.username.is_empty() {
             ui.label(
-                RichText::new(
-                    "Clients must give the password. Leaving the username empty is fine.",
-                )
-                .size(11.5)
-                .color(crate::theme::GREEN()),
+                RichText::new(tr!("settings-general-clients-must-give-password-leaving"))
+                    .size(11.5)
+                    .color(crate::theme::GREEN()),
             );
         } else {
             ui.label(
-                RichText::new("Clients must sign in.").size(11.5).color(crate::theme::GREEN()),
+                RichText::new(tr!("settings-general-clients-must-sign"))
+                    .size(11.5)
+                    .color(crate::theme::GREEN()),
             );
         }
     } else {
         ui.label(
-            RichText::new(
-                "⚠ Empty: anyone who can reach the server's port can operate this radio, on \
-                 your callsign. Set a password before forwarding the port.",
-            )
-            .size(11.5)
-            .color(crate::theme::YELLOW()),
+            RichText::new(tr!("settings-general-empty-anyone-who-can-reach"))
+                .size(11.5)
+                .color(crate::theme::YELLOW()),
         );
     }
     ui.add_space(4.0);
     ui.label(
-        RichText::new(
-            "Stored in the clear in config.toml, like the other passwords sdroxide keeps.",
-        )
-        .size(10.5)
-        .color(crate::theme::gray(140)),
+        RichText::new(tr!("settings-general-stored-clear-config-toml-like"))
+            .size(10.5)
+            .color(crate::theme::gray(140)),
     );
 }
 
@@ -271,7 +285,7 @@ pub(in crate::app) fn settings_rx_audio_gain(
 ) {
     ui.add_space(8.0);
     ui.horizontal(|ui| {
-        ui.label(RichText::new("Receive audio gain").strong());
+        ui.label(RichText::new(tr!("settings-general-receive-audio-gain")).strong());
         ui.end_row();
         ui.add(
             egui::DragValue::new(&mut cfg.rx_audio_gain_db)
@@ -280,7 +294,7 @@ pub(in crate::app) fn settings_rx_audio_gain(
                 .fixed_decimals(1)
                 .suffix(" dB"),
         );
-        if cfg.rx_audio_gain_db != 0.0 && ui.button("0 dB").clicked() {
+        if cfg.rx_audio_gain_db != 0.0 && ui.button(tr!("settings-general-t-0-db")).clicked() {
             cfg.rx_audio_gain_db = 0.0;
         }
     });
@@ -290,13 +304,7 @@ pub(in crate::app) fn settings_rx_audio_gain(
     ui.add(
         egui::Label::new(
             RichText::new(
-                "Extra gain on everything this radio sends to the speakers, on top of the \
-                 volume control. Leave it at 0 dB unless the radio is quiet at full volume: the \
-                 volume rail's top is the audio as it arrives, so it can turn a radio down but \
-                 never up, and some transceivers' USB sound output sits well below full scale.\n\n\
-                 Go up 6 dB at a time. Too much clips — the audio is limited at full scale rather \
-                 than allowed to wrap round, so overdoing it sounds harsh rather than loud. \
-                 Recordings are taken ahead of this and are not affected.",
+                tr!("settings-general-extra-gain-everything-radio-sends"),
             )
             .size(10.5)
             .color(crate::theme::gray(140)),
@@ -321,21 +329,22 @@ impl SdroxideApp {
     ) {
         let custom = !sdroxide_types::band_plan().is_default();
         ui.horizontal_wrapped(|ui| {
-            if crate::chrome::chip(ui, false, RichText::new("RELOAD BAND PLAN").size(10.5))
-                .on_hover_text(
-                    "Re-read bandplan.json on the machine the radio is attached to and apply \
-                     it — band edges, sub-segments and skimmer windows — without restarting.",
-                )
-                .clicked()
+            if crate::chrome::chip(
+                ui,
+                false,
+                RichText::new(tr!("settings-general-reload-band-plan")).size(10.5),
+            )
+            .on_hover_text(tr!("settings-general-re-read-bandplan-json-machine"))
+            .clicked()
             {
                 cmds.push(sdroxide_types::Command::ReloadBandPlan);
             }
             ui.add(
                 egui::Label::new(
                     RichText::new(if custom {
-                        "Running on the station's own band plan."
+                        tr!("settings-general-running-station-s-own-band")
                     } else {
-                        "Running on the built-in IARU tables."
+                        tr!("settings-general-running-built-iaru-tables")
                     })
                     .size(10.5)
                     .weak(),
@@ -352,19 +361,8 @@ impl SdroxideApp {
             .map(|p| p.display().to_string());
         ui.label(
             RichText::new(match &path {
-                Some(p) => format!(
-                    "Every band edge and sub-segment comes from {p}, written from the built-in \
-                     IARU tables the first time and yours to edit after that — narrow a band to \
-                     your licence and sdroxide will refuse to transmit outside it. Frequencies \
-                     are in MHz; delete the file for a fresh copy of the defaults. This is the \
-                     regional allocation, not your licence: your own conditions may be narrower, \
-                     and national plans differ inside a region.",
-                ),
-                None => "Every band edge and sub-segment comes from bandplan.json on the machine \
-                         the radio is attached to. This is the regional allocation, not your \
-                         licence: your own conditions may be narrower, and national plans differ \
-                         inside a region."
-                    .to_string(),
+                Some(p) => tr!("settings-general-band-plan-file", path = p.as_str()),
+                None => tr!("settings-general-every-band-edge-sub-segment"),
             })
             .size(10.5)
             .color(crate::theme::gray(140)),
@@ -385,36 +383,34 @@ impl SdroxideApp {
         export: &mut bool,
         import: &mut bool,
     ) {
-        ui.label(RichText::new("Settings file").strong());
+        ui.label(RichText::new(tr!("settings-general-settings-file")).strong());
         ui.end_row();
         if self.ctrl.engine_is_remote() {
             ui.label(
-                RichText::new(
-                    "The settings are on the machine the radio is attached to. Export them \
-                     there.",
-                )
-                .size(10.5)
-                .color(crate::theme::gray(140)),
+                RichText::new(tr!("settings-general-settings-are-machine-radio-attached"))
+                    .size(10.5)
+                    .color(crate::theme::gray(140)),
             );
             return;
         }
         ui.horizontal_wrapped(|ui| {
-            if crate::chrome::chip(ui, false, RichText::new("EXPORT…").size(10.5))
-                .on_hover_text(
-                    "Write every setting at this station — the radios, the modes, the servers, \
-                     the memories, the band plan — to one file you can carry to another \
-                     installation. Your logbook and any saved server password stay here.",
-                )
-                .clicked()
+            if crate::chrome::chip(
+                ui,
+                false,
+                RichText::new(tr!("settings-general-export")).size(10.5),
+            )
+            .on_hover_text(tr!("settings-general-write-every-setting-station-radios"))
+            .clicked()
             {
                 *export = true;
             }
-            if crate::chrome::chip(ui, false, RichText::new("IMPORT…").size(10.5))
-                .on_hover_text(
-                    "Replace this station's settings with the ones in a file exported from \
-                     another installation. Restart sdroxide afterwards.",
-                )
-                .clicked()
+            if crate::chrome::chip(
+                ui,
+                false,
+                RichText::new(tr!("settings-general-import")).size(10.5),
+            )
+            .on_hover_text(tr!("settings-general-replace-station-s-settings-ones"))
+            .clicked()
             {
                 *import = true;
             }
@@ -428,16 +424,9 @@ impl SdroxideApp {
         ui.add_space(4.0);
         ui.add(
             egui::Label::new(
-                RichText::new(
-                    "An import overwrites what is here, file for file, and takes effect the \
-                     next time sdroxide starts — the settings already in memory would \
-                     otherwise be written straight back over it. Anything the file does not \
-                     mention is left as it is, so a bundle from a one-radio station does not \
-                     remove a second radio here. Your logbook is never in the file: export it \
-                     as ADIF from the LOG window if you want to move that too.",
-                )
-                .size(10.5)
-                .color(crate::theme::gray(140)),
+                RichText::new(tr!("settings-general-import-overwrites-what-here-file"))
+                    .size(10.5)
+                    .color(crate::theme::gray(140)),
             )
             .wrap(),
         );
@@ -465,15 +454,15 @@ impl SdroxideApp {
                         .map(|b| b.summary())
                         .unwrap_or_else(|_| "settings".into());
                     crate::download::save("sdroxide-settings.json", json.as_bytes());
-                    format!("Exported {note} — choose where to save it.")
+                    tr!("settings-general-exported", note = note)
                 }
-                Err(e) => format!("Export failed: {e}"),
+                Err(e) => tr!("settings-general-export-failed", error = e.to_string()),
             });
         }
         if import {
             self.settings_transfer_note = None;
             crate::download::load_text(
-                "sdroxide settings",
+                &tr!("settings-general-sdroxide-settings"),
                 &["json"],
                 self.settings_import_inbox.clone(),
             );
@@ -502,8 +491,7 @@ impl SdroxideApp {
         if self.ctrl.engine_is_remote() {
             ui.label(
                 RichText::new(
-                    "Recordings are written on the machine the radio is attached to. Set the \
-                     folder there.",
+                    tr!("settings-general-recordings-remote"),
                 )
                 .size(10.5)
                 .color(crate::theme::gray(140)),
@@ -511,23 +499,22 @@ impl SdroxideApp {
             return;
         }
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Folder").size(11.0).color(crate::theme::gray(150)));
+            ui.label(RichText::new(tr!("settings-general-folder")).size(11.0).color(crate::theme::gray(150)));
             ui.label(
                 RichText::new(self.recordings_dir.display().to_string())
                     .size(10.5)
                     .monospace()
                     .color(crate::theme::gray(180)),
             );
-            if crate::chrome::chip(ui, false, RichText::new("CHOOSE…").size(10.5))
-                .on_hover_text("Pick the folder recordings are written to")
+            if crate::chrome::chip(ui, false, RichText::new(tr!("settings-general-choose")).size(10.5))
+                .on_hover_text(tr!("settings-general-choose-hint"))
                 .clicked()
             {
                 *choose = true;
             }
-            if crate::chrome::chip(ui, false, RichText::new("DEFAULT").size(10.5))
+            if crate::chrome::chip(ui, false, RichText::new(tr!("settings-general-default")).size(10.5))
                 .on_hover_text(
-                    "Go back to the default — your music folder, or the config directory when \
-                     the system has none",
+                    tr!("settings-general-default-hint"),
                 )
                 .clicked()
             {
@@ -538,9 +525,7 @@ impl SdroxideApp {
         ui.add(
             egui::Label::new(
                 RichText::new(
-                    "Where the audio recordings, the scheduled recordings and the raw I/Q captures \
-                     are written. Default: your music folder's sdroxide subfolder, or the config \
-                     directory's recordings folder when the system exposes no music folder.",
+                    tr!("settings-general-recordings-dir-note"),
                 )
                 .size(10.5)
                 .color(crate::theme::gray(140)),
@@ -600,13 +585,18 @@ impl SdroxideApp {
         // button is looking at the window, and on Windows there is no console
         // behind it to print to.
         self.settings_transfer_note = Some(match loaded {
-            Err(e) => format!("Import failed: {e}"),
+            Err(e) => tr!("settings-general-import-failed", error = e.to_string()),
             Ok(loaded) => match sdroxide_config::transfer::import(&loaded.text) {
-                Err(e) => format!("Import failed: {e}"),
+                Err(e) => tr!("settings-general-import-failed", error = e.to_string()),
                 Ok(report) => {
-                    let mut msg = format!("{} — restart sdroxide to use them.", report.summary());
+                    let mut msg = tr!("settings-general-imported", summary = report.summary());
                     for (path, why) in report.skipped.iter().take(4) {
-                        msg.push_str(&format!("\nSkipped {path}: {why}"));
+                        msg.push('\n');
+                        msg.push_str(&tr!(
+                            "settings-general-import-skipped",
+                            path = path.to_string(),
+                            why = why.to_string()
+                        ));
                     }
                     msg
                 }
@@ -625,7 +615,7 @@ impl SdroxideApp {
     /// The command is sent only on an actual change, since a `DragValue` reports
     /// its value every frame it is dragged and each one would be a config write.
     pub(in crate::app) fn settings_swr_guard(&self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
-        ui.label(RichText::new("SWR guard").strong());
+        ui.label(RichText::new(tr!("settings-general-swr-guard")).strong());
         ui.end_row();
         ui.add_space(4.0);
 
@@ -635,14 +625,19 @@ impl SdroxideApp {
         let mut limit = self.state.tx.swr_limit.clamp(SWR_LIMIT_MIN, SWR_LIMIT_MAX);
 
         ui.horizontal(|ui| {
-            if crate::chrome::checkbox(ui, &mut enabled, "Stop transmitting on high SWR").changed()
+            if crate::chrome::checkbox(
+                ui,
+                &mut enabled,
+                tr!("settings-general-stop-transmitting-high-swr"),
+            )
+            .changed()
             {
                 cmds.push(Command::SetSwrGuard { enabled, limit });
             }
         });
         ui.add_enabled_ui(enabled, |ui| {
             ui.horizontal(|ui| {
-                ui.label("Trip at");
+                ui.label(tr!("settings-general-trip"));
                 let r = ui.add(
                     egui::DragValue::new(&mut limit)
                         .speed(0.1)
@@ -660,9 +655,12 @@ impl SdroxideApp {
                 // stopped is told a figure, and this is where they find out
                 // where it came from.
                 ui.label(
-                    RichText::new(format!("(tuning: {:.1}:1)", swr_tune_limit(limit)))
-                        .size(11.0)
-                        .color(crate::theme::gray(140)),
+                    RichText::new(tr!(
+                        "settings-general-swr-tune-limit",
+                        limit = format!("{:.1}", swr_tune_limit(limit))
+                    ))
+                    .size(11.0)
+                    .color(crate::theme::gray(140)),
                 );
             });
         });
@@ -670,26 +668,16 @@ impl SdroxideApp {
         ui.add_space(6.0);
         super::note_rich(
             ui,
-            "Stops the transmission when the radio reports an SWR at or above this figure, and \
-                 keeps transmit locked out until you acknowledge it. Catches a disconnected \
-                 antenna, a failed feeder, or a switch left on the wrong port.\n\n\
-                 Tuning is treated differently, because feeding a mismatch is the point of it: an \
-                 antenna tuner gets double the limit and about five seconds before the guard \
-                 applies at all. A manual tuner that takes longer than that wants the guard \
-                 switched off for the session.\n\n\
-                 Needs a rig that reports SWR over CAT. Ignores the first fifth of a second of \
-                 each transmission, and does not wait for high power.",
+            &tr!("settings-general-stops-transmission-when-radio-reports"),
             Some(10.5),
             None,
         );
         if let Some(swr) = self.state.tx.swr_tripped {
             ui.add_space(4.0);
             ui.label(
-                RichText::new(format!(
-                    "⚠ Currently tripped at {swr:.1}:1 — transmit is locked out."
-                ))
-                .size(11.0)
-                .color(Color32::from_rgb(255, 190, 70)),
+                RichText::new(tr!("settings-general-swr-tripped", swr = format!("{swr:.1}")))
+                    .size(11.0)
+                    .color(Color32::from_rgb(255, 190, 70)),
             );
         }
     }
@@ -705,16 +693,17 @@ impl SdroxideApp {
         ui: &mut egui::Ui,
         cmds: &mut Vec<sdroxide_types::Command>,
     ) {
-        ui.label(RichText::new("Per-mode settings").strong());
+        ui.label(RichText::new(tr!("settings-general-per-mode-settings")).strong());
         ui.end_row();
         ui.add_space(4.0);
         ui.horizontal_wrapped(|ui| {
-            if crate::chrome::chip(ui, false, RichText::new("RESET EVERY MODE").size(10.5))
-                .on_hover_text(
-                    "Forget every mode's remembered AGC, squelch, noise reduction, notch and \
-                     stereo switches, and put each mode's own defaults back.",
-                )
-                .clicked()
+            if crate::chrome::chip(
+                ui,
+                false,
+                RichText::new(tr!("settings-general-reset-every-mode")).size(10.5),
+            )
+            .on_hover_text(tr!("settings-general-forget-every-mode-s-remembered"))
+            .clicked()
             {
                 cmds.push(sdroxide_types::Command::ResetModeDefaults { mode: None });
             }
@@ -722,11 +711,7 @@ impl SdroxideApp {
         ui.add_space(4.0);
         super::note_rich(
             ui,
-            "Selecting a mode lays that mode's own starting values for AGC, squelch, noise \
-                 reduction, the notch and the stereo switches on the receiver, and changing one \
-                 remembers it for that mode alone. The circular-arrow chip at the end of the \
-                 receiver's filter/noise row lists what has been changed and puts the current \
-                 mode back.",
+            &tr!("settings-general-selecting-mode-lays-mode-s"),
             Some(10.5),
             None,
         );

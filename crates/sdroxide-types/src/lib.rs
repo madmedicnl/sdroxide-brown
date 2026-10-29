@@ -55,8 +55,8 @@ mod mode;
 mod morse_trainer;
 mod netcfg;
 mod pi4;
-mod picupload;
 mod pictures;
+mod picupload;
 pub mod playback;
 mod probe;
 mod profile;
@@ -95,8 +95,8 @@ mod ui;
 mod uvpacket;
 mod vdl2;
 mod voice;
-mod wefax;
 mod wavelog;
+mod wefax;
 mod winlink;
 mod wsjtx;
 mod wspr;
@@ -123,6 +123,10 @@ pub use aprs::{
 };
 pub use atchat::{AtChatChatLine, AtChatFile, AtChatRosterEntry, AtChatStatus, AtChatTransfer};
 pub use audio::AudioRouting;
+pub use audio_level::{
+    AUDIO_BAND_FLOOR_DB, AUDIO_BANDS, AUDIO_BANDS_HI_HZ, AUDIO_BANDS_LO_HZ, AUDIO_LEVEL_LEASE_SECS,
+    AudioLevel, band_to_byte, byte_to_unit,
+};
 pub use awards::{
     Awards, Coverage, EntitySlot, Highlight, LogIndex, Novelty, Status as AwardStatus, US_STATES,
     compute_awards, counts, coverage_counts, entity_coverage, entity_name,
@@ -161,11 +165,6 @@ pub use contacts::FsqContact;
 pub use contest::{
     ContestId, ContestScore, ContestSession, ContestSpec, Exchange, Multiplier, cabrillo_contest,
     cabrillo_mode, rate, score, to_cabrillo, wpx_prefix,
-};
-pub use audio_level::{
-    AUDIO_LEVEL_LEASE_SECS,
-    AUDIO_BAND_FLOOR_DB, AUDIO_BANDS, AUDIO_BANDS_HI_HZ, AUDIO_BANDS_LO_HZ, AudioLevel, band_to_byte,
-    byte_to_unit,
 };
 pub use controller::{AudioDevices, PeerRadio, RadioController, RadioEvent};
 pub use dab::{
@@ -249,14 +248,14 @@ pub use netcfg::{
     PskConfig, RbnConfig, WsprNetConfig,
 };
 pub use pi4::{BURST_S as PI4_BURST_S, Pi4Spot, Pi4Status, SLOT_S as PI4_SLOT_S};
-pub use picupload::{
-    FtpSecurity, PictureUploadConfig, PictureUploadStatus, TlsVerify, UploadFormat, UploadNaming,
-    format_fingerprint, normalize_fingerprint,
-};
 pub use pictures::{
     IMAGE_NAME_MAX, IMAGE_PAGE_MAX, IMAGE_SLOT_THUMB_EDGE, IMAGE_SLOTS, IMAGE_SOURCE_MAX_EDGE,
     IMAGE_THUMB_EDGE, IMAGE_UPLOAD_MAX, ImageEntry, ImageKind, ImageListing, ImagePresets,
     ImageSlotInfo, received_at, safe_name,
+};
+pub use picupload::{
+    FtpSecurity, PictureUploadConfig, PictureUploadStatus, TlsVerify, UploadFormat, UploadNaming,
+    format_fingerprint, normalize_fingerprint,
 };
 pub use playback::{
     PlaybackCommand, PlaybackStatus, RecordingFile, RecordingListing, RecordingStamp,
@@ -328,7 +327,7 @@ pub use satlock::{
     C_KM_S, SatLockConfig, SatPass, SatTrackStatus, SatUplink, doppler_rx_hz, doppler_tx_hz,
 };
 pub use scanner::{
-    MIN_LISTEN_MS, SCAN_STEPS_HZ, ScanKind, ScanResume, ScanState, ScannerConfig, ScanVoice,
+    MIN_LISTEN_MS, SCAN_STEPS_HZ, ScanKind, ScanResume, ScanState, ScanVoice, ScannerConfig,
 };
 pub use signal_id::{
     PROFILES, SIGIDWIKI_BASE, SignalFamily, SignalProfile, identify, search_profiles,
@@ -362,8 +361,8 @@ pub use tone::{CTCSS_TONES, SubTone};
 pub use ui::{
     BandplanKind, BroadcastScope, ChromeStyle, ClassicSection, ClientAcks, ClientScreen,
     DetachableModule, DetachedState, DetachedWindow, FontSize, LayoutMode, MapStyle, SmeterStyle,
-    Solar3dWindow, SpectrumDetail, SpectrumFillStyle, Speed, UiSettings, UiTheme, WORKSPACE_MAX,
-    Workspace,
+    Solar3dWindow, SpectrumDetail, SpectrumFillStyle, Speed, UiLanguage, UiSettings, UiTheme,
+    WORKSPACE_MAX, Workspace,
 };
 pub use ui::{force_swl, set_force_swl};
 pub use uvpacket::{
@@ -377,13 +376,13 @@ pub use vdl2::{
     Vdl2Payload, Vdl2Settings, Vdl2Station, Vdl2Status, Vdl2Xid,
 };
 pub use voice::{VOICE_MAX_LEN_S, VOICE_SLOTS, VoiceSlotInfo, VoiceStatus, slot_label};
-pub use wefax::{
-    WEFAX_STATIONS, WefaxChartMeta, WefaxIoc, WefaxLpm, WefaxStation, WefaxStatus, shift_fax_rows,
-};
 pub use wavelog::{
     WavelogBatch, WavelogConfig, WavelogMerge, WavelogProbe, WavelogResync, WavelogStation,
     WavelogSyncState, apply_resync, fingerprint_display, merge_from_wavelog, plan_resync,
     same_contact,
+};
+pub use wefax::{
+    WEFAX_STATIONS, WefaxChartMeta, WefaxIoc, WefaxLpm, WefaxStation, WefaxStatus, shift_fax_rows,
 };
 pub use winlink::{
     DEFAULT_CMS_ADDRESS, MAIL_PAGE_MAX, MailAttachment, MailDraft, MailEntry, MailFolder,

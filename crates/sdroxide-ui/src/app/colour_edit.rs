@@ -3,6 +3,7 @@
 //! nothing reads it back, and Cmd/Ctrl+V does nothing over a swatch. A memory
 //! list of a thousand names is coloured by pasting, not by dragging sliders.
 
+use crate::i18n::tr;
 use eframe::egui;
 
 /// A colour code as an operator writes or copies it: `#rrggbb`, `rrggbb`,
@@ -32,7 +33,7 @@ pub(in crate::app) fn colour_edit(ui: &mut egui::Ui, col: &mut [u8; 3]) -> bool 
     changed |= swatch.changed();
     let id = swatch.id.with("paste");
     let paste = crate::chrome::chip(ui, false, egui::RichText::new("PST").size(11.0))
-        .on_hover_text("Paste a colour code (#RRGGBB or r, g, b) — or Cmd/Ctrl+V on the swatch");
+        .on_hover_text(tr!("colouredit-paste-a-colour-code-rrggbb-or-r-g"));
     if swatch.clicked() {
         ui.data_mut(|d| d.insert_temp(id, true));
     }

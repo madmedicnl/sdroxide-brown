@@ -26,6 +26,7 @@ use sdroxide_aircraft_online::{
 };
 
 use super::aircraft_card::{self, CardKey, icao_hex};
+use crate::i18n::tr;
 use super::aircraft_registry::AircraftCard;
 
 /// Seconds before a failed question may be asked again.
@@ -57,15 +58,11 @@ impl Reason {
     /// What the card says about it. Only the reasons the operator can do
     /// something about are said; a failure that will mend itself is not an
     /// error, and is not drawn as one.
-    pub(in crate::app) fn note(self) -> Option<&'static str> {
+    pub(in crate::app) fn note(self) -> Option<String> {
         match self {
-            Reason::Disabled => {
-                Some("online unavailable — the station has not switched the relay on")
-            }
-            Reason::NoStation => {
-                Some("online unavailable — no station to ask; the radio data is all there is")
-            }
-            Reason::Unauthorized => Some("online unavailable — not signed in to the station"),
+            Reason::Disabled => Some(tr!("aircraft-online-unavailable-disabled")),
+            Reason::NoStation => Some(tr!("aircraft-online-unavailable-no-station")),
+            Reason::Unauthorized => Some(tr!("aircraft-online-unavailable-unauthorized")),
             Reason::Offline | Reason::Busy | Reason::Unknown => None,
         }
     }
@@ -199,15 +196,15 @@ pub(in crate::app) enum SwitchAnswer {
     /// The relay is off now.
     Off,
     /// It did not change, and the sentence says why.
-    Refused(&'static str),
+    Refused(String),
 }
 
 /// Read the reply to a switch request.
 pub(in crate::app) fn classify_switch(http_status: Option<u16>, body: &str) -> SwitchAnswer {
     match http_status {
-        None => SwitchAnswer::Refused("the station did not answer"),
-        Some(401) => SwitchAnswer::Refused("not signed in to the station"),
-        Some(403) => SwitchAnswer::Refused("the station refused the request"),
+        None => SwitchAnswer::Refused(tr!("aircraft-switch-no-answer")),
+        Some(401) => SwitchAnswer::Refused(tr!("aircraft-switch-not-signed-in")),
+        Some(403) => SwitchAnswer::Refused(tr!("aircraft-switch-refused")),
         Some(200) => {
             #[derive(serde::Deserialize)]
             struct Reply {
@@ -216,13 +213,11 @@ pub(in crate::app) fn classify_switch(http_status: Option<u16>, body: &str) -> S
             match serde_json::from_str::<Reply>(body) {
                 Ok(r) if r.enabled => SwitchAnswer::On,
                 Ok(_) => SwitchAnswer::Off,
-                Err(_) => {
-                    SwitchAnswer::Refused("the station does not offer this switch (too old?)")
-                }
+                Err(_) => SwitchAnswer::Refused(tr!("aircraft-switch-too-old")),
             }
         }
-        Some(404) => SwitchAnswer::Refused("the station does not offer this switch (too old?)"),
-        Some(_) => SwitchAnswer::Refused("the station could not change it"),
+        Some(404) => SwitchAnswer::Refused(tr!("aircraft-switch-too-old")),
+        Some(_) => SwitchAnswer::Refused(tr!("aircraft-switch-failed")),
     }
 }
 
@@ -384,10 +379,8 @@ pub(in crate::app) struct Row {
     pub note: String,
 }
 
-const ONLINE_NOTE: &str = "adsbdb, through the station";
-
 fn online_row(label: &'static str, value: String) -> Row {
-    Row { label, value, badge: Badge::Online, note: ONLINE_NOTE.to_string() }
+    Row { label, value, badge: Badge::Online, note: tr!("aircraft-online-source") }
 }
 
 fn airport(a: &sdroxide_aircraft_online::Airport) -> String {
@@ -444,7 +437,7 @@ pub(in crate::app) fn rows(card: &AircraftCard, state: &OnlineState, now: i64) -
             label: "Online",
             value: "…".to_string(),
             badge: Badge::Missing,
-            note: "asking the station".to_string(),
+            note: tr!("aircraft-asking-station"),
         }),
         OnlineState::Unavailable(r) => {
             if let Some(note) = r.note() {
@@ -452,7 +445,7 @@ pub(in crate::app) fn rows(card: &AircraftCard, state: &OnlineState, now: i64) -
                     label: "Online",
                     value: "—".to_string(),
                     badge: Badge::Missing,
-                    note: note.to_string(),
+                    note,
                 });
             }
         }
@@ -471,12 +464,12 @@ pub(in crate::app) enum Provenance {
 }
 
 impl Provenance {
-    pub(in crate::app) fn label(self) -> &'static str {
+    pub(in crate::app) fn label(self) -> String {
         match self {
-            Provenance::Radio => "radio",
-            Provenance::RadioOnline => "radio + online",
-            Provenance::Online => "online",
-            Provenance::Nothing => "",
+            Provenance::Radio => tr!("aircraft-provenance-radio"),
+            Provenance::RadioOnline => tr!("aircraft-provenance-radio-online"),
+            Provenance::Online => tr!("aircraft-provenance-online"),
+            Provenance::Nothing => String::new(),
         }
     }
 }
@@ -549,7 +542,7 @@ pub(in crate::app) fn photo_view(state: &OnlineState, thumb: ThumbStatus) -> Opt
     Some(PhotoView {
         thumb_url: thumb_url.clone(),
         show_image: thumb != ThumbStatus::Failed && thumb_fetchable(thumb_url),
-        credit: format!("Photo: {photographer} / Planespotters"),
+        credit: tr!("aircraft-photo-credit", photographer = photographer),
         page_url: page_ok(page_url).then(|| page_url.clone()),
     })
 }

@@ -6,6 +6,7 @@
 //! and a free-text query, tune a row, or open a reception with the station
 //! filled in.
 
+use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use sdroxide_types::{BroadcastStation, Command, RxId, ScheduleSource, Vfo, broadcast};
 
@@ -36,13 +37,18 @@ const SOURCE_FILTERS: &[(ScheduleSource, &str)] = &[
 /// schedules are loaded would be the control quietly lying about its state.
 fn source_label(source: Option<ScheduleSource>) -> String {
     match source {
-        None => "all of them".to_string(),
+        None => tr!("schedule-all-of-them"),
         Some(s) => SOURCE_FILTERS
             .iter()
             .find(|(x, _)| *x == s)
-            .map(|(_, n)| (*n).to_string())
+            .map(|(x, n)| source_name(*x, n))
             .unwrap_or_else(|| format!("{s:?}")),
     }
+}
+
+/// A source's name as drawn: the schedules are proper names, but "mine" is a word.
+fn source_name(source: ScheduleSource, name: &str) -> String {
+    if source == ScheduleSource::User { tr!("schedule-source-mine") } else { name.to_string() }
 }
 
 /// The metre bands offered in the band filter. Empty = any.
@@ -133,7 +139,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "schedule",
-            "PROGRAMS",
+            &tr!("schedule-title"),
             [SCHEDULE_WINDOW_W, 560.0],
             self.schedule.show,
             |me, ui| me.schedule_body(ui, &mut tune, &mut log, &mut fav_toggle, &mut all_toggle),
@@ -235,8 +241,8 @@ impl SdroxideApp {
         let count = rows.len();
 
         ui.horizontal_wrapped(|ui| {
-            ui.label("At");
-            if crate::chrome::chip(ui, self.schedule.use_now, "NOW").clicked() {
+            ui.label(tr!("schedule-at"));
+            if crate::chrome::chip(ui, self.schedule.use_now, tr!("schedule-now-chip")).clicked() {
                 self.schedule.use_now = true;
             }
             let mut hh = self.schedule.hhmm as i32;
@@ -250,38 +256,38 @@ impl SdroxideApp {
             if r.changed() {
                 self.schedule.hhmm = hh.clamp(0, 2359) as u16;
             }
-            if ui.button("set time").clicked() {
+            if ui.button(tr!("schedule-set-time")).clicked() {
                 self.schedule.use_now = false;
             }
             ui.separator();
-            ui.label("Find");
+            ui.label(tr!("signalid-find"));
             crate::chrome::field(
                 ui,
                 egui::TextEdit::singleline(&mut self.schedule.query)
                     .desired_width(150.0)
-                    .hint_text("BBC, 6185, 15.4 MHz…"),
+                    .hint_text(tr!("schedule-find-hint")),
             );
-            ui.label("Language");
+            ui.label(tr!("settings-ui-language"));
             crate::chrome::field(
                 ui,
                 egui::TextEdit::singleline(&mut self.schedule.lang).desired_width(90.0),
             );
-            ui.label("Target");
+            ui.label(tr!("schedule-target"));
             crate::chrome::field(
                 ui,
                 egui::TextEdit::singleline(&mut self.schedule.target).desired_width(90.0),
             );
-            ui.label("Band");
+            ui.label(tr!("settings-relay-band"));
             egui::ComboBox::from_id_salt("sched-band")
                 .width(72.0)
                 .selected_text(if self.schedule.band.is_empty() {
-                    "any".to_string()
+                    tr!("schedule-any")
                 } else {
                     self.schedule.band.clone()
                 })
                 .show_ui(ui, |ui| {
                     for b in BAND_FILTERS {
-                        let label = if b.is_empty() { "any" } else { b };
+                        let label = if b.is_empty() { tr!("schedule-any") } else { b.to_string() };
                         ui.selectable_value(&mut self.schedule.band, b.to_string(), label);
                     }
                 });
@@ -289,43 +295,35 @@ impl SdroxideApp {
             // the window's edge and a third combobox put "Aoki" half off it. The
             // house rule is that a new control is priced before it is added, and
             // this one was not.
-            ui.label("Source");
+            ui.label(tr!("schedule-source"));
             egui::ComboBox::from_id_salt("sched-source")
                 .width(96.0)
                 .selected_text(source_label(self.schedule.source))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.schedule.source, None, "all of them")
-                        .on_hover_text(
-                            "Every downloaded schedule in the one store. A station listed \
-                         by two of them appears twice, which is the detail this window \
-                         is for — the panadapter shows one name.",
-                        );
+                    ui.selectable_value(&mut self.schedule.source, None, tr!("schedule-all-of-them"))
+                        .on_hover_text(tr!("schedule-all-hint"));
                     for (src, what) in SOURCE_FILTERS {
-                        ui.selectable_value(&mut self.schedule.source, Some(*src), *what);
+                        ui.selectable_value(
+                            &mut self.schedule.source,
+                            Some(*src),
+                            source_name(*src, what),
+                        );
                     }
                 });
-            if crate::chrome::chip(ui, self.schedule.favourites_only, "★ FAVS")
-                .on_hover_text("Only the stations you have starred")
+            if crate::chrome::chip(ui, self.schedule.favourites_only, tr!("schedule-favs"))
+                .on_hover_text(tr!("schedule-favs-hint"))
                 .clicked()
             {
                 self.schedule.favourites_only = !self.schedule.favourites_only;
             }
-            if crate::chrome::chip(ui, self.broadcast_all, "⭐ ALL")
-                .on_hover_text(
-                    "Favourite every schedule station, and show their labels on the \
-                     waterfall while it stays on. Click again to clear all favourites.",
-                )
+            if crate::chrome::chip(ui, self.broadcast_all, tr!("schedule-all-favs"))
+                .on_hover_text(tr!("schedule-all-favs-hint"))
                 .clicked()
             {
                 *all_toggle = Some(!self.broadcast_all);
             }
-            if crate::chrome::chip(ui, self.schedule.solar_time, "SOLAR TIME")
-                .on_hover_text(
-                    "Show each row's local time at the transmitter — the Sun's clock, \
-                     four minutes a degree from its longitude, not a civil time zone. \
-                     It knows nothing of daylight saving or zone borders, so it is \
-                     labelled solar rather than local.",
-                )
+            if crate::chrome::chip(ui, self.schedule.solar_time, tr!("schedule-solar-time"))
+                .on_hover_text(tr!("schedule-solar-time-hint"))
                 .clicked()
             {
                 self.schedule.solar_time = !self.schedule.solar_time;
@@ -336,11 +334,8 @@ impl SdroxideApp {
             // two-row limit at 1400 pt, and a third chip pushed AM — the main
             // SWL mode — onto a third row. SCHEDULE is already in that row and is
             // the same data, so this costs no width and loses nothing.
-            if crate::chrome::chip(ui, self.show_listen, "MAP")
-                .on_hover_text(
-                    "Open LISTEN — this schedule as a map. Pick a station on it, write \
-                     what you heard, and log it. The selected station comes across",
-                )
+            if crate::chrome::chip(ui, self.show_listen, tr!("schedule-map"))
+                .on_hover_text(tr!("schedule-map-hint"))
                 .clicked()
             {
                 self.show_listen = !self.show_listen;
@@ -374,10 +369,11 @@ impl SdroxideApp {
         });
         ui.add_space(2.0);
         ui.label(
-            RichText::new(format!(
-                "{count} on air at {} UTC",
-                if self.schedule.use_now {
-                    "now".to_string()
+            RichText::new(tr!(
+                "schedule-on-air",
+                count = count,
+                time = if self.schedule.use_now {
+                    tr!("schedule-now")
                 } else {
                     hhmm_text(self.schedule.hhmm)
                 }
@@ -427,23 +423,25 @@ impl SdroxideApp {
                                     .monospace()
                                     .color(crate::theme::gray(140)),
                             )
-                            .on_hover_text(format!(
-                                "{local} local solar time at {}, {lon:.1}°",
-                                s.site,
+                            .on_hover_text(tr!(
+                                "schedule-solar-hover",
+                                local = local,
+                                site = s.site,
+                                lon = format!("{lon:.1}")
                             ));
                         }
                         let fav = self.broadcast_favs.iter().any(|n| n == &s.name);
                         if ui
                             .small_button(if fav { "★" } else { "☆" })
-                            .on_hover_text("Favourite this station")
+                            .on_hover_text(tr!("schedule-favourite-hint"))
                             .clicked()
                         {
                             *fav_toggle = Some((s.name.clone(), !fav));
                         }
-                        if ui.small_button("TUNE").clicked() {
+                        if ui.small_button(tr!("sat-tune")).clicked() {
                             *tune = Some(s.clone());
                         }
-                        if ui.small_button("LOG").clicked() {
+                        if ui.small_button(tr!("topbar-chip-log")).clicked() {
                             *log = Some(s.clone());
                         }
                     });
