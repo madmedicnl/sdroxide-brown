@@ -68,6 +68,7 @@ speech-callsign-style-as-is = Zoals geschreven
 settings-ui-display = Weergave
 settings-ui-moved-note = Panadapter-detail, de reactie van het spectrum en de scrollsnelheid van de waterval stel je in met de SPEC-knop op de weergavebalk — het DISP-menu in een smal venster.
 settings-ui-language = Taal
+settings-ui-language-system = Systeem (volg OS)
     .hint = De taal van de interface. De handleiding achter F1 en de spraakmeldingen zijn in het Engels, wat je hier ook kiest.
 settings-ui-layout = Indeling
 settings-ui-theme = Thema

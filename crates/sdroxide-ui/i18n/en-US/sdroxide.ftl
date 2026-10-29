@@ -73,6 +73,7 @@ speech-callsign-style-as-is = As written
 settings-ui-display = Display
 settings-ui-moved-note = Panadapter detail, the spectrum's reaction and the waterfall's scroll speed are set from the SPEC button on the display strip — the DISP menu on a narrow window.
 settings-ui-language = Language
+settings-ui-language-system = System (follow OS)
     .hint = The language of the interface. The manual behind F1 and the voice announcements are in English whatever is picked here.
 settings-ui-layout = Layout
 settings-ui-theme = Theme

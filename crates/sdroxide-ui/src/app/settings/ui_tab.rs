@@ -43,7 +43,44 @@ pub(in crate::app) fn settings_ui_tab(
     report: &mut sdroxide_types::SwlReportPrefs,
     report_pick: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
 ) {
-    use sdroxide_types::{ChromeStyle, FontSize, LayoutMode, UiSettings, UiTheme};
+    use sdroxide_types::{ChromeStyle, FontSize, LayoutMode, UiSettings, UiTheme, UiLanguage};
+    // Language selector at the top.
+    {
+        let langs = crate::i18n::languages();
+        let current = cfg.language;
+        let current_label = current.tag().map(|t| {
+            langs.iter().find(|l| l.tag == t).map(|l| l.name.clone()).unwrap_or_else(|| t.to_string())
+        }).unwrap_or_else(|| tr!("settings-ui-language-system"));
+        ui.label(RichText::new(tr!("settings-ui-language")).size(14.0).strong().color(crate::theme::CYAN()));
+        // Staged selection: the combo box picks a language, Apply commits it.
+        let stage_id = egui::Id::new("ui-language-stage");
+        let mut staged: UiLanguage = ui.data(|d| d.get_temp(stage_id)).unwrap_or(cfg.language);
+        ui.horizontal(|ui| {
+            ComboBox::from_id_salt("ui-language")
+                .selected_text(if staged.is_system() {
+                    tr!("settings-ui-language-system")
+                } else {
+                    staged.tag().and_then(|t| langs.iter().find(|l| l.tag == t).map(|l| l.name.clone())).unwrap_or_else(|| staged.tag().unwrap_or("").to_string())
+                })
+                .show_styled(ui, |ui| {
+                    if ui.selectable_label(staged.is_system(), tr!("settings-ui-language-system")).clicked() {
+                        staged = UiLanguage::SYSTEM;
+                    }
+                    for lang in langs {
+                        if let Some(ul) = UiLanguage::from_tag(&lang.tag) {
+                            if ui.selectable_label(staged == ul, &lang.name).clicked() {
+                                staged = ul;
+                            }
+                        }
+                    }
+                });
+            if ui.button(tr!("settings-apply")).clicked() {
+                cfg.language = staged;
+            }
+        });
+        ui.data_mut(|d| d.insert_temp(stage_id, staged));
+        ui.add_space(6.0);
+    }
     ui.label(RichText::new(tr!("settings-ui-display")).size(14.0).strong().color(crate::theme::CYAN()));
     {
         // **How many broadcast stations a listener's screen may show** (#80).
