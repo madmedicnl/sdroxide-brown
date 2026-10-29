@@ -495,12 +495,14 @@ const HD_RADIO_RETUNE_HZ: f64 = 100_000.0;
 /// How far the dial has to move before the RDS decoder is told to forget the
 /// station.
 ///
-/// Broadcast channels are at least 100 kHz apart, so anything within half of
-/// that is still the same station and a nudge of the tuning should not blank the
-/// display. Anything further is somebody else, and leaving the previous
-/// station's name sitting under the new one's audio is worse than showing
-/// nothing for the second it takes to re-acquire.
-const RDS_RETUNE_HZ: f64 = 50_000.0;
+/// Broadcast channels are 50 kHz apart in places (Italy, parts of Asia) and 100
+/// kHz or more elsewhere, so a move of 20 kHz is a different station on every
+/// grid, while a nudge of the tuning step (a few kHz) is the same one and
+/// should not blank the display. Leaving the previous station's name sitting
+/// under the new one's audio, and its carrier and timing loops fitted to the
+/// wrong subcarrier, is worse than showing nothing for the second it takes to
+/// re-acquire.
+const RDS_RETUNE_HZ: f64 = 20_000.0;
 
 /// How much audio the time-shift window keeps. Two minutes covers a station
 /// identification or a frequency read-out, and costs about 23 MB per receiver
@@ -18142,6 +18144,17 @@ impl Engine {
         let _ = self.event_tx.send(RadioEvent::State(self.state.clone()));
     }
 
+    /// Tells the RDS decoder to forget its station when the dial has moved far
+    /// enough to be another one — see [`RDS_RETUNE_HZ`].
+    fn note_rds_dial(&mut self, dial: f64) {
+        if (dial - self.rds_dial_hz).abs() > RDS_RETUNE_HZ {
+            self.rds_dial_hz = dial;
+            if let Some(c) = self.main.as_mut() {
+                c.reset_rds();
+            }
+        }
+    }
+
     fn update_tuning(&mut self) {
         // Before anything reads the passband below (the audio-mode window is
         // drawn on the sideband), and before the dial reaches the rig.
@@ -18155,6 +18168,10 @@ impl Engine {
             // already receives `tx_freq_hz`.
             self.source.set_rit_hz(self.state.rit.effective_hz());
             let dial = self.state.active_freq_hz();
+            // The rig's own tuning moves the dial too: the decoder forgets the
+            // old station here as it does on the DDC path below, which a CAT
+            // rig never reaches.
+            self.note_rds_dial(dial);
             if self.source.set_center_hz(dial).is_ok() {
                 // The rig took the dial: this is where a refused tune goes back
                 // to. Tracked here rather than in `keep_vfo_in_span`, which a
@@ -18182,12 +18199,7 @@ impl Engine {
         // moves when the front end recentres or a satellite lock tracks Doppler
         // — neither of which is a different station.
         let dial = self.state.rx_freq_hz();
-        if (dial - self.rds_dial_hz).abs() > RDS_RETUNE_HZ {
-            self.rds_dial_hz = dial;
-            if let Some(c) = self.main.as_mut() {
-                c.reset_rds();
-            }
-        }
+        self.note_rds_dial(dial);
         if (dial - self.drm_dial_hz).abs() > DRM_RETUNE_HZ {
             self.drm_dial_hz = dial;
             if let Some(c) = self.main.as_mut() {
