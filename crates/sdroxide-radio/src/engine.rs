@@ -3570,6 +3570,8 @@ struct Engine {
     /// is a rolling window, so a line is what is new since this — see
     /// [`Engine::new_text_lines`].
     text_feed_seen: String,
+    /// How many VDL2 messages have already been sent to the decoded-text feed.
+    vdl2_feed_seen: usize,
     /// The band the last tick saw, so a crossing into another one can be told
     /// from the tuning about inside a band that goes on all session. See
     /// [`Engine::poll_band_change`].
@@ -5093,6 +5095,7 @@ fn engine_thread(
         decode_feed: None,
         decode_udp: String::new(),
         text_feed_seen: String::new(),
+        vdl2_feed_seen: 0,
         rigctld: None,
         rigctld_cfg: RigctldConfig::default(),
         rigctld_err: None,
@@ -7912,6 +7915,32 @@ impl Engine {
                 text: &line,
             });
         }
+    }
+
+    /// VDL2 messages, one per decoded frame. `freq_hz` is the channel's
+    /// absolute frequency, `text` the message summary.
+    fn feed_vdl2(&mut self, st: &sdroxide_types::Vdl2Status) {
+        if self.decode_feed.is_none() {
+            return;
+        }
+        // The log is a rolling window; if it shrank (cleared), start over.
+        if st.messages.len() < self.vdl2_feed_seen {
+            self.vdl2_feed_seen = 0;
+        }
+        for m in &st.messages[self.vdl2_feed_seen..] {
+            self.send_feed(FeedLine {
+                unix: m.at,
+                kind: "decode",
+                mode: "VDL2",
+                dial_hz: m.freq_hz,
+                freq_hz: m.freq_hz,
+                audio_hz: None,
+                snr_db: Some(f64::from(m.snr_db)),
+                dt: None,
+                text: &m.summary(),
+            });
+        }
+        self.vdl2_feed_seen = st.messages.len();
     }
 
     /// Broadcast the station's state as WSJT-X reports it.
@@ -13177,6 +13206,7 @@ impl Engine {
             st.degraded = degraded.clone();
             st.suggest_center_hz = (unavailable.is_some() || degraded.is_some())
                 .then_some(sdroxide_types::VDL2_PLAN_CENTER_HZ);
+            self.feed_vdl2(&st);
             let _ = self.event_tx.send(RadioEvent::Vdl2Status(st));
         }
     }
