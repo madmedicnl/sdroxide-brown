@@ -194,6 +194,20 @@ impl WefaxUi {
         self.dirty = true;
     }
 
+    /// Rotate the chart being held 180° — the in-between fix for a chart that
+    /// arrived upside-down, until the receiver detects the orientation itself.
+    ///
+    /// The buffer is row-major (top row first, each row left to right), so one
+    /// reverse turns both axes at once: the rows end up bottom-to-top and each
+    /// row's pixels right-to-left, which together are the half-turn.
+    pub fn rotate_live(&mut self) {
+        if self.live_w == 0 || self.live_h == 0 {
+            return;
+        }
+        self.live.reverse();
+        self.dirty = true;
+    }
+
     /// Adopt a freshly decoded scan line.
     pub fn push_line(&mut self, image_id: u32, y: u16, gray: &[u8]) {
         if gray.is_empty() || gray.len() > MAX_W {
@@ -573,6 +587,30 @@ mod tests {
         ui.clear_live();
         assert!(!ui.has_live());
         assert_eq!(ui.live_size(), (6, 0));
+    }
+
+    /// The half-turn reverses both axes at once: the rows bottom-to-top and the
+    /// pixels in each right-to-left, which together are the 180° rotation.
+    #[test]
+    fn the_half_turn_reverses_rows_and_pixels_together() {
+        let mut ui = WefaxUi::default();
+        ui.push_line(1, 0, &[10, 20, 30]);
+        ui.push_line(1, 1, &[40, 50, 60]);
+        assert_eq!(ui.live_size(), (3, 2));
+        ui.rotate_live();
+        assert_eq!(ui.live_size(), (3, 2), "turning must not change the shape");
+        assert_eq!(ui.live, &[60, 50, 40, 30, 20, 10]);
+        // A second turn puts it back where it started.
+        ui.rotate_live();
+        assert_eq!(ui.live, &[10, 20, 30, 40, 50, 60]);
+    }
+
+    /// Turning an empty (or widthless) chart is a no-op, not a panic.
+    #[test]
+    fn the_half_turn_of_nothing_is_a_no_op() {
+        let mut ui = WefaxUi::default();
+        ui.rotate_live();
+        assert!(!ui.has_live());
     }
 
     /// A one-pixel PNG, for the gallery tests: `insert_entry` decodes the

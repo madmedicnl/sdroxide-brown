@@ -72,7 +72,7 @@ use std::sync::Arc;
 use num_complex::Complex32;
 use realfft::{RealFftPlanner, RealToComplex};
 
-use crate::fir::{ComplexFir, bandpass_taps};
+use crate::fir::{bandpass_taps, ComplexFir};
 
 /// Subcarrier centre, Hz. Black is 400 Hz below it and white 400 Hz above.
 pub const CENTRE_HZ: f64 = 1900.0;
@@ -290,6 +290,18 @@ enum AudioTone {
     Other,
 }
 
+/// Scale a threshold that must be *reached*: a share of a window's energy.
+///
+/// `2 − k` and not `1 / k`. Dividing is the obvious form and it breaks at the
+/// low end: the reference purity is 0.6, so `−5` would ask for 1.5 — a share no
+/// window can hold — and the detector would stop hearing a start or a stop tone
+/// at all, which silences the mode instead of steadying it. `2 − k` keeps every
+/// fraction inside `(0, 1)`, moves the reference 0.6 to 0.24 at `+5` and 0.96 at
+/// `−5`, is monotonic, and is exactly `1.0` at the reference setting.
+fn fraction_threshold(f: f32, k: f64) -> f32 {
+    f * (2.0 - k) as f32
+}
+
 /// Detector for a start or stop signal sent as a literal audio tone.
 ///
 /// The standard describes both as the subcarrier alternating black/white, which
@@ -308,6 +320,11 @@ struct AudioToneDetect {
     spec: Vec<Complex32>,
     scratch: Vec<Complex32>,
     hz_per_bin: f64,
+    /// Threshold multiplier from the operator's sensitivity setting: the purity
+    /// is scaled by [`fraction_threshold`] and the pitch tolerance multiplied,
+    /// so `+` believes a fainter tone and `−` demands a cleaner one. Exactly
+    /// `1.0` at the reference setting, so the default reading is untouched.
+    scale: f64,
 }
 
 impl AudioToneDetect {
@@ -324,7 +341,18 @@ impl AudioToneDetect {
             spec,
             scratch,
             hz_per_bin: rate / n as f64,
+            scale: 1.0,
         }
+    }
+
+    /// Set the threshold multiplier (see [`WefaxRx::sens_k`]).
+    fn set_scale(&mut self, scale: f64) {
+        self.scale = scale;
+    }
+
+    /// Share of the low audio a line must hold to be a start or stop tone.
+    fn purity_threshold(&self) -> f32 {
+        fraction_threshold(AUDIO_TONE_PURITY, self.scale)
     }
 
     fn reset(&mut self) {
@@ -361,13 +389,13 @@ impl AudioToneDetect {
         // A Hann window spreads a line over a few bins either side.
         let held: f32 =
             power[peak.saturating_sub(3)..=(peak + 3).min(power.len() - 1)].iter().sum();
-        if held < total * AUDIO_TONE_PURITY {
+        if held < total * self.purity_threshold() {
             return Some(AudioTone::Other);
         }
         let hz = peak as f64 * self.hz_per_bin;
-        Some(if (hz - START_AUDIO_HZ).abs() <= START_AUDIO_TOL_HZ {
+        Some(if (hz - START_AUDIO_HZ).abs() <= START_AUDIO_TOL_HZ * self.scale {
             AudioTone::Start
-        } else if (hz - STOP_TONE_HZ).abs() <= STOP_AUDIO_TOL_HZ {
+        } else if (hz - STOP_TONE_HZ).abs() <= STOP_AUDIO_TOL_HZ * self.scale {
             AudioTone::Stop
         } else {
             AudioTone::Other
@@ -458,9 +486,9 @@ impl PhasingStack {
     }
 
     /// Add a line; once `want` are held, where the picture begins in the line
-    /// just added (samples from its start) and where the pulse is, if they make
-    /// a phasing signal.
-    fn push(&mut self, line: &[f32], want: usize) -> Option<(u32, PulseRegion)> {
+    /// just added (samples from its start), where the pulse is, and which
+    /// polarity the signal has, if they make a phasing signal.
+    fn push(&mut self, line: &[f32], want: usize) -> Option<(u32, PulseRegion, bool)> {
         self.lines.push_back(line.to_vec());
         while self.lines.len() > want {
             self.lines.pop_front();
@@ -478,14 +506,19 @@ impl PhasingStack {
         }
         let k = self.lines.len() as f32;
         profile.iter_mut().for_each(|p| *p /= k);
-        let pulse = pulse_region(&profile, false)?;
+        // The pulse is found in whichever polarity the signal arrived; `negative`
+        // reports a transmission received on the wrong sideband, where black and
+        // white are swapped and the pulse reads as a dip.
+        let (pulse, negative) = pulse_region_polarity(&profile, false)?;
         // The vote: the pulse has to be in nearly every line, or the average is
-        // a few bright lines and a chart.
-        let present = self.lines.iter().filter(|l| pulse.stands_out(&l[..n])).count();
+        // a few bright lines and a chart. A negative line's pulse is a dip, so
+        // each line is judged on its own polarity.
+        let present =
+            self.lines.iter().filter(|l| pulse.stands_out_polarity(&l[..n], negative)).count();
         if present + 1 < self.lines.len() {
             return None;
         }
-        Some((pulse.picture_start(n), pulse))
+        Some((pulse.picture_start(n), pulse, negative))
     }
 }
 
@@ -511,6 +544,14 @@ pub struct WefaxRx {
     /// Sample-clock trim in parts per million. Positive stretches the line,
     /// which corrects an image slanting to the left.
     slant_ppm: f64,
+    /// Auto-slant: the pulse position and phasing-line index the drift is
+    /// measured from. A pulse a few lines later that has moved names the slant,
+    /// and the trim is corrected once rather than per line. `None` while the
+    /// phasing signal has not shown a clear pulse yet.
+    slant_anchor: Option<(f64, u32)>,
+    /// Phasing lines seen so far, to index [`Self::slant_anchor`] without
+    /// trusting `phase_samples` (the line length changes as the trim does).
+    phasing_lines: u32,
 
     phase: Phase,
     /// Demodulated brightness of the line being built, one entry per input
@@ -595,6 +636,13 @@ pub struct WefaxRx {
     lead_skipped: u32,
     /// No page is begun by phasing alone before this sample: see [`IDLE_HOLD_S`].
     idle_hold_until: u64,
+    /// The operator's receive sensitivity, `-5..=+5`. See [`WefaxRx::sens_k`].
+    sensitivity: i8,
+    /// Whether the transmission in progress arrived negative — black and white
+    /// swapped, as a receiver on the wrong sideband hears it. Detected from the
+    /// phasing signal (a negative one reads white with a black pulse) and used
+    /// to invert the emitted pixels so the chart prints the right way round.
+    negative: bool,
 }
 
 /// How long a tone-detector window is, in seconds. Long enough that a chart's
@@ -702,6 +750,16 @@ const FLAT_MEAN: f32 = 0.45;
 const BLACK_RANGE_HZ: (f64, f64) = (1300.0, 1700.0);
 const WHITE_RANGE_HZ: (f64, f64) = (2100.0, 2500.0);
 const SPAN_RANGE_HZ: (f64, f64) = (600.0, 1000.0);
+
+/// A calibration window widened — or narrowed — about its own centre by `k`.
+///
+/// At `k = 1.0` the arithmetic is exact, so each window is the constant itself:
+/// black, white and the span are a centre ±200 Hz. See [`WefaxRx::sens_k`].
+fn cal_range(range: (f64, f64), k: f64) -> (f64, f64) {
+    let mid = 0.5 * (range.0 + range.1);
+    let half = 0.5 * (range.1 - range.0) * k;
+    (mid - half, mid + half)
+}
 /// Give up looking for the phasing pulse after this long and start the picture
 /// anyway — a misaligned chart beats no chart.
 const PHASE_TIMEOUT_S: f64 = 35.0;
@@ -727,6 +785,15 @@ const PHASING_SIGNAL_S: f64 = 30.0;
 /// length rejects it. That is [`phasing_skew_strict`]'s job; this only keeps a
 /// passing shape from cutting the page on a line or two of it.
 const REPHASE_LINES: u32 = 8;
+/// Phasing lines the auto-slant measures the drift over. Twenty is ten seconds
+/// at 120 LPM, well inside the thirty-second phasing signal, and long enough
+/// that a few parts-per-million of line-clock error move the pulse several
+/// samples — which is what makes the slant measurable at all.
+const SLANT_PROBE_LINES: u32 = 20;
+/// The smallest drift the auto-slant will act on, in parts per million. Below
+/// this the picture's own edge-wander swamps the measurement, and "correcting"
+/// it would only add a wobble the operator never asked for.
+const SLANT_MIN_PPM: f64 = 25.0;
 /// How far two phasing lines' pulses may sit apart, as a fraction of a line,
 /// and still be read as the same phasing signal. The line clock drifts by parts
 /// per million between lines, so a real signal's pulse barely moves; what this
@@ -757,6 +824,8 @@ impl WefaxRx {
             auto_start: true,
             auto_stop: true,
             slant_ppm: 0.0,
+            slant_anchor: None,
+            phasing_lines: 0,
             phase: Phase::Idle,
             line_buf: Vec::new(),
             line_start: 0.0,
@@ -794,6 +863,8 @@ impl WefaxRx {
             lead_phasing: None,
             lead_skipped: 0,
             idle_hold_until: 0,
+            sensitivity: 0,
+            negative: false,
         }
     }
 
@@ -838,6 +909,60 @@ impl WefaxRx {
 
     pub fn slant_ppm(&self) -> f32 {
         self.slant_ppm as f32
+    }
+
+    /// The operator's receive sensitivity, `-5..=+5`; see [`WefaxRx::sens_k`].
+    pub fn sensitivity(&self) -> i8 {
+        self.sensitivity
+    }
+
+    /// Set the receive sensitivity, `-5..=+5`, clamped.
+    ///
+    /// A fax is frequency modulated, so signal strength does not change the
+    /// greys — this moves the decoder's *thresholds* instead. See
+    /// [`WefaxRx::sens_k`] for what is scaled and what deliberately is not.
+    pub fn set_sensitivity(&mut self, sensitivity: i8) {
+        self.sensitivity = sensitivity.clamp(-5, 5);
+        let k = self.sens_k();
+        self.audio_tone.set_scale(k);
+    }
+
+    /// Threshold multiplier from the sensitivity setting: `1 + 0.12·s`, so
+    /// `0.4` at `-5` and `1.6` at `+5`.
+    ///
+    /// `+` is more sensitive: a threshold said to *accept* something is widened
+    /// (the tone pitch tolerance, the audio start/stop window, the phasing
+    /// agreement and the black/white calibration window are all multiplied),
+    /// and one that must be *reached* is lowered (the audio tone's purity, the
+    /// subcarrier share and the periodic share, through
+    /// [`fraction_threshold`]). `−` does the opposite: it waits for a cleaner
+    /// signal.
+    ///
+    /// Exactly `1.0` at the reference setting, and multiplying by it is exact,
+    /// so `0` reproduces the decoder's own behaviour bit for bit.
+    fn sens_k(&self) -> f64 {
+        1.0 + 0.12 * f64::from(self.sensitivity)
+    }
+
+    /// How far a measured crossing rate may sit from the nominal one.
+    fn tone_tol(&self) -> f64 {
+        TONE_TOL * self.sens_k()
+    }
+
+    /// How far from its nominal pitch a phasing pulse may repeat, as a fraction.
+    fn rephase_tol(&self) -> f64 {
+        REPHASE_TOL * self.sens_k()
+    }
+
+    /// Share of a window's audio energy that must lie in the subcarrier's band.
+    fn subcarrier_share(&self) -> f32 {
+        fraction_threshold(SUBCARRIER_SHARE, self.sens_k())
+    }
+
+    /// Share of a window's brightness variation that must sit at the tone's own
+    /// pitch.
+    fn periodic_share(&self) -> f32 {
+        fraction_threshold(PERIODIC_SHARE, self.sens_k())
     }
 
     /// Smoothed input level, for the panel's tuning meter.
@@ -913,6 +1038,8 @@ impl WefaxRx {
         self.line_start = self.sample_idx as f64;
         self.line_no = 0;
         self.phase_samples = 0;
+        self.slant_anchor = None;
+        self.phasing_lines = 0;
         self.auto_begun = auto;
         self.phasing_stack.reset();
         self.lock_lines = LOCK_LINES;
@@ -921,6 +1048,7 @@ impl WefaxRx {
         self.lead_skipped = 0;
         self.reset_idle();
         self.rephase_lines = 0;
+        self.negative = false;
         self.had_content = false;
         self.blank_run = 0;
         self.blank_gap = 0;
@@ -982,6 +1110,17 @@ impl WefaxRx {
         brightness_between(hz, self.black_hz, self.white_hz)
     }
 
+    /// The finished pixel row for a scan line: the resampled brightness,
+    /// inverted when the transmission arrived negative (wrong sideband), so a
+    /// chart is always emitted with black where the station printed black.
+    fn emit_line(&self, line: &[f32]) -> Vec<u8> {
+        let mut gray = resample_line(line, self.ioc.width() as usize);
+        if self.negative {
+            gray.iter_mut().for_each(|g| *g = 255 - *g);
+        }
+        gray
+    }
+
     /// Re-measure black and white from a line that is known to be phasing.
     ///
     /// A receiver a little off tune, or Doppler on the path, moves the whole
@@ -1009,7 +1148,13 @@ impl WefaxRx {
         }
         let (black, white) = (black / f64::from(blacks), white / f64::from(whites));
         let span = white - black;
-        let ok = |v: f64, r: (f64, f64)| v >= r.0 && v <= r.1;
+        // The windows move with the sensitivity setting; at the reference they
+        // are the constants themselves.
+        let k = self.sens_k();
+        let ok = |v: f64, r: (f64, f64)| {
+            let (lo, hi) = cal_range(r, k);
+            v >= lo && v <= hi
+        };
         if ok(black, BLACK_RANGE_HZ) && ok(white, WHITE_RANGE_HZ) && ok(span, SPAN_RANGE_HZ) {
             self.black_hz = black;
             self.white_hz = white;
@@ -1136,11 +1281,12 @@ impl WefaxRx {
         let hz = std::mem::take(&mut self.idle_hz);
         let line_s = spl / self.rate;
         let need = ((IDLE_PHASING_S / line_s).ceil() as usize).max(LOCK_LINES as usize);
-        let Some((skew, pulse)) = self.phasing_stack.push(&line, need) else {
+        let Some((skew, pulse, negative)) = self.phasing_stack.push(&line, need) else {
             return;
         };
         self.calibrate(&line, &hz);
         self.arm(self.ioc, true);
+        self.negative = negative;
         self.phase = Phase::Image;
         self.line_start = self.sample_idx as f64 + f64::from(skew);
         self.lead_phasing = Some(pulse);
@@ -1159,18 +1305,19 @@ impl WefaxRx {
     fn start_tone(&mut self, level: f32, required: u32) -> Option<Ioc> {
         let window = (self.rate * TONE_WINDOW_S) as u32;
         let rate = self.start_det.push(level, window)?;
-        let in_band = self.band_sub >= self.band_raw * SUBCARRIER_SHARE;
+        let in_band = self.band_sub >= self.band_raw * self.subcarrier_share();
         self.band_raw = 0.0;
         self.band_sub = 0.0;
         // Crossings per window → crossings per second → the alternation rate,
         // which is half the crossing rate.
         let alt_hz = rate / TONE_WINDOW_S / 2.0;
+        let (tone_tol, periodic_share) = (self.tone_tol(), self.periodic_share());
         let candidate = Ioc::ALL.into_iter().find(|i| {
             let want = i.start_tone_hz();
-            in_band && self.start_det.swing && (alt_hz - want).abs() <= want * TONE_TOL
+            in_band && self.start_det.swing && (alt_hz - want).abs() <= want * tone_tol
         });
         let hit = candidate.filter(|i| {
-            self.level_spec.share(self.start_det.window(), i.start_tone_hz()) >= PERIODIC_SHARE
+            self.level_spec.share(self.start_det.window(), i.start_tone_hz()) >= periodic_share
         });
         match hit {
             Some(ioc) if ioc == self.start_ioc => {
@@ -1220,10 +1367,42 @@ impl WefaxRx {
     /// signal is still running. [`PHASING_SIGNAL_S`] is the standard's own
     /// number, and it costs nothing real: the next chart's phasing is minutes
     /// away, never seconds.
+    /// Measure the line clock's drift over the phasing signal and correct the
+    /// slant once, from the pulse's movement across [`SLANT_PROBE_LINES`] lines.
+    ///
+    /// The pulse sits at the same place in every phasing line; if the line clock
+    /// is a little long or short it walks a few samples per line, and that walk
+    /// *is* the slant. Measured rather than per line so a weak line's edge-wander
+    /// does not turn into a wobble, and only when the drift is large enough to
+    /// mean something ([`SLANT_MIN_PPM`]).
+    fn probe_slant(&mut self, line: &[f32]) {
+        let Some(pos) = self.strict_skew(line) else { return };
+        self.phasing_lines += 1;
+        let pos = pos as f64;
+        let i = self.phasing_lines;
+        let Some((p0, i0)) = self.slant_anchor else {
+            self.slant_anchor = Some((pos, i));
+            return;
+        };
+        let di = (i - i0) as f64;
+        if di < f64::from(SLANT_PROBE_LINES) {
+            return;
+        }
+        // Pulse movement in samples per line, as a fraction of the nominal
+        // line: a clock that is too long walks the pulse backwards, and that is
+        // exactly the amount the trim must come down by.
+        let nominal = self.rate * self.lpm.line_secs();
+        let ppm = (pos - p0) / di / nominal * 1e6;
+        if ppm.abs() >= SLANT_MIN_PPM {
+            self.slant_ppm += ppm;
+        }
+        self.slant_anchor = None;
+    }
+
     fn note_phasing_line(&mut self, line: &[f32]) -> bool {
         // The strict test: mid-picture, a line that is merely "mostly black
         // with a white patch" is a chart's own graphic, not a phasing pulse.
-        let Some(skew) = phasing_skew_strict(line) else {
+        let Some(skew) = self.strict_skew(line) else {
             self.rephase_lines = 0;
             return false;
         };
@@ -1231,11 +1410,29 @@ impl WefaxRx {
         // Circular: a pulse sitting on the line boundary reads as ≈0 on one
         // line and ≈n on the next, and that is the same place.
         let d = (skew - self.rephase_skew).abs();
-        let moved = d.min(n - d) > n * REPHASE_TOL;
+        let moved = d.min(n - d) > n * self.rephase_tol();
         self.rephase_lines =
             if self.rephase_lines > 0 && moved { 1 } else { self.rephase_lines + 1 };
         self.rephase_skew = skew;
         self.rephase_lines >= REPHASE_LINES
+    }
+
+    /// The strict phasing test on a line read the right way up.
+    ///
+    /// A negative page's phasing signal is a mirror image — white where the
+    /// standard puts black and a black pulse where it puts the white one — so
+    /// its lines are judged flipped. The polarity is the page's own, settled at
+    /// lock time, never re-derived from a line's mean: re-deriving it here would
+    /// let a normal chart's bright feature be mistaken for a negative phasing
+    /// pulse, which is exactly the false positive [`phasing_skew_strict`]'s mean
+    /// threshold exists to stop.
+    fn strict_skew(&self, line: &[f32]) -> Option<u32> {
+        if self.negative {
+            let flipped: Vec<f32> = line.iter().map(|l| 1.0 - l).collect();
+            phasing_skew_strict(&flipped)
+        } else {
+            phasing_skew_strict(line)
+        }
     }
 
     /// Track a white carrier after the chart. Returns true once an automatic
@@ -1277,13 +1474,14 @@ impl WefaxRx {
                 // Same two conditions as a start signal: it has to be the
                 // subcarrier swinging, not a plain audio tone or a steady
                 // carrier that the discriminator reads as noise.
-                let in_band = self.band_sub >= self.band_raw * SUBCARRIER_SHARE;
+                let in_band = self.band_sub >= self.band_raw * self.subcarrier_share();
                 self.band_raw = 0.0;
                 self.band_sub = 0.0;
                 if in_band
                     && self.stop_det.swing
-                    && (alt_hz - STOP_TONE_HZ).abs() <= STOP_TONE_HZ * TONE_TOL
-                    && self.level_spec.share(self.stop_det.window(), STOP_TONE_HZ) >= PERIODIC_SHARE
+                    && (alt_hz - STOP_TONE_HZ).abs() <= STOP_TONE_HZ * self.tone_tol()
+                    && self.level_spec.share(self.stop_det.window(), STOP_TONE_HZ)
+                        >= self.periodic_share()
                 {
                     self.stop_run += 1;
                     self.stop_miss = 0;
@@ -1319,11 +1517,20 @@ impl WefaxRx {
         match self.phase {
             Phase::Phasing => {
                 self.phase_samples += line.len() as u64;
-                if let Some((mean, _)) = self.phasing_stack.push(&line, self.lock_lines as usize) {
+                self.probe_slant(&line);
+                if let Some((mean, _, negative)) =
+                    self.phasing_stack.push(&line, self.lock_lines as usize)
+                {
                     // The pulse sits at the *end* of a phasing line, so the
                     // picture starts just after it.
                     self.calibrate(&line, &line_hz);
+                    self.negative = negative;
                     self.line_start += f64::from(mean);
+                    // The line clock has just been re-aligned to the pulse, so
+                    // the pulse position's baseline moved: the auto-slant's
+                    // anchor has to restart from here.
+                    self.slant_anchor = None;
+                    self.phasing_lines = 0;
                     self.phasing_stack.reset();
                     self.phase = Phase::Image;
                     if self.start_pending {
@@ -1349,6 +1556,10 @@ impl WefaxRx {
                 }
             }
             Phase::Image => {
+                // The phasing signal continues past the lock; the auto-slant
+                // keeps measuring its drift on the lines that still carry the
+                // pulse (and a chart line simply fails the strict pulse test).
+                self.probe_slant(&line);
                 // The other half of the same rule: the start signal is five
                 // seconds long and a fade can swallow it whole, while the
                 // phasing signal that follows it runs for thirty. A run of
@@ -1382,21 +1593,30 @@ impl WefaxRx {
                     // to show a pulse of its own.
                     let room =
                         (PHASING_SIGNAL_S * 1.5 * self.rate / self.samples_per_line()) as u32;
-                    let mean = line.iter().sum::<f32>() / line.len().max(1) as f32;
-                    if self.lead_skipped < room && mean <= 0.4 && pulse.stands_out_by(&line, 0.12) {
+                    // A negative page's lines read the opposite way round, so
+                    // the skip is judged on them flipped.
+                    let (mean, pulse_here) = if self.negative {
+                        let flipped: Vec<f32> = line.iter().map(|l| 1.0 - l).collect();
+                        let m = flipped.iter().sum::<f32>() / flipped.len().max(1) as f32;
+                        (m, pulse.stands_out_by(&flipped, 0.12))
+                    } else {
+                        let m = line.iter().sum::<f32>() / line.len().max(1) as f32;
+                        (m, pulse.stands_out_by(&line, 0.12))
+                    };
+                    if self.lead_skipped < room && mean <= 0.4 && pulse_here {
                         self.lead_skipped += 1;
                         return;
                     }
                     self.lead_phasing = None;
                 }
                 if self.auto_begun && self.note_blank_line(&line) {
-                    let gray = resample_line(&line, self.ioc.width() as usize);
+                    let gray = self.emit_line(&line);
                     out.push(WefaxEvent::Line { y: self.line_no, gray });
                     self.line_no = self.line_no.saturating_add(1);
                     self.finish(false, out);
                     return;
                 }
-                let gray = resample_line(&line, self.ioc.width() as usize);
+                let gray = self.emit_line(&line);
                 out.push(WefaxEvent::Line { y: self.line_no, gray });
                 self.line_no = self.line_no.saturating_add(1);
                 if self.line_no >= MAX_LINES {
@@ -1528,6 +1748,18 @@ impl PulseRegion {
             (inside / self.width as f32, (total - inside) / (n - self.width) as f32);
         inside - outside >= margin
     }
+
+    /// Whether `line` carries the pulse in the given polarity. A negative line
+    /// (received on the wrong sideband) shows the pulse as a dip rather than a
+    /// rise, so it is judged on its flip.
+    fn stands_out_polarity(&self, line: &[f32], negative: bool) -> bool {
+        if negative {
+            let flipped: Vec<f32> = line.iter().map(|l| 1.0 - l).collect();
+            self.stands_out(&flipped)
+        } else {
+            self.stands_out(line)
+        }
+    }
 }
 
 /// Find the white pulse of a phasing line, or `None` if it is not one.
@@ -1590,6 +1822,32 @@ fn pulse_region(line: &[f32], strict: bool) -> Option<PulseRegion> {
     Some(PulseRegion { start: (best.1 + n - before) % n, width })
 }
 
+/// Find the phasing pulse of a line whichever polarity it arrived in, and say
+/// which one it was.
+///
+/// A phasing line is black with a white pulse. Received on the wrong sideband
+/// the frequency axis inverts, so the whole line reads negative — white with a
+/// black pulse, a dip instead of a rise. The pulse's *position* is the same
+/// either way, so a mostly-bright line is read flipped and the pulse found in
+/// the same place; the returned flag reports that flip. Used only while locking
+/// (and while idle), where a transmission's polarity is not yet known — once a
+/// page is under way [`WefaxRx::strict_skew`] judges lines on the polarity
+/// already settled on, so a normal chart's bright feature cannot be mistaken
+/// for a negative phasing pulse.
+fn pulse_region_polarity(line: &[f32], strict: bool) -> Option<(PulseRegion, bool)> {
+    if line.len() < 32 {
+        return None;
+    }
+    let mean = line.iter().sum::<f32>() / line.len() as f32;
+    let negative = mean > 0.5;
+    if negative {
+        let flipped: Vec<f32> = line.iter().map(|l| 1.0 - l).collect();
+        pulse_region(&flipped, strict).map(|p| (p, true))
+    } else {
+        pulse_region(line, strict).map(|p| (p, false))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1617,6 +1875,25 @@ mod tests {
             .collect()
     }
 
+    /// The mirror of [`modulate`]: the subcarrier reflected about its centre,
+    /// so black comes out at 2300 Hz and white at 1500 Hz. That is what a
+    /// receiver on the wrong sideband hears — black reads white and white black
+    /// — and it is the *negative* the auto-orientation corrects.
+    fn modulate_negative(levels: &[f32]) -> Vec<f32> {
+        let mut ph = 0.0f64;
+        levels
+            .iter()
+            .map(|&l| {
+                let hz = WHITE_HZ - (WHITE_HZ - BLACK_HZ) * l as f64;
+                ph += TAU * hz / RATE;
+                if ph > TAU {
+                    ph -= TAU;
+                }
+                (ph.sin() * 0.5) as f32
+            })
+            .collect()
+    }
+
     /// `secs` of the subcarrier alternating black/white at `alt_hz` — the shape
     /// of the start and stop signals.
     fn tone(alt_hz: f64, secs: f64) -> Vec<f32> {
@@ -1624,7 +1901,11 @@ mod tests {
         let levels: Vec<f32> = (0..n)
             .map(|i| {
                 let t = i as f64 / RATE;
-                if (t * alt_hz).fract() < 0.5 { 1.0 } else { 0.0 }
+                if (t * alt_hz).fract() < 0.5 {
+                    1.0
+                } else {
+                    0.0
+                }
             })
             .collect();
         modulate(&levels)
@@ -1640,6 +1921,19 @@ mod tests {
             levels.extend(std::iter::repeat_n(1.0f32, pulse));
         }
         modulate(&levels)
+    }
+
+    /// The same phasing lines on the wrong sideband: the black lines and white
+    /// pulse heard inverted, so they read white lines with a black pulse.
+    fn phasing_negative(lpm: Lpm, count: usize) -> Vec<f32> {
+        let per = (RATE * lpm.line_secs()) as usize;
+        let pulse = (per as f64 * 0.05) as usize;
+        let mut levels = Vec::new();
+        for _ in 0..count {
+            levels.extend(std::iter::repeat_n(0.0f32, per - pulse));
+            levels.extend(std::iter::repeat_n(1.0f32, pulse));
+        }
+        modulate_negative(&levels)
     }
 
     /// The same, with the pulse at `frac` of the line.
@@ -1662,6 +1956,21 @@ mod tests {
         modulate(&levels)
     }
 
+    /// Phasing lines cut on a clock that is `slant_ppm` per-mille long: the
+    /// pulse sits at the end of each of *these* lines, so against the nominal
+    /// line clock it walks right by that fraction of a line per line.
+    fn phasing_slanted(lpm: Lpm, count: usize, slant_ppm: f64) -> Vec<f32> {
+        let per = (RATE * lpm.line_secs()) as usize;
+        let slanted = (per as f64 * (1.0 + slant_ppm * 1e-6)).round() as usize;
+        let pulse = (slanted as f64 * 0.05) as usize;
+        let mut levels = Vec::new();
+        for _ in 0..count {
+            levels.extend(std::iter::repeat_n(0.0f32, slanted - pulse));
+            levels.extend(std::iter::repeat_n(1.0f32, pulse));
+        }
+        modulate(&levels)
+    }
+
     /// A picture whose every line is a horizontal ramp black → white, which is
     /// the pattern that makes a misalignment obvious: a correctly phased decode
     /// is monotonic across the row and a wrapped one has a cliff in it.
@@ -1674,6 +1983,18 @@ mod tests {
             }
         }
         modulate(&levels)
+    }
+
+    /// The same ramp picture on the wrong sideband: black and white swapped.
+    fn ramp_picture_negative(lpm: Lpm, lines: usize) -> Vec<f32> {
+        let per = (RATE * lpm.line_secs()) as usize;
+        let mut levels = Vec::new();
+        for _ in 0..lines {
+            for i in 0..per {
+                levels.push(i as f32 / per as f32);
+            }
+        }
+        modulate_negative(&levels)
     }
 
     /// A dark chart: every line mostly black with one broad bright band at
@@ -1717,6 +2038,26 @@ mod tests {
             rx.process(chunk, &mut out);
         }
         out
+    }
+
+    /// The auto-slant measures the pulse's walk over the phasing signal and
+    /// trims the line clock to match, so a chart comes out square without the
+    /// operator reaching for the slant setting.
+    #[test]
+    fn the_auto_slant_trims_the_line_clock_to_the_signal() {
+        // A clock 1000 ppm long walks the pulse right by a per-mille of a line
+        // each line; the receiver must stretch its own clock to follow.
+        for slant in [300.0f64, 1000.0, -400.0] {
+            let mut rx = WefaxRx::new(RATE);
+            rx.start_manual(&mut Vec::new());
+            let _ = drain(&mut rx, &phasing_slanted(Lpm::L120, 40, slant));
+            assert!(
+                (rx.slant_ppm() as f64 - slant).abs() < 80.0,
+                "slant {} ppm was left at {}",
+                slant,
+                rx.slant_ppm()
+            );
+        }
     }
 
     #[test]
@@ -1847,6 +2188,44 @@ mod tests {
             .max()
             .unwrap_or(0);
         assert!(biggest_step < 60, "the row wraps: biggest step {biggest_step}");
+    }
+
+    /// A chart received on the wrong sideband arrives negative — black and white
+    /// swapped — and the receiver must notice from the phasing signal (which
+    /// reads white with a black pulse) and invert the pixels, so the chart comes
+    /// out the right way round. No geometry changes: only the brightness flips.
+    #[test]
+    fn a_negative_signal_is_corrected_to_the_right_polarity() {
+        let lpm = Lpm::L120;
+        let mut rx = WefaxRx::new(RATE);
+        rx.set_lpm(lpm);
+        let mut out = Vec::new();
+        rx.start_manual(&mut out);
+        let mut audio = phasing_negative(lpm, 8);
+        audio.extend(ramp_picture_negative(lpm, 6));
+        let ev = drain(&mut rx, &audio);
+
+        // The inverted pulse still locks the line — the negative is detected, not
+        // merely survived.
+        assert!(
+            ev.iter().any(|e| matches!(e, WefaxEvent::Phased { .. })),
+            "the negative phasing signal was not phased: {ev:?}"
+        );
+        let lines: Vec<&Vec<u8>> = ev
+            .iter()
+            .filter_map(|e| match e {
+                WefaxEvent::Line { gray, .. } => Some(gray),
+                _ => None,
+            })
+            .collect();
+        assert!(lines.len() >= 3, "only {} lines", lines.len());
+
+        // The ramp must rise black → white, the way the station sent it. Left
+        // uncorrected a negative signal falls white → black.
+        let row = lines[lines.len() - 2];
+        let w = row.len();
+        let (a, b) = (row[w / 4] as i32, row[3 * w / 4] as i32);
+        assert!(b - a > 80, "the negative ramp was not inverted: {a} → {b}");
     }
 
     /// Issue #276: the next chart begins and the stop tone never arrives.
@@ -2009,7 +2388,11 @@ mod tests {
         let levels: Vec<f32> = (0..n)
             .map(|i| {
                 let t = i as f64 / RATE;
-                if fade && t % 10.0 > 8.5 { 0.0 } else { 1.0 }
+                if fade && t % 10.0 > 8.5 {
+                    0.0
+                } else {
+                    1.0
+                }
             })
             .collect();
         modulate(&levels)
@@ -2382,6 +2765,30 @@ mod tests {
         assert_eq!(phasing_skew(&[0.0; 8]), None);
     }
 
+    /// The pulse is found in either polarity, in the same place, and the flag
+    /// says which way the line arrived.
+    #[test]
+    fn a_negative_phasing_line_is_found_and_flagged() {
+        let n = 6000;
+        let pulse = n / 20;
+        let mut normal = vec![0.0f32; n];
+        for v in normal.iter_mut().skip(n - pulse) {
+            *v = 1.0;
+        }
+        let mut negative = vec![1.0f32; n];
+        for v in negative.iter_mut().skip(n - pulse) {
+            *v = 0.0;
+        }
+
+        let (p, flag) = pulse_region_polarity(&normal, false).expect("a normal pulse");
+        assert!(!flag, "a normal line was flagged negative");
+        assert_eq!(p.picture_start(n), 0, "the pulse is at the end of the line");
+
+        let (q, flag) = pulse_region_polarity(&negative, false).expect("a negative pulse");
+        assert!(flag, "a negative line was not flagged");
+        assert_eq!(q, p, "the pulse is in the same place either way");
+    }
+
     #[test]
     fn a_line_is_averaged_down_to_the_requested_width() {
         // Two samples per pixel, so the box average is the mean of each pair.
@@ -2558,6 +2965,66 @@ mod tests {
         rx.start_manual(&mut ev);
         assert!(rx.receiving(), "START from idle did nothing: {:?}", story(&ev));
     }
+
+    /// Auto is the decoder that shipped: exactly `1.0`, and every threshold the
+    /// constant beside it. `+` widens, `−` narrows, and the ends are the ends of
+    /// the slider.
+    #[test]
+    fn the_reference_sensitivity_is_the_decoder_as_it_was() {
+        let mut rx = WefaxRx::new(RATE);
+        assert_eq!(rx.sensitivity(), 0, "a new decoder did not start at the reference");
+        assert_eq!(rx.sens_k(), 1.0, "the reference multiplier is not exactly one");
+        assert_eq!(rx.tone_tol(), TONE_TOL, "the reference crossing tolerance moved");
+        assert_eq!(rx.rephase_tol(), REPHASE_TOL, "the reference phasing tolerance moved");
+
+        rx.set_sensitivity(5);
+        assert!(rx.tone_tol() > TONE_TOL, "+ did not widen the crossing tolerance");
+        assert!(rx.rephase_tol() > REPHASE_TOL, "+ did not widen the phasing tolerance");
+        let wide = cal_range(BLACK_RANGE_HZ, rx.sens_k());
+
+        rx.set_sensitivity(-5);
+        assert!(rx.tone_tol() < TONE_TOL, "− did not narrow the crossing tolerance");
+        assert!(rx.rephase_tol() < REPHASE_TOL, "− did not narrow the phasing tolerance");
+        let narrow = cal_range(BLACK_RANGE_HZ, rx.sens_k());
+        assert!(wide.1 - wide.0 > BLACK_RANGE_HZ.1 - BLACK_RANGE_HZ.0, "{wide:?}");
+        assert!(narrow.1 - narrow.0 < BLACK_RANGE_HZ.1 - BLACK_RANGE_HZ.0, "{narrow:?}");
+
+        // Off the end of the slider is off the end, not wherever the value landed.
+        rx.set_sensitivity(9);
+        assert_eq!(rx.sensitivity(), 5);
+        rx.set_sensitivity(-9);
+        assert_eq!(rx.sensitivity(), -5);
+    }
+
+    /// The three thresholds that are *shares* stay shares at every setting.
+    ///
+    /// They are scaled as `f · (2 − k)` and not `f / k`: at `−5` dividing asks
+    /// for 1.5 of a window's energy in one line, which no signal can hold, so the
+    /// detector would hear no start or stop tone at all — not a strict decoder, a
+    /// deaf one. `2 − k` keeps every fraction inside `(0, 1)` and is monotonic.
+    #[test]
+    fn a_fraction_threshold_stays_inside_the_share_it_measures() {
+        let mut rx = WefaxRx::new(RATE);
+        for s in -5..=5i8 {
+            rx.set_sensitivity(s);
+            for f in [rx.audio_tone.purity_threshold(), rx.subcarrier_share(), rx.periodic_share()]
+            {
+                assert!(f > 0.0 && f < 1.0, "at {s:+}: {f:.2} is not a share of anything");
+            }
+        }
+
+        rx.set_sensitivity(0);
+        assert_eq!(rx.audio_tone.purity_threshold(), AUDIO_TONE_PURITY);
+        assert_eq!(rx.subcarrier_share(), SUBCARRIER_SHARE);
+        assert_eq!(rx.periodic_share(), PERIODIC_SHARE);
+
+        // `+` is the more sensitive direction, so the share it must reach falls.
+        rx.set_sensitivity(-5);
+        let strict = rx.audio_tone.purity_threshold();
+        rx.set_sensitivity(5);
+        let loose = rx.audio_tone.purity_threshold();
+        assert!(loose < AUDIO_TONE_PURITY && AUDIO_TONE_PURITY < strict, "{loose} < {strict}");
+    }
 }
 
 /// Start and stop signals that arrive as plain audio tones.
@@ -2730,6 +3197,39 @@ mod audio_tone_tests {
         let ev = feed(&mut rx, &a);
         assert!(ev.is_empty(), "{ev:?}");
     }
+
+    /// The last verdict the decoder's own tone detector reaches on a second of
+    /// `hz` at `sensitivity`, asked through `set_sensitivity` so the test drives
+    /// the same path the slider does.
+    fn verdict(hz: f64, sensitivity: i8) -> AudioTone {
+        let mut rx = rx();
+        rx.set_sensitivity(sensitivity);
+        let mut last = AudioTone::Other;
+        for i in 0..RATE as usize {
+            let a = (0.5 * (TAU * hz * i as f64 / RATE).sin()) as f32;
+            if let Some(v) = rx.audio_tone.push(a) {
+                last = v;
+            }
+        }
+        last
+    }
+
+    /// `+` listens to a fainter, mistuned tone and `−` will not.
+    ///
+    /// 210 Hz is the one tone inside the detector's band (`200..520`) that is
+    /// further than the reference 75 Hz from both the 300 Hz start pitch and the
+    /// 450 Hz stop pitch — 225 would be inside the start window and 375 inside
+    /// both — so it is the single tone whose verdict the setting decides.
+    #[test]
+    fn the_sensitivity_setting_widens_the_audio_tone_window() {
+        assert_eq!(verdict(210.0, 0), AudioTone::Other, "210 Hz was a tone at the reference");
+        assert_eq!(
+            verdict(210.0, 5),
+            AudioTone::Start,
+            "+5 did not reach a tone 90 Hz off the start pitch"
+        );
+        assert_eq!(verdict(210.0, -5), AudioTone::Other, "−5 took a tone 90 Hz off");
+    }
 }
 
 /// A carrier on the channel, a signal that has drifted, noise that looks like a
@@ -2831,6 +3331,25 @@ mod carrier_tests {
         // The first row is the ramp, not a black phasing line.
         let mean = l[0].1.iter().map(|&g| f64::from(g)).sum::<f64>() / l[0].1.len() as f64 / 255.0;
         assert!(mean > 0.3, "the page opens on the phasing signal: {mean:.2}");
+    }
+
+    /// The same on the wrong sideband: a page begun by an inverted phasing
+    /// signal alone is detected as negative and the chart comes out the right
+    /// way round.
+    #[test]
+    fn a_negative_phasing_signal_alone_begins_a_corrected_page() {
+        let mut rx = WefaxRx::new(RATE);
+        let mut audio = fm(&phasing(12, 0.95, 0.05, 1.0), WHITE_HZ, BLACK_HZ);
+        audio.extend(fm(&ramp(20), WHITE_HZ, BLACK_HZ));
+        let ev = feed(&mut rx, &audio);
+        assert!(ev.iter().any(|e| matches!(e, WefaxEvent::Start { auto: true, .. })), "{ev:?}");
+        let l = lines(&ev);
+        assert!(l.len() >= 15, "only {} lines", l.len());
+        // The ramp rises black → white; uncorrected it would fall white → black.
+        let row = &l[l.len() / 2].1;
+        let w = row.len();
+        let (lo, hi) = (row[w / 4] as i32, row[3 * w / 4] as i32);
+        assert!(hi - lo > 80, "the negative ramp was not inverted: {lo} → {hi}");
     }
 
     /// A weak signal's pulse is a scatter of blips a fifth of a line wide, not a

@@ -25,6 +25,12 @@ CB station in FT8 like any other. And it is **built for listening** — three
 broadcast schedules in one store, a **LISTEN** window that draws the path to a
 station with the share of it **in darkness**, and a reception log that tracks QSL.
 
+There is also an **antenna calculator** (EXTRAS → ANTENNA): a frequency in,
+cutting lengths and SWR out for the common shapes, a method-of-moments solver
+for the real impedance and gain, a Yagi optimizer, stacking, and an obstacle
+(vegetation / ridge) attenuation model — see the
+[manual](docs/USER_MANUAL.md#224-antenna-calculator).
+
 Same binary, two jobs: a desktop app, or a server you reach from any browser,
 phone, or a headless Raspberry Pi at a remote site.
 

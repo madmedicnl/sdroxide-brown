@@ -58,10 +58,31 @@ pub(in crate::app) struct HoverCard {
     pub title: String,
     pub provenance: Provenance,
     pub lines: Vec<Row>,
+    /// The note most lines shared ("ADS-B, 4s ago"), said once in the header
+    /// and cleared from the lines that carried it. A line whose own note
+    /// differs (an older position, a figure from the history) keeps it.
+    pub common_note: Option<String>,
     pub photo: Option<HoverPhoto>,
     /// One grey line, only when the operator could do something about the
     /// missing online half.
     pub footer: Option<&'static str>,
+}
+
+/// Lift the note that two or more lines share into one, and clear it from
+/// them: the same "ADS-B, 4s ago" down every row said nothing after the first.
+pub(in crate::app) fn lift_common_note(lines: &mut [Row]) -> Option<String> {
+    let mut best: Option<(&str, usize)> = None;
+    for r in lines.iter().filter(|r| !r.note.is_empty()) {
+        let n = lines.iter().filter(|o| o.note == r.note).count();
+        if best.is_none_or(|(_, b)| n > b) {
+            best = Some((&r.note, n));
+        }
+    }
+    let common = best.filter(|&(_, n)| n >= 2)?.0.to_string();
+    for r in lines.iter_mut().filter(|r| r.note == common) {
+        r.note.clear();
+    }
+    Some(common)
 }
 
 /// `s` cut to `max` characters, with an ellipsis where it was cut.
@@ -93,13 +114,13 @@ pub(in crate::app) fn hover_photo(state: &OnlineState, thumb: ThumbStatus) -> Op
 pub(in crate::app) fn footer(state: &OnlineState) -> Option<&'static str> {
     match state {
         OnlineState::Unavailable(Reason::Disabled) => {
-            Some("online indisponible — relay off on the station")
+            Some("online unavailable — relay off on the station")
         }
         OnlineState::Unavailable(Reason::NoStation) => {
-            Some("online indisponible — no station to ask")
+            Some("online unavailable — no station to ask")
         }
         OnlineState::Unavailable(Reason::Unauthorized) => {
-            Some("online indisponible — not signed in")
+            Some("online unavailable — not signed in")
         }
         _ => None,
     }
@@ -147,10 +168,15 @@ pub(in crate::app) fn hover_card(
     if let (Some(h), Some((lat, lon))) = (home, live.lat.zip(live.lon)) {
         let km = sdroxide_types::distance_km(h, (lat, lon));
         let bear = sdroxide_types::bearing_deg(h, (lat, lon));
-        lines.push(extra("Range", format!("{km:.0} km  {bear:.0}°"), "from your station".into()));
+        let range = format!("{}  {bear:.0}°", sdroxide_types::AirUnits::current().distance(km));
+        lines.push(extra("Range", range, "from your station".into()));
     }
     if let Some(vr) = live.vertical_rate_fpm.filter(|v| v.abs() > 100) {
-        lines.push(extra("Vertical", format!("{vr:+} ft/min"), age.clone()));
+        lines.push(extra(
+            "Vertical",
+            sdroxide_types::AirUnits::current().vertical_rate(vr),
+            age.clone(),
+        ));
     }
     if let Some(e) = &live.emergency {
         lines.push(extra("Emergency", e.clone(), age));
@@ -162,7 +188,9 @@ pub(in crate::app) fn hover_card(
         r.note = clip(&r.note, MAX_CHARS);
     }
 
+    let common_note = lift_common_note(&mut lines);
     HoverCard {
+        common_note,
         title: clip(&aircraft_card::title(&CardKey::Icao(icao), card), MAX_CHARS),
         provenance: aircraft_online::provenance(card, state),
         lines,
@@ -211,6 +239,9 @@ fn draw_inner(
         ui.horizontal(|ui| {
             ui.label(RichText::new(&card.title).strong().size(13.0));
             provenance_chip(ui, card.provenance);
+            if let Some(n) = &card.common_note {
+                ui.label(RichText::new(n).size(9.5).color(crate::theme::gray(130)));
+            }
             if let Some(out) = pin.as_deref_mut() {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let r = ui.small_button("✕").on_hover_text("Close (Esc)");
@@ -532,8 +563,10 @@ mod tests {
         }
         assert_eq!(row(&c, "ICAO").value, "4840D6");
         assert_eq!(row(&c, "Altitude").value, "35000 ft");
-        assert!(row(&c, "Altitude").note.starts_with("ADS-B"), "{:?}", row(&c, "Altitude"));
-        assert!(row(&c, "Altitude").note.contains("12"), "{:?}", row(&c, "Altitude"));
+        // The ADS-B source and age are said once, in the header, not per line.
+        let common = c.common_note.as_deref().unwrap_or_default();
+        assert!(common.starts_with("ADS-B") && common.contains("12"), "{common}");
+        assert_eq!(row(&c, "Altitude").note, "");
         assert!(row(&c, "Registration").note.starts_with("VDL2"), "{:?}", row(&c, "Registration"));
     }
 
@@ -630,6 +663,55 @@ mod tests {
     }
 
     #[test]
+    fn a_note_every_line_repeats_is_said_once_in_the_header() {
+        let c = hover_card(
+            &live(),
+            Some(&heard()),
+            &OnlineState::Idle,
+            ThumbStatus::NotTried,
+            Some(HOME),
+            NOW,
+        );
+        let common = c.common_note.clone().expect("lines share the age note");
+        assert!(common.starts_with("ADS-B"), "{common}");
+        assert!(c.lines.iter().all(|r| r.note != common), "still repeated: {:?}", c.lines);
+        // A line with its own note keeps it.
+        assert_eq!(row(&c, "Range").note, "from your station");
+    }
+
+    #[test]
+    fn two_lines_with_different_notes_share_nothing() {
+        let mut rows = vec![extra("A", "1".into(), "x".into()), extra("B", "2".into(), "y".into())];
+        assert_eq!(lift_common_note(&mut rows), None);
+        assert_eq!(rows[0].note, "x");
+    }
+
+    #[test]
+    fn the_card_writes_range_and_climb_in_the_chosen_units() {
+        let km = sdroxide_types::distance_km(HOME, (52.3, 4.8));
+        let bear = sdroxide_types::bearing_deg(HOME, (52.3, 4.8));
+        let card = || {
+            hover_card(
+                &live(),
+                Some(&heard()),
+                &OnlineState::Idle,
+                ThumbStatus::NotTried,
+                Some(HOME),
+                NOW,
+            )
+        };
+        sdroxide_types::AirUnits::Metric.set_current();
+        let c = card();
+        assert_eq!(row(&c, "Range").value, format!("{km:.0} km  {bear:.0}°"));
+        assert_eq!(row(&c, "Vertical").value, "+9.1 m/s");
+        sdroxide_types::AirUnits::Imperial.set_current();
+        let c = card();
+        assert_eq!(row(&c, "Range").value, format!("{:.0} mi  {bear:.0}°", km * 0.621_371));
+        assert_eq!(row(&c, "Vertical").value, "+1800 ft/min");
+        sdroxide_types::AirUnits::Aviation.set_current();
+    }
+
+    #[test]
     fn the_distance_the_bearing_and_the_emergency_of_the_old_tooltip_are_kept() {
         let mut a = live();
         a.emergency = Some("general emergency".into());
@@ -705,7 +787,7 @@ mod tests {
     fn only_a_switched_off_relay_or_a_missing_station_says_so_in_the_footer() {
         for r in [Reason::Disabled, Reason::NoStation, Reason::Unauthorized] {
             let c = card_with(Some(&heard()), &OnlineState::Unavailable(r), ThumbStatus::NotTried);
-            assert!(c.footer.is_some_and(|f| f.contains("online indisponible")), "{r:?}");
+            assert!(c.footer.is_some_and(|f| f.contains("online unavailable")), "{r:?}");
             assert!(c.footer.is_some_and(|f| f.chars().count() <= 60), "{r:?}");
         }
         for st in [

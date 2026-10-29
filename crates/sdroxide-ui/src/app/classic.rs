@@ -600,7 +600,7 @@ impl super::SdroxideApp {
         // open reports nothing and a receive-only device reports none — two
         // different facts, and each gets its own sentence rather than an empty
         // fold.
-        if !self.tx_capable() {
+        if !self.tx_chrome_ok() {
             let (why, fix) = match self.caps.as_ref().map(|c| c.tx_channels) {
                 None => (
                     "This radio has not reported what it can do yet — its link is closed, or \
@@ -787,8 +787,6 @@ pub(in crate::app) fn gutter_label_button(ui: &mut egui::Ui, label: &str, lit: b
 
 #[cfg(test)]
 mod squelch_tests {
-    use super::*;
-
     /// **The Classic UI's squelch row is the hold-open too.** #218 put the gesture
     /// on the strip's `SQL` label; the operator runs the Classic column, which
     /// draws its own squelch row, and reported that he could not find it. Two

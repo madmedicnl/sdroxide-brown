@@ -20,6 +20,12 @@
 (function () {
     let ctx = null;
     let player = null;
+    // The player's own report of what it has rendered and what it still holds
+    // (`pcm_worklet.js` posts one every ~170 ms). Kept for `health()`: a report
+    // of delayed sound needs a number, and the worklet's counter is the only one
+    // that says how much audio is waiting to be played. Its units are the
+    // player's own -- source samples, 48 kHz today -- not milliseconds.
+    let playout = null;
     let micChunks = [];
     let micWanted = false;
     let micStarting = false;
@@ -304,6 +310,7 @@
         const old = ctx;
         ctx = null;
         player = null;
+        playout = null;
         micReady = false;
         if (old) {
             old.onstatechange = null;
@@ -373,8 +380,10 @@
             const node = new AudioWorkletNode(next, "pcm-player", {
                 outputChannelCount: [1],
             });
-            node.port.onmessage = () => {
+            node.port.onmessage = (ev) => {
                 if (gen !== generation) return;
+                const d = ev.data;
+                if (d && typeof d.queued === "number") playout = d;
                 noteRender();
             };
             node.connect(next.destination);
@@ -736,6 +745,24 @@
                 sink: ctx ? readSink(ctx) : "(none)",
                 sinkSupported: sinkSupported,
                 sinkId: sinkId,
+                // The context's rate, as the browser actually gave it, and the
+                // device's own share of the delay. A 44.1 kHz context playing
+                // 48 kHz PCM is audible as a flat, slow signal; these two say so
+                // without having to ask.
+                contextRate: ctx ? ctx.sampleRate : 0,
+                baseLatency: ctx && ctx.baseLatency ? ctx.baseLatency : 0,
+                outputLatency: ctx && ctx.outputLatency ? ctx.outputLatency : 0,
+                // What the player has queued, in its own samples (48 kHz
+                // today), and how many it has rendered. This is the reader's
+                // backlog, not the delay to the speakers: the device adds
+                // `baseLatency` and `outputLatency` above.
+                playout: playout
+                    ? {
+                          queued: playout.queued,
+                          rendered: playout.rendered,
+                          sourceRate: 48000,
+                      }
+                    : null,
             };
         },
         // Force the audio path back on, for the banner and for a caller that

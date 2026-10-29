@@ -95,6 +95,44 @@ pub fn tier_for(size: egui::Vec2, mode: LayoutMode) -> Tier {
     }
 }
 
+/// The height [`tier_for_window`] measures against: above every breakpoint in
+/// [`tier_for`], so only the *width* of a child window reaches its tier.
+const WINDOW_TALL: f32 = 4000.0;
+
+/// The tier a child window's **width** earns, before any floor: the screen's
+/// width rule with the height rules dropped.
+fn tier_for_width(width: f32, mode: LayoutMode) -> Tier {
+    tier_for(egui::vec2(width, WINDOW_TALL), mode)
+}
+
+/// The tier a **child window** — an operating panel, a spectrum, a tool in its
+/// own OS window — earns, from its own width and the operator's override.
+///
+/// [`tier_for`]'s height rules are about a *screen*: a phone held upright, a
+/// phone in landscape at 393 points tall. A window is not a screen. One that is
+/// short because the operator tiled it that way, or because a panel wants to be
+/// wide and short, is asking for a short window — not for the phone design.
+///
+/// And the phone design is the one thing a child window cannot wear: it is one
+/// pane at a time **behind a tab row**, and that tab row is drawn by the main
+/// window (`panels::digi_tabs`), so a child window that took the phone tier
+/// would draw a single pane and no way to reach the others — a panel whose
+/// three quarters are silently unreachable. So the floor is [`Tier::Tablet`]:
+/// the same program at a smaller size rather than a different design.
+///
+/// **The exception is [`WindowShape::Panes`]**, which is a window that draws
+/// the tab row itself. It takes this same width rule with the floor lifted, so
+/// a narrow panel window is one pane at a time and can reach the rest of
+/// itself. Measured 2026-10-26 (`floating_panel_preview`, the FT8 panel at
+/// 560 pt): without it the panel keeps two columns and the QSO area's chips run
+/// past the window's edge.
+pub fn tier_for_window(width: f32, mode: LayoutMode) -> Tier {
+    match tier_for_width(width, mode) {
+        Tier::Phone => Tier::Tablet,
+        tier => tier,
+    }
+}
+
 /// Below this height a tablet-tier viewport is "short": the tablet top bar —
 /// a full-width frequency box stacked over a row of meter and menu chips,
 /// some 170 pt of chrome — would take a quarter of a 1280x720 panel before
@@ -108,9 +146,15 @@ pub const SHORT_H: f32 = 740.0;
 /// than the stacked layout — see [`SHORT_H`]. Pure function of the size and
 /// override so it can be tested beside [`tier_for`].
 pub fn short_tablet_for(size: egui::Vec2, mode: LayoutMode) -> bool {
+    short_tablet_for_tier(tier_for(size, mode), size, mode)
+}
+
+/// [`short_tablet_for`] with the tier already decided — the child-window case,
+/// where the tier is [`tier_for_window`]'s and not [`tier_for`]'s.
+pub fn short_tablet_for_tier(tier: Tier, size: egui::Vec2, mode: LayoutMode) -> bool {
     // `Small` is the tablet tier with this said out loud: it exists for a
     // screen that fits the stacked bar and cannot afford it.
-    mode == LayoutMode::Small || (tier_for(size, mode) == Tier::Tablet && size.y < SHORT_H)
+    mode == LayoutMode::Small || (tier == Tier::Tablet && size.y < SHORT_H)
 }
 
 /// Whether the operating panels should pull their chips and spacing in.
@@ -130,9 +174,13 @@ pub fn short_tablet_for(size: egui::Vec2, mode: LayoutMode) -> bool {
 /// Always true under [`LayoutMode::Small`], which is the operator saying so on
 /// a screen of any size, and always on a phone.
 pub fn tight_for(size: egui::Vec2, mode: LayoutMode) -> bool {
-    mode == LayoutMode::Small
-        || tier_for(size, mode) == Tier::Phone
-        || (tier_for(size, mode) != Tier::Desktop && size.y < TIGHT_H)
+    tight_for_tier(tier_for(size, mode), size, mode)
+}
+
+/// [`tight_for`] with the tier already decided — the child-window case, where
+/// the tier is [`tier_for_window`]'s and not [`tier_for`]'s.
+pub fn tight_for_tier(tier: Tier, size: egui::Vec2, mode: LayoutMode) -> bool {
+    mode == LayoutMode::Small || tier == Tier::Phone || (tier != Tier::Desktop && size.y < TIGHT_H)
 }
 
 /// Below this height an operating panel pulls its chips in — see
@@ -281,6 +329,172 @@ pub fn salted_id(ctx: &egui::Context, name: &str) -> egui::Id {
     match radio_salt(ctx) {
         0 => egui::Id::new(name),
         n => egui::Id::new((name, n)),
+    }
+}
+
+/// Where the band dock's room lives between [`set_band_dock_room`] and
+/// [`band_dock_room`].
+fn band_dock_room_id() -> egui::Id {
+    egui::Id::new("sdroxide-band-dock-room")
+}
+
+/// Publish how wide the band/mode selector may dock in the window being
+/// drawn, or `None` where it cannot dock at all.
+///
+/// The rule lives where the dock is drawn — `app::top_bar::band_dock_room`,
+/// from a tier and a width — and this is only its register for the frame, for
+/// the reason every answer here is: the chip that draws the DOCK icon is deep
+/// inside the strip and has no width argument to spend. Published rather than
+/// read off the app's own field because a second window is a second width: a
+/// control window asked the main window's dock question and answered yes, so
+/// its band chip hid or showed a column sitting in another window, which reads
+/// as a chip that does nothing.
+pub fn set_band_dock_room(ctx: &egui::Context, room: Option<f32>) {
+    ctx.data_mut(|d| d.insert_temp(band_dock_room_id(), room));
+}
+
+/// How wide the band/mode selector may dock in the window being drawn — see
+/// [`set_band_dock_room`]. `None` before the first frame and in a window that
+/// has no waterfall to put a column beside.
+pub fn band_dock_room(ctx: &egui::Context) -> Option<f32> {
+    ctx.data(|d| d.get_temp(band_dock_room_id())).unwrap_or(None)
+}
+
+/// Where the classic column's answer lives between [`set_classic_column`] and
+/// [`classic_column`].
+fn classic_column_id() -> egui::Id {
+    egui::Id::new("sdroxide-classic-column")
+}
+
+/// Publish whether **this window draws the classic control column** this frame.
+///
+/// One decision, made where the column is drawn, from the window's own whole
+/// width — and read by the strip, which must draw only the readout and the meter
+/// when the column beside it already carries every control. The strip cannot
+/// derive it: by the time it draws, the column has taken its width off what is
+/// left, and a window that *has* a column then measures as one that has no room
+/// for one. That is the operator's screenshot of Classic with the panadapter out
+/// — the full strip under the frequency, beside a column holding the same
+/// controls.
+pub fn set_classic_column(ctx: &egui::Context, here: bool) {
+    ctx.data_mut(|d| d.insert_temp(classic_column_id(), here));
+}
+
+/// Whether the window being drawn has the classic column — see
+/// [`set_classic_column`]. `false` before the first frame and in any **child
+/// window**: a detached window never draws the main window's column, so its
+/// strip (the RX control console's, which is a strip in a window) keeps every
+/// control.
+pub fn classic_column(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp(classic_column_id())).unwrap_or(false)
+}
+
+/// Which layout a **child window** publishes while it draws — see
+/// [`ViewportScope`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowShape {
+    /// Its own width decides the tier — a spectrum, an operating panel, a tool.
+    Own,
+    /// Desktop-shaped whatever its own height: a control surface an operator
+    /// opens wide and short, like the RX control console, whose compact strip
+    /// was the first thing that looked wrong when it opened.
+    Desk,
+    /// An **operating panel**, which can carry the phone design because it
+    /// draws the tab row itself: two columns while there is room for two, one
+    /// pane at a time below 600 pt, and the pane chips are drawn by the window
+    /// (`panels::digi_tabs` with no waterfall tab — the picture is the main
+    /// window's). Without it a 560 pt panel drew its QSO chips past its own
+    /// right edge; measured 2026-10-26.
+    Panes,
+}
+
+/// One window's answers to the questions this module publishes for the frame,
+/// held for the length of its draw and put back afterwards.
+///
+/// The tier, the tight and short flags, the band dock's room and the radio salt
+/// are all published on the shared [`egui::Context`], because the widgets that
+/// need them are far too deep — and too many — to take them as arguments. That
+/// is right for one window and wrong for several: a detached viewport shares
+/// the context with the main one, so without this it answered every question
+/// with the *main window's* geometry. A 520 pt panel window laid itself out as
+/// though it were desktop-wide and its chips ran past its right edge; Classic's
+/// arrangement was half applied; and with two radios on screen a window drew
+/// with whichever tab the shell had drawn last, not the radio it belongs to.
+///
+/// `Drop` puts every answer back, so a child window's geometry ends with its
+/// draw and the main window gets its own again.
+///
+/// What this deliberately does **not** carry is the style: fonts, chip padding
+/// and touch targets are rewritten in one place by [`crate::theme::apply_metrics`]
+/// when the main window's tier changes. A child window's tier here decides
+/// **which arrangement the code branches into** — compact menus rather than the
+/// full strip, one column rather than two — not how large a chip is. Per-window
+/// metrics would mean rewriting the context's styles inside every viewport draw
+/// and putting them back, mid-frame, for a caller that has already copied them.
+pub struct ViewportScope {
+    /// A `Context` is a handle on shared state, so keeping one costs a clone and
+    /// is what lets `Drop` put the answers back without an argument.
+    ctx: egui::Context,
+    tier: Tier,
+    tight: bool,
+    short_tablet: bool,
+    band_dock: Option<f32>,
+    salt: u32,
+    classic: bool,
+}
+
+impl ViewportScope {
+    /// Take on the answers for a child window of `size` drawn in `mode`, on
+    /// radio `salt`.
+    pub fn enter(
+        ctx: &egui::Context,
+        size: egui::Vec2,
+        mode: LayoutMode,
+        shape: WindowShape,
+        salt: u32,
+    ) -> Self {
+        let prev = Self {
+            ctx: ctx.clone(),
+            tier: tier(ctx),
+            tight: tight(ctx),
+            short_tablet: short_tablet(ctx),
+            band_dock: band_dock_room(ctx),
+            salt: radio_salt(ctx),
+            classic: classic_column(ctx),
+        };
+        let tier = match shape {
+            WindowShape::Own => tier_for_window(size.x, mode),
+            WindowShape::Desk => Tier::Desktop,
+            // No floor: this window draws the tab row that makes one pane at a
+            // time reachable.
+            WindowShape::Panes => tier_for_width(size.x, mode),
+        };
+        set_tier(ctx, tier);
+        set_tight(ctx, tight_for_tier(tier, size, mode));
+        set_short_tablet(ctx, short_tablet_for_tier(tier, size, mode));
+        // A child window draws no docked band column: the column is a pane
+        // beside the waterfall, and a window of its own has no waterfall to put
+        // one beside. `None` is what makes the band chip open its popup there
+        // rather than toggle a column living in another window.
+        set_band_dock_room(ctx, None);
+        set_radio_salt(ctx, salt);
+        // A child window never draws the main window's classic column, so its
+        // *own* strip — the RX control console's — keeps every control rather
+        // than drawing a readout-only strip that expects a column in another
+        // window.
+        set_classic_column(ctx, false);
+        prev
+    }
+}
+
+impl Drop for ViewportScope {
+    fn drop(&mut self) {
+        set_tier(&self.ctx, self.tier);
+        set_tight(&self.ctx, self.tight);
+        set_short_tablet(&self.ctx, self.short_tablet);
+        set_band_dock_room(&self.ctx, self.band_dock);
+        set_radio_salt(&self.ctx, self.salt);
+        set_classic_column(&self.ctx, self.classic);
     }
 }
 
@@ -435,6 +649,122 @@ mod tests {
         assert_eq!(tier_for(big, LayoutMode::Tablet), Tier::Tablet);
         let small = vec2(360.0, 800.0);
         assert_eq!(tier_for(small, LayoutMode::Desktop), Tier::Desktop);
+    }
+
+    /// A **child window** is measured by its width. Its height is how the
+    /// operator tiled it, not a screen's, and a window that flipped into the
+    /// phone design because it was made 400 points tall would be a window the
+    /// operator cannot predict — the console's own complaint, one window over.
+    #[test]
+    fn a_child_window_is_measured_by_its_width_not_its_height() {
+        let auto = LayoutMode::Auto;
+        // Wide and short — the RX console's own shape — is still a desktop.
+        assert_eq!(tier_for_window(1600.0, auto), Tier::Desktop);
+        assert_eq!(tier_for_window(1280.0, auto), Tier::Tablet, "1280 is a tablet width");
+        // Narrow is a tablet **however tall it is**. The phone design is one
+        // pane at a time behind a tab row, and the tab row is drawn by the main
+        // window: a child window that took it would draw one pane and no way to
+        // reach the others.
+        assert_eq!(tier_for_window(520.0, auto), Tier::Tablet, "the default panel window");
+        assert_eq!(tier_for_window(360.0, auto), Tier::Tablet, "the narrowest a window opens");
+        assert_eq!(tier_for_window(360.0, LayoutMode::Phone), Tier::Tablet, "the override too");
+        // The override still says so out loud where it can.
+        assert_eq!(tier_for_window(1600.0, LayoutMode::Tablet), Tier::Tablet);
+        assert_eq!(tier_for_window(360.0, LayoutMode::Desktop), Tier::Desktop);
+        assert_eq!(tier_for_window(360.0, LayoutMode::Small), Tier::Tablet);
+    }
+
+    /// A **panel window** may take the phone design because it draws the tab
+    /// row itself; a window that cannot keeps the floor. Measured 2026-10-26:
+    /// at 560 pt the FT8 panel's two columns put its QSO chips past the edge.
+    #[test]
+    fn a_panel_window_that_draws_its_own_tabs_may_be_one_pane_at_a_time() {
+        let ctx = egui::Context::default();
+        let auto = LayoutMode::Auto;
+        {
+            let scope = ViewportScope::enter(&ctx, vec2(560.0, 760.0), auto, WindowShape::Panes, 0);
+            assert_eq!(tier(&ctx), Tier::Phone, "one pane at a time is what fits");
+            assert!(tight(&ctx));
+            drop(scope);
+        }
+        // The same window *without* its own tab row keeps the floor: one pane
+        // and no way to reach the rest would be worse than a cramped two.
+        {
+            let scope = ViewportScope::enter(&ctx, vec2(560.0, 760.0), auto, WindowShape::Own, 0);
+            assert_eq!(tier(&ctx), Tier::Tablet);
+            drop(scope);
+        }
+        // And with room for two columns it is a tablet like any other window.
+        {
+            let scope = ViewportScope::enter(&ctx, vec2(900.0, 760.0), auto, WindowShape::Panes, 0);
+            assert_eq!(tier(&ctx), Tier::Tablet);
+            drop(scope);
+        }
+    }
+
+    /// The published answers belong to the window being drawn, and the main
+    /// window's come back when its own draw resumes — which is the whole point
+    /// of the guard: without it a detached viewport lays itself out from the
+    /// main window's geometry and Classic is half applied.
+    #[test]
+    fn a_child_window_answers_for_itself_and_the_main_windows_answers_come_back() {
+        let ctx = egui::Context::default();
+        // The main window: a desktop, the station radio, its band selector able
+        // to dock beside the waterfall.
+        set_tier(&ctx, Tier::Desktop);
+        set_tight(&ctx, false);
+        set_short_tablet(&ctx, false);
+        set_band_dock_room(&ctx, Some(280.0));
+        set_radio_salt(&ctx, 0);
+
+        {
+            // A 520 pt operating panel in its own OS window, drawn for radio 3
+            // in a split the shell drew two tabs ago.
+            let scope = ViewportScope::enter(
+                &ctx,
+                vec2(520.0, 700.0),
+                LayoutMode::Auto,
+                WindowShape::Own,
+                3,
+            );
+            assert_eq!(tier(&ctx), Tier::Tablet, "the window's own width, not the main window's");
+            assert_eq!(radio_salt(&ctx), 3, "its own radio, not whichever tab was drawn last");
+            assert_eq!(band_dock_room(&ctx), None, "no waterfall in this window to dock beside");
+            assert!(tight(&ctx), "a 700 pt window pulls its chips in");
+            assert!(short_tablet(&ctx), "…and has no room for a stacked tablet bar");
+            drop(scope);
+        }
+
+        assert_eq!(tier(&ctx), Tier::Desktop, "the main window's tier is back");
+        assert!(!tight(&ctx));
+        assert!(!short_tablet(&ctx));
+        assert_eq!(band_dock_room(&ctx), Some(280.0));
+        assert_eq!(radio_salt(&ctx), 0);
+    }
+
+    /// A **desk tool** — the RX control console, the band selector, the rotator
+    /// — stays desktop-shaped however small it is made: they open wide and
+    /// short, and the compact strips were the first thing that looked wrong.
+    #[test]
+    fn a_desk_window_stays_desktop_shaped_however_small_it_is_made() {
+        let ctx = egui::Context::default();
+        // Whatever the context says before the window draws — it is a fresh
+        // context here, so nothing has been published for a main window yet.
+        let before = tier(&ctx);
+        {
+            let scope = ViewportScope::enter(
+                &ctx,
+                vec2(400.0, 300.0),
+                LayoutMode::Auto,
+                WindowShape::Desk,
+                0,
+            );
+            assert_eq!(tier(&ctx), Tier::Desktop);
+            assert!(!tight(&ctx), "the desktop arrangement is not a short-screen one");
+            assert!(!short_tablet(&ctx));
+            drop(scope);
+        }
+        assert_eq!(tier(&ctx), before, "the answer before the window drew is back");
     }
 
     /// The screen issue #211 is about: 1366×768 fits the tablet tier and

@@ -154,7 +154,7 @@ fn memory_row(
             // Per-memory label colour on the waterfall: a small coloured chip
             // that opens the palette on click. None = use the global colour.
             let mut col = m.color.unwrap_or(global_color);
-            if ui.color_edit_button_srgb(&mut col).changed() {
+            if super::colour_edit::colour_edit(ui, &mut col) {
                 cmds.push(Command::SetMemoryColor { id: m.id, color: Some(col) });
             }
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
@@ -728,10 +728,8 @@ impl SdroxideApp {
             {
                 desc = !desc;
             }
-            let color_changed = ui
-                .color_edit_button_srgb(&mut self.ui_settings.memory_waterfall_color)
-                .on_hover_text("Colour of the memory labels on the waterfall")
-                .changed();
+            let color_changed =
+                super::colour_edit::colour_edit(ui, &mut self.ui_settings.memory_waterfall_color);
             if color_changed {
                 crate::app::persist::persist_ui_settings(&self.ui_settings);
             }

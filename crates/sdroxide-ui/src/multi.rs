@@ -178,17 +178,17 @@ fn windows_menu_body(
     for m in M::ALL {
         let out = ui_settings.is_detached(m);
         ui.horizontal(|ui| {
-            ui.label(RichText::new(module_window_name(m)).size(12.0));
+            ui.label(RichText::new(m.window_name()).size(12.0));
             crate::chrome::row_tail(ui, |ui| {
                 let chip =
                     crate::chrome::chip(ui, out, if out { "IN ITS OWN WINDOW" } else { "DOCKED" })
                         .on_hover_text(if out {
-                            format!("Bring {} back into the main window", module_window_name(m))
+                            format!("Bring {} back into the main window", m.window_name())
                         } else {
                             format!(
                                 "Put {} in its own OS window — its own app-id, so a window rule \
                              can pin it to a monitor",
-                                module_window_name(m)
+                                m.window_name()
                             )
                         });
                 if chip.clicked() {
@@ -223,25 +223,6 @@ fn windows_menu_body(
                 actions.push(StripAction::UndockAll);
             }
         });
-    }
-}
-
-/// What each detachable module's window is called in the **WINDOWS** menu —
-/// SDRuno's names for the two that have one, and the program's own for the
-/// rest. The settings rows call them by
-/// [`sdroxide_types::DetachableModule::label`]; this is the face of the program,
-/// where SP1 and SP2 are what an SDRuno operator is looking for and "Panadapter"
-/// is not.
-#[cfg(not(target_arch = "wasm32"))]
-fn module_window_name(m: sdroxide_types::DetachableModule) -> &'static str {
-    use sdroxide_types::DetachableModule as M;
-    match m {
-        M::Panadapter => "SP1 — the spectrum",
-        M::AuxPanadapter => "SP2 (AUX) — a second spectrum",
-        M::Panel => "Operating panel",
-        M::Controls => "RX control",
-        M::BandMenu => "Band & mode",
-        M::Rotor => "Antenna rotator",
     }
 }
 
@@ -440,6 +421,20 @@ impl MultiApp {
     /// Toggle the ALL chip on the SCHEDULE window.
     pub fn toggle_all_chip(&mut self) {
         self.tabs[self.focused].app.toggle_all_chip();
+    }
+
+    /// **Clear the notice banners, for a screenshot.** The "this radio is
+    /// receive-only" nudge is a banner across the top of the panadapter: right
+    /// for an operator with a signal generator, wrong in a manual's picture of
+    /// the program. Screenshot-only — nothing in the program calls it.
+    /// Screenshot-only: the state the CTR chip and a narrow span leave the view
+    /// in, so a figure of a centred chart is reproducible.
+    pub fn screenshot_centre(&mut self, span_hz: f64) {
+        self.tabs[self.focused].app.screenshot_centre(span_hz);
+    }
+
+    pub fn dismiss_notices(&mut self) {
+        self.tabs[self.focused].app.dismiss_notices();
     }
 
     /// Toggle the FAVS chip on the SCHEDULE window.
@@ -2467,16 +2462,16 @@ mod split_tests {
     #[cfg(not(target_arch = "wasm32"))]
     fn the_windows_menu_offers_every_module_by_name() {
         use sdroxide_types::DetachableModule as M;
-        let names: Vec<&str> = M::ALL.iter().map(|m| module_window_name(*m)).collect();
+        let names: Vec<&str> = M::ALL.iter().map(|m| m.window_name()).collect();
         assert_eq!(names.len(), M::ALL.len(), "one row per module");
         for m in M::ALL {
-            let name = module_window_name(m);
+            let name = m.window_name();
             assert!(!name.is_empty(), "{:?} has no name in the menu", m.label());
         }
         // The two an SDRuno operator looks for are called SP1 and SP2, and the
         // second says so plainly rather than "Panadapter 2".
-        assert!(module_window_name(M::Panadapter).contains("SP1"));
-        assert!(module_window_name(M::AuxPanadapter).contains("SP2"));
+        assert!(M::Panadapter.window_name().contains("SP1"));
+        assert!(M::AuxPanadapter.window_name().contains("SP2"));
         // And no two rows are the same control.
         let mut sorted = names.clone();
         sorted.sort_unstable();

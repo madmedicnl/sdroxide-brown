@@ -690,6 +690,22 @@ impl DetachableModule {
         }
     }
 
+    /// The name this module's **window** carries on screen — SDRuno's names for
+    /// the two that have one, and the program's own for the rest. [`Self::label`]
+    /// is the settings page's word for it; this is the face of the program,
+    /// where SP1 and SP2 are what an SDRuno operator is looking for and
+    /// "Panadapter" is not.
+    pub fn window_name(self) -> &'static str {
+        match self {
+            DetachableModule::Panadapter => "SP1 — the spectrum",
+            DetachableModule::AuxPanadapter => "SP2 (AUX) — a second spectrum",
+            DetachableModule::Panel => "Operating panel",
+            DetachableModule::Controls => "RX control",
+            DetachableModule::BandMenu => "Band & mode",
+            DetachableModule::Rotor => "Antenna rotator",
+        }
+    }
+
     /// The window's **application id** — the handle a Wayland compositor rule
     /// matches on to float this window and pin it to a monitor. A public
     /// contract with the operator: change it and their rules stop matching.
@@ -1090,6 +1106,18 @@ pub struct UiSettings {
     /// ouvert. Reste `Copy` (u64).
     #[serde(default)]
     pub tool_windows_open: u64,
+    /// The Radio Classic panel (EXTRAS) is in use: docked under the waterfall in
+    /// the voice modes, or in a window where the slot is taken or the operator
+    /// detached it. Off by default.
+    #[serde(default)]
+    pub radio_classic_on: bool,
+    /// The last frequency Radio Classic was listening on, in Hz, and the mode it
+    /// was in — `0.0` and `None` until it has been used once. Switching the
+    /// panel on tunes here, or to 100 MHz in WFM the very first time.
+    #[serde(default)]
+    pub radio_classic_last_hz: f64,
+    #[serde(default)]
+    pub radio_classic_last_mode: Option<crate::Mode>,
     /// Which repair [`UiSettings::tool_windows_open`] has had. **1** clears the
     /// bits the program used to set when a mode was selected - until then,
     /// choosing a mode opened its panel in a window of its own instead of docking
@@ -1264,6 +1292,11 @@ pub struct UiSettings {
     /// data in `sdroxide-ui`'s `basemap` — but the choice is.
     #[serde(default)]
     pub survey_map_style: MapStyle,
+    /// **Units for the aircraft views** — aviation (feet, knots, km), metric
+    /// (metres, km/h, m/s, km) or imperial (feet, mph, miles). Presentation
+    /// only; the decoder and the wire stay in feet and knots.
+    #[serde(default)]
+    pub air_units: crate::AirUnits,
     /// **Classic UI** — every control in one column down the left, the way
     /// SDR++ and SDR++Brown lay theirs out, with each group a section that
     /// folds away.
@@ -1678,9 +1711,13 @@ impl Default for UiSettings {
             broadcast_scope: BroadcastScope::default(),
             broadcast_labels_all: false,
             survey_map_style: MapStyle::default(),
+            air_units: crate::AirUnits::default(),
             classic_ui: false,
             classic_sections: String::new(),
             tool_windows_open: 0,
+            radio_classic_on: false,
+            radio_classic_last_hz: 0.0,
+            radio_classic_last_mode: None,
             tool_windows_repaired: 0,
             session_qso_sort: 0,
             session_qso_sort_desc: true,

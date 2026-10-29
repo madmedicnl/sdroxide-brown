@@ -2007,7 +2007,6 @@ use sdroxide_types::{
 /// Appended by hand under the register's own rule (the number was taken twice
 /// on two branches; the later one moves). `PROTO_VERSION` 237 → 238,
 /// `VERSION_BYTE` 0x39 → 0x3A.
-/// Reverted in v245.
 /// v237: [`sdroxide_types::DigiConfig`] gains `wefax_rx_sensitivity` (i8) and
 /// `wefax_rx_auto` (bool) on its tail — a receive sensitivity control for the
 /// WEFAX decoder, -5 to +5, with Auto meaning the reference thresholds. Unlike
@@ -2017,7 +2016,6 @@ use sdroxide_types::{
 /// `#[serde(default)]`, so a stored config loads unchanged.
 /// `PROTO_VERSION` 238 → 239, `VERSION_BYTE` 0x3A → 0x3B. A downstream (fork)
 /// change.
-/// Reverted in v246.
 /// v240: [`sdroxide_types::NetworkConfig`] gains `decode_udp` (String) on its
 /// tail — where the station's decoded text may be sent, `host:port`, one JSON
 /// line per decode over UDP, empty meaning off. `NetworkConfig` rides
@@ -2051,15 +2049,6 @@ use sdroxide_types::{
 /// so the gap at 242 is that PR's to fill.
 /// `PROTO_VERSION` 242 → 243, `VERSION_BYTE` 0x3E → 0x3F. A downstream (fork)
 /// change.
-/// v244: **NAVTEX receive sensitivity** (PR #202). [`sdroxide_types::DigiConfig`]
-/// gains `navtex_rx_sensitivity` (i8) and `navtex_rx_auto` (bool) between
-/// `navtex_reverse` and `rtty_afc` — a receive sensitivity control for the
-/// NAVTEX decoder, -5 to +5, with Auto meaning the reference thresholds.
-/// `DigiConfig` rides `SetDigiConfig`/`DigiStatus` whole, so the inserted
-/// fields move the layout. `#[serde(default)]`, so a stored config loads
-/// unchanged. `PROTO_VERSION` 243 → 244, `VERSION_BYTE` 0x3F → 0x40.
-/// A downstream (fork) change.
-/// Reverted in v247.
 /// v245: **revert of PR #163** (SSTV receive sensitivity control). The
 /// `sstv_rx_sensitivity` (i8) and `sstv_rx_auto` (bool) fields are removed
 /// from [`sdroxide_types::DigiConfig`], the audio gain in `SstvController` is
@@ -2097,8 +2086,81 @@ use sdroxide_types::{
 /// #233 (the NAVTEX sensitivity revert) claimed it and landed while this was in
 /// review, so the later of two colliding branches moves. `PROTO_VERSION`
 /// 247 → 248, `VERSION_BYTE` 0x43 → 0x44. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 248;
-const VERSION_BYTE: u8 = 0x44;
+/// v251: **the receive sensitivity controls come back** — SSTV, WEFAX and
+/// NAVTEX. [`sdroxide_types::DigiConfig`] regains `sstv_rx_sensitivity` /
+/// `sstv_rx_auto`, `wefax_rx_sensitivity` / `wefax_rx_auto` and
+/// `navtex_rx_sensitivity` / `navtex_rx_auto`, where each pair was when it
+/// first shipped: 0 with Auto on is the reference behaviour, so a stored config
+/// that never touched the sliders loads and behaves exactly as it does now.
+/// The setting is the operator's answer to two different faults — "a faint
+/// chart never starts" and "a noisy channel starts a page on nothing" — and it
+/// is the reason the phasing calibration exists at all. `DigiConfig` rides
+/// `SetDigiConfig`/`DigiStatus` whole, so the layout moves and every end has to
+/// be rebuilt together: `PROTO_VERSION` 250 → 251, `VERSION_BYTE` 0x46 → 0x47.
+/// (250 is PR #242's, 249 PR #240's — neither is merged here, so this branch
+/// would move again if they land first.) A downstream (fork) change.
+/// v253: **the Auto CQ run's own bound** — [`sdroxide_types::DigiConfig`] gains
+/// `auto_cq_repeats` and `auto_cq_then_listen` at its tail, so an unattended CQ
+/// run can end after a set number of calls instead of only on the watchdog's
+/// clock (issue #236). Appended last, and postcard is positional — a v248 peer's
+/// payload does not decode and the version byte is what refuses it;
+/// `#[serde(default)]` covers a stored config loading. This branch took **250**
+/// when it was opened; #245 and then #240 landed first, so the later of the
+/// colliding branches moves again — `PROTO_VERSION` 252 → 253,
+/// `VERSION_BYTE` 0x48 → 0x49. A downstream (fork) change.
+/// v252: **the picture composer's document** —
+/// [`sdroxide_types::ImageSlotInfo`] gains `composer` at its tail and
+/// [`sdroxide_types::Command`] gains `ImageSetComposer` last: each transmit
+/// preset now carries the layers drawn over its picture, so every client
+/// composes the same picture instead of one caption drawn where it likes.
+/// Appended last, and postcard is positional — so a v248 peer's payload does not
+/// decode and the version byte is what refuses it; `#[serde(default)]` covers the
+/// paths that read a bare value (a stored blob, a fixture). This branch took
+/// **249** when it was opened; #245 (the receive sensitivity controls) landed
+/// first and took 251, so the later of the two moved, as the register says it
+/// must. `PROTO_VERSION` 251 → 252, `VERSION_BYTE` 0x47 → 0x48. A downstream
+/// (fork) change.
+/// v254: **the composer's overlay, its template library and the mosaic's
+/// picture** — [`sdroxide_types::ImageSlotInfo`] gains `apply_overlay` at its
+/// tail, [`sdroxide_types::ImagePresets`] gains `templates`, and
+/// [`sdroxide_types::Command`] gains `ImageSetOverlay`, `ImageSaveTemplate` and
+/// `ImageDeleteTemplate` last. The station-wide overlay lets one layout identify
+/// every picture while each preset keeps its own layers under it; the templates
+/// are named layouts the operator saves and recalls, and they ride the presets
+/// so the console and a browser tab keep the same library.
+///
+/// **253 belongs to PR #242** (the Auto CQ split), which took it while this one
+/// was in review; the later of the colliding branches moves, so this takes 254.
+/// `PROTO_VERSION` 252 → 254, `VERSION_BYTE` 0x48 → 0x4A. A downstream (fork)
+/// change.
+/// v255: **the unattended run's own limits** —
+/// [`sdroxide_types::DigiConfig`] gains `auto_call_retries` and
+/// `auto_session_min` at its tail: how many times one station is called before
+/// the run passes it over, and how long the run may last at all. With the
+/// continuous role this makes the automatic operator a bounded one: a station
+/// that never answers stops costing slots, and a run that nobody stops stops
+/// itself (issue #251). Appended last, so the layout moves: `PROTO_VERSION`
+/// 254 → 255, `VERSION_BYTE` 0x4A → 0x4B. A downstream (fork) change.
+/// v256: **the composer and auto fields are re-appended at the true tail.**
+///
+/// v252/v254/v255 each said "appended last" for the fields they added to
+/// [`sdroxide_types::DigiConfig`] — `sstv_banner_bottom`,
+/// `sstv_banner_text_pct`, `station_overlay`, `auto_call_retries`,
+/// `auto_session_min` — but they were actually inserted *before* the existing
+/// `sstv_rx_sensitivity`/`sstv_rx_auto`/`wefax_rx_sensitivity`/`wefax_rx_auto`,
+/// so the sensitivity fields moved down in the positional postcard layout for
+/// no reason and the register entries no longer described the struct. They now
+/// sit after `wefax_rx_auto`, where the entries always claimed they were; the
+/// wire layout moves again, so the version does too. `PROTO_VERSION` 255 → 256,
+/// `VERSION_BYTE` 0x4B → 0x4C. A downstream (fork) change.
+/// v257: **the main receiver's audio level.** `ServerMsg` gains
+/// `AudioLevel(Box<AudioLevel>)` last: the speaker feed's left/right level and
+/// 48 spectrum bars, about thirty times a second, for the Radio Classic panel's
+/// VU and bars. Until now only the DAB status carried a level. It is sent only
+/// while a screen holds a lease: `Command` gains `WantAudioLevel` last, renewed
+/// about once a second by an open panel. `PROTO_VERSION` 256 → 257, `VERSION_BYTE` 0x4C → 0x4D. A downstream (fork) change.
+pub const PROTO_VERSION: u16 = 257;
+const VERSION_BYTE: u8 = 0x4D;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -2655,6 +2717,12 @@ pub enum ServerMsg {
     ///
     /// Appended last, for the usual reason.
     DabSlide(Box<sdroxide_types::DabSlide>),
+
+    /// `RadioEvent::AudioLevel`: the level and the bars of the main receiver's
+    /// speaker feed, about thirty times a second.
+    ///
+    /// Appended last, for the usual reason.
+    AudioLevel(Box<sdroxide_types::AudioLevel>),
 }
 
 /// What [`ServerMsg::ClientSettings`] carries.
@@ -2939,6 +3007,11 @@ mod tests {
             data: vec![0xFF, 0xD8, 0xFF, 0xE0, 0, 16],
         }));
         assert_eq!(decode::<ServerMsg>(&encode(&slide).unwrap()).unwrap(), slide);
+        let level = ServerMsg::AudioLevel(Box::new(sdroxide_types::AudioLevel {
+            rms_db: [-14.5, -17.0],
+            bands: (0..sdroxide_types::AUDIO_BANDS as u8).map(|i| i * 5).collect(),
+        }));
+        assert_eq!(decode::<ServerMsg>(&encode(&level).unwrap()).unwrap(), level);
 
         // The CW paddle contacts, and both closed at once — the case that
         // matters, since it is the one where two contacts share an element.
@@ -3087,9 +3160,43 @@ mod tests {
                         height: 768,
                         version: 0xdead_beef,
                         thumb: vec![0x89, 0x50, 0x4e, 0x47, 0x0d],
+                        // The composer's document: a turned line with a faded
+                        // band, which is the shape a misplaced field would
+                        // corrupt worst.
+                        apply_overlay: true,
+                        composer: sdroxide_types::Composer {
+                            layers: vec![sdroxide_types::TextLayer {
+                                text: "OE1TEST".into(),
+                                face: sdroxide_types::Face::Mono,
+                                px: 30,
+                                ink: [255, 255, 0],
+                                outline: Some([0, 0, 0]),
+                                x: 0.07,
+                                y: 0.5,
+                                vertical: true,
+                                band: Some(sdroxide_types::Strip {
+                                    thickness: 30,
+                                    fill: [0, 0, 120],
+                                    fill2: Some([0, 0, 20]),
+                                }),
+                                hidden: false,
+                            }],
+                        },
                     },
                     ImageSlotInfo::default(),
                 ],
+                templates: vec![sdroxide_types::LayoutTemplate {
+                    name: "CQ".into(),
+                    composer: sdroxide_types::Composer::seeded(
+                        "19DCG373",
+                        "",
+                        "CQ CQ",
+                        sdroxide_types::Face::Mono,
+                        26,
+                        None,
+                        320,
+                    ),
+                }],
             }),
             ServerMsg::ImageSlotSource {
                 slot: 3,
@@ -3141,6 +3248,38 @@ mod tests {
         let cmds = [
             ClientMsg::Command(Command::ImageSetSlot { slot: 2, bytes: vec![0xff, 0xd8, 0xff] }),
             ClientMsg::Command(Command::ImageSetMessage { slot: 2, message: "73".into() }),
+            ClientMsg::Command(Command::ImageSetComposer {
+                slot: 4,
+                composer: sdroxide_types::Composer {
+                    layers: vec![sdroxide_types::TextLayer {
+                        text: "PSE K".into(),
+                        x: 0.5,
+                        y: 0.8,
+                        ..sdroxide_types::TextLayer::default()
+                    }],
+                },
+            }),
+            // ...and an empty one, which is what "this preset uses the banner"
+            // looks like on the wire.
+            ClientMsg::Command(Command::ImageSetComposer {
+                slot: 0,
+                composer: sdroxide_types::Composer::default(),
+            }),
+            ClientMsg::Command(Command::ImageSetOverlay { slot: 3, on: false }),
+            ClientMsg::Command(Command::ImageSaveTemplate {
+                name: "Reply".into(),
+                composer: sdroxide_types::Composer::seeded(
+                    "",
+                    "",
+                    "PSE K",
+                    sdroxide_types::Face::Chakra,
+                    30,
+                    None,
+                    256,
+                ),
+            }),
+            ClientMsg::Command(Command::ImageDeleteTemplate { name: "Reply".into() }),
+            ClientMsg::Command(Command::WantAudioLevel),
             ClientMsg::Command(Command::ImageGetSlot(4)),
             ClientMsg::Command(Command::ImageClearSlot(0)),
             ClientMsg::Command(Command::ImageList { kind: ImageKind::Wefax, offset: 0, count: 48 }),
@@ -3246,6 +3385,59 @@ mod tests {
             let back: ServerMsg = decode(&bytes).unwrap();
             assert_eq!(&back, m);
         }
+    }
+
+    /// `AudioLevel` rides after `DabSlide`, the variant that was last before it:
+    /// the index postcard writes is the variant's position, so a variant slipped
+    /// in above shifts it and every client on the older number reads the wrong
+    /// message.
+    #[test]
+    fn the_audio_level_message_is_appended_last() {
+        let slide = ServerMsg::DabSlide(Box::new(sdroxide_types::DabSlide {
+            service_id: String::new(),
+            content_type: String::new(),
+            name: None,
+            data: Vec::new(),
+        }));
+        let level = ServerMsg::AudioLevel(Box::new(sdroxide_types::AudioLevel::silent()));
+        // Byte 0 is `VERSION_BYTE`; byte 1 is the variant index (< 128 here).
+        let (a, b) = (encode(&slide).unwrap()[1], encode(&level).unwrap()[1]);
+        assert_eq!(b, a + 1, "AudioLevel must directly follow DabSlide");
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (257, 0x4D));
+    }
+
+    /// postcard is positional: a field inserted mid-struct shifts every byte
+    /// after it and silently breaks every peer on the older layout — exactly
+    /// the DigiConfig mistake of `PROTO_VERSION 255 → 256`. Pin the serialized
+    /// form of the three structs that ride the wire whole, so such a change is
+    /// a failing test (and therefore a conscious bump), not a mystery.
+    #[test]
+    fn the_wire_layout_of_the_config_structs_is_pinned() {
+        fn fnv1a(bytes: &[u8]) -> u64 {
+            let mut h = 0xcbf2_9ce4_8422_2325u64;
+            for &b in bytes {
+                h = (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3);
+            }
+            h
+        }
+        let digi = postcard::to_allocvec(&sdroxide_types::DigiConfig::default()).unwrap();
+        let radio = postcard::to_allocvec(&sdroxide_types::RadioConfig::default()).unwrap();
+        let net = postcard::to_allocvec(&sdroxide_types::NetworkConfig::default()).unwrap();
+        assert_eq!(
+            (digi.len(), fnv1a(&digi)),
+            (477, 2_903_949_547_993_043_639),
+            "DigiConfig's wire layout shifted — append fields, never insert them"
+        );
+        assert_eq!(
+            (radio.len(), fnv1a(&radio)),
+            (887, 11_921_450_238_979_962_418),
+            "RadioConfig's wire layout shifted — append fields, never insert them"
+        );
+        assert_eq!(
+            (net.len(), fnv1a(&net)),
+            (314, 15_307_633_050_357_107_781),
+            "NetworkConfig's wire layout shifted — append fields, never insert them"
+        );
     }
 
     /// The station configuration, both ways.
@@ -3791,6 +3983,38 @@ mod tests {
         let answer =
             ClientMsg::Auth { username: "oe1test".into(), password: "pässwörd ✓".into() };
         assert_eq!(decode::<ClientMsg>(&encode(&answer).unwrap()).unwrap(), answer);
+    }
+
+    /// The receive-sensitivity pair crosses the wire at values other than its
+    /// defaults: WEFAX's fields (v237) sit at the very tail of `DigiConfig`, which
+    /// rides `SetDigiConfig` and `DigiStatus` whole. A field appended in the
+    /// wrong place decodes into another setting rather than failing, so only a
+    /// non-default value shows it — and Auto's default is `true`, which a zeroed
+    /// `bool` would silently turn off.
+    #[test]
+    fn roundtrip_receive_sensitivity() {
+        use sdroxide_types::DigiConfig;
+
+        let cfg = DigiConfig {
+            my_call: "OE1XYZ".into(),
+            wefax_rx_sensitivity: 4,
+            wefax_rx_auto: false,
+            ..DigiConfig::default()
+        };
+        let m = ClientMsg::Command(Command::SetDigiConfig(cfg.clone()));
+        assert_eq!(decode::<ClientMsg>(&encode(&m).unwrap()).unwrap(), m);
+
+        let m = ServerMsg::Ft8Status(DigiStatus::idle(cfg));
+        let back = decode::<ServerMsg>(&encode(&m).unwrap()).unwrap();
+        assert_eq!(back, m);
+        let ServerMsg::Ft8Status(s) = back else { panic!("not a status") };
+        assert_eq!(s.config.wefax_rx_sensitivity, 4);
+        assert!(!s.config.wefax_rx_auto);
+
+        // A configuration that never set them still arrives at Auto and zero,
+        // which is the behaviour a station had before the field existed.
+        let d = DigiConfig::default();
+        assert_eq!((d.wefax_rx_sensitivity, d.wefax_rx_auto), (0, true));
     }
 
     #[test]

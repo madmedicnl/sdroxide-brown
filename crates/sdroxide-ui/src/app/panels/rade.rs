@@ -32,6 +32,12 @@ impl SdroxideApp {
                 RichText::new("FreeDV V1 digital voice").size(10.5).color(crate::theme::CYAN_DIM()),
             );
             crate::chrome::row_tail(ui, |ui| {
+                // **The pane's way out**, in the corner where every panel keeps
+                // it: one drawn glyph, the same picture the float's bar uses to
+                // come back.
+                if super::window_chip(ui) {
+                    self.float_operating_panel();
+                }
                 if transmitting {
                     ui.label(
                         RichText::new("● TX").size(11.0).strong().color(crate::theme::ALERT()),

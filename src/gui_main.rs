@@ -208,7 +208,7 @@ pub fn run_multi(
     // close, and for the rest in `SdroxideApp::on_exit` — so every device
     // closes before process teardown can race the C libraries' exit handlers.
     sdroxide_ui::event_loop::run(
-        "sdroxide",
+        "sdroxide-brown",
         options,
         Box::new(move |cc| {
             let mut multi =
@@ -488,7 +488,7 @@ pub fn run_screenshot(
     };
 
     let run_result = sdroxide_ui::event_loop::run(
-        "sdroxide",
+        "sdroxide-brown",
         options,
         Box::new(move |cc| {
             let multi = sdroxide_ui::MultiApp::new(cc, tabs, Some(factory), Some(remote_factory()));
@@ -598,7 +598,7 @@ pub fn run_remote(url: &str) -> Result<()> {
     // moment a message arrives, instead of waiting for the next poll.
     let url = url.to_string();
     sdroxide_ui::event_loop::run(
-        "sdroxide-remote",
+        "sdroxide-brown-remote",
         options,
         Box::new(move |cc| {
             // Radio 0, so a client that has always been started this way keeps

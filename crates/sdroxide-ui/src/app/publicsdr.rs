@@ -53,8 +53,11 @@ fn entry_row(
     ui: &mut egui::Ui,
     e: &PublicSdrEntry,
     distance_km: Option<f64>,
+    dead: bool,
 ) -> Option<PickAction> {
-    let blocked = e.blocked_reason();
+    let blocked = e
+        .blocked_reason()
+        .or_else(|| dead.then(|| "could not connect this session".to_string()));
     let mut action = None;
     let dim = crate::theme::gray(if blocked.is_some() { 100 } else { 170 });
     let net_col = match e.network {
@@ -546,7 +549,8 @@ impl SdroxideApp {
                     }
                     _ => None,
                 };
-                if let Some(a) = entry_row(ui, e, km) {
+                let dead = self.dead_public_sdrs.contains(&e.address);
+                if let Some(a) = entry_row(ui, e, km, dead) {
                     *picked = Some(((*e).clone(), a));
                 }
             }
@@ -612,6 +616,7 @@ impl SdroxideApp {
     /// "open it in a tab" and "use it here" would drift into two subtly
     /// different radios.
     fn take_public_sdr(&mut self, entry: &PublicSdrEntry, action: PickAction) {
+        self.last_public_sdr_try = Some(entry.address.clone());
         match action {
             PickAction::ThisRadio => {
                 // Built on this radio's own configuration, so pointing it at a

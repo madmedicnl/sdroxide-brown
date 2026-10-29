@@ -12,6 +12,7 @@ mod aprs;
 mod atchat;
 pub mod atsmini;
 mod audio;
+mod audio_level;
 pub mod auto;
 mod awards;
 mod band;
@@ -26,6 +27,7 @@ mod cb_callsign;
 mod cb_country;
 mod chirp;
 mod command;
+mod composer;
 mod contacts;
 mod contest;
 mod controller;
@@ -103,7 +105,7 @@ pub use access::{AUTH_BUSY, AUTH_REFUSED, AuthPhase, RemoteAccess, RemoteServer,
 pub use adsb::{
     ADSB_DROP_LIST_S, ADSB_DROP_MAP_S, ADSB_FREQ_HZ, ADSB_GOOD_RATE_HZ, ADSB_HISTORY_POINTS,
     ADSB_MAX_AIRCRAFT, ADSB_MAX_RATE_HZ, ADSB_MIN_RATE_HZ, ADSB_TRACK_MAX, ADSB_VECTOR_MINUTES,
-    AdsbAircraft, AdsbSettings, AdsbSource, AdsbStatus,
+    AdsbAircraft, AdsbSettings, AdsbSource, AdsbStatus, AirUnits,
 };
 pub use ais::{
     AIS_ALL_CHANNELS, AIS_BIT_RATE, AIS_CHANNEL_A_HZ, AIS_CHANNEL_B_HZ, AIS_CHANNEL_SPACING_HZ,
@@ -152,10 +154,18 @@ pub use cb_callsign::{
 pub use cb_country::cb_callsign_in;
 pub use chirp::{chirp_csv_to_memories, memories_to_chirp_csv};
 pub use command::{Command, KNOWN_CALLS_REPLY_MAX, KnownCallsReply};
+pub use composer::{
+    Composer, Face, LayoutTemplate, Strip, TEMPLATE_MAX, TEMPLATE_NAME_MAX, TextLayer,
+};
 pub use contacts::FsqContact;
 pub use contest::{
     ContestId, ContestScore, ContestSession, ContestSpec, Exchange, Multiplier, cabrillo_contest,
     cabrillo_mode, rate, score, to_cabrillo, wpx_prefix,
+};
+pub use audio_level::{
+    AUDIO_LEVEL_LEASE_SECS,
+    AUDIO_BAND_FLOOR_DB, AUDIO_BANDS, AUDIO_BANDS_HI_HZ, AUDIO_BANDS_LO_HZ, AudioLevel, band_to_byte,
+    byte_to_unit,
 };
 pub use controller::{AudioDevices, PeerRadio, RadioController, RadioEvent};
 pub use dab::{

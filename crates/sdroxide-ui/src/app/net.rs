@@ -15,11 +15,9 @@ use sdroxide_types::{
 use crate::app::SdroxideApp;
 use crate::app::persist::persist_qso_log;
 
+/// Wasm-safe wall clock — `SystemTime::now()` panics in the browser (#262/#297).
 fn now_unix() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
+    crate::time::now_unix()
 }
 
 /// Least time between two locator lookups driven by a heard list.

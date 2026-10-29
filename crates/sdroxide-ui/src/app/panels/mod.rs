@@ -38,6 +38,7 @@ mod navtex;
 pub(in crate::app) mod packet;
 pub(in crate::app) mod pi4;
 pub(in crate::app) mod rade;
+pub(in crate::app) mod radio_classic;
 pub(in crate::app) mod rf_paint;
 pub(in crate::app) mod setup;
 pub(in crate::app) mod sstv;
@@ -255,6 +256,40 @@ pub(in crate::app) fn save_rx_chip_for(ui: &mut egui::Ui, status: Option<&DigiSt
     }
 }
 
+/// What each style looks like, for its button's tooltip.
+fn map_style_hover(style: sdroxide_types::MapStyle) -> &'static str {
+    match style {
+        sdroxide_types::MapStyle::Radar => {
+            "Radar — the dark ground, land filled. What an air picture is read against"
+        }
+        sdroxide_types::MapStyle::Terrain => {
+            "Terrain — land lifted and warmed so it reads as ground, borders dimmed"
+        }
+        sdroxide_types::MapStyle::Chart => {
+            "Chart — pale land, picked-out borders and a graticule, the aeronautical look"
+        }
+    }
+}
+
+/// The three style buttons, the current one lit, each with its response.
+fn map_style_buttons(
+    ui: &mut egui::Ui,
+    current: sdroxide_types::MapStyle,
+) -> Vec<(sdroxide_types::MapStyle, egui::Response)> {
+    sdroxide_types::MapStyle::ALL
+        .into_iter()
+        .map(|style| {
+            let r = crate::chrome::chip(
+                ui,
+                style == current,
+                RichText::new(style.label().to_uppercase()).size(9.5),
+            )
+            .on_hover_text(map_style_hover(style));
+            (style, r)
+        })
+        .collect()
+}
+
 impl SdroxideApp {
     /// Fold everything this frame knows into the propagation field, and hand
     /// back the texture the map should paint under itself.
@@ -344,29 +379,21 @@ impl SdroxideApp {
         }
     }
 
-    /// The **map style** chip: the ground the survey maps are painted on.
-    ///
-    /// Three states, so it cycles rather than opening a picker — the same
-    /// judgement as the RX strip's NR chip in reverse: that one had sixteen and
-    /// needed a menu, this has three and needs a click.
+    /// The **map style** buttons: the ground the survey maps are painted on,
+    /// one button per style side by side — Radar, Terrain, Chart — with the
+    /// active one lit. The operator picks the one that suits them; nothing
+    /// cycles.
     pub(in crate::app) fn map_style_chip(&mut self, ui: &mut egui::Ui) {
-        let style = self.ui_settings.survey_map_style;
-        let hover = format!(
-            "The ground under the picture: {}. Click for the next one.",
-            match style {
-                sdroxide_types::MapStyle::Radar =>
-                    "Radar — the dark ground, land filled. What an air picture is read against",
-                sdroxide_types::MapStyle::Terrain =>
-                    "Terrain — land lifted and warmed so it reads as ground, borders dimmed",
-                sdroxide_types::MapStyle::Chart =>
-                    "Chart — pale land, picked-out borders and a graticule, the aeronautical look",
-            }
-        );
-        if crate::chrome::chip(ui, false, RichText::new(style.label().to_uppercase()).size(9.5))
-            .on_hover_text(hover)
-            .clicked()
-        {
-            self.ui_settings.survey_map_style = style.next();
+        let current = self.ui_settings.survey_map_style;
+        let mut picked = None;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            picked = map_style_buttons(ui, current)
+                .into_iter()
+                .find_map(|(s, r)| r.clicked().then_some(s));
+        });
+        if let Some(style) = picked.filter(|s| *s != current) {
+            self.ui_settings.survey_map_style = style;
             crate::app::persist::persist_ui_settings(&self.ui_settings);
         }
     }
@@ -456,9 +483,15 @@ impl SdroxideApp {
     }
 }
 
-/// The full tab row for `mode`: its panes, then the waterfall.
-pub(in crate::app) fn panel_tabs(mode: Mode) -> impl Iterator<Item = &'static str> {
-    panel_panes(mode).iter().copied().chain(std::iter::once(TAB_WFALL))
+/// The full tab row for `mode`: its panes, then the waterfall — or the panes
+/// alone, for a **panel window**, which has no waterfall to give its last tab
+/// to (the picture is the main window's, and a tab that showed the two-column
+/// layout again would undo the reason the row exists).
+pub(in crate::app) fn panel_tabs(
+    mode: Mode,
+    waterfall: bool,
+) -> impl Iterator<Item = &'static str> {
+    panel_panes(mode).iter().copied().chain(std::iter::once(TAB_WFALL).filter(move |_| waterfall))
 }
 
 /// Index of the pane named `name`, for the panels that need to switch to one of
@@ -799,7 +832,11 @@ impl SdroxideApp {
     /// Wrapped, so a mode with more panes than the width holds takes a second
     /// row rather than losing the last one — which on most modes is the
     /// waterfall.
-    pub(in crate::app) fn digi_tabs(&mut self, ui: &mut egui::Ui, mode: Mode) {
+    /// The pane chips a narrow view switches between. `waterfall` is whether
+    /// this row has the main window's last tab — true where the picture is
+    /// below or beside it, false in a **panel window**, which draws the panel
+    /// and nothing else.
+    pub(in crate::app) fn digi_tabs(&mut self, ui: &mut egui::Ui, mode: Mode, waterfall: bool) {
         let selected = self.digi_pane(mode);
         // Pin the content to the width left *inside* the margins. A `Frame`
         // reports an outer rect of content-plus-margins, and a content row that
@@ -814,7 +851,7 @@ impl SdroxideApp {
             .show(ui, |ui| {
                 ui.set_max_width(inner_w);
                 ui.horizontal_wrapped(|ui| {
-                    for (i, label) in panel_tabs(mode).enumerate() {
+                    for (i, label) in panel_tabs(mode, waterfall).enumerate() {
                         if crate::chrome::chip(ui, selected == i, label).clicked() {
                             self.view.digi_pane = i;
                         }
@@ -833,9 +870,9 @@ impl SdroxideApp {
                             // Auto mode's always-visible tell: it keys the
                             // transmitter with nobody watching, so it must not
                             // be possible to leave it armed and forget.
-                            if self.auto_mode {
+                            if let Some(role) = self.auto_role {
                                 ui.label(
-                                    RichText::new("● AUTO")
+                                    RichText::new(format!("● {}", role.label()))
                                         .size(10.0)
                                         .strong()
                                         .color(crate::theme::ALERT()),
@@ -1567,6 +1604,62 @@ impl SdroxideApp {
 mod tests {
     use super::*;
 
+    /// One frame of the three style buttons; returns each button's rect and
+    /// the style clicked, if any.
+    fn style_frame(
+        ctx: &egui::Context,
+        current: sdroxide_types::MapStyle,
+        events: Vec<egui::Event>,
+    ) -> (Vec<egui::Rect>, Option<sdroxide_types::MapStyle>) {
+        let mut rects = Vec::new();
+        let mut clicked = None;
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(400.0, 100.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        ctx.run_ui(raw, |ui| {
+            ui.horizontal(|ui| {
+                for (s, r) in map_style_buttons(ui, current) {
+                    rects.push(r.rect);
+                    if r.clicked() {
+                        clicked = Some(s);
+                    }
+                }
+            });
+        })
+        .drop_without_applying_deltas();
+        (rects, clicked)
+    }
+
+    /// The request: no button that cycles — each style has its own, side by
+    /// side, and a click on one picks exactly that one.
+    #[test]
+    fn each_map_style_has_its_own_button_beside_the_others() {
+        use sdroxide_types::MapStyle;
+        let ctx = egui::Context::default();
+        let (rects, _) = style_frame(&ctx, MapStyle::Radar, vec![]);
+        assert_eq!(rects.len(), 3);
+        assert!(rects.windows(2).all(|p| p[0].right() <= p[1].left() + 0.5), "{rects:?}");
+        assert!(rects.windows(2).all(|p| (p[0].center().y - p[1].center().y).abs() < 1.0));
+        for (i, want) in MapStyle::ALL.into_iter().enumerate() {
+            let at = rects[i].center();
+            let press = |pressed| egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            };
+            style_frame(&ctx, MapStyle::Radar, vec![egui::Event::PointerMoved(at)]);
+            style_frame(&ctx, MapStyle::Radar, vec![egui::Event::PointerMoved(at), press(true)]);
+            let (_, clicked) = style_frame(&ctx, MapStyle::Radar, vec![press(false)]);
+            assert_eq!(clicked, Some(want), "button {i}");
+        }
+    }
+
     /// The header rows that carry SAVE, on the narrowest phones in their
     /// widest state — a busy channel, bad frames, a repaired/lost count — stay
     /// on the screen: a row too long for one line takes a second rather than
@@ -1585,6 +1678,7 @@ mod tests {
             bad_frames: 99_999,
             ..Default::default()
         };
+        let mut cfg = DigiConfig::default();
         let mut status = DigiStatus::idle(DigiConfig::default());
         status.text_rx = "something to save".into();
         let mut off_screen = Vec::new();
@@ -1601,12 +1695,18 @@ mod tests {
                 let r = ui.scope(|ui| acars::acars_header(ui, &acars, s, &mut cmds));
                 rows.push(("ACARS", r.response.rect));
                 let r = ui.scope(|ui| {
-                    // Five arguments: the NAVTEX sensitivity revert (#233)
-                    // took the two the float branch still passed here. #233
-                    // shrank the signature and #226 — merged after it — brought
-                    // the branch's seven-argument call back, so `main` on origin
-                    // does not compile. This is that seam.
-                    navtex::navtex_list_header(ui, &navtex, s, &mut cmds, true)
+                    // Seven arguments again: the header draws the receive
+                    // sensitivity control with the rest of NAVTEX's settings, so
+                    // it takes the config being edited and whether it is seeded.
+                    navtex::navtex_list_header(
+                        ui,
+                        &navtex,
+                        s,
+                        &mut cmds,
+                        true,
+                        &mut cfg,
+                        true,
+                    )
                 });
                 rows.push(("NAVTEX", r.response.rect));
                 let r =
@@ -1649,10 +1749,14 @@ mod tests {
         for mode in Mode::ALL {
             let panes = panel_panes(mode);
             assert!(!panes.is_empty(), "{mode:?} has no panes");
-            let tabs: Vec<_> = panel_tabs(mode).collect();
+            let tabs: Vec<_> = panel_tabs(mode, true).collect();
             assert_eq!(tabs.len(), panes.len() + 1, "{mode:?} tab count");
             assert_eq!(tabs.last().copied(), Some(TAB_WFALL), "{mode:?} waterfall is not last");
             assert!(!panes.contains(&TAB_WFALL), "{mode:?} names a pane after the waterfall tab");
+            // A **panel window** has no waterfall to show — the picture is the
+            // main window's — so its row is the mode's own panes and no more.
+            let window: Vec<_> = panel_tabs(mode, false).collect();
+            assert_eq!(window, panes, "{mode:?} window row");
         }
     }
 

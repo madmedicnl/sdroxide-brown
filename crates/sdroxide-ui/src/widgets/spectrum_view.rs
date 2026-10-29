@@ -1417,21 +1417,24 @@ pub fn show_ext(
         return;
     };
 
-    // The pan/zoom bounds are the full device passband (frames may cover
-    // only the zoomed viewport). Mutable because a pan that reaches the edge of
-    // the window moves the window — everything below has to be bounded by the
-    // one being asked for, not the one being left.
+    // The pan/zoom bounds are the *usable* part of the device passband, not the
+    // raw rate: a zero-IF receiver's decimation filter rolls off inside its
+    // rate (the Airspy HF+ at 768 kSPS carries about 660 kHz), so a view that
+    // can pan into that skirt draws filter edge as band. `iq_span` below stays
+    // the raw I/Q, which is what the sub receiver's DDC is genuinely bounded
+    // by — the skirt is still inside the stream even where it is not band.
     let mut dev_center = state.center_hz;
-    let dev_span = state.sample_rate;
+    let dev_span = crate::app::spectrum::display_span(state.sample_rate, state.usable_hz);
+    let iq_span = state.sample_rate;
     // How far the view may zoom and pan: the full-band lane where the front end
-    // has one, else the passband. Distinct from `dev_*` above, which stays the
-    // I/Q and goes on bounding the things that really are limited by it — the
-    // sub receiver's DDC, and the zoom-in resolution floor.
+    // has one, else the usable passband. Distinct from `iq_span`, which stays
+    // the I/Q and goes on bounding the things that really are limited by it —
+    // the sub receiver's DDC, and the zoom-in resolution floor.
     let (zoom_center, zoom_span) = pan.view_bounds(dev_center, dev_span);
     // Both receivers are DDCs on this one IQ stream, so nothing outside these
     // edges can be tuned — the sub gets clamped to them.
-    let dev_lo = dev_center - dev_span / 2.0;
-    let dev_hi = dev_center + dev_span / 2.0;
+    let dev_lo = dev_center - iq_span / 2.0;
+    let dev_hi = dev_center + iq_span / 2.0;
     if view.is_unset() {
         view.fit(dev_center, dev_span);
     }

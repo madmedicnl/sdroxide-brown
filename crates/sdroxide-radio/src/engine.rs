@@ -3449,6 +3449,10 @@ struct Engine {
     dab_idle_sent: Option<Option<String>>,
     /// The decoded audio's level, left and right, from the last block played.
     dab_level: Option<[f32; 2]>,
+    /// The speaker feed's level meter, for `RadioEvent::AudioLevel`.
+    audio_meter: sdroxide_dsp::AudioMeter,
+    /// Until when a screen has asked for `AudioLevel` (`Command::WantAudioLevel`).
+    audio_level_until: Option<Instant>,
     /// QO-100 beacon decoder: a fixed downconversion onto
     /// [`sdroxide_types::QO100_BEACON_HZ`] plus a worker-thread demodulator,
     /// present only while the decoder is enabled. Simpler than the ISM
@@ -5055,6 +5059,8 @@ fn engine_thread(
         dab_cfg,
         dab_idle_sent: None,
         dab_level: None,
+        audio_meter: sdroxide_dsp::AudioMeter::new(),
+        audio_level_until: None,
         qo100_ddc: None,
         qo100: None,
         qo100_buf: Vec::new(),
@@ -6572,6 +6578,14 @@ impl Engine {
         }
         let (speaker, speaker_right): (&[f32], Option<&[f32]>) =
             if self.replay.on() { (&self.replay_buf, None) } else { (&self.main_play, right) };
+        let now = Instant::now();
+        if self.audio_level_until.is_some_and(|t| now < t) {
+            if let Some(level) =
+                self.audio_meter.feed(speaker, speaker_right, self.audio_out_rate, now)
+            {
+                let _ = self.event_tx.send(RadioEvent::AudioLevel(Box::new(level)));
+            }
+        }
         if let Some(mixer) = self.mixer.as_mut() {
             mixer.push(speaker, speaker_right, &self.main_play_rec, rec_right);
         }
@@ -11019,6 +11033,52 @@ impl Engine {
                 if self.images.set_message(slot as usize, message) {
                     self.emit_image_presets();
                 }
+                return;
+            }
+            // The picture composer's document. Like the message above, it is the
+            // preset's own text and outlives its picture: clearing a picture is
+            // replacing it, not forgetting what it said.
+            ImageSetComposer { slot, composer } => {
+                if slot as usize >= sdroxide_types::IMAGE_SLOTS {
+                    warn!(slot, "picture document for a slot that does not exist");
+                } else if self.images.set_composer(slot as usize, composer) {
+                    self.emit_image_presets();
+                }
+                return;
+            }
+            // The station-wide overlay switch, per preset: the overlay is every
+            // picture's identification, and a picture that already carries one —
+            // a retransmitted mosaic, usually — turns it off here.
+            ImageSetOverlay { slot, on } => {
+                if slot as usize >= sdroxide_types::IMAGE_SLOTS {
+                    warn!(slot, "overlay switch for a slot that does not exist");
+                } else if self.images.set_overlay(slot as usize, on) {
+                    self.emit_image_presets();
+                }
+                return;
+            }
+            // **The layout library.** Saved and forgotten here rather than in a
+            // panel, for the reason the documents themselves live here: the
+            // console, a browser tab and the next session have to see the same
+            // templates.
+            ImageSaveTemplate { name, composer } => {
+                match self.images.save_template(&name, composer) {
+                    Ok(()) => self.emit_image_presets(),
+                    Err(why) => {
+                        let _ = self.event_tx.send(RadioEvent::Notice(Some(why)));
+                    }
+                }
+                return;
+            }
+            ImageDeleteTemplate { name } => {
+                if self.images.delete_template(&name) {
+                    self.emit_image_presets();
+                }
+                return;
+            }
+            WantAudioLevel => {
+                let lease = std::time::Duration::from_secs_f64(sdroxide_types::AUDIO_LEVEL_LEASE_SECS);
+                self.audio_level_until = Some(Instant::now() + lease);
                 return;
             }
             // Answered inline: the bytes are already in memory and bounded to
@@ -15562,6 +15622,18 @@ impl Engine {
         let (lo, hi) = mode.default_filter_at(dial);
         (r.filter_lo, r.filter_hi) = (lo, hi);
         let snapshot = *r;
+        // **A transmitter already on the air does not stay keyed into a
+        // receive-only mode.** Selecting WEFAX mid-over would otherwise leave
+        // PTT or TUNE latched with the only controls that could release them
+        // gone from the screen, which is the state an operator cannot get out
+        // of — on a channel that mode exists to listen to, usually a broadcast
+        // one.
+        if rx == RxId::Main && mode.is_rx_only() && (self.state.tx.ptt || self.state.tx.tune) {
+            self.state.tx.ptt = false;
+            self.state.tx.tune = false;
+            self.sync_tx_state();
+            self.notice(&format!("{} is receive-only — the transmitter was unkeyed", mode.label()));
+        }
         if let Some(c) = self.chain_mut(rx) {
             c.build_for_mode(&snapshot, dial);
         }
@@ -17585,15 +17657,16 @@ impl Engine {
     /// nobody chose is how someone ends up chasing a signal that is not there.
     /// One line, and the number on screen is never a surprise.
     fn note_opened_elsewhere(&self, asked_hz: f64, at_hz: f64) {
-        let msg = format!(
+        // Logged, not shown: this fires while the receiver is settling and the
+        // dial still holds the previous frequency, which is noise to most
+        // operators (issue #265). The dial on screen still moves to where the
+        // hardware actually is, so the number is never a surprise.
+        warn!(
             "This radio would not open on {:.6} MHz, which it cannot reach, so it opened on \
-             {:.6} MHz — the last frequency it tuned. Put a frequency it can tune in the \
-             start-frequency field to stop this.",
+             {:.6} MHz — the last frequency it tuned.",
             asked_hz / 1e6,
             at_hz / 1e6,
         );
-        warn!("{msg}");
-        let _ = self.event_tx.send(RadioEvent::Notice(Some(msg)));
     }
 
     /// Rebuild the IQ front-end at runtime (backend / CAT audio / HPSDR-TCI
@@ -17894,8 +17967,10 @@ impl Engine {
         // ends put us here by answering with the frequency they were handed
         // rather than the one they clamped to, and a converter switched on
         // under a running radio moves the whole range at once.
-        let mut moved = None;
         if let Some(hz) = nearest_rx_hz(&self.caps, state.active_freq_hz()) {
+            // Logged, not shown: the dial is being brought into the new front
+            // end's range automatically, which is not a refusal the operator
+            // asked about (issue #265).
             let why = format!(
                 "{:.6} MHz is outside this radio's receive range ({}) — the dial moved to \
                  {:.6} MHz",
@@ -17904,12 +17979,17 @@ impl Engine {
                 hz / 1e6,
             );
             warn!("{why}");
-            moved = Some(why);
             state.vfo_a_hz = hz;
             state.vfo_b_hz = hz;
         }
         state.band = Band::containing(state.active_freq_hz());
         self.state = state;
+        // `sample_rate` and `decimation` above are the new front end's, but the
+        // `usable_hz` that rode over from `..self.state.clone()` still belongs
+        // to the old one. Swapping a switched-off stand-in (48 kHz) for a
+        // 3 Msps SDR left it at 48 kHz, so the display span came up at 48 kHz
+        // and the zoom kept snapping back to it (issue #263).
+        self.state.usable_hz = self.usable_span_hz();
         // The frequency a refused tune goes back to belongs to the front end
         // that is on the air now: the old one's dial may be nowhere this one can
         // go, and `keep_vfo_in_span` below is about to judge exactly that.
@@ -18000,7 +18080,6 @@ impl Engine {
         // Surface any open warning (radio audio unavailable, …) and any config
         // file reset to defaults by the reload, or clear a stale notice.
         let mut notes: Vec<String> = self.source.open_status().into_iter().collect();
-        notes.extend(moved);
         notes.extend(sdroxide_config::take_load_alerts());
         let _ =
             self.event_tx.send(RadioEvent::Notice((!notes.is_empty()).then(|| notes.join("\n"))));
@@ -18542,6 +18621,25 @@ impl Engine {
             return;
         }
         if want_tx {
+            // **A receive-only mode cannot be keyed, by any route.** The chrome
+            // stops offering a PTT in WEFAX, NAVTEX, DSC and the rest (issue
+            // #239), and this is the half that makes the refusal true rather
+            // than cosmetic: a keyboard binding, a MIDI button, an external PTT
+            // line, a TCI client, a remote `SetPtt` or a digital burst all end
+            // here, and none of them can put a carrier on a broadcast channel
+            // whose mode has nothing to modulate.
+            //
+            // It is asked of the *transmitting* receiver — the main one — for
+            // the reason the whole transmit chain asks it: the sub receiver is
+            // a second pair of ears, and what it is listening to never decides
+            // what is sent.
+            if self.state.rx[0].mode.is_rx_only() {
+                let mode = self.state.rx[0].mode;
+                return self.deny_tx(&format!(
+                    "{} is a receive-only mode",
+                    mode.label()
+                ));
+            }
             // The SWR latch comes before every other rail, including the
             // station interlock. It is a pure state check with no side effects
             // to unwind, and it is the one refusal that says the antenna system

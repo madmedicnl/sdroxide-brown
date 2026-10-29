@@ -57,6 +57,7 @@ mod solar3d;
 mod sound_welcome;
 pub mod spectrum_fill;
 mod sstv;
+mod sstv_composer;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test_raster;
 pub mod theme;

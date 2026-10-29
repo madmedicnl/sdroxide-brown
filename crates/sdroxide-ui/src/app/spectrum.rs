@@ -1102,6 +1102,14 @@ impl SdroxideApp {
         // a zoomed-out KiwiSDR session came back up at 12 kHz.
         let (out_center, out_span) = self.zoom_out_window();
         if self.caps.is_some() && out_span > 0.0 && self.view.span() > out_span {
+            tracing::debug!(
+                target: "sdroxide::panadapter",
+                view_span = self.view.span(),
+                out_span,
+                sample_rate = self.state.sample_rate,
+                usable_hz = self.state.usable_hz,
+                "narrowing a restored view to the front end's window",
+            );
             self.view.fit(out_center, out_span);
         }
         // What has to stay on screen is what is being listened to, not the
@@ -1300,7 +1308,7 @@ const SSTV_VIEW_SPAN_HZ: f64 = 3000.0;
 ///
 /// A free function for the reason the tree's other decisions are: the app is not
 /// needed to answer it, so the answer can be pinned without standing one up.
-fn display_span(rate: f64, usable: f64) -> f64 {
+pub(crate) fn display_span(rate: f64, usable: f64) -> f64 {
     if usable > 0.0 && usable < rate { usable } else { rate }
 }
 

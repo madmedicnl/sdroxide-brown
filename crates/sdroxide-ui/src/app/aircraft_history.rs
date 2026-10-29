@@ -290,7 +290,11 @@ pub(in crate::app) fn rows(j: &Journal, now: i64) -> Vec<Row> {
     }
     out.push(line("Track points", j.points.len().to_string(), "kept for the last 24 h"));
     if let Some(top) = j.points.iter().filter_map(|p| p.altitude_ft()).max() {
-        out.push(line("Highest", format!("{top} ft"), "of the kept points"));
+        out.push(line(
+            "Highest",
+            sdroxide_types::AirUnits::current().altitude(top),
+            "of the kept points",
+        ));
     }
     let joined = |list: &[sdroxide_aircraft_history::Seen]| {
         list.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(", ")

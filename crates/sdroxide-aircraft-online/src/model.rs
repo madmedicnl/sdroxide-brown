@@ -131,8 +131,27 @@ fn planespotters_url(url: &str, hosts: &[&str]) -> bool {
     !host.contains('@') && !host.contains(':') && hosts.iter().any(|h| host == *h)
 }
 
-pub(crate) fn thumb_url_ok(url: &str) -> bool {
+pub fn thumb_url_ok(url: &str) -> bool {
     planespotters_url(url, &["t.plnspttrs.net"])
+}
+
+/// The largest picture the station will hold for a client.
+pub const MAX_IMAGE: usize = 2 * 1024 * 1024;
+
+/// One thumbnail, as Planespotters sent it: only ever held in memory, for the
+/// one card that is open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Image {
+    pub content_type: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Whether a reply is a picture the station keeps: a JPEG or a PNG, not empty
+/// and not past [`MAX_IMAGE`]. Anything else (an HTML error page behind a 200,
+/// say) is not passed on.
+pub fn image_ok(content_type: &str, len: usize) -> bool {
+    let kind = content_type.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    matches!(kind.as_str(), "image/jpeg" | "image/png") && len > 0 && len <= MAX_IMAGE
 }
 
 pub(crate) fn page_url_ok(url: &str) -> bool {

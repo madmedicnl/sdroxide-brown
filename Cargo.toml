@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "tools/antenna"]
 default-members = [".", "crates/sdroxide-types", "crates/sdroxide-proto", "crates/sdroxide-dsp", "crates/sdroxide-radio", "crates/sdroxide-config"]
 # The vendored crates are reached through `[patch.crates-io]`, not as members:
 # they are upstream's code under upstream's licences, not ours to lint or
@@ -40,7 +40,7 @@ ewebsock = { path = "vendor/ewebsock" }
 soapysdr = { path = "vendor/soapysdr" }
 
 [workspace.package]
-version = "2.1.0"
+version = "2.2.0"
 edition = "2024"
 # The native binary links mfsk-core (GPL-3.0-or-later) for FT8/FT4 and the
 # DeepCW model (AGPL-3.0-only) for CW, so the built binary carries both. AGPL is
@@ -55,6 +55,11 @@ license = "GPL-3.0-or-later"
 # DSP is unusably slow unoptimized; keep deps and the sample-rate-hot crates
 # fast in dev builds while the rest stays quick to compile.
 [profile.dev.package."*"]
+opt-level = 2
+
+# The antenna MoM solver is an integrate-and-solve; unoptimized a few-second
+# optimization becomes a minute under `cargo test`, so keep it fast there too.
+[profile.test.package.antenna-model]
 opt-level = 2
 
 [profile.dev.package.sdroxide-dsp]

@@ -1855,47 +1855,129 @@ impl SdroxideApp {
             let tx_permitted_band = self.auto_tx_permitted();
             let auto_block =
                 sdroxide_types::auto::auto_block_reason(auto_m, auto_watchdog, tx_permitted_band);
-            let auto_armed = self.auto_mode;
-            ui.horizontal_wrapped(|ui| {
-                let auto_hover = match auto_block {
-                    Some(r) => r.to_string(),
-                    None if auto_armed => {
-                        // The engine's own step, because it is the one fact that
-                        // decides whether a station answering our CQ can be
-                        // adopted: the adopt arm requires `CallingCq` with no
-                        // contact in hand, and every other state discards the
-                        // answer. It used to be invisible, which made a missed
-                        // contact impossible to explain after the fact.
-                        let step = status.as_ref().map(|s| s.step);
+            // **Two roles, two chips** (issue #236): listen-and-answer, or
+            // call-and-work. One toggle did both and the operator could not say
+            // which one he wanted; the difference is visible in what the station
+            // does when the band is empty.
+            let armed = self.auto_role;
+            let repeats = self.digi_cfg_edit.auto_cq_repeats;
+            let then_listen = self.digi_cfg_edit.auto_cq_then_listen;
+            let engine_step = status.as_ref().map(|s| s.step);
+            let auto_note = self.auto_note.clone();
+            let session_min = self.digi_cfg_edit.auto_session_min;
+            let cq_repeats = self.digi_cfg_edit.auto_cq_repeats;
+            // The hover for each chip is built **before** the loop: it needs the
+            // operator's auto settings, and the loop takes `self` mutably.
+            let hover = |role: sdroxide_types::auto::AutoRole| -> String {
+                if let Some(r) = auto_block {
+                    return r.to_string();
+                }
+                if armed == Some(role) {
+                    // The engine's own step, because it is the one fact that
+                    // decides whether a station answering our CQ can be
+                    // adopted: the adopt arm requires `CallingCq` with no
+                    // contact in hand, and every other state discards the
+                    // answer. It used to be invisible, which made a missed
+                    // contact impossible to explain after the fact.
+                    return format!(
+                        "{} is armed. Click to stop.\n\n{}\n\nEngine step: {:?} — a \
+                         station answering a CQ is only taken in CallingCq with no contact \
+                         in hand.",
+                        role.label(),
+                        auto_note,
+                        engine_step
+                    );
+                }
+                match role {
+                    sdroxide_types::auto::AutoRole::Rx => {
+                        "Answer a new station's CQ, unattended, and never call CQ yourself. \
+                         Only callsigns not already in the log are answered. The transmit \
+                         watchdog paces it and the inactivity stop disarms it."
+                            .to_string()
+                    }
+                    sdroxide_types::auto::AutoRole::Continuous => {
                         format!(
-                            "Auto mode is armed. Click to stop.\n\n{}\n\nEngine step: {:?} \
-                             — a station answering a CQ is only taken in CallingCq with \
-                             no contact in hand.",
-                            self.auto_note, step
+                            "The whole workflow, unattended: finish the QSO, work whoever is \
+                             calling you, answer a station calling CQ, and call CQ only when \
+                             there is nothing else. Runs until you stop it{}. {bound}",
+                            if session_min == 0 {
+                                String::new()
+                            } else {
+                                format!(" or {session_min} minutes are up")
+                            },
+                            bound = if cq_repeats == 0 {
+                                "Each CQ run has no call limit of its own."
+                            } else {
+                                "Each CQ run is bounded by its own call count."
+                            },
                         )
                     }
-                    None => "Answer a new station's CQ, or call CQ when none is heard, \
-                             unattended. Only callsigns not already in the log are answered. \
-                             The transmit watchdog paces the run, and the inactivity stop \
-                             disarms it."
-                        .to_string(),
-                };
-                if crate::chrome::chip_enabled(
-                    ui,
-                    tx_ok && auto_block.is_none(),
-                    auto_armed,
-                    "AUTO",
-                )
-                .on_hover_text(auto_hover)
-                .clicked()
+                    sdroxide_types::auto::AutoRole::Cq => {
+                        let bound = if repeats == 0 {
+                            "No call limit of its own — the watchdog and the inactivity \
+                             stop end the run."
+                                .to_string()
+                        } else {
+                            format!(
+                                "After {repeats} calls it {}.",
+                                if then_listen {
+                                    "switches to AUTO RX and keeps listening"
+                                } else {
+                                    "stops"
+                                }
+                            )
+                        };
+                        format!(
+                            "Call CQ unattended and work whoever answers. {bound} Too short a \
+                             run and a quiet band never hears you; too long and the \
+                             transmitter sits on a frequency nobody is answering."
+                        )
+                    }
+                }
+            };
+            ui.horizontal_wrapped(|ui| {
+                // **Two chips and a tick.** The operating panel is a column with
+                // no room to grow — a third full chip pushed it past the dock
+                // edge in the layout test — so the continuous role, which is the
+                // two chips run in sequence, is armed by the compact tick beside
+                // them. It is a role of its own rather than a modifier, because
+                // the operator asked that the other two not change meaning.
+                for role in [sdroxide_types::auto::AutoRole::Rx, sdroxide_types::auto::AutoRole::Cq] {
+                    let is_armed = armed == Some(role);
+                    if crate::chrome::chip_enabled(ui, tx_ok && auto_block.is_none(), is_armed, role.label())
+                        .on_hover_text(hover(role))
+                        .clicked()
+                    {
+                        if is_armed {
+                            self.stop_auto(format!("{} stopped by the operator", role.label()), cmds);
+                        } else if self.arm_auto(ui.input(|i| i.time), role)
+                            && !self.digi_cfg_edit.auto_seq
+                        {
+                            // Auto mode is a sequencer running itself; without
+                            // Auto Seq it would advance only on a button press.
+                            self.digi_cfg_edit.auto_seq = true;
+                            cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+                        }
+                    }
+                }
                 {
-                    if auto_armed {
-                        self.stop_auto("auto stopped by the operator".into(), cmds);
-                    } else if self.arm_auto(ui.input(|i| i.time)) && !self.digi_cfg_edit.auto_seq {
-                        // Auto mode is a sequencer running itself; without Auto
-                        // Seq it would advance only on a button press.
-                        self.digi_cfg_edit.auto_seq = true;
-                        cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+                    let role = sdroxide_types::auto::AutoRole::Continuous;
+                    let mut on = armed == Some(role);
+                    let tick = ui
+                        .add_enabled_ui(tx_ok && auto_block.is_none(), |ui| {
+                            crate::chrome::checkbox(ui, &mut on, "cont")
+                        })
+                        .inner
+                        .on_hover_text(hover(role));
+                    if tick.changed() {
+                        if armed == Some(role) {
+                            self.stop_auto(format!("{} stopped by the operator", role.label()), cmds);
+                        } else if self.arm_auto(ui.input(|i| i.time), role)
+                            && !self.digi_cfg_edit.auto_seq
+                        {
+                            self.digi_cfg_edit.auto_seq = true;
+                            cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+                        }
                     }
                 }
                 let cq = ui.add_enabled_ui(!in_qso && tx_ok, |ui| {
@@ -1929,7 +2011,7 @@ impl SdroxideApp {
                     cmds.push(Command::DigiAbortTx);
                 }
             });
-            if self.auto_mode {
+            if self.auto_role.is_some() {
                 ui.label(
                     RichText::new(format!("● {}", self.auto_note))
                         .size(10.5)

@@ -2252,6 +2252,15 @@ pub enum WindowIcon {
     /// Dock a floating panel back into the pane: a panel with a chevron pushing
     /// into it, from the operator's second reference.
     Dock,
+    /// **Roll up**: a chevron pointing down, the window's bar keeping only its
+    /// title. Drawn like the others — a font `▾` beside a painted arrow was two
+    /// different weights on one row, which is exactly what the operator saw.
+    Collapse,
+    /// **Unroll** again: the same chevron, pointing up.
+    Unfold,
+    /// **Close**: two strokes crossed. A drawn × rather than the font's `×`,
+    /// for the same reason — one family, one stroke, one size.
+    Close,
 }
 
 /// A chip whose face is a **drawn** window icon rather than a word or a glyph.
@@ -2269,6 +2278,56 @@ pub enum WindowIcon {
 /// other chip. Every geometry here is a fraction of the icon's box, so it is
 /// crisp at whatever size a theme's chip height gives it.
 pub fn chip_window_icon(ui: &mut Ui, icon: WindowIcon) -> Response {
+    chip_window_icon_lit(ui, icon, false)
+}
+
+/// The strip a **window's own title bar** is drawn at: a 16 pt bar, 14 pt chips
+/// and a 12 pt name — the operator's numbers, each two points up from his first
+/// try because 14/12/10 read too small on his screen. Cheap to move, because every
+/// window picture is painted in fractions of its box, so one set of constants
+/// resizes all of them.
+pub const BAR_H: f32 = 16.0;
+/// The window buttons in a title bar: square, and square with the bar.
+pub const BAR_CHIP: f32 = 14.0;
+/// The name at the left of a title bar.
+pub const BAR_FONT: f32 = 12.0;
+/// How far the last button of a title bar stands off the window's edge. The
+/// operator's screenshot: the dock glyph sat hard in the top-right corner, and a
+/// control that touches the frame reads as clipped rather than placed.
+pub const BAR_INSET: f32 = 8.0;
+
+/// [`chip_window_icon`] at an exact size, for a bar that is smaller than the
+/// tier's own chip — the floating panel's title strip. The glyph inset is a
+/// fixed couple of points rather than the theme's chip padding, which is sized
+/// for buttons and would leave an 8 pt chip with a 6 pt picture in it.
+pub fn chip_window_icon_sized(ui: &mut Ui, icon: WindowIcon, size: egui::Vec2) -> Response {
+    let resp =
+        chip_impl(ui, false, RichText::new(WINDOW_ICON_LABEL), None, Sense::click(), Some(size));
+    let ink = if resp.hovered() {
+        ui.visuals().widgets.hovered.weak_bg_fill
+    } else {
+        ui.visuals().widgets.noninteractive.fg_stroke.color
+    };
+    let inner = (size.y - 4.0).min(size.x - 4.0).max(4.0);
+    let box_ = egui::Rect::from_center_size(resp.rect.center(), egui::Vec2::splat(inner));
+    paint_window_icon(ui.painter(), box_, ink, icon);
+    resp
+}
+
+/// The width a [`chip_window_icon`] takes: the chip's own inner box plus its
+/// padding. Exposed so a row that keeps a slot **empty** — a state this module
+/// cannot be in — can reserve exactly what the chip would have taken, and the
+/// row still reads the same left to right.
+pub fn window_icon_width(ui: &Ui) -> f32 {
+    let h = chip_height(ui, None);
+    let pad = chip_padding(ui);
+    (h - 2.0 * pad.y).min(h - 2.0) + 2.0 * pad.x
+}
+
+/// [`chip_window_icon`] with the chip **lit** while the state it names is in
+/// force — the MODULE WINDOWS list marks which of the three places a module is
+/// in with one of these, so the icon doubles as the state.
+pub fn chip_window_icon_lit(ui: &mut Ui, icon: WindowIcon, lit: bool) -> Response {
     let h = chip_height(ui, None);
     let pad = chip_padding(ui);
     // Square-ish: as tall as the chip's inner box allows, and no wider than
@@ -2279,9 +2338,17 @@ pub fn chip_window_icon(ui: &mut Ui, icon: WindowIcon) -> Response {
     // all — and the space simply leaves the middle empty for the icon. Borrowing
     // the chip rather than reimplementing it is what keeps the icon's hover and
     // press identical to the chips beside it.
-    let resp =
-        chip_impl(ui, false, RichText::new(WINDOW_ICON_LABEL), None, Sense::click(), Some(size));
-    let ink = if resp.hovered() {
+    // A **disabled** icon chip must look disabled: egui paints from the
+    // response's own sense, so a chip allocated with `Sense::click()` inside an
+    // `add_enabled_ui(false)` block ignores the pointer and still looks
+    // pressable — a control that looks live and does nothing.
+    let sense = if ui.is_enabled() { Sense::click() } else { Sense::hover() };
+    let resp = chip_impl(ui, lit, RichText::new(WINDOW_ICON_LABEL), None, sense, Some(size));
+    let ink = if lit {
+        // On the accent fill the chip's own label ink applies; a dark icon on a
+        // bright chip is the same picture the words beside it make.
+        theme::INK_ON_CYAN()
+    } else if resp.hovered() {
         ui.visuals().widgets.hovered.weak_bg_fill
     } else {
         ui.visuals().widgets.noninteractive.fg_stroke.color
@@ -2297,6 +2364,37 @@ pub fn chip_window_icon(ui: &mut Ui, icon: WindowIcon) -> Response {
 fn paint_window_icon(p: &egui::Painter, r: Rect, ink: Color32, icon: WindowIcon) {
     let s = r.height();
     let stroke = Stroke::new(1.3, ink);
+    match icon {
+        // The two chevrons: one picture, turned over.
+        WindowIcon::Collapse | WindowIcon::Unfold => {
+            let (up, down) = if icon == WindowIcon::Collapse { (-1.0, 1.0) } else { (1.0, -1.0) };
+            let half = s * 0.30;
+            let tip = pos2(r.center().x, r.center().y + down * half * 0.62);
+            p.line_segment([pos2(tip.x - half, tip.y + up * half * 0.62), tip], stroke);
+            p.line_segment([pos2(tip.x + half, tip.y + up * half * 0.62), tip], stroke);
+            return;
+        }
+        // The drawn ×, in the same stroke as everything beside it.
+        WindowIcon::Close => {
+            let half = s * 0.30;
+            p.line_segment(
+                [
+                    pos2(r.center().x - half, r.center().y - half),
+                    pos2(r.center().x + half, r.center().y + half),
+                ],
+                stroke,
+            );
+            p.line_segment(
+                [
+                    pos2(r.center().x + half, r.center().y - half),
+                    pos2(r.center().x - half, r.center().y + half),
+                ],
+                stroke,
+            );
+            return;
+        }
+        _ => {}
+    }
     if icon == WindowIcon::Dock {
         // A panel, with a chevron pushing into it: the picture the operator
         // pointed at for "dock this back".

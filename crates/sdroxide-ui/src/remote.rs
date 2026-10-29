@@ -548,6 +548,19 @@ impl RemoteController {
         }
     }
 
+    fn play_rx_audio(&mut self) {
+        if self.rx_pcm.is_empty() {
+            return;
+        }
+        let pcm = fresh_tail(&self.rx_pcm);
+        if let Some(bridge) = self.audio.as_mut() {
+            bridge.play(pcm);
+        }
+        let edges = frame_edges(&mut self.frame_gate, &mut self.frame_gate_fed, pcm);
+        self.pending.extend(edges.into_iter().map(RadioEvent::HeardFrame));
+        self.rx_pcm.clear();
+    }
+
     fn on_server_msg(&mut self, msg: ServerMsg) {
         // Before the arms below: the audio they drop while muted or on the air
         // is dropped on purpose, and is not a packet the network lost.
@@ -613,6 +626,7 @@ impl RemoteController {
             ServerMsg::KnownCalls(r) => self.pending.push_back(RadioEvent::KnownCalls(r)),
             ServerMsg::Recordings(l) => self.pending.push_back(RadioEvent::Recordings(l)),
             ServerMsg::DabSlide(s) => self.pending.push_back(RadioEvent::DabSlide(s)),
+            ServerMsg::AudioLevel(l) => self.pending.push_back(RadioEvent::AudioLevel(l)),
             ServerMsg::ClientAcks(a) => self.pending.push_back(RadioEvent::ClientAcks(a)),
             // Dropped rather than decoded while another tab holds the page's
             // single output: the work saved is the point on a browser tab
@@ -646,6 +660,8 @@ impl RemoteController {
                             .chunks_exact(2)
                             .map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0),
                     );
+                    // Play immediately without waiting for the next render frame
+                    self.play_rx_audio();
                 }
             }
             ServerMsg::Pong(_) => {}
@@ -956,13 +972,7 @@ impl RadioController for RemoteController {
             }
         }
         if !self.rx_pcm.is_empty() {
-            let pcm = fresh_tail(&self.rx_pcm);
-            if let Some(bridge) = self.audio.as_mut() {
-                bridge.play(pcm);
-            }
-            let edges = frame_edges(&mut self.frame_gate, &mut self.frame_gate_fed, pcm);
-            self.pending.extend(edges.into_iter().map(RadioEvent::HeardFrame));
-            self.rx_pcm.clear();
+            self.play_rx_audio();
         }
         self.pump_mic();
         self.flush_radio_config(false);

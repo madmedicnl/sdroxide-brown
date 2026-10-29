@@ -13,25 +13,38 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ## [Unreleased]
 
-### Needs feedback
-- **ALE (2G)** decodes a synthesized word exactly and has never copied a real burst. If you can hear one, a minute of WAV on 11175 / 8992 / 15016 kHz USB (or the amateur channels near 14109.5 kHz) would finish the mode — see the manual, §3.29.
+### Added
+- **Radio Classic** — EXTRAS → RADIO: a classic-radio face for broadcast listening (bands, memories, schedule, S-meter, stereo VU, 9-digit VFO, RDS name and RadioText), docked under the waterfall in the voice modes and detachable from Settings. — madmedicnl (wire 257)
+
+## [2.2.0.2_brown] - 2026-10-27
 
 ### Added
-- **Export the fleet** — **CSV** and **JSON** buttons in the AIRCRAFT window save the tracked aircraft as a table: callsign, registration, category, type, operator, route, first and last heard, positions kept, and whether each row is radio, online or both. The station's last 24 hours if it keeps a history (`GET /aircraft-export?format=csv|json`), else what the program holds now, and it says which. Never a position, a photo or its address, or anything about the session; a callsign that a spreadsheet would run as a formula is made inert.
-- **Aircraft alerts** — a **Watch** view in the AIRCRAFT window keeps a list of callsigns and registrations; when one appears, or comes back after ten minutes off the air, the window shows a line and the AIRCRAFT chip wears a count. The list is kept by the station (`aircraft-watch.json`, served on `/aircraft-watch`), so it is the same from every screen. No sound, no mail, nothing asked of anybody to find an aircraft.
-- **Aircraft statistics** — a **Stats** view in the AIRCRAFT window counts the most common categories and airlines (from the radio, green) and models, operators and routes (from the relay's cards, blue), most first or A–Z. It uses what is already known: the live cards, the relay's answers, and the station's history list when it keeps one. No new source, nothing asked unless the view is open.
-- **Copy summary** on an aircraft's card — the card as plain text on the clipboard, each line marked *radio*, *online* or *station history*, with the photo credit and link; never the position, the last message or the picture's address.
-- **Aircraft history stays small** — once `aircraft-history.json` passes 5 MB the station writes it gzipped, under the same name, and reads either form; a file from before is read as it was. Still off unless `SDROXIDE_AIRCRAFT_HISTORY=1`, and still written atomically.
-- **Aircraft history on the station** — the station keeps a day of what its radios heard of each aircraft (positions, callsigns, registrations, the relay's card) in `aircraft-history.json`, **off by default** and switched on by the station's operator with `SDROXIDE_AIRCRAFT_HISTORY=1`. **Show history** in the pinned card or the Cards list draws the trail on the map and adds the record to the card. It asks nobody for anything, and no client is recorded.
-- **Search the aircraft** — one box over the ADS-B table, the Cards list and the map finds an aircraft by ICAO, callsign, registration, type or operator (`reg:PH op:KLM` limits a word to a field). The map hides what does not match; the pinned aircraft stays. It asks for nothing, so type and operator are found only for aircraft already looked up, and the box says how many that leaves out.
-- **Pinned aircraft card** — click an aircraft on the ADS-B map to pin its card beside it, with a clickable Planespotters link; ✕ or Esc closes it. A click or a hover asks for nothing; **Look up online** in the card asks the station's relay for that aircraft only.
-- **Voice hunting in the scanner** — press **VOICE** and it stops only on channels that sound like somebody talking, passing over carriers, birdies and data bursts instead of stopping on them. The reading is shown while it runs, so a strong signal going by says *voice 18* rather than leaving you wondering.
-- **8PSK receive** — eight-phase differential PSK beside BPSK and QPSK on the keyboard modes' modulation row, three bits per symbol. Proven on a synthetic: the 8PSK recordings in the test corpus turn out not to carry a clean constellation.
-- **CIS-11 (TORG-11)**, the Russian meteorological teleprinter, receive only — the receiver finds its own tones and reads real transmissions with 121 of 123 characters parity-valid; the character layer is still unproven.
-- **Decoded text over UDP** — one JSON line per decode for a script of your own: the FT8 family, WSPR and every keyboard mode (RTTY, PSK, Olivia, THOR, MFSK, DominoEX, Hell), with the dial it was heard on.
+- **The Aircraft window's full cockpit** — an airport card that stays open on a click, one button per map style, aviation, metric or imperial units, VDL2 and ACARS views, the online-lookup switch, and Esc to close. — madmedicnl, PR #266–#276
+- **Windows that work on a tiling window manager** — a floating panel with a title bar of its own (roll up, out to a real window, close which docks), one dock glyph inside a panel's own window because a tiling WM draws no title bar, a **▣** beside the gear listing every module and where it is, and a panel window narrow enough for one pane drawing its own pane chips. `Ctrl+Alt+W` opens that list anywhere, `Ctrl+Alt+F` floats or docks the operating panel, `Ctrl+Alt+1…9` and `0` recall a saved workspace. — madmedicnl, PR #261
+- **Auto Rx and Auto CQ as two roles** — one answers a station calling CQ and never calls one, the other calls CQ and works whoever answers; an Auto CQ run has a call count, then switches to Auto Rx or stops. — F4NRM, #253
+- **An unattended run has a ceiling** — twelve hours, then it stops, so a station cannot be left calling into the night. — F4NRM
+- **The receive sensitivity controls are back** — SSTV's audio level, WEFAX's detector thresholds with the phasing calibration they carry, and NAVTEX's, each −5…+5 with Auto. — F4NRM's controls, restored (wire 251)
+- **Voice hunting in the scanner** — **VOICE** stops only on channels that sound like somebody talking, passing over carriers, birdies and data bursts. — madmedicnl
+- **Aircraft**: CSV/JSON export, a Watch list with a chip count, statistics, 24 h history with a drawn trail (off unless asked), a search box, a pinned card and a copy summary. — madmedicnl
+- **8PSK receive**, a third modulation beside BPSK and QPSK; **CIS-11** (TORG-11) receive; **decoded text over UDP** as one JSON line per decode. — madmedicnl
+- **JTTY brought up to the reference's own standard** — upstream's six follow-ups taken whole: the 1500 Hz centre, four-letter words, the reference waveform timing, one line per message, and the transmit panic. — upstream picks, madmedicnl
 
-### Changed
-- **JTTY, brought up to the reference's own standard** — upstream's six follow-up commits, taken whole: the 1500 Hz centre, four-letter words packed as text, the reference waveform timing, the frequency search around the operator's tuning, one line per message, a non-ASCII transmit panic, the burst tail and the stop button.
+### Fixed
+- **The Windows installer is back** — the Start Menu and desktop shortcuts pointed at property names instead of WiX directory IDs and were authored non-advertised with a file key path, so WiX 5.0.2 refused to build an MSI at all; they are now advertised in the executable's component and turned into ordinary shortcuts at install. — madmedicnl
+- **The wire layout** — five settings fields were inserted mid-struct instead of at the end, shifting every field after them. They're back at the tail, wire 256. — madmedicnl, PR #277
+- **The web client's cache** — fixed-name files are served no-store and the fingerprinted bundle immutable, so an update always loads the new client and never mixes old and new files. — madmedicnl, PR #278
+- **A receive-only mode can no longer key the transmitter** — a weather fax on 3855 kHz still offered a PTT, and every route into it could key. The chrome hides them, the engine refuses, and switching in unkeys. — madmedicnl, issue #239 (F4NRM)
+- **The logbook is no longer wiped to one contact** — in a browser there was no store to re-read and the answer "empty" replaced the log. — madmedicnl, issue #236 (F4NRM)
+- **WEFAX: one press centres a detuned chart** — and a chart that is off by a few hundred Hz is no longer a blank page. — madmedicnl, #258
+- **In Classic, the strip no longer repeats the column** — it drew every control again under the frequency beside a column holding the same ones. — madmedicnl
+- **TUNE in the satellite window follows the VFO you are using**, not always VFO A. — madmedicnl, issue #244
+- **Four `sdroxide-ui` tests that were red on `main`.** — madmedicnl
+
+### Needs feedback
+- **ALE (2G)** decodes a synthesized word exactly and has never copied a real burst: a minute of WAV on 11175 / 8992 / 15016 kHz USB would finish the mode (manual, §3.29). — madmedicnl
+
+_The window controls are icons now, not words: `▣` beside the gear is the list, `⇱` on a panel floats it, and the float carries its own roll-up, out and close. The three keys are `Ctrl+Alt+W` (list), `Ctrl+Alt+F` (float the panel) and `Ctrl+Alt+1…9` (workspaces); hovering any icon names it._
+
 ## [2.1.0.2_brown] - 2026-10-23
 
 ### Added

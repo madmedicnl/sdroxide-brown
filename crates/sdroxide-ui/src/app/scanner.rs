@@ -9,6 +9,31 @@ use sdroxide_types::{
 use crate::app::SdroxideApp;
 use crate::chrome::StyledCombo;
 
+/// What the scan dwell becomes when the VOICE gate is switched on or off.
+///
+/// On: a dwell too short to hear a syllable is raised to the floor the gate
+/// needs, and what was there is remembered. Off: the remembered figure comes
+/// back — but only while the field still holds the raised one, because a dwell
+/// the operator chose *while* the gate was on is theirs and must not be
+/// overwritten. Either way the memory is cleared, so the next press cannot
+/// restore a figure from two toggles ago.
+///
+/// A pure function so the rule can be tested without a window (issue #254).
+fn voice_dwell(on: bool, dwell: u32, prev: &mut Option<u32>) -> u32 {
+    if on {
+        if dwell < sdroxide_types::MIN_LISTEN_MS {
+            *prev = Some(dwell);
+            return sdroxide_types::MIN_LISTEN_MS;
+        }
+        dwell
+    } else {
+        match prev.take() {
+            Some(was) if dwell == sdroxide_types::MIN_LISTEN_MS => was,
+            _ => dwell,
+        }
+    }
+}
+
 impl SdroxideApp {
     pub(in crate::app) fn scanner_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         if !self.show_scanner {
@@ -27,7 +52,7 @@ impl SdroxideApp {
         self.show_scanner = show;
     }
 
-    fn scanner_body(&self, ui: &mut egui::Ui, cfg: &mut ScannerConfig, cmds: &mut Vec<Command>) {
+    fn scanner_body(&mut self, ui: &mut egui::Ui, cfg: &mut ScannerConfig, cmds: &mut Vec<Command>) {
         let scan = self.state.scan;
 
         // What to scan.
@@ -349,7 +374,7 @@ impl SdroxideApp {
     /// scan whose modes carry no speech would run and stop nowhere. That is the
     /// same test the engine makes when the scan starts, so the operator sees the
     /// answer here rather than as a notice after pressing START.
-    fn scanner_voice(&self, ui: &mut egui::Ui, cfg: &mut ScannerConfig) {
+    fn scanner_voice(&mut self, ui: &mut egui::Ui, cfg: &mut ScannerConfig) {
         ui.horizontal_wrapped(|ui| {
             // A range scan has one mode for the whole range; a memory scan has
             // one per channel, so the question is whether *any* of the channels
@@ -377,12 +402,16 @@ impl SdroxideApp {
             });
             if resp.inner.on_hover_text(hint).clicked() && any_speech {
                 cfg.voice_only = !cfg.voice_only;
-                // Turned on with a dwell too short to judge a voice by: raise it
-                // to the floor now, visibly, rather than letting the field say
-                // one thing and the engine do another.
-                if cfg.voice_only {
-                    cfg.dwell_ms = cfg.dwell_ms.max(sdroxide_types::MIN_LISTEN_MS);
-                }
+                // **A dwell set by the voice check is given back when it is
+                // switched off** (issue #254). Turning the gate on raises the
+                // dwell to the floor it needs — visibly, because the field must
+                // not say one thing and the engine do another — and leaving it
+                // raised afterwards silently changes the scan's speed for good.
+                // The raised figure is remembered here, and restored only while
+                // the field still holds it: if the operator has since chosen a
+                // dwell of their own, that is theirs to keep.
+                cfg.dwell_ms =
+                    voice_dwell(cfg.voice_only, cfg.dwell_ms, &mut self.scan_voice_prev_dwell);
             }
             ui.label(
                 RichText::new(if any_speech {
@@ -396,7 +425,7 @@ impl SdroxideApp {
         });
     }
 
-    fn scanner_thresholds(&self, ui: &mut egui::Ui, cfg: &mut ScannerConfig) {
+    fn scanner_thresholds(&mut self, ui: &mut egui::Ui, cfg: &mut ScannerConfig) {
         egui::Grid::new("scan-levels").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
             ui.label("Stops at");
             ui.horizontal(|ui| {
@@ -577,5 +606,39 @@ fn mhz_edit(ui: &mut egui::Ui, hz: &mut f64) {
         .changed()
     {
         *hz = mhz * 1e6;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::voice_dwell;
+
+    /// **The dwell the voice gate raised is given back when it is switched off**
+    /// (issue #254), and a dwell chosen while the gate was on is not stolen.
+    #[test]
+    fn the_voice_gate_gives_the_dwell_back() {
+        let mut prev = None;
+        // On, from a dwell too short for a syllable: raised and remembered.
+        assert_eq!(voice_dwell(true, 100, &mut prev), 400);
+        assert_eq!(prev, Some(100));
+        // Off: the remembered figure returns, and the memory clears.
+        assert_eq!(voice_dwell(false, 400, &mut prev), 100);
+        assert_eq!(prev, None);
+
+        // A dwell already long enough is left alone and nothing is remembered.
+        let mut prev = None;
+        assert_eq!(voice_dwell(true, 800, &mut prev), 800);
+        assert_eq!(prev, None);
+
+        // The operator picks a dwell while the gate is on: switching it off
+        // keeps their figure rather than restoring the old one.
+        let mut prev = None;
+        assert_eq!(voice_dwell(true, 100, &mut prev), 400);
+        assert_eq!(voice_dwell(false, 900, &mut prev), 900);
+        assert_eq!(prev, None, "a stale figure would be restored on the next off");
+
+        // Off with nothing remembered is a no-op.
+        let mut prev = None;
+        assert_eq!(voice_dwell(false, 400, &mut prev), 400);
     }
 }

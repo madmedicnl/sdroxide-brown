@@ -708,6 +708,9 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         .route("/radios", get(radios_route))
         .route("/solar-ws", get(solar::ws_route))
         .route("/aircraft-info/{icao}", get(aircraft::info_route))
+        .route("/aircraft-photo/{icao}", get(aircraft::photo_route))
+        .route("/aircraft-photo", axum::routing::delete(aircraft::photo_release))
+        .route("/aircraft-online", get(aircraft::switch_get).post(aircraft::switch_post))
         .route("/aircraft-history", get(history::list_route))
         .route("/aircraft-history/{icao}", get(history::one_route))
         .route("/aircraft-export", get(history::export_route))
@@ -743,16 +746,13 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
 /// and nowhere else.
 fn is_root_route(path: &str) -> bool {
     match path {
-        "/ws"
-        | "/solar-ws"
-        | "/radios"
-        | "/aircraft-history"
-        | "/aircraft-export"
-        | "/aircraft-watch" => true,
+        "/ws" | "/solar-ws" | "/radios" | "/aircraft-history" | "/aircraft-export"
+        | "/aircraft-online" | "/aircraft-photo" | "/aircraft-watch" => true,
         // Whatever follows is the question, and a bad one is the endpoint's to
         // refuse with a 400, not the static handler's to answer with a page.
         _ if path
             .strip_prefix("/aircraft-info/")
+            .or_else(|| path.strip_prefix("/aircraft-photo/"))
             .or_else(|| path.strip_prefix("/aircraft-history/"))
             .is_some_and(|q| !q.is_empty() && !q.contains('/')) =>
         {
@@ -1332,6 +1332,9 @@ fn handle_event(shared: &Shared, ev: RadioEvent) {
             // Likewise the recordings list: the files are this station's.
             RadioEvent::Recordings(listing) => Some(ServerMsg::Recordings(listing)),
             RadioEvent::DabSlide(s) => Some(ServerMsg::DabSlide(s)),
+            // The speaker feed's level: the station's audio, so a remote screen
+            // has no other way to draw a meter that follows it.
+            RadioEvent::AudioLevel(l) => Some(ServerMsg::AudioLevel(l)),
             // Found where the sound reaches the speakers, so a remote client
             // finds its own from the audio it is sent.
             RadioEvent::HeardFrame(_) => None,
@@ -1418,17 +1421,12 @@ fn add_static_routes(app: Router, web_root: Option<PathBuf>) -> Router {
         }
         None => add_embedded_or_placeholder(app),
     };
-    // Trunk fingerprints the wasm bundle, but index.html and the hand-written
-    // JS beside it keep fixed names. With no validator on those a browser is
-    // free to pair a cached `audio_bridge.js` with a freshly fingerprinted
-    // wasm, and the two then disagree about which functions exist — which
-    // presents as the client failing to start, not as an audio glitch.
-    // `no-cache` still caches; it just requires revalidation, which the
-    // embedded handler answers with a 304 off the ETag.
-    let app = app.layer(SetResponseHeaderLayer::if_not_present(
-        axum::http::header::CACHE_CONTROL,
-        HeaderValue::from_static("no-cache"),
-    ));
+    // The cache policy is decided per asset from its name (see
+    // `cache_policy_for`). index.html and the hand-written JS beside it keep
+    // fixed names, so a cached copy paired with a freshly fingerprinted wasm
+    // disagrees about which functions exist and the client fails to start —
+    // those are never stored. The fingerprinted bundle is immutable.
+    let app = app.layer(axum::middleware::from_fn(cache_policy));
     // Cross-origin isolation: lets the client use SharedArrayBuffer if the
     // audio path is ever upgraded to it.
     app.layer(SetResponseHeaderLayer::if_not_present(
@@ -1439,6 +1437,40 @@ fn add_static_routes(app: Router, web_root: Option<PathBuf>) -> Router {
         axum::http::header::HeaderName::from_static("cross-origin-embedder-policy"),
         HeaderValue::from_static("require-corp"),
     ))
+}
+
+/// Stamp a `Cache-Control` on the client's own assets, decided per asset from
+/// its name. Routes that already set one (the aircraft/history handlers say
+/// `no-store`) keep their own answer.
+async fn cache_policy(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let path = req.uri().path().to_owned();
+    let mut resp = next.run(req).await;
+    if !resp.headers().contains_key(axum::http::header::CACHE_CONTROL) {
+        resp.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static(cache_policy_for(&path)),
+        );
+    }
+    resp
+}
+
+/// The cache policy for one client asset, from its name.
+///
+/// Trunk fingerprints the wasm bundle and its loader JS with a content hash in
+/// the `sdroxide-web-…` name, so a new build is a new URL and these may be
+/// cached forever. index.html and the hand-written JS beside it keep fixed
+/// names, so they are never stored — a stale `audio_bridge.js` paired with a
+/// freshly fingerprinted wasm disagrees about which functions exist.
+fn cache_policy_for(path: &str) -> &'static str {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    if name.ends_with(".wasm") || (name.starts_with("sdroxide-web-") && name.ends_with(".js")) {
+        "max-age=31536000, immutable"
+    } else {
+        "no-store"
+    }
 }
 
 #[cfg(feature = "embed-web")]
@@ -1568,6 +1600,21 @@ mod proxy_prefix_tests {
         assert_eq!(strip_proxy_prefix("/ws/ws/3"), Some("/ws/3".to_string()));
     }
 
+    /// The picture of the open card is an endpoint too, behind any prefix.
+    #[test]
+    fn the_aircraft_photo_survives_a_proxy_prefix() {
+        assert_eq!(strip_proxy_prefix("/aircraft-photo/484006"), None);
+        assert_eq!(strip_proxy_prefix("/aircraft-photo"), None);
+        assert_eq!(
+            strip_proxy_prefix("/sdroxide/aircraft-photo/484006"),
+            Some("/aircraft-photo/484006".to_string())
+        );
+        assert_eq!(
+            strip_proxy_prefix("/shack/sdr/aircraft-photo"),
+            Some("/aircraft-photo".to_string())
+        );
+    }
+
     /// `/aircraft-info/` names a question and only one: nothing under it, and
     /// nothing at all is not a question.
     #[test]
@@ -1618,6 +1665,46 @@ mod proxy_prefix_tests {
         );
         assert_ne!(strip_proxy_prefix("/aircraft-history/"), None, "no address, no endpoint");
         assert_ne!(strip_proxy_prefix("/aircraft-history/484006/x"), None);
+    }
+}
+
+#[cfg(test)]
+mod cache_policy_tests {
+    use super::cache_policy_for;
+
+    /// The fingerprinted bundle is immutable (a new build is a new URL), and
+    /// everything that keeps a fixed name is never stored — a stale copy of
+    /// `index.html` or a hand-written JS beside a fresh bundle is exactly the
+    /// client-fails-to-start shape this policy exists to prevent.
+    #[test]
+    fn the_bundle_is_immutable_and_the_fixed_names_are_never_stored() {
+        assert_eq!(cache_policy_for("/index.html"), "no-store");
+        assert_eq!(cache_policy_for("/"), "no-store");
+        assert_eq!(cache_policy_for("/audio_bridge.js"), "no-store");
+        assert_eq!(cache_policy_for("/pcm_worklet.js"), "no-store");
+        assert_eq!(cache_policy_for("/wake_lock.js"), "no-store");
+        assert_eq!(cache_policy_for("/ws_arraybuffer.js"), "no-store");
+        assert_eq!(cache_policy_for("/manifest.json"), "no-store");
+        assert_eq!(cache_policy_for("/sdroxide-brown-192.png"), "no-store");
+        assert_eq!(
+            cache_policy_for("/sdroxide-web-9a78ba26f0438e5a_bg.wasm"),
+            "max-age=31536000, immutable"
+        );
+        assert_eq!(
+            cache_policy_for("/sdroxide-web-9a78ba26f0438e5a.js"),
+            "max-age=31536000, immutable"
+        );
+    }
+
+    /// A reverse-proxy prefix does not change the answer: the decision is made
+    /// on the last path segment, which is the file name either way.
+    #[test]
+    fn a_proxy_prefix_does_not_change_the_answer() {
+        assert_eq!(
+            cache_policy_for("/sdroxide/sdroxide-web-abc123.js"),
+            "max-age=31536000, immutable"
+        );
+        assert_eq!(cache_policy_for("/shack/sdr/index.html"), "no-store");
     }
 }
 

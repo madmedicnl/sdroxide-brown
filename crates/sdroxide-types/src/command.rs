@@ -1369,6 +1369,55 @@ pub enum Command {
     ///
     /// Appended for the usual reason — postcard numbers variants by position.
     TestPictureUpload(Box<crate::PictureUploadConfig>),
+    /// Set a preset's **picture document**: the layers the composer draws over
+    /// that slot's picture.
+    ///
+    /// It rides the engine rather than staying in the panel because the
+    /// document has to mean the same thing on every screen — the console, a
+    /// browser tab attached to the same radio and the next session all compose
+    /// from it, and only one of the three has a filesystem to keep it in. Sent
+    /// when an edit settles, not on every dragged pixel: the engine writes it to
+    /// disk.
+    ///
+    /// Answered with a fresh [`crate::RadioEvent::ImagePresets`], like the other
+    /// preset writes, so every client adopts the same document.
+    ///
+    /// Appended for the usual reason — postcard numbers variants by position.
+    ImageSetComposer {
+        slot: u8,
+        composer: crate::Composer,
+    },
+    /// Draw the station-wide overlay under transmit preset `slot`'s own
+    /// document, or stop drawing it there. Answered with a fresh
+    /// [`crate::RadioEvent::ImagePresets`].
+    ImageSetOverlay {
+        slot: u8,
+        on: bool,
+    },
+    /// Save a named layout template, replacing one of the same name.
+    ///
+    /// The name is trimmed and capped at [`crate::TEMPLATE_NAME_MAX`]; an empty
+    /// one, or a library already at [`crate::TEMPLATE_MAX`] under a new name, is
+    /// refused with a [`crate::RadioEvent::Notice`] rather than silently.
+    ImageSaveTemplate {
+        name: String,
+        composer: crate::Composer,
+    },
+    /// Forget a named layout template.
+    ImageDeleteTemplate {
+        name: String,
+    },
+    /// A screen is showing the Radio Classic panel and wants
+    /// [`crate::RadioEvent::AudioLevel`] for the next few seconds
+    /// ([`crate::AUDIO_LEVEL_LEASE_SECS`]).
+    ///
+    /// A lease rather than an on/off switch: several screens can be attached to
+    /// one station, and one that closes its panel must not silence another that
+    /// has it open, nor can a screen that vanished leave the stream on. A panel
+    /// that stays open sends it again about once a second.
+    ///
+    /// Appended for the usual reason — postcard numbers variants by position.
+    WantAudioLevel,
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.

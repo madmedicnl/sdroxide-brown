@@ -449,6 +449,10 @@ pub(in crate::app) struct SatEditState {
 pub(in crate::app) struct SettingsIo<'a> {
     iface_opts: &'a [sdroxide_types::Backend],
     radio_edit: &'a mut Option<sdroxide_types::RadioConfig>,
+    /// The per-radio SWL switch's own state, seeded from the whole SWL mode
+    /// (the start-in-SWL seed *or* `hide_tx`) so a session that came up in SWL
+    /// mode reads as "on" and one toggle turns it off instead of two.
+    swl_hide: &'a mut bool,
     /// Whether the controls that ask a question about a *machine* — which
     /// dongles are on the USB bus, which serial ports exist, what a Discover
     /// broadcast finds, whether an address answers — can be used.
@@ -1106,6 +1110,14 @@ pub(in crate::app) fn enum_combo<T: PartialEq + Copy>(
 /// for their radio by name rather than reading it through, and sorting
 /// means a backend added here needs no thought about where to put it. A
 /// free function (not inlined into the settings UI) so
+/// Whether turning the SWL switch has to clear the start-in-SWL seed: the
+/// per-radio `hide_tx` changed, or the operator turned the switch off while the
+/// seed was what held SWL mode on (the switch reflects the whole state, so one
+/// toggle off clears it instead of two).
+fn clear_swl_seed(hide_changed: bool, swl_start: bool, swl_hide: bool) -> bool {
+    hide_changed || (swl_start && !swl_hide)
+}
+
 /// [`every_backend_but_auto_and_none_is_offered_in_the_picker`] can check it
 /// stays complete without going through the whole `egui` render path.
 fn iface_opts(soapy_supported: bool) -> Vec<sdroxide_types::Backend> {
@@ -1474,6 +1486,7 @@ impl SdroxideApp {
         let mut pluto_copy_report = false;
         let mut apply_iface = ApplyInterface::default();
         let mut radio_edit = self.radio_cfg.clone();
+        let mut swl_hide = self.swl_start || self.radio_cfg.as_ref().is_some_and(|c| c.hide_tx);
         let mut converter_hz = self.converter_edit_hz;
         let mut ranges = self.range_edit.clone();
         let mut rx_site = self.rx_site_edit.clone();
@@ -1633,6 +1646,7 @@ impl SdroxideApp {
                             &mut SettingsIo {
                                 iface_opts: &iface_opts,
                                 radio_edit: &mut radio_edit,
+                                swl_hide: &mut swl_hide,
                                 // Both of these questions are asked of the machine
                                 // the radio is on, which may not be this one: it
                                 // answers the device lists over the session, and
@@ -2174,21 +2188,23 @@ impl SdroxideApp {
         self.converter_edit_hz = converter_hz;
         self.range_edit = ranges;
         self.rx_site_edit = rx_site;
+        let hide_changed =
+            radio_edit.as_ref().map(|c| c.hide_tx) != self.radio_cfg.as_ref().map(|c| c.hide_tx);
         if radio_edit != self.radio_cfg {
-            let hide_changed = radio_edit.as_ref().map(|c| c.hide_tx)
-                != self.radio_cfg.as_ref().map(|c| c.hide_tx);
             if let Some(cfg) = &radio_edit {
                 self.ctrl.set_radio_config(cfg.clone());
             }
             self.radio_cfg = radio_edit;
-            // An explicit per-radio choice supersedes the start-in-SWL seed
-            // and the legacy global switch, so it can also turn SWL *off* for
-            // a session that started in it.
-            if hide_changed {
-                self.swl_start = false;
-                if ui_edit.swl {
-                    ui_edit.swl = false;
-                }
+        }
+        // An explicit per-radio choice supersedes the start-in-SWL seed and
+        // the legacy global switch, so it can also turn SWL *off* for a session
+        // that started in it. `swl_hide` is the whole per-radio SWL state the
+        // switch showed, so unchecking it clears the seed even when `hide_tx`
+        // was already false and never changed.
+        if clear_swl_seed(hide_changed, self.swl_start, swl_hide) {
+            self.swl_start = false;
+            if ui_edit.swl {
+                ui_edit.swl = false;
             }
         }
         if ui_edit != self.ui_settings {
@@ -2899,7 +2915,12 @@ impl SdroxideApp {
                     // beside it keeps its PTT.
                     ui.label(RichText::new("Transmit controls").strong());
                     ui.end_row();
-                    crate::chrome::checkbox(ui, &mut cfg.hide_tx, "hide them all (SWL mode)")
+                    // The checkbox reflects the whole per-radio SWL state — the
+                    // start-in-SWL seed *or* `hide_tx` — so a session that came
+                    // up in SWL mode reads as "on" and one toggle turns it off,
+                    // rather than two (unchecking a box that showed the seed
+                    // only as `hide_tx`).
+                    if crate::chrome::checkbox(ui, &mut *io.swl_hide, "hide them all (SWL mode)")
                         .on_hover_text(
                             "Hide every transmit control for *this* radio — the PTT, CALL CQ, TX \
                          level, SEND, BEACON, all of it — and swap the strip's ham extras \
@@ -2908,7 +2929,11 @@ impl SdroxideApp {
                          transceiver beside it keeps its transmitter.\n\nThe hardware can \
                          still transmit; this only hides the controls. `--swl` forces it on \
                          for every radio for the run.\n\nTakes effect on Apply.",
-                        );
+                        )
+                        .changed()
+                    {
+                        cfg.hide_tx = *io.swl_hide;
+                    }
                     ui.end_row();
 
                     // Auto mode's inactivity stop. Per radio because one set
@@ -3700,6 +3725,7 @@ impl SdroxideApp {
                     ui,
                     io.ui_edit,
                     io.radio_edit.as_mut(),
+                    io.swl_hide,
                     io.solar_cloud_march.as_deref_mut(),
                     &self.client_settings_pending,
                     self.client_settings_from.as_ref(),
@@ -3789,7 +3815,7 @@ impl SdroxideApp {
                 note(ui, "Panels converted to floating windows. Their open state is remembered.");
                 ui.add_space(4.0);
                 let tool_windows: &[(&str, u64)] = &[
-                    ("SCHEDULE", crate::app::frame::TW_SCHEDULE),
+                    ("PROGRAMS", crate::app::frame::TW_SCHEDULE),
                     ("LISTEN", crate::app::frame::TW_LISTEN),
                     ("LOGBOOK", crate::app::frame::TW_LOGBOOK),
                     ("SETTINGS", crate::app::frame::TW_SETTINGS),
@@ -3802,6 +3828,7 @@ impl SdroxideApp {
                     ("MEMORIES", crate::app::frame::TW_MEMORIES),
                     ("EXTRAS", crate::app::frame::TW_EXTRAS),
                     ("AIRCRAFT", crate::app::frame::TW_AIRCRAFT),
+                    ("RADIO CLASSIC", crate::app::frame::TW_RADIO_CLASSIC),
                     ("RDS", crate::app::frame::TW_RDS),
                     ("DRM", crate::app::frame::TW_DRM),
                     ("HD RADIO", crate::app::frame::TW_HD_RADIO),
@@ -5513,7 +5540,22 @@ mod roster_order_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::iface_opts;
+    use super::{clear_swl_seed, iface_opts};
+
+    /// The start-in-SWL seed must clear on a *single* switch toggle, not two:
+    /// a session that came up in SWL mode shows the switch as on, and turning
+    /// it off clears the seed even though `hide_tx` was already false (so the
+    /// per-radio field never changed).
+    #[test]
+    fn turning_the_swl_switch_off_clears_the_seed_in_one_toggle() {
+        // Seed on, switch off, `hide_tx` unchanged → clear the seed.
+        assert!(clear_swl_seed(false, true, false));
+        // `hide_tx` actually changed → clear it whatever the direction.
+        assert!(clear_swl_seed(true, false, false));
+        assert!(clear_swl_seed(true, true, true));
+        // Seed off and switch still off with nothing changed → leave it.
+        assert!(!clear_swl_seed(false, false, false));
+    }
 
     /// A backend registered everywhere else (`Backend::ALL`, the `open_*`
     /// dispatch in `src/main.rs`, its own settings tab) but never pushed

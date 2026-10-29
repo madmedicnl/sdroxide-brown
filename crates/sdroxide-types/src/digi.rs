@@ -2321,6 +2321,16 @@ pub struct DigiConfig {
     /// tuning instruction for the service reads.
     #[serde(default)]
     pub navtex_reverse: bool,
+    /// NAVTEX receive sensitivity, `-5..=+5`. See the WEFAX one for the
+    /// shape of the control: `+` accepts a weaker or noisier signal, `−`
+    /// waits for a cleaner one before declaring sync. Appended last, so this
+    /// is a wire change.
+    #[serde(default)]
+    pub navtex_rx_sensitivity: i8,
+    /// NAVTEX receive is using its reference thresholds. When true,
+    /// `navtex_rx_sensitivity` is ignored and the slider sits at 0.
+    #[serde(default = "yes")]
+    pub navtex_rx_auto: bool,
     /// Let the RTTY decoder track tuning error rather than staying pinned to
     /// the cursor. On by default; the matched-filter detector is much less
     /// forgiving of mistuning than a wideband discriminator would be.
@@ -3136,6 +3146,101 @@ pub struct DigiConfig {
     /// (`PROTO_VERSION` 234 → 235).
     #[serde(default)]
     pub wavelog_station_id: u32,
+
+    /// Auto CQ (issue #236): how many CQ calls one run may make before it ends.
+    /// 0 is no limit of its own — the transmit watchdog and the inactivity stop
+    /// still bound the run — which is what every station had before this was a
+    /// setting.
+    ///
+    /// Appended at the tail, so this is a wire change.
+    #[serde(default)]
+    pub auto_cq_repeats: u16,
+    /// Auto CQ: after [`Self::auto_cq_repeats`] calls, **switch to Auto Rx**
+    /// (listen and answer) rather than stopping entirely. Unused while the
+    /// repeat count is 0.
+    ///
+    /// The default is `true`: a run that reaches its limit goes on listening
+    /// rather than shutting the station up, which is the gentler of the two and
+    /// the one an unattended station wants.
+    #[serde(default = "auto_cq_then_listen_default")]
+    pub auto_cq_then_listen: bool,
+    /// SSTV receive sensitivity, -5..=+5. 0 = the automatic level (Auto).
+    /// Adjusts the signal level fed to the decoder: negative attenuates,
+    /// positive boosts. Does not change the decoder itself.
+    ///
+    /// Appended last, so this is a wire change (`PROTO_VERSION` 237 → 238).
+    #[serde(default)]
+    pub sstv_rx_sensitivity: i8,
+    /// SSTV receive is in automatic level mode. When true,
+    /// `sstv_rx_sensitivity` is ignored and the slider sits at 0. Moving the
+    /// slider off 0 clears this. Appended last for the reason above.
+    #[serde(default = "yes")]
+    pub sstv_rx_auto: bool,
+    /// WEFAX receive sensitivity, -5..=+5. 0 = the thresholds measured from the
+    /// chart's own phasing signal, which is the reference behaviour.
+    ///
+    /// This is not an audio gain, unlike SSTV's: a fax is frequency modulated,
+    /// so signal strength does not change the greys (`1500` Hz black to `2300`
+    /// Hz white). It scales the detector's *thresholds* instead — `+` accepts a
+    /// weaker, fainter or noisier chart, `−` waits for a clean signal before it
+    /// starts or ends a page.
+    ///
+    /// Appended last, so this is a wire change (`PROTO_VERSION` 238 → 239).
+    #[serde(default)]
+    pub wefax_rx_sensitivity: i8,
+    /// WEFAX receive is using its reference thresholds. When true,
+    /// `wefax_rx_sensitivity` is ignored and the slider sits at 0. Moving the
+    /// slider off 0 clears this.
+    #[serde(default = "yes")]
+    pub wefax_rx_auto: bool,
+    /// SSTV: draw the banner strip along the **bottom** of the picture instead
+    /// of across the top. `false` is the top, which is what every picture before
+    /// this setting looked like.
+    ///
+    /// Wanted because the useful half of a picture is not always at the top: a
+    /// QSO picture taken from a webcam has the operator's face in the middle and
+    /// sky above, and a strip across the bottom covers the least. Appended last,
+    /// so this is a wire change.
+    #[serde(default)]
+    pub sstv_banner_bottom: bool,
+    /// SSTV: the banner text's size as a **percentage of the strip's own** — 100
+    /// is what it has always been.
+    ///
+    /// A 16-pixel strip prints 11-pixel letters, and the report behind this was
+    /// that current pictures are "not QSO-compliant": the call has to be
+    /// readable after a noisy 8-second decode, and making the strip taller is not
+    /// the only way to get bigger lettering — a taller strip also eats more of
+    /// the picture. This scales the text inside the strip instead.
+    #[serde(default = "sstv_default_banner_text_pct")]
+    pub sstv_banner_text_pct: u16,
+    /// **The station-wide picture overlay**: the layers every transmit preset
+    /// draws under its own document — the callsign, usually, in the corner the
+    /// operator likes.
+    ///
+    /// Station-wide rather than per slot because it is the station's
+    /// identification, not a picture's caption: the thing an operator sets once.
+    /// It composes *with* each preset's own layers rather than replacing them,
+    /// and a preset can switch it off where the picture already carries it
+    /// ([`crate::ImageSlotInfo::apply_overlay`]).
+    ///
+    /// On `DigiConfig` because that is the station's identity, and it already
+    /// rides the wire whole and is stored for us; appending it here is what
+    /// makes it a wire change.
+    #[serde(default)]
+    pub station_overlay: crate::Composer,
+    /// Auto mode: how many times one station may be called before the run gives
+    /// up on it and moves down the queue. 1..=5, two by default.
+    ///
+    /// A station that answers once needs one call; one that does not answer is
+    /// not worth a third, and a run that keeps calling the same silent station
+    /// while others wait is the behaviour this exists to stop. Appended at the
+    /// tail, so this is a wire change.
+    #[serde(default = "auto_call_retries_default")]
+    pub auto_call_retries: u8,
+    /// Auto mode's overall session limit in minutes, 0 for none. The backstop
+    /// for a continuous run: it stops whether or not contacts are being made.
+    #[serde(default)]
+    pub auto_session_min: u16,
 }
 
 fn cw_default_tx_idle_s() -> f32 {
@@ -3235,6 +3340,12 @@ fn sstv_default_banner_ink() -> [u8; 3] {
     [255, 255, 255]
 }
 
+/// Default for [`DigiConfig::sstv_banner_text_pct`] — the size the banner text
+/// has always been, as a percentage of the strip's height.
+pub fn sstv_default_banner_text_pct() -> u16 {
+    100
+}
+
 /// Default for [`DigiConfig::sstv_banner_height`], in picture pixels.
 fn sstv_default_banner_height() -> u16 {
     16
@@ -3254,6 +3365,14 @@ fn cw_default_wpm() -> f32 {
     20.0
 }
 
+fn auto_call_retries_default() -> u8 {
+    2
+}
+
+fn auto_cq_then_listen_default() -> bool {
+    true
+}
+
 impl Default for DigiConfig {
     fn default() -> Self {
         DigiConfig {
@@ -3271,6 +3390,8 @@ impl Default for DigiConfig {
             rtty_shift_hz: 170.0,
             rtty_reverse: false,
             navtex_reverse: false,
+            navtex_rx_sensitivity: 0,
+            navtex_rx_auto: true,
             rtty_afc: true,
             olivia_tones: 32,
             olivia_bw_hz: 1000.0,
@@ -3297,6 +3418,9 @@ impl Default for DigiConfig {
             sstv_banner_fill: sstv_default_banner_fill(),
             sstv_banner_ink: sstv_default_banner_ink(),
             sstv_banner_height: sstv_default_banner_height(),
+            sstv_banner_bottom: false,
+            sstv_banner_text_pct: sstv_default_banner_text_pct(),
+            station_overlay: crate::Composer::default(),
             rf_paint_speed: 0.25,
             auto_tx_freq: true,
             hold_tx_freq: false,
@@ -3397,6 +3521,14 @@ impl Default for DigiConfig {
             psk_coded: PskCoded::default(),
             domino_mode: DominoMode::default(),
             wavelog_station_id: 0,
+            auto_cq_repeats: 0,
+            auto_cq_then_listen: auto_cq_then_listen_default(),
+            auto_call_retries: auto_call_retries_default(),
+            auto_session_min: 0,
+            sstv_rx_sensitivity: 0,
+            sstv_rx_auto: true,
+            wefax_rx_sensitivity: 0,
+            wefax_rx_auto: true,
         }
     }
 }

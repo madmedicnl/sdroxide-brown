@@ -405,6 +405,13 @@ impl Band {
                 Mode::Drm,
                 Mode::Hfdl,
                 Mode::Dsc,
+                // **The weather charts live here**, on 3855, 7880 and 13882 kHz
+                // among others, and on this band alone. Without the entry the
+                // engine refused `SetMode(Wefax)` on every shortwave frequency
+                // ("not used on SW") — the mode could only be reached through
+                // the listener's screen, which is the one path that skips the
+                // band rule. Reported from the bench as "WEFAX no working".
+                Mode::Wefax,
                 // The navies' single-tone data service, which is what the
                 // utility frequencies across this band carry.
                 Mode::Stanag4285,
