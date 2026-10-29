@@ -1,10 +1,5 @@
-# sdroxide — the interface's English text, the reference every translation
-# is checked against. See crates/sdroxide-ui/src/i18n.rs for the rules.
-#
-# Ids are grouped by where they are shown, and named after it:
-# settings-ui-* is the UI tab of the Settings window, and so on. A message
-# shown in capitals is written in capitals here; the code does not upper-case
-# translated text.
+# sdroxide — Nederlandse vertaling van de interface. De referentie is
+# en-US/sdroxide.ftl; wat hier ontbreekt, wordt in het Engels getoond.
 
 ## The language's own name, as the language picker lists it.
 language-name = Nederlands
