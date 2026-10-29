@@ -1,0 +1,41 @@
+# Instructions for agents working in this repository
+
+## Every piece of interface text is translated
+
+The interface speaks English, French, Spanish and German. **Any change that
+adds or edits text a person reads on screen must add or update the message in
+all four languages in the same change.** That covers labels, buttons, hover
+text, window titles, notes, status lines, error messages shown to the operator
+and the names of values (`label()` of an enum drawn on screen).
+
+How:
+
+1. Never write display text as a string literal in `crates/sdroxide-ui`.
+   Use `tr!("some-id")` (`use crate::i18n::tr;`), or `tr!("some-id", n = 3)`
+   for a message with `{ $n }` placeables, or `tr!("some-id", "hint")` for an
+   attribute. `tr!` returns a `String`; pass `&tr!(..)` where `&str` is wanted.
+2. Add the message to every language with the helper (it locks the files, so it
+   is safe to run in parallel):
+
+   ```bash
+   python3 tools/i18n_add.py <<'JSON'
+   {"id": "area-thing", "en": "Thing", "fr": "Chose", "es": "Cosa", "de": "Ding"}
+   JSON
+   ```
+
+   Ids are `area-words-of-the-text` in lower case with hyphens. Keep capitals
+   where the English has them (captions in capitals stay in capitals).
+   Keep `{ $name }` placeables as they are. Do not translate ids, file names,
+   protocol names, mode names (FT8, SSTV…) or units.
+3. For a value an enum shows on screen, add the arm in
+   `crates/sdroxide-ui/src/i18n/labels.rs` (a `match` that must stay
+   exhaustive) rather than calling `label()` from the interface.
+4. `const`/`static` items cannot call `tr!`. Keep the English identity there and
+   translate when drawing (see `tab_label` in `app/settings/mod.rs`).
+5. Run `cargo test -p sdroxide-ui --lib i18n` before pushing. It checks that
+   every message exists in English, that every placeable matches, and that no
+   message is unused.
+
+Read `crates/sdroxide-ui/i18n/README.md` for the Fluent syntax and the rules for
+translators. A change that adds a literal to the interface and no messages is
+not finished.
