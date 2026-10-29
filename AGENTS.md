@@ -97,6 +97,9 @@ one entry per work item.
   `Item (added by X, owned by Y) — description.`
 - The board is scripted (`gh project item-create` + `item-edit`). If the
   `project` scope is not granted, update `PROJECT-BOARD.md` itself and say so.
+  Either way, `PROJECT-BOARD.md` must reflect the current state — it is the
+  local mirror of the GitHub Projects board and must be updated for every
+  task, not only when the script fails.
 - Re-measurable numbers (crate version, PROTO_VERSION, open issues/PRs) must be
   kept current in TODO.md's state line and AGENTS.md.
 
