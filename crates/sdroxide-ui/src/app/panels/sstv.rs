@@ -542,17 +542,35 @@ impl SstvUi {
         let message = self.current_message().to_string();
         match self.slots.get(self.selected_slot).and_then(|s| s.as_ref()) {
             Some(slot) => {
-                let (rgb, w, h) = crate::sstv::compose(
-                    dims.0,
-                    dims.1,
-                    &slot.src_rgb,
-                    slot.sw,
-                    slot.sh,
-                    &message,
-                    self.banner.as_ref(),
-                    &self.style,
-                );
-                let ci = crate::sstv::color_image(&rgb, w, h);
+                // Use the composer document when it has content, so the
+                // preview matches what Send transmits.
+                let doc = crate::sstv_composer::shown(&self.composer_edit, &self.presets, self.selected_slot);
+                let rgb = if doc.is_active() {
+                    let mut d = doc.clone();
+                    if self.presets.slot(self.selected_slot).apply_overlay && self.overlay.is_active() {
+                        d = d.over(&self.overlay);
+                    }
+                    let (rgb, _, _) = crate::sstv_composer::render(
+                        &d,
+                        dims.0,
+                        dims.1,
+                        Some((&slot.src_rgb, slot.sw, slot.sh)),
+                    );
+                    rgb
+                } else {
+                    let (rgb, _, _) = crate::sstv::compose(
+                        dims.0,
+                        dims.1,
+                        &slot.src_rgb,
+                        slot.sw,
+                        slot.sh,
+                        &message,
+                        self.banner.as_ref(),
+                        &self.style,
+                    );
+                    rgb
+                };
+                let ci = crate::sstv::color_image(&rgb, dims.0, dims.1);
                 self.preview_tex =
                     Some(ctx.load_texture("sstv_preview", ci, egui::TextureOptions::NEAREST));
             }
@@ -590,17 +608,18 @@ impl SstvUi {
             );
             return crate::sstv::encode_png(&rgb, w, h);
         }
-        let (rgb, w, h) = crate::sstv::compose(
-            dims.0,
-            dims.1,
+        // Fall back to the slot's own picture without the station banner
+        // or message: a composed image that carries no text of its own is
+        // sent as the picture the operator loaded, not with the panel's
+        // banner and caption painted over it.
+        let rgb = crate::sstv::crop_scale(
             &slot.src_rgb,
             slot.sw,
             slot.sh,
-            self.current_message(),
-            self.banner.as_ref(),
-            &self.style,
+            dims.0,
+            dims.1,
         );
-        crate::sstv::encode_png(&rgb, w, h)
+        crate::sstv::encode_png(&rgb, dims.0, dims.1)
     }
 
     /// Send a picked file to the engine for a slot.
@@ -1707,6 +1726,8 @@ impl SdroxideApp {
             let mut reupload = false;
             let mut email_qsl = false;
             let mut pressed_delete = false;
+            let received_len = self.sstv.received.len();
+            let mut nav_to: Option<usize> = None;
             if let Some(r) = self.sstv.received.get(idx) {
                 // The full-size picture lives on the radio, and its *bytes* are
                 // what "Save picture…" writes out. Ask for it the moment one is
@@ -1773,6 +1794,12 @@ impl SdroxideApp {
                         // row breaking to a second line is the failure mode
                         // rather than content pushed off the edge.
                         ui.horizontal_wrapped(|ui| {
+                            if ui.button("<").clicked() && idx > 0 {
+                                nav_to = Some(idx - 1);
+                            }
+                            if ui.button(">").clicked() && idx + 1 < received_len {
+                                nav_to = Some(idx + 1);
+                            }
                             if self.sstv.full_gone {
                                 ui.label(
                                     RichText::new(tr!("sstv-no-longer-store"))
@@ -1941,6 +1968,9 @@ impl SdroxideApp {
             if save {
                 if let Some((name, png)) = &self.sstv.full_png {
                     crate::download::save_as(name, png, crate::download::Mime::Png);
+                    // Also put the picture into the selected slot, so it can be
+                    // sent without a separate load step.
+                    self.sstv.set_slot(self.sstv.selected_slot, png.clone(), cmds);
                 }
             }
             // Opening the QSL composer, not sending anything: the message is
@@ -1984,6 +2014,12 @@ impl SdroxideApp {
                         self.sstv.confirm_delete = Some(name);
                     }
                 }
+            }
+            // Apply deferred navigation.
+            if let Some(i) = nav_to {
+                self.sstv.enlarged = Some(i);
+                self.sstv.full_asked = None;
+                self.sstv.full_gone = false;
             }
             if !open {
                 self.sstv.enlarged = None;
@@ -3120,6 +3156,10 @@ impl SdroxideApp {
                                         &png,
                                         crate::download::Mime::Png,
                                     );
+                                    // Also put the composed picture into the
+                                    // selected slot, so it can be sent without
+                                    // a separate load step.
+                                    self.sstv.set_slot(self.sstv.selected_slot, png.clone(), cmds);
                                     note = Some(tr!("sstv-composed-saved"));
                                 }
                             }
@@ -3130,19 +3170,46 @@ impl SdroxideApp {
                                 })
                                 .inner
                                 .on_hover_text(tr!("sstv-send-now-hint"));
-                            if send.clicked()
-                                && let Some(png) = self.sstv.compose_png(dims)
-                            {
-                                // The engine gets the document first, so a client
-                                // that composes its own copy sends the same
-                                // picture as this one.
-                                send_now = true;
-                                cmds.push(if rifp {
-                                    Command::RifpTx { png }
-                                } else {
-                                    Command::SstvTx { mode: self.sstv.tx_mode, png }
-                                });
-                                note = Some(tr!("sstv-composed-sending"));
+                            if send.clicked() {
+                                // Compose from the current `doc` (this frame's
+                                // edits), not from the stale engine copy.
+                                let png = self.sstv.slots.get(self.sstv.selected_slot)
+                                    .and_then(|s| s.as_ref())
+                                    .and_then(|slot| {
+                                        let mut d = doc.clone();
+                                        if self.sstv.presets.slot(self.sstv.selected_slot).apply_overlay
+                                            && self.sstv.overlay.is_active()
+                                        {
+                                            d = d.over(&self.sstv.overlay);
+                                        }
+                                        if d.is_active() {
+                                            let (rgb, w, h) = crate::sstv_composer::render(
+                                                &d,
+                                                dims.0,
+                                                dims.1,
+                                                Some((&slot.src_rgb, slot.sw, slot.sh)),
+                                            );
+                                            crate::sstv::encode_png(&rgb, w, h)
+                                        } else {
+                                            let rgb = crate::sstv::crop_scale(
+                                                &slot.src_rgb,
+                                                slot.sw,
+                                                slot.sh,
+                                                dims.0,
+                                                dims.1,
+                                            );
+                                            crate::sstv::encode_png(&rgb, dims.0, dims.1)
+                                        }
+                                    });
+                                if let Some(png) = png {
+                                    send_now = true;
+                                    cmds.push(if rifp {
+                                        Command::RifpTx { png }
+                                    } else {
+                                        Command::SstvTx { mode: self.sstv.tx_mode, png }
+                                    });
+                                    note = Some(tr!("sstv-composed-sending"));
+                                }
                             }
                             if crate::chrome::chip(ui, false, tr!("sstv-forget"))
                                 .on_hover_text(tr!("sstv-forget-hint"))
