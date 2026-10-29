@@ -746,3 +746,16 @@ fn wideband_preview() {
     img.save(&out).expect("write the preview");
     println!("wrote {out}");
 }
+
+/// The arrow in the corner: docked it lifts the panel out, detached it docks it
+/// back, and a panel that is a window only because the slot is taken wears none.
+#[test]
+fn the_corner_arrow_is_worn_only_where_it_has_somewhere_to_go() {
+    use super::panels::radio_classic::{RadioClassicPlace as P, detach_icon};
+    use crate::chrome::WindowIcon as I;
+    assert_eq!(detach_icon(P::Docked, false, false), Some(I::Out));
+    assert_eq!(detach_icon(P::Window, true, false), Some(I::Dock));
+    assert_eq!(detach_icon(P::Window, false, false), None, "slot taken: nowhere to dock");
+    assert_eq!(detach_icon(P::Docked, false, true), None, "no room to float on a phone");
+    assert_eq!(detach_icon(P::Hidden, false, false), None);
+}

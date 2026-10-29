@@ -136,15 +136,28 @@ impl SdroxideApp {
         let mut log: Option<BroadcastStation> = None;
         let mut fav_toggle: Option<(String, bool)> = None;
         let mut all_toggle: Option<bool> = None;
-        let open = self.tool_window(
-            ctx,
-            "schedule",
-            &tr!("schedule-title"),
-            [SCHEDULE_WINDOW_W, 560.0],
-            self.schedule.show,
-            |me, ui| me.schedule_body(ui, &mut tune, &mut log, &mut fav_toggle, &mut all_toggle),
-        );
-        self.schedule.show = open;
+        if !self.schedule.show {
+            self.schedule_was_open = false;
+        } else {
+            // Each opening gets its own window id, so the remembered geometry
+            // is what applies — see `remembered_tool_window`.
+            if !self.schedule_was_open {
+                self.schedule_epoch += 1;
+                self.schedule_was_open = true;
+            }
+            let epoch = self.schedule_epoch;
+            self.schedule.show = self.remembered_tool_window(
+                ctx,
+                "schedule",
+                &tr!("schedule-title"),
+                [SCHEDULE_WINDOW_W, 560.0],
+                [480.0, 240.0],
+                epoch,
+                |me, ui| {
+                    me.schedule_body(ui, &mut tune, &mut log, &mut fav_toggle, &mut all_toggle)
+                },
+            );
+        }
 
         if let Some((name, on)) = fav_toggle {
             self.broadcast_favs.retain(|n| n != &name);

@@ -484,15 +484,26 @@ impl SdroxideApp {
         // WINDOW chip. Wide enough for a row — the recall button, a name, a
         // dial to the Hz, a mode, and the edit and delete buttons; narrower and
         // every name is drawn with an ellipsis on it.
-        let open = self.tool_window(
+        if !self.show_memories {
+            self.memories_was_open = false;
+            return;
+        }
+        // Each opening gets its own window id, so the remembered geometry is
+        // what applies — see `remembered_tool_window`.
+        if !self.memories_was_open {
+            self.memories_epoch += 1;
+            self.memories_was_open = true;
+        }
+        let epoch = self.memories_epoch;
+        self.show_memories = self.remembered_tool_window(
             ctx,
             "memories",
             &tr!("windows-memories"),
             [460.0, 460.0],
-            self.show_memories,
+            [320.0, 200.0],
+            epoch,
             |me, ui| me.memories_body(ui, cmds),
         );
-        self.show_memories = open;
     }
 
     /// The memory channel list and its entry form. Split out of
