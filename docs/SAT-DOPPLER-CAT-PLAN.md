@@ -1,75 +1,102 @@
-# SAT Doppler for CAT rigs — plan (step 1: RX Doppler only)
 
-## Goal
-Steer a CAT rig's receive VFO with the Doppler-corrected downlink frequency
-during a satellite pass, instead of leaving it on the nominal downlink.
+## SP9TKN's answers (2026-10-29)
 
-## Constraints
-- No hardware on the bench (FT-991A, IC-7100). All engine integration
-  needs live testing by SP9TKN.
-- Step 1 = RX Doppler only (no uplink, no split, no TX changes).
-- Rate-limited writes (never during TX).
-- Rig's echo must be recognised as ours, not as a dial move.
+1. **VFO selection (Icom):** select VFO A explicitly, once at lock (VFO mode, then
+   `0x07 00`). Not before every write — the rig may have been left on VFO B.
+2. **Rate limit:** no fixed interval. 1 Hz resolution (both rigs accept it over
+   CAT). Pace writes by link acknowledgment: send next only after rig acknowledges
+   (Icom `FB` reply), or after a short gap on Yaesu (no ack). Leave room for
+   the regular CAT poll. One mechanism for all modes, not separate FM/SSB thresholds.
+3. **Echo recognition:** tight tolerance (1 Hz writes → exact match expected).
+4. **TX in step 1:** existing key-down behaviour stays (VFO A borrowed for
+   uplink, then back). No TX changes in step 1. SP9TKN will avoid TX testing.
+5. **TX in step 2 (future):** HRD-style — VFO B on corrected uplink, split on,
+   key-down is just PTT.
 
-## What exists
-- `doppler_rx_hz()`, `doppler_tx_hz()` — already computed in `poll_sat_track`
-- `corrections_active = lock.cfg.doppler && !self.audio_mode` — false for CAT
-- `update_tuning()` audio_mode branch sets VFO to `state.active_freq_hz()` (nominal)
-- `note_frequency_taken(hz)` records `good_vfo_hz` for echo recognition
-- CAT `set_freq` sets the selected VFO's frequency
-- Yaesu `FA…;` / `FB…;`, Icom `0x05` (selected VFO)
+### Updated thresholds
+- Resolution: 1 Hz (not 1 kHz / 10 Hz)
+- Rate limit: by acknowledgment, not fixed timer
+- No separate FM/SSB thresholds
 
-## Step 1 changes needed
+## CAT-thread architectuur (step 1: RX Doppler)
 
-### 1. `start_sat_lock()` (engine.rs ~14307)
-- Remove the "CAT rig: satellite tracking runs, but Doppler correction needs
-  an IQ front end" notice, or change it to note CAT Doppler is active.
-- For CAT rigs, set `corrections_active = lock.cfg.doppler` (remove `&& !self.audio_mode`).
+### Huidige architectuur
+```
+Engine (audio_mode)          CatHandle (channels)          CAT thread
+  │                              │                            │
+  │ source.set_center_hz(dial)   │                            │
+  │ (sound card only)            │                            │
+  │                              │                            │
+  │                              │  cmd_tx.send(Freq(hz))     │
+  │                              │ ──────────────────────►    │
+  │                              │                            │ process Freq → protocol.set_freq(hz)
+  │                              │                            │ → rig VFO set
+  │                              │                            │
+  │                              │  event_rx ◄──────────────── │
+  │                              │  (rig reports freq back)   │
+```
 
-### 2. `poll_sat_track()` (engine.rs ~14475)
-- Change `t.corrections_active = lock.cfg.doppler && !self.audio_mode` to
-  `t.corrections_active = lock.cfg.doppler`.
-- This makes the Doppler correction computed even for CAT rigs.
+### Wat er bij moet voor SAT Doppler
+```
+Engine                          CatHandle                      CAT thread
+  │                              │                            │
+  │ (sat lock active)            │                            │
+  │ compute corrected = dial +   │                            │
+  │   doppler_rx_hz              │                            │
+  │                              │                            │
+  │ [rate limit check]           │                            │
+  │ [never during TX]            │                            │
+  │                              │                            │
+  │ cat.sat_set_freq_vfo_a(      │                            │
+  │     corrected)                │                            │
+  │                              │  cmd_tx.send(             │
+  │                              │    CatCmd::SatFreqVfoA(    │
+  │                              │      corrected))           │
+  │                              │ ──────────────────────►    │
+  │                              │                            │ process → protocol.set_freq(corrected)
+  │                              │                            │ (Yaesu: FA<corrected>;)
+  │                              │                            │ (Icom: 0x07 00, 0x05, 0x07 00)
+  │                              │                            │ → rig VFO A set
+  │                              │                            │
+  │                              │  event_rx ◄──────────────── │
+  │                              │  (rig reports corrected)   │
+  │                              │                            │
+  │ [echo recognition]           │                            │
+  │ good_vfo_hz = corrected      │                            │
+  │ → rig's echo matches ours    │                            │
+  │ → not adopted as dial move   │                            │
+```
 
-### 3. `update_tuning()` audio_mode branch (engine.rs ~18145)
-- When sat lock is active and corrections_active:
-  - Compute `corrected = state.active_freq_hz() + sat_rx_doppler_hz()`
-  - Send `corrected` to the rig via CAT (set_freq on VFO A)
-  - Set `good_vfo_hz = corrected` (so the rig's echo is recognised as ours)
-  - Rate-limit: only send if `|corrected - last_sent| > threshold`
-  - Never during TX: check `!self.tx_active`
-- Track `last_sat_cat_freq: f64` and `last_sat_cat_time: Instant` for rate limiting.
+### Nieuwe CatCmd varianten
+- `SatFreqVfoA(f64)` — set VFO A to corrected frequency (step 1)
+- `SatFreqVfoB(f64)` — set VFO B to corrected uplink (step 2)
+- `SplitOn` / `SplitOff` — rig split control (step 2)
 
-### 4. Thresholds
-- FM: 1 kHz (1000 Hz)
-- SSB/CW: 10 Hz (or tens of Hz)
-- Rate limit: at most one write per 2 seconds (to avoid flooding CAT)
+### Rate-limiting (SP9TKN's suggestie)
+- No fixed timer. Pace by acknowledgment:
+  - Icom: send next only after rig acknowledges (FB reply)
+  - Yaesu: send next after a short gap (no ack)
+- Leave room for regular CAT poll
+- 1 Hz resolution (both rigs accept it over CAT)
 
-### 5. Echo recognition
-- When the rig reports back a frequency, compare against `good_vfo_hz`
-  (which is now the corrected frequency). If within tolerance (e.g. 5 Hz),
-  treat as "ours" — do not adopt as a dial move.
-- The tolerance needs to account for BCD rounding on Yaesu.
+### Echo recognition
+- `good_vfo_hz` = corrected frequency (not nominal dial)
+- When rig reports back, compare against `good_vfo_hz`
+- If within tolerance (1-2 Hz), treat as "ours" → do not adopt as dial move
+- Account for BCD rounding on Yaesu
 
-### 6. `tx_begin()` / `tx_end()`
-- No changes for step 1 (uplink pre-correction is step 2).
-- The rig stays on the corrected downlink during TX (no frequency change).
+### Engine changes
+1. `start_sat_lock()`: remove "CAT rig: Doppler needs IQ" notice. For CAT rigs
+   with cfg.doppler, note that Doppler will be applied via CAT.
+2. `poll_sat_track()`: set `corrections_active = lock.cfg.doppler` (remove
+   `&& !self.audio_mode`).
+3. `update_tuning()` audio_mode branch: when sat lock active and corrections_active,
+   compute corrected freq, send via cat_handle (rate-limited, never during TX).
+4. Track `last_sat_cat_freq: f64` and `last_sat_cat_time: Instant` for rate limiting.
+5. `tx_begin()` / `tx_end()`: no changes in step 1 (existing behavior stays).
 
-## Open questions for SP9TKN
-- VFO selection: Yaesu `FA…;` sets VFO A regardless of selected VFO. Icom `0x05`
-  sets the selected VFO. Should I select VFO A first on Icom, or assume VFO A
-  is already selected?
-- Rate limit: is 2 seconds between writes OK, or should it be faster/slower?
-- Threshold: 1 kHz for FM, 10 Hz for SSB/CW — reasonable?
-
-## Files to touch
-- crates/sdroxide-radio/src/engine.rs (start_sat_lock, poll_sat_track, update_tuning)
-- crates/sdroxide-cat/src/yaesu.rs (already has set_freq_vfo_b, split frames)
-- crates/sdroxide-cat/src/civ.rs (already has select_vfo_a/b, split on/off)
-- crates/sdroxide-types/src/satlock.rs (maybe add cat_doppler flag?)
-
-## Not in scope (step 2+)
-- Uplink pre-correction
-- VFO B / split
-- Mode and CTCSS on VFO B
-- Unlock restore
+### Testing without hardware
+- CAT command builders: ✅ tested (Yaesu + Icom frames)
+- Rate-limiting logic: can be unit-tested as pure function
+- Echo recognition: needs hardware
+- Engine integration: needs hardware
