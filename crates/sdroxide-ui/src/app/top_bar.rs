@@ -3814,7 +3814,7 @@ impl SdroxideApp {
                 if crate::chrome::chip_accent(
                     ui,
                     muted,
-                    tr!("topbar-mute"),
+                    "MUTE",
                     crate::theme::ALERT(),
                     Color32::WHITE,
                 )
