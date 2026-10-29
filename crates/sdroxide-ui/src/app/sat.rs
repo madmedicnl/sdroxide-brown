@@ -579,7 +579,6 @@ fn parse_ctcss_hz(note: &str) -> Option<f64> {
     let lower = note.to_lowercase();
     if let Some(idx) = lower.find("ctcss") {
         let rest = &note[idx..];
-        // Find the number after "CTCSS"
         let mut num_str = String::new();
         let mut found_dot = false;
         for c in rest.chars().skip(5) {
@@ -1464,6 +1463,7 @@ impl SdroxideApp {
             downlink_hz: lock_downlink_hz(link, self.state.active_freq_hz()),
             uplink: SatUplink::from_link(link),
             doppler: true,
+            ctcss_hz: parse_ctcss_hz(&link.note),
             rotator: true,
         };
         cmds.push(Command::SetMode { rx: sdroxide_types::RxId::Main, mode: mode_for_link(link) });
