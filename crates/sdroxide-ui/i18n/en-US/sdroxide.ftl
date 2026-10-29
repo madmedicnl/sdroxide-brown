@@ -6947,6 +6947,8 @@ aircraft-online-unavailable-no-station = online unavailable — no station to as
 
 aircraft-online-unavailable-unauthorized = online unavailable — not signed in to the station
 
+aircraft-online-unavailable-retry = online lookup failed — will try again shortly
+
 aircraft-switch-no-answer = the station did not answer
 
 aircraft-switch-not-signed-in = not signed in to the station

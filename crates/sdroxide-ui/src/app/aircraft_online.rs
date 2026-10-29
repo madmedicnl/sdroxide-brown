@@ -29,10 +29,20 @@ use super::aircraft_card::{self, CardKey, icao_hex};
 use crate::i18n::tr;
 use super::aircraft_registry::AircraftCard;
 
-/// Seconds before a failed question may be asked again.
+/// Seconds before a question the registry could not answer may be asked again.
 pub(in crate::app) const RETRY_S: i64 = 300;
-/// Seconds after which a question that never came back is given up on.
-pub(in crate::app) const FLIGHT_TIMEOUT_S: i64 = 30;
+/// Seconds before a read that failed (no answer from the station or from the
+/// services behind it) is tried again: it mends itself, so it is soon.
+pub(in crate::app) const RETRY_OFFLINE_S: i64 = 30;
+/// Seconds before a read the station refused for its rate ceiling is tried again.
+pub(in crate::app) const RETRY_BUSY_S: i64 = 60;
+/// Seconds after which a question that never came back is given up on. A
+/// browser's `fetch` has no timeout of its own, so this is the only one there.
+pub(in crate::app) const FLIGHT_TIMEOUT_S: i64 = 15;
+/// Questions that may be out at once. A card that is slow or failing holds one
+/// place, never the whole line; a few at a time keeps the relay's own ceiling
+/// in sight.
+pub(in crate::app) const MAX_IN_FLIGHT: usize = 3;
 /// Cards whose online state is kept; the least recently looked at go first.
 pub(in crate::app) const MAX_KEPT: usize = 64;
 
@@ -55,15 +65,16 @@ pub(in crate::app) enum Reason {
 }
 
 impl Reason {
-    /// What the card says about it. Only the reasons the operator can do
-    /// something about are said; a failure that will mend itself is not an
-    /// error, and is not drawn as one.
+    /// What the card says about it. A read that failed says so and that it
+    /// will be tried again, so it never fails in silence; an aircraft the
+    /// registry simply does not know says nothing.
     pub(in crate::app) fn note(self) -> Option<String> {
         match self {
             Reason::Disabled => Some(tr!("aircraft-online-unavailable-disabled")),
             Reason::NoStation => Some(tr!("aircraft-online-unavailable-no-station")),
             Reason::Unauthorized => Some(tr!("aircraft-online-unavailable-unauthorized")),
-            Reason::Offline | Reason::Busy | Reason::Unknown => None,
+            Reason::Offline | Reason::Busy => Some(tr!("aircraft-online-unavailable-retry")),
+            Reason::Unknown => None,
         }
     }
 
@@ -71,7 +82,9 @@ impl Reason {
     /// this session.
     pub(in crate::app) fn retry_after(self) -> Option<i64> {
         match self {
-            Reason::Offline | Reason::Busy | Reason::Unknown => Some(RETRY_S),
+            Reason::Offline => Some(RETRY_OFFLINE_S),
+            Reason::Busy => Some(RETRY_BUSY_S),
+            Reason::Unknown => Some(RETRY_S),
             Reason::Disabled | Reason::Unauthorized | Reason::NoStation => None,
         }
     }
@@ -239,8 +252,8 @@ pub(in crate::app) struct OnlineStore {
     /// Set once the station says it will not answer anybody (relay off, sign-in
     /// missing): after that no card is asked about.
     blocked: Option<OnlineState>,
-    /// The question out, and when it went.
-    in_flight: Option<(u32, i64)>,
+    /// The questions out, and when each went; at most [`MAX_IN_FLIGHT`].
+    in_flight: Vec<(u32, i64)>,
     clock: u64,
 }
 
@@ -249,7 +262,7 @@ impl OnlineStore {
     /// so every card may ask again. Cards that did get an answer keep it.
     pub(in crate::app) fn unblock(&mut self) {
         self.blocked = None;
-        self.in_flight = None;
+        self.in_flight.clear();
         self.entries.retain(|_, e| matches!(e.state, OnlineState::Ready(_)));
     }
 
@@ -280,10 +293,10 @@ impl OnlineStore {
         self.entries.get(&icao).map_or(&IDLE, |e| &e.state)
     }
 
-    /// Whether a question is out and still being waited for. One at a time:
-    /// while this is true no other aircraft can be asked about.
+    /// Whether every place for a question is taken by one still being waited
+    /// for. Only then can no other aircraft be asked about.
     pub(in crate::app) fn line_busy(&self, now: i64) -> bool {
-        self.in_flight.is_some_and(|(_, at)| now - at < FLIGHT_TIMEOUT_S)
+        self.in_flight.iter().filter(|(_, at)| now - at < FLIGHT_TIMEOUT_S).count() >= MAX_IN_FLIGHT
     }
 
     /// The question to send now, if any. Called every frame the card is open:
@@ -298,14 +311,26 @@ impl OnlineStore {
         if !has_station || self.blocked.is_some() {
             return None;
         }
-        if let Some((_, at)) = self.in_flight {
-            if now - at < FLIGHT_TIMEOUT_S {
-                return None;
-            }
-            // Never came back. Let the line move; the card waits out a back-off.
-            if let Some((lost, _)) = self.in_flight.take() {
-                self.settle(lost, OnlineState::Unavailable(Reason::Offline), Some(now + RETRY_S));
-            }
+        // Whatever never came back is given up on and says so: its place is
+        // free and the card waits out a short back-off.
+        let lost: Vec<u32> = self
+            .in_flight
+            .iter()
+            .filter(|(_, at)| now - at >= FLIGHT_TIMEOUT_S)
+            .map(|(i, _)| *i)
+            .collect();
+        self.in_flight.retain(|(_, at)| now - at < FLIGHT_TIMEOUT_S);
+        for icao in lost {
+            self.settle(
+                icao,
+                OnlineState::Unavailable(Reason::Offline),
+                Some(now + RETRY_OFFLINE_S),
+            );
+        }
+        if self.in_flight.iter().any(|(i, _)| *i == want.icao)
+            || self.in_flight.len() >= MAX_IN_FLIGHT
+        {
+            return None;
         }
         self.clock += 1;
         if let Some(e) = self.entries.get_mut(&want.icao) {
@@ -319,15 +344,13 @@ impl OnlineStore {
             }
         }
         self.settle(want.icao, OnlineState::Loading, None);
-        self.in_flight = Some((want.icao, now));
+        self.in_flight.push((want.icao, now));
         Some(want.clone())
     }
 
     /// Take an answer to the question for `icao`.
     pub(in crate::app) fn deliver(&mut self, icao: u32, answer: Answer, now: i64) {
-        if self.in_flight.is_some_and(|(i, _)| i == icao) {
-            self.in_flight = None;
-        }
+        self.in_flight.retain(|(i, _)| *i != icao);
         match answer {
             Answer::Info(info) => self.settle(icao, OnlineState::Ready(info), None),
             Answer::Unavailable(r) => {
@@ -346,7 +369,7 @@ impl OnlineStore {
             let oldest = self
                 .entries
                 .iter()
-                .filter(|(i, _)| self.in_flight.map(|(f, _)| f) != Some(**i) && **i != icao)
+                .filter(|(i, _)| !self.in_flight.iter().any(|(f, _)| f == *i) && **i != icao)
                 .min_by_key(|(_, e)| e.touched)
                 .map(|(i, _)| *i);
             match oldest {
@@ -633,11 +656,13 @@ mod tests {
     fn the_line_is_busy_while_a_question_is_out_and_free_after_its_answer_or_timeout() {
         let mut st = OnlineStore::default();
         assert!(!st.line_busy(NOW));
-        let w = Want { icao: 5, callsign: None, registration: None };
-        assert!(st.next_request(Some(&w), true, NOW).is_some());
-        assert!(st.line_busy(NOW + 1));
+        for i in 0..MAX_IN_FLIGHT as u32 {
+            assert!(!st.line_busy(NOW), "a place is free");
+            assert!(st.next_request(Some(&want(i)), true, NOW).is_some());
+        }
+        assert!(st.line_busy(NOW + 1), "every place is taken");
         assert!(!st.line_busy(NOW + FLIGHT_TIMEOUT_S), "a question that never came back");
-        st.deliver(5, Answer::Unavailable(Reason::Offline), NOW + 2);
+        st.deliver(0, Answer::Unavailable(Reason::Offline), NOW + 2);
         assert!(!st.line_busy(NOW + 3));
     }
 
@@ -736,7 +761,7 @@ mod tests {
 
     #[test]
     fn a_card_with_no_online_data_reads_exactly_as_the_radio_card_does() {
-        for st in [OnlineState::Idle, OnlineState::Unavailable(Reason::Offline)] {
+        for st in [OnlineState::Idle, OnlineState::Unavailable(Reason::Unknown)] {
             let all = rows(&heard(), &st, NOW);
             let radio = lines(&heard(), NOW);
             assert_eq!(all.len(), radio.len(), "{st:?}");
@@ -833,15 +858,20 @@ mod tests {
         assert!(Reason::Disabled.note().unwrap().contains("online unavailable"));
         assert!(Reason::NoStation.note().unwrap().contains("online unavailable"));
         assert!(Reason::Unauthorized.note().is_some());
-        for quiet in [Reason::Offline, Reason::Busy, Reason::Unknown] {
-            assert_eq!(quiet.note(), None, "{quiet:?}");
+        assert_eq!(Reason::Unknown.note(), None, "the registry just does not know it");
+        for failed in [Reason::Offline, Reason::Busy] {
+            let n = failed.note().unwrap_or_else(|| panic!("{failed:?} failed in silence"));
+            assert!(n.contains("again"), "{n}");
         }
         let all = rows(&heard(), &OnlineState::Unavailable(Reason::Disabled), NOW);
         let r = all.last().unwrap();
         assert_eq!((r.label, r.value.as_str(), r.badge), ("Online", "—", Badge::Missing));
         assert!(r.note.contains("online unavailable"), "{}", r.note);
-        let quiet = rows(&heard(), &OnlineState::Unavailable(Reason::Busy), NOW);
+        let quiet = rows(&heard(), &OnlineState::Unavailable(Reason::Unknown), NOW);
         assert_eq!(quiet.len(), lines(&heard(), NOW).len());
+        let failed = rows(&heard(), &OnlineState::Unavailable(Reason::Offline), NOW);
+        assert_eq!(failed.last().unwrap().label, "Online");
+        assert!(failed.last().unwrap().note.contains("again"));
     }
 
     #[test]
@@ -859,8 +889,8 @@ mod tests {
         let w = want(0x4CA1FA);
         assert_eq!(s.next_request(Some(&w), true, NOW), Some(w.clone()));
         assert_eq!(s.state_for(w.icao, true), &OnlineState::Loading);
-        // Redrawn every frame, asked once.
-        for t in 0..100 {
+        // Redrawn every frame while the question is out, asked once.
+        for t in 0..FLIGHT_TIMEOUT_S {
             assert_eq!(s.next_request(Some(&w), true, NOW + t), None);
         }
         s.deliver(w.icao, Answer::Info(Box::new(info())), NOW + 1);
@@ -909,33 +939,73 @@ mod tests {
             assert!(s.next_request(Some(&w), true, NOW).is_some());
             s.deliver(5, Answer::Unavailable(r), NOW);
             assert_eq!(s.next_request(Some(&w), true, NOW), None, "{r:?}");
-            assert_eq!(s.next_request(Some(&w), true, NOW + RETRY_S - 1), None, "{r:?}");
-            assert!(s.next_request(Some(&w), true, NOW + RETRY_S).is_some(), "{r:?}");
+            let wait = r.retry_after().unwrap();
+            assert_eq!(s.next_request(Some(&w), true, NOW + wait - 1), None, "{r:?}");
+            assert!(s.next_request(Some(&w), true, NOW + wait).is_some(), "{r:?}");
             // And again: each failure restarts the wait.
-            s.deliver(5, Answer::Unavailable(r), NOW + RETRY_S);
-            assert_eq!(s.next_request(Some(&w), true, NOW + RETRY_S + 1), None, "{r:?}");
+            s.deliver(5, Answer::Unavailable(r), NOW + wait);
+            assert_eq!(s.next_request(Some(&w), true, NOW + wait + 1), None, "{r:?}");
         }
-        assert_eq!(Reason::Offline.retry_after(), Some(RETRY_S));
+        assert!(
+            Reason::Offline.retry_after().unwrap() <= 60,
+            "a failed read mends itself, so it is tried again soon, not in five minutes"
+        );
+        assert_eq!(Reason::Unknown.retry_after(), Some(RETRY_S));
         assert_eq!(Reason::Disabled.retry_after(), None);
         assert_eq!(Reason::Unauthorized.retry_after(), None);
         assert_eq!(Reason::NoStation.retry_after(), None);
     }
 
     #[test]
-    fn one_question_is_out_at_a_time() {
+    fn a_second_card_is_asked_while_the_first_is_still_out() {
         let mut s = OnlineStore::default();
         assert!(s.next_request(Some(&want(1)), true, NOW).is_some());
-        assert_eq!(s.next_request(Some(&want(2)), true, NOW + 1), None);
-        s.deliver(1, Answer::Unavailable(Reason::Offline), NOW + 2);
-        assert!(s.next_request(Some(&want(2)), true, NOW + 3).is_some());
+        assert!(
+            s.next_request(Some(&want(2)), true, NOW + 1).is_some(),
+            "a card that is slow to answer must not hold every other card"
+        );
+        assert_eq!(
+            s.next_request(Some(&want(1)), true, NOW + 2),
+            None,
+            "the same card is not asked twice"
+        );
     }
 
     #[test]
-    fn a_question_that_never_comes_back_does_not_hold_the_line_for_ever() {
+    fn only_a_few_questions_are_out_at_once() {
+        let mut s = OnlineStore::default();
+        for i in 0..MAX_IN_FLIGHT as u32 {
+            assert!(s.next_request(Some(&want(i)), true, NOW + i as i64).is_some());
+        }
+        assert!(s.line_busy(NOW + 5), "every place is taken");
+        assert_eq!(s.next_request(Some(&want(99)), true, NOW + 5), None);
+        s.deliver(0, Answer::Unavailable(Reason::Offline), NOW + 6);
+        assert!(!s.line_busy(NOW + 6), "an answer freed a place");
+        assert!(s.next_request(Some(&want(99)), true, NOW + 6).is_some());
+    }
+
+    #[test]
+    fn a_card_that_fails_never_stops_another_from_being_read() {
         let mut s = OnlineStore::default();
         assert!(s.next_request(Some(&want(1)), true, NOW).is_some());
-        assert_eq!(s.next_request(Some(&want(2)), true, NOW + FLIGHT_TIMEOUT_S - 1), None);
+        // The first card fails after a long wait; the operator opens another.
+        let t = NOW + FLIGHT_TIMEOUT_S - 1;
+        assert!(s.next_request(Some(&want(2)), true, t).is_some(), "card 2 asked during the wait");
+        s.deliver(1, Answer::Unavailable(Reason::Offline), t + 1);
+        s.deliver(2, Answer::Info(Box::new(info())), t + 2);
+        assert!(matches!(s.state_for(2, true), OnlineState::Ready(_)));
+        assert!(matches!(s.state_for(1, true), OnlineState::Unavailable(Reason::Offline)));
+    }
+
+    #[test]
+    fn a_question_that_never_comes_back_is_given_up_quickly_and_frees_its_place() {
+        assert!(FLIGHT_TIMEOUT_S <= 15, "a browser fetch has no timeout of its own");
+        let mut s = OnlineStore::default();
+        assert!(s.next_request(Some(&want(1)), true, NOW).is_some());
+        // The lost one is settled with a reason when the time is up.
         assert!(s.next_request(Some(&want(2)), true, NOW + FLIGHT_TIMEOUT_S).is_some());
+        assert!(!s.line_busy(NOW + FLIGHT_TIMEOUT_S));
+        assert!(matches!(s.state_for(1, true), OnlineState::Unavailable(Reason::Offline)));
         // The lost one is not asked again at once either.
         assert_eq!(s.next_request(Some(&want(1)), true, NOW + FLIGHT_TIMEOUT_S + 1), None);
     }

@@ -6945,6 +6945,8 @@ aircraft-online-unavailable-no-station = online niet beschikbaar — geen statio
 
 aircraft-online-unavailable-unauthorized = online niet beschikbaar — niet aangemeld bij het station
 
+aircraft-online-unavailable-retry = online opvraag mislukt — wordt zo opnieuw geprobeerd
+
 aircraft-switch-no-answer = het station antwoordde niet
 
 aircraft-switch-not-signed-in = niet aangemeld bij het station
