@@ -1073,7 +1073,7 @@ impl SdroxideApp {
         // out, and gated to audio-mode sources so an SDR that un-decimates keeps
         // its zoom.
         if refit_on_window_growth(
-            self.caps.as_ref().is_some_and(|c| c.audio_mode),
+            self.caps.as_ref().is_some_and(window_follows_the_rig),
             prev_rate,
             self.state.sample_rate,
             self.view.span(),
@@ -1188,6 +1188,16 @@ fn base_fft_for_rate(chip: u32, rate_hz: f64) -> u32 {
 /// panadapter. A tenth of a percent is far below any zoom step and far above
 /// that.
 const WIDER_THAN_PASSBAND: f64 = 1.001;
+
+/// Whether the device window is the rig's to set, so a jump in it is the
+/// operator choosing a new bandwidth rather than an SDR being decimated: a
+/// demod-audio front end, or a radio whose picture comes from an attached
+/// panadapter receiver. The second is the TS-200 on CAT beside a HackRF at
+/// 2.5 Msps — it opens on the receiver's 2.5 MHz, not on the 48 kHz it had
+/// alone, and a view left on the old sliver is the wrong default bandwidth.
+fn window_follows_the_rig(caps: &sdroxide_types::DeviceCaps) -> bool {
+    caps.audio_mode || caps.rx_audio_external
+}
 
 /// Whether a jump in the device window should re-fit the view to it.
 ///
@@ -1514,6 +1524,23 @@ mod tests {
         assert!(!refit_on_window_growth(true, 200_000.0, 200_000.0, 20_000.0));
         // A gentle change (un-decimating 2x) is below the factor gate.
         assert!(!refit_on_window_growth(true, 100_000.0, 200_000.0, 50_000.0));
+    }
+
+    /// A CAT rig with a receiver attached as its panadapter (TS-200 48 kHz +
+    /// HackRF 2.5 Msps): the window jumps to the receiver's rate and the view
+    /// has to open out to it, as it does for a rig's own scope.
+    #[test]
+    fn an_attached_panadapter_receiver_refits_the_view_to_its_bandwidth() {
+        let paired = sdroxide_types::DeviceCaps { rx_audio_external: true, ..Default::default() };
+        let plain_sdr = sdroxide_types::DeviceCaps::default();
+        assert!(super::window_follows_the_rig(&paired));
+        assert!(!super::window_follows_the_rig(&plain_sdr));
+        assert!(refit_on_window_growth(
+            super::window_follows_the_rig(&paired),
+            48_000.0,
+            2_500_000.0,
+            48_000.0
+        ));
     }
 
     #[test]
