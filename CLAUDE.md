@@ -39,3 +39,12 @@ How:
 Read `crates/sdroxide-ui/i18n/README.md` for the Fluent syntax and the rules for
 translators. A change that adds a literal to the interface and no messages is
 not finished.
+
+## CTR on = the frequency is always in the middle
+
+With the CTR chip lit the red line is at the centre of the waterfall on every
+frame — wheel, pinch, keyboard zoom, pan, fit, mode or decoder change, every
+radio, the whole bandwidth, zoom in or out, fast or slow. No drift, no jitter,
+no off/on to re-centre. Modes keep their preset bandwidth; CTR only moves the
+line. Touching waterfall or zoom code: keep the `ctr_zoom_sim` tests in
+`widgets/spectrum_view.rs` green and add the gesture.

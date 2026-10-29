@@ -64,6 +64,13 @@ or stackable and add it to the Detachable page in Settings.
 - **Format what you touch.** No repo-wide `cargo fmt`. Fork-only files swept on
   arrival. Run rustfmt with `--config-path` or from repo root.
 - **Commit messages:** short imperative subject, then the why.
+- **CTR on = the frequency is always in the middle.** With the CTR chip lit the
+  red line is at the centre of the waterfall on every frame: wheel, pinch,
+  keyboard zoom, pan, fit, mode or decoder change; every radio, the whole
+  bandwidth, zoom in or out, fast or slow. No drift, no jitter, no off/on to
+  re-centre. Modes keep their preset bandwidth; CTR only moves the line. Touching
+  waterfall or zoom code: keep the `ctr_zoom_sim` tests in
+  `widgets/spectrum_view.rs` green and add the gesture you changed.
 
 ## Working autonomously
 
