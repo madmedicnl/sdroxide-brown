@@ -100,3 +100,10 @@ Engine                          CatHandle                      CAT thread
 - Rate-limiting logic: can be unit-tested as pure function
 - Echo recognition: needs hardware
 - Engine integration: needs hardware
+
+### Step 2b/2c: VFO B + split (implemented 2026-10-29)
+- VFO B set to corrected uplink at lock start and updated (rate-limited, > 1 Hz)
+- Split enabled at lock start (`FT3;` / `0x0F 01`)
+- Split disabled on unlock (`FT2;` / `0x0F 00`)
+- Mode and CTCSS on VFO B: NOT yet implemented (requires VFO selection +
+  mode set + tone set sequence). Rig retains last mode/tone on VFO B.

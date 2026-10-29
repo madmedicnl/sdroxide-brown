@@ -3717,6 +3717,10 @@ struct Engine {
     /// Last satellite CAT frequency sent to a CAT rig, for rate-limiting.
     /// Zero means "nothing sent yet".
     sat_cat_last_freq: f64,
+    /// Last VFO B frequency sent (SAT uplink), for rate-limiting.
+    sat_vfo_b_last_freq: f64,
+    /// Whether the rig's split is currently on (SAT lock).
+    sat_split_on: bool,
     /// The centre an open attempt on this radio failed at, and which a later
     /// attempt should therefore not simply repeat.
     ///
@@ -5161,6 +5165,8 @@ fn engine_thread(
         // recorded; see the note where that is worked out.
         good_vfo_hz: seeded_good_vfo_hz,
         sat_cat_last_freq: 0.0,
+        sat_vfo_b_last_freq: 0.0,
+        sat_split_on: false,
         // Nothing has been refused yet on a front end that opened, so the first
         // attempt is made at the dial and only its failure arms the fallback.
         refused_center_hz: seeded_refused_center_hz,
@@ -14337,13 +14343,18 @@ impl Engine {
             return;
         };
         if self.audio_mode && cfg.doppler {
-            // Step 1 (RX Doppler): CAT rigs now get Doppler correction via CAT
-            // commands (rate-limited, never during TX). The notice is kept as a
-            // fallback for rigs where the CAT thread is not available.
             let _ = self.event_tx.send(RadioEvent::Notice(Some(
                 "CAT rig: satellite RX Doppler correction via CAT (experimental)"
                     .into(),
             )));
+            // Step 2: set VFO B to the initial uplink and enable split.
+            if let Some(u) = cfg.uplink {
+                let up = u.uplink_for(self.state.active_freq_hz()) + self.state.xit.effective_hz();
+                self.source.set_vfo_b_freq(up);
+                self.sat_vfo_b_last_freq = up;
+            }
+            self.source.split_on();
+            self.sat_split_on = true;
         }
         self.stop_scan_for_operator();
         // The dial goes to the nominal downlink through the normal tuning
@@ -14395,6 +14406,11 @@ impl Engine {
     fn stop_sat_lock(&mut self) {
         if self.sat_lock.take().is_none() {
             return;
+        }
+        // Step 2: restore the rig's split state.
+        if self.sat_split_on {
+            self.source.split_off();
+            self.sat_split_on = false;
         }
         if let Some(tx) = self.tx.as_mut() {
             tx.sat_nco = None;
@@ -18203,6 +18219,24 @@ impl Engine {
                 // `keep_vfo_in_span`, which a CAT rig never reaches.
                 self.note_frequency_taken(corrected);
                 self.sat_cat_last_freq = corrected;
+            }
+            // Step 2b/2c: VFO B + split (only when sat lock is active and
+            // corrections are on). Set VFO B to the corrected uplink and enable
+            // split once. Update VFO B when the uplink changes by > 1 Hz.
+            if !self.tx_active
+                && self.sat_lock.as_ref().is_some_and(|l| l.track.corrections_active)
+            {
+                let up = self.sat_lock.as_ref().unwrap().track.uplink_hz.unwrap_or(0.0)
+                    + self.sat_tx_doppler_hz()
+                    + self.state.xit.effective_hz();
+                if !self.sat_split_on {
+                    self.source.split_on();
+                    self.sat_split_on = true;
+                }
+                if (up - self.sat_vfo_b_last_freq).abs() > 1.0 || self.sat_vfo_b_last_freq == 0.0 {
+                    self.source.set_vfo_b_freq(up);
+                    self.sat_vfo_b_last_freq = up;
+                }
             }
             self.update_display_center();
             return;
