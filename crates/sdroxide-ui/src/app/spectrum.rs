@@ -144,7 +144,7 @@ fn pick_levels(bins: &[u8], db_floor: f32, db_ceil: f32) -> Option<(f32, f32)> {
     // margin at a time. One step may overshoot; the next fit reels it in.
     let step = range / 255.0;
     let reach = |clipped: bool, margin: f32| if clipped { 15.0 } else { margin };
-    let mut floor = noise - reach(noise <= db_floor + step, 5.0); // noise just above the floor (dark)
+    let floor = noise - reach(noise <= db_floor + step, 5.0); // noise just above the floor (dark)
     let mut ceil = peak + reach(peak >= db_ceil - step, 6.0); // headroom so strong signals don't clip
     // Keep a usable dynamic range even on an empty/flat band — but **anchor it at
     // the noise, not at the middle of the window**. Centring it put a dead band

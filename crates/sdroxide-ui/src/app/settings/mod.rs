@@ -3706,7 +3706,7 @@ impl SdroxideApp {
                 }
                 #[cfg(target_arch = "wasm32")]
                 {
-                    note(ui, tr!("settings-detachable-native-only"));
+                    note(ui, &tr!("settings-detachable-native-only"));
                 }
             }
             SettingsTab::Alerts => {
@@ -5241,7 +5241,7 @@ fn settings_cw_usb(ui: &mut egui::Ui, io: &mut SettingsIo) {
 
 #[cfg(not(all(not(target_arch = "wasm32"), target_os = "linux")))]
 fn settings_cw_usb(ui: &mut egui::Ui, _io: &mut SettingsIo) {
-    note_small(ui, tr!("settings-cw-usb-linux"));
+    note_small(ui, &tr!("settings-cw-usb-linux"));
 }
 
 /// The label one S-meter calibration step is offered under.

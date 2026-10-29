@@ -12,7 +12,7 @@
 //! be allowed to apply defaults over the real thing.
 
 use crate::chrome::StyledCombo;
-use crate::i18n::{Tr, tr};
+use crate::i18n::tr;
 use eframe::egui::{self, Color32, ComboBox, RichText};
 
 /// Live status of the built-in TCI server, from `RadioEvent::TciServerStatus`.

@@ -870,7 +870,7 @@ impl SdroxideApp {
                 ui.set_max_width(inner_w);
                 ui.horizontal_wrapped(|ui| {
                     for (i, label) in panel_tabs(mode, waterfall).enumerate() {
-                        if crate::chrome::chip(ui, selected == i, label).clicked() {
+                        if crate::chrome::chip(ui, selected == i, &pane_label(label)).clicked() {
                             self.view.digi_pane = i;
                         }
                     }
