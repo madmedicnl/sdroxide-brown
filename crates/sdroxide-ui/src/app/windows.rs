@@ -487,7 +487,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "memories",
-            "Memories",
+            &tr!("windows-memories"),
             [460.0, 460.0],
             self.show_memories,
             |me, ui| me.memories_body(ui, cmds),
@@ -846,7 +846,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "voice-keyer",
-            "Voice keyer",
+            &tr!("windows-voice-keyer"),
             [600.0, 400.0],
             self.show_voice,
             |me, ui| me.voice_body(ui, cmds),
@@ -875,9 +875,7 @@ impl SdroxideApp {
 
         ui.label(
             RichText::new(
-                "REC records from your microphone, PLAY lets you listen to what you \
-                 recorded, TX puts it on the air — as does a numpad key, a MIDI pad, \
-                 or rigctld's send_voice_mem.",
+                tr!("windows-rec-records-your-microphone-play"),
             )
             .weak()
             .size(11.5),
@@ -941,7 +939,7 @@ impl SdroxideApp {
                         })
                         .inner
                         .on_hover_text(if is_rec {
-                            "Stop and store".to_string()
+                            tr!("windows-stop-store").to_string()
                         } else {
                             format!("Record from the microphone (up to {max_len:.0} s)")
                         });
@@ -962,18 +960,18 @@ impl SdroxideApp {
                             crate::chrome::chip(
                                 ui,
                                 is_prev,
-                                RichText::new(if is_prev { "STOP" } else { "PLAY" }).size(11.5),
+                                RichText::new(if is_prev { tr!("windows-stop") } else { tr!("windows-play") }).size(11.5),
                             )
                         })
                         .inner
                         .on_hover_text(if is_prev {
-                            "Stop listening"
+                            tr!("windows-stop-listening")
                         } else if slot.is_empty() {
-                            "Nothing recorded in this slot"
+                            tr!("windows-nothing-recorded-slot")
                         } else if self.state.tx.ptt || tuning {
-                            "Not while transmitting"
+                            tr!("windows-not-while-transmitting")
                         } else {
-                            "Listen to this message — nothing is transmitted"
+                            tr!("windows-listen-message-nothing-transmitted")
                         });
                     if prev.clicked() {
                         cmds.push(if is_prev {
@@ -993,20 +991,20 @@ impl SdroxideApp {
                             crate::chrome::chip_accent(
                                 ui,
                                 is_play,
-                                RichText::new(if is_play { "STOP" } else { "TX" }).size(11.5),
+                                RichText::new(if is_play { tr!("windows-stop") } else { "TX".to_string() }).size(11.5),
                                 crate::theme::ALERT(),
                                 Color32::WHITE,
                             )
                         })
                         .inner
                         .on_hover_text(if is_play {
-                            "Stop transmitting"
+                            tr!("windows-stop-transmitting")
                         } else if slot.is_empty() {
-                            "Nothing recorded in this slot"
+                            tr!("windows-nothing-recorded-slot")
                         } else if tuning {
-                            "TUNE is active — switch it off first"
+                            tr!("windows-tune-active-switch-off-first")
                         } else {
-                            "Transmit this message"
+                            tr!("windows-transmit-message")
                         });
                     if play.clicked() {
                         cmds.push(if is_play {
@@ -1049,7 +1047,7 @@ impl SdroxideApp {
                                 )
                             })
                             .inner
-                            .on_hover_text("Erase this recording")
+                            .on_hover_text(tr!("windows-erase-recording"))
                             .clicked()
                         {
                             cmds.push(Command::VoiceClear(i as u8));
@@ -1064,8 +1062,7 @@ impl SdroxideApp {
             ui.add_space(4.0);
             ui.label(
                 RichText::new(
-                    "RADE: the message is encoded by the digital-voice codec, \
-                     exactly as a live over would be.",
+                    tr!("windows-rade-message-encoded-digital-voice"),
                 )
                 .weak()
                 .size(11.0),

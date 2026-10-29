@@ -67,8 +67,7 @@ pub(super) fn packet_monitor_header(
             }
             if crate::chrome::chip(ui, setup_open, RichText::new("⚙").size(9.5))
                 .on_hover_text(
-                    "Station callsign, speed, TX delay, the digipeater path, the beacon and the \
-                     KISS server",
+                    tr!("packet-station-callsign-speed-tx-delay"),
                 )
                 .clicked()
             {
@@ -278,9 +277,7 @@ impl SdroxideApp {
                             .hint_text("via"),
                     )
                     .on_hover_text(
-                        "Digipeaters, nearest first, separated by commas — OE3XLR-1,OE3XMS-1. Leave \
-                         it empty for a station you can hear directly, or to use the default path \
-                         from the packet settings.",
+                        tr!("packet-digipeaters-nearest-first-separated-commas"),
                     );
                     if resp.changed() {
                         self.packet_via = self.packet_via.to_uppercase();
@@ -299,8 +296,7 @@ impl SdroxideApp {
                             theme::INK_ON_CYAN(),
                         )
                         .on_hover_text(
-                            "Hang up properly, and wait for the far end to agree. Changing mode \
-                             instead ends the session without telling anybody.",
+                            tr!("packet-hang-up-properly-wait-far"),
                         )
                     })
                     .clicked()
@@ -316,14 +312,13 @@ impl SdroxideApp {
                         theme::INK_ON_CYAN(),
                     )
                     .on_hover_text(if busy {
-                        "The MAIL window has the link. Finish or stop that session first."
+                        tr!("packet-mail-window-has-link-finish")
                     } else if !have_call {
-                        "This station has no callsign yet — set one under SETUP, above the monitor \
-                         pane. Nothing transmits until it is set."
+                        tr!("packet-station-has-no-callsign-yet")
                     } else if ready {
-                        "Call this station in connected mode — a node, a BBS, or another operator."
+                        tr!("packet-call-station-connected-mode-node")
                     } else {
-                        "Needs a callsign to call."
+                        tr!("packet-needs-callsign-call")
                     })
                 })
                 .clicked()
@@ -334,8 +329,7 @@ impl SdroxideApp {
                 crate::chrome::row_tail(ui, |ui| {
                     if crate::chrome::chip(ui, false, RichText::new(" CLEAR ").size(10.5))
                         .on_hover_text(
-                            "Empty the transcript. The link is untouched — a connected station stays \
-                             connected.",
+                            tr!("packet-empty-transcript-link-untouched-connected"),
                         )
                         .clicked()
                     {
@@ -396,7 +390,7 @@ impl SdroxideApp {
                     let resp = ui.add(
                         egui::TextEdit::singleline(&mut self.packet_draft)
                             .desired_width(room)
-                            .hint_text(if connected { "type here" } else { "not connected" }),
+                            .hint_text(if connected { tr!("packet-type-here") } else { tr!("packet-not-connected") }),
                     );
                     if resp.has_focus() {
                         self.packet_recall(ui, &resp);
@@ -411,7 +405,7 @@ impl SdroxideApp {
                         theme::GREEN(),
                         theme::INK_ON_CYAN(),
                     )
-                    .on_hover_text("Send the line. A node or a BBS reads one line at a time.")
+                    .on_hover_text(tr!("packet-send-line-node-bbs-reads"))
                 })
                 .clicked()
                 {

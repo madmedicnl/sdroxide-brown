@@ -290,10 +290,9 @@ impl SdroxideApp {
                 // `chip_enabled`, not a bare `add_enabled_ui`: this row is
                 // `horizontal_wrapped`, and a child Ui inside one does not wrap.
                 let auto_chip =
-                    crate::chrome::chip_enabled(ui, !held, auto && !held, "Auto TX FRQ")
+                    crate::chrome::chip_enabled(ui, !held, auto && !held, &tr!("decodes-auto-tx-frq"))
                         .on_hover_text(if held {
-                            "Overridden by Hold TX. Lift the hold to choose which way the transmit \
-                         frequency moves."
+                            tr!("decodes-overridden-hold-tx-lift-hold")
                         } else {
                             "Pick our transmit frequency automatically: the quietest spot in the \
                              period we transmit in, rather than the frequency of whoever we are \
@@ -303,7 +302,7 @@ impl SdroxideApp {
                              Hold TX.\n\nOne band is exempt: on 11 m the WSJT-CB norm is to \
                              answer a CQ on the caller's own tone and stay there for the whole \
                              contact, so the hunt is skipped and a CQ reply sits on the frequency \
-                             it was heard at whether this is on or off."
+                             it was heard at whether this is on or off.".to_string()
                         });
                 if auto_chip.clicked() {
                     self.digi_cfg_edit.auto_tx_freq = !auto;
@@ -632,25 +631,25 @@ impl SdroxideApp {
                     // be able to see at a glance which state it is in.
                     let ignored = crate::app::ignore::is_ignored(ignored_set, d.from.as_deref());
                     let (badge, badge_col) = if ignored {
-                        ("MUTED", crate::theme::gray(95))
+                        ("MUTED".to_string(), crate::theme::gray(95))
                     } else {
                         match novelty.highlight() {
                             Some(sdroxide_types::Highlight::NewDxcc) => {
-                                ("DXCC", crate::theme::PINK())
+                                (tr!("decodes-dxcc"), crate::theme::PINK())
                             }
                             Some(sdroxide_types::Highlight::NewDxccBand) => {
-                                ("BAND", crate::theme::YELLOW())
+                                (tr!("decodes-band"), crate::theme::YELLOW())
                             }
                             Some(sdroxide_types::Highlight::NewGrid) => {
-                                ("GRID", crate::theme::CYAN())
+                                (tr!("decodes-grid"), crate::theme::CYAN())
                             }
                             Some(sdroxide_types::Highlight::NewCall) => {
-                                ("NEW", crate::theme::CYAN_DIM())
+                                (tr!("decodes-new"), crate::theme::CYAN_DIM())
                             }
                             Some(sdroxide_types::Highlight::Dupe) => {
-                                ("DUPE", crate::theme::gray(85))
+                                (tr!("decodes-dupe"), crate::theme::gray(85))
                             }
-                            None => ("", Color32::TRANSPARENT),
+                            None => (String::new(), Color32::TRANSPARENT),
                         }
                     };
                     let dupe = novelty.dupe;
@@ -1184,7 +1183,7 @@ impl SdroxideApp {
                     .size(11.0)
                     .color(crate::theme::gray(150)),
             )
-            .on_hover_text("QSOs worked since sdroxide was started");
+            .on_hover_text(tr!("decodes-qsos-worked-since-sdroxide-was"));
             if ui
                 .add_enabled(logged > 0, egui::Button::new("ADIF"))
                 .on_hover_text(format!("Save the whole logbook ({logged} QSO) as ADIF"))
@@ -1983,11 +1982,11 @@ impl SdroxideApp {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             for (step, label) in [
-                (sdroxide_types::QsoStep::TxGrid, "GRID"),
-                (sdroxide_types::QsoStep::TxReport, "RPT"),
-                (sdroxide_types::QsoStep::TxRReport, "R+RPT"),
-                (sdroxide_types::QsoStep::TxRr73, "RR73"),
-                (sdroxide_types::QsoStep::Tx73, "73"),
+                (sdroxide_types::QsoStep::TxGrid, tr!("decodes-grid")),
+                (sdroxide_types::QsoStep::TxReport, "RPT".to_string()),
+                (sdroxide_types::QsoStep::TxRReport, "R+RPT".to_string()),
+                (sdroxide_types::QsoStep::TxRr73, "RR73".to_string()),
+                (sdroxide_types::QsoStep::Tx73, "73".to_string()),
             ] {
                 let resp = ui.add_enabled_ui(has_dx, |ui| {
                     crate::chrome::chip(ui, step_now == Some(step), RichText::new(label).size(11.0))

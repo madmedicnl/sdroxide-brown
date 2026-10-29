@@ -57,7 +57,7 @@ impl SdroxideApp {
         // scanner's are; the engine persists it and echoes it back, so there is
         // no apply step to get wrong.
         let mut cfg = self.state.ism;
-        let show = self.tool_window(ctx, "ism", "ISM DEVICES", [760.0, 420.0], true, |me, ui| {
+        let show = self.tool_window(ctx, "ism", &tr!("ism-ism-devices"), [760.0, 420.0], true, |me, ui| {
             me.ism_body(ui, &mut cfg, cmds);
         });
         if cfg != self.state.ism {

@@ -160,7 +160,7 @@ impl SdroxideApp {
                 self.float_operating_panel();
             }
             if crate::chrome::chip(ui, self.show_adsb_setup, "⚙")
-                .on_hover_text("Timeouts, trail length and how far ahead the speed vectors reach")
+                .on_hover_text(tr!("adsb-timeouts-trail-length-how-far"))
                 .clicked()
             {
                 self.show_adsb_setup = !self.show_adsb_setup;
@@ -335,19 +335,19 @@ impl SdroxideApp {
                 let mut rows: Vec<(String, String)> = Vec::new();
                 if let Some(ft) = a.altitude_ft {
                     rows.push((
-                        "altitude".to_string(),
+                        tr!("adsb-row-altitude").to_string(),
                         format!("{} barometric", sdroxide_types::AirUnits::current().altitude(ft)),
                     ));
                 }
                 if let Some(ft) = a.gnss_altitude_ft {
                     rows.push((
-                        "GNSS altitude".to_string(),
+                        tr!("adsb-gnss-altitude").to_string(),
                         sdroxide_types::AirUnits::current().altitude(ft),
                     ));
                 }
                 if let Some(kt) = a.ground_speed_kt {
                     rows.push((
-                        "ground speed".to_string(),
+                        tr!("adsb-ground-speed").to_string(),
                         sdroxide_types::AirUnits::current().speed(kt),
                     ));
                 }
@@ -359,7 +359,7 @@ impl SdroxideApp {
                 }
                 if let Some(v) = a.vertical_rate_fpm {
                     rows.push((
-                        "vertical rate".to_string(),
+                        tr!("adsb-vertical-rate").to_string(),
                         sdroxide_types::AirUnits::current().vertical_rate(v),
                     ));
                 }
@@ -370,7 +370,7 @@ impl SdroxideApp {
                     let km = sdroxide_types::distance_km((hlat, hlon), (lat, lon));
                     let bear = sdroxide_types::bearing_deg((hlat, hlon), (lat, lon));
                     rows.push((
-                        "range".to_string(),
+                        tr!("adsb-row-range").to_string(),
                         format!("{}  {bear:.0}°", sdroxide_types::AirUnits::current().distance(km)),
                     ));
                 }
@@ -574,7 +574,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "adsb-setup",
-            "ADS-B Setup",
+            &tr!("adsb-ads-b-setup"),
             [400.0, 420.0],
             self.show_adsb_setup,
             |me, ui| me.adsb_setup_body(ui, &mut cfg),
@@ -625,47 +625,45 @@ impl SdroxideApp {
             );
             ui.end_row();
 
-            ui.label("Drop from map after");
+            ui.label(tr!("adsb-drop-map-after"));
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut cfg.drop_map_s).range(2..=600).suffix(" s"));
-                ui.label(RichText::new("without a position report").size(9.5).weak());
+                ui.label(RichText::new(tr!("adsb-without-position-report")).size(9.5).weak());
             });
             ui.end_row();
             ui.label("");
             ui.label(
                 RichText::new(
-                    "Past this the aircraft comes off the map and its row greys. It \
-                     is not faded: a dim square at a stale position is still a claim \
-                     about where an aeroplane is, in the same ink as the true ones.",
+                    tr!("adsb-past-aircraft-comes-off-map"),
                 )
                 .size(10.0)
                 .weak(),
             );
             ui.end_row();
 
-            ui.label("Drop from list after");
+            ui.label(tr!("adsb-drop-list-after"));
             ui.horizontal(|ui| {
                 ui.add(
                     egui::DragValue::new(&mut cfg.drop_list_s)
                         .range(i64::from(cfg.drop_map_s)..=3600)
                         .suffix(" s"),
                 );
-                ui.label(RichText::new("with nothing heard at all").size(9.5).weak());
+                ui.label(RichText::new(tr!("adsb-nothing-heard-all")).size(9.5).weak());
             });
             ui.end_row();
 
-            ui.label("Trail length");
+            ui.label(tr!("adsb-trail-length"));
             ui.horizontal(|ui| {
                 ui.add(
                     egui::DragValue::new(&mut cfg.history_points)
                         .range(0..=sdroxide_types::ADSB_TRACK_MAX as u16)
                         .suffix(" points"),
                 );
-                ui.label(RichText::new("history dots behind each target").size(9.5).weak());
+                ui.label(RichText::new(tr!("adsb-history-dots-behind-each-target")).size(9.5).weak());
             });
             ui.end_row();
 
-            ui.label("Speed vector");
+            ui.label(tr!("adsb-speed-vector"));
             ui.horizontal(|ui| {
                 ui.add(
                     egui::DragValue::new(&mut cfg.vector_minutes)
@@ -673,23 +671,20 @@ impl SdroxideApp {
                         .range(0.0..=10.0)
                         .suffix(" min"),
                 );
-                ui.label(RichText::new("how far ahead the leader line reaches").size(9.5).weak());
+                ui.label(RichText::new(tr!("adsb-how-far-ahead-leader-line")).size(9.5).weak());
             });
             ui.end_row();
             ui.label("");
             ui.label(
                 RichText::new(
-                    "One minute is the usual radar convention: the line is exactly \
-                     as long as the distance the aircraft covers in that time, so \
-                     two equal leaders are two equal speeds at any zoom. Zero \
-                     switches them off.",
+                    tr!("adsb-one-minute-usual-radar-convention"),
                 )
                 .size(10.0)
                 .weak(),
             );
             ui.end_row();
 
-            ui.label("Track at most");
+            ui.label(tr!("adsb-track-most"));
             ui.add(
                 egui::DragValue::new(&mut cfg.max_aircraft).range(10..=2000).suffix(" aircraft"),
             );
@@ -698,10 +693,7 @@ impl SdroxideApp {
         ui.separator();
         ui.label(
             RichText::new(
-                "Aircraft on the ground are placed against the station's own \
-                 position — a surface squitter has no unambiguous decode of its \
-                 own — so fill in My grid in the digimode setup if the airport \
-                 nearby shows nothing.",
+                tr!("adsb-aircraft-ground-are-placed-against"),
             )
             .size(10.0)
             .weak(),
@@ -721,7 +713,7 @@ fn adsb_head_row(ui: &mut egui::Ui, have_home: bool, sort: &mut AdsbSort, desc: 
             (cols.call, L, &tr!("adsb-call"), Some(AdsbSort::Callsign)),
             // The address is the callsign column's fallback, not an order
             // anybody wants a sky in.
-            (cols.icao, L, "ICAO", None),
+            (cols.icao, L, &tr!("adsb-icao"), None),
             (cols.alt, R, units.altitude_head(), Some(AdsbSort::Altitude)),
             (cols.spd, R, units.speed_head(), Some(AdsbSort::Speed)),
             (cols.trk, R, "TRK", None),

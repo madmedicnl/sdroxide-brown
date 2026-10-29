@@ -390,7 +390,7 @@ impl SdroxideApp {
                                 ui,
                                 egui::TextEdit::singleline(&mut self.text_tx)
                                     .desired_width((ui.available_width() - 62.0).max(60.0))
-                                    .hint_text("Message…"),
+                                    .hint_text(tr!("fsq-message")),
                             );
                             // Return is the same button, so it is shut off with it.
                             let entered = tx_ok
@@ -460,7 +460,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "fsq-contacts",
-            "FSQ Contacts",
+            &tr!("fsq-fsq-contacts"),
             [320.0, 360.0],
             self.fsq_show_contacts,
             |me, ui| me.fsq_contacts_body(ui, &mut changed, &mut set_target),
@@ -492,7 +492,7 @@ impl SdroxideApp {
                     .hint_text("callsign"),
             );
             let can_add = !self.fsq_new_contact.trim().is_empty();
-            if ui.add_enabled(can_add, egui::Button::new("Add")).clicked() {
+            if ui.add_enabled(can_add, egui::Button::new(tr!("fsq-add"))).clicked() {
                 let id = self.fsq_contacts.iter().map(|c| c.id).max().unwrap_or(0) + 1;
                 self.fsq_contacts.push(sdroxide_types::FsqContact {
                     id,

@@ -361,7 +361,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "public-sdrs",
-            "PUBLIC SDRS",
+            &tr!("publicsdr-public-sdrs"),
             [980.0, 520.0],
             self.show_public_sdrs,
             |me, ui| me.public_sdrs_body(ui, &mut refresh, &mut picked, &mut answer),
@@ -433,35 +433,31 @@ impl SdroxideApp {
                     self.public_sdr_nets_shown[i] = !self.public_sdr_nets_shown[i];
                 }
             }
-            if crate::chrome::chip(ui, self.public_sdr_free_only, "AVAILABLE")
+            if crate::chrome::chip(ui, self.public_sdr_free_only, tr!("publicsdr-available"))
                 .on_hover_text(
-                    "Hide receivers that are full, and the ones whose operator has \
-                     not opened any channels to apps other than a browser",
+                    tr!("publicsdr-hide-receivers-are-full-ones"),
                 )
                 .clicked()
             {
                 self.public_sdr_free_only = !self.public_sdr_free_only;
             }
-            if crate::chrome::chip(ui, self.public_sdr_in_band, "IN BAND")
-                .on_hover_text("Only receivers that cover the current dial frequency")
+            if crate::chrome::chip(ui, self.public_sdr_in_band, tr!("publicsdr-band"))
+                .on_hover_text(tr!("publicsdr-only-receivers-cover-current-dial"))
                 .clicked()
             {
                 self.public_sdr_in_band = !self.public_sdr_in_band;
             }
-            if crate::chrome::chip(ui, self.public_sdr_low_bw, "LOW BW")
+            if crate::chrome::chip(ui, self.public_sdr_low_bw, tr!("publicsdr-low-bw"))
                 .on_hover_text(
-                    "Take a SpyServer in its low-bandwidth shape: a narrow I/Q window \
-                     that follows the dial plus the server's own band view, instead of \
-                     megabits of wideband I/Q. No effect on a KiwiSDR, which has only \
-                     the one shape.",
+                    tr!("publicsdr-take-spyserver-low-bandwidth-shape"),
                 )
                 .clicked()
             {
                 self.public_sdr_low_bw = !self.public_sdr_low_bw;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if crate::chrome::chip(ui, false, "⟳ REFRESH")
-                    .on_hover_text("Fetch both directories again")
+                if crate::chrome::chip(ui, false, tr!("publicsdr-refresh"))
+                    .on_hover_text(tr!("publicsdr-fetch-both-directories-again"))
                     .clicked()
                 {
                     *refresh = true;
@@ -475,11 +471,11 @@ impl SdroxideApp {
                 ui,
                 egui::TextEdit::singleline(&mut self.public_sdr_search)
                     .desired_width(240.0)
-                    .hint_text("name, place, antenna, band")
+                    .hint_text(tr!("publicsdr-name-place-antenna-band"))
                     .text_color(crate::theme::TEXT_STRONG()),
             );
             if !self.public_sdr_search.trim().is_empty()
-                && ui.button("✕").on_hover_text("Clear the search").clicked()
+                && ui.button("✕").on_hover_text(tr!("publicsdr-clear-search")).clicked()
             {
                 self.public_sdr_search.clear();
             }
@@ -490,10 +486,9 @@ impl SdroxideApp {
             ui.add_space(8.0);
             ui.label(
                 RichText::new(if self.probes_answered {
-                    "Fetching the receiver lists…"
+                    tr!("publicsdr-fetching-receiver-lists")
                 } else {
-                    "The machine this radio is attached to does not answer \
-                     device questions, so it cannot fetch the lists either."
+                    tr!("publicsdr-machine-radio-attached-does-not")
                 })
                 .color(crate::theme::gray(140)),
             );
@@ -531,7 +526,7 @@ impl SdroxideApp {
         if !self.public_sdr_search.trim().is_empty() || rows.len() > MAX_ROWS {
             let shown = rows.len().min(MAX_ROWS);
             let (text, colour) = match rows.len() {
-                0 => ("no match".to_string(), crate::theme::ALERT()),
+                0 => (tr!("publicsdr-no-match").to_string(), crate::theme::ALERT()),
                 n if n > MAX_ROWS => (
                     format!("showing {shown} of {n} — search to narrow it"),
                     crate::theme::YELLOW(),
@@ -557,7 +552,7 @@ impl SdroxideApp {
             if rows.is_empty() {
                 ui.add_space(8.0);
                 ui.label(
-                    RichText::new("nothing matches — try turning a filter chip back on")
+                    RichText::new(tr!("publicsdr-nothing-matches-try-turning-filter"))
                         .color(crate::theme::gray(120)),
                 );
             }

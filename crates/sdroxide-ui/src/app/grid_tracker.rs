@@ -400,7 +400,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "grid-tracker",
-            "GRID TRACKER",
+            &tr!("gridtracker-grid-tracker"),
             [760.0, 560.0],
             self.show_grid,
             |_me, ui| {
@@ -479,8 +479,7 @@ fn grid_tracker_body<'a>(
     ui.separator();
     ui.label(
         egui::RichText::new(
-            "Drag to pan, wheel to zoom. Amber = worked, green = confirmed, \
-             cyan = heard.",
+            tr!("gridtracker-drag-pan-wheel-zoom-amber"),
         )
         .size(10.0)
         .color(theme::gray(150)),

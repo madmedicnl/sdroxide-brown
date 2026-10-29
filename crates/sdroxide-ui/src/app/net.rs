@@ -218,7 +218,7 @@ impl SdroxideApp {
 
     /// Record an upload result and mark the QSO's sent flag on success.
     pub(in crate::app) fn on_upload_result(&mut self, r: UploadResult) {
-        let status = if r.ok { "OK" } else { "FAIL" };
+        let status = if r.ok { "OK" } else { &tr!("net-fail") };
         self.push_net_log(format!("{} → {}: {}", r.target.label(), status, r.message));
         // Keep the outcome for the panel to show beside a completed QSO: this
         // is how an operator learns a logged contact reached LOG11DX and not

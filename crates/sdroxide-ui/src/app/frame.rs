@@ -1283,7 +1283,7 @@ impl eframe::App for SdroxideApp {
                                     self.radio_notice = None;
                                 }
                             } else {
-                                if ui.small_button("Dismiss").clicked() {
+                                if ui.small_button(tr!("frame-dismiss")).clicked() {
                                     self.dismiss_notice();
                                     if rx_only {
                                         self.rx_only_nudge_dismissed = true;
@@ -1346,7 +1346,7 @@ impl eframe::App for SdroxideApp {
                             .color(ink),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("Dismiss").clicked() {
+                            if ui.small_button(tr!("frame-dismiss")).clicked() {
                                 self.update_dismissed = true;
                             }
                             if ui
@@ -4671,7 +4671,7 @@ impl SdroxideApp {
                 });
                 ui.add_space(4.0);
                 ui.label(
-                    RichText::new("Restart without --oob-tx to put the lockout back.")
+                    RichText::new(tr!("frame-restart-without-oob-tx-put"))
                         .color(crate::theme::LINE_LIT())
                         .size(10.5),
                 );

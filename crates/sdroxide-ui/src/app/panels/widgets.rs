@@ -133,15 +133,15 @@ pub(in crate::app) fn worked_before_line(
     novelty: sdroxide_types::Novelty,
     band: &str,
 ) -> (String, egui::Color32) {
-    let band_label = if band.is_empty() { "this band".to_string() } else { band.to_string() };
+    let band_label = if band.is_empty() { tr!("widgets-band").to_string() } else { band.to_string() };
     if novelty.new_dxcc {
-        ("New entity — never worked, on any band".to_string(), crate::theme::PINK())
+        (tr!("widgets-new-entity-never-worked-any").to_string(), crate::theme::PINK())
     } else if novelty.new_dxcc_band {
         (format!("New entity on {band_label}"), crate::theme::YELLOW())
     } else if novelty.new_grid {
-        ("New grid square".to_string(), crate::theme::CYAN())
+        (tr!("widgets-new-grid-square").to_string(), crate::theme::CYAN())
     } else if novelty.new_call {
-        ("Not worked before".to_string(), crate::theme::CYAN_DIM())
+        (tr!("widgets-not-worked-before").to_string(), crate::theme::CYAN_DIM())
     } else if novelty.dupe {
         (format!("Worked before on {band_label}"), crate::theme::gray(130))
     } else if band.is_empty() {
@@ -153,7 +153,7 @@ pub(in crate::app) fn worked_before_line(
         // station could never reach the dupe branch above.
         ("Worked before".to_string(), crate::theme::gray(150))
     } else {
-        ("Worked before, but not on this band".to_string(), crate::theme::gray(150))
+        (tr!("widgets-worked-before-but-not-band").to_string(), crate::theme::gray(150))
     }
 }
 

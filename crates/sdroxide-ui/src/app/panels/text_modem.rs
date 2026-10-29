@@ -863,7 +863,7 @@ impl SdroxideApp {
                 }
                 Mode::Olivia | Mode::Contestia => {
                     let contestia = mode == Mode::Contestia;
-                    cap(ui, "Tones");
+                    cap(ui, &tr!("textmodem-tones"));
                     // Contestia's narrowest is four carriers. The two modes
                     // share this field — they are the same engine and the same
                     // waveform — so a 2 left over from Olivia is raised to 4 by

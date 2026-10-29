@@ -548,7 +548,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "ais-setup",
-            "AIS Setup",
+            &tr!("ais-ais-setup"),
             [420.0, 420.0],
             self.show_ais_setup,
             |me, ui| me.ais_setup_body(ui, &mut cfg),
@@ -565,7 +565,7 @@ impl SdroxideApp {
     fn ais_setup_body(&mut self, ui: &mut egui::Ui, cfg: &mut sdroxide_types::AisSettings) {
         crate::chrome::window_body_bg(ui);
         ui.horizontal_wrapped(|ui| {
-            ui.label("Channels");
+            ui.label(tr!("ais-channels"));
             for (i, ch) in sdroxide_ais_channels().iter().enumerate() {
                 let on = cfg.channel_enabled(i);
                 if crate::chrome::chip(ui, on, format!("AIS {}", ch.0))
@@ -584,70 +584,59 @@ impl SdroxideApp {
         });
         ui.add_space(4.0);
         egui::Grid::new("ais-cfg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-            ui.label("Drop from chart after");
+            ui.label(tr!("ais-drop-chart-after"));
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut cfg.drop_map_s).range(10..=3600).suffix(" s"));
-                ui.label(RichText::new("without a position report").size(9.5).weak());
+                ui.label(RichText::new(tr!("ais-without-position-report")).size(9.5).weak());
             });
             ui.end_row();
             ui.label("");
             ui.label(
                 RichText::new(
-                    "Five minutes by default, not ADS-B's ten seconds: a vessel at \
-                     anchor reports once every three minutes, and a shorter window \
-                     would blank most of a harbour between two perfectly good \
-                     reports. Past it the ship comes off the chart and its row \
-                     greys — it is not faded, because a dim symbol at a stale \
-                     position is still a claim about where a ship is, in the same \
-                     ink as the true ones.",
+                    tr!("ais-five-minutes-default-not-ads"),
                 )
                 .size(10.0)
                 .weak(),
             );
             ui.end_row();
 
-            ui.label("Drop from list after");
+            ui.label(tr!("ais-drop-list-after"));
             ui.horizontal(|ui| {
                 ui.add(
                     egui::DragValue::new(&mut cfg.drop_list_s)
                         .range(i64::from(cfg.drop_map_s)..=21_600)
                         .suffix(" s"),
                 );
-                ui.label(RichText::new("with nothing heard at all").size(9.5).weak());
+                ui.label(RichText::new(tr!("ais-nothing-heard-all")).size(9.5).weak());
             });
             ui.end_row();
             ui.label("");
             ui.label(
                 RichText::new(
-                    "The message carrying a ship's name comes round every six \
-                     minutes, so a short list window keeps throwing vessels away \
-                     just before they say what they are called.",
+                    tr!("ais-message-carrying-ship-s-name"),
                 )
                 .size(10.0)
                 .weak(),
             );
             ui.end_row();
 
-            ui.label("Trail length");
+            ui.label(tr!("ais-trail-length"));
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut cfg.trail_minutes).range(0..=360).suffix(" min"));
-                ui.label(RichText::new("of history behind each target").size(9.5).weak());
+                ui.label(RichText::new(tr!("ais-history-behind-each-target")).size(9.5).weak());
             });
             ui.end_row();
             ui.label("");
             ui.label(
                 RichText::new(
-                    "In minutes rather than in points, because AIS reporting rates \
-                     span two orders of magnitude: a fixed count would be eighty \
-                     seconds of a ferry and two hours of an anchored tanker, drawn \
-                     identically. Zero switches trails off.",
+                    tr!("ais-minutes-rather-than-points-because"),
                 )
                 .size(10.0)
                 .weak(),
             );
             ui.end_row();
 
-            ui.label("Speed vector");
+            ui.label(tr!("ais-speed-vector"));
             ui.horizontal(|ui| {
                 ui.add(
                     egui::DragValue::new(&mut cfg.vector_minutes)
@@ -655,36 +644,32 @@ impl SdroxideApp {
                         .range(0.0..=60.0)
                         .suffix(" min"),
                 );
-                ui.label(RichText::new("how far ahead the vector reaches").size(9.5).weak());
+                ui.label(RichText::new(tr!("ais-how-far-ahead-vector-reaches")).size(9.5).weak());
             });
             ui.end_row();
 
-            ui.label("Slot threshold");
+            ui.label(tr!("ais-slot-threshold"));
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut cfg.threshold_db).range(3..=30).suffix(" dB"));
-                ui.label(RichText::new("above the channel's learned noise floor").size(9.5).weak());
+                ui.label(RichText::new(tr!("ais-above-channel-s-learned-noise")).size(9.5).weak());
             });
             ui.end_row();
 
-            ui.label("Track at most");
+            ui.label(tr!("ais-track-most"));
             ui.add(egui::DragValue::new(&mut cfg.max_vessels).range(10..=5000).suffix(" vessels"));
             ui.end_row();
         });
         ui.separator();
         ui.label(
             RichText::new(
-                "AIS is receive-only here and always will be: it is a \
-                 safety-of-life service, and putting false vessel traffic on it is \
-                 not something a licence covers.",
+                tr!("ais-ais-receive-only-here-always"),
             )
             .size(10.0)
             .weak(),
         );
         ui.label(
             RichText::new(
-                "Fill in My grid in the digimode setup for ranges and bearings, and \
-                 so the chart frames itself around where you are rather than around \
-                 whatever is furthest away.",
+                tr!("ais-fill-my-grid-digimode-setup"),
             )
             .size(10.0)
             .weak(),

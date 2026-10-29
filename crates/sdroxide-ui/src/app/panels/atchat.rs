@@ -135,7 +135,7 @@ impl SdroxideApp {
                     self.float_operating_panel();
                 }
                 if crate::chrome::chip(ui, self.show_digi_settings, RichText::new("⚙").size(9.5))
-                    .on_hover_text("Station callsign and the virtual-channel address")
+                    .on_hover_text(tr!("atchat-station-callsign-virtual-channel-address"))
                     .clicked()
                 {
                     self.show_digi_settings = !self.show_digi_settings;

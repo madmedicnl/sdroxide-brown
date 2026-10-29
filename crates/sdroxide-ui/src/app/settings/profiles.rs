@@ -36,15 +36,11 @@ pub(in crate::app) fn settings_profiles_tab(
     ui.add_space(4.0);
     super::note(
         ui,
-        "A profile captures the whole working setup — the dials and VFOs, the mode \
-             and filters, the gains, drive and antennas, your callsign and message \
-             templates, and the per-band registers — and applies it back in one click. \
-             The hardware (back end, audio devices, converters) is deliberately left \
-             alone: a profile is the way you work the station, not the radio it runs on.",
+        &tr!("settings-profiles-profile-captures-whole-working-setup"),
     );
     ui.add_space(10.0);
 
-    ui.label(RichText::new("Save the current setup").strong());
+    ui.label(RichText::new(tr!("settings-profiles-save-current-setup")).strong());
     ui.end_row();
     ui.horizontal(|ui| {
         crate::chrome::field(
@@ -60,18 +56,16 @@ pub(in crate::app) fn settings_profiles_tab(
     });
     super::note(
         ui,
-        "Applies to whatever sdroxide is attached to: dials and VFOs, mode and \
-             filters, levels, gains, drive, antennas, the digital identity and the band \
-             stacks.",
+        &tr!("settings-profiles-applies-whatever-sdroxide-attached-dials"),
     );
     ui.add_space(12.0);
 
     if profiles.is_empty() {
-        super::note(ui, "No profiles saved yet — name one above and press Save.");
+        super::note(ui, &tr!("settings-profiles-no-profiles-saved-yet-name"));
         return;
     }
 
-    ui.label(RichText::new("Saved profiles").strong());
+    ui.label(RichText::new(tr!("settings-profiles-saved-profiles")).strong());
     ui.end_row();
     ui.add_space(4.0);
     for name in profiles {

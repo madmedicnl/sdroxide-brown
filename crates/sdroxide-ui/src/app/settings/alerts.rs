@@ -42,14 +42,14 @@ pub(in crate::app) fn alerts_settings(
             .spacing([12.0, 8.0])
             .min_row_height(ui.spacing().interact_size.y)
             .show(ui, |ui| {
-                ui.label("Volume");
+                ui.label(tr!("settings-alerts-volume"));
                 crate::chrome::slider(
                     ui,
                     egui::Slider::new(&mut cfg.volume, 0.0..=1.0).step_by(0.05),
                 );
                 ui.end_row();
 
-                ui.label("Output");
+                ui.label(tr!("settings-alerts-output"));
                 // Same contract as the speech tab: the current selection is read
                 // into a copy because the dropdown's closure hands the new one back.
                 let cur = cfg.device.clone();
@@ -73,7 +73,7 @@ pub(in crate::app) fn alerts_settings(
         });
 
         ui.add_space(4.0);
-        egui::CollapsingHeader::new("What to sound").default_open(true).show(ui, |ui| {
+        egui::CollapsingHeader::new(tr!("settings-alerts-what-sound")).default_open(true).show(ui, |ui| {
             ui.add_space(4.0);
             // One row per event: what it is, whether it rings, and with
             // which of the sounds. The rows are shared with the decode
@@ -131,9 +131,7 @@ pub(in crate::app) fn alerts_settings(
             ui.add_space(4.0);
             super::note_small(
                 ui,
-                "Each station is quiet for a while after an alert, so a busy band \
-                         does not ring every slot. Voice and Tone + voice are read by the \
-                         spoken-announcement voice — switch it on in Settings → UI.",
+                &tr!("settings-alerts-each-station-quiet-while-after"),
             );
         });
     });

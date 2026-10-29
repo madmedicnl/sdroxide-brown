@@ -673,16 +673,14 @@ fn card(
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let remember = crate::chrome::checkbox(ui, &mut form.remember, "Remember on this device");
+        let remember = crate::chrome::checkbox(ui, &mut form.remember, tr!("login-remember-device"));
         if !touch {
             remember.on_hover_text(
-                "Signs in without asking next time, and lets the 3D view's tab in without \
-                 asking at all. The password is kept in the clear, so leave this off on a machine \
-                 other people use.",
+                tr!("login-signs-without-asking-next-time"),
             );
         } else {
             ui.label(
-                RichText::new("Keeps the password on this device, in the clear.")
+                RichText::new(tr!("login-keeps-password-device-clear"))
                     .size(10.5)
                     .color(crate::theme::gray(140)),
             );

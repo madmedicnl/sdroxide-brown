@@ -38,16 +38,12 @@ pub(in crate::app) fn settings_tle_tab(ui: &mut egui::Ui, io: &mut SettingsIo) {
     );
     ui.add_space(4.0);
     if !io.sat_seeded {
-        super::note(ui, "Waiting for the station's satellite configuration…");
+        super::note(ui, &tr!("settings-tle-waiting-station-s-satellite-configuration"));
         return;
     }
     super::note(
         ui,
-        "The tracker already fetches CelesTrak's amateur group on its own. This is for \
-             everything else: the NOAA weather birds, a cubesat too new to be in the group, or \
-             a fresher element set than the one that arrived. The listings are fetched — and \
-             kept — where the radio engine runs, so this is the same set of satellites wherever \
-             the app is open.",
+        &tr!("settings-tle-tracker-already-fetches-celestrak-s"),
     );
     if !io.sat_ui.note.is_empty() {
         ui.add_space(4.0);
@@ -72,12 +68,11 @@ pub(in crate::app) fn settings_tle_tab(ui: &mut egui::Ui, io: &mut SettingsIo) {
 fn settings_tle_subscriptions(ui: &mut egui::Ui, io: &mut SettingsIo) {
     use crate::theme;
 
-    ui.label(RichText::new("Subscriptions").strong());
+    ui.label(RichText::new(tr!("settings-tle-subscriptions")).strong());
     ui.end_row();
     super::note_at(
         ui,
-        "Listings fetched and kept current, on the same six-hourly cadence as the amateur \
-             set. Refreshed while the solar window is open, and by UPDATE NOW here.",
+        &tr!("settings-tle-listings-fetched-kept-current-same"),
         Some(11.0),
     );
     ui.add_space(6.0);
@@ -221,13 +216,11 @@ fn settings_tle_subscriptions(ui: &mut egui::Ui, io: &mut SettingsIo) {
 fn settings_tle_pasted(ui: &mut egui::Ui, io: &mut SettingsIo) {
     use crate::theme;
 
-    ui.label(RichText::new("Pasted element sets").strong());
+    ui.label(RichText::new(tr!("settings-tle-pasted-element-sets")).strong());
     ui.end_row();
     super::note_at(
         ui,
-        "For a one-off. These do not update themselves, and SGP4 stops propagating an \
-             element set once it is a fortnight past its epoch — subscribe instead for anything \
-             you mean to keep.",
+        &tr!("settings-tle-one-off-these-do-not"),
         Some(11.0),
     );
     ui.add_space(6.0);
@@ -390,13 +383,11 @@ fn tle_epoch_age(t: &sdroxide_types::CustomTle, now_unix: i64) -> Option<i64> {
 fn settings_tle_freqs(ui: &mut egui::Ui, io: &mut SettingsIo) {
     use crate::theme;
 
-    ui.label(RichText::new("Frequencies").strong());
+    ui.label(RichText::new(tr!("settings-tle-frequencies")).strong());
     ui.end_row();
     super::note_at(
         ui,
-        "Shown under the pass table in the solar window. An entry here replaces the \
-             built-in one for that catalogue number outright, so start from a copy of it unless \
-             you mean to drop the rest.",
+        &tr!("settings-tle-shown-under-pass-table-solar"),
         Some(11.0),
     );
     ui.add_space(6.0);
@@ -439,7 +430,7 @@ fn settings_tle_freqs(ui: &mut egui::Ui, io: &mut SettingsIo) {
                 .spacing([8.0, 4.0])
                 .min_row_height(ui.spacing().interact_size.y)
                 .show(ui, |ui| {
-                    for h in ["LINK", "DOWNLINK", "UPLINK", "MODE", "NOTE", ""] {
+                    for h in [tr!("settings-tle-link"), tr!("settings-tle-downlink"), tr!("settings-tle-uplink"), tr!("settings-tle-mode"), tr!("settings-tle-note"), "".to_string()] {
                         ui.label(RichText::new(h).color(theme::CYAN_DIM()).size(9.5).strong());
                     }
                     ui.end_row();
@@ -448,7 +439,7 @@ fn settings_tle_freqs(ui: &mut egui::Ui, io: &mut SettingsIo) {
                             ui,
                             egui::TextEdit::singleline(&mut l.label)
                                 .desired_width(120.0)
-                                .hint_text("FM repeater"),
+                                .hint_text(tr!("settings-tle-fm-repeater")),
                         );
                         freq_box(ui, (k, "down"), &mut l.downlink, "145.800");
                         freq_box(ui, (k, "up"), &mut l.uplink, "435.250");
@@ -456,13 +447,13 @@ fn settings_tle_freqs(ui: &mut egui::Ui, io: &mut SettingsIo) {
                             ui,
                             egui::TextEdit::singleline(&mut l.mode)
                                 .desired_width(90.0)
-                                .hint_text("FM"),
+                                .hint_text(tr!("settings-tle-fm")),
                         );
                         crate::chrome::field(
                             ui,
                             egui::TextEdit::singleline(&mut l.note)
                                 .desired_width(180.0)
-                                .hint_text("CTCSS 67.0 Hz"),
+                                .hint_text(tr!("settings-tle-ctcss-67-0-hz")),
                         );
                         if ui.button("✕").clicked() {
                             drop_link = Some(k);
@@ -496,8 +487,7 @@ fn settings_tle_freqs(ui: &mut egui::Ui, io: &mut SettingsIo) {
             ui.add_space(4.0);
             super::note_at(
                 ui,
-                "A frequency is either one number (145.800) or a transponder passband \
-                     written 145.950-145.970. Leave a direction blank for a beacon.",
+                &tr!("settings-tle-frequency-either-one-number-145"),
                 Some(10.0),
             );
         });

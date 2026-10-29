@@ -908,7 +908,7 @@ impl SdroxideApp {
                             // Mode selection: Auto + the per-mode chips.
                             ui.horizontal_wrapped(|ui| {
                                 ui.label(
-                                    RichText::new("SSTV")
+                                    RichText::new(tr!("sstv-sstv"))
                                         .size(12.0)
                                         .strong()
                                         .color(crate::theme::CYAN()),
@@ -942,7 +942,7 @@ impl SdroxideApp {
                                 let auto_label = if self.sstv.auto {
                                     format!("Auto ({})", self.sstv.tx_mode.label())
                                 } else {
-                                    "Auto".to_string()
+                                    tr!("sstv-auto").to_string()
                                 };
                                 if crate::chrome::chip(ui, self.sstv.auto, &auto_label).clicked() {
                                     self.sstv.auto = true;
@@ -971,7 +971,7 @@ impl SdroxideApp {
 
                             // Signal meter + activity, and the TX-slant trim.
                             ui.horizontal_wrapped(|ui| {
-                                ui.label(RichText::new("Signal").size(10.0).weak());
+                                ui.label(RichText::new(tr!("sstv-signal")).size(10.0).weak());
                                 sstv_level_bar(ui, signal);
                                 if tx_active {
                                     ui.label(
@@ -1000,9 +1000,7 @@ impl SdroxideApp {
                                             .color(crate::theme::ALERT()),
                                     )
                                     .on_hover_text(
-                                        "A station is sending in a mode sdroxide does not have. \
-                                         The signal and the tuning are fine — there is simply no \
-                                         decoder for this one. Nothing to fix at your end.",
+                                        tr!("sstv-station-sending-mode-sdroxide-does"),
                                     );
                                 } else if let Some(m) = st.detected {
                                     ui.label(
@@ -1011,7 +1009,7 @@ impl SdroxideApp {
                                             .weak(),
                                     );
                                 } else {
-                                    ui.label(RichText::new("listening…").size(10.0).weak());
+                                    ui.label(RichText::new(tr!("sstv-listening")).size(10.0).weak());
                                 }
 
                                 // Issue #397. A receiver that has locked on is
@@ -1046,8 +1044,7 @@ impl SdroxideApp {
                                             .color(crate::theme::CYAN_DIM()),
                                     )
                                     .on_hover_text(
-                                        "The callsign the last station sent as an FSK ID after \
-                                         its picture.",
+                                        tr!("sstv-callsign-last-station-sent-fsk"),
                                     );
                                 }
 
@@ -1072,8 +1069,8 @@ impl SdroxideApp {
                                     }
                                     ui.add_space(12.0);
                                     ui.separator();
-                                    ui.label(RichText::new("TX slant").size(10.0).weak()).on_hover_text(
-                                        "Transmit clock trim (ppm) to remove slant on the far-end decoder",
+                                    ui.label(RichText::new(tr!("sstv-tx-slant")).size(10.0).weak()).on_hover_text(
+                                        tr!("sstv-transmit-clock-trim-ppm-remove"),
                                     );
                                     ui.add_enabled_ui(self.digi_cfg_seeded, |ui| {
                                         ui.spacing_mut().slider_width = 130.0;
@@ -1089,7 +1086,7 @@ impl SdroxideApp {
                                         }
                                         if ui
                                             .small_button("0")
-                                            .on_hover_text("Reset to 0 ppm")
+                                            .on_hover_text(tr!("sstv-reset-0-ppm"))
                                             .clicked()
                                         {
                                             self.digi_cfg_edit.sstv_tx_ppm = 0.0;
@@ -1106,13 +1103,10 @@ impl SdroxideApp {
                                         if crate::chrome::checkbox(
                                             ui,
                                             &mut self.digi_cfg_edit.sstv_fsk_id,
-                                            "FSK ID",
+                                            tr!("sstv-fsk-id"),
                                         )
                                         .on_hover_text(
-                                            "Send your callsign in tones after each picture — the \
-                                             identification SSTV repeaters and other programs read. \
-                                             Adds about 2.5 seconds, and sends nothing at all until \
-                                             you have set a callsign.",
+                                            tr!("sstv-send-your-callsign-tones-after"),
                                         )
                                         .changed()
                                         {
@@ -1126,7 +1120,7 @@ impl SdroxideApp {
                                         // kind of per-station trim as the slant
                                         // beside it, and the operator who needs it
                                         // finds out by transmitting.
-                                        ui.label(RichText::new("TX lead").size(10.0).weak());
+                                        ui.label(RichText::new(tr!("sstv-tx-lead")).size(10.0).weak());
                                         if ui
                                             .add(
                                                 egui::DragValue::new(
@@ -1137,11 +1131,7 @@ impl SdroxideApp {
                                                 .suffix(" ms"),
                                             )
                                             .on_hover_text(
-                                                "Silence sent after keying and before the picture's \
-                                                 leader and VIS code. A decoder that misses any of \
-                                                 that header shows no picture at all, so this covers \
-                                                 the gap between asking a rig for PTT and it really \
-                                                 being on the air. 0 for an SDR that keys instantly.",
+                                                tr!("sstv-silence-sent-after-keying-before"),
                                             )
                                             .changed()
                                         {
@@ -1157,7 +1147,7 @@ impl SdroxideApp {
                             // whole panel over the dock (#643). One row for the
                             // pair keeps them together and wraps.
                             ui.horizontal_wrapped(|ui| {
-                                if crate::chrome::chip(ui, false, "Restart RX")
+                                if crate::chrome::chip(ui, false, tr!("sstv-restart-rx"))
                                     .on_hover_text(
                                         "Abandon the picture being received and listen for the                                          next header. For a transmission that started decoding                                          in the wrong mode — the receiver is otherwise committed                                          until that mode runs out.",
                                     )
@@ -1218,7 +1208,7 @@ impl SdroxideApp {
                                 if crate::chrome::chip(
                                     ui,
                                     self.digi_cfg_edit.sstv_rx_auto,
-                                    "Auto",
+                                    tr!("sstv-auto"),
                                 )
                                 .on_hover_text(
                                     "Returns to the automatic level (reference 0) and \
@@ -1255,7 +1245,7 @@ impl SdroxideApp {
                     };
                     ui.with_layout(lay, |ui| {
                         // LIVE: the picture currently decoding, shown large.
-                        sstv_section(ui, "LIVE", egui::vec2(live_w, row_h), |ui| {
+                        sstv_section(ui, &tr!("sstv-live"), egui::vec2(live_w, row_h), |ui| {
                             ui.centered_and_justified(|ui| {
                                 if let Some(tex) = &self.sstv.rx_tex {
                                     ui.add(
@@ -1267,7 +1257,7 @@ impl SdroxideApp {
                                     let msg = if rifp {
                                         // RIFP only paints live from the raw
                                         // raster; anything else appears whole.
-                                        "waiting for a picture…"
+                                        tr!("sstv-waiting-picture")
                                     } else if signal > 0.0008 {
                                         // There *is* signal here — the meter is
                                         // above the same threshold that says so
@@ -1280,9 +1270,9 @@ impl SdroxideApp {
                                         // was the case: no audio at all, wrong
                                         // level, or a signal we cannot read all
                                         // look identical from in here.
-                                        "audio present · no SSTV header yet"
+                                        "audio present · no SSTV header yet".to_string()
                                     } else {
-                                        "no / low audio"
+                                        tr!("sstv-no-low-audio")
                                     };
                                     ui.label(RichText::new(msg).size(11.0).weak());
                                 }
@@ -1304,12 +1294,12 @@ impl SdroxideApp {
                         // pictures, thumbnailed by the engine out of its own
                         // store — so it is the same gallery here, on a browser
                         // tab, and on a client dialled in from anywhere else.
-                        sstv_section(ui, "RECEIVED", egui::vec2(gallery_w, row_h), |ui| {
+                        sstv_section(ui, &tr!("sstv-received"), egui::vec2(gallery_w, row_h), |ui| {
                             if self.sstv.received.is_empty() {
                                 let msg = if self.sstv.page_pending {
-                                    "Reading the radio's pictures…".to_string()
+                                    tr!("sstv-reading-radio-s-pictures").to_string()
                                 } else if self.sstv.dir.is_empty() {
-                                    "Decoded pictures collect here.".to_string()
+                                    tr!("sstv-decoded-pictures-collect-here").to_string()
                                 } else {
                                     format!(
                                         "Decoded pictures are saved {} and collect here.",
@@ -1338,7 +1328,7 @@ impl SdroxideApp {
                                                         .sense(egui::Sense::click()),
                                                 )
                                                 .on_hover_text(
-                                                    "Click to enlarge · right-click to delete",
+                                                    tr!("sstv-click-enlarge-right-click-delete"),
                                                 );
                                             if resp.clicked() {
                                                 enlarge = Some(i);
@@ -1355,7 +1345,7 @@ impl SdroxideApp {
                                                         .size(10.0)
                                                         .weak(),
                                                 );
-                                                if ui.button("Delete this picture").clicked() {
+                                                if ui.button(tr!("sstv-delete-picture")).clicked() {
                                                     delete = Some(r.entry.name.clone());
                                                     ui.close();
                                                 }
@@ -1376,7 +1366,7 @@ impl SdroxideApp {
                                     } else if older > 0 {
                                         ui.add_space(4.0);
                                         let label = if self.sstv.page_pending {
-                                            "loading…".to_string()
+                                            tr!("sstv-loading").to_string()
                                         } else {
                                             format!("{older} older — load more")
                                         };
@@ -1492,7 +1482,7 @@ impl SdroxideApp {
                                     if sel { crate::theme::CYAN() } else { crate::theme::gray(170) },
                                 );
                                 let resp = resp.on_hover_text(
-                                    "Click to edit this slot's message · double-click to load an image",
+                                    tr!("sstv-click-edit-slot-s-message"),
                                 );
                                 if resp.double_clicked() {
                                     self.sstv.pick_target = Some(i);
@@ -1518,24 +1508,23 @@ impl SdroxideApp {
                         ui.horizontal(|ui| {
                             let sel = self.sstv.selected_slot;
                             let has_img = self.sstv.presets.slot(sel).has_picture();
-                            let label = if has_img { "Change image…" } else { "Load image…" };
+                            let label = if has_img { tr!("sstv-change-image") } else { tr!("sstv-load-image") };
                             if crate::chrome::chip(ui, false, label).clicked() {
                                 self.sstv.pick_target = Some(sel);
                                 pick_image(self.sstv.inbox.clone());
                             }
                             if has_img
-                                && crate::chrome::chip(ui, false, "Clear")
-                                    .on_hover_text("Empty this slot's picture (the message stays)")
+                                && crate::chrome::chip(ui, false, tr!("sstv-clear"))
+                                    .on_hover_text(tr!("sstv-empty-slot-s-picture-message"))
                                     .clicked()
                             {
                                 cmds.push(Command::ImageClearSlot(sel as u8));
                             }
                             // The banner belongs to the station, not to the slot:
                             // one editor, reached from whichever slot is in front.
-                            if crate::chrome::chip(ui, self.sstv.banner_open, "Banner…")
+                            if crate::chrome::chip(ui, self.sstv.banner_open, tr!("sstv-banner"))
                                 .on_hover_text(
-                                    "What is printed across the top of every picture this station \
-                                     sends",
+                                    tr!("sstv-what-printed-across-top-every"),
                                 )
                                 .clicked()
                             {
@@ -1583,9 +1572,9 @@ impl SdroxideApp {
                                             self.sstv.presets.slot(self.sstv.selected_slot).has_picture();
                                         ui.label(
                                             RichText::new(if waiting {
-                                                "Fetching this slot's picture…"
+                                                tr!("sstv-fetching-slot-s-picture")
                                             } else {
-                                                "Load an image into this slot →"
+                                                tr!("sstv-load-image-into-slot")
                                             })
                                             .size(11.0)
                                             .weak(),
@@ -1607,7 +1596,7 @@ impl SdroxideApp {
                             .push_id(sel, |ui| {
                                 crate::chrome::field_sized(ui, egui::vec2(inner_w, msg_h),
                                     egui::TextEdit::multiline(&mut buf)
-                                        .hint_text("Drawn on this slot's image"),
+                                        .hint_text(tr!("sstv-drawn-slot-s-image")),
                                 )
                             })
                             .inner;
@@ -1810,12 +1799,12 @@ impl SdroxideApp {
                         ui.horizontal_wrapped(|ui| {
                             if self.sstv.full_gone {
                                 ui.label(
-                                    RichText::new("no longer in the store")
+                                    RichText::new(tr!("sstv-no-longer-store"))
                                         .size(10.0)
                                         .color(crate::theme::YELLOW()),
                                 );
                             } else if r.full.is_none() {
-                                ui.label(RichText::new("loading full size…").size(10.0).weak());
+                                ui.label(RichText::new(tr!("sstv-loading-full-size")).size(10.0).weak());
                             } else if savable
                                 && crate::chrome::chip(ui, false, "Save image as…")
                                     // Says what it does: it asks where. "Save
@@ -3196,7 +3185,7 @@ impl SdroxideApp {
                         let has_picture =
                             self.sstv.presets.slot(self.sstv.selected_slot).has_picture();
                         ui.horizontal(|ui| {
-                            if crate::chrome::chip(ui, false, "Save picture…").clicked() {
+                            if crate::chrome::chip(ui, false, tr!("sstv-save-picture")).clicked() {
                                 if let Some(png) = self.sstv.compose_png(dims) {
                                     crate::download::save_as(
                                         "sstv-composed.png",

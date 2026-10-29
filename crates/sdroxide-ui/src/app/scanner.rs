@@ -43,7 +43,7 @@ impl SdroxideApp {
         // Edited in place and sent whole on any change, the way the skimmer's
         // settings are; the engine persists it and echoes it back.
         let mut cfg = self.scanner.clone();
-        let show = self.tool_window(ctx, "scanner", "Scanner", [420.0, 520.0], true, |me, ui| {
+        let show = self.tool_window(ctx, "scanner", &tr!("scanner-scanner"), [420.0, 520.0], true, |me, ui| {
             me.scanner_body(ui, &mut cfg, cmds);
         });
         if cfg != self.scanner {
@@ -443,7 +443,7 @@ impl SdroxideApp {
             ui.label("Voice");
             self.scanner_voice(ui, cfg);
             ui.end_row();
-            ui.label("Listens for");
+            ui.label(tr!("scanner-listens"));
             ui.add(
                 egui::DragValue::new(&mut cfg.dwell_ms)
                     .speed(5.0)
@@ -454,9 +454,9 @@ impl SdroxideApp {
                 "How long to stay on a candidate before judging it. The voice check needs at \
                  least this much: a voice is a rhythm of syllables, and half a second is two of \
                  them"
+                .to_string()
             } else {
-                "How long to stay on a candidate before judging it. Below about a tenth of a \
-                 second the level meter has not settled and weak signals get missed"
+                tr!("scanner-how-long-stay-candidate-before")
             });
             ui.end_row();
 

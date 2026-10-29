@@ -40,14 +40,12 @@ pub(in crate::app) fn settings_wsjtx_tab(
     );
     ui.add_space(4.0);
     if !seeded {
-        super::note(ui, "Waiting for the station's WSJT-X broadcast configuration…");
+        super::note(ui, &tr!("settings-servers-waiting-station-s-wsjt-x"));
         return;
     }
     super::note(
         ui,
-        "Sends decodes, station status and logged QSOs the way WSJT-X does, so GridTracker, \
-             JTAlert, N1MM+ and Log4OM work with sdroxide unchanged. Output only — nothing on \
-             this socket can touch the radio.",
+        &tr!("settings-servers-sends-decodes-station-status-logged"),
     );
     ui.add_space(6.0);
     crate::chrome::checkbox(ui, &mut cfg.enabled, tr!("settings-servers-enable"));
@@ -58,7 +56,7 @@ pub(in crate::app) fn settings_wsjtx_tab(
             .spacing([12.0, 6.0])
             .min_row_height(ui.spacing().interact_size.y)
             .show(ui, |ui| {
-                ui.label("Send to");
+                ui.label(tr!("settings-servers-send"));
                 crate::chrome::field(
                     ui,
                     egui::TextEdit::singleline(&mut cfg.host)
@@ -66,24 +64,22 @@ pub(in crate::app) fn settings_wsjtx_tab(
                         .hint_text("127.0.0.1"),
                 )
                 .on_hover_text(
-                    "127.0.0.1 reaches clients on this machine; a LAN address or a multicast \
-                 group (224.0.0.1) reaches others",
+                    tr!("settings-servers-t-127-0-0-1-reaches"),
                 );
                 ui.end_row();
 
-                ui.label("Port");
+                ui.label(tr!("settings-servers-port"));
                 ui.add(egui::DragValue::new(&mut cfg.port).range(1..=65535))
-                    .on_hover_text("2237 is the port every client defaults to");
+                    .on_hover_text(tr!("settings-servers-t-2237-port-every-client-defaults"));
                 ui.end_row();
 
-                ui.label("Identify as");
+                ui.label(tr!("settings-servers-identify"));
                 crate::chrome::field(
                     ui,
                     egui::TextEdit::singleline(&mut cfg.id).desired_width(160.0),
                 )
                 .on_hover_text(
-                    "The name clients see. Some loggers only accept traffic identifying itself \
-                 as WSJT-X.",
+                    tr!("settings-servers-name-clients-see-some-loggers"),
                 );
                 ui.end_row();
             });
@@ -103,10 +99,7 @@ pub(in crate::app) fn settings_wsjtx_tab(
     ui.add_space(4.0);
     super::note(
         ui,
-        "The same news in N1MM's words: one XML datagram per logged contact, for the loggers \
-             that listen for N1MM rather than for WSJT-X — the World Radio League's bridge takes \
-             either. Contacts only; there is no decode stream in this protocol. Its own switch \
-             and its own port, because a station may want both.",
+        &tr!("settings-servers-same-news-n1mm-s-words"),
     );
     ui.add_space(6.0);
     crate::chrome::checkbox(ui, &mut cfg.n1mm.enabled, tr!("settings-servers-enable"));
@@ -117,7 +110,7 @@ pub(in crate::app) fn settings_wsjtx_tab(
             .spacing([12.0, 6.0])
             .min_row_height(ui.spacing().interact_size.y)
             .show(ui, |ui| {
-                ui.label("Send to");
+                ui.label(tr!("settings-servers-send"));
                 crate::chrome::field(
                     ui,
                     egui::TextEdit::singleline(&mut cfg.n1mm.host)
@@ -125,25 +118,22 @@ pub(in crate::app) fn settings_wsjtx_tab(
                         .hint_text("127.0.0.1"),
                 )
                 .on_hover_text(
-                    "127.0.0.1 reaches clients on this machine. N1MM's own advice for a contest \
-                 network is this subnet's broadcast address — 192.168.1.255 for a 192.168.1.n \
-                 network — which reaches every position at once.",
+                    tr!("settings-servers-t-127-0-0-1-reaches-2"),
                 );
                 ui.end_row();
 
-                ui.label("Port");
+                ui.label(tr!("settings-servers-port"));
                 ui.add(egui::DragValue::new(&mut cfg.n1mm.port).range(1..=65535))
-                    .on_hover_text("12060 is the port N1MM's documentation recommends");
+                    .on_hover_text(tr!("settings-servers-t-12060-port-n1mm-s-documentation"));
                 ui.end_row();
 
-                ui.label("Station name");
+                ui.label(tr!("settings-servers-station-name"));
                 crate::chrome::field(
                     ui,
                     egui::TextEdit::singleline(&mut cfg.n1mm.station).desired_width(160.0),
                 )
                 .on_hover_text(
-                    "What N1MM calls the StationName: the name of the computer that sent the \
-                 packet. Loggers show it to tell one operating position from another.",
+                    tr!("settings-servers-what-n1mm-calls-stationname-name"),
                 );
                 ui.end_row();
             });
@@ -174,7 +164,7 @@ pub(in crate::app) fn settings_wsjtx_tab(
             .spacing([12.0, 6.0])
             .min_row_height(ui.spacing().interact_size.y)
             .show(ui, |ui| {
-                ui.label("Send to");
+                ui.label(tr!("settings-servers-send"));
                 crate::chrome::field(
                     ui,
                     egui::TextEdit::singleline(decode_udp)
@@ -229,7 +219,7 @@ pub(in crate::app) fn settings_rigctld_tab(
     );
     ui.add_space(4.0);
     if !seeded {
-        super::note(ui, "Waiting for the station's rigctld configuration…");
+        super::note(ui, &tr!("settings-servers-waiting-station-s-rigctld-configuration"));
         return;
     }
     ui.add_space(2.0);
@@ -242,15 +232,15 @@ pub(in crate::app) fn settings_rigctld_tab(
             .spacing([12.0, 6.0])
             .min_row_height(ui.spacing().interact_size.y)
             .show(ui, |ui| {
-                ui.label("Listen on");
+                ui.label(tr!("settings-servers-listen"));
                 ComboBox::from_id_salt("rigctld_bind").selected_text(&cfg.bind).show_styled(
                     ui,
                     |ui| {
                         for b in RigctldConfig::BINDS {
                             let label = if b == "127.0.0.1" {
-                                "127.0.0.1 (this machine)"
+                                tr!("settings-servers-t-127-0-0-1-machine")
                             } else {
-                                "0.0.0.0 (whole network)"
+                                tr!("settings-servers-t-0-0-0-0-whole")
                             };
                             if ui.selectable_label(cfg.bind == b, label).clicked() {
                                 cfg.bind = b.to_string();
@@ -260,21 +250,21 @@ pub(in crate::app) fn settings_rigctld_tab(
                 );
                 ui.end_row();
 
-                ui.label("Port");
+                ui.label(tr!("settings-servers-port"));
                 ui.add(egui::DragValue::new(&mut cfg.port).range(1..=65535))
-                    .on_hover_text("4532 is the port every rigctld client assumes");
+                    .on_hover_text(tr!("settings-servers-t-4532-port-every-rigctld-client"));
                 ui.end_row();
 
-                ui.label("Rig name");
+                ui.label(tr!("settings-servers-rig-name"));
                 crate::chrome::field(
                     ui,
                     egui::TextEdit::singleline(&mut cfg.rig_name)
                         .desired_width(160.0)
-                        .hint_text("reported to clients"),
+                        .hint_text(tr!("settings-servers-reported-clients")),
                 );
                 ui.end_row();
 
-                ui.label("Max clients");
+                ui.label(tr!("settings-servers-max-clients"));
                 ui.add(egui::DragValue::new(&mut cfg.max_clients).range(1..=32));
                 ui.end_row();
             });
@@ -320,11 +310,11 @@ pub(in crate::app) fn settings_rigctld_tab(
                 );
             }
             None => {
-                super::note(ui, "Not running.");
+                super::note(ui, &tr!("settings-servers-not-running"));
             }
         },
         None => {
-            super::note(ui, "Status unknown — press APPLY.");
+            super::note(ui, &tr!("settings-servers-status-unknown-press-apply"));
         }
     }
 
@@ -345,10 +335,7 @@ pub(in crate::app) fn settings_rigctld_tab(
     ui.add_space(8.0);
     super::note(
         ui,
-        "Lets any Hamlib-capable program drive this radio: frequency, mode, PTT, split, RIT \
-             and power. In WSJT-X, fldigi or CQRLOG choose the rig \u{201c}Hamlib NET rigctl\u{201d} \
-             (model 2) and point it at this address; in GPredict and N1MM enter the host and port \
-             directly. Unlike the TCI server it carries control only \u{2014} no audio, no IQ.",
+        &tr!("settings-servers-lets-any-hamlib-capable-program"),
     );
 }
 
@@ -364,10 +351,10 @@ pub(in crate::app) fn settings_rotator_tab(
     apply: &mut bool,
 ) {
     use sdroxide_types::RotatorTransport as T;
-    ui.label(RichText::new("Antenna rotator").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(RichText::new(tr!("settings-servers-antenna-rotator")).size(14.0).strong().color(crate::theme::CYAN()));
     ui.add_space(4.0);
     if !seeded {
-        super::note(ui, "Waiting for the station's rotator configuration…");
+        super::note(ui, &tr!("settings-servers-waiting-station-s-rotator-configuration"));
         return;
     }
     super::note(
@@ -409,7 +396,7 @@ pub(in crate::app) fn settings_rotator_tab(
 
                 match cfg.transport {
                     T::Rotctld => {
-                        ui.label("Host");
+                        ui.label(tr!("settings-servers-host"));
                         crate::chrome::field(
                             ui,
                             egui::TextEdit::singleline(&mut cfg.host)
@@ -418,7 +405,7 @@ pub(in crate::app) fn settings_rotator_tab(
                         );
                         ui.end_row();
 
-                        ui.label("Port");
+                        ui.label(tr!("settings-servers-port"));
                         ui.add(egui::DragValue::new(&mut cfg.port).range(1..=65535))
                             .on_hover_text("4533 is rotctld's default");
                         ui.end_row();
@@ -450,34 +437,32 @@ pub(in crate::app) fn settings_rotator_tab(
                     }
                 }
 
-                ui.label("Min elevation");
+                ui.label(tr!("settings-servers-min-elevation"));
                 ui.add(egui::DragValue::new(&mut cfg.min_el_deg).range(0.0..=45.0).suffix("°"))
                     .on_hover_text(
-                        "Below this the rotator parks instead of tracking — set it to your local \
-                     horizon or roofline",
+                        tr!("settings-servers-below-rotator-parks-instead-tracking"),
                     );
                 ui.end_row();
 
-                ui.label("Azimuth offset");
+                ui.label(tr!("settings-servers-azimuth-offset"));
                 ui.add(
                     egui::DragValue::new(&mut cfg.az_offset_deg).range(-180.0..=180.0).suffix("°"),
                 )
-                .on_hover_text("Added to every command, for a rotator whose north is off");
+                .on_hover_text(tr!("settings-servers-added-every-command-rotator-whose"));
                 ui.end_row();
 
-                ui.label("Min movement");
+                ui.label(tr!("settings-servers-min-movement"));
                 ui.add(egui::DragValue::new(&mut cfg.min_move_deg).range(0.1..=10.0).suffix("°"))
                     .on_hover_text(
-                        "Steps smaller than this are not sent — chasing tenths of a degree wears \
-                     motors for nothing",
+                        tr!("settings-servers-steps-smaller-than-are-not"),
                     );
                 ui.end_row();
 
-                ui.label("Park position");
+                ui.label(tr!("settings-servers-park-position"));
                 let mut has_park = cfg.park.is_some();
                 if ui
-                    .checkbox(&mut has_park, "drive to a position when idle")
-                    .on_hover_text("Off leaves the antenna wherever the last pass ended")
+                    .checkbox(&mut has_park, tr!("settings-servers-drive-position-when-idle"))
+                    .on_hover_text(tr!("settings-servers-off-leaves-antenna-wherever-last"))
                     .changed()
                 {
                     cfg.park = has_park.then_some((0.0, 0.0));
@@ -516,10 +501,10 @@ pub(in crate::app) fn settings_rotator_tab(
             );
         }
         Some((false, _, _, None)) => {
-            super::note(ui, "Not connected.");
+            super::note(ui, &tr!("settings-servers-not-connected"));
         }
         None if cfg.enabled => {
-            super::note(ui, "Status unknown — press APPLY.");
+            super::note(ui, &tr!("settings-servers-status-unknown-press-apply"));
         }
         None => {}
     }
@@ -549,7 +534,7 @@ pub(in crate::app) fn settings_tci_server_tab(
     use sdroxide_types::TciServerConfig;
 
     if !seeded {
-        super::note(ui, "Waiting for the station's TCI server configuration…");
+        super::note(ui, &tr!("settings-servers-waiting-station-s-tci-server"));
         return;
     }
 
@@ -569,15 +554,15 @@ pub(in crate::app) fn settings_tci_server_tab(
             .spacing([12.0, 6.0])
             .min_row_height(ui.spacing().interact_size.y)
             .show(ui, |ui| {
-                ui.label("Listen on");
+                ui.label(tr!("settings-servers-listen"));
                 ComboBox::from_id_salt("tci_srv_bind").selected_text(&cfg.bind).show_styled(
                     ui,
                     |ui| {
                         for b in TciServerConfig::BINDS {
                             let label = if b == "127.0.0.1" {
-                                "127.0.0.1 (this machine)"
+                                tr!("settings-servers-t-127-0-0-1-machine")
                             } else {
-                                "0.0.0.0 (whole network)"
+                                tr!("settings-servers-t-0-0-0-0-whole")
                             };
                             if ui.selectable_label(cfg.bind == b, label).clicked() {
                                 cfg.bind = b.to_string();
@@ -587,20 +572,20 @@ pub(in crate::app) fn settings_tci_server_tab(
                 );
                 ui.end_row();
 
-                ui.label("Port");
+                ui.label(tr!("settings-servers-port"));
                 ui.add(egui::DragValue::new(&mut cfg.port).range(1..=65535));
                 ui.end_row();
 
-                ui.label("Device name");
+                ui.label(tr!("settings-servers-device-name"));
                 crate::chrome::field(
                     ui,
                     egui::TextEdit::singleline(&mut cfg.device_name)
                         .desired_width(160.0)
-                        .hint_text("reported to clients"),
+                        .hint_text(tr!("settings-servers-reported-clients")),
                 );
                 ui.end_row();
 
-                ui.label("Max clients");
+                ui.label(tr!("settings-servers-max-clients"));
                 ui.add(egui::DragValue::new(&mut cfg.max_clients).range(1..=32));
                 ui.end_row();
             });
@@ -645,11 +630,11 @@ pub(in crate::app) fn settings_tci_server_tab(
                 ui.label(msg.color(Color32::from_rgb(230, 90, 80)));
             }
             None => {
-                super::note(ui, "Not running.");
+                super::note(ui, &tr!("settings-servers-not-running"));
             }
         },
         None => {
-            super::note(ui, "Status unknown — press APPLY.");
+            super::note(ui, &tr!("settings-servers-status-unknown-press-apply"));
         }
     }
 

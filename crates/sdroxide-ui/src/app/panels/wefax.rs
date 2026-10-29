@@ -137,9 +137,7 @@ impl SdroxideApp {
                     .monospace(),
             )
             .on_hover_text(
-                "Subcarrier offset from 1900 Hz. Tune for roughly zero: the fax carrier is \
-                 1500 Hz black to 2300 Hz white, and a receiver a few hundred hertz off clips \
-                 the picture to solid black or solid white.",
+                tr!("wefax-subcarrier-offset-1900-hz-tune"),
             );
             // **A way to act on that number.** The readout turns yellow when the
             // offset is too large, and until now it could only tell the operator
@@ -233,7 +231,7 @@ impl SdroxideApp {
 
             ui.add_space(8.0);
             let auto_start = self.digi_cfg_edit.wefax_auto_start;
-            if crate::chrome::chip(ui, auto_start, "AUTO START")
+            if crate::chrome::chip(ui, auto_start, tr!("wefax-auto-start"))
                 .on_hover_text(
                     "Begin a chart when the 300 Hz (IOC 576) or 675 Hz start tone is heard, \
                      or, if the tone was lost in a fade or under a carrier, when a few \

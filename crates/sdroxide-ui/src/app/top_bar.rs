@@ -369,19 +369,19 @@ enum MenuChip {
 }
 
 impl MenuChip {
-    fn label(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Self::Rx => "RX",
-            Self::Vfo => "VFO",
-            Self::Div => "DIV",
-            Self::Sub => "SUB",
-            Self::Rig => "RIG",
-            Self::Tx => "TX",
-            Self::Disp => "DISP",
-            Self::Sys => "SYS",
-            Self::Menu => "☰",
-            Self::Mem => "MEM",
-            Self::Lock => LOCK_LABEL,
+            Self::Rx => "RX".to_string(),
+            Self::Vfo => "VFO".to_string(),
+            Self::Div => "DIV".to_string(),
+            Self::Sub => "SUB".to_string(),
+            Self::Rig => "RIG".to_string(),
+            Self::Tx => "TX".to_string(),
+            Self::Disp => "DISP".to_string(),
+            Self::Sys => "SYS".to_string(),
+            Self::Menu => "☰".to_string(),
+            Self::Mem => tr!("topbar-chip-mem"),
+            Self::Lock => LOCK_LABEL.to_string(),
         }
     }
 }
@@ -1003,8 +1003,8 @@ impl SdroxideApp {
         let font = egui::TextStyle::Button.resolve(ui.style());
         let (mut menu, mut text_w) = (Vec::new(), 0.0f32);
         for chip in self.menu_chips(tx_capable, crate::layout::tier(ui.ctx())) {
-            menu.push(crate::chrome::chip_width(ui, chip.label(), None));
-            text_w = text_w.max(crate::chrome::text_width(ui, chip.label(), font.clone()));
+            menu.push(crate::chrome::chip_width(ui, &chip.label(), None));
+            text_w = text_w.max(crate::chrome::text_width(ui, &chip.label(), font.clone()));
         }
         // Not `available_width()`: in a wrapping layout that reports the width
         // of the row this item would wrap *onto*, which is the full row
@@ -1071,9 +1071,9 @@ impl SdroxideApp {
                 (r1.len(), widest(&r1))
             },
             row2: if tx_capable {
-                (5, widest(&["TX", "DISP", "SYS", "MEM", LOCK_LABEL]))
+                (5, widest(&["TX", "DISP", "SYS", &tr!("topbar-chip-mem"), LOCK_LABEL]))
             } else {
-                (4, widest(&["DISP", "SYS", "MEM", LOCK_LABEL]))
+                (4, widest(&["DISP", "SYS", &tr!("topbar-chip-mem"), LOCK_LABEL]))
             },
         };
         let plan = plan_short_strip(ui.available_width(), &fit, &chips, gap, gap);
@@ -1202,7 +1202,7 @@ impl SdroxideApp {
                     self.disp_menu(ui, btn, cmds);
                     let btn = crate::chrome::chip_sized(ui, false, "SYS", cell2);
                     self.sys_menu(ui, btn, cmds);
-                    let btn = crate::chrome::chip_sized(ui, self.show_memories, "MEM", cell2);
+                    let btn = crate::chrome::chip_sized(ui, self.show_memories, tr!("topbar-chip-mem"), cell2);
                     self.mem_chip(btn);
                     crate::touch_lock::padlock(ui, cell2);
                 });
@@ -1357,7 +1357,7 @@ impl SdroxideApp {
             }
             let lit = self.menu_chip_lit(chip);
             let btn = match fit {
-                ChipFit::Hug => crate::chrome::chip(ui, lit, chip.label()),
+                ChipFit::Hug => crate::chrome::chip(ui, lit, &chip.label()),
                 ChipFit::Cell(size, text) => {
                     let label = RichText::new(chip.label());
                     let label = match text {
@@ -1646,14 +1646,14 @@ impl SdroxideApp {
                 // the group that does that and not to the popup.
                 let mut opened = false;
                 ui.horizontal_wrapped(|ui| {
-                    if crate::chrome::chip(ui, self.show_memories, "MEM")
+                    if crate::chrome::chip(ui, self.show_memories, tr!("topbar-chip-mem"))
                         .on_hover_text("Memory channels")
                         .clicked()
                     {
                         self.show_memories = !self.show_memories;
                         opened = true;
                     }
-                    if crate::chrome::chip(ui, self.show_grid, "GRID")
+                    if crate::chrome::chip(ui, self.show_grid, tr!("topbar-chip-grid"))
                         .on_hover_text("Grid tracker — worked Maidenhead squares on a map")
                         .clicked()
                     {
@@ -2442,7 +2442,7 @@ impl SdroxideApp {
             let hover = format!(
                 "{}\n\nClick to cycle meter face: {}",
                 smeter::hover_text(self.meters.as_ref(), self.meter_is_audio()),
-                if compact { "bar / trace" } else { "needle / bar / trace" }
+                if compact { tr!("topbar-bar-trace") } else { tr!("topbar-needle-bar-trace") }
             );
             let resp = smeter::show(ui, self.meters.as_ref(), shown, outline).on_hover_text(hover);
             if resp.clicked() {
@@ -3492,7 +3492,7 @@ impl SdroxideApp {
             if self.state.rx[0].mode.audio_agc() {
                 let agc = self.state.rx[0].agc;
                 if crate::chrome::chip(ui, agc != AgcMode::Off, format!("AGC {}", agc.label()))
-                    .on_hover_text("AGC hang time — click to cycle: Off / Slow / Med / Fast")
+                    .on_hover_text(tr!("topbar-agc-hang-time-click-cycle"))
                     .clicked()
                 {
                     cmds.push(Command::SetAgc { rx: RxId::Main, agc: agc.next() });
@@ -3820,16 +3820,13 @@ impl SdroxideApp {
                 // `chip_enabled_tinted`.
                 let chip = crate::chrome::chip_enabled(ui, !sub, on && !sub, "BIN").on_hover_text(
                     if sub {
-                        "Binaural audio — not while the sub receiver has the right ear".to_string()
+                        tr!("topbar-binaural-audio-not-while-sub").to_string()
                     } else if on {
                         tr!("topbar-binaural-audio-passband-spread-across")
                     } else if cw {
                         tr!("topbar-binaural-cw-spread-passband-across")
                     } else {
-                        "Binaural audio: spread the passband across the two ears. On voice the \
-                         noise spreads over the whole image while the station stays in the \
-                         middle of it, which is easier to listen to for an hour — at the cost \
-                         of the voice itself being spread out. Best on headphones"
+                        tr!("topbar-binaural-audio-spread-passband-across")
                             .to_string()
                     },
                 );
@@ -3930,7 +3927,7 @@ impl SdroxideApp {
                     || (rx0.auto_notch && rx0.mode.auto_notch_applies());
                 let playback = self.state.playback.as_ref();
                 let hover = if !want {
-                    "WFM stereo forced off — click for automatic stereo".to_string()
+                    tr!("topbar-wfm-stereo-forced-off-click").to_string()
                 } else if yields {
                     "WFM stereo is off while noise reduction or the auto-notch runs — they \
                      would smear the two channels. Switch them off to hear stereo"
@@ -3940,7 +3937,7 @@ impl SdroxideApp {
                      force mono"
                         .to_string()
                 } else if locked {
-                    "WFM stereo: pilot locked. Click to force mono".to_string()
+                    tr!("topbar-wfm-stereo-pilot-locked-click").to_string()
                 } else if playback.is_some_and(|p| p.channels < 2) {
                     "This recording is mono — there is no second channel to play".to_string()
                 } else {
@@ -4420,7 +4417,7 @@ impl SdroxideApp {
                     ui,
                     chip.enabled,
                     chip.selected,
-                    chip.label,
+                    &chip.label,
                     None,
                     crate::theme::ALERT(),
                     Color32::WHITE,
@@ -4440,8 +4437,8 @@ impl SdroxideApp {
             // writer is initialised with it — so it greys out while one runs.
             let mono = self.state.recording_mono;
             let mono_chip =
-                crate::chrome::chip_enabled(ui, !audio, mono, "MONO").on_hover_text(if mono {
-                    "Mixed to one channel — click for two".to_string()
+                crate::chrome::chip_enabled(ui, !audio, mono, &tr!("topbar-mono")).on_hover_text(if mono {
+                    tr!("topbar-mixed-one-channel-click-two").to_string()
                 } else {
                     tr!("topbar-two-channels-rx-left-tx")
                 });
@@ -4595,7 +4592,7 @@ impl SdroxideApp {
                 let enabled = secs.is_none() || block.is_none();
                 let chip = crate::chrome::chip_enabled(ui, enabled, armed, &label).on_hover_text(
                     match secs {
-                        None => "Stop following the squelch".to_string(),
+                        None => tr!("topbar-stop-following-squelch").to_string(),
                         Some(s) => format!(
                             "Record each transmission to its own file, closed after {s} seconds \
                              of silence"
@@ -4645,22 +4642,20 @@ impl SdroxideApp {
         // it, not that sdroxide has not.
         let have_iq = self.state.sample_rate > 96_000.0;
         ui.horizontal_wrapped(|ui| {
-            let iq_label = if iq { "● I/Q WAV" } else { "I/Q WAV" };
+            let iq_label = if iq { tr!("topbar-i-q-wav") } else { tr!("topbar-i-q-wav-2") };
             let chip = crate::chrome::chip_accent_enabled(
                 ui,
                 have_iq || iq,
                 iq,
-                iq_label,
+                &iq_label,
                 None,
                 crate::theme::ALERT(),
                 Color32::WHITE,
             )
             .on_hover_text(if have_iq || iq {
-                "The raw spectrum the receiver is delivering, as a stereo 32-bit float WAV \
-                     (RF64 past 4 GB) that SDR#, SDRuno, HDSDR and SDRangel open — and that \
-                     sdroxide itself plays back with --file. Large: 8 bytes a sample."
+                tr!("topbar-raw-spectrum-receiver-delivering-stereo")
             } else {
-                "This radio hands over demodulated audio, so there is no I/Q to record."
+                tr!("topbar-radio-hands-over-demodulated-audio")
             });
             if chip.clicked() {
                 cmds.push(Command::SetIqRecording(!iq));
@@ -5498,7 +5493,7 @@ impl SdroxideApp {
     /// The Mic gain: label + rail, no readout.
     fn tx_mic(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
         let mut mic = self.state.tx.mic_gain;
-        ui.label("Mic");
+        ui.label(tr!("topbar-mic"));
         if crate::chrome::slider(ui, Slider::new(&mut mic, 0.0..=1.0).show_value(false)).changed() {
             cmds.push(Command::SetMicGain(mic));
         }
@@ -5595,7 +5590,7 @@ impl SdroxideApp {
     fn tx_mic_vertical(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 2.0;
-            ui.label(RichText::new("Mic").size(10.5));
+            ui.label(RichText::new(tr!("topbar-mic")).size(10.5));
             let mut mic = self.state.tx.mic_gain;
             // The rail takes whatever height the label left it.
             ui.spacing_mut().slider_width = (ui.available_height() - 2.0).max(24.0);
@@ -6109,8 +6104,7 @@ impl SdroxideApp {
                 let on = self.view.spectrum_visible();
                 if crate::chrome::chip(ui, on, "SHOW SPECTRUM")
                     .on_hover_text(
-                        "Draw the spectrum line across the top of the panadapter. \
-                         Switched off, the waterfall takes the whole height.",
+                        tr!("topbar-draw-spectrum-line-across-top"),
                     )
                     .clicked()
                 {
@@ -6118,9 +6112,7 @@ impl SdroxideApp {
                 }
                 if crate::chrome::chip(ui, self.view.peak_hold, "PEAK HOLD")
                     .on_hover_text(
-                        "Trace the highest level each column has reached over the live \
-                         line, decaying back down — what the band did while you were \
-                         looking elsewhere",
+                        tr!("topbar-trace-highest-level-each-column"),
                     )
                     .clicked()
                 {
@@ -6139,12 +6131,7 @@ impl SdroxideApp {
                 }
                 if crate::chrome::chip(ui, self.view.spectrum_3d, "3D")
                     .on_hover_text(
-                        "Draw the spectrum as a receding surface instead of a flat line: \
-                         the newest spectrum across the front, the ones before it flowing \
-                         away from you. The last couple of seconds of the band as a \
-                         landscape — a carrier that comes and goes is a ridge rather than \
-                         a line that twitches. The grid and the peak hold belong to the \
-                         flat line and are not drawn on it.",
+                        tr!("topbar-draw-spectrum-receding-surface-instead"),
                     )
                     .clicked()
                 {
@@ -6157,20 +6144,16 @@ impl SdroxideApp {
                 "reaction",
                 &mut cfg.spectrum_speed,
                 &Speed::ALL,
-                "How quickly the spectrum line follows the band. Slower averages more \
-                 frames into each other: a steadier line, and a weak carrier that stands \
-                 still long enough to read. The waterfall is not touched by it — those \
-                 rows get every frame either way.",
+                &tr!("topbar-how-quickly-spectrum-line-follows"),
             );
             self.detail_row(ui, &mut cfg);
             fill_style_row(ui, &mut cfg);
         });
         crate::chrome::menu_group(ui, "Waterfall", w, |ui| {
             let on = self.view.waterfall_visible();
-            if crate::chrome::chip(ui, on, "SHOW WATERFALL")
+            if crate::chrome::chip(ui, on, tr!("topbar-show-waterfall"))
                 .on_hover_text(
-                    "Draw the scrolling waterfall below the spectrum. Switched off, the \
-                     spectrum line takes the whole height.",
+                    tr!("topbar-draw-scrolling-waterfall-below-spectrum"),
                 )
                 .clicked()
             {
@@ -6357,10 +6340,7 @@ impl SdroxideApp {
         if !simple
             && chip_stretched(ui, self.view.center_on_vfo, ctr, extra)
                 .on_hover_text(
-                    "Keep the tuned frequency in the middle of the panadapter: the window slides \
-                     under the dial instead of the picture jumping a whole span when you tune off \
-                     the edge. Switch it on to centre at once; switch it off to pan and zoom \
-                     wherever you like.",
+                    tr!("topbar-keep-tuned-frequency-middle-panadapter"),
                 )
                 .clicked()
         {
@@ -6465,7 +6445,7 @@ impl SdroxideApp {
         // (issue #375). A slider is one grab from either stop, and the FIT chip
         // above sets both at once from what is on screen.
         ui.horizontal(|ui| {
-            ui.label("floor");
+            ui.label(tr!("topbar-floor"));
             crate::chrome::slider_readout(
                 ui,
                 value_field_w(ui, "-888 dB"),
@@ -6518,7 +6498,7 @@ impl SdroxideApp {
         });
         crate::chrome::menu_caption(ui, "Waterfall");
         if crate::chrome::chip(ui, self.view.waterfall_flip, DISPLAY_FLIP_CHIP)
-            .on_hover_text("Scroll the waterfall upwards — newest row at the bottom (V)")
+            .on_hover_text(tr!("topbar-scroll-waterfall-upwards-newest-row"))
             .clicked()
         {
             self.view.waterfall_flip = !self.view.waterfall_flip;
@@ -6560,9 +6540,9 @@ impl SdroxideApp {
         // LISTEN chip it replaces leaves the width for the longer name.
         let log_opens_swl = log_chip_opens_swl(self.listener_screen());
         let (log_open, log_hover) = if log_opens_swl {
-            (self.show_swl, "Reception log — stations heard, with SINPO/SIO")
+            (self.show_swl, "Reception log — stations heard, with SINPO/SIO".to_string())
         } else {
-            (self.show_logbook, "Logbook — all QSOs (digital + manual)")
+            (self.show_logbook, tr!("topbar-logbook-all-qsos-digital-manual"))
         };
         let log_label = if swl { "SWL LOG" } else { log };
         if chip_stretched(ui, log_open, log_label, extra).on_hover_text(log_hover).clicked() {
@@ -6604,7 +6584,7 @@ impl SdroxideApp {
         if !swl
             && !simple
             && chip_stretched(ui, self.show_awards, awards, extra)
-                .on_hover_text("Award tracking — DXCC / WAS / WAZ / grids")
+                .on_hover_text(tr!("topbar-award-tracking-dxcc-was-waz"))
                 .clicked()
         {
             self.show_awards = !self.show_awards;
@@ -6641,9 +6621,9 @@ impl SdroxideApp {
             if sat_chip
                 .on_hover_text(match (&self.sat_track, qo100_running) {
                     (Some(t), _) => format!("Satellite — locked on {}", t.name),
-                    (None, true) => "Satellite — the QO-100 beacon calibration is running".into(),
+                    (None, true) => tr!("topbar-satellite-qo-100-beacon-calibration").into(),
                     (None, false) => {
-                        "Satellite — Doppler tracking, and the QO-100 beacon calibration".into()
+                        tr!("topbar-satellite-doppler-tracking-qo-100").into()
                     }
                 })
                 .clicked()
@@ -6687,7 +6667,7 @@ impl SdroxideApp {
             }
         } else if !simple
             && chip_stretched(ui, self.mail.open, mail, extra)
-                .on_hover_text("Winlink radio email")
+                .on_hover_text(tr!("topbar-winlink-radio-email"))
                 .clicked()
         {
             self.mail.open = !self.mail.open;
@@ -6751,7 +6731,7 @@ impl SdroxideApp {
         if !self.swl_mode()
             && chip_stretched(ui, self.show_grid, grid_label, extra)
                 .on_hover_text(
-                    "Grid tracker — worked Maidenhead squares on a map, with what is heard",
+                    tr!("topbar-grid-tracker-worked-maidenhead-squares"),
                 )
                 .clicked()
         {
@@ -6779,8 +6759,7 @@ impl SdroxideApp {
         // looking for websdr.org's list behind it (issue #254).
         if chip_stretched(ui, self.show_public_sdrs, public_sdrs, extra)
             .on_hover_text(
-                "Public SDRs on the internet — browse the KiwiSDR and SpyServer directories \
-                 and open one as a radio",
+                tr!("topbar-public-sdrs-internet-browse-kiwisdr"),
             )
             .clicked()
         {
@@ -8577,17 +8556,17 @@ fn draw_ism_chip(ui: &mut egui::Ui, state: &RadioState, show_ism: &mut bool) {
         crate::chrome::chip_accent(
             ui,
             true,
-            "ISM",
+            tr!("topbar-chip-ism"),
             crate::theme::GREEN(),
             crate::theme::INK_ON_BRIGHT(),
         )
     } else {
-        crate::chrome::chip(ui, *show_ism, "ISM")
+        crate::chrome::chip(ui, *show_ism, tr!("topbar-chip-ism"))
     };
     let resp = resp.on_hover_text(if ism_running {
-        "ISM-band devices — decoding now, whether or not this window is open. Switch it off with DECODING inside the window."
+        tr!("topbar-ism-band-devices-decoding-now")
     } else {
-        "ISM-band devices — weather sensors, meters and home automation heard around you"
+        tr!("topbar-ism-band-devices-weather-sensors")
     });
     if resp.clicked() {
         *show_ism = !*show_ism;
@@ -9638,8 +9617,8 @@ const REC_FORMATS: [RecordingFormat; 2] = [RecordingFormat::Mp3, RecordingFormat
 /// the file — and the other greys out, because a container cannot be chosen
 /// mid-file.
 struct RecFormatChip {
-    label: &'static str,
-    hover: &'static str,
+    label: String,
+    hover: String,
     /// Whether the chip may be pressed: the running format, or either while idle.
     enabled: bool,
     /// Whether this is the format currently being written.
@@ -9650,14 +9629,14 @@ fn rec_format_chip(format: RecordingFormat, audio: bool, active: RecordingFormat
     let selected = audio && format == active;
     let (label, hover) = match format {
         RecordingFormat::Mp3 => (
-            if selected { "● MP3" } else { "MP3" },
-            "What you hear, as an MP3: the receiver in one channel and your own transmit in \
-             the other. This is the recording of a QSO.",
+            if selected { tr!("topbar-mp3") } else { "MP3".to_string() },
+            tr!("topbar-what-you-hear-mp3-receiver"),
         ),
         RecordingFormat::Wav => (
-            if selected { "● WAV" } else { "WAV" },
+            if selected { "● WAV" } else { "WAV" }.to_string(),
             "The same audio as uncompressed 16-bit PCM at 48 kHz — about 11 MB a minute \
-             stereo. For an editor or a decoder of your own.",
+             stereo. For an editor or a decoder of your own."
+                .to_string(),
         ),
     };
     RecFormatChip { label, hover, enabled: !audio || selected, selected }

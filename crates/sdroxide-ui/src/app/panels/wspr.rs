@@ -510,7 +510,7 @@ impl SdroxideApp {
         if !self.swl_mode() {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                ui.label(RichText::new("TRANSMIT").size(9.5).color(crate::theme::CYAN_DIM()));
+                ui.label(RichText::new(tr!("wspr-transmit")).size(9.5).color(crate::theme::CYAN_DIM()));
                 let cur = self.digi_cfg_edit.wspr_tx_percent;
                 for (pct, label) in [(0u8, "OFF"), (10, "10%"), (20, "20%"), (33, "33%"), (50, "50%")] {
                     // Off is the resting state and reads as one; anything else puts
@@ -534,7 +534,7 @@ impl SdroxideApp {
                     };
                     if resp
                         .on_hover_text(if pct == 0 {
-                            "Receive only.".to_string()
+                            tr!("wspr-receive-only-2").to_string()
                         } else {
                             format!(
                                 "Beacon in one two-minute slot out of every {} — {pct}% of them, \
@@ -605,28 +605,24 @@ impl SdroxideApp {
                     cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
                 }
                 ui.label(
-                    RichText::new("what you actually radiate")
+                    RichText::new(tr!("wspr-what-you-actually-radiate"))
                         .size(9.5)
                         .color(crate::theme::gray(110)),
                 )
                 .on_hover_text(
-                    "This goes out in the message, and everyone who hears you judges the path by \
-                     it — so an optimistic figure here makes their measurements wrong as well as \
-                     yours.",
+                    tr!("wspr-goes-out-message-everyone-who"),
                 );
 
                 // Moving inside the 200 Hz window is the WSPR convention, and it is
                 // the only other thing about a transmission worth a switch.
                 let auto = self.digi_cfg_edit.auto_tx_freq;
-                let resp = crate::chrome::chip(ui, auto, RichText::new("ROAM").size(10.5));
+                let resp = crate::chrome::chip(ui, auto, RichText::new(tr!("wspr-roam")).size(10.5));
                 if resp.clicked() && self.digi_cfg_seeded {
                     self.digi_cfg_edit.auto_tx_freq = !auto;
                     cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
                 }
                 resp.on_hover_text(
-                    "Pick a different offset inside the 200 Hz window for every transmission. \
-                     This is the convention: two hundred hertz shared by everyone only works if \
-                     nobody parks in the middle of it. Off holds where the cursor is.",
+                    tr!("wspr-pick-different-offset-inside-200"),
                 );
             });
         }
@@ -709,7 +705,7 @@ impl SdroxideApp {
                 "Set your callsign and grid on the General tab of Settings to label your spots."
                     .to_string()
             } else {
-                "Set your callsign and grid on the General tab of Settings before transmitting."
+                tr!("wspr-set-your-callsign-grid-general")
                     .to_string()
             }
         } else if self.swl_mode() {

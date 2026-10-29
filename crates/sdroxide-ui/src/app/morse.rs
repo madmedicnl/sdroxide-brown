@@ -424,7 +424,7 @@ impl super::SdroxideApp {
         if !self.morse.show {
             return;
         }
-        let show = self.tool_window(ctx, "morse", "MORSE", [520.0, 430.0], true, |me, ui| {
+        let show = self.tool_window(ctx, "morse", &tr!("morse-morse"), [520.0, 430.0], true, |me, ui| {
             me.morse_body(ui);
         });
         self.morse.show = show;
@@ -727,7 +727,7 @@ impl super::SdroxideApp {
                 if self.morse.reveal {
                     ui.label(RichText::new(c.to_string()).size(16.0).strong());
                 }
-                if crate::chrome::chip(ui, false, "REPLAY").clicked() {
+                if crate::chrome::chip(ui, false, tr!("morse-replay")).clicked() {
                     self.morse.play_letter(c);
                 }
             }

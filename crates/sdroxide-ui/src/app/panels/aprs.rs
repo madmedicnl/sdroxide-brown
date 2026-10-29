@@ -176,10 +176,7 @@ impl SdroxideApp {
                                 }),
                         )
                         .on_hover_text(
-                            "How often to beacon your position, unattended. `off` — the default — \
-                             never beacons: selecting a mode must not put a station on the air. \
-                             Thirty minutes is the convention for a fixed station, oftener for a \
-                             moving one, and every beacon is somebody else's channel time.",
+                            tr!("aprs-how-often-beacon-your-position"),
                         );
                     if resp.changed() && cfg.aprs_beacon_minutes != before {
                         let cfg = cfg.clone();
@@ -194,12 +191,11 @@ impl SdroxideApp {
                             theme::INK_ON_CYAN(),
                         )
                         .on_hover_text(if !have_call {
-                            "This station has no callsign — see the warning to the left."
+                            tr!("aprs-station-has-no-callsign-see")
                         } else if !have_pos {
-                            "This station has no position to report — see the warning to the left."
+                            tr!("aprs-station-has-no-position-report")
                         } else {
-                            "Send one position report now, without waiting for the interval. It \
-                             waits for the channel to be clear like everything else."
+                            tr!("aprs-send-one-position-report-now")
                         })
                     })
                     .clicked()
@@ -794,13 +790,11 @@ impl SdroxideApp {
                         theme::INK_ON_CYAN(),
                     )
                     .on_hover_text(if !have_call {
-                        "This station has no callsign, so nothing can be transmitted. Set one under \
-                         Settings → General, or an APRS-specific one with its SSID under SETUP."
+                        tr!("aprs-station-has-no-callsign-so")
                     } else if !ready {
-                        "Needs a station to address and something to say."
+                        tr!("aprs-needs-station-address-something-say")
                     } else {
-                        "Send it, and keep retrying until the far end acknowledges. Messages are \
-                         the one thing on this channel that is answered."
+                        tr!("aprs-send-keep-retrying-until-far")
                     })
                 })
                 .clicked()

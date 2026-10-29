@@ -51,7 +51,7 @@ impl SdroxideApp {
             return;
         }
         let mut body_cmds = Vec::new();
-        let show = self.tool_window(ctx, "hd-radio", "HD Radio", [440.0, 360.0], true, |me, ui| {
+        let show = self.tool_window(ctx, "hd-radio", &tr!("hd-hd-radio"), [440.0, 360.0], true, |me, ui| {
             body_cmds = me.hd_body(ui);
         });
         cmds.extend(body_cmds);

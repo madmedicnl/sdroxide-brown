@@ -368,11 +368,9 @@ impl SdroxideApp {
     /// chip row (ADS-B, AIS, APRS, HFDL). Same switch as the operating panels'
     /// NIGHT chip, so turning it on anywhere turns it on everywhere.
     pub(in crate::app) fn night_chip(&mut self, ui: &mut egui::Ui) {
-        if crate::chrome::chip(ui, self.view.map_night, RichText::new("NIGHT").size(9.5))
+        if crate::chrome::chip(ui, self.view.map_night, RichText::new(tr!("panels-night")).size(9.5))
             .on_hover_text(
-                "Shade where the Sun is down, and the twilight between, so the grey line shows \
-                 on the map. Low bands go long and high bands close on the night side of it, \
-                 and the terminator itself is where the DX is.",
+                tr!("panels-shade-where-sun-down-twilight"),
             )
             .clicked()
         {
@@ -410,13 +408,7 @@ impl SdroxideApp {
                 self.view.prop_on_map = !on;
             }
             resp.on_hover_text(
-                "Shade the map by where signals are actually getting through, on each band. \
-                 Every reception is placed at the midpoint of its path — the patch of \
-                 ionosphere that bent it — not at the far station, so this is a map of the \
-                 sky rather than of where radio amateurs live. Built from paths this \
-                 station has taken part in, plus — when the Reverse Beacon Network is \
-                 switched on under Settings → Spots — what the world's skimmers are \
-                 hearing, which covers the bands this radio is not on.",
+                tr!("panels-shade-map-where-signals-are"),
             );
             // "Who heard me": the reporters that heard this callsign on the
             // current band, from PSK Reporter, drawn as rings at their own
@@ -1064,7 +1056,7 @@ impl SdroxideApp {
             let field = ui.add(
                 egui::TextEdit::singleline(&mut self.text_tx)
                     .desired_width(260.0)
-                    .hint_text("W1ABC W9XYZ FN42"),
+                    .hint_text(tr!("panels-w1abc-w9xyz-fn42")),
             );
             if field.changed() {
                 cmds.push(Command::DigiTxText(self.text_tx.clone()));
@@ -1098,7 +1090,7 @@ impl SdroxideApp {
             .clicked()
             {
                 let call = if self.digi_cfg_edit.my_call.is_empty() {
-                    "NOCALL".into()
+                    tr!("panels-nocall").into()
                 } else {
                     self.digi_cfg_edit.my_call.clone()
                 };
@@ -1111,8 +1103,7 @@ impl SdroxideApp {
         });
         ui.label(
             RichText::new(
-                "The message repeats for as long as transmit is held — a meteor catches \
-                 whatever part of it is passing.",
+                tr!("panels-message-repeats-long-transmit-held"),
             )
             .size(9.5)
             .color(crate::theme::CYAN_DIM()),

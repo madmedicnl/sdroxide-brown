@@ -67,7 +67,7 @@ pub(in crate::app) fn settings_controls_tab(
     let cfg = &mut *io.input_edit;
     let key_capture = &mut *io.key_capture;
 
-    ui.label(RichText::new("Keyboard").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(RichText::new(tr!("settings-controls-keyboard")).size(14.0).strong().color(crate::theme::CYAN()));
     ui.add_space(4.0);
     super::note(
         ui,
@@ -85,17 +85,17 @@ pub(in crate::app) fn settings_controls_tab(
         .min_row_height(ui.spacing().interact_size.y)
         .striped(true)
         .show(ui, |ui| {
-            ui.label(RichText::new("Shortcut").small().weak());
-            ui.label(RichText::new("Does").small().weak());
-            ui.label(RichText::new("Step / mode").small().weak());
-            ui.label(RichText::new("Accel").small().weak());
-            ui.label(RichText::new("On").small().weak());
+            ui.label(RichText::new(tr!("settings-controls-shortcut")).small().weak());
+            ui.label(RichText::new(tr!("settings-controls-does")).small().weak());
+            ui.label(RichText::new(tr!("settings-controls-step-mode")).small().weak());
+            ui.label(RichText::new(tr!("settings-controls-accel")).small().weak());
+            ui.label(RichText::new(tr!("settings-controls-on")).small().weak());
             ui.label("");
             ui.end_row();
 
             for (i, b) in cfg.keys.iter_mut().enumerate() {
                 let capturing = *key_capture == Some(i);
-                let label = if capturing { "press a key…".to_string() } else { b.chord.label() };
+                let label = if capturing { tr!("settings-controls-press-key").to_string() } else { b.chord.label() };
                 if crate::chrome::chip(ui, capturing, RichText::new(label).monospace()).clicked() {
                     *key_capture = if capturing { None } else { Some(i) };
                 }
@@ -136,7 +136,7 @@ pub(in crate::app) fn settings_controls_tab(
                 }
 
                 crate::chrome::checkbox(ui, &mut b.enabled, "");
-                if ui.small_button("✕").on_hover_text("Remove this binding").clicked() {
+                if ui.small_button("✕").on_hover_text(tr!("settings-controls-remove-binding")).clicked() {
                     remove = Some(i);
                 }
                 ui.end_row();
@@ -206,15 +206,15 @@ pub(in crate::app) fn settings_controls_tab(
         .spacing([12.0, 6.0])
         .min_row_height(ui.spacing().interact_size.y)
         .show(ui, |ui| {
-            ui.label("Wheel");
+            ui.label(tr!("settings-controls-wheel"));
             wheel_action_combo(ui, "wheel-plain", &mut w.wheel);
             ui.end_row();
 
-            ui.label("Wheel + Shift");
+            ui.label(tr!("settings-controls-wheel-shift"));
             wheel_action_combo(ui, "wheel-shift", &mut w.wheel_shift);
             ui.end_row();
 
-            ui.label("Tune step");
+            ui.label(tr!("settings-controls-tune-step"));
             ui.add(
                 egui::DragValue::new(&mut w.tune_step_hz)
                     .speed(10.0)
@@ -223,11 +223,11 @@ pub(in crate::app) fn settings_controls_tab(
             );
             ui.end_row();
 
-            ui.label("Zoom rate");
+            ui.label(tr!("settings-controls-zoom-rate"));
             ui.add(egui::DragValue::new(&mut w.zoom_rate).speed(0.05).range(0.1..=5.0));
             ui.end_row();
 
-            ui.label("Click-tune rounding");
+            ui.label(tr!("settings-controls-click-tune-rounding"));
             ui.add(
                 egui::DragValue::new(&mut w.click_tune_step_hz)
                     .speed(1.0)
@@ -264,7 +264,7 @@ pub(in crate::app) fn settings_controls_tab(
     ui.separator();
     ui.end_row();
     ui.add_space(6.0);
-    ui.label(RichText::new("Mouse buttons").size(14.0).strong().color(crate::theme::CYAN()));
+    ui.label(RichText::new(tr!("settings-controls-mouse-buttons")).size(14.0).strong().color(crate::theme::CYAN()));
     ui.add_space(4.0);
     super::note(
         ui,
@@ -317,7 +317,7 @@ pub(in crate::app) fn settings_controls_tab(
     }
 
     ui.add_space(8.0);
-    super::note(ui, "F1 always opens this manual, even while typing, so it is not rebindable.");
+    super::note(ui, &tr!("settings-controls-f1-always-opens-manual-even"));
 
     ui.add_space(10.0);
     ui.separator();
@@ -362,7 +362,7 @@ fn settings_midi_section(
     if !status.supported {
         super::note(
             ui,
-            "MIDI controllers need the native app — the browser client has no MIDI access.",
+            &tr!("settings-controls-midi-controllers-need-native-app"),
         );
         return;
     }
@@ -380,7 +380,7 @@ fn settings_midi_section(
             .spacing([12.0, 6.0])
             .min_row_height(ui.spacing().interact_size.y)
             .show(ui, |ui| {
-                ui.label("Controller");
+                ui.label(tr!("settings-controls-controller"));
                 midi_port_combo(
                     ui,
                     "midi-in",
@@ -390,7 +390,7 @@ fn settings_midi_section(
                 );
                 ui.end_row();
 
-                ui.label("Feedback to");
+                ui.label(tr!("settings-controls-feedback"));
                 midi_port_combo(
                     ui,
                     "midi-out",
@@ -413,7 +413,7 @@ fn settings_midi_section(
             } else if let Some(e) = &status.error {
                 ui.label(RichText::new(e).color(Color32::from_rgb(230, 90, 80)));
             } else {
-                super::note(ui, "Not connected.");
+                super::note(ui, &tr!("settings-controls-not-connected"));
             }
         });
         ui.add_space(4.0);
@@ -421,7 +421,7 @@ fn settings_midi_section(
         // surface bindable at all.
         match last_midi {
             Some((msg, v)) => super::note(ui, &format!("Last message: {}  value {v}", msg.label())),
-            None => super::note(ui, "Move a control to see it here."),
+            None => super::note(ui, &tr!("settings-controls-move-control-see-here")),
         };
     });
 
@@ -433,20 +433,20 @@ fn settings_midi_section(
         .min_row_height(ui.spacing().interact_size.y)
         .striped(true)
         .show(ui, |ui| {
-            ui.label(RichText::new("Control").small().weak());
-            ui.label(RichText::new("Does").small().weak());
-            ui.label(RichText::new("Reads as").small().weak());
-            ui.label(RichText::new("Step / mode").small().weak());
-            ui.label(RichText::new("LED").small().weak());
-            ui.label(RichText::new("On").small().weak());
+            ui.label(RichText::new(tr!("settings-controls-control")).small().weak());
+            ui.label(RichText::new(tr!("settings-controls-does")).small().weak());
+            ui.label(RichText::new(tr!("settings-controls-reads")).small().weak());
+            ui.label(RichText::new(tr!("settings-controls-step-mode")).small().weak());
+            ui.label(RichText::new(tr!("settings-controls-led")).small().weak());
+            ui.label(RichText::new(tr!("settings-controls-on")).small().weak());
             ui.label("");
             ui.end_row();
 
             for (i, b) in cfg.midi.bindings.iter_mut().enumerate() {
                 let learning = learn.map(|l| l.row) == Some(i);
-                let label = if learning { "move it…".to_string() } else { b.msg.label() };
+                let label = if learning { tr!("settings-controls-move").to_string() } else { b.msg.label() };
                 if crate::chrome::chip(ui, learning, RichText::new(label).monospace())
-                    .on_hover_text("Click, then move the control you want to bind")
+                    .on_hover_text(tr!("settings-controls-click-then-move-control-you"))
                     .clicked()
                 {
                     *learn = if learning { None } else { Some(crate::input::MidiLearn { row: i }) };
@@ -480,7 +480,7 @@ fn settings_midi_section(
                                     .range(0.0..=4.0)
                                     .prefix("×"),
                             )
-                            .on_hover_text("Speed sensitivity: spin faster to tune faster");
+                            .on_hover_text(tr!("settings-controls-speed-sensitivity-spin-faster-tune"));
                             // Sign/magnitude and 64-centred encoders are
                             // indistinguishable from small movements, so a wrong
                             // guess shows up as a knob that turns the wrong way.
@@ -501,7 +501,7 @@ fn settings_midi_section(
                 }
 
                 crate::chrome::checkbox(ui, &mut b.feedback, "")
-                    .on_hover_text("Send the current value back, to light an LED or move a fader");
+                    .on_hover_text(tr!("settings-controls-send-current-value-back-light"));
                 crate::chrome::checkbox(ui, &mut b.enabled, "");
                 if ui.small_button("✕").clicked() {
                     remove = Some(i);

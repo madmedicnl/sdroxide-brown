@@ -157,7 +157,7 @@ impl SdroxideApp {
     /// The BANDS window: one row per band, forecast beside evidence.
     pub(in crate::app) fn bands_window(&mut self, ctx: &egui::Context) {
         let open = self.show_bands;
-        let show = self.tool_window(ctx, "bands", "BANDS", [520.0, 460.0], open, |me, ui| {
+        let show = self.tool_window(ctx, "bands", &tr!("bands-bands"), [520.0, 460.0], open, |me, ui| {
             me.bands_body(ui);
         });
         self.show_bands = show;
@@ -203,13 +203,13 @@ impl SdroxideApp {
             egui::Grid::new("bands_grid").num_columns(7).spacing([14.0, 3.0]).striped(true).show(
                 ui,
                 |ui| {
-                    ui.label(dim("BAND"));
-                    ui.label(dim("CONDX"));
+                    ui.label(dim(&tr!("bands-band")));
+                    ui.label(dim(&tr!("bands-condx")));
                     ui.label(dim("WSPR"));
                     ui.label(dim("PSK"));
-                    ui.label(dim("PATHS"));
-                    ui.label(dim("REACH"));
-                    ui.label(dim("BEST"));
+                    ui.label(dim(&tr!("bands-paths")));
+                    ui.label(dim(&tr!("bands-reach")));
+                    ui.label(dim(&tr!("bands-best")));
                     ui.end_row();
 
                     for b in Band::ALL {
@@ -372,7 +372,7 @@ impl SdroxideApp {
                 ui.label(dim(s.code)).on_hover_text(&hover);
                 ui.label(RichText::new(format!("ZHR {}", s.zhr)).size(10.5)).on_hover_text(&hover);
                 if a.at_peak() {
-                    ui.label(RichText::new("PEAK").size(9.5).strong().color(crate::theme::GREEN()))
+                    ui.label(RichText::new(tr!("bands-peak")).size(9.5).strong().color(crate::theme::GREEN()))
                         .on_hover_text(&hover);
                 }
                 if a.radiant_up() {
@@ -410,7 +410,7 @@ impl SdroxideApp {
         let active = sdroxide_types::ibp_active_at(now, home);
         let dim = |s: &str| RichText::new(s.to_string()).size(9.5).color(dim_ink());
         ui.add_space(12.0);
-        ui.label(RichText::new("IBP BEACONS").size(10.0).strong().color(crate::theme::CYAN_DIM()));
+        ui.label(RichText::new(tr!("bands-ibp-beacons")).size(10.0).strong().color(crate::theme::CYAN_DIM()));
         ui.add_space(2.0);
         ui.label(dim(&format!(
             "NCDXF/IARU · next beacon in {} s",

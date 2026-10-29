@@ -197,9 +197,7 @@ pub(in crate::app) fn remote_access_settings(ui: &mut egui::Ui, access: &mut Rem
     ui.add_space(6.0);
     super::note_at(
         ui,
-        "What a remote client — the browser page, or another sdroxide started with \
-             --connect — has to give before this station will let it operate. Applies in server \
-             mode (--server); the next sign-in picks up a change, with no restart.",
+        &tr!("settings-general-what-remote-client-browser-page"),
         Some(11.5),
     );
     ui.add_space(8.0);
@@ -208,13 +206,13 @@ pub(in crate::app) fn remote_access_settings(ui: &mut egui::Ui, access: &mut Rem
         .spacing([12.0, 8.0])
         .min_row_height(ui.spacing().interact_size.y)
         .show(ui, |ui| {
-            ui.label("Username");
+            ui.label(tr!("settings-general-username"));
             crate::chrome::field(
                 ui,
                 egui::TextEdit::singleline(&mut access.username).desired_width(200.0),
             );
             ui.end_row();
-            ui.label("Password");
+            ui.label(tr!("settings-general-password"));
             crate::chrome::field(
                 ui,
                 egui::TextEdit::singleline(&mut access.password)
@@ -273,7 +271,7 @@ pub(in crate::app) fn settings_rx_audio_gain(
 ) {
     ui.add_space(8.0);
     ui.horizontal(|ui| {
-        ui.label(RichText::new("Receive audio gain").strong());
+        ui.label(RichText::new(tr!("settings-general-receive-audio-gain")).strong());
         ui.end_row();
         ui.add(
             egui::DragValue::new(&mut cfg.rx_audio_gain_db)
@@ -377,7 +375,7 @@ impl SdroxideApp {
         export: &mut bool,
         import: &mut bool,
     ) {
-        ui.label(RichText::new("Settings file").strong());
+        ui.label(RichText::new(tr!("settings-general-settings-file")).strong());
         ui.end_row();
         if self.ctrl.engine_is_remote() {
             ui.label(
@@ -613,7 +611,7 @@ impl SdroxideApp {
     /// The command is sent only on an actual change, since a `DragValue` reports
     /// its value every frame it is dragged and each one would be a config write.
     pub(in crate::app) fn settings_swr_guard(&self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
-        ui.label(RichText::new("SWR guard").strong());
+        ui.label(RichText::new(tr!("settings-general-swr-guard")).strong());
         ui.end_row();
         ui.add_space(4.0);
 
@@ -699,7 +697,7 @@ impl SdroxideApp {
         ui: &mut egui::Ui,
         cmds: &mut Vec<sdroxide_types::Command>,
     ) {
-        ui.label(RichText::new("Per-mode settings").strong());
+        ui.label(RichText::new(tr!("settings-general-per-mode-settings")).strong());
         ui.end_row();
         ui.add_space(4.0);
         ui.horizontal_wrapped(|ui| {
@@ -717,11 +715,7 @@ impl SdroxideApp {
         ui.add_space(4.0);
         super::note_rich(
             ui,
-            "Selecting a mode lays that mode's own starting values for AGC, squelch, noise \
-                 reduction, the notch and the stereo switches on the receiver, and changing one \
-                 remembers it for that mode alone. The circular-arrow chip at the end of the \
-                 receiver's filter/noise row lists what has been changed and puts the current \
-                 mode back.",
+            &tr!("settings-general-selecting-mode-lays-mode-s"),
             Some(10.5),
             None,
         );

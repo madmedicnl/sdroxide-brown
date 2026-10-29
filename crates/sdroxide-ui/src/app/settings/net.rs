@@ -284,7 +284,7 @@ pub(in crate::app) fn operator_identity_note(
 ) {
     net_heading(ui, &tr!("settings-net-operator"));
     if !seeded {
-        super::note(ui, "Callsign and grid are set on the General tab.");
+        super::note(ui, &tr!("settings-net-callsign-grid-are-set-general"));
         return;
     }
     let (call, grid) = (digi.my_call.trim(), digi.my_grid.trim());
@@ -370,7 +370,7 @@ pub(in crate::app) fn settings_freedv_tab(
             ui,
             &format!("Reporting as {call} / {grid} — SDRoxide {}", env!("CARGO_PKG_VERSION")),
         );
-        super::note(ui, "Callsign and grid are set on the General tab.");
+        super::note(ui, &tr!("settings-net-callsign-grid-are-set-general"));
     }
     // The status line is shared by every network feed, so only show it here
     // when it is actually ours.
@@ -447,8 +447,7 @@ pub(in crate::app) fn broadcast_stations_settings(
     ui.add_space(4.0);
     super::note(
         ui,
-        "Your own stations and corrections go in this file. sdroxide never writes it, and \
-             an entry here replaces a scheduled one with the same name and frequency.",
+        &tr!("settings-net-your-own-stations-corrections-go"),
     );
     if let Ok(p) = sdroxide_config::broadcast_stations_path() {
         ui.add(
@@ -611,8 +610,7 @@ pub(in crate::app) fn broadcast_stations_settings(
 ) {
     super::note(
         ui,
-        "The broadcast stations labelled on the waterfall come from the list built into \
-             this build. Editing them needs the desktop app.",
+        tr!("settings-net-broadcast-stations-labelled-waterfall-come"),
     );
 }
 
@@ -656,7 +654,7 @@ impl crate::app::SdroxideApp {
                 cmds.push(sdroxide_types::Command::TestLogin(target));
             }
             if pending {
-                super::note_at(ui, "checking…", Some(11.0));
+                super::note_at(ui, &tr!("settings-net-checking"), Some(11.0));
             } else if let Some(r) = self.login_tests.get(&target) {
                 let (mark, colour) = if r.ok {
                     ("✔", crate::theme::GREEN())

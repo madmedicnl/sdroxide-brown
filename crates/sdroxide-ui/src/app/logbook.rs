@@ -435,7 +435,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "logbook",
-            "LOGBOOK",
+            &tr!("logbook-logbook"),
             [720.0, 560.0],
             self.show_logbook,
             |me, ui| me.logbook_body(ui, cmds),
@@ -450,7 +450,7 @@ impl SdroxideApp {
         crate::chrome::window_body_bg(ui);
         ui.horizontal(|ui| {
             let adding = self.log_edit.as_ref().is_some_and(|f| f.id == 0);
-            if crate::chrome::chip(ui, adding, "+ NEW ENTRY").clicked() {
+            if crate::chrome::chip(ui, adding, tr!("logbook-new-entry")).clicked() {
                 // The frequency of the contact, not the dial. In CW
                 // the dial sits a sidetone-pitch below the signal and
                 // in RTTY a tone pair below it, so logging the readout
@@ -472,17 +472,17 @@ impl SdroxideApp {
                         let txt = sdroxide_types::qso_log_to_text(&self.qso_log);
                         crate::download::save("sdroxide-log.txt", txt.as_bytes());
                     }
-                    if crate::chrome::chip(ui, false, "ADIF").clicked() {
+                    if crate::chrome::chip(ui, false, tr!("logbook-adif")).clicked() {
                         let adif = sdroxide_types::qso_log_to_adif(&self.qso_log);
                         crate::download::save("sdroxide-log.adi", adif.as_bytes());
                     }
                 });
-                if crate::chrome::chip(ui, false, "IMPORT")
-                    .on_hover_text("Import QSOs from an ADIF (.adi or .adif) file")
+                if crate::chrome::chip(ui, false, tr!("logbook-import"))
+                    .on_hover_text(tr!("logbook-import-qsos-adif-adi-adif"))
                     .clicked()
                 {
                     crate::download::load_text(
-                        "ADIF",
+                        &tr!("logbook-adif"),
                         &["adi", "adif"],
                         self.adif_import_inbox.clone(),
                     );
@@ -856,17 +856,17 @@ impl SdroxideApp {
                     };
                     let mut qsl_tip = String::new();
                     for (on, name) in [
-                        (r.lotw_rcvd, "LoTW ✓"),
-                        (r.eqsl_rcvd, "eQSL ✓"),
-                        (r.qsl_rcvd, "card ✓"),
-                        (r.lotw_sent, "LoTW ↑"),
-                        (r.eqsl_sent, "eQSL ↑"),
-                        (r.qrz_sent, "QRZ ↑"),
-                        (r.hamqth_sent, "HamQTH ↑"),
-                        (r.clublog_sent, "Club Log ↑"),
-                        (r.wrl_sent, "WRL ↑"),
-                        (r.log11dx_sent, "LOG11DX ↑"),
-                        (r.wavelog_sent, "Wavelog ↑"),
+                        (r.lotw_rcvd, tr!("logbook-lotw")),
+                        (r.eqsl_rcvd, tr!("logbook-eqsl")),
+                        (r.qsl_rcvd, tr!("logbook-card")),
+                        (r.lotw_sent, tr!("logbook-lotw-2")),
+                        (r.eqsl_sent, tr!("logbook-eqsl-2")),
+                        (r.qrz_sent, tr!("logbook-qrz")),
+                        (r.hamqth_sent, tr!("logbook-hamqth")),
+                        (r.clublog_sent, tr!("logbook-club-log")),
+                        (r.wrl_sent, "WRL ↑".to_string()),
+                        (r.log11dx_sent, "LOG11DX ↑".to_string()),
+                        (r.wavelog_sent, tr!("logbook-wavelog")),
                     ] {
                         if on {
                             if !qsl_tip.is_empty() {

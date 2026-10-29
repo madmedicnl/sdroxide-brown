@@ -425,7 +425,7 @@ impl SdroxideApp {
         let open = self.tool_window(
             ctx,
             "vdl2-setup",
-            "VDL2 Setup",
+            &tr!("vdl2-vdl2-setup"),
             [420.0, 460.0],
             self.show_vdl2_setup,
             |me, ui| me.vdl2_setup_body(ui, &mut cfg),
@@ -441,13 +441,10 @@ impl SdroxideApp {
     /// of its own.
     fn vdl2_setup_body(&mut self, ui: &mut egui::Ui, cfg: &mut sdroxide_types::Vdl2Settings) {
         crate::chrome::window_body_bg(ui);
-        ui.label(RichText::new("Channels").strong());
+        ui.label(RichText::new(tr!("vdl2-channels")).strong());
         ui.label(
             RichText::new(
-                "Every 25 kHz slot from 136.650 to 136.975 MHz. One downconverter \
-                 each, all inside the same receiver window. Switching one off saves \
-                 a little processor time; it does not make the others any more \
-                 sensitive.",
+                tr!("vdl2-every-25-khz-slot-136"),
             )
             .size(10.0)
             .weak(),
@@ -481,25 +478,23 @@ impl SdroxideApp {
         ui.add_space(6.0);
 
         egui::Grid::new("vdl2-cfg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-            ui.label("Burst threshold");
+            ui.label(tr!("vdl2-burst-threshold"));
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut cfg.threshold_db).range(3..=40).suffix(" dB"));
-                ui.label(RichText::new("above each channel's own noise floor").size(9.5).weak());
+                ui.label(RichText::new(tr!("vdl2-above-each-channel-s-own")).size(9.5).weak());
             });
             ui.end_row();
             ui.label("");
             ui.label(
                 RichText::new(
-                    "Lower catches weaker transmissions and costs processor time on \
-                     noise; higher misses them. The floor is learned per channel and \
-                     a change here does not throw it away.",
+                    tr!("vdl2-lower-catches-weaker-transmissions-costs"),
                 )
                 .size(10.0)
                 .weak(),
             );
             ui.end_row();
 
-            ui.label("Keep in the log");
+            ui.label(tr!("vdl2-keep-log"));
             ui.horizontal(|ui| {
                 ui.add(
                     egui::DragValue::new(&mut cfg.max_messages)
@@ -509,36 +504,33 @@ impl SdroxideApp {
             });
             ui.end_row();
 
-            ui.label("Track at most");
+            ui.label(tr!("vdl2-track-most"));
             ui.horizontal(|ui| {
                 ui.add(
                     egui::DragValue::new(&mut cfg.max_stations)
                         .range(10..=sdroxide_types::VDL2_STATION_MAX)
                         .suffix(" stations"),
                 );
-                ui.label(RichText::new("the longest silent go first").size(9.5).weak());
+                ui.label(RichText::new(tr!("vdl2-longest-silent-go-first")).size(9.5).weak());
             });
             ui.end_row();
 
-            ui.label("Forget a station after");
+            ui.label(tr!("vdl2-forget-station-after"));
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut cfg.drop_list_s).range(30..=21_600).suffix(" s"));
-                ui.label(RichText::new("with nothing heard from it").size(9.5).weak());
+                ui.label(RichText::new(tr!("vdl2-nothing-heard")).size(9.5).weak());
             });
             ui.end_row();
 
-            ui.label("Show unread payloads");
+            ui.label(tr!("vdl2-show-unread-payloads"));
             ui.horizontal(|ui| {
-                ui.checkbox(&mut cfg.show_other, "as hex");
+                ui.checkbox(&mut cfg.show_other, tr!("vdl2-hex"));
             });
             ui.end_row();
             ui.label("");
             ui.label(
                 RichText::new(
-                    "Frames carrying X.25, CLNP or the datalink applications above \
-                     them. SDRoxide names them and shows the bytes rather than \
-                     reading them, and hiding them would hide how much of the \
-                     traffic that is.",
+                    tr!("vdl2-frames-carrying-x-25-clnp"),
                 )
                 .size(10.0)
                 .weak(),

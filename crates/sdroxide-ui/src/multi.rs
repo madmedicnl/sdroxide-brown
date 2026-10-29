@@ -1047,11 +1047,11 @@ impl MultiApp {
                         .inner
                     };
                     let tip = if split_on {
-                        "Close this radio's split view"
+                        tr!("multi-close-radio-s-split-view")
                     } else if splittable {
-                        "Open this radio in a split view of its own"
+                        tr!("multi-open-radio-split-view-own")
                     } else {
-                        "Two radios side by side need a wider window — this screen shows one at a time"
+                        "Two radios side by side need a wider window — this screen shows one at a time".to_string()
                     };
                     let split = split.on_hover_text(tip);
                     if splittable && split.clicked() {
