@@ -3571,15 +3571,15 @@ struct Engine {
     /// [`Engine::new_text_lines`].
     text_feed_seen: String,
     /// How many VDL2 messages have already been sent to the decoded-text feed.
-    vdl2_feed_seen: usize,
+    vdl2_feed_seen: i64,
     /// How many NAVTEX messages have already been sent to the decoded-text feed.
-    navtex_feed_seen: usize,
+    navtex_feed_seen: i64,
     /// How many ACARS messages have already been sent to the decoded-text feed.
-    acars_feed_seen: usize,
+    acars_feed_seen: i64,
     /// How many DSC messages have already been sent to the decoded-text feed.
-    dsc_feed_seen: usize,
+    dsc_feed_seen: i64,
     /// How many HFDL log entries have already been sent to the decoded-text feed.
-    hfdl_feed_seen: usize,
+    hfdl_feed_seen: i64,
     /// The band the last tick saw, so a crossing into another one can be told
     /// from the tuning about inside a band that goes on all session. See
     /// [`Engine::poll_band_change`].
@@ -7936,10 +7936,11 @@ impl Engine {
             return;
         }
         // The log is a rolling window; if it shrank (cleared), start over.
-        if st.messages.len() < self.vdl2_feed_seen {
+        if !st.messages.is_empty() && st.messages[0].at > self.vdl2_feed_seen {
             self.vdl2_feed_seen = 0;
         }
-        for m in &st.messages[self.vdl2_feed_seen..] {
+        let start = st.messages.iter().position(|m| m.at > self.vdl2_feed_seen).unwrap_or(st.messages.len());
+        for m in &st.messages[start..] {
             self.send_feed(FeedLine {
                 unix: m.at,
                 kind: "decode",
@@ -7952,7 +7953,7 @@ impl Engine {
                 text: &m.summary(),
             });
         }
-        self.vdl2_feed_seen = st.messages.len();
+        if let Some(m) = st.messages.last() { self.vdl2_feed_seen = m.at; }
     }
 
     /// NAVTEX messages, one per decoded message. The summary includes the
@@ -7962,10 +7963,11 @@ impl Engine {
             return;
         }
         let Some(ns) = &st.navtex else { return };
-        if ns.messages.len() < self.navtex_feed_seen {
+        if !ns.messages.is_empty() && ns.messages[0].at > self.navtex_feed_seen {
             self.navtex_feed_seen = 0;
         }
-        for m in &ns.messages[self.navtex_feed_seen..] {
+        let start = ns.messages.iter().position(|m| m.at > self.navtex_feed_seen).unwrap_or(ns.messages.len());
+        for m in &ns.messages[start..] {
             let text = format!("ZCZC {}{}{} {}", m.station, m.kind, m.serial, m.text);
             self.send_feed(FeedLine {
                 unix: m.at,
@@ -7979,15 +7981,16 @@ impl Engine {
                 text: &text,
             });
         }
-        self.navtex_feed_seen = ns.messages.len();
+        if let Some(m) = ns.messages.last() { self.navtex_feed_seen = m.at; }
     }
 
     /// ACARS messages, one per decoded message.
     fn feed_acars(&mut self, st: &sdroxide_types::DigiStatus) {
         if self.decode_feed.is_none() { return; }
         let Some(as_) = &st.acars else { return };
-        if as_.messages.len() < self.acars_feed_seen { self.acars_feed_seen = 0; }
-        for m in &as_.messages[self.acars_feed_seen..] {
+        if !as_.messages.is_empty() && as_.messages[0].at > self.acars_feed_seen { self.acars_feed_seen = 0; }
+        let start = as_.messages.iter().position(|m| m.at > self.acars_feed_seen).unwrap_or(as_.messages.len());
+        for m in &as_.messages[start..] {
             let text = format!("{} {} {}", m.label, m.address, m.text);
             self.send_feed(FeedLine {
                 unix: m.at,
@@ -8001,15 +8004,16 @@ impl Engine {
                 text: &text,
             });
         }
-        self.acars_feed_seen = as_.messages.len();
+        if let Some(m) = as_.messages.last() { self.acars_feed_seen = m.at; }
     }
 
     /// DSC messages, one per decoded sequence.
     fn feed_dsc(&mut self, st: &sdroxide_types::DigiStatus) {
         if self.decode_feed.is_none() { return; }
         let Some(ds) = &st.dsc else { return };
-        if ds.messages.len() < self.dsc_feed_seen { self.dsc_feed_seen = 0; }
-        for m in &ds.messages[self.dsc_feed_seen..] {
+        if !ds.messages.is_empty() && ds.messages[0].at > self.dsc_feed_seen { self.dsc_feed_seen = 0; }
+        let start = ds.messages.iter().position(|m| m.at > self.dsc_feed_seen).unwrap_or(ds.messages.len());
+        for m in &ds.messages[start..] {
             let text = format!("{:?} {} -> {}", m.message.category, m.message.self_mmsi, m.message.target_mmsi);
             self.send_feed(FeedLine {
                 unix: m.at,
@@ -8023,14 +8027,15 @@ impl Engine {
                 text: &text,
             });
         }
-        self.dsc_feed_seen = ds.messages.len();
+        if let Some(m) = ds.messages.last() { self.dsc_feed_seen = m.at; }
     }
 
     /// HFDL log entries, one per decoded event.
     fn feed_hfdl(&mut self, st: &sdroxide_types::HfdlStatus) {
         if self.decode_feed.is_none() { return; }
-        if st.log.len() < self.hfdl_feed_seen { self.hfdl_feed_seen = 0; }
-        for e in &st.log[self.hfdl_feed_seen..] {
+        if !st.log.is_empty() && st.log[0].unix > self.hfdl_feed_seen { self.hfdl_feed_seen = 0; }
+        let start = st.log.iter().position(|e| e.unix > self.hfdl_feed_seen).unwrap_or(st.log.len());
+        for e in &st.log[start..] {
             let text = format!("{} {}", e.kind, e.gs.as_deref().unwrap_or(""));
             self.send_feed(FeedLine {
                 unix: e.unix,
@@ -8044,7 +8049,7 @@ impl Engine {
                 text: &text,
             });
         }
-        self.hfdl_feed_seen = st.log.len();
+        if let Some(e) = st.log.last() { self.hfdl_feed_seen = e.unix; }
     }
 
     /// Broadcast the station's state as WSJT-X reports it.
