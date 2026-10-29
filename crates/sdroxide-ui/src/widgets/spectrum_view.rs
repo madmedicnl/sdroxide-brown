@@ -452,6 +452,17 @@ fn centring_due(was: Option<(f64, f64)>, vfo: f64, span: f64) -> bool {
     }
 }
 
+/// Whether the anchor has left the middle of the view by more than a display
+/// column. CTR on means the frequency is in the middle on **every** frame, so a
+/// pan, a fit or a mode change that moved the view without moving the dial or
+/// the span is answered too; the edge-triggered [`centring_due`] alone left the
+/// line wherever such a move put it until CTR was switched off and on again.
+/// One column is the tolerance, so a sub-pixel remainder never makes it chase.
+fn off_centre(view: &ViewState, anchor: f64, width_px: f32) -> bool {
+    let mid = (view.view_lo_hz + view.view_hi_hz) / 2.0;
+    (anchor - mid).abs() > view.span() / f64::from(width_px.max(1.0))
+}
+
 /// The sub receiver's colour, on the panadapter and on its control module.
 /// Deliberately nothing like the main receiver's red, the amber VFO/RTTY
 /// markers, or the cyan the digital modes use: two receivers on one waterfall
@@ -2216,7 +2227,9 @@ pub fn show_ext(
         // zoom used to re-arm `asked` every frame, which made CTR chase left
         // and right. With a request pending we let the view zoom locally and
         // wait for it to settle.
-        if asked.is_none() && centring_due(centred_at, vfo, view.span()) {
+        if asked.is_none()
+            && (centring_due(centred_at, vfo, view.span()) || off_centre(view, vfo, rect.width()))
+        {
             let over = center_on_dial(view, vfo, zoom_center, zoom_span, rect.width());
             let before = dev_center;
             pan_center(&mut dev_center, state, over, pan, cmds);
@@ -4635,7 +4648,10 @@ mod ctr_zoom_sim {
                     }
                 }
             }
-            if asked.is_none() && centring_due(self.centred_at, vfo, view.span()) {
+            if asked.is_none()
+                && (centring_due(self.centred_at, vfo, view.span())
+                    || off_centre(view, vfo, rect.width()))
+            {
                 let over = center_on_dial(view, vfo, zoom_center, zoom_span, rect.width());
                 let before = dev_center;
                 pan_center(&mut dev_center, state, over, self.pan, &mut cmds);
@@ -4735,6 +4751,62 @@ mod ctr_zoom_sim {
             }
         }
         assert!(failures.is_empty(), "CTR left the middle:\n{}", failures.join("\n"));
+    }
+
+    /// Frames until `sim` has settled, then the offset the operator sees.
+    fn settled(sim: &mut Sim, frames: usize) -> Seen {
+        let mut seen = sim.frame(500.0, 1.0);
+        for _ in 0..frames {
+            seen = sim.frame(500.0, 1.0);
+        }
+        seen
+    }
+
+    /// A pan of the axis, the keyboard's pan keys, a drag: the view moves and
+    /// neither the dial nor the span does. CTR on brings the dial back.
+    #[test]
+    fn a_pan_with_ctr_on_is_brought_back_to_the_middle() {
+        for lag in [0, 3] {
+            for guard in [0.0, 300_000.0] {
+                for shift in [-400_000.0_f64, 25_000.0, 400_000.0] {
+                    let mut sim = Sim::new(lag, guard);
+                    settled(&mut sim, 10);
+                    // Zoomed in first, so there is room to pan inside the window.
+                    for _ in 0..30 {
+                        sim.frame(500.0, 0.9);
+                    }
+                    let span = sim.view.span();
+                    sim.view.view_lo_hz += shift.min(span);
+                    sim.view.view_hi_hz += shift.min(span);
+                    let seen = settled(&mut sim, lag + 6);
+                    assert!(
+                        seen.off_hz.abs() <= seen.span / WIDTH as f64,
+                        "lag={lag} guard={guard} shift={shift}: dial {:+.0} Hz off the middle",
+                        seen.off_hz
+                    );
+                }
+            }
+        }
+    }
+
+    /// `Fit` puts the view on the front end's centre, which a zero-IF front end
+    /// keeps a guard away from the dial.
+    #[test]
+    fn a_fit_with_ctr_on_leaves_the_dial_in_the_middle() {
+        for lag in [0, 3] {
+            let mut sim = Sim::new(lag, 300_000.0);
+            settled(&mut sim, 10);
+            for _ in 0..20 {
+                sim.frame(500.0, 0.85);
+            }
+            sim.view.fit(sim.state.center_hz, DEV_SPAN);
+            let seen = settled(&mut sim, lag + 6);
+            assert!(
+                seen.off_hz.abs() <= seen.span / WIDTH as f64,
+                "lag={lag}: dial {:+.0} Hz off the middle after a fit",
+                seen.off_hz
+            );
+        }
     }
 
     /// Notch after notch of a fast wheel or a quick pinch.
