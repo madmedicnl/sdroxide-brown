@@ -997,7 +997,7 @@ fn draw_ism_box(p: &egui::Painter, b: &IsmBox, label: &IsmLabel, hovered: bool) 
 
 /// Kind tint, brightened on hover.
 fn net_spot_color(spot: &Spot, hovered: bool) -> Color32 {
-    let (r, g, b) = crate::theme::spot_color(spot.kind);
+    let (r, g, b) = crate::theme::spot_color_for(spot);
     if hovered { Color32::from_rgb(r, g, b) } else { Color32::from_rgba_unmultiplied(r, g, b, 225) }
 }
 
