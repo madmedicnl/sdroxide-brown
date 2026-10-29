@@ -381,10 +381,7 @@ mod tests {
     /// Every English message is asked for somewhere, so a translator is never
     /// given text nobody will see. A message is used when its id appears as a
     /// string in the source — through `tr!` or otherwise.
-    // Ignored here: this tree keeps its own panels where they diverge from the
-    // translated ones, so some messages are not asked for yet.
     #[test]
-    #[ignore]
     fn every_english_message_is_used() {
         fn sources(dir: &std::path::Path, out: &mut String) {
             for entry in std::fs::read_dir(dir).unwrap() {

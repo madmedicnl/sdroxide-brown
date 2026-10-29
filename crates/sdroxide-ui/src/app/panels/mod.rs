@@ -499,6 +499,9 @@ fn pane_message(name: &str) -> Option<String> {
         "READING" => tr!("pane-reading"),
         "RECEIVE" => tr!("pane-receive"),
         "SAVED" => tr!("pane-saved"),
+        "FRAME" => tr!("pane-frame"),
+        "FRAMES" => tr!("pane-frames"),
+        "WORDS" => tr!("pane-words"),
         "SEND" => tr!("pane-send"),
         "SPOTS" => tr!("pane-spots"),
         "STATIONS" => tr!("pane-stations"),
@@ -1742,10 +1745,7 @@ mod tests {
 
     /// Every pane name is one [`pane_label`] has a message for, so no tab is
     /// drawn with its untranslated identifier.
-    // Ignored here: panes added in this tree have no message yet and are drawn
-    // under their English name.
     #[test]
-    #[ignore]
     fn every_pane_has_a_message() {
         for mode in Mode::ALL {
             for name in panel_tabs(mode, false) {

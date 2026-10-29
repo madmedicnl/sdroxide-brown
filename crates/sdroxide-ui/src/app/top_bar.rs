@@ -9356,7 +9356,7 @@ pub(in crate::app) fn band_mode_menu(
                 ui.horizontal_wrapped(|ui| {
                     for p in plans {
                         if crate::chrome::chip(ui, current == p, p.short())
-                            .on_hover_text(format!("{} — {}", p.label(), p.modes()))
+                            .on_hover_text(format!("{} — {}", crate::app::settings::general::cb_plan_label(p), p.modes()))
                             .clicked()
                         {
                             cmds.push(Command::SetCbPlan(p));
@@ -9369,7 +9369,7 @@ pub(in crate::app) fn band_mode_menu(
                 chip_lines(ui, &widths, |ui, i| {
                     let p = plans[i];
                     if crate::chrome::chip(ui, current == p, p.short())
-                        .on_hover_text(format!("{} — {}", p.label(), p.modes()))
+                        .on_hover_text(format!("{} — {}", crate::app::settings::general::cb_plan_label(p), p.modes()))
                         .clicked()
                     {
                         cmds.push(Command::SetCbPlan(p));

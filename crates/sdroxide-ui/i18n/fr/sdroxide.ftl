@@ -69,11 +69,9 @@ settings-ui-display = Affichage
 settings-ui-moved-note = La largeur du panoramique, la réaction du spectre et la vitesse de défilement de la cascade se règlent avec le bouton SPEC de la barre d'affichage — le menu DISP sur une fenêtre étroite.
 settings-ui-language = Langue
     .hint = La langue de l'interface. Le manuel accessible avec F1 et les annonces vocales restent en anglais, quelle que soit la langue choisie ici.
-settings-ui-language-system = Système ({ $language })
 settings-ui-layout = Disposition
 settings-ui-theme = Thème
 settings-ui-button-style = Style des boutons
-settings-ui-window-style = Style des fenêtres
 settings-ui-frame-rate = Fréquence de mise à jour de l'écran
 settings-ui-palette = Palette de la cascade
 settings-ui-tuning-buttons = Boutons d'accord
@@ -85,9 +83,6 @@ settings-ui-tuning-snap = Le premier appui aligne sur le pas
 settings-ui-smoothing = Lissage de la cascade
 settings-ui-smoothing-interpolate = Interpoler
     .hint = Mélange chaque pixel de l'écran avec les cases et les lignes qui l'entourent, pour qu'un signal paraisse continu quand l'affichage est plus large que la transformée. Désactivez-le pour une cascade rectangulaire — un bloc par case, une ligne par balayage — ce qui est nécessaire pour lire la forme d'un signal sur l'image : un signal interpolé ne se distingue pas d'un signal réellement plus large. Une FFT plus grande (la puce FFT) est l'autre moitié de la solution.
-settings-ui-clock = Horloge
-settings-ui-clock-show = UTC + heure locale sur le panoramique
-    .hint = Une horloge murale en haut à droite du panoramique, en UTC et à votre heure.
 settings-ui-background = Fond du spectre
 settings-ui-background-gradient = Dégradé
 settings-ui-background-top = haut
@@ -111,8 +106,6 @@ settings-ui-cities = Villes sur les cartes
 
         Elles indiquent surtout *où* se trouve un point sur une carte du monde entier, et ce sont aussi les éléments les plus chargés de la carte. Désactivez-les si les noms gênent la lecture des stations. Le globe 3D n'est pas concerné : ses villes sont des lumières du côté nuit, pas des repères, et rien n'y est écrit par-dessus un contact.
 settings-ui-cities-show = afficher les villes et leurs noms
-settings-ui-update-check = Rechercher les mises à jour au démarrage
-    .hint = Demande une fois par lancement à sdroxide.com si une version plus récente a été publiée, et l'annonce dans une bannière fermable au-dessus de la cascade. Rien n'est envoyé au-delà de la requête elle-même.
 settings-ui-3d-view = Vue 3D
 settings-ui-clouds = Rendu des nuages
 settings-ui-clouds-layered = En couches
@@ -194,12 +187,8 @@ settings-what-you-call-shown-log = Le nom que vous lui donnez. Affiché dans le 
 settings-bottom-band-transverter-works-dial = Le bas de la bande que ce transverteur couvre, sur le cadran. 144 pour le 2 m.
 settings-top-band-dial-148-2 = Le haut de la bande, sur le cadran. 148 pour le 2 m dans les régions 2 et 3, 146 dans la région 1.
 settings-radio-ends-up-dial-offset = La radio se retrouve sur cadran + décalage, donc un transverteur qui ramène une bande vers une F.I. a un décalage négatif : le 2 m vers une F.I. de 28 MHz vaut -116, car 144 - 116 = 28. Faites glisser pour ajuster au hertz près un oscillateur légèrement décalé.
-settings-off-while-converting-receive-only =
-    Désactivé pendant la conversion : réception seulement — la ligne est un convertisseur, pas un transverteur, et rien n'est émis sur cette bande.
 
     Par le même convertisseur : cela fonctionne dans les deux sens, et l'émission prend le même décalage.
-settings-ceiling-transmit-drive-while-transverter =
-    Un plafond d'excitation à l'émission pendant que ce transverteur est sélectionné, en pourcentage du maximum. L'entrée F.I. d'un transverteur accepte des milliwatts, et l'excitation correcte pour les bandes propres de la radio le détruirait : c'est donc le champ le plus important de la ligne. 100 % signifie aucune limite.
 
     Votre réglage d'excitation est maintenu sous cette valeur plutôt que modifié, pour que le nombre que vous utilisez en HF revienne lorsque le cadran quitte la bande.
 settings-remove = SUPPRIMER
@@ -232,15 +221,12 @@ settings-uploads = Envois
 settings-winlink = Winlink
 settings-servers = Serveurs
 settings-t-r-switch = Commutateur E/R
-settings-amplifier = Amplificateur
-settings-remote = À distance
 settings-tle = TLE
 settings-profiles = Profils
 settings-station = Station
 settings-enter-digital-mode-ft8-sstv = Saisissez un mode numérique (FT8 / SSTV / …) une fois pour charger les valeurs enregistrées.
 settings-callsign = Indicatif
 settings-grid-square = Carré (locator)
-settings-your-callsign-grid-shared-across = Votre indicatif et votre locator, partagés entre FT8/FT4/FT2, les en-têtes d'images SSTV et le journal. Modifiable aussi depuis la boîte de configuration FT8 / SSTV.
 settings-iaru-region = Région UIR
 settings-which-radio-interface-server-uses = L'interface radio qu'utilise le serveur se règle sur la machine où il tourne.
 settings-radio-interface = Interface radio
@@ -308,24 +294,11 @@ settings-receiver-s-maidenhead-locator-jn88ec =
     Le locator Maidenhead du récepteur — JN88ec, DO30db. Quatre ou six caractères.
 
     Laissez vide si vous ne savez pas où se trouve le récepteur : rien n'est alors transmis du tout, ce qui est la seule réponse honnête. Transmettre depuis votre propre carré placerait la réception de quelqu'un d'autre sur le mauvais continent.
-settings-audio = Audio vers
-settings-gain-per-band = Gain par bande
-settings-remember-receive-gain-per-band = Mémoriser le gain de réception par bande
-settings-each-band-keeps-receive-gain = Chaque bande garde le gain de réception que vous avez réglé en dernier, et le retrouve au retour du cadran — un bouton de bande, un glissement sur un bord de bande ou le bouton de la radio. La couverture générale est répartie entre HF, VHF, UHF et au-delà. Une bande sur laquelle vous n'avez pas réglé de gain garde celui qui est en vigueur. Désactivé : un seul gain partout.
-settings-s-meter-calibration = Étalonnage du S-mètre
-settings-added-radio-s-s-meter =
-    Ajouté à la lecture S-mètre de cette radio. Le S-mètre d'un SDR démarre en dBFS — niveau par rapport à la pleine échelle du convertisseur — si bien qu'un récepteur avec beaucoup de gain peut afficher S9 sans aucune antenne branchée. Réglez-le sur la différence entre ce qu'affiche le S-mètre et un niveau que vous connaissez : un générateur de signaux, ou une bande calme dont vous savez qu'elle se situe autour de S2–S3. S'applique immédiatement.
 
     S'ajoute à cal_offset_db dans config.toml, qui est un chiffre unique pour toute la station.
-settings-t-0-db = 0 dB
 settings-antenna-somewhere-else-no-locator = L'antenne est ailleurs et aucun locator n'est défini, donc rien de ce qu'entend cette radio n'est transmis à PSK Reporter, WSPRnet ou FreeDV Reporter. Saisissez le locator du récepteur ci-dessus pour transmettre depuis lui.
 settings-ranges-are-mhz-low-high = Les plages sont en MHz, bas-haut, séparées par des virgules : 144-146, 430-440 — soit 144000000-146000000 Hz et 430000000-440000000 Hz. Ce sont des fréquences de cadran : un décalage de convertisseur ne les déplace pas. Le décalage de convertisseur ci-dessus est le champ en hertz. Laissez une plage vide pour utiliser ce que le périphérique annonce de lui-même ; un périphérique qui n'annonce rien est pris au mot.
 settings-careful-rtl-sdr-blog-v4 = Attention avec un RTL-SDR : le Blog V4 convertit déjà vers le haut en dessous de 28,8 MHz ; un décalage négatif qui amène le matériel dans cette zone se décale donc deux fois.
-settings-transmit-audio = Audio d'émission
-settings-use = utilisé
-settings-every-stage-off = tous les étages désactivés
-settings-open-tx-audio = Ouvrir Audio TX…
-settings-microphone-processing-chain-gate-eq = La chaîne de traitement du microphone — porte, égaliseur, dé-esseur, compresseur et limiteur — avec un enregistrement de test pour la régler à l'oreille sans émettre. Modes vocaux seulement. S'ouvre aussi en cliquant sur Micro dans la boîte TX.
 settings-pick-radio-interface-above-configuration = Choisissez une interface radio ci-dessus (cette configuration utilisait le mode de détection automatique, aujourd'hui supprimé).
 settings-configuration-used-removed-auto-detect = Cette configuration utilisait le mode de détection automatique, aujourd'hui supprimé. Choisissez une interface ci-dessus une fois que la machine à laquelle la radio est reliée a répondu.
 settings-radio-has-no-interface-yet = Cette radio n'a pas encore d'interface — choisissez-en une ci-dessus et appuyez sur Appliquer / reconnecter.
@@ -342,9 +315,6 @@ settings-port = Port
 settings-login-call = Indicatif de connexion
 settings-commands = Commandes
 settings-one-per-line-e-g = une par ligne, p. ex. SET/FT8
-settings-reverse-beacon-network = Reverse Beacon Network
-settings-read-world-s-cw-rtty = Lit les skimmers CW/RTTY du monde entier et alimente la carte de propagation avec eux. C'est ce qui fait afficher sur la carte des bandes que cette radio n'écoute pas. Activé par défaut : cela n'émet rien, ne demande aucun compte et utilise l'indicatif de l'onglet Général. Les spots RBN n'apparaissent pas dans la liste des spots — ce sont des mesures, pas des invitations.
-settings-t-7000-cw-rtty-feed-7001 = 7000 est le flux CW/RTTY, 7001 celui de FT8/FT4
 settings-one-per-line-e-g-2 = une par ligne, p. ex. set/filter cont=eu
 settings-sent-after-login-place-narrow = Envoyé après la connexion. C'est là qu'il faut restreindre le flux — sans filtre, c'est chaque skimmer de la Terre.
 settings-rbn-paths-are-placed-country = Les trajets RBN sont placés depuis le centre des pays, pas depuis des locators — exacts pour un petit pays, très inexacts pour un grand. Ils forment une couche séparée sur la carte de propagation, et peuvent y être désactivés.
@@ -353,7 +323,6 @@ settings-pota-activator-spots = Spots d'activateurs POTA
 settings-sota-spots = Spots SOTA
 settings-psk-reporter-current-band = PSK Reporter (bande courante)
 settings-upload-my-ft8-ft4-ft2 = Envoyer mes décodages FT8/FT4/FT2/JS8
-settings-report-what-station-hears-pskreporter = Transmettre ce que cette station entend à pskreporter.info, pour qu'elle y apparaisse comme récepteur. Utilise l'indicatif et le carré de l'onglet Général.
 settings-antenna-2 = Antenne
 settings-collector = Collecteur
 settings-t-4739-live-collector-14739-test = 4739 est le collecteur en service, 14739 celui de test
@@ -422,7 +391,6 @@ settings-qrz-logbook-api-key-your = La clé d'API du journal QRZ, à lire dans l
 settings-eqsl-user = Utilisateur eQSL
 settings-eqsl-pass = Mot de passe eQSL
 settings-eqsl-qth = QTH eQSL
-settings-qth-nickname-eqsl-profile-upload = Le surnom QTH du profil eQSL vers lequel envoyer et depuis lequel télécharger — nécessaire seulement si le compte en possède plusieurs ; laissez-le vide sinon.
 settings-same-login-hamqth-callsign-lookup = Le même identifiant que la recherche d'indicatif HamQTH — remplir l'un remplit les deux.
 settings-club-log-email = Courriel Club Log
 settings-club-log-pass = Mot de passe Club Log
@@ -435,21 +403,15 @@ settings-lotw-pass = Mot de passe LoTW
 settings-lotw-upload-uses-tqsl-export = L'envoi LoTW utilise TQSL — exportez l'ADIF depuis le journal et signez-le. Les confirmations LoTW/eQSL sont téléchargées ici pour distinguer les contacts travaillés des contacts confirmés.
 settings-sync-confirmations = SYNCHRONISER LES CONFIRMATIONS
 settings-fetching-subscriptions = Récupération des abonnements…
-settings-spectrum-waterfall-everything-read-off =
-    Son spectre, sa cascade et tout ce qui en est lu se trouvent sur l'onglet de cette radio, raison pour laquelle elle n'en a pas en propre. Les réglages d'interface ci-dessus sont toujours ceux de cette radio et s'appliquent toujours — appuyez sur Appliquer / reconnecter après les avoir modifiés et les deux radios redémarrent ensemble.
 
     Pour l'utiliser à nouveau seule, videz la case Récepteur du panoramique sur la page de cette radio.
 settings-panadapter = Panoramique
 settings-give-radio-wideband-panadapter-borrowing = Donner à cette radio un panoramique à large bande en empruntant le récepteur d'une autre radio — un SDR sur la même antenne, ou alimenté depuis la sortie F.I. de cette radio. Le spectre, la cascade, le sous-récepteur, les modes numériques et le skimmer viennent tous de ce récepteur ; le cadran, le mode, le filtre et l'émetteur restent ici.
 settings-receiver = Récepteur
 settings-none = Aucun
-settings-which-radio-receives-one-leaves =
-    La radio qui reçoit pour celle-ci. Elle quitte la barre d'onglets pendant qu'elle est prêtée — son étage d'entrée appartient au moteur de cette radio — et y revient dès que ce réglage est sur Aucun.
 
     Prend effet à l'application.
 settings-connected = Connecté à
-settings-how-far-above-radio-s =
-    De combien le récepteur se trouve au-dessus du cadran de cette radio, en hertz — 0 pour un récepteur sur la même antenne. Pour une prise F.I., la fréquence intermédiaire sur laquelle le récepteur est accordé : 8215000 pour le KXV3B d'un K3, 9000000 pour une F.I. de 9 MHz.
 
     Ce n'est pas le champ Convertisseur ci-dessus, qui accorde la radio, ni le décalage du centre I/Q de l'onglet CAT, qui concerne la carte son de cette radio. Rien de ce qui est saisi ici n'est jamais envoyé à l'une ou l'autre radio.
 
@@ -470,7 +432,6 @@ settings-radio-s-settings-are-below = Les réglages de cette radio sont ci-desso
 settings-switch-radio-dialog-follows-drag = Passer à cette radio (la boîte suit). Faites glisser pour la déplacer le long de la barre.
 settings-tx = ● TX
 settings-mute-radio-s-audio = Couper l'audio de cette radio
-settings-link = LIAISON
 settings-close-radio-configuration-kept = Fermer cette radio (sa configuration est conservée)
 settings-close-tab-close-radio-station = Fermer cet onglet, ou fermer la radio sur sa station
 settings-close-tab = Fermer cet onglet
@@ -483,9 +444,6 @@ settings-region-note = L'endroit où se trouve la station. Règle tous les plans
     }. Prend effet immédiatement, et s'applique à chaque radio de cette station.
 settings-rx-grid-reported = Les réceptions de cette radio sont transmises depuis { $grid }, et non depuis votre propre locator.
 settings-rx-grid-invalid = { $grid } n'est pas un locator Maidenhead, donc rien de ce qu'entend cette radio n'est transmis. Quatre ou six caractères : deux lettres, deux chiffres, et éventuellement deux lettres de plus.
-settings-bypassed = contourné
-# $state is one of settings-bypassed, settings-use or settings-every-stage-off.
-settings-tx-audio-chain = Chaîne { $state }.
 settings-gateway-via = { " " }via { $via }
 settings-auto-upload-to = Envoyer automatiquement chaque nouveau QSO à { $service }
 settings-tle-updated = Mis à jour : { $n } { $n ->
@@ -632,11 +590,7 @@ settings-general-per-mode-settings = Réglages par mode
 settings-general-reset-every-mode = RÉINITIALISER TOUS LES MODES
 settings-general-forget-every-mode-s-remembered = Oublie le CAG, le squelch, la réduction de bruit, le filtre coupe-bande et les commutateurs stéréo mémorisés pour chaque mode, et rétablit les valeurs par défaut propres à chaque mode.
 settings-general-selecting-mode-lays-mode-s = Choisir un mode applique les valeurs de départ propres à ce mode pour le CAG, le squelch, la réduction de bruit, le filtre coupe-bande et les commutateurs stéréo du récepteur, et modifier une de ces valeurs la mémorise pour ce seul mode. La puce en forme de flèche circulaire, à la fin de la ligne filtre/bruit du récepteur, liste ce qui a été modifié et rétablit le mode courant.
-settings-general-your-audio-speakers-microphone = Votre audio (haut-parleurs / microphone)
-settings-general-output = Sortie
 settings-general-channels = Canaux
-settings-general-which-speaker-channel-s-received = Le ou les canaux de haut-parleur que reçoit l'audio reçu. Gauche ou droite envoie tout, mixé en mono, de ce seul côté.
-settings-general-input = Entrée
 
 ## Settings window, network services (src/app/settings/net.rs)
 
@@ -662,15 +616,12 @@ settings-net-adds-them-panadapter-overlay-world = Les ajoute à la superposition
 settings-net-set-your-callsign-grid-general-2 = ⚠ Réglez votre indicatif et votre carré dans l'onglet Général. Sans les deux, la connexion est en lecture seule : vous voyez les autres stations mais n'apparaissez pas vous-même.
 settings-net-apply = {" "}APPLIQUER{" "}
 settings-net-persist-re-connect = Enregistrer et (re)connecter
-settings-net-longwave-shortwave-stations-labelled-waterfall = Les stations en ondes longues et courtes étiquetées sur la cascade. Le planning des ondes courtes est téléchargé depuis eibispace.de pour la saison de radiodiffusion en cours, et retéléchargé lorsque la saison change.
 settings-net-season = Saison
 settings-net-downloading = téléchargement…
 settings-net-using-built-copy = utilisation de la copie intégrée
 settings-net-your-own-stations-corrections-go = Vos propres stations et corrections vont dans ce fichier. sdroxide ne l'écrit jamais, et une entrée ici remplace une station planifiée de même nom et même fréquence.
 settings-net-reload = Recharger
 settings-net-re-read-your-station-file = Relire votre fichier de stations après l'avoir modifié
-settings-net-download-schedule-now = Télécharger le planning maintenant
-settings-net-fetch-season-s-schedule-again = Récupérer à nouveau le planning de cette saison, en remplaçant la copie en cache
 settings-net-broadcast-stations-labelled-waterfall-come = Les stations de radiodiffusion étiquetées sur la cascade viennent de la liste intégrée à cette version. Les modifier exige l'application de bureau.
 settings-net-ask-service-whether-these-credentials = Demander au service si ces identifiants fonctionnent. Applique d'abord les réglages ci-dessus, et n'enregistre rien : il ne fait que lire.
 settings-net-checking = vérification…
@@ -844,8 +795,6 @@ settings-remote-tick-where-server-sits-behind = Cochez ceci lorsque le serveur s
 settings-remote-connect = {" "}CONNECTER{" "}
 settings-remote-open-station-radio-tab-own = Ouvrir cette station dans un onglet radio à part
 settings-remote-client-cannot-hold-second-connection = Ce client ne peut pas tenir une seconde connexion.
-settings-remote-station-appears-tab-beside-radios =
-    La station apparaît sous forme d'onglet à côté des radios déjà ouvertes ici, et la barre d'onglets en haut de la fenêtre permet de passer de l'une à l'autre (⊞ en place deux côte à côte). Fermez-la depuis la liste en haut de l'onglet Radio — cela raccroche ; rien n'est modifié sur le serveur.
 
     Si le serveur demande un identifiant et un mot de passe, son écran de connexion s'affiche dans le nouvel onglet. Un lien ws:// simple ne transporte rien de cela chiffré : sur Internet ouvert, faites passer la liaison par un VPN ou un tunnel SSH, ou terminez le HTTPS devant le serveur et cochez Sécurisé ci-dessus.
 
@@ -867,10 +816,7 @@ settings-servers-t-127-0-0-1-reaches-2 = 127.0.0.1 atteint les clients de cette 
 settings-servers-t-12060-port-n1mm-s-documentation = 12060 est le port recommandé par la documentation de N1MM
 settings-servers-station-name = Nom de la station
 settings-servers-what-n1mm-calls-stationname-name = Ce que N1MM appelle StationName : le nom de l'ordinateur qui a envoyé le paquet. Les logiciels de journal l'affichent pour distinguer un poste opérateur d'un autre.
-settings-servers-decoded-cw-over-udp = CW décodé par UDP
 settings-servers-cw-panel-s-copy-plain = La copie du panneau CW en texte brut, un datagramme UDP par morceau dès qu'il est stabilisé — pour un contrôleur de station, la fenêtre CW d'un logiciel de journal ou un script. Pas de protocole : un écouteur ajoute simplement ce qui arrive (essayez nc -ul 9999). Seul le texte stabilisé est envoyé, jamais la queue que le décodeur révise encore. Chaque radio a son propre commutateur.
-settings-servers-t-127-0-0-1-reaches-3 = 127.0.0.1 atteint les programmes de cette machine ; une adresse du réseau local ou l'adresse de diffusion de ce sous-réseau atteint les autres.
-settings-servers-t-9999-default = 9999 par défaut
 settings-servers-apply = {" "}APPLIQUER{" "}
 settings-servers-persist-re-open-broadcast-sockets = Enregistrer et (ré)ouvrir les sockets de diffusion
 settings-servers-hamlib-rigctld-server = Serveur rigctld Hamlib
@@ -892,10 +838,7 @@ settings-servers-persist-re-bind-server = Enregistrer et (ré)lier le serveur
 settings-servers-lets-any-hamlib-capable-program = Permet à tout programme compatible Hamlib de piloter cette radio : fréquence, mode, PTT, split, RIT et puissance. Dans WSJT-X, fldigi ou CQRLOG, choisissez la radio « Hamlib NET rigctl » (modèle 2) et indiquez cette adresse ; dans GPredict et N1MM, saisissez directement l'hôte et le port. Contrairement au serveur TCI, il ne transporte que la commande — ni audio, ni IQ.
 settings-servers-antenna-rotator = Rotateur d'antenne
 settings-servers-waiting-station-s-rotator-configuration = En attente de la configuration du rotateur de la station…
-settings-servers-points-motorized-antenna-satellite-you = Oriente une antenne motorisée vers le satellite sur lequel vous êtes verrouillé, par un démon Hamlib rotctld (lancez par ex. « rotctld -m 603 -r /dev/ttyUSB0 » pour un rotateur GS-232B, ou « rotctld -m 1 » pour l'essayer sans matériel) — un seul démon couvre chaque rotateur piloté par Hamlib — ou par PSTRotator, avec UDP Control activé dans son Setup.
-settings-servers-program = Programme
 settings-servers-host = Hôte
-settings-servers-t-4533-rotctld-s-default-pstrotator = 4533 est le port par défaut de rotctld. Le port de contrôle UDP de PSTRotator est 12000 par défaut, et il répond aux demandes de position sur le port suivant, 12001 — qui doit être libre sur cette machine.
 settings-servers-min-elevation = Élévation min
 settings-servers-below-rotator-parks-instead-tracking = En dessous de cette valeur, le rotateur se met en position de repos au lieu de suivre — réglez-la sur votre horizon ou votre ligne de toit local
 settings-servers-azimuth-offset = Décalage d'azimut
@@ -906,21 +849,11 @@ settings-servers-park-position = Position de repos
 settings-servers-drive-position-when-idle = se placer à une position à l'arrêt
 settings-servers-off-leaves-antenna-wherever-last = Désactivé laisse l'antenne là où a fini la dernière passe
 settings-servers-not-connected = Non connecté.
-settings-servers-persist-re-connect-daemon = Enregistrer et (re)connecter au démon
 settings-servers-waiting-station-s-tci-server = En attente de la configuration du serveur TCI de la station…
 settings-servers-built-tci-server = Serveur TCI intégré
 settings-servers-device-name = Nom du périphérique
 settings-servers-off-leaves-control-receive-streams = Désactivé laisse la commande et les flux de réception fonctionner, mais chaque demande de manipulation est refusée.
 settings-servers-tci-has-no-authentication-0 = ⚠ TCI n'a aucune authentification. Sur 0.0.0.0, quiconque peut atteindre ce port peut accorder et piloter votre émetteur.
-settings-servers-tci-client = Client TCI
-settings-servers-when-you-tune-send-radio = Lorsque vous accordez, envoie le VFO de cette radio à un autre serveur TCI pour que cet appareil suive l'accord. Commande seulement — ni audio, ni IQ, et cela ne manipule pas l'émetteur.
-settings-servers-server = Serveur
-settings-servers-same-address-server-above-client = C'est la même adresse que le serveur ci-dessus. Le client ne se connecte que lorsque ce serveur n'est pas celui qui écoute — laissez-le désactivé, ou sur un autre port, lorsque 590Ctrl utilise ce port.
-settings-servers-tci-client-connected = ● Client TCI connecté
-settings-servers-tci-client-connecting = Connexion du client TCI…
-settings-servers-tci-client-press-apply = Client TCI — appuyez sur APPLIQUER.
-settings-servers-persist-re-bind-server-connect = Enregistrer et (ré)lier le serveur, et connecter le client TCI
-settings-servers-server-lets-tci-capable-programs = Le serveur permet aux programmes compatibles TCI de piloter cette radio : commande de fréquence et de mode, IQ large bande, audio de réception et audio d'émission. Dans WSJT-X, choisissez le type de radio SunSDR (TCI), indiquez cette adresse et réglez le PTT sur TCI. Le client TCI va dans l'autre sens : le cadran de sdroxide est envoyé comme commande de VFO à 590Ctrl (ou à tout serveur TCI) à l'adresse ci-dessus. Il ne transmet pas d'audio.
 
 ## Settings window, TLE (src/app/settings/tle.rs)
 
@@ -1038,7 +971,6 @@ settings-servers-n-clients = { $n ->
 settings-servers-listening = ● En écoute sur { $addr } — { $clients }
 settings-servers-failed = Échec : { $error }
 settings-servers-rotator-at = ● Connecté — antenne à { $az }° az, { $el }° el
-settings-servers-tci-client-error = Client TCI : { $error }
 
 ## Settings window, TLE: messages with values
 
@@ -1304,18 +1236,6 @@ settings-radio-scope-span = Largeur de l'oscilloscope
 settings-radio-how-wide-sweep-radio-keeps = La largeur du balayage. La radio conserve la largeur choisie en dernier sur son propre écran — souvent quelques kHz. Régler une largeur ici place aussi l'oscilloscope en mode centré, donc il suit le cadran. Cela modifie aussi l'affichage propre à la radio ; « Comme réglé sur la radio » le laisse tranquille.
 settings-radio-press-apply-reconnect-switch-without = Appuyez sur « Appliquer / reconnecter » pour basculer sans redémarrer.
 settings-radio-radio-audio-sound-card = Audio radio (carte son)
-settings-radio-waiting-sound-cards-machine-radio = En attente des cartes son de la machine à laquelle la radio est branchée.
-settings-radio-radio-rx = De la radio (RX)
-settings-radio-radio-tx = Vers la radio (TX)
-settings-radio-apply-reconnect = Appliquer / reconnecter
-settings-radio-reopen-cat-rig-these-sound = Rouvrir l'appareil CAT avec ces cartes son — sans redémarrage
-settings-radio-reconnects-radio-without-restarting = Reconnecte la radio sans redémarrer.
-settings-radio-receive-radio-pc = Réception (radio → PC)
-settings-radio-sound-card-radio-s-own = La carte son sur laquelle arrive l'audio propre de la radio — sa prise casque vers l'entrée ligne ou micro de l'ordinateur. Tout ce qui est sur le panoramique et dans les décodeurs arrive ici.
-settings-radio-transmit-pc-radio-mic = Émission (PC → micro de la radio)
-settings-radio-sound-card-carries-audio-radio = La carte son qui transporte l'audio que la radio doit diffuser — la sortie de l'ordinateur vers la prise micro de la radio. La radio se déclenche elle-même, par VOX, dès que l'audio arrive ici, donc ce périphérique est muet à moins que la radio ne soit en train d'émettre.
-settings-radio-radio-has-no-control-cable = Cette radio n'a pas de câble de commande — elle se déclenche par VOX, donc il n'y a aucun PTT à commander. L'émission est de l'audio envoyé au micro de la radio.
-settings-radio-reopen-radio-these-sound-cards = Rouvrir la radio avec ces cartes son — sans redémarrage
 settings-radio-devices = Périphériques
 settings-radio-discover = Découvrir
 settings-radio-no-devices-press-discover = aucun périphérique — appuyez sur Découvrir
@@ -1335,7 +1255,6 @@ settings-radio-back-lna-gain-off-itself =
     Désactivé par défaut : cela modifie un réglage que vous avez choisi. Rien ne se passe pendant l'émission.
 settings-radio-wind-gain-back-when-adc = Réduire le gain lorsque le CAN déborde
 settings-radio-applies-apply-reconnect-main-window = S'applique à Appliquer / reconnecter. La réglette de gain de la fenêtre principale affiche le gain effectivement utilisé par la carte, donc elle suit la boucle et vous pouvez voir ce qu'elle fait ; le curseur ci-dessus est le niveau auquel démarre la radio, et la boucle ne le réécrit pas.
-settings-radio-step = {"  "}Pas
 settings-radio-how-far-gain-moves-each = De combien le gain se déplace à chaque fois, en dB. Un dB est le pas du registre de gain propre à la carte.
 settings-radio-attack-decay = {"  "}Attaque / retour
 settings-radio-how-often-gain-may-come =
@@ -1360,9 +1279,7 @@ settings-radio-how-far-ahead-real-time = De combien d'avance sur le temps réel 
 settings-radio-puresignal = PureSignal
 settings-radio-adaptive-predistortion-linearise-transmitter-sample = Prédistorsion adaptative : linéarise l'émetteur à partir d'un échantillon de ce qu'il émet réellement, pour une vingtaine de décibels de moins d'intermodulation à la même puissance. Le récepteur est la boucle de retour — la carte continue de recevoir pendant un trafic — donc un coupleur directif et un atténuateur doivent faire parvenir un échantillon de la sortie de l'amplificateur à une entrée que le commutateur E/R ne retire pas à l'émission. Sur un Hermes-Lite 2, cela signifie la prise PureSignal de la carte IO, et l'entrée de réception ci-dessus réglée en conséquence ; sur une carte qui n'en a pas, le port RX d'un ANAN, ou un relais externe qui branche le coupleur pendant la durée du trafic. C'est ce récepteur qui est lu — une carte dotée d'un second CAN ne peut pas utiliser RX2 comme prise de retour, quelle que soit la façon dont son propre micrologiciel l'aiguille. Sans rien de couplé, la boucle ne se verrouille jamais et l'émetteur reste exactement comme il aurait été. S'applique à Appliquer / reconnecter, et uniquement à la radio qui possède l'émetteur (DDC1).
 settings-radio-correct-transmitter-receiver-s-own = Corriger l'émetteur à partir de la réaction du récepteur lui-même
-settings-radio-table-steps = {"  "}Pas du tableau
 settings-radio-how-finely-amplifier-s-curve = La finesse avec laquelle la courbe de l'amplificateur est modélisée. Plus de pas suivent un coude plus net et prennent plus de temps à remplir ; 32 est un bon point de départ.
-settings-radio-adaptation = {"  "}Adaptation
 settings-radio-how-fast-correction-follows-what = La vitesse à laquelle la correction suit ce que signale le coupleur. Lent est le bon réglage — il s'agit de moyenner la courbe d'un amplificateur, qui ne bouge pas, à partir d'une boucle de retour bruitée.
 settings-radio-hold = Maintien
 settings-radio-stop-adapting-keep-correction-where = Cesser l'adaptation et garder la correction où elle est — pour mesurer, et pour un opérateur satisfait de ce qu'elle a appris.
@@ -1447,7 +1364,6 @@ settings-radio-step-index-not-db-figure = Un indice de pas, non un nombre de dB 
 settings-radio-if-gain-reduction = Réduction du gain F.I.
 settings-radio-reduction-so-more-less-signal = Une réduction, donc plus élevé signifie moins de signal. N'est respecté que lorsque le CAG du RSP est désactivé.
 settings-radio-enable = Activer
-settings-radio-dbfs = {" "}dBfs
 settings-radio-level-rsp-s-agc-aims = Le niveau que le CAG du RSP cherche à maintenir.
 settings-radio-notches = Coupe-bandes
 settings-radio-am = AM
@@ -1582,7 +1498,6 @@ settings-radio-t-50001-unless-has-been-changed = 50001 sauf s'il a été modifi�
 settings-radio-network-user = Utilisateur réseau
 settings-radio-stored-clear-radio-json-protocol = Stocké en clair dans radio.json. Le protocole le brouille de façon réversible sur le fil, donc rien ici n'en ferait un secret.
 settings-radio-receive = Recevoir depuis
-settings-radio-af-radio-demodulates-sdroxide-shows = AF : la radio démodule et sdroxide affiche la bande audio. FI 12 kHz : la radio envoie à la place sa fréquence intermédiaire DRM et sdroxide démodule, ce qui met en jeu ses propres filtres, sa réduction de bruit et ses décodeurs sur environ ±12 kHz. Dans les deux cas, la cascade large est l'oscilloscope propre à la radio — aucun Icom n'envoie d'I/Q. Une préférence FI utilise provisoirement AF pour les modes plus larges comme la WFM, puis rétablit FI pour les modes compatibles. Une préférence AF reste AF. HD Radio n'est pas disponible sur cette connexion.
 settings-radio-audio-sample-rate = Taux d'échantillonnage audio
 settings-radio-t-12-khz-if-needs-48000 = Une FI 12 kHz exige le flux à 48000 Hz — à ce taux, c'est l'audio démodulé de la radio qui est utilisé.
 settings-radio-if-spectrum = Spectre FI
@@ -1598,7 +1513,6 @@ settings-radio-how-wide-sweep-only-wide = La largeur du balayage. C'est la seule
 settings-radio-switch-modulation-input-lan = Basculer l'entrée de modulation sur LAN
 settings-radio-transmit-audio-only-heard-when = L'audio d'émission n'est entendu que lorsque l'entrée MOD de la radio est réglée sur LAN. sdroxide peut l'écrire sur un modèle dont il connaît la numérotation des menus ; sur tout autre, il le signale et laisse le menu tranquille. C'est un prêt : ce que la radio contenait à cet endroit est lu d'abord, puis remis en place à la fin de la session, si bien qu'un appareil utilisé seul ensuite entend toujours son propre microphone.
 settings-radio-copy-diagnostic-report = Copier le rapport de diagnostic
-settings-radio-copies-radio-s-last-session = Copie la dernière session de cette radio — sa négociation et sa trace CI-V — dans le presse-papiers, pour un rapport de bogue. Celle de cette radio, non celle de la station : avec deux Icom sur le réseau local, chaque onglet répond pour sa propre adresse.
 settings-radio-control-audio-radio-s-own = Commande, audio et oscilloscope propre à la radio sur une seule connexion réseau — ni câble série ni carte son. Appuyez sur « Appliquer / reconnecter » pour basculer sans redémarrer.
 settings-radio-testing = Test…
 settings-radio-was-only-check-press-apply = Ce n'était qu'une vérification — appuyez sur Appliquer / reconnecter ci-dessous pour commencer à utiliser cette radio.
@@ -1654,9 +1568,7 @@ settings-radio-samples = {" "}échantillons
 settings-radio-rx-tx-port = Port RX / TX
 settings-radio-ad9361-s-rf-port-select = Le rf_port_select du AD9361. Un Pluto d'origine câble un de chaque, donc laissez ceci vide sauf si vous avez une carte qui ne le fait pas. Prend effet à Appliquer.
 settings-radio-opens-radio-reads-what-says = Ouvre la radio, lit ce qu'elle dit d'elle-même, et annonce la plage d'accord de cette carte-ci. Ne démarre pas de flux.
-settings-radio-copies-last-session-s-protocol = Copie la trace du protocole de la dernière session dans le presse-papiers, pour un rapport de bogue.
 settings-radio-wideband-iq-receive-transmit-half = I/Q large bande en réception et en émission. Demi-duplex — la réception s'arrête pendant la durée d'un trafic, car la liaison réseau USB ne peut pas porter les deux à la fois. Ni SoapySDR ni libiio nécessaires.
-settings-radio-not-yet-verified-against-real = Pas encore vérifié sur du matériel réel. En cas de comportement anormal, envoyez le rapport de diagnostic — il contient chaque commande échangée avec la radio, et les premiers octets du flux d'échantillons.
 settings-radio-flexradio-announces-itself-local-network = Une FlexRadio s'annonce sur le réseau local environ une fois par seconde. Une radio jointe par un routeur ou un VPN ne vous diffuse jamais rien — saisissez son adresse ci-dessous à la place.
 settings-radio-another-gui-client-has-radio = Un autre client graphique utilise cette radio et multiFLEX est désactivé. Déconnectez ce client, ou activez multiFLEX sur la radio.
 settings-radio-overrides-selection-above-use-radio = Remplace la sélection ci-dessus. À utiliser pour une radio sur un autre sous-réseau, derrière un VPN, ou sur un port non standard.
@@ -1767,10 +1679,6 @@ settings-radio-which-two-sockets-back-receiver-2 =
     S'applique immédiatement, et est relu depuis la radio à l'ouverture du port de commande — c'est le réglage propre à l'appareil, non une copie tenue ici.
 settings-radio-how-often-radio-asked-what-2 = La fréquence à laquelle la radio est interrogée sur ce qu'elle fait — son cadran, son mode et ses indicateurs. Tournez le bouton VFO de l'appareil et l'affichage suit en un cycle d'interrogation. C'est aussi tout le trafic de commande produit de ce côté, donc baissez-le si l'audio de la radio coupe.
 settings-radio-transmit-audio = Audio d'émission
-settings-radio-system-default = — valeur système —
-settings-radio-fdm-duo-s-own-usb = Le port Audio USB propre au FDM-DUO. Laissé sur la valeur système, ce n'est presque jamais la radio — ce sont les haut-parleurs de la machine.
-settings-radio-press-rescan-list-sound-cards = appuyez sur Rechercher pour lister les cartes son
-settings-radio-copies-last-session-s-trace = Copie la trace de la dernière session dans le presse-papiers, pour un rapport de bogue : chaque commande échangée avec le périphérique, et les premiers octets du flux d'échantillons.
 settings-radio-only-receiving-fdm-duo-has = Seule la réception sur un FDM-DUO a été testée sur du matériel réel jusqu'ici. Si quelque chose se comporte mal, joignez le rapport de diagnostic à un rapport de bogue.
 settings-radio-cw-keyed-radio-s-own = La CW est manipulée par la manipulation ou la palette propre à la radio : le FDM-DUO n'a aucune commande qui accepte du texte, donc le panneau CW ne peut pas le manipuler.
 settings-radio-press-apply-reopen-radio = Appuyez sur Appliquer pour rouvrir la radio.
@@ -1794,7 +1702,6 @@ settings-radio-not-every-hf-has-one = Tous les HF+ n'en ont pas ; sur un récept
 settings-radio-host-dsp = DSP de l'hôte
 settings-radio-image-balancer-zero-if-offset = L'équilibreur d'image, le décalage zéro-FI et l'oscillateur de réglage fin. Ne le désactivez que pour voir la sortie brute du matériel — désactivé, l'image miroir apparaît sur les taux à zéro-FI et l'accord n'est juste qu'au kilohertz près.
 settings-radio-correct-image-fine-tune = Corriger l'image et régler finement
-settings-radio-copies-last-session-s-trace-2 = Copie la trace de la dernière session dans le presse-papiers, pour un rapport de bogue : chaque commande échangée avec le récepteur, et les premiers octets du flux d'échantillons.
 settings-radio-receive-only-no-soapysdr-no = Réception seule. Ni SoapySDR ni libairspyhf nécessaires. Sous le plancher du synthétiseur, c'est l'oscillateur de l'hôte qui accorde, et c'est ainsi que ce récepteur atteint le VLF. Le récepteur et le taux d'échantillonnage prennent effet à Appliquer ; tout le reste s'applique dès que vous le modifiez.
 settings-radio-not-yet-verified-against-real-3 = Pas encore vérifié sur du matériel réel. En cas de comportement anormal, envoyez le rapport de diagnostic — il contient chaque commande échangée avec le récepteur, et les premiers octets du flux d'échantillons décodés en paires I/Q.
 settings-radio-no-airspy-r2-mini-found = Aucun Airspy R2 ni Mini trouvé — appuyez sur Rechercher
@@ -1887,8 +1794,6 @@ settings-radio-which-rspduo-s-two-tuners = Lequel des deux accords du RSPduo cet
 settings-radio-which-rspduo-s-two-tuners-2 = Lequel des deux accords du RSPduo porte l'antenne que vous écoutez. L'autre porte la seconde antenne. Prend effet à Appliquer.
 settings-radio-which-rspduo-s-two-tuners-3 = Lequel des deux accords du RSPduo faire tourner (un à la fois). Prend effet à Appliquer.
 settings-radio-applies-immediately = S'applique immédiatement.
-settings-radio-fm-broadcast-notch = Coupe-bande de la radiodiffusion FM
-settings-radio-hardware-notch-over-88-108 = Coupe-bande matériel sur la bande de radiodiffusion 88–108 MHz, pour quand un émetteur local sature tout le reste. S'applique immédiatement.
 settings-radio-dab-notch = Coupe-bande DAB
 settings-radio-hardware-notch-over-165-230 = Coupe-bande matériel sur la bande DAB 165–230 MHz. S'applique immédiatement.
 settings-radio-hdr-mode = Mode HDR
@@ -2002,7 +1907,6 @@ settings-radio-rfe-tx-fallback = Émission sur { $port } : celles-ci repassent s
 
 ## Top bar and control strip (src/app/top_bar.rs)
 
-topbar-how-far-one-press-moves = De combien un appui déplace le cadran. Touchez pour passer au pas suivant : 10 Hz, 100 Hz, 500 Hz, 1, 2,5, 5, 9, 10 et 25 kHz. Désactivez la rangée dans Réglages › Interface.
 topbar-volume-gain-agc-squelch-noise = Volume, gain, CAG, squelch, les commandes de bruit, et l'affichage RDS en radiodiffusion FM
 topbar-receiver = RÉCEPTEUR
 topbar-vfo-b-split-rit-xit = VFO A/B, split, et les décalages RIT/XIT
@@ -2016,7 +1920,6 @@ topbar-radio = RADIO
 topbar-tune-voice-keyer-drive-mic = Accord, le manipulateur vocal, et les niveaux d'excitation et de micro
 topbar-transmit = ÉMISSION
 topbar-tune = {" "}ACCORD{" "}
-topbar-panadapter-two-layers-their-speeds = Le panoramique — ses deux couches, leurs vitesses et leur détail, la mémoire de crête — ainsi que le contraste de la cascade, la taille de la FFT et les skimmers
 topbar-display = AFFICHAGE
 topbar-logbook-spots-awards-memories-scanner = Journal, spots, distinctions, mémoires, le scanner, les réglages et le manuel
 topbar-system = SYSTÈME
@@ -2050,12 +1953,8 @@ topbar-receive-tone-squelch = SQUELCH À TONALITÉ EN RÉCEPTION
 topbar-require-receive-what-station-transmits = Exiger en réception ce que cette station émet
 topbar-hide-docked-band-selector-click = Masquer le sélecteur de bande accroché — cliquez à nouveau pour le faire revenir
 topbar-show-docked-band-selector = Afficher le sélecteur de bande accroché
-topbar-dock = ACCROCHER
-topbar-keep-band-mode-selector-open = Garder le sélecteur de bande et de mode ouvert à côté de la cascade, au lieu de fermer cette fenêtre à chaque fois
 topbar-band-mode = BANDE ET MODE
 topbar-hide-band-chip-brings-back = Masquer — la puce de bande le fait revenir
-topbar-undock = DÉTACHER
-topbar-return-selector-top-bar-popup = Remettre le sélecteur dans la fenêtre de la barre supérieure
 topbar-dec-off = DEC off
 topbar-vol = Vol
 topbar-counted-steps-not-decibels-what =
@@ -2068,7 +1967,6 @@ topbar-plutosdr-s-own-agc-setting =
 
     Le CAG propre au PlutoSDR règle ce gain, donc déplacer le curseur ne fait rien. Réglez Réglages → Radio → CAG sur Manuel pour le commander ici.
 topbar-agc-hang-time-click-cycle = Temps de maintien du CAG — cliquez pour parcourir : Arrêt / Lent / Moyen / Rapide
-topbar-radio-s-own-agc-click = Le CAG propre à la radio — cliquez pour parcourir : Lent / Moyen / Rapide. Il ne peut pas être coupé d'ici.
 topbar-man = Man
 topbar-manual-audio-gain-used-while = Gain audio manuel, utilisé pendant que le CAG est désactivé. Initialisé au niveau que le CAG maintenait au moment de sa désactivation.
 topbar-radio-s-own-squelch-sent = Le squelch propre à la radio, envoyé par la liaison de commande. C'est la porte que traverse réellement l'audio — celle du logiciel ne ferait que se fermer davantage sur ce que l'appareil a déjà laissé passer.
@@ -2077,7 +1975,6 @@ topbar-manual-gain = gain manuel
 topbar-noise-reduction = réduction de bruit
 topbar-impulse-noise-blanker = Limiteur de bruit impulsionnel
 topbar-auto-notch-cancel-constant-tone = Coupe-bande automatique : annule les éléments à tonalité constante (hétérodynes)
-topbar-noise-reduction-off-click-switch = Réduction de bruit, désactivée — cliquez pour l'activer, ou choisissez un moteur dans les lignes ci-dessous
 topbar-binaural-audio-not-while-sub = Audio binaural — pas pendant que le sous-récepteur tient l'oreille droite
 topbar-binaural-audio-passband-spread-across = Audio binaural : la bande passante est répartie entre les deux oreilles, si bien que des signaux de hauteurs différentes viennent de directions différentes et que celui que vous accordez glisse d'un côté à l'autre. Cliquez pour revenir au mono
 topbar-binaural-cw-spread-passband-across = CW binaural : répartit la bande passante entre les deux oreilles, si bien que des signaux de hauteurs différentes viennent de directions différentes — un pile-up devient plusieurs endroits au lieu d'une seule note encombrée, et accorder une station la fait glisser d'un côté à l'autre. Idéal au casque
@@ -2101,7 +1998,6 @@ topbar-edges = BORDS
 topbar-low-edge-hz-carrier = Bord bas, en Hz depuis la porteuse
 topbar-high-edge-hz-carrier = Bord haut, en Hz depuis la porteuse
 topbar-noise-reduction-voice-off-click = Réduction de bruit (voix), désactivée — cliquez pour choisir un moteur
-topbar-record-audio = ENREGISTRER L'AUDIO
 topbar-mp3 = ● MP3
 topbar-what-you-hear-mp3-receiver = Ce que vous entendez, en MP3 : le récepteur sur un canal et votre propre émission sur l'autre. C'est l'enregistrement d'un QSO.
 topbar-mono = MONO
@@ -2168,8 +2064,6 @@ topbar-ptt = {" "}PTT{" "}
 topbar-voice-keyer-record-transmit-stored = Manipulateur vocal : enregistrer et émettre les messages mémorisés
 topbar-drive = Excitation
 topbar-tune-2 = Accord
-topbar-tx-audio-processing-microphone-click = TX Audio traite le microphone — cliquez pour l'ouvrir
-topbar-click-open-tx-audio-gate = Cliquez pour ouvrir TX Audio : porte, égaliseur, compresseur et limiteur pour le microphone
 topbar-mic = Micro
 topbar-cessb = CESSB
 topbar-microphone-gain = Gain du microphone
@@ -2202,7 +2096,6 @@ topbar-peak-hold = MÉMOIRE DE CRÊTE
 topbar-trace-highest-level-each-column = Trace le niveau le plus haut atteint par chaque colonne au-dessus de la ligne en direct, qui redescend ensuite — ce que la bande a fait pendant que vous regardiez ailleurs
 topbar-draw-spectrum-receding-surface-instead = Dessiner le spectre comme une surface qui s'éloigne au lieu d'une ligne plate : le spectre le plus récent à l'avant, les précédents s'éloignant de vous. Les deux dernières secondes de la bande en paysage — une porteuse qui apparaît et disparaît est une crête plutôt qu'une ligne qui tremble. La grille et la mémoire de crête appartiennent à la ligne plate et ne sont pas dessinées dessus.
 topbar-how-quickly-spectrum-line-follows = La vitesse à laquelle la ligne du spectre suit la bande. Plus lent moyenne davantage de trames entre elles : une ligne plus stable, et une porteuse faible qui reste assez longtemps immobile pour être lue. La cascade n'en est pas affectée — ces lignes reçoivent chaque trame dans les deux cas.
-topbar-waterfall = CASCADE
 topbar-show-waterfall = AFFICHER LA CASCADE
 topbar-draw-scrolling-waterfall-below-spectrum = Dessiner la cascade défilante sous le spectre. Désactivée, la ligne du spectre prend toute la hauteur.
 topbar-how-fast-waterfall-scrolls-lines = La vitesse de défilement de la cascade, en lignes par seconde : Lent 5, Moyen 28, Rapide 56, Plus rapide 112, Le plus rapide 224. Le moteur cadence lui-même ces valeurs, donc les deux plus rapides apportent un vrai détail plutôt que la même ligne dessinée deux fois — dans la mesure où le récepteur peut les alimenter : une ligne ne peut jamais montrer plus d'une transformée, et un étage d'entrée étroit n'en produit que quelques dizaines par seconde. Elles coûtent de l'historique, puisque la cascade garde un nombre fixe de lignes — 73 secondes à Moyen, 9 au Le plus rapide.
@@ -2220,15 +2113,10 @@ topbar-read-machine-screen-take-most = Lire cette machine et cet écran, prendre
 topbar-width-force-right-now-whatever = La largeur appliquée en ce moment, quelle que soit la demande de la rangée ci-dessus
 topbar-keep-floor-ceiling-set-best = Garder le plancher/plafond réglé pour le meilleur contraste de cascade — rétablis doucement lors d'un changement de bande, après un déplacement ou un zoom, et lorsque les niveaux dérivent. Activez pour ajuster immédiatement ; désactivez pour garder les niveaux là où vous les avez réglés.
 topbar-keep-tuned-frequency-middle-panadapter = Garder la fréquence accordée au milieu du panoramique : la fenêtre glisse sous le cadran au lieu que l'image saute d'une largeur entière lorsque vous accordez au-delà du bord. Activez pour centrer immédiatement ; désactivez pour déplacer et zoomer où vous voulez.
-topbar-spectrum-floor-ceiling-fft-size = Plancher / plafond du spectre et taille de la FFT
-topbar-level-drawn-bottom-spectrum-darkest = Le niveau dessiné en bas du spectre et comme la couleur la plus sombre de la cascade. Montez-le jusqu'à ce que le bruit de fond assombrisse tout juste. Le régler désactive AJUSTER.
 topbar-ceil = plaf{" "}
-topbar-level-drawn-top-bring-down = Le niveau dessiné en haut. Baissez-le jusqu'à ce que le signal le plus fort qui vous intéresse atteigne la couleur pleine. Le régler désactive AJUSTER.
 topbar-fft-size = TAILLE DE LA FFT
-topbar-flip = INVERSER
 topbar-scroll-waterfall-upwards-newest-row = Faire défiler la cascade vers le haut — ligne la plus récente en bas (V)
 topbar-logbook-all-qsos-digital-manual = Journal — tous les QSO (numériques + manuels)
-topbar-live-spots-dx-cluster-pota = Spots en direct — cluster DX, POTA, SOTA, PSK Reporter
 topbar-award-tracking-dxcc-was-waz = Suivi des distinctions — DXCC / WAS / WAZ / carrés
 topbar-band-conditions-published-forecast-beside = Conditions de bande — la prévision publiée à côté de ce qui a réellement été entendu sur chaque bande
 topbar-satellite-qo-100-beacon-calibration = Satellite — l'étalonnage par la balise QO-100 est en cours
@@ -2241,36 +2129,26 @@ topbar-memory-channels = Canaux mémoire
 topbar-scanner-stopped-signal = Scanner — arrêté sur un signal
 topbar-scanner-running = Scanner — en marche
 topbar-scan-memory-channels-frequency-range = Balayer des canaux mémoire ou une plage de fréquences
-topbar-hfdl-ground-network-decode-log = Réseau au sol HFDL — le journal de décodage et la carte des avions, sous la cascade. Activez le décodeur avec ÉCOUTER dans le panneau.
-topbar-hfdl-ground-network-decoding-now = Réseau au sol HFDL — décodage en cours. Ouvrez le panneau.
-topbar-hfdl-ground-network-aircraft-shortwave = Réseau au sol HFDL — la liaison de données ondes courtes des avions, un canal d'écoute à la fois
 topbar-grid-tracker-worked-maidenhead-squares = Suivi des carrés — carrés Maidenhead travaillés sur une carte, avec ce qui est entendu
-topbar-amplifier-set-up-hardrock-under = Amplificateur — configurez un Hardrock dans Réglages → Amplificateur
 topbar-settings-device-gains-antennas-audio = Réglages — gains des appareils, antennes, périphériques audio
 topbar-user-manual-f1 = Manuel d'utilisation (F1)
 topbar-range-was-typed-settings-radio = Cette plage a été saisie dans Réglages ▸ Radio ▸ Plage RX, non annoncée par la radio. Élargissez-la, ou videz la case pour utiliser ce que le périphérique annonce de lui-même.
 topbar-what-device-reports-about-itself = C'est ce que le périphérique annonce de lui-même. Si la radio couvre bien cette bande, indiquez sa plage réelle dans Réglages ▸ Radio ▸ Plage RX.
 topbar-band = BANDE
 topbar-mode = MODE
-topbar-digital = NUMÉRIQUE
 
 ## Top bar: the System box's window chips.
 
 topbar-chip-log = JOURNAL
-topbar-chip-spots = SPOTS
 topbar-chip-awards = DISTINCTIONS
 topbar-chip-bands = BANDES
 topbar-chip-sat = SAT
 topbar-chip-ism = ISM
-topbar-chip-public-sdr = SDR PUBLIC
 topbar-chip-mail = MAIL
 topbar-chip-mem = MÉM
 topbar-chip-scan = SCAN
 topbar-chip-hfdl = HFDL
 topbar-chip-grid = CARRÉS
-topbar-chip-amp = AMP
-topbar-chip-settings = ⚙ RÉGLAGES
-topbar-chip-help = ? AIDE
 
 ## Top bar: the mode-defaults chip.
 
@@ -2346,8 +2224,6 @@ topbar-squelch-hint =
     Coupe l'audio en dessous de cette puissance dans la bande passante de réception, en dBFS. À gauche, c'est ouvert.{ $level } Réglez-le au-dessus du bruit et en dessous du signal.
 
     Un flux qui arrive avec le CAG propre à la radio déjà intégré — la FI 12 kHz d'un Icom, par exemple — se situe bien plus haut sur cette échelle que la bande de base brute d'un SDR, ce qui explique que la réglette atteigne la pleine échelle.
-topbar-nr-cycle-hint =
-    Réduction de bruit : { $strength } — { $engine }
 
     Cliquez pour parcourir l'intensité : Faible / Moy. / Forte / Arrêt. Le moteur figure dans les lignes ci-dessous.
 topbar-recording-both = Enregistrement de { $audio } et de { $iq }
@@ -2368,7 +2244,6 @@ topbar-nr-hover =
 topbar-clipping = Extrait { $span } — appuyez à nouveau pour le recommencer
 topbar-record-clip = Enregistrer { $span } et arrêter — un extrait à joindre à un rapport de réception
 topbar-starting-clip = démarrage d'un extrait de { $span }…
-topbar-stop-recording-after = Arrêter l'enregistrement MP3 après { $minutes } minutes
 topbar-stops-in = s'arrête dans { $time }
 topbar-auto-record-hint = Enregistrer chaque émission dans son propre fichier, fermé après { $secs } secondes de silence
 topbar-recording-silence = enregistrement · { $secs } s de silence (se ferme à { $hold })
@@ -2406,9 +2281,6 @@ topbar-n-columns = { $n } colonnes
 topbar-fft-bins-whole = { $n } cases sur tout le flux — une par colonne, ou plus fin
 topbar-fft-bins-pooled = { $n } cases regroupées dans les { $cols } colonnes du panoramique : des signaux plus nets, pas davantage de signaux
 topbar-sat-locked = Satellite — verrouillé sur { $name }
-topbar-amp-in-line = { $model } — en ligne (PTT)
-topbar-amp-bypassed = { $model } — contourné (OFF)
-topbar-amp-not-answering = { $model } — ne répond pas
 topbar-filter-edges = { $lo } … { $hi } Hz depuis la porteuse
 topbar-filter-isb = Filtre de réception : { $width } Hz dans chaque oreille ({ $edges }). Les deux bandes latérales de l'ISB sont des émissions distinctes, donc la largeur est celle de l'une d'elles.
 topbar-filter-width = Filtre de réception : { $width } Hz de large ({ $edges }).
@@ -2746,7 +2618,6 @@ solar-link = LIAISON
 solar-downlink-mhz = DESCENDANTE (MHz)
 solar-uplink-mhz = MONTANTE (MHz)
 solar-doppler-shifts-these-few-khz = L'effet Doppler les décale de quelques kHz pendant un passage en orbite basse.
-solar-sim = -- SIM
 solar-satellite-planet-comet = satellite, planète ou comète
 solar-planet-asteroid-comet = planète, astéroïde ou comète
 solar-clear-search = Effacer la recherche
@@ -2856,8 +2727,6 @@ setup-decode-depth = Profondeur de décodage
 setup-fast = Rapide
 setup-normal = Normale
 setup-deep = Profonde
-setup-how-hard-ft8-decoder-works =
-    Le degré d'effort du décodeur FT8 sur les signaux faibles.
 
     Rapide — une seule passe, sans soustraction de signal : le plus rapide, le moins de décodages.
     Normal — soustraction à plusieurs passes régulière : un peu plus rapide que Profonde, un peu moins complète.
@@ -2870,7 +2739,6 @@ setup-tx-watchdog = Chien de garde d'émission
 setup-stop-transmitting-after-long-no = Cesser d'émettre après ce délai sans réponse ni action de votre part. 0 le désactive.
 setup-give-up-after = Abandonner après
 setup-calls = {" "}appels
-setup-unanswered-calls-one-station-before = Appels sans réponse à une station avant de passer à autre chose. Les appels CQ en sont exemptés. 0 le désactive.
 setup-contest = Concours
 setup-everyday-exchange-grid-report-rr73 = L'échange courant : carré, rapport, RR73.
 setup-european-vhf-contests-send-signal = Concours VHF européens : envoie un rapport de signal, un numéro de série et votre locator à SIX caractères, dans la mise en forme de message que WSJT-X appelle EU VHF Contest. Les CQ partent en CQ TEST.
@@ -2886,12 +2754,8 @@ setup-fox-signals = Signaux Fox
 setup-once = {" "}à la fois
 setup-simultaneous-transmissions-spaced-60-hz = Émissions simultanées, espacées de 60 Hz. Elles se partagent la puissance de l'émetteur, donc davantage de signaux signifie que chacun est plus faible.
 setup-tx-audio = Audio d'émission
-setup-how-loud-mode-s-burst =
-    Le niveau auquel la salve de ce mode est remise à une radio qui la module elle-même — et en FM, c'est l'excursion, car un émetteur FM transforme le niveau audio en excursion de fréquence et n'a pas de CAL pour le retenir. Le paquet 1200 bauds veut environ 3 kHz là où la voix en veut 5, donc une pleine échelle envoyée à une entrée de données réglée pour la voix dépasse l'excursion — ce qui paraît parfaitement normal à l'écoute et ne décode pour personne. Baissez-le jusqu'à ce que d'autres stations vous signalent, ou réglez le niveau sur la radio.
 
     Ce niveau appartient à ce seul mode. Un mode que vous n'avez jamais réglé part de la valeur FM, et les modes à bande latérale partent de leur propre valeur — si bien qu'une excursion réglée pour le 1200 bauds n'atterrit jamais sur le FT8.
-setup-how-loud-mode-s-over =
-    Le niveau auquel le trafic de ce mode est remis à une radio qui le module elle-même — un appareil CAT sur sa carte son, un FLEX, un Icom sur son port réseau. En bande latérale, c'est l'excitation du modulateur : baissez-la jusqu'à ce que le CAL de l'appareil bouge à peine, et réglez la puissance sur la radio, car un CAL qui monte sur un mode à enveloppe constante fait des éclaboussures. Ici, l'excitation atteint le registre de puissance de l'appareil, non son audio, donc ceci est le niveau.
 
     Ce niveau appartient à ce seul mode : FT8, RTTY, PSK et MCW gardent chacun le leur, car ils ne chargent pas un modulateur de la même façon. La même réglette se trouve sur la barre d'émission, où vous pouvez l'atteindre pendant que vous émettez.
 setup-deviation-fm = excursion, en FM
@@ -2989,7 +2853,6 @@ sstv-tx-lead = Avance d'émission
 sstv-silence-sent-after-keying-before = Silence envoyé après la manipulation et avant l'amorce de l'image et le code VIS. Un décodeur qui manque une partie de cet en-tête n'affiche aucune image, donc ceci couvre l'écart entre la demande de PTT à la radio et son passage réel en ondes. 0 pour une SDR qui manipule instantanément.
 sstv-live = DIRECT
 sstv-waiting-picture = en attente d'une image…
-sstv-waiting-signal = en attente d'un signal…
 sstv-no-low-audio = pas d'audio / audio faible
 sstv-received = REÇUES
 sstv-reading-radio-s-pictures = Lecture des images de la radio…
@@ -3008,14 +2871,12 @@ sstv-what-printed-across-top-every = Ce qui est imprimé en haut de chaque image
 sstv-fetching-slot-s-picture = Récupération de l'image de cet emplacement…
 sstv-load-image-into-slot = Charger une image dans cet emplacement →
 sstv-drawn-slot-s-image = Dessiné sur l'image de cet emplacement
-sstv-tx = {"   "}TX{"   "}
 sstv-abort-tx = {" "}ANNULER L'ÉMISSION{" "}
 sstv-delete-picture-store = Supprimer cette image du stock
 sstv-received-image = Image reçue
 sstv-no-longer-store = plus dans le stock
 sstv-loading-full-size = chargement en taille réelle…
 sstv-save-picture = Enregistrer l'image…
-sstv-save-copy-computer = Enregistrer une copie sur cet ordinateur
 sstv-delete-sure = Supprimer — vous êtes sûr ?
 sstv-click-again-delete-good = Cliquez à nouveau pour la supprimer définitivement
 sstv-delete = Supprimer…
@@ -3244,7 +3105,6 @@ decodes-new-only = Nouveaux seulement
 decodes-only-stations-would-new-entity = Seulement les stations qui seraient nouvelles : entité, couple bande-créneau, carré ou indicatif
 decodes-auto-tx-frq = FRQ émission auto
 decodes-overridden-hold-tx-lift-hold = Remplacé par Maintenir la fréquence d'émission. Levez le maintien pour choisir dans quel sens la fréquence d'émission se déplace.
-decodes-pick-our-transmit-frequency-automatically = Choisir notre fréquence d'émission automatiquement : l'endroit le plus calme de la période dans laquelle nous émettons, plutôt que la fréquence de celui à qui nous répondons — il émet dans l'autre période, donc la sienne ne dit rien de qui est là au moment où nous manipulons. Désactivé, cela ne maintient PAS la fréquence : la réponse se fait sur la fréquence de la station appelée. Pour la maintenir, utilisez Maintenir la fréquence d'émission.
 decodes-hold-tx = Maintenir la fréquence d'émission
 decodes-pin-transmit-tone-where-nothing =
     Fixer la tonalité d'émission là où elle est. Rien ne la déplace : ni la réponse à une station, ni la file d'appels, ni un appel CQ, ni un clic sur un décodage ou sur la cascade. Désactivez-le pour la déplacer, puis réactivez-le.
@@ -3265,9 +3125,7 @@ decodes-reply = RÉPONSE
 decodes-queued-click-remove = En file d'attente — cliquez pour retirer
 decodes-work-station-after-current-one = Travailler cette station après la station en cours
 decodes-qsos-worked-since-sdroxide-was = QSO travaillés depuis le lancement de sdroxide
-decodes-setup = ⚙ RÉGLAGES
 decodes-qso-complete = ✓ QSO TERMINÉ
-decodes-contact-complete-log-held-here = Le contact est terminé et figure dans le journal. Il est gardé ici quelques minutes pour que le message final puisse être renvoyé si l'autre station répète le sien — rien d'autre n'est dû.
 decodes-tx = ● TX
 decodes-dxpedition-mode-transmit-frequency-held = Mode DXpedition. La fréquence d'émission est tenue hors de la moitié du Fox de la bande passante (sous 1000 Hz) jusqu'à ce que le Fox réponde.
 decodes-watchdog = CHIEN DE GARDE
@@ -3347,7 +3205,6 @@ wefax-start-chart-now-without-waiting = Démarrer une carte maintenant, sans att
 wefax-phasing = phasage…
 wefax-subcarrier-offset-1900-hz-tune = Décalage de la sous-porteuse depuis 1900 Hz. Accordez pour environ zéro : la porteuse fax va de 1500 Hz pour le noir à 2300 Hz pour le blanc, et un récepteur décalé de quelques centaines de hertz écrête l'image en noir ou en blanc uniforme.
 wefax-auto-start = DÉPART AUTO
-wefax-begin-chart-when-300-hz = Commencer une carte lorsqu'on entend la tonalité de départ de 300 Hz (IOC 576) ou de 675 Hz — et terminer celle en cours et phaser la nouvelle lorsque la transmission suivante arrive, qu'une tonalité d'arrêt ait été reçue ou non.
 wefax-auto-stop = ARRÊT AUTO
 wefax-end-450-hz-stop-tone = La terminer sur la tonalité d'arrêt de 450 Hz. Désactivez pour continuer l'enregistrement pendant une station qui envoie plusieurs cartes à la suite.
 wefax-phase = PHASAGE
@@ -3366,7 +3223,6 @@ wefax-reset = RÉINITIALISER
 wefax-back-picture-s-own-proportions = Revenir aux proportions propres de l'image
 wefax-follow = SUIVRE
 wefax-keep-newest-lines-view-scrolling = Garder les lignes les plus récentes à l'écran. Faire défiler vers le haut désactive ceci pour lire ce qui est déjà arrivé ; revenir tout en bas le réactive.
-wefax-tune-fax-schedule-usb-wait = Accordez un créneau fax en USB et attendez une tonalité de départ, ou appuyez sur DÉMARRER pour commencer au milieu d'une carte.
 wefax-saved = ENREGISTRÉES
 wefax-path = CHEMIN
 wefax-reading-radio-s-charts = Lecture des cartes de la radio…
@@ -3466,9 +3322,7 @@ vdl2-burst-threshold = Seuil de rafale
 vdl2-above-each-channel-s-own = au-dessus du bruit de fond propre à chaque canal
 vdl2-lower-catches-weaker-transmissions-costs = Plus bas, il capte les émissions plus faibles mais coûte du temps processeur sur le bruit ; plus haut, il les manque. Le plancher est appris par canal, et un changement ici ne le jette pas.
 vdl2-keep-log = Garder dans le journal
-vdl2-messages-2 = {" "}messages
 vdl2-track-most = Suivre au maximum
-vdl2-stations-2 = {" "}stations
 vdl2-longest-silent-go-first = les plus longtemps silencieuses partent en premier
 vdl2-forget-station-after = Oublier une station après
 vdl2-nothing-heard = sans rien avoir entendu d'elle
@@ -3507,8 +3361,6 @@ cw-signal-noise-500-hz-same = Rapport signal/bruit dans 500 Hz — le même chif
 cw-how-far-off-cursor-signal = De combien le signal est réellement décalé du curseur. Le décodeur le suit ; la bande passante, non — déplacez légèrement le curseur s'il s'éloigne.
 cw-listening = — écoute —
 cw-tx = ● TX
-cw-trainer = ENTRAÎNEMENT
-cw-learn-morse-read-characters-words = Apprendre le morse : lire des caractères et des mots, les jouer à votre propre vitesse, et un exercice de Koch qui ajoute un caractère à la fois. Cela se joue ici, par les haut-parleurs de cet ordinateur — rien ne manipule la radio.
 cw-nothing-copied-yet = — rien de copié pour l'instant —
 cw-key-send-characters-you-send = Manipulez pour émettre — les caractères que vous envoyez apparaissent ici.
 cw-type-line-return-sends = Tapez une ligne, Entrée l'envoie…
@@ -3516,8 +3368,6 @@ cw-type-here-send = Tapez ici pour envoyer…
 cw-key = {" "}MANIPULATEUR ●{" "}
 cw-key-2 = {" "}MANIPULATEUR{" "}
 cw-hold-key-bound-cw-straight = Maintenir la touche affectée au manipulateur droit CW — Espace par défaut, et toute touche de votre choix dans Réglages → Commandes — en manipulateur droit : abaissée tant qu'elle est maintenue, relevée au relâchement, au lieu de taper du texte. La zone d'émission est verrouillée tant que ceci est actif, et tout le manipulateur est remis à la touche : le texte qui était en file est abandonné.
-cw-radio-sends-own-keyer-text =
-    Cette radio émet depuis son propre manipulateur : le texte passe par le port de commande et l'appareil cadence les éléments, si bien qu'il n'y a rien entre le manipulateur droit et l'antenne que la main puisse commander.
 
     Pour la manipuler à la main, réglez la manipulation CW sur « Carte son (MCW) » dans Réglages → Radio. L'appareil est alors maintenu sur une bande latérale et le sidetone du manipulateur est émis en audio, ce que pilote le manipulateur droit.
 cw-watchdog = CHIEN DE GARDE
@@ -3533,7 +3383,6 @@ cw-stop-sending-drop-whatever-has = Arrêter l'envoi et abandonner ce qui n'est 
 cw-sidetone = SIDETONE
 cw-play-keyed-tone-through-computer = Jouer la tonalité manipulée par les haut-parleurs de cet ordinateur en plus de l'émettre, pour entendre ce que vous envoyez. Sur `Carte son (MCW)`, la tonalité part vers la radio et nulle part ailleurs, donc sans cela vous émettez dans le silence. À désactiver lorsque le contrôle propre à la radio ou une copie hors ondes fait déjà le travail.
 cw-hold-what-typed-until-return = Garder ce qui est tapé jusqu'à Entrée, puis envoyer la ligne d'un bloc au lieu de manipuler chaque caractère au fur et à mesure qu'il est tapé. Utile sur un émetteur-récepteur qui se manipule à partir du texte, où chaque transfert vers son manipulateur est un nouveau cycle émission-réception.
-cw-your-own-message-buttons-contest = Vos propres boutons de message — un échange de concours, une réponse nom-et-QTH, TNX 73 GL. Chacun envoie tout son texte d'un coup, et F2–F10 en actionnent les neuf premiers. Ils voyagent avec la configuration de la station, si bien qu'un client distant les a aussi.
 cw-cw-messages = MESSAGES CW
 cw-clear-rx = {" "}EFFACER RX{" "}
 cw-empty-receive-window-straight-key = Vider la fenêtre de réception et la relecture du manipulateur droit. Rien de ce qui est en ondes ne s'arrête.
@@ -3560,7 +3409,6 @@ textmodem-call-cq = {" "}APPEL CQ{" "}
 textmodem-nocall = SANS APPEL
 textmodem-clear = {" "}EFFACER{" "}
 textmodem-hold-what-typed-until-return = Garder ce qui est tapé jusqu'à Entrée, puis envoyer la ligne d'un bloc au lieu de diffuser chaque caractère en ondes au fur et à mesure qu'il est tapé. Permet de relire une ligne et de la corriger avant qu'une partie n'en parte.
-textmodem-your-own-message-buttons-working = Vos propres boutons de message — conditions de travail, météo, réponse type. Chacun envoie tout son texte d'un coup, et F2–F10 en actionnent les neuf premiers. Ils voyagent avec la configuration de la station, si bien qu'un client distant les a aussi.
 textmodem-messages = MESSAGES
 textmodem-hell = HELL
 textmodem-contrast = Contraste
@@ -3677,7 +3525,6 @@ js8-hb-auto = HB AUTO
 js8-turbo-does-not-beacon-local = Turbo n'émet pas de balise — c'est la vitesse locale et VHF
 js8-beacon-your-callsign-grid-every = Émettre votre indicatif et votre carré toutes les 15 minutes
 js8-until-next-heartbeat = Jusqu'à la prochaine pulsation
-js8-setup = ⚙ CONFIGURATION
 js8-tx = ● TX
 js8-heard = ENTENDU
 js8-nothing-heard-yet = — rien d'entendu pour l'instant —
@@ -3818,7 +3665,6 @@ adsb-aircraft-2 = {" "}avions
 adsb-aircraft-ground-are-placed-against = Les avions au sol sont placés par rapport à la position propre de la station — un squitter de surface n'a pas de décodage non ambigu à lui seul — donc renseignez Mon carré dans la configuration des modes numériques si l'aéroport voisin n'affiche rien.
 adsb-call = INDICATIF
 adsb-icao = ICAO
-adsb-v-s = V/S
 
 ## drm (src/app/drm.rs)
 
@@ -3869,7 +3715,6 @@ atchat-off-net = hors net
 atchat-carrier = ● PORTEUSE
 atchat-another-station-transmitting-channel-busy = Une autre station émet — le canal est occupé.
 atchat-tx = ● TX
-atchat-setup = ⚙ CONFIGURATION
 atchat-station-callsign-virtual-channel-address = Indicatif de la station et adresse du canal virtuel
 atchat-virtual-channel = CANAL VIRTUEL
 atchat-work-net-over-tcp-endpoint = Travailler le net par un point de terminaison TCP au lieu de la radio — un bouclage compatible channel_server pour le développement sans radio. Désactivé met la station en ondes.
@@ -3995,7 +3840,6 @@ wspr-set-your-callsign-grid-general = Réglez votre indicatif et votre carré da
 packet-monitor = MONITEUR
 packet-busy = OCCUPÉ
 packet-frames-arrived-but-failed-their = Trames arrivées mais ayant échoué à leur contrôle de séquence — une collision, un évanouissement, ou un signal trop faible pour être lu.
-packet-setup = ⚙ CONFIGURATION
 packet-station-callsign-speed-tx-delay = Indicatif de la station, vitesse, délai d'émission, chemin de répéteurs, balise et serveur KISS
 packet-starting-packet-modem = démarrage du modem paquet…
 packet-nothing-heard-yet = rien d'entendu pour l'instant
@@ -4181,7 +4025,6 @@ app-usrp = USRP
 navtex-messages = MESSAGES
 navtex-sync = SYNCHRO
 navtex-character-phase-locked-signal-being = La phase des caractères est verrouillée — un signal est en cours de lecture.
-navtex-no-character-phase-yet-no = Aucune phase de caractères pour l'instant : pas de signal, ou pas celui-ci.
 navtex-characters-whose-first-copy-was = Caractères dont la première copie était corrompue et ont été pris sur la répétition cinq créneaux plus tard, et ceux où les deux étaient mauvaises. Un caractère NAVTEX est envoyé deux fois ; c'est toute sa correction d'erreurs.
 navtex-swap-mark-space-tones-signal = Inverser les tonalités de marque et d'espace, pour un signal reçu sur l'autre bande latérale. Désactivé, c'est la bande latérale supérieure sur la fréquence du canal, ce que disent toutes les consignes de réglage publiées pour le service.
 navtex-starting-navtex-receiver = démarrage du récepteur NAVTEX…
@@ -4249,7 +4092,6 @@ rade-rade-v1-occupies-roughly-1060 = RADE V1 occupe environ 1060–1880 Hz de la
 
 frame-acknowledge = Accuser réception
 frame-dismiss = Fermer
-frame-get-sdroxide-com = Le télécharger sur sdroxide.com
 frame-reconnecting = Reconnexion…
 frame-not-connected = Non connecté.
 frame-reconnect-now = Reconnecter maintenant
@@ -4299,12 +4141,7 @@ multi-client-cannot-open-connection = Ce client ne peut pas ouvrir de connexion.
 ## net (src/app/net.rs)
 
 net-fail = ÉCHEC
-net-will-retry = {" "}(nouvel essai à venir)
-net-full-resync-downloading = Resynchronisation complète : téléchargement…
 net-downloading = Téléchargement…
-net-full-resync-log-already-matches = Resynchronisation complète : le journal correspond déjà à Wavelog
-net-full-resync-review-changes-below = Resynchronisation complète : vérifiez les modifications ci-dessous
-net-full-resync-discarded-nothing-changed = Resynchronisation complète abandonnée ; rien n'a changé
 net-adif-import-failed-file-could = Échec de l'import ADIF : le fichier n'a pas pu être lu
 net-channel-import-failed-file-could = Échec de l'import des canaux : le fichier n'a pas pu être lu
 net-channel-import-nothing-read-chirp = Import des canaux : rien à lire — un fichier CSV CHIRP commence par une ligne d'en-tête qui nomme ses colonnes, dont l'une doit être Frequency
@@ -4404,7 +4241,6 @@ spectrum-wider-than-renderer-can-draw = Plus large que ce moteur de rendu peut d
 ## macros (src/app/panels/macros.rs)
 
 macros-nocall = SANS APPEL
-macros-each-button-sends-whole-text = Chaque bouton envoie tout son texte d'un coup. F2–F10 en actionnent les neuf premiers, tant que rien à l'écran n'a le clavier.
 macros-remove-button = Supprimer ce bouton
 
 ## gridtracker (src/app/grid_tracker.rs)
@@ -4420,7 +4256,6 @@ remote-connection-closed = connexion fermée
 
 ## solarwin (src/solar3d/mod.rs)
 
-solarwin-sdroxide-solar-system = sdroxide — système solaire
 
 ## solarbtn (src/app/solar.rs)
 
@@ -4512,7 +4347,6 @@ morse-play-what-you-type-your = Jouer ce que vous tapez, sur vos propres haut-pa
 morse-play = JOUER
 morse-stop = ARRÊT
 morse-every-character-learned-well-done = Tous les caractères appris — bravo.
-morse-drill-needs-sound-which-desktop = L'exercice exige du son, dont dispose la version de bureau.
 morse-reveal = RÉVÉLER
 morse-reset = RÉINITIALISER
 morse-replay = REJOUER
@@ -4562,9 +4396,6 @@ winlink-to-heading = À
 
 ## adsbmap: messages with values (src/adsb_map.rs)
 
-adsbmap-ft-min =
-    {""}
-    { $vr } ft/min
 
 ## aismap: messages with values (src/ais_map.rs)
 
@@ -4618,7 +4449,6 @@ duopower-w-running-barefoot-qrp =
 ## frame: messages with values (src/app/frame.rs)
 
 frame-re-enables-transmit-after-1 = Réactive l'émission après { $swr }:1. Vérifiez d'abord l'antenne : si le défaut est toujours là, la prochaine émission s'arrête aussi.
-frame-sdroxide-has-been-released = SDRoxide { $version } a été publié — vous avez la { $sdroxide_version }.
 frame-reconnecting-s = Reconnexion dans { $value } s…
 
 ## gridtracker: messages with values (src/app/grid_tracker.rs)
@@ -4682,11 +4512,6 @@ morse-was = c'était { $value }
 
 ## net: messages with values (src/app/net.rs)
 
-net-synced-z-new-already-log = Synchronisé à { $when }Z : { $added } nouveaux, { $matched } déjà dans le journal
-net-wavelog-2 = Wavelog : { $line }
-net-full-resync-stopped-nothing-changed = Resynchronisation complète arrêtée, rien n'a changé : { $error }
-net-full-resync-applied-added-updated = Resynchronisation complète appliquée : { $add } ajoutés, { $update } mis à jour, { $remove } supprimés, { $mark } des vôtres marqués comme présents dans Wavelog
-net-wavelog-3 = Wavelog : { $line }
 net-adif-import-failed = Échec de l'import ADIF : { $error }
 net-not-unicode-read = {" "}(pas en Unicode ; lu comme { $enc })
 net-received-reports-swl-left-out = , { $n } rapports de réception (SWL) laissés de côté
@@ -4852,7 +4677,6 @@ vdl2-parameter-sdroxide-does-not-read = { $unknown } { $unknown ->
 
 ## wefax: messages with values (src/app/panels/wefax.rs)
 
-wefax-lines = { $lines } lignes
 wefax-lines-held = { $live_size } lignes conservées
 wefax-pixels-per-line = { $width } pixels par ligne
 wefax-shift-picture-pixels = Décaler l'image de { $px } pixels
@@ -4979,8 +4803,6 @@ scanner-scanning-mhz = balayage · { $here } MHz
 ## spectrum: messages with values (src/app/spectrum.rs)
 
 spectrum-renderer-will-not-hold-texture = Ce moteur de rendu ne peut pas contenir une texture plus large que { $max_texture_dim } pixels.
-spectrum-mem = Mém : { $f } / { $value }
-spectrum-mem-2 = Mém : { $value }
 
 ## speech: messages with values (src/app/speech.rs)
 
@@ -5112,7 +4934,6 @@ winlink-to-list = à { $to }
 winlink-cc-list = cc { $cc }
 spots-n-of-total = { $n } sur { $total }
 wefax-n-of-total = { $n } sur { $total }
-adsb-range-bearing = { $km } km à { $bearing }°
 ais-range-bearing = { $km } km à { $bearing }°
 
 ## More values from sdroxide-types, as pickers name them (src/i18n/labels.rs).
@@ -5147,8 +4968,6 @@ sdr-play-agc-off = Désactivé (gain FI manuel)
 sdr-play-agc-hz5 = 5 Hz
 sdr-play-agc-hz50 = 50 Hz
 sdr-play-agc-hz100 = 100 Hz
-rotator-protocol-rotctld = Hamlib rotctld (TCP)
-rotator-protocol-pst-rotator = PSTRotator (UDP)
 pluto-ptt-off = Désactivé
 pluto-ptt-gpo01 = GPO0 = RX, GPO1 = TX
 pluto-ptt-gpo23 = GPO2 = RX, GPO3 = TX
@@ -5172,11 +4991,6 @@ digi-mode-data = DIGI
 digi-mode-radio = Contrôlé par la radio
 cw-keying-cat = Manipulateur de la radio (CAT)
 cw-keying-audio = Carte son (MCW)
-audio-route-both = Les deux canaux
-audio-route-left = Gauche seulement
-audio-route-right = Droite seulement
-amp-model-hr500 = Hardrock-500
-amp-model-hr50 = Hardrock-50 (non testé)
 alert-sound-ding = Ding
 alert-sound-two-tone = Deux tons
 alert-sound-triplet = Triplet
@@ -5444,10 +5258,6 @@ tls-verify-off = Ne pas vérifier
 tone-mode-off = OFF
 tone-mode-ctcss = CTCSS
 tone-mode-dcs = DCS
-tx-voice-stage-gate = Porte
-tx-voice-stage-eq = Égaliseur
-tx-voice-stage-de-ess = Dé-esseur
-tx-voice-stage-comp = Compresseur
 upload-naming-sequence = image1 … imageN (en rotation)
 upload-naming-original = Nom de fichier d'origine
 wheel-action-zoom = Zoom
@@ -6149,9 +5959,7 @@ macros-note-placeholders = { $mycall } et { $mygrid } sont remplacés au moment 
 
 macros-buttons-note = Chaque bouton envoie tout son texte d'un coup. F1–F9 actionnent les neuf premiers, tant que rien à l'écran n'a le clavier.
 
-widgets-new-entity-band = Nouvelle entité sur { $band_label }
 
-widgets-worked-before-band = Déjà contacté sur { $band_label }
 
 widgets-worked-before-any = Déjà contacté
 
@@ -6864,7 +6672,6 @@ decodes-queue-next = suivant
 
 decodes-queue-waiting = en attente
 
-decodes-session-qso-count = Session : { $session } QSO
 
 decodes-setup-hint = RÉGLAGES — l'identité de la station et les modèles que ces modes QSO partagent
 
@@ -8481,7 +8288,6 @@ sstv-bottom = Bas
 
 topbar-ptt-hold-hint = Maintenir pour émettre — un clic le verrouille, et l'appui suivant le relâche
 
-topbar-mode-offset-hint = Ce mode travaille le signal { $where } le cadran. Le nombre est le cadran, car c'est ce que vous accordez ; le signal est à { $mhz } MHz.
 
 topbar-above-the-dial = au-dessus de
 
@@ -9053,3 +8859,9 @@ settings-remote-tab-note =
 settings-cw-source-keyboard = CLAVIER
 
 settings-cw-source-usb = PADDLE USB
+
+pane-frame = TRAME
+
+pane-frames = TRAMES
+
+pane-words = MOTS

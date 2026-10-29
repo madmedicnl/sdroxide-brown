@@ -207,10 +207,10 @@ pub(in crate::app) fn settings_ui_tab(
 
         ui.label(tr!("settings-ui-palette"));
         ComboBox::from_id_salt("ui-palette")
-            .selected_text(colormap::NAMES[cfg.waterfall_palette.min(colormap::NAMES.len() - 1)])
+            .selected_text(colormap::name_tr(cfg.waterfall_palette.min(colormap::NAMES.len() - 1)))
             .show_styled(ui, |ui| {
-                for (i, name) in colormap::NAMES.iter().enumerate() {
-                    ui.selectable_value(&mut cfg.waterfall_palette, i, *name);
+                for i in 0..colormap::NAMES.len() {
+                    ui.selectable_value(&mut cfg.waterfall_palette, i, colormap::name_tr(i));
                 }
             });
         ui.end_row();
