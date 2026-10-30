@@ -8926,3 +8926,7 @@ schedule-colour-reset-hint = Zurück zur Standardfarbe für alle Sender, die gew
 settings-language = Sprache
 
 settings-language-note = Die Sprache, in der die Oberflaeche dargestellt wird. Standardmaessig folgt sie dem Betriebssystem; waehlen Sie eine andere, um sie zu ersetzen. Die Wahl wird gespeichert und gemerkt.
+
+aprs-all-chip = ALLE
+
+aprs-all-chip-hint = An: jede auf dem Kanal gehörte Nachricht, an wen auch immer. Aus: nur die an Sie oder von Ihnen, und Bulletins.

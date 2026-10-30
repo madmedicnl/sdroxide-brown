@@ -8938,3 +8938,7 @@ schedule-colour-reset-hint = Back to the stock colour for every station, forgett
 settings-language = Language
 
 settings-language-note = The language the interface is drawn in. System default follows the operating system; pick another to override it. The choice is saved and remembered.
+
+aprs-all-chip = ALL
+
+aprs-all-chip-hint = Lit: every message heard on the channel, whoever it is for. Off: only the ones to or from you, and bulletins.
