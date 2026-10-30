@@ -845,6 +845,27 @@ mod tests {
         }
     }
 
+    /// 201 messages leave 200, the oldest the one lost.
+    #[test]
+    fn the_message_log_keeps_two_hundred_and_drops_the_oldest() {
+        let mut c = AprsController::new(DigiConfig::default(), 48_000.0);
+        for n in 1..=201 {
+            c.messages.push(sdroxide_types::AprsMessage {
+                at: n,
+                from: "N0CALL".into(),
+                to: "N1CALL".into(),
+                text: format!("m{n}"),
+                id: String::new(),
+                state: Default::default(),
+                tries: 0,
+            });
+            c.trim_messages();
+        }
+        assert_eq!(c.messages.len(), 200);
+        assert_eq!(c.messages.first().map(|m| m.text.as_str()), Some("m2"));
+        assert_eq!(c.messages.last().map(|m| m.text.as_str()), Some("m201"));
+    }
+
     /// A frame off the air becomes a station on the map.
     #[test]
     fn a_position_report_puts_a_station_on_the_map() {

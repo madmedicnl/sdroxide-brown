@@ -318,11 +318,7 @@ impl SdroxideApp {
             None => &st.messages,
         };
         let filter = self.vdl2_filter.trim().to_ascii_uppercase();
-        let rows: Vec<(usize, &Vdl2Message)> = log
-            .iter()
-            .enumerate()
-            .filter(|(_, m)| filter.is_empty() || matches_filter(m, &filter))
-            .collect();
+        let rows = message_rows(log, &filter);
 
         let card = self.vdl2_selected.and_then(|i| log.get(i));
         let card_h = if card.is_some() { (avail_h * 0.42).clamp(130.0, 260.0) } else { 0.0 };
@@ -334,10 +330,6 @@ impl SdroxideApp {
             .max_height(list_h)
             .min_scrolled_height(list_h)
             .auto_shrink([false, false])
-            // Newest at the bottom, and follow it: a log is read the way a
-            // conversation is heard. Not while held — the whole point of
-            // holding is that the view stays where it was put.
-            .stick_to_bottom(hold.is_none())
             .show_themed(ui, |ui| {
                 if rows.is_empty() {
                     ui.label(
@@ -531,6 +523,16 @@ impl SdroxideApp {
             ui.end_row();
         });
     }
+}
+
+/// The rows of the message list, each with its place in `log` (which the
+/// selection is an index into), newest first.
+fn message_rows<'a>(log: &'a [Vdl2Message], filter: &str) -> Vec<(usize, &'a Vdl2Message)> {
+    log.iter()
+        .enumerate()
+        .rev()
+        .filter(|(_, m)| filter.is_empty() || matches_filter(m, filter))
+        .collect()
 }
 
 /// Whether a message matches the filter box, which searches everything an
@@ -904,6 +906,21 @@ mod tests {
         s.messages = msgs;
         s.last_at = last;
         s
+    }
+
+    /// The list shows the newest message first, like every other message log:
+    /// place 1 is the one that has just arrived.
+    #[test]
+    fn the_newest_message_is_listed_first_and_keeps_its_place_in_the_log() {
+        let log: Vec<Vdl2Message> = (1..=3u32)
+            .map(|n| Vdl2Message { at: i64::from(n), ..msg(n, Vdl2Payload::None) })
+            .collect();
+        let rows = message_rows(&log, "");
+        assert_eq!(rows.iter().map(|(_, m)| m.at).collect::<Vec<_>>(), vec![3, 2, 1]);
+        assert_eq!(rows.iter().map(|(i, _)| *i).collect::<Vec<_>>(), vec![2, 1, 0]);
+        let one = message_rows(&log, "000002");
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].0, 1, "a filtered row still points at its own place in the log");
     }
 
     fn msg(src: u32, payload: Vdl2Payload) -> Vdl2Message {
