@@ -5400,6 +5400,13 @@ navtex-sensitivity-hint =
     
     Ce n'est pas le volume : NAVTEX est de la FSK, les gris viennent des tons et non de la force du signal.
 
+
+navtex-loss-limit-hint =
+    Nombre de slots consécutifs sans copie lisible avant abandon de la synchronisation.
+    
+navtex-disagree-limit-hint =
+    Nombre de slots consécutifs dont les deux copies sont légales mais différentes avant abandon de la synchronisation.
+    
 navtex-auto-hint = Revient aux seuils de référence (0). Mis en évidence quand actif.
 
 navtex-tune-dial-usb-below-channel = Accorde le cadran ici (USB, 1,710 kHz sous le canal).
