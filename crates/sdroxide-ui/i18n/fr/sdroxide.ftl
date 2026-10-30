@@ -8947,3 +8947,37 @@ aprs-all-chip-hint = Allumé : tous les messages entendus sur le canal, quel que
 aprs-composer-hidden-swl = L'envoi est masqué : le mode SWL / écoute est actif. Désactivez-le pour écrire et envoyer un message.
 
 aprs-compose-count-hint = Caractères utilisés sur les 67 qu'un message APRS peut contenir.
+
+tx-bands-title = Bandes d'émission
+
+tx-bands-note = Mettez TX sur OUI uniquement pour les bandes où cette radio émet réellement. Ce réglage passe avant tous les autres réglages d'émission ; OUI ne lève jamais les autres sécurités.
+
+tx-bands-careful = ⚠ Une mauvaise bande peut détruire la radio : vérifiez bien chaque option.
+
+tx-bands-yes = OUI
+
+tx-bands-no = NON
+
+tx-bands-confirmed = ✓ Bandes d'émission validées pour cette radio
+
+tx-bands-ack = J'ai vérifié ces bandes par rapport à ma radio
+
+tx-bands-confirm = Valider ces bandes
+
+tx-bands-confirm-hint = Cochez d'abord la case : la validation se fait une fois par radio.
+
+tx-bands-check = Vérifier les bandes…
+
+tx-bands-notice-new = L'émission est coupée sur toutes les bandes. Choisissez les bandes où cette radio émet et validez-les une seule fois. En raison des risques pour la radio, vérifiez bien les options choisies.
+
+tx-bands-notice-carried = Vos bandes d'émission ont été reprises de la version précédente. L'émission reste bloquée tant que vous ne les avez pas vérifiées et validées une fois. En raison des risques pour la radio, vérifiez bien chaque option.
+
+tx-bands-refused = L'émission est coupée sur { $band } : le cadran est revenu à { $mhz } MHz. Pour utiliser cette bande, activez-la dans Réglages → Radio, ou repassez par le mode écoute.
+
+tx-bands-launch = L'émission est coupée sur { $band } : démarrage en mode écoute. Activez la bande dans Réglages → Radio pour y émettre.
+
+tx-bands-listen = Mode écoute
+
+tx-bands-listen-hint = Passer à l'écran d'écoute (sans commandes d'émission) pour accéder à n'importe quelle bande.
+
+tx-bands-ptt-off = L'émission est coupée pour cette bande, ou les bandes d'émission ne sont pas encore validées (Réglages → Radio → Bandes d'émission).

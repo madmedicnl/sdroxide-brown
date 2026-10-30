@@ -92,7 +92,7 @@ fn caps(tx_audio: bool) -> DeviceCaps {
 fn key_up(tx_audio: bool) -> (Log, Option<String>) {
     let log = Arc::new(Mutex::new(Log::default()));
     let src = MockIqCat { log: Arc::clone(&log) };
-    let cfg = EngineConfig { tx_ham_only: false, ..Default::default() };
+    let cfg = EngineConfig { tx_bands_open: true, tx_ham_only: false, ..Default::default() };
     let mut h = start_engine(Box::new(src), caps(tx_audio), cfg);
     let thread = h.thread.take();
 

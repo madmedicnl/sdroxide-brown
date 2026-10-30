@@ -8946,3 +8946,37 @@ aprs-all-chip-hint = Lit: every message heard on the channel, whoever it is for.
 aprs-composer-hidden-swl = Sending is hidden: SWL / listen mode is on. Turn it off to write and send a message.
 
 aprs-compose-count-hint = Characters used out of the 67 an APRS message can carry.
+
+tx-bands-title = Transmit bands
+
+tx-bands-note = Switch TX to YES only on the bands this radio really transmits on. This comes before every other transmit setting; YES never lifts the other safety limits.
+
+tx-bands-careful = ⚠ A wrong band can destroy the radio: check every option carefully.
+
+tx-bands-yes = YES
+
+tx-bands-no = NO
+
+tx-bands-confirmed = ✓ Transmit bands confirmed for this radio
+
+tx-bands-ack = I have checked these bands against my radio
+
+tx-bands-confirm = Confirm these bands
+
+tx-bands-confirm-hint = Tick the box first: you confirm once for each radio.
+
+tx-bands-check = Check bands…
+
+tx-bands-notice-new = Transmit is off on every band. Choose the bands this radio transmits on and confirm them once. Because of the risk to the radio, check the options you choose carefully.
+
+tx-bands-notice-carried = Your transmit bands were carried over from the previous version. Transmit stays blocked until you check and confirm them once. Because of the risk to the radio, check every option carefully.
+
+tx-bands-refused = Transmit is off on { $band }: the dial went back to { $mhz } MHz. To use that band, switch it on in Settings → Radio, or go through listen mode.
+
+tx-bands-launch = Transmit is off on { $band }: starting in listen mode. Switch the band on in Settings → Radio to transmit there.
+
+tx-bands-listen = Listen mode
+
+tx-bands-listen-hint = Switch to the listening screen (no transmit controls) to tune to any band.
+
+tx-bands-ptt-off = Transmit is off for this band, or the transmit bands are not confirmed yet (Settings → Radio → Transmit bands).

@@ -940,6 +940,88 @@ fn transverter_table(ui: &mut egui::Ui, cfg: &mut sdroxide_types::RadioConfig) {
     });
 }
 
+/// The bands this radio may transmit on: one YES/NO per band, and the one-time
+/// confirmation. First in the transmit settings because it comes before every
+/// other transmit setting — a band that is NO is never keyed, and YES does not
+/// lift any other limit (the radio's own range, the amateur-band rail, the band
+/// plan segments).
+///
+/// Every band in [`Band::ALL`] is here, none hidden: the last row, "Other", is
+/// any frequency that is in no band — what the ALL selector tunes to.
+fn tx_bands_table(ui: &mut egui::Ui, cfg: &mut sdroxide_types::RadioConfig) {
+    use sdroxide_types::Band;
+
+    ui.add_space(10.0);
+    ui.separator();
+    ui.end_row();
+    ui.add_space(4.0);
+    ui.label(RichText::new(tr!("tx-bands-title")).size(14.0).strong().color(crate::theme::CYAN()));
+    ui.add_space(2.0);
+    note(ui, &tr!("tx-bands-note"));
+    ui.add_space(2.0);
+    ui.label(RichText::new(tr!("tx-bands-careful")).color(crate::theme::YELLOW()));
+    ui.add_space(6.0);
+
+    let mut set: Option<(Band, bool)> = None;
+    let listed = cfg.tx_band_enable.clone().unwrap_or_default();
+    egui::Grid::new("tx-bands-grid")
+        .num_columns(8)
+        .spacing([12.0, 6.0])
+        .min_row_height(ui.spacing().interact_size.y)
+        .striped(true)
+        .show(ui, |ui| {
+            for (i, band) in Band::ALL.iter().enumerate() {
+                let on = listed.contains(band);
+                ui.label(if *band == Band::Gen {
+                    tr!("settings-other")
+                } else {
+                    band.label().to_string()
+                });
+                let mut choice = on;
+                egui::ComboBox::from_id_salt(("tx-band", i))
+                    .width(64.0)
+                    .selected_text(if on { tr!("tx-bands-yes") } else { tr!("tx-bands-no") })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut choice, true, tr!("tx-bands-yes"));
+                        ui.selectable_value(&mut choice, false, tr!("tx-bands-no"));
+                    });
+                if choice != on {
+                    set = Some((*band, choice));
+                }
+                if i % 4 == 3 {
+                    ui.end_row();
+                }
+            }
+            ui.end_row();
+        });
+    if let Some((band, on)) = set {
+        let bands = cfg.tx_band_enable.get_or_insert_with(Vec::new);
+        bands.retain(|b| *b != band);
+        if on {
+            bands.push(band);
+        }
+    }
+
+    ui.add_space(6.0);
+    if cfg.tx_bands_confirmed {
+        ui.label(RichText::new(tr!("tx-bands-confirmed")).color(crate::theme::GREEN()));
+    } else {
+        let id = ui.id().with("tx-bands-ack");
+        let mut ack: bool = ui.data(|d| d.get_temp(id)).unwrap_or(false);
+        if crate::chrome::checkbox(ui, &mut ack, tr!("tx-bands-ack")).changed() {
+            ui.data_mut(|d| d.insert_temp(id, ack));
+        }
+        if ui
+            .add_enabled(ack, egui::Button::new(tr!("tx-bands-confirm")))
+            .on_disabled_hover_text(tr!("tx-bands-confirm-hint"))
+            .clicked()
+        {
+            cfg.tx_bands_confirmed = true;
+        }
+    }
+    ui.end_row();
+}
+
 /// The operator's hard ceiling on transmit drive (issue #504).
 ///
 /// Drawn above the band calibration because it is the other kind of thing: the
@@ -1015,11 +1097,9 @@ fn drive_trim_table(ui: &mut egui::Ui, cfg: &mut sdroxide_types::RadioConfig) {
     );
     ui.add_space(6.0);
 
-    // Bands the station's own region actually has: a Region 1 operator has no
-    // 1.25 m to calibrate, and a row for one would be a row that can never be
-    // reached. GEN closes the table for a dial outside every ham band.
-    let bands: Vec<Band> =
-        Band::ALL.iter().copied().filter(|b| *b == Band::Gen || b.edges().is_some()).collect();
+    // Every band, whatever the region: no two radios are alike, and a band the
+    // station's region lacks may still be one this radio transmits on.
+    let bands: Vec<Band> = Band::ALL.to_vec();
     let mut set: Option<(Band, f32)> = None;
     egui::Grid::new("drive-trim-grid")
         .num_columns(8)
@@ -3183,6 +3263,7 @@ impl SdroxideApp {
                 // selected above, so it sits here rather than in one of the
                 // per-backend sections below.
                 if self.tx_capable() {
+                    tx_bands_table(ui, cfg);
                     drive_ceiling_row(ui, cfg);
                     drive_trim_table(ui, cfg);
                     ui.separator();

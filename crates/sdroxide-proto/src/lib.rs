@@ -2159,8 +2159,16 @@ use sdroxide_types::{
 /// VU and bars. Until now only the DAB status carried a level. It is sent only
 /// while a screen holds a lease: `Command` gains `WantAudioLevel` last, renewed
 /// about once a second by an open panel. `PROTO_VERSION` 256 → 257, `VERSION_BYTE` 0x4C → 0x4D. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 257;
-const VERSION_BYTE: u8 = 0x4D;
+/// v258: **the transmit band list.** [`sdroxide_types::RadioConfig`] gains
+/// `tx_band_enable` and `tx_bands_confirmed` at its tail: the bands the operator
+/// has switched TX on for, and whether they have confirmed the list. The engine
+/// refuses a key-down on any other band, ahead of every other rail.
+/// `RadioConfig` rides `ServerMsg::RadioConfig` and `Command::SetRadioConfig`
+/// whole, so the appended fields move their layout. `#[serde(default)]`, so a
+/// `radio.json` written before this loads unchanged — and is carried over
+/// unconfirmed. `PROTO_VERSION` 257 → 258, `VERSION_BYTE` 0x4D → 0x4E.
+pub const PROTO_VERSION: u16 = 258;
+const VERSION_BYTE: u8 = 0x4E;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3403,7 +3411,7 @@ mod tests {
         // Byte 0 is `VERSION_BYTE`; byte 1 is the variant index (< 128 here).
         let (a, b) = (encode(&slide).unwrap()[1], encode(&level).unwrap()[1]);
         assert_eq!(b, a + 1, "AudioLevel must directly follow DabSlide");
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (257, 0x4D));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (258, 0x4E));
     }
 
     /// postcard is positional: a field inserted mid-struct shifts every byte

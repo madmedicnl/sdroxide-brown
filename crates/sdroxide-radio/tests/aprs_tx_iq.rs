@@ -96,7 +96,7 @@ fn iq_over(cmds: Vec<Command>) -> Vec<Complex32> {
         ..DeviceCaps::default()
     };
     let (producer, _consumer) = rtrb::RingBuffer::<f32>::new(48_000);
-    let cfg = EngineConfig {
+    let cfg = EngineConfig { tx_bands_open: true,
         tx_ham_only: false,
         remember_session: false,
         audio: Some(AudioParams { producer, out_rate: 48_000.0 }),

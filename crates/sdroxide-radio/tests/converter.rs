@@ -160,7 +160,7 @@ fn the_dial_stays_on_air_while_the_hardware_takes_the_offset() {
     let mut h = start_engine(
         Box::new(source),
         shift_caps(hardware_caps(), OFFSET, None),
-        EngineConfig::default(),
+        EngineConfig { tx_bands_open: true, ..EngineConfig::default() },
     );
     let thread = h.thread.take();
 
@@ -195,7 +195,7 @@ fn the_engine_starts_on_the_operator_frequency() {
     let mut h = start_engine(
         Box::new(source),
         shift_caps(hardware_caps(), OFFSET, None),
-        EngineConfig::default(),
+        EngineConfig { tx_bands_open: true, ..EngineConfig::default() },
     );
     let thread = h.thread.take();
 
@@ -222,7 +222,7 @@ fn a_converter_composes_with_a_zero_if_lo_offset() {
     let mut h = start_engine(
         Box::new(source),
         shift_caps(hardware_caps(), OFFSET, None),
-        EngineConfig::default(),
+        EngineConfig { tx_bands_open: true, ..EngineConfig::default() },
     );
     let thread = h.thread.take();
 
@@ -261,7 +261,7 @@ fn an_unreachable_dial_is_refused_in_the_operators_own_numbers() {
     let mut h = start_engine(
         Box::new(source),
         shift_caps(hardware_caps(), OFFSET, None),
-        EngineConfig::default(),
+        EngineConfig { tx_bands_open: true, ..EngineConfig::default() },
     );
     let thread = h.thread.take();
 
@@ -357,7 +357,7 @@ fn a_qo100_station_keys_up_on_its_uplink() {
     let mut h = start_engine(
         Box::new(source),
         shift_caps(qo100_caps(), LNB, Some(0.0)),
-        EngineConfig::default(),
+        EngineConfig { tx_bands_open: true, ..EngineConfig::default() },
     );
     let thread = h.thread.take();
 
@@ -748,7 +748,7 @@ fn a_converter_switched_on_under_a_running_radio_relabels_the_dial() {
     });
 
     // Before Apply: no converter, the dial on the 739 MHz the LNB is delivering.
-    let cfg = EngineConfig { reopen: Some(reopen), ..Default::default() };
+    let cfg = EngineConfig { tx_bands_open: true, reopen: Some(reopen), ..Default::default() };
     let mut h = start_engine(Box::new(Hardware::new(IF_HZ)), qo100_caps(), cfg);
     let thread = h.thread.take();
     h.swap_tx.send(EngineSwap::ReopenSource).expect("the engine is running");
@@ -808,7 +808,7 @@ fn a_swap_to_a_front_end_that_cannot_reach_the_dial_moves_it() {
 
     let inner = Hardware::new(DOWNLINK + LNB);
     let source = ConvertedSource::new(Box::new(inner), LNB, Some(0.0));
-    let cfg = EngineConfig { reopen: Some(reopen), ..Default::default() };
+    let cfg = EngineConfig { tx_bands_open: true, reopen: Some(reopen), ..Default::default() };
     let mut h = start_engine(Box::new(source), shift_caps(qo100_caps(), LNB, Some(0.0)), cfg);
     let thread = h.thread.take();
     h.swap_tx.send(EngineSwap::ReopenSource).expect("the engine is running");

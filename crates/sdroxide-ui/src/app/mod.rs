@@ -73,9 +73,9 @@ pub(in crate::app) mod recording_jobs;
 pub(in crate::app) mod rotor;
 pub(in crate::app) mod sat;
 pub(in crate::app) mod save_text;
-pub(in crate::app) mod session_qsos;
 pub(in crate::app) mod scanner;
 pub(in crate::app) mod schedule;
+pub(in crate::app) mod session_qsos;
 pub(in crate::app) mod settings;
 pub(in crate::app) mod signal_id;
 pub(in crate::app) mod solar;
@@ -84,6 +84,7 @@ pub(in crate::app) mod speech;
 pub(in crate::app) mod spots;
 mod swl_log;
 pub(in crate::app) mod top_bar;
+mod tx_bands;
 /// The update check — native only (a browser has no updater to point at).
 #[cfg(not(target_arch = "wasm32"))]
 pub(in crate::app) mod update;
@@ -316,6 +317,14 @@ pub struct SdroxideApp {
     /// Persistent, non-fatal operator notice (e.g. radio audio input
     /// unavailable / mono card selected for IQ). Shown as a warning banner.
     radio_notice: Option<String>,
+    /// Why the dial was put back, or the screen sent to listening, because the
+    /// band is not enabled for transmit (see `tx_bands.rs`). Dismissable, with
+    /// a button that goes to the listening screen.
+    tx_band_msg: Option<String>,
+    /// The last dial inside an enabled band, which the guard puts back.
+    tx_band_last_ok: Option<(sdroxide_types::Vfo, f64)>,
+    /// The frequency (as bits) a put-back was already sent for, so it is sent once.
+    tx_band_reverting: Option<u64>,
     /// Another sdroxide found running on this machine at start-up — see
     /// [`SdroxideApp::warn_other_instance`]. Kept apart from `radio_notice`
     /// because the engine clears that one with its own notices, and this is
@@ -2091,6 +2100,9 @@ impl SdroxideApp {
             retry_at: None,
             retry_backoff: RETRY_MIN_S,
             radio_notice: None,
+            tx_band_msg: None,
+            tx_band_last_ok: None,
+            tx_band_reverting: None,
             other_instance: None,
             #[cfg(not(target_arch = "wasm32"))]
             panel_undock_notice_mode: None,
@@ -3236,7 +3248,7 @@ impl SdroxideApp {
     /// The banner's Dismiss: one banner shows at a time, so one press takes
     /// the one on screen — the engine's notice first, then this warning.
     pub(in crate::app) fn dismiss_notice(&mut self) {
-        if self.radio_notice.take().is_none() {
+        if self.radio_notice.take().is_none() && self.tx_band_msg.take().is_none() {
             self.other_instance = None;
         }
     }
