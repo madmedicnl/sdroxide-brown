@@ -1207,6 +1207,9 @@ pub struct SdroxideApp {
     /// APRS: which pane of the message column is showing — the conversation or
     /// the raw frames on the channel.
     aprs_show_traffic: bool,
+    /// The message pane lists every message heard, not only ours. On by default:
+    /// an overheard message is the whole point of listening.
+    aprs_msgs_all: bool,
     /// APRS: filter for the station list; matches a callsign or a comment.
     aprs_filter: String,
     /// APRS: what is typed in the latitude and longitude boxes.
@@ -2431,6 +2434,7 @@ impl SdroxideApp {
             atchat_img_at: 0,
             atchat_img_cache: std::collections::HashMap::new(),
             aprs_show_traffic: false,
+            aprs_msgs_all: true,
             aprs_filter: String::new(),
             aprs_lat_buf: String::new(),
             aprs_lon_buf: String::new(),

@@ -8927,3 +8927,11 @@ schedule-colour-reset-hint = Volver al color original de todas las emisoras, olv
 settings-language = Idioma
 
 settings-language-note = El idioma en el que se dibuja la interfaz. Por defecto sigue al sistema operativo; elija otro para sustituirlo. La eleccion se guarda y se recuerda.
+
+aprs-all-chip = TODOS
+
+aprs-all-chip-hint = Encendido: todos los mensajes oídos en el canal, sea cual sea el destinatario. Apagado: solo los dirigidos a usted o enviados por usted, y los boletines.
+
+aprs-composer-hidden-swl = El envío está oculto: el modo SWL / escucha está activo. Desactívelo para escribir y enviar un mensaje.
+
+aprs-compose-count-hint = Caracteres usados de los 67 que admite un mensaje APRS.

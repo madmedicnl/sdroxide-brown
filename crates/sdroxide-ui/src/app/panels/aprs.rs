@@ -637,6 +637,17 @@ impl SdroxideApp {
                 }
             }
             crate::chrome::row_tail(ui, |ui| {
+                if !self.aprs_show_traffic
+                    && crate::chrome::chip(
+                        ui,
+                        self.aprs_msgs_all,
+                        RichText::new(tr!("aprs-all-chip")).size(9.5),
+                    )
+                    .on_hover_text(tr!("aprs-all-chip-hint"))
+                    .clicked()
+                {
+                    self.aprs_msgs_all = !self.aprs_msgs_all;
+                }
                 if crate::chrome::chip(ui, self.aprs_show_traffic, RichText::new(tr!("aprs-raw-chip")).size(9.5))
                     .on_hover_text(tr!("aprs-every-frame-channel-arrived-other"))
                     .clicked()
@@ -683,11 +694,20 @@ impl SdroxideApp {
                     }
                     return;
                 }
-                if st.messages.is_empty() {
+                // Ours, to us, or a bulletin; everything else only when ALL is lit.
+                let mine = |m: &sdroxide_types::AprsMessage| {
+                    !me.is_empty()
+                        && (m.from.eq_ignore_ascii_case(&me) || m.to.eq_ignore_ascii_case(&me))
+                        || m.to.to_ascii_uppercase().starts_with("BLN")
+                };
+                let shown: Vec<&sdroxide_types::AprsMessage> =
+                    st.messages.iter().filter(|m| self.aprs_msgs_all || mine(m)).collect();
+                if shown.is_empty() {
                     ui.label(RichText::new(tr!("aprs-no-messages")).weak().size(10.5));
                 }
-                for m in &st.messages {
+                for m in shown {
                     let ours = m.from.eq_ignore_ascii_case(&me) && !me.is_empty();
+                    let to_me = !me.is_empty() && m.to.eq_ignore_ascii_case(&me);
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         ui.label(
@@ -696,12 +716,17 @@ impl SdroxideApp {
                                 .size(9.0)
                                 .weak(),
                         );
-                        let who = if ours { format!("→{}", m.to) } else { m.from.clone() };
-                        ui.label(RichText::new(who).monospace().size(10.5).color(if ours {
-                            theme::GREEN()
+                        // Ours read "→TO"; to us, the sender; overheard ones, both
+                        // ends, dimmed, so a conversation between two other
+                        // stations is not mistaken for something addressed to us.
+                        let (who, colour) = if ours {
+                            (format!("→{}", m.to), theme::GREEN())
+                        } else if to_me {
+                            (m.from.clone(), theme::YELLOW())
                         } else {
-                            theme::YELLOW()
-                        }));
+                            (format!("{}→{}", m.from, m.to), theme::gray(150))
+                        };
+                        ui.label(RichText::new(who).monospace().size(10.5).color(colour));
                         ui.label(RichText::new(&m.text).size(10.5));
                         if ours {
                             // Words, not symbols. The packaged font has no
@@ -757,7 +782,11 @@ impl SdroxideApp {
             });
 
         ui.add_space(2.0);
-        if !self.swl_mode() {
+        if self.swl_mode() {
+            // Hidden on purpose in SWL mode, but never without saying so: a
+            // pane with no way to answer and no word about why reads as broken.
+            ui.label(RichText::new(tr!("aprs-composer-hidden-swl")).weak().size(10.0));
+        } else {
             let mut send = false;
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
@@ -770,7 +799,7 @@ impl SdroxideApp {
                 if to.changed() {
                     self.aprs_target = self.aprs_target.to_ascii_uppercase();
                 }
-                let room = (ui.available_width() - 56.0).max(60.0);
+                let room = (ui.available_width() - 90.0).max(60.0);
                 let text = ui.add(
                     egui::TextEdit::singleline(&mut self.aprs_draft)
                         .hint_text(tr!("aprs-message-hint"))
@@ -779,7 +808,17 @@ impl SdroxideApp {
                 );
                 if text.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     send = true;
+                    // Enter takes the focus with it; a second message should not
+                    // need the box clicking into again.
+                    text.request_focus();
                 }
+                ui.label(
+                    RichText::new(format!("{}/{MSG_MAX}", self.aprs_draft.chars().count()))
+                        .monospace()
+                        .size(9.0)
+                        .weak(),
+                )
+                .on_hover_text(tr!("aprs-compose-count-hint"));
                 let ready = !self.aprs_target.trim().is_empty() && !self.aprs_draft.trim().is_empty();
                 if tx_gated(ui, tx_ok && ready && have_call, |ui| {
                     crate::chrome::chip_accent(

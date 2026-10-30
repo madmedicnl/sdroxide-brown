@@ -4350,7 +4350,8 @@ mod tests {
         assert_eq!(ACARS_MESSAGE_MAX, MESSAGE_LOG_MAX);
         assert_eq!(DSC_MESSAGE_MAX, MESSAGE_LOG_MAX);
         assert_eq!(NAVTEX_MESSAGE_MAX, MESSAGE_LOG_MAX);
-        assert_eq!(crate::APRS_MESSAGE_MAX, MESSAGE_LOG_MAX);
+        // APRS keeps 500: it lists every message on the channel, not only ours.
+        assert_eq!(crate::APRS_MESSAGE_MAX, 500);
         assert_eq!(crate::JTTY_MESSAGE_MAX, MESSAGE_LOG_MAX);
         assert_eq!(usize::from(crate::VDL2_MESSAGE_MAX), MESSAGE_LOG_MAX);
         assert!(usize::from(crate::VDL2_MESSAGES) <= MESSAGE_LOG_MAX, "the default");

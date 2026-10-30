@@ -8939,3 +8939,11 @@ schedule-colour-reset-hint = Retour à la couleur d'origine pour toutes les stat
 settings-language = Langue
 
 settings-language-note = La langue dans laquelle l interface est affichee. Par defaut, elle suit le systeme d exploitation ; choisissez-en une autre pour la remplacer. Le choix est enregistre et memorise.
+
+aprs-all-chip = TOUS
+
+aprs-all-chip-hint = Allumé : tous les messages entendus sur le canal, quel que soit le destinataire. Éteint : seulement ceux qui vous concernent, et les bulletins.
+
+aprs-composer-hidden-swl = L'envoi est masqué : le mode SWL / écoute est actif. Désactivez-le pour écrire et envoyer un message.
+
+aprs-compose-count-hint = Caractères utilisés sur les 67 qu'un message APRS peut contenir.
