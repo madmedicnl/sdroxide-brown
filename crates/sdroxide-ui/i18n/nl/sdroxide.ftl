@@ -8940,3 +8940,7 @@ settings-language-note = De taal waarin de interface wordt getekend. Standaard v
 aprs-all-chip = ALLES
 
 aprs-all-chip-hint = Aan: elk bericht dat op het kanaal te horen is, voor wie het ook bedoeld is. Uit: alleen de berichten aan of van u, en bulletins.
+
+aprs-composer-hidden-swl = Verzenden is verborgen: de SWL-/luistermodus staat aan. Zet hem uit om een bericht te schrijven en te verzenden.
+
+aprs-compose-count-hint = Gebruikte tekens van de 67 die een APRS-bericht kan bevatten.

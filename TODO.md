@@ -1,6 +1,6 @@
 # TODO — SDR Oxide Brown
 
-Working queue. Rules in AGENTS.md. Last updated 2026-10-29.
+Working queue. Rules in AGENTS.md. Last updated 2026-10-30.
 
 State: `main` at crate 2.2.0, PROTO_VERSION 256 (0x4C). Latest release
 v2.2.0.3_brown. Open PRs: 3 (#318, #339, #341). Open issues: 15 (re-measured 2026-10-29).
@@ -35,6 +35,7 @@ v2.2.0.3_brown. Open PRs: 3 (#318, #339, #341). Open issues: 15 (re-measured 202
 - NAVTEX sync-drop (added by Roy, owned by Roy) — PR #308 open.
 - UDP feed VDL2/ACARS/DSC/HFDL (added by Roy, owned by Roy) — PR #318 open.
   Rolling-window fix toegepast.
+- APRS panel: all messages heard, 500 kept, composer note, RX/TX engine tests (added by madmedicnl, owned by Roy; touches F4NRM's APRS area, PR for his review) — decoder fault #259 not reproduced in the engine; needs a real capture.
 
 ## Waiting on other people
 

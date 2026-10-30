@@ -8930,3 +8930,7 @@ settings-language-note = Die Sprache, in der die Oberflaeche dargestellt wird. S
 aprs-all-chip = ALLE
 
 aprs-all-chip-hint = An: jede auf dem Kanal gehörte Nachricht, an wen auch immer. Aus: nur die an Sie oder von Ihnen, und Bulletins.
+
+aprs-composer-hidden-swl = Senden ist ausgeblendet: SWL-/Hörmodus ist aktiv. Schalten Sie ihn aus, um eine Nachricht zu schreiben und zu senden.
+
+aprs-compose-count-hint = Verwendete Zeichen von den 67, die eine APRS-Nachricht fassen kann.

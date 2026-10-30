@@ -782,7 +782,11 @@ impl SdroxideApp {
             });
 
         ui.add_space(2.0);
-        if !self.swl_mode() {
+        if self.swl_mode() {
+            // Hidden on purpose in SWL mode, but never without saying so: a
+            // pane with no way to answer and no word about why reads as broken.
+            ui.label(RichText::new(tr!("aprs-composer-hidden-swl")).weak().size(10.0));
+        } else {
             let mut send = false;
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
@@ -795,7 +799,7 @@ impl SdroxideApp {
                 if to.changed() {
                     self.aprs_target = self.aprs_target.to_ascii_uppercase();
                 }
-                let room = (ui.available_width() - 56.0).max(60.0);
+                let room = (ui.available_width() - 90.0).max(60.0);
                 let text = ui.add(
                     egui::TextEdit::singleline(&mut self.aprs_draft)
                         .hint_text(tr!("aprs-message-hint"))
@@ -804,7 +808,17 @@ impl SdroxideApp {
                 );
                 if text.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     send = true;
+                    // Enter takes the focus with it; a second message should not
+                    // need the box clicking into again.
+                    text.request_focus();
                 }
+                ui.label(
+                    RichText::new(format!("{}/{MSG_MAX}", self.aprs_draft.chars().count()))
+                        .monospace()
+                        .size(9.0)
+                        .weak(),
+                )
+                .on_hover_text(tr!("aprs-compose-count-hint"));
                 let ready = !self.aprs_target.trim().is_empty() && !self.aprs_draft.trim().is_empty();
                 if tx_gated(ui, tx_ok && ready && have_call, |ui| {
                     crate::chrome::chip_accent(
