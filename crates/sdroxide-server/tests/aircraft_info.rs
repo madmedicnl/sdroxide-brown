@@ -214,4 +214,10 @@ async fn nothing_is_fetched_for_an_aircraft_nobody_asked_about_and_a_release_nee
     assert!(bare.starts_with("HTTP/1.1 403"), "{bare}");
     let ok = send(PORT_PHOTO_OPEN, "DELETE", "/aircraft-photo", "x-sdroxide: 1\r\n").await;
     assert!(ok.starts_with("HTTP/1.1 204"), "{ok}");
+    let one = send(PORT_PHOTO_OPEN, "DELETE", "/aircraft-photo/484006", "x-sdroxide: 1\r\n").await;
+    assert!(one.starts_with("HTTP/1.1 204"), "{one}");
+    let bare_one = send(PORT_PHOTO_OPEN, "DELETE", "/aircraft-photo/484006", "").await;
+    assert!(bare_one.starts_with("HTTP/1.1 403"), "{bare_one}");
+    let junk = send(PORT_PHOTO_OPEN, "DELETE", "/aircraft-photo/zz", "x-sdroxide: 1\r\n").await;
+    assert!(junk.starts_with("HTTP/1.1 400"), "{junk}");
 }

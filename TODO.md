@@ -76,6 +76,7 @@ v2.2.0.3_brown. Open PRs: 3 (#318, #339, #341). Open issues: 15 (re-measured 202
 - AppImage — beslissing nodig.
 
 ## Recently done
+- 2026-10-30 — Aircraft photo: the station keeps 10 thumbnails for 30 s (was 1), loads several aircraft at once (up to 3, same aircraft once) instead of answering 429, frees its place even if a download panics, a closing card releases only its own picture, and a failed thumbnail is asked again (3 times) while the card stays open.
 - 2026-10-29 — Every message log keeps at most 200 (ACARS, DSC, APRS, VDL2 were 300/300/300/2000), VDL2 list newest first (added by madmedicnl, owned by Roy; touches F4NRM's DSC/NAVTEX/APRS caps, PR for his review)
 - 2026-10-29 — ACARS channel chips tune the VFO in use, light the real channel, grey out unreachable ones (added by madmedicnl, owned by Roy)
 - 2026-10-29 — Aircraft online read: a failing or slow card no longer blocks the others (3 at once, 15 s limit, retry 30 s, failure says so) (added by madmedicnl, owned by Roy)
