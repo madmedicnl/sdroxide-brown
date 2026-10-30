@@ -188,11 +188,18 @@ pub(in crate::app) fn photo_url(peer_url: &str, icao: u32) -> Option<String> {
     Some(format!("{base}/aircraft-photo/{}", super::aircraft_card::icao_hex(icao)))
 }
 
-/// Where the card being closed lets the thumbnail go: `DELETE {station}/aircraft-photo`.
-pub(in crate::app) fn photo_release_url(peer_url: &str) -> Option<String> {
-    let base = crate::login::http_base(&crate::login::station_key(peer_url))?;
-    Some(format!("{base}/aircraft-photo"))
+/// Where the card being closed lets its thumbnail go:
+/// `DELETE {station}/aircraft-photo/{icao}`. Only that aircraft's, so a card
+/// opened a moment before keeps its own.
+pub(in crate::app) fn photo_release_url(peer_url: &str, icao: u32) -> Option<String> {
+    photo_url(peer_url, icao)
 }
+
+/// Seconds a thumbnail that failed waits before it is asked for again while its
+/// card stays open, and how many times: the station may have been busy or the
+/// picture's host slow, which mends itself.
+pub(in crate::app) const THUMB_RETRY_S: f64 = 4.0;
+pub(in crate::app) const THUMB_TRIES: u8 = 3;
 
 /// Whether the thumbnail held is for a card that is no longer open: nothing has
 /// asked for it in the frame before this one or the one before that. The card
@@ -579,11 +586,11 @@ mod tests {
             Some("https://shack.example/sdr/aircraft-photo/4CA1FA")
         );
         assert_eq!(
-            super::photo_release_url("ws://shack.test:4950/ws").as_deref(),
-            Some("http://shack.test:4950/aircraft-photo")
+            super::photo_release_url("ws://shack.test:4950/ws", 0x4CA1FA).as_deref(),
+            Some("http://shack.test:4950/aircraft-photo/4CA1FA")
         );
         assert_eq!(super::photo_url("not an address", 1), None);
-        assert_eq!(super::photo_release_url("not an address"), None);
+        assert_eq!(super::photo_release_url("not an address", 0x4CA1FA), None);
     }
 
     #[test]

@@ -50,8 +50,8 @@ const MAX_SWITCH_BYTES: u64 = 1024;
 const MAX_THUMB_BYTES: u64 = 2 * 1024 * 1024;
 /// Widest or tallest a thumbnail may decode to.
 const MAX_THUMB_SIDE: u32 = 2048;
-/// Thumbnails kept at once: the open card's and no other. The station holds
-/// one picture too, and both let it go when the card is closed.
+/// Thumbnails kept at once: the open card's and no other. The station holds a
+/// few for half a minute; this one lets its own go when the card is closed.
 const KEEP_THUMBS: usize = 1;
 
 enum Msg {
@@ -66,7 +66,11 @@ enum Msg {
 
 struct Thumb {
     url: String,
+    icao: u32,
     status: ThumbStatus,
+    /// Times it was asked for, and when it last failed (egui seconds).
+    tries: u8,
+    failed_at: f64,
     texture: Option<egui::TextureHandle>,
 }
 
@@ -179,7 +183,10 @@ impl OnlineClient {
                                 ));
                                 t.status = ThumbStatus::Ready;
                             }
-                            None => t.status = ThumbStatus::Failed,
+                            None => {
+                                t.status = ThumbStatus::Failed;
+                                t.failed_at = ctx.input(|i| i.time);
+                            }
                         }
                     }
                 }
@@ -328,7 +335,22 @@ impl OnlineClient {
             return;
         }
         self.thumb_wanted = Some(ctx.cumulative_pass_nr());
-        if self.thumbs.iter().any(|t| t.url == url) {
+        let now = ctx.input(|i| i.time);
+        if let Some(t) = self.thumbs.iter_mut().find(|t| t.url == url) {
+            // A busy station or a slow host mends itself: ask again, a few times.
+            let retry = t.status == ThumbStatus::Failed
+                && t.tries < aircraft_online::THUMB_TRIES
+                && now - t.failed_at >= aircraft_online::THUMB_RETRY_S;
+            if !retry {
+                if t.status == ThumbStatus::Failed && t.tries < aircraft_online::THUMB_TRIES {
+                    ctx.request_repaint_after(std::time::Duration::from_secs(1));
+                }
+                return;
+            }
+            t.status = ThumbStatus::Loading;
+            t.tries += 1;
+            let via = peer.and_then(|p| aircraft_online::photo_url(p, icao));
+            send_thumb(url.to_string(), via, self.tx.clone(), ctx.clone());
             return;
         }
         // Only one at a time: the card that is open is the only one.
@@ -337,7 +359,10 @@ impl OnlineClient {
         }
         self.thumbs.push(Thumb {
             url: url.to_string(),
+            icao,
             status: ThumbStatus::Loading,
+            tries: 1,
+            failed_at: 0.0,
             texture: None,
         });
         let via = peer.and_then(|p| aircraft_online::photo_url(p, icao));
@@ -347,16 +372,19 @@ impl OnlineClient {
     /// Once a frame: when no card has asked for the thumbnail for two frames,
     /// the card is closed — destroy the picture here and tell the station to
     /// drop its own. A station that never hears (tab closed, line cut) drops it
-    /// itself after a minute.
+    /// itself after half a minute.
     pub(in crate::app) fn release_thumbs(&mut self, ctx: &egui::Context, peer: Option<&str>) {
         if self.thumbs.is_empty() {
             return;
         }
         if aircraft_online::thumb_unwanted(self.thumb_wanted, ctx.cumulative_pass_nr()) {
+            let closed: Vec<u32> = self.thumbs.iter().map(|t| t.icao).collect();
             self.thumbs.clear();
             self.thumb_wanted = None;
-            if let Some(url) = peer.and_then(aircraft_online::photo_release_url) {
-                send_release(url);
+            for icao in closed {
+                if let Some(url) = peer.and_then(|p| aircraft_online::photo_release_url(p, icao)) {
+                    send_release(url);
+                }
             }
         } else {
             // A closed card draws nothing more, so something must look again.
@@ -654,8 +682,35 @@ mod tests {
         c.poll(&ctx, 0);
         assert_eq!(c.thumb_status(url), ThumbStatus::Failed);
         c.want_thumb(&ctx, None, 7, url);
-        assert_eq!(c.thumb_status(url), ThumbStatus::Failed, "not retried");
+        assert_eq!(c.thumb_status(url), ThumbStatus::Failed, "not retried at once");
         assert!(c.thumb_texture(url).is_none());
+    }
+
+    #[test]
+    fn a_failed_thumbnail_is_asked_again_a_few_times_while_the_card_stays_open() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        let url = "https://t.plnspttrs.net/a_t.jpg";
+        let at = |ctx: &egui::Context, t: f64| {
+            ctx.begin_pass(egui::RawInput { time: Some(t), ..Default::default() });
+            ctx.end_pass().drop_without_applying_deltas();
+        };
+        at(&ctx, 0.0);
+        c.want_thumb(&ctx, None, 7, url);
+        for (i, t) in [1.0, 6.0, 12.0].into_iter().enumerate() {
+            at(&ctx, t);
+            c.tx.send(Msg::Thumb { url: url.into(), bytes: None }).unwrap();
+            c.poll(&ctx, 0);
+            assert_eq!(c.thumb_status(url), ThumbStatus::Failed, "try {}", i + 1);
+            at(&ctx, t + 1.0);
+            c.want_thumb(&ctx, None, 7, url);
+            assert_eq!(c.thumb_status(url), ThumbStatus::Failed, "too soon after try {}", i + 1);
+            at(&ctx, t + 5.0);
+            c.want_thumb(&ctx, None, 7, url);
+            let again = i + 1 < usize::from(aircraft_online::THUMB_TRIES);
+            let want = if again { ThumbStatus::Loading } else { ThumbStatus::Failed };
+            assert_eq!(c.thumb_status(url), want, "after try {}", i + 1);
+        }
     }
 
     fn frame(ctx: &egui::Context) {

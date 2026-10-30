@@ -5,8 +5,8 @@
 //! open, and optionally the callsign and registration the radio heard
 //! (`?callsign=KLM1234&reg=PH-BXA`). It gets one JSON [`Info`] back: the
 //! airframe, the route, and the address, page and credit of a photo. The picture
-//! is `GET /aircraft-photo/{icao}`'s: one thumbnail, in memory, for the card
-//! that is open (see [`PhotoSlot`]).
+//! is `GET /aircraft-photo/{icao}`'s: a few thumbnails, in memory, for half a
+//! minute or until the card is closed (see [`PhotoStore`]).
 //!
 //! The decision of what to answer is [`judge`], a function of plain values, so
 //! the status codes are tested without a socket. The questions themselves are
@@ -16,11 +16,11 @@
 //! this machine reach out to two services on behalf of whoever is connected,
 //! and that is the operator's call, not a client's.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
@@ -68,6 +68,13 @@ fn clean_param(
     }
 }
 
+/// A Mode S address: exactly six hex digits.
+fn parse_icao(icao: &str) -> Option<u32> {
+    (icao.len() == 6 && icao.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then(|| u32::from_str_radix(icao, 16).ok())
+        .flatten()
+}
+
 /// Sign-in first, then the switch, then the question itself.
 pub(crate) fn judge(
     enabled: bool,
@@ -82,9 +89,7 @@ pub(crate) fn judge(
     if !enabled {
         return Verdict::Reject(Status::Disabled);
     }
-    let icao = (icao.len() == 6 && icao.bytes().all(|b| b.is_ascii_hexdigit()))
-        .then(|| u32::from_str_radix(icao, 16).ok())
-        .flatten();
+    let icao = parse_icao(icao);
     let callsign = clean_param(query.get("callsign"), clean_callsign);
     let registration = clean_param(query.get("reg"), clean_registration);
     match (icao, callsign, registration) {
@@ -115,8 +120,20 @@ pub(crate) const SWITCH_FILE: &str = "aircraft-online.on";
 pub(crate) const SWITCH_HEADER: &str = "x-sdroxide";
 
 /// How long the station keeps a thumbnail nobody has let go of: a client that
-/// vanished (tab closed, connection cut) cannot release it, so it expires.
-pub(crate) const PHOTO_HOLD: Duration = Duration::from_secs(60);
+/// vanished (tab closed, connection cut) cannot release it, so it expires. Long
+/// enough that going back to a card just seen costs no download, short enough
+/// that nothing lingers.
+pub(crate) const PHOTO_HOLD: Duration = Duration::from_secs(30);
+
+/// Thumbnails held at once, one per aircraft; the oldest goes first.
+pub(crate) const PHOTO_KEEP: usize = 10;
+
+/// Thumbnails being downloaded at once. A card clicked while another is still
+/// loading is served in parallel, not turned away.
+pub(crate) const PHOTO_PARALLEL: usize = 3;
+
+/// How long a client that asks for a picture already on its way waits for it.
+const PHOTO_WAIT: Duration = Duration::from_secs(10);
 
 /// The thumbnails' addresses the relay has handed out, newest last. The photo
 /// route looks the address up here and never takes one from a client.
@@ -125,52 +142,84 @@ const MAX_THUMBS: usize = 64;
 struct Held {
     icao: u32,
     image: Image,
-    /// Which fill this is, so a timer set for an older one leaves a newer alone.
-    generation: u64,
+    expires: Instant,
 }
 
-/// The one picture the station holds: in memory only, never written to disk,
-/// replaced by the next one and gone when the card it was for is closed. The
-/// operator's instruction of 2026-10-27: one image, for as long as it is looked
-/// at, destroyed at once when the view is closed.
+/// The few pictures the station holds: in memory only, never written to disk,
+/// at most [`PHOTO_KEEP`], each gone [`PHOTO_HOLD`] after it was fetched or as
+/// soon as its card is closed.
 #[derive(Default)]
-pub(crate) struct PhotoSlot {
-    held: Mutex<(Option<Held>, u64)>,
+pub(crate) struct PhotoStore {
+    held: Mutex<Vec<Held>>,
 }
 
-impl PhotoSlot {
-    fn lock(&self) -> std::sync::MutexGuard<'_, (Option<Held>, u64)> {
+impl PhotoStore {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<Held>> {
         self.held.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Hold `image` for `icao`, dropping whatever was held. Returns the fill's number.
-    pub(crate) fn put(&self, icao: u32, image: Image) -> u64 {
+    /// Hold `image` for `icao` from `now`, in place of that aircraft's older one.
+    pub(crate) fn put_at(&self, now: Instant, icao: u32, image: Image) {
         let mut g = self.lock();
-        g.1 += 1;
-        let generation = g.1;
-        g.0 = Some(Held { icao, image, generation });
-        generation
-    }
-
-    pub(crate) fn get(&self, icao: u32) -> Option<Image> {
-        self.lock().0.as_ref().filter(|h| h.icao == icao).map(|h| h.image.clone())
-    }
-
-    /// Drop the picture now.
-    pub(crate) fn clear(&self) {
-        self.lock().0 = None;
-    }
-
-    /// Drop the picture if it is still the fill `generation`: the timer's call.
-    pub(crate) fn clear_if(&self, generation: u64) {
-        let mut g = self.lock();
-        if g.0.as_ref().is_some_and(|h| h.generation == generation) {
-            g.0 = None;
+        g.retain(|h| h.icao != icao && h.expires > now);
+        g.push(Held { icao, image, expires: now + PHOTO_HOLD });
+        while g.len() > PHOTO_KEEP {
+            g.remove(0);
         }
     }
 
-    pub(crate) fn holds(&self) -> Option<u32> {
-        self.lock().0.as_ref().map(|h| h.icao)
+    pub(crate) fn get_at(&self, now: Instant, icao: u32) -> Option<Image> {
+        self.lock().iter().find(|h| h.icao == icao && h.expires > now).map(|h| h.image.clone())
+    }
+
+    pub(crate) fn put(&self, icao: u32, image: Image) {
+        self.put_at(Instant::now(), icao, image);
+    }
+
+    pub(crate) fn get(&self, icao: u32) -> Option<Image> {
+        self.get_at(Instant::now(), icao)
+    }
+
+    /// Drop the picture of one aircraft now: its card was closed.
+    pub(crate) fn remove(&self, icao: u32) {
+        self.lock().retain(|h| h.icao != icao);
+    }
+
+    /// Drop every picture now.
+    pub(crate) fn clear(&self) {
+        self.lock().clear();
+    }
+
+    /// Drop what has run out of time.
+    pub(crate) fn sweep_at(&self, now: Instant) {
+        self.lock().retain(|h| h.expires > now);
+    }
+
+    /// The aircraft whose pictures are held, oldest first.
+    pub(crate) fn holds(&self) -> Vec<u32> {
+        self.lock().iter().map(|h| h.icao).collect()
+    }
+}
+
+/// The pictures being downloaded, by aircraft: at most [`PHOTO_PARALLEL`], and
+/// never two for the same one.
+#[derive(Default)]
+struct Fetching {
+    set: Mutex<HashSet<u32>>,
+    done: Condvar,
+}
+
+/// Held while one picture is downloaded. Dropping it, even by a panic, frees the
+/// place and wakes whoever waits for that aircraft.
+struct Place<'a> {
+    fetching: &'a Fetching,
+    icao: u32,
+}
+
+impl Drop for Place<'_> {
+    fn drop(&mut self) {
+        self.fetching.set.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.icao);
+        self.fetching.done.notify_all();
     }
 }
 
@@ -178,11 +227,10 @@ impl PhotoSlot {
 pub(crate) enum Photo {
     Held {
         image: Image,
-        generation: Option<u64>,
     },
     /// The relay has not told this station of a photo for that aircraft.
     None,
-    /// A picture is already on its way for another client.
+    /// Too many pictures are on their way, or the one asked for did not come in time.
     Busy,
     Failed,
 }
@@ -198,8 +246,8 @@ pub(crate) struct AircraftHub<U = HttpUpstream> {
     file: Option<PathBuf>,
     switch_file: Option<PathBuf>,
     thumbs: Mutex<Vec<(u32, String)>>,
-    pub(crate) slot: PhotoSlot,
-    fetching: AtomicBool,
+    pub(crate) store: PhotoStore,
+    fetching: Fetching,
 }
 
 fn now_unix() -> i64 {
@@ -228,8 +276,8 @@ impl AircraftHub<HttpUpstream> {
             file,
             switch_file,
             thumbs: Mutex::default(),
-            slot: PhotoSlot::default(),
-            fetching: AtomicBool::new(false),
+            store: PhotoStore::default(),
+            fetching: Fetching::default(),
         }
     }
 }
@@ -244,8 +292,8 @@ impl<U: Upstream> AircraftHub<U> {
             file: None,
             switch_file: None,
             thumbs: Mutex::default(),
-            slot: PhotoSlot::default(),
-            fetching: AtomicBool::new(false),
+            store: PhotoStore::default(),
+            fetching: Fetching::default(),
         }
     }
 
@@ -296,11 +344,10 @@ impl<U: Upstream> AircraftHub<U> {
         info
     }
 
-    /// The thumbnail of `icao`, held in memory in place of any other. Blocking.
+    /// The thumbnail of `icao`, held in memory for a short while. Blocking.
+    /// Another aircraft's download does not stand in its way; the same
+    /// aircraft's is waited for instead of started twice.
     pub(crate) fn photo(&self, icao: u32) -> Photo {
-        if let Some(image) = self.slot.get(icao) {
-            return Photo::Held { image, generation: None };
-        }
         let url = self
             .thumbs
             .lock()
@@ -308,16 +355,34 @@ impl<U: Upstream> AircraftHub<U> {
             .iter()
             .find(|(i, _)| *i == icao)
             .map(|(_, u)| u.clone());
-        let Some(url) = url else { return Photo::None };
-        if self.fetching.swap(true, Ordering::SeqCst) {
-            return Photo::Busy;
+        let deadline = Instant::now() + PHOTO_WAIT;
+        let mut set = self.fetching.set.lock().unwrap_or_else(|e| e.into_inner());
+        loop {
+            if let Some(image) = self.store.get(icao) {
+                return Photo::Held { image };
+            }
+            if url.is_none() {
+                return Photo::None;
+            }
+            if !set.contains(&icao) {
+                if set.len() >= PHOTO_PARALLEL {
+                    return Photo::Busy;
+                }
+                set.insert(icao);
+                break;
+            }
+            let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+                return Photo::Busy;
+            };
+            set = self.fetching.done.wait_timeout(set, left).unwrap_or_else(|e| e.into_inner()).0;
         }
-        let got = self.relay.image(&url);
-        self.fetching.store(false, Ordering::SeqCst);
-        match got {
+        drop(set);
+        let _place = Place { fetching: &self.fetching, icao };
+        let Some(url) = url else { return Photo::None };
+        match self.relay.image(&url) {
             Some(image) => {
-                let generation = self.slot.put(icao, image.clone());
-                Photo::Held { image, generation: Some(generation) }
+                self.store.put(icao, image.clone());
+                Photo::Held { image }
             }
             None => Photo::Failed,
         }
@@ -393,13 +458,13 @@ pub(crate) async fn photo_route(
     let h = hub.clone();
     let got = tokio::task::spawn_blocking(move || h.photo(icao)).await.unwrap_or(Photo::Failed);
     match got {
-        Photo::Held { image, generation } => {
-            if let Some(generation) = generation {
-                tokio::spawn(async move {
-                    tokio::time::sleep(PHOTO_HOLD).await;
-                    hub.slot.clear_if(generation);
-                });
-            }
+        Photo::Held { image } => {
+            // The picture runs out by itself; this sweep is what frees it when
+            // nobody asks again.
+            tokio::spawn(async move {
+                tokio::time::sleep(PHOTO_HOLD + Duration::from_secs(1)).await;
+                hub.store.sweep_at(Instant::now());
+            });
             picture(StatusCode::OK, Some(&image))
         }
         Photo::None => picture(StatusCode::NOT_FOUND, None),
@@ -408,19 +473,41 @@ pub(crate) async fn photo_route(
     }
 }
 
-/// `DELETE /aircraft-photo`: the card is closed, let the picture go. Same
-/// sign-in as the switch, plus the custom header (see [`SWITCH_HEADER`]); works
-/// whether or not the relay is still on.
+/// The sign-in and header a release needs, as for the switch.
+fn release_refusal(station: &Station, headers: &HeaderMap) -> Option<StatusCode> {
+    let needed = station.auth.required().is_some();
+    let signed = crate::session_cookie::from_headers(headers, &station.auth).is_some();
+    switch_refusal(needed, signed, true, headers.contains_key(SWITCH_HEADER))
+}
+
+/// `DELETE /aircraft-photo`: every picture goes, for a client that does not say
+/// which card closed. Same sign-in as the switch, plus the custom header (see
+/// [`SWITCH_HEADER`]); works whether or not the relay is still on.
 pub(crate) async fn photo_release(
     State(station): State<Arc<Station>>,
     headers: HeaderMap,
 ) -> Response {
-    let needed = station.auth.required().is_some();
-    let signed = crate::session_cookie::from_headers(&headers, &station.auth).is_some();
-    if let Some(code) = switch_refusal(needed, signed, true, headers.contains_key(SWITCH_HEADER)) {
+    if let Some(code) = release_refusal(&station, &headers) {
         return code.into_response();
     }
-    station.aircraft.slot.clear();
+    station.aircraft.store.clear();
+    picture(StatusCode::NO_CONTENT, None)
+}
+
+/// `DELETE /aircraft-photo/{icao}`: that card is closed, only its picture goes,
+/// so a card opened a moment before keeps its own.
+pub(crate) async fn photo_release_one(
+    State(station): State<Arc<Station>>,
+    Path(icao): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if let Some(code) = release_refusal(&station, &headers) {
+        return code.into_response();
+    }
+    match parse_icao(&icao) {
+        Some(icao) => station.aircraft.store.remove(icao),
+        None => return picture(StatusCode::BAD_REQUEST, None),
+    }
     picture(StatusCode::NO_CONTENT, None)
 }
 
@@ -693,7 +780,7 @@ mod tests {
 
     fn bytes(p: Photo) -> Vec<u8> {
         match p {
-            Photo::Held { image, .. } => image.bytes,
+            Photo::Held { image } => image.bytes,
             _ => panic!("no picture"),
         }
     }
@@ -709,30 +796,136 @@ mod tests {
     }
 
     #[test]
-    fn only_one_picture_is_held_and_the_next_replaces_it() {
-        let (hub, _) = hub("image/png");
+    fn several_pictures_are_held_so_a_card_seen_again_costs_no_download() {
+        let (hub, asked) = hub("image/png");
         hub.run(0x484006, Some("KLM1"), Some("PH-AAA"));
         hub.run(0x4ca1fa, Some("EIN2"), Some("EI-BBB"));
         hub.photo(0x484006);
-        assert_eq!(hub.slot.holds(), Some(0x484006));
         hub.photo(0x4ca1fa);
-        assert_eq!(hub.slot.holds(), Some(0x4ca1fa), "one at a time");
-        assert!(hub.slot.get(0x484006).is_none(), "the first is gone");
+        assert_eq!(hub.store.holds(), vec![0x484006, 0x4ca1fa], "both are kept");
+        assert_eq!(asked.load(Ordering::SeqCst), 2);
+        hub.photo(0x484006);
+        assert_eq!(asked.load(Ordering::SeqCst), 2, "the first card again: from memory");
+    }
+
+    fn image(tag: u8) -> Image {
+        Image { content_type: "image/png".into(), bytes: vec![tag] }
     }
 
     #[test]
-    fn closing_the_card_destroys_the_picture_and_so_does_the_timer_for_its_own_fill_only() {
+    fn at_most_ten_pictures_are_held_and_the_oldest_goes_first() {
+        let store = PhotoStore::default();
+        let t0 = Instant::now();
+        for i in 0..12u32 {
+            store.put_at(t0, i, image(i as u8));
+        }
+        assert_eq!(store.holds(), (2..12).collect::<Vec<u32>>());
+        store.put_at(t0, 5, image(99));
+        assert_eq!(store.holds().last(), Some(&5), "a picture fetched again is the newest");
+        assert_eq!(store.holds().len(), PHOTO_KEEP);
+    }
+
+    #[test]
+    fn a_picture_runs_out_thirty_seconds_after_it_was_fetched() {
+        let store = PhotoStore::default();
+        let t0 = Instant::now();
+        store.put_at(t0, 1, image(1));
+        assert!(store.get_at(t0 + Duration::from_secs(29), 1).is_some());
+        assert!(store.get_at(t0 + Duration::from_secs(30), 1).is_none());
+        store.sweep_at(t0 + Duration::from_secs(30));
+        assert!(store.holds().is_empty(), "swept, not just hidden");
+    }
+
+    #[test]
+    fn closing_a_card_destroys_its_picture_and_only_its_own() {
         let (hub, _) = hub("image/jpeg");
         hub.run(0x484006, None, None);
         hub.run(0x4ca1fa, None, None);
-        let Photo::Held { generation: Some(first), .. } = hub.photo(0x484006) else { panic!() };
-        hub.slot.clear();
-        assert_eq!(hub.slot.holds(), None, "released");
-        let Photo::Held { generation: Some(second), .. } = hub.photo(0x4ca1fa) else { panic!() };
-        hub.slot.clear_if(first);
-        assert_eq!(hub.slot.holds(), Some(0x4ca1fa), "an old timer leaves a newer picture");
-        hub.slot.clear_if(second);
-        assert_eq!(hub.slot.holds(), None, "the timer for this fill empties it");
+        hub.photo(0x484006);
+        hub.photo(0x4ca1fa);
+        hub.store.remove(0x484006);
+        assert_eq!(hub.store.holds(), vec![0x4ca1fa], "a late release of A leaves B alone");
+        hub.store.clear();
+        assert!(hub.store.holds().is_empty());
+    }
+
+    /// A relay whose picture takes a while and can be told to fail by panic.
+    struct Slow {
+        asked: Arc<AtomicUsize>,
+        pause: Duration,
+        panic_first: bool,
+    }
+
+    impl Upstream for Slow {
+        fn fetch(&self, req: &Request) -> Reply {
+            Pictures { pictures_asked: self.asked.clone(), kind: "image/jpeg" }.fetch(req)
+        }
+
+        fn image(&self, url: &str) -> Option<Image> {
+            let n = self.asked.fetch_add(1, Ordering::SeqCst);
+            std::thread::sleep(self.pause);
+            if self.panic_first && n == 0 {
+                panic!("the picture's host blew up");
+            }
+            Some(Image { content_type: "image/jpeg".into(), bytes: url.as_bytes().to_vec() })
+        }
+    }
+
+    fn slow(pause_ms: u64, panic_first: bool) -> (Arc<AircraftHub<Slow>>, Arc<AtomicUsize>) {
+        let n = Arc::new(AtomicUsize::new(0));
+        let up = Slow { asked: n.clone(), pause: Duration::from_millis(pause_ms), panic_first };
+        (Arc::new(AircraftHub::with(true, up, 100)), n)
+    }
+
+    #[test]
+    fn a_card_clicked_while_another_picture_loads_is_served_not_turned_away() {
+        let (hub, _) = slow(300, false);
+        hub.run(0x484006, Some("KLM1"), Some("PH-AAA"));
+        hub.run(0x4ca1fa, Some("EIN2"), Some("EI-BBB"));
+        let h = hub.clone();
+        let first = std::thread::spawn(move || h.photo(0x484006));
+        std::thread::sleep(Duration::from_millis(80));
+        assert!(matches!(hub.photo(0x4ca1fa), Photo::Held { .. }), "B while A loads");
+        assert!(matches!(first.join().unwrap(), Photo::Held { .. }));
+    }
+
+    #[test]
+    fn the_same_aircraft_asked_twice_at_once_is_fetched_once() {
+        let (hub, asked) = slow(300, false);
+        hub.run(0x484006, None, None);
+        let h = hub.clone();
+        let first = std::thread::spawn(move || h.photo(0x484006));
+        std::thread::sleep(Duration::from_millis(80));
+        assert!(matches!(hub.photo(0x484006), Photo::Held { .. }));
+        assert!(matches!(first.join().unwrap(), Photo::Held { .. }));
+        assert_eq!(asked.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn a_download_that_blows_up_does_not_block_the_next_one() {
+        let (hub, _) = slow(0, true);
+        hub.run(0x484006, None, None);
+        let h = hub.clone();
+        assert!(std::thread::spawn(move || h.photo(0x484006)).join().is_err());
+        assert!(matches!(hub.photo(0x484006), Photo::Held { .. }), "not stuck busy for ever");
+    }
+
+    #[test]
+    fn past_three_pictures_at_once_the_next_is_told_to_come_back() {
+        let (hub, _) = slow(400, false);
+        for i in 1..=4u32 {
+            hub.run(i, None, None);
+        }
+        let mut running = Vec::new();
+        for i in 1..=3u32 {
+            let h = hub.clone();
+            running.push(std::thread::spawn(move || h.photo(i)));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+        assert!(matches!(hub.photo(4), Photo::Busy));
+        for r in running {
+            assert!(matches!(r.join().unwrap(), Photo::Held { .. }));
+        }
     }
 
     #[test]
@@ -740,11 +933,12 @@ mod tests {
         let (hub, _) = hub("text/html");
         hub.run(0x484006, None, None);
         assert!(matches!(hub.photo(0x484006), Photo::Failed));
-        assert_eq!(hub.slot.holds(), None);
+        assert!(hub.store.holds().is_empty());
     }
 
     #[test]
-    fn the_hold_is_a_minute() {
-        assert_eq!(PHOTO_HOLD, Duration::from_secs(60));
+    fn the_hold_is_half_a_minute_for_ten_pictures() {
+        assert_eq!(PHOTO_HOLD, Duration::from_secs(30));
+        assert_eq!((PHOTO_KEEP, PHOTO_PARALLEL), (10, 3));
     }
 }
