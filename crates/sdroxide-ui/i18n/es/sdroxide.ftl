@@ -4176,6 +4176,8 @@ acars-blocks-framed-blocks-whose-check = Bloques que se enmarcaron, y bloques cu
 acars-starting-acars-receiver = iniciando el receptor ACARS…
 acars-channel = CANAL
 acars-tune-dial-here = Sintonizar el dial aquí.
+
+acars-channel-out-of-range = Fuera del rango de recepción de esta radio.
 acars-nothing-yet-acars-quiet-between = Aún nada. ACARS está en silencio entre aeronaves — déjalo en un canal y espera una ráfaga.
 acars-check-failed = comprobación fallida
 acars-block-check-sequence-did-not = La secuencia de comprobación del bloque no coincidió — el texto puede ser erróneo.
