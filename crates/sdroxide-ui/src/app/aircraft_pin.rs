@@ -215,13 +215,13 @@ mod tests {
             assert_eq!(lookup_want(Some(5), Some(want(5)), offer), None, "{offer:?}");
         }
 
-        // What the line does with it: once, one at a time, and no second try on
-        // its own after the answer.
+        // What the line does with it: once, without holding another aircraft
+        // up, and no second try on its own after the answer.
         let mut store = OnlineStore::default();
         let w = lookup_want(Some(5), Some(want(5)), LookupOffer::Button).unwrap();
         assert_eq!(store.next_request(Some(&w), true, NOW), Some(w.clone()));
         assert_eq!(store.next_request(Some(&w), true, NOW + 1), None, "pressed twice");
-        assert_eq!(store.next_request(Some(&want(6)), true, NOW + 1), None, "another aircraft");
+        assert!(store.next_request(Some(&want(6)), true, NOW + 1).is_some(), "not held up");
         store.deliver(5, Answer::Unavailable(Reason::Busy), NOW + 2);
         assert_eq!(store.next_request(Some(&w), true, NOW + 3), None, "back-off, not a retry");
     }
