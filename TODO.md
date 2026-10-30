@@ -77,6 +77,7 @@ v2.2.0.3_brown. Open PRs: 3 (#318, #339, #341). Open issues: 15 (re-measured 202
 
 ## Recently done
 - 2026-10-29 — Every message log keeps at most 200 (ACARS, DSC, APRS, VDL2 were 300/300/300/2000), VDL2 list newest first (added by madmedicnl, owned by Roy; touches F4NRM's DSC/NAVTEX/APRS caps, PR for his review)
+- 2026-10-29 — ACARS channel chips tune the VFO in use, light the real channel, grey out unreachable ones (added by madmedicnl, owned by Roy)
 - 2026-10-29 — Aircraft online read: a failing or slow card no longer blocks the others (3 at once, 15 s limit, retry 30 s, failure says so) (added by madmedicnl, owned by Roy)
 - 2026-10-29 — Aircraft photo a quarter larger: map card 84→106 px, Cards view 140→175 px (added by madmedicnl, owned by Roy)
 - 2026-10-29 — Language selector in Settings → UI with Apply button (PR #339, #331)
