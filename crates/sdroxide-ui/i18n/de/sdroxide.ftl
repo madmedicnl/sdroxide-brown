@@ -6931,6 +6931,8 @@ aircraft-online-unavailable-no-station = online nicht verfügbar — keine Stati
 
 aircraft-online-unavailable-unauthorized = online nicht verfügbar — nicht an der Station angemeldet
 
+aircraft-online-unavailable-retry = Online-Abfrage fehlgeschlagen — neuer Versuch gleich
+
 aircraft-switch-no-answer = die Station hat nicht geantwortet
 
 aircraft-switch-not-signed-in = nicht an der Station angemeldet
