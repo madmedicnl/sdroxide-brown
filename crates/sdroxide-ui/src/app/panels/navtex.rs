@@ -67,43 +67,6 @@ pub(super) fn navtex_list_header(
             )
             .on_hover_text(tr!("navtex-characters-whose-first-copy-was"));
         }
-        // Receive sensitivity. NAVTEX is FSK, so signal strength does not change
-        // the alphabet — this moves the detection thresholds instead (signal
-        // presence, phase lock, AFC tracking). 0 is the reference behaviour.
-        ui.label(RichText::new(tr!("panels-sensitivity")).size(10.0).weak());
-        {
-            let mut v = cfg.navtex_rx_sensitivity;
-            let resp =
-                crate::chrome::slider(ui, egui::Slider::new(&mut v, -5..=5).fixed_decimals(0))
-                    .on_hover_text(tr!("navtex-sensitivity-hint"));
-            if resp.changed() {
-                cfg.navtex_rx_sensitivity = v;
-                cfg.navtex_rx_auto = v == 0;
-                if seeded {
-                    cmds.push(Command::SetDigiConfig(cfg.clone()));
-                }
-            }
-        }
-        if crate::chrome::chip(ui, cfg.navtex_rx_auto, tr!("sstv-auto"))
-            .on_hover_text(tr!("navtex-auto-hint"))
-            .clicked()
-        {
-            cfg.navtex_rx_auto = true;
-            cfg.navtex_rx_sensitivity = 0;
-            if seeded {
-                cmds.push(Command::SetDigiConfig(cfg.clone()));
-            }
-        }
-        crate::chrome::row_tail(ui, |ui| {
-            super::clear_rx_chip_at(ui, cmds, !st.messages.is_empty() || st.live.is_some());
-            super::save_rx_chip_for(ui, status);
-            if crate::chrome::chip(ui, rev, RichText::new("REV").size(10.5))
-                .on_hover_text(tr!("navtex-swap-mark-space-tones-signal"))
-                .clicked()
-            {
-                flip = true;
-            }
-        });
     });
     flip
 }
@@ -148,9 +111,7 @@ impl SdroxideApp {
                     cmds.push(Command::SetVfo { vfo: Vfo::A, hz: vfo_hz });
                 }
             }
-        });
-
-        ui.horizontal_wrapped(|ui| {
+            ui.add_space(8.0);
             ui.label(RichText::new(tr!("aprs-channel")).size(10.0).weak());
             for (hz, label) in CHANNELS {
                 let active_vfo_hz = match self.state.active_vfo {
@@ -165,11 +126,56 @@ impl SdroxideApp {
                     cmds.push(Command::SetVfo { vfo: Vfo::A, hz: *hz });
                 }
             }
+            ui.add_space(8.0);
+            if crate::chrome::chip(ui, self.digi_cfg_edit.navtex_reverse, RichText::new("REV").size(10.5))
+                .on_hover_text(tr!("navtex-swap-mark-space-tones-signal"))
+                .clicked()
+            {
+                self.digi_cfg_edit.navtex_reverse = !self.digi_cfg_edit.navtex_reverse;
+                if self.digi_cfg_seeded { cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone())); }
+            }
         });
 
-        ui.horizontal(|ui| {
+        // REV / save / clear RX on the next line
+        ui.horizontal_wrapped(|ui| {
+            crate::chrome::row_tail(ui, |ui| {
+                crate::app::panels::clear_rx_chip_at(ui, cmds, !st.messages.is_empty() || st.live.is_some());
+                crate::app::panels::save_rx_chip_for(ui, self.digi_status.as_ref());
+            });
+        });
+
+        // Sliders stacked vertically in a sidebar, so the message area gets
+        // the full remaining height.
+        let h = ui.available_height();
+        ui.allocate_ui(egui::vec2(ui.available_width(), h), |ui| {
+            ui.set_min_height(h);
+            ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.set_width(160.0);
+                ui.set_min_height(h);
+
+                ui.label(RichText::new(tr!("panels-sensitivity")).size(10.0).weak());
+                let mut v = self.digi_cfg_edit.navtex_rx_sensitivity;
+                let resp = crate::chrome::slider(ui, egui::Slider::new(&mut v, -5..=5).fixed_decimals(0))
+                    .on_hover_text(tr!("navtex-sensitivity-hint"));
+                if resp.changed() {
+                    self.digi_cfg_edit.navtex_rx_sensitivity = v;
+                    self.digi_cfg_edit.navtex_rx_auto = v == 0;
+                    if self.digi_cfg_seeded { cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone())); }
+                }
+                if crate::chrome::chip(ui, self.digi_cfg_edit.navtex_rx_auto, tr!("sstv-auto"))
+                    .on_hover_text(tr!("navtex-auto-hint"))
+                    .clicked()
+                {
+                    self.digi_cfg_edit.navtex_rx_auto = true;
+                    self.digi_cfg_edit.navtex_rx_sensitivity = 0;
+                    if self.digi_cfg_seeded { cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone())); }
+                }
+            });
+            ui.separator();
             if pane.is_none_or(|p| p == 0) {
                 ui.vertical(|ui| {
+                    ui.set_min_height(h);
                     if pane.is_none() {
                         ui.set_width(ui.available_width() * 0.46);
                     }
@@ -181,9 +187,11 @@ impl SdroxideApp {
             }
             if pane.is_none_or(|p| p == 1) {
                 ui.vertical(|ui| {
+                    ui.set_min_height(h);
                     self.navtex_reading(ui, &st, panel_h);
                 });
             }
+        });
         });
     }
 
@@ -213,7 +221,7 @@ impl SdroxideApp {
 
         egui::ScrollArea::vertical()
             .id_salt("navtex-list")
-            .max_height((panel_h - 40.0).max(60.0))
+            .max_height(ui.available_height().max(60.0))
             .show(ui, |ui| {
                 if st.messages.is_empty() && st.live.is_none() {
                     ui.label(RichText::new(tr!("navtex-nothing-yet-station-transmits-ten")).weak());
@@ -313,7 +321,7 @@ impl SdroxideApp {
         };
         egui::ScrollArea::vertical()
             .id_salt("navtex-body")
-            .max_height((panel_h - 40.0).max(60.0))
+            .max_height(ui.available_height().max(60.0))
             .stick_to_bottom(selected.is_none() || self.navtex_open.is_none())
             .show(ui, |ui| {
                 if body.trim().is_empty() {

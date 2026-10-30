@@ -5397,6 +5397,12 @@ navtex-hunting-hint =
 navtex-sensitivity-hint =
     Sensitivity — how readily the decoder locks onto and keeps a signal.
     
+navtex-loss-limit-hint =
+    Consecutive slots with neither copy readable before sync is dropped.
+    
+navtex-disagree-limit-hint =
+    Consecutive slots whose two copies both parsed and disagreed before sync is dropped.
+    
     Auto uses the reference thresholds (0), which is the behaviour as shipped.
     
     + accepts a weaker or noisier signal; − waits for a cleaner one before declaring sync, which is what stops noise being read as characters.

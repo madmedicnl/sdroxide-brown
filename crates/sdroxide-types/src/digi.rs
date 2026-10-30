@@ -2337,6 +2337,14 @@ pub struct DigiConfig {
     /// `navtex_rx_sensitivity` is ignored and the slider sits at 0.
     #[serde(default = "yes")]
     pub navtex_rx_auto: bool,
+    /// NAVTEX sync drop: consecutive slots with neither copy readable before
+    /// the character phase is given up. Default 48.
+    #[serde(default = "navtex_loss_limit_default")]
+    pub navtex_loss_limit: u8,
+    /// NAVTEX sync drop: consecutive slots whose two copies both parsed and
+    /// disagreed before sync is given up. Default 6.
+    #[serde(default = "navtex_disagree_limit_default")]
+    pub navtex_disagree_limit: u8,
     /// Let the RTTY decoder track tuning error rather than staying pinned to
     /// the cursor. On by default; the matched-filter detector is much less
     /// forgiving of mistuning than a wideband discriminator would be.
@@ -3398,6 +3406,8 @@ impl Default for DigiConfig {
             navtex_reverse: false,
             navtex_rx_sensitivity: 0,
             navtex_rx_auto: true,
+            navtex_loss_limit: 48,
+            navtex_disagree_limit: 6,
             rtty_afc: true,
             olivia_tones: 32,
             olivia_bw_hz: 1000.0,
@@ -5041,6 +5051,8 @@ mod tests {
 }
 
 /// `#[serde(default)]` helper: a bool that defaults to true.
+fn navtex_loss_limit_default() -> u8 { 48 }
+fn navtex_disagree_limit_default() -> u8 { 6 }
 fn yes() -> bool {
     true
 }

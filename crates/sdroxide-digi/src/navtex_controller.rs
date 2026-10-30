@@ -55,6 +55,7 @@ fn sensitivity(cfg: &DigiConfig) -> i8 {
 pub struct NavtexController {
     cfg: DigiConfig,
     rx: NavtexRx,
+    tap_rate: f64,
     /// Text decoded but not yet consumed by the framer.
     pending: String,
     /// The message being received, if a `ZCZC` has been seen.
@@ -84,6 +85,7 @@ impl NavtexController {
         let mut ctrl = NavtexController {
             cfg,
             rx,
+            tap_rate,
             pending: String::new(),
             live: None,
             messages: Vec::new(),
@@ -347,6 +349,11 @@ impl DigiEngine for NavtexController {
         self.live = None;
         self.text.clear();
         self.pending.clear();
+        // Restart the decoder from scratch: drop any latched sync so a stale
+        // phase cannot keep producing garbage on a quiet channel.
+        self.rx = NavtexRx::new(self.tap_rate);
+        self.rx.set_reverse(self.cfg.navtex_reverse);
+        self.rx.set_sensitivity(sensitivity(&self.cfg));
         self.status_dirty = true;
         self.save_messages();
     }

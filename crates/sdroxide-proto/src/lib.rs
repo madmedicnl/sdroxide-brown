@@ -2159,8 +2159,8 @@ use sdroxide_types::{
 /// VU and bars. Until now only the DAB status carried a level. It is sent only
 /// while a screen holds a lease: `Command` gains `WantAudioLevel` last, renewed
 /// about once a second by an open panel. `PROTO_VERSION` 256 → 257, `VERSION_BYTE` 0x4C → 0x4D. A downstream (fork) change.
-pub const PROTO_VERSION: u16 = 257;
-const VERSION_BYTE: u8 = 0x4D;
+pub const PROTO_VERSION: u16 = 258;
+const VERSION_BYTE: u8 = 0x4E;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3403,7 +3403,7 @@ mod tests {
         // Byte 0 is `VERSION_BYTE`; byte 1 is the variant index (< 128 here).
         let (a, b) = (encode(&slide).unwrap()[1], encode(&level).unwrap()[1]);
         assert_eq!(b, a + 1, "AudioLevel must directly follow DabSlide");
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (257, 0x4D));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (258, 0x4E));
     }
 
     /// postcard is positional: a field inserted mid-struct shifts every byte
@@ -3425,7 +3425,7 @@ mod tests {
         let net = postcard::to_allocvec(&sdroxide_types::NetworkConfig::default()).unwrap();
         assert_eq!(
             (digi.len(), fnv1a(&digi)),
-            (477, 2_903_949_547_993_043_639),
+            (479, 221_087_630_763_656_457),
             "DigiConfig's wire layout shifted — append fields, never insert them"
         );
         assert_eq!(
