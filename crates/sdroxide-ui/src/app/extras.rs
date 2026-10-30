@@ -2,8 +2,8 @@
 //! ordinary modes. The System box's EXTRAS chip opens it, and like PLAYBACK it
 //! is a tool window — it can be pulled out into a window of its own with ⇱.
 //!
-//! Five buttons side by side is the room it is built for; DAB, AIRCRAFT and RADIO
-//! (the Radio Classic panel) are in it so far.
+//! Five buttons side by side is the room it is built for; DAB, AIRCRAFT, RADIO
+//! (the Radio Classic panel), ANTENNA and PROGRAMS are in it so far.
 
 use crate::i18n::tr;
 use eframe::egui;
@@ -279,9 +279,19 @@ impl super::SdroxideApp {
             if ant.clicked() {
                 self.show_antenna = !self.show_antenna;
             }
+            let programs = crate::chrome::chip_sized(
+                ui,
+                self.schedule.show,
+                "PROGRAMS",
+                egui::vec2(SLOT_W, SLOT_H),
+            )
+            .on_hover_text(tr!("topbar-programs-hint"));
+            if programs.clicked() {
+                self.schedule.show = !self.schedule.show;
+            }
             // The other slots are kept: the panel is sized for them, so a
             // receiver added here does not widen the window.
-            for _ in 4..EXTRAS_SLOTS {
+            for _ in 5..EXTRAS_SLOTS {
                 let (rect, _) =
                     ui.allocate_exact_size(egui::vec2(SLOT_W, SLOT_H), egui::Sense::hover());
                 ui.painter().rect_stroke(
