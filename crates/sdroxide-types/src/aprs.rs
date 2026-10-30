@@ -22,8 +22,9 @@ use serde::{Deserialize, Serialize};
 /// distinct stations in an hour; past that the oldest are dropped.
 pub const APRS_STATION_MAX: usize = 400;
 
-/// Messages kept in the pane, both directions together.
-pub const APRS_MESSAGE_MAX: usize = 300;
+/// Messages kept in the pane, both directions together
+/// ([`crate::MESSAGE_LOG_MAX`]).
+pub const APRS_MESSAGE_MAX: usize = crate::MESSAGE_LOG_MAX;
 
 /// Positions kept per station, so a moving one draws a trail behind it.
 pub const APRS_TRACK_MAX: usize = 64;

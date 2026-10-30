@@ -1001,9 +1001,14 @@ pub(crate) fn parse_navtex_time(text: &str) -> Option<(u8, u8)> {
     None
 }
 
+/// The most messages any mode's log keeps. One number for every log of decoded
+/// messages (ACARS, VDL2, DSC, NAVTEX, APRS, JTTY, JS8): the newest takes the
+/// first place and the 201st is dropped.
+pub const MESSAGE_LOG_MAX: usize = 200;
+
 /// Messages kept. A station transmits on a ten-minute slot every four hours
 /// and its neighbours fill the rest, so this is a day or two of a busy area.
-pub const NAVTEX_MESSAGE_MAX: usize = 200;
+pub const NAVTEX_MESSAGE_MAX: usize = MESSAGE_LOG_MAX;
 
 /// What the NAVTEX receiver is doing.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -1029,9 +1034,9 @@ pub struct NavtexStatus {
     pub reverse: bool,
 }
 
-/// Most ACARS messages kept. A busy channel produces a few a minute and the
-/// pane is a rolling view, not a log.
-pub const ACARS_MESSAGE_MAX: usize = 300;
+/// Most ACARS messages kept ([`MESSAGE_LOG_MAX`]). A busy channel produces a few
+/// a minute and the pane is a rolling view, not a log.
+pub const ACARS_MESSAGE_MAX: usize = MESSAGE_LOG_MAX;
 
 /// One decoded ACARS message.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -1067,9 +1072,10 @@ pub struct AcarsStatus {
     pub bad: u64,
 }
 
-/// Most DSC sequences kept. A DSC channel is mostly quiet — bursts are a
-/// second or two and sporadic — so this is a long evening's listening.
-pub const DSC_MESSAGE_MAX: usize = 300;
+/// Most DSC sequences kept ([`MESSAGE_LOG_MAX`]). A DSC channel is mostly quiet
+/// — bursts are a second or two and sporadic — so this is a long evening's
+/// listening.
+pub const DSC_MESSAGE_MAX: usize = MESSAGE_LOG_MAX;
 
 /// One DSC sequence as the receiver filed it: the message, and when it was
 /// heard.
@@ -4334,6 +4340,23 @@ pub fn digi_decodes_to_adif<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The operator's rule: no mode keeps more than 200 messages, the newest in
+    /// the first place and the 201st dropped. One number, so no log can drift
+    /// from it again (ACARS and DSC kept 300, APRS 300, VDL2 up to 2000).
+    #[test]
+    fn no_message_log_keeps_more_than_two_hundred() {
+        assert_eq!(MESSAGE_LOG_MAX, 200);
+        assert_eq!(ACARS_MESSAGE_MAX, MESSAGE_LOG_MAX);
+        assert_eq!(DSC_MESSAGE_MAX, MESSAGE_LOG_MAX);
+        assert_eq!(NAVTEX_MESSAGE_MAX, MESSAGE_LOG_MAX);
+        assert_eq!(crate::APRS_MESSAGE_MAX, MESSAGE_LOG_MAX);
+        assert_eq!(crate::JTTY_MESSAGE_MAX, MESSAGE_LOG_MAX);
+        assert_eq!(usize::from(crate::VDL2_MESSAGE_MAX), MESSAGE_LOG_MAX);
+        assert!(usize::from(crate::VDL2_MESSAGES) <= MESSAGE_LOG_MAX, "the default");
+        let s = crate::Vdl2Settings { max_messages: 60_000, ..Default::default() }.sane();
+        assert!(usize::from(s.max_messages) <= MESSAGE_LOG_MAX, "a hand-edited setting");
+    }
 
     /// The shipped FT8 decode depth is `Deep`: the fork exists for the recall,
     /// and the speed knob is opt-in. Pinned so a careless default change is
