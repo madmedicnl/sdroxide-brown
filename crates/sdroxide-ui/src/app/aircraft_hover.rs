@@ -33,7 +33,7 @@ pub(in crate::app) const MAX_CHARS: usize = 28;
 /// Most lines the card carries.
 pub(in crate::app) const MAX_LINES: usize = 14;
 /// Tallest the picture is drawn, points.
-const PHOTO_H: f32 = 84.0;
+const PHOTO_H: f32 = 106.0;
 /// Column widths of a line, points: label, badge, value. The note takes the rest.
 const COL_LABEL: f32 = 62.0;
 const COL_BADGE: f32 = 44.0;
@@ -859,6 +859,110 @@ mod tests {
             assert!(rect.width() <= HOVER_W + 1.0, "too wide: {rect:?}");
             assert!(rect.height() <= HOVER_MAX_H, "too tall: {rect:?}");
         }
+    }
+
+    /// Height the card gains when the thumbnail is drawn, measured on the
+    /// real card rather than read from the constant.
+    fn thumbnail_gain(thumb_w: usize, thumb_h: usize) -> f32 {
+        let c = card_with(Some(&heard()), &ready(info()), ThumbStatus::Ready);
+        let ctx = egui::Context::default();
+        let tex = ctx.load_texture(
+            "thumb",
+            egui::ColorImage::new([thumb_w, thumb_h], vec![egui::Color32::GRAY; thumb_w * thumb_h]),
+            Default::default(),
+        );
+        let mut heights = [0.0_f32; 2];
+        for (i, t) in [None, Some(&tex)].into_iter().enumerate() {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                heights[i] = draw(ui, &c, t).height();
+            });
+            out.textures_delta.clear();
+        }
+        heights[1] - heights[0]
+    }
+
+    #[test]
+    fn the_thumbnail_is_drawn_a_quarter_larger_than_it_was() {
+        // It was 84 px high and the operator found it too small. A Planespotters
+        // thumbnail is 280 x 187 (3:2), so the proportions must survive.
+        let gain = thumbnail_gain(280, 187);
+        assert!(gain >= PHOTO_H, "the picture is not drawn at its reserved height: {gain}");
+        assert!(PHOTO_H >= 104.0 && PHOTO_H <= 112.0, "about a quarter larger than 84: {PHOTO_H}");
+        assert!(gain < PHOTO_H + 8.0, "{gain} is more than the picture and its gap");
+    }
+
+    #[test]
+    fn the_larger_thumbnail_keeps_the_card_inside_its_bounds() {
+        let c = card_with(Some(&heard()), &ready(info()), ThumbStatus::Ready);
+        let ctx = egui::Context::default();
+        let tex = ctx.load_texture(
+            "thumb",
+            egui::ColorImage::new([280, 187], vec![egui::Color32::GRAY; 280 * 187]),
+            Default::default(),
+        );
+        let mut rect = egui::Rect::NOTHING;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            rect = draw(ui, &c, Some(&tex));
+        });
+        out.textures_delta.clear();
+        assert!(rect.width() <= HOVER_W + 1.0 && rect.height() <= HOVER_MAX_H, "{rect:?}");
+    }
+
+    /// Writes the card with a stand-in picture (a gradient, 3:2 like a
+    /// Planespotters thumbnail), next to the old 84 px picture, to look at.
+    #[test]
+    #[ignore = "writes a picture to look at; not an assertion"]
+    fn thumbnail_size_preview() {
+        let (w, h) = (700.0_f32, 470.0_f32);
+        let ctx = egui::Context::default();
+        let px: Vec<egui::Color32> = (0..280 * 187)
+            .map(|i| {
+                let (x, y) = ((i % 280) as u8, (i / 280) as u8);
+                egui::Color32::from_rgb(x, y, 200 - y / 2)
+            })
+            .collect();
+        let tex = ctx.load_texture(
+            "thumb",
+            egui::ColorImage::new([280, 187], px),
+            Default::default(),
+        );
+        let c = card_with(Some(&heard()), &ready(info()), ThumbStatus::Ready);
+        let mut tx = crate::test_raster::Textures::default();
+        let mut last = None;
+        for i in 0..3 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
+                time: Some(1.0 + i as f64 / 30.0),
+                ..Default::default()
+            };
+            let mut full = ctx.run_ui(input, |ui| {
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label("before: 84 px");
+                        ui.add(egui::Image::new(&tex).max_height(84.0).corner_radius(3.0));
+                    });
+                    ui.vertical(|ui| {
+                        ui.label(format!("after: {PHOTO_H} px, in the card"));
+                        draw(ui, &c, Some(&tex));
+                    });
+                });
+            });
+            tx.apply(&full.textures_delta);
+            full.textures_delta.clear();
+            last = Some(full);
+        }
+        let img = crate::test_raster::rasterize(
+            &ctx,
+            last.unwrap(),
+            &tx,
+            egui::vec2(w, h),
+            crate::theme::BG_DEEP(),
+        );
+        let out = std::env::var("THUMB_PREVIEW").unwrap_or_else(|_| {
+            format!("{}/../../target/thumb_preview.png", env!("CARGO_MANIFEST_DIR"))
+        });
+        img.save(&out).expect("write the preview");
+        println!("wrote {out}");
     }
 
     #[test]

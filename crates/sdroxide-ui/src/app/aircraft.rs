@@ -35,6 +35,8 @@ use sdroxide_aircraft_history::export::Format;
 /// The opening size of the window and its floor.
 const AIRCRAFT_SIZE: [f32; 2] = [920.0, 560.0];
 const AIRCRAFT_MIN: [f32; 2] = [560.0, 320.0];
+/// Tallest the photo is drawn in the Cards view, points (was 140; a quarter more).
+const CARD_PHOTO_H: f32 = 175.0;
 
 /// One button of the mode column.
 struct AirMode {
@@ -906,7 +908,7 @@ impl super::SdroxideApp {
         if p.show_image {
             match self.aircraft_online.thumb_texture(&p.thumb_url) {
                 Some(tex) => {
-                    ui.add(egui::Image::new(tex).max_height(140.0).corner_radius(3.0));
+                    ui.add(egui::Image::new(tex).max_height(CARD_PHOTO_H).corner_radius(3.0));
                 }
                 None => {
                     ui.label(RichText::new(tr!("aircraft-loading-photo")).size(10.5).weak());
