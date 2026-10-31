@@ -122,7 +122,7 @@ impl SdroxideApp {
             // and the picture is all black or all white.
             let off = st.subcarrier_hz - 1900.0;
             ui.label(
-                RichText::new(format!("{:+.0} Hz", off))
+                RichText::new(format!("{:+05.0} Hz", off))
                     .color(if off.abs() < 120.0 { theme::GREEN() } else { theme::YELLOW() })
                     .size(11.0)
                     .monospace(),
@@ -137,20 +137,22 @@ impl SdroxideApp {
             // arrives as a white page with grey speckle. One press moves the dial
             // by exactly what the decoder is measuring, so the subcarrier lands
             // back on 1900 Hz.
-            if off.abs() > CENTRE_THRESHOLD_HZ as f32
-                && crate::chrome::chip(ui, false, tr!("wefax-centre"))
+            let can_centre = off.abs() > CENTRE_THRESHOLD_HZ as f32;
+            ui.add_enabled_ui(can_centre, |ui| {
+                if crate::chrome::chip(ui, false, tr!("wefax-centre"))
                     .on_hover_text(tr!(
                         "wefax-centre-hint",
                         sign = if off > 0.0 { "+" } else { "" },
                         off = format!("{off:.0}")
                     ))
                     .clicked()
-            {
-                cmds.push(Command::SetVfo {
-                    vfo: self.state.active_vfo,
-                    hz: centred_dial_hz(self.state.active_freq_hz(), f64::from(st.subcarrier_hz)),
-                });
-            }
+                {
+                    cmds.push(Command::SetVfo {
+                        vfo: self.state.active_vfo,
+                        hz: centred_dial_hz(self.state.active_freq_hz(), f64::from(st.subcarrier_hz)),
+                    });
+                }
+            });
             self.digi_squelch_slider(ui, cmds);
 
             // Receive sensitivity. Not a volume: a fax is frequency modulated,
@@ -286,22 +288,19 @@ impl SdroxideApp {
                 }
             }
 
-            // Half-turn the chart being held, for one that arrived upside-down.
-            // The in-between answer until the receiver detects the orientation
-            // itself. Gated to a *held* chart: a picture that is still arriving
-            // is a row at a time, and turning the half already on screen while
-            // the rest keeps appending would scramble it (issue #239).
+            // Invert the chart being held (black<->white), for one received on
+            // the wrong sideband. Manual: the receiver no longer guesses.
             let held = self.wefax.has_live() && !st.receiving;
             ui.add_enabled_ui(held, |ui| {
-                if crate::chrome::chip(ui, false, tr!("wefax-rotate-180"))
+                if crate::chrome::chip(ui, false, "NEG")
                     .on_hover_text(if held {
-                        tr!("wefax-rotate-hint")
+                        "Invert black and white (wrong sideband)."
                     } else {
-                        tr!("wefax-rotate-unavailable-hint")
+                        "Available once a chart is held."
                     })
                     .clicked()
                 {
-                    self.wefax.rotate_live();
+                    self.wefax.invert_live();
                 }
             });
 
@@ -714,28 +713,34 @@ impl SdroxideApp {
             .show(|ui| {
                 crate::chrome::window_body_bg(ui);
                 ui.set_max_width(420.0);
-                for s in WEFAX_STATIONS {
-                    ui.label(
-                        RichText::new(s.name).color(crate::theme::CYAN_DIM()).size(10.0).strong(),
-                    );
-                    ui.horizontal_wrapped(|ui| {
-                        for &f in s.carriers_khz {
-                            let d = WefaxStation::dial_hz(f);
-                            let on = (d - dial).abs() < WefaxStation::NEAR_HZ;
-                            if crate::chrome::chip(ui, on, format!("{f:.1}"))
-                                .on_hover_text(tr!(
-                                    "wefax-published-carrier-khz-dial-khz",
-                                    f = format!("{:.1}", f),
-                                    value = format!("{:.1}", d / 1000.0)
-                                ))
-                                .clicked()
-                            {
-                                pick = Some(d);
-                            }
+                egui::ScrollArea::vertical()
+                    .id_salt("wefax-station-picker")
+                    .max_height(450.0)
+                    .auto_shrink([true, true])
+                    .show(ui, |ui| {
+                        for s in WEFAX_STATIONS {
+                            ui.label(
+                                RichText::new(s.name).color(crate::theme::CYAN_DIM()).size(10.0).strong(),
+                            );
+                            ui.horizontal_wrapped(|ui| {
+                                for &f in s.carriers_khz {
+                                    let d = WefaxStation::dial_hz(f);
+                                    let on = (d - dial).abs() < WefaxStation::NEAR_HZ;
+                                    if crate::chrome::chip(ui, on, format!("{f:.1}"))
+                                        .on_hover_text(tr!(
+                                            "wefax-published-carrier-khz-dial-khz",
+                                            f = format!("{:.1}", f),
+                                            value = format!("{:.1}", d / 1000.0)
+                                        ))
+                                        .clicked()
+                                    {
+                                        pick = Some(d);
+                                    }
+                                }
+                            });
+                            ui.add_space(2.0);
                         }
                     });
-                    ui.add_space(2.0);
-                }
                 ui.label(
                     RichText::new(tr!("wefax-frequencies-are-published-carrier-dial"))
                         .color(crate::theme::LINE_LIT())

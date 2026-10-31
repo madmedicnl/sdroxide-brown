@@ -62,6 +62,7 @@ v2.2.0.3_brown. Open PRs: 3 (#318, #339, #341). Open issues: 15 (re-measured 202
 - #283 Settings question — gesloten (fix da78715b).
 
 ## Parked
+- WEFAX broadcast schedules (added by Roy, owned by Roy) — station picker chip with times/links, offline data. Batch with other UI tweaks.
 
 - 4 brede PSK-banken (PSK125C12, PSK500C4, PSK500RC4, PSK1000C2) — 0/3
   words. Geparkeerd tot iemand ze op de band hoort.

@@ -208,6 +208,16 @@ impl WefaxUi {
         self.dirty = true;
     }
 
+    /// Invert the chart being held (black<->white), for one received on the
+    /// wrong sideband. Manual counterpart of the automatic negative detection.
+    pub fn invert_live(&mut self) {
+        if self.live_w == 0 || self.live_h == 0 {
+            return;
+        }
+        self.live.iter_mut().for_each(|g| *g = 255 - *g);
+        self.dirty = true;
+    }
+
     /// Adopt a freshly decoded scan line.
     pub fn push_line(&mut self, image_id: u32, y: u16, gray: &[u8]) {
         if gray.is_empty() || gray.len() > MAX_W {
