@@ -6148,8 +6148,40 @@ aid transmits, and an aid parked on a dial still in a lane mode would be silence
 and then a retune. The same rule holds for every mode whose frequency is fixed:
 a click that tunes goes to the dial that mode is not using.
 
-**An airport cannot be tuned** — no frequency is published for one. What is
-tunable is the aid beside it.
+**An airport cannot be tuned** — its frequencies are listed, not wired to the
+dial. What is tunable is the aid beside it.
+
+**Click an airport to open its card.** Hovering gives the short card (codes,
+name, field height, distance, traffic). Clicking pins the full one: up to four
+**runways** (both ends, length, surface, lit or not; `+N more` for the rest) and
+up to six **frequencies** (tower, ground, ATIS, approach, departure, CTAF,
+UNICOM, delivery, AFIS; `+N more`), with the date of the data at the bottom.
+They come from the OurAirports tables inside the program, so they work offline —
+and because frequencies change, check the date and the chart before you rely on
+one. An airport the source says nothing about shows no runway or frequency line.
+Lengths follow the units chip (feet; metres in **Metric**). "Aircraft within" now
+counts out to 100 km (62 mi).
+
+**The pinned airport card shows the airport's Wikipedia picture** when the
+airport has an article and the station's **Online** switch is on (it is by
+default). The picture is asked of your station, which fetches it from Wikipedia
+for you, keeps it in memory for the open card only and drops it the moment you
+close the card (it never touches a disk). Click **Photo: Wikipedia** under it to
+open the article, where the picture's author and licence are. Without a station,
+with the switch off, or for an airport without an article, the card is text alone.
+
+**The pinned airport card also gives the airport's local time and temperature**,
+when your station can reach the internet and the **Online** switch is on. They
+come from Open-Meteo (free, no key; the card says so), asked by your station:
+the only thing sent is the airport's position, rounded to about a kilometre —
+never yours. The time is your clock moved by the airport's zone, summer time
+included, so it stays right as the minutes pass; the card asks again after ten
+minutes while it stays open and forgets everything when you close it (nothing is
+written to a disk). Time and temperature follow the units chip: **Aviation** and
+**Metric** show 24 h and °C, **Imperial** shows 12 h (AM/PM) and °F. Without a
+station, with the switch off or if the service does not answer, the card shows
+**UTC hh:mm (local time: offline)** — never a local time it could not know — and
+no temperature line.
 
 **A target with a stale position is not drawn at all.** Past the timeout it
 comes off the map — square, dots and block together — while staying on the list,
@@ -6170,11 +6202,14 @@ aircraft moves it, **✕** or **Esc** closes it, and it closes by itself when th
 aircraft drops off the map. In the pinned card the **Planespotters** link opens
 the photo's page, and the picture is shown if it has already been loaded.
 
-**Look up online** is the one thing that asks, and only when you press it. It
-appears when you are connected to a station and the aircraft has not been asked
-about, and asks that station's relay for that aircraft alone, one lookup at a
-time. If the station's operator has not switched the relay on, or you are not
-signed in, the card says so instead of offering the button.
+**Online.** The **Online** switch at the top right of the AIRCRAFT window is on
+by default. While it is on, the card you open asks the station's relay for that
+aircraft alone, one lookup at a time, and shows its type, operator, route and
+photo with no click. Switch it off and nothing leaves the station; the station keeps
+your choice across restarts. If you are not signed in, or the operator holds the
+relay with `SDROXIDE_AIRCRAFT_ONLINE` (`=0` holds it off, `=1` on; unset leaves it to
+the switch), the card or a short note says so. With no station to connect to there is
+no switch.
 
 **Searching.** The **search** box above the table, in the AIRCRAFT window's
 **Cards** list and above the map is one and the same box: type there and the

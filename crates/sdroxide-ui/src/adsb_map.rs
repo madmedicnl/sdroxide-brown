@@ -99,6 +99,13 @@ pub struct AdsbMapState {
     /// [`crate::airdata::airports`]. Set by a click on an airport (an aircraft
     /// under the pointer wins), cleared by a click on empty map or Esc.
     pub airport_pin: Option<usize>,
+    /// The Wikipedia picture of the open airport box, written by the app each
+    /// frame from what the station delivered; drawn only while it is for the
+    /// airport that is pinned.
+    pub airport_photo: Option<AirportPhoto>,
+    /// The local time and temperature of the open airport box, written by the
+    /// app each frame like the picture; drawn only for the pinned airport.
+    pub airport_weather: Option<AirportWeather>,
     /// The aircraft the operator pressed "Look up online" for: its thumbnail is
     /// loaded once the answer is in. `None` until that button is pressed.
     pub lookup: Option<u32>,
@@ -115,6 +122,58 @@ pub struct AdsbMapState {
     /// than the dot stipple the propagation maps use. Rebuilt only when the
     /// view moves by more than a texel.
     pub ground: crate::widgets::worldmap::GroundCache,
+}
+
+/// What the open airport box shows above its text.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum CardPhoto {
+    /// No picture: the airport has no article, the relay is off, or it failed.
+    /// The box is text alone, as before.
+    #[default]
+    None,
+    /// On its way: the room is kept, so the box does not jump when it arrives.
+    Pending,
+    Ready {
+        texture: eframe::egui::TextureId,
+        /// The picture's size in pixels.
+        size: Vec2,
+    },
+}
+
+/// What an open airport box knows about its airport's clock and air.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AirportClock {
+    /// No station, the relay is off, or the station could not say: UTC only, and
+    /// the box says so. A local time is never guessed.
+    Offline,
+    /// Asked, not yet answered.
+    Asking,
+    Known {
+        /// The zone's offset from UTC now, summer time included, in seconds.
+        utc_offset_s: i32,
+        /// The air temperature in °C, when the service gave one.
+        temp_c: Option<f32>,
+    },
+}
+
+/// The clock and air of one airport's box, with the moment they are read at.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AirportWeather {
+    /// Index into [`crate::airdata::airports`].
+    pub airport: usize,
+    pub clock: AirportClock,
+    /// Now, in unix seconds: the local time is this moved by the zone's offset.
+    pub now: i64,
+}
+
+/// The picture of one airport's box, with the article it comes from.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AirportPhoto {
+    /// Index into [`crate::airdata::airports`].
+    pub airport: usize,
+    pub photo: CardPhoto,
+    /// The Wikipedia page, where the credit points.
+    pub page_url: String,
 }
 
 /// One stretch of an aircraft's past track: two positions (latitude, longitude)
@@ -378,18 +437,65 @@ fn project_at(
 /// tooltip could only say "somewhere on the map", and what the operator wants
 /// is the name beside the symbol they are pointing at.
 fn draw_hover_label(p: &Painter, rect: Rect, map: &theme::MapPalette, hover: &NavHover) {
+    draw_hover_card(p, rect, map, hover, CardPhoto::None, None);
+}
+
+/// The widest a card's picture is drawn, and the tallest, in points. A
+/// Wikipedia thumbnail is 320 px wide; half of that is plenty for a card and
+/// keeps it a card.
+const CARD_PHOTO_W: f32 = 168.0;
+const CARD_PHOTO_MAX_H: f32 = 112.0;
+/// The room kept for a picture on its way: a landscape 3:2.
+const CARD_PHOTO_PENDING_H: f32 = 112.0;
+
+/// Where a picture of `size` pixels is drawn in a card: as wide as the card's
+/// picture may be and no taller than it may be, its proportions kept.
+fn photo_fit(size: Vec2) -> Vec2 {
+    if size.x < 1.0 || size.y < 1.0 {
+        return Vec2::ZERO;
+    }
+    let k = (CARD_PHOTO_W / size.x).min(CARD_PHOTO_MAX_H / size.y);
+    size * k
+}
+
+/// What a card took on the screen: the box, and the credit line when it has one.
+struct CardDrawn {
+    box_: Rect,
+    credit: Option<Rect>,
+}
+
+/// [`draw_hover_label`] with the picture of the place above its text and, under
+/// the picture, `credit` (the line that names where the picture is from).
+fn draw_hover_card(
+    p: &Painter,
+    rect: Rect,
+    map: &theme::MapPalette,
+    hover: &NavHover,
+    photo: CardPhoto,
+    credit: Option<&str>,
+) -> CardDrawn {
     // The gesture is *said*, where the station's name is read: a station that can
     // be tuned has to look like one, or the feature is invisible. Only the ones
     // that are on a frequency say it.
     let hint = hover.freq_khz.is_some().then(|| tr!("adsbmap-tune-hint"));
     let galley =
         p.layout_no_wrap(hover.text.clone(), FontId::monospace(10.0), alpha(map.city_label, 255.0));
-    let hint_galley = hint.map(|h| {
-        p.layout_no_wrap(h, FontId::proportional(9.0), alpha(map.city_label, 190.0))
-    });
+    let hint_galley =
+        hint.map(|h| p.layout_no_wrap(h, FontId::proportional(9.0), alpha(map.city_label, 190.0)));
     let pad = vec2(6.0, 4.0);
     let hint_h = hint_galley.as_ref().map_or(0.0, |g| g.size().y + 2.0);
-    let size = galley.size() + pad * 2.0 + vec2(0.0, hint_h);
+    let pic = match photo {
+        CardPhoto::None => Vec2::ZERO,
+        CardPhoto::Pending => vec2(CARD_PHOTO_W, CARD_PHOTO_PENDING_H),
+        CardPhoto::Ready { size, .. } => photo_fit(size),
+    };
+    // The credit goes with a picture that is drawn, not with room that is kept.
+    let credit_galley = credit.filter(|_| matches!(photo, CardPhoto::Ready { .. })).map(|c| {
+        p.layout_no_wrap(c.to_string(), FontId::proportional(9.0), alpha(map.city_label, 200.0))
+    });
+    let credit_h = credit_galley.as_ref().map_or(0.0, |g| g.size().y);
+    let photo_h = if pic.y > 0.0 { pic.y + 2.0 + credit_h + 4.0 } else { 0.0 };
+    let size = vec2(galley.size().x.max(pic.x), galley.size().y + photo_h + hint_h) + pad * 2.0;
     let mut at = hover.at + vec2(11.0, -size.y - 7.0);
     // Kept on the map: a name for something at the edge is the one that most
     // needs to move, because the auto-fit leaves the outermost targets close to
@@ -404,26 +510,176 @@ fn draw_hover_label(p: &Painter, rect: Rect, map: &theme::MapPalette, hover: &Na
         Stroke::new(1.0, alpha(map.border, 210.0)),
         eframe::egui::StrokeKind::Inside,
     );
+    let mut y = box_.min.y + pad.y;
+    let mut credit_rect = None;
+    if pic.y > 0.0 {
+        let frame = Rect::from_min_size(pos2(box_.min.x + pad.x, y), pic);
+        match photo {
+            CardPhoto::Ready { texture, .. } => {
+                p.image(
+                    texture,
+                    frame,
+                    Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+                p.rect_stroke(
+                    frame,
+                    1.0,
+                    Stroke::new(1.0, alpha(map.border, 160.0)),
+                    eframe::egui::StrokeKind::Outside,
+                );
+            }
+            _ => {
+                p.rect_filled(frame, 2.0, alpha(map.border, 40.0));
+                p.text(
+                    frame.center(),
+                    Align2::CENTER_CENTER,
+                    "…",
+                    FontId::proportional(14.0),
+                    alpha(map.city_label, 150.0),
+                );
+            }
+        }
+        y += pic.y + 2.0;
+        if let Some(g) = credit_galley {
+            let r = Rect::from_min_size(pos2(box_.min.x + pad.x, y), g.size());
+            p.galley(r.min, g, map.city_label);
+            p.line_segment(
+                [r.left_bottom(), r.right_bottom()],
+                Stroke::new(0.8, alpha(map.city_label, 160.0)),
+            );
+            credit_rect = Some(r);
+            y += r.height();
+        }
+        y += 4.0;
+    }
     let text_h = galley.size().y;
-    p.galley(box_.min + pad, galley, map.city_label);
+    p.galley(pos2(box_.min.x + pad.x, y), galley, map.city_label);
     if let Some(g) = hint_galley {
-        p.galley(box_.min + pad + vec2(0.0, text_h + 2.0), g, map.city_label);
+        p.galley(pos2(box_.min.x + pad.x, y + text_h + 2.0), g, map.city_label);
     }
     // A ring on the symbol itself, so the name is attached to a mark.
     p.circle_stroke(hover.at, 4.5, Stroke::new(1.3, alpha(map.city_label, 220.0)));
+    CardDrawn { box_, credit: credit_rect }
 }
 
 /// How far from an airport an aircraft counts as "near" it, km.
-const AIRPORT_NEAR_KM: f64 = 25.0;
+const AIRPORT_NEAR_KM: f64 = 100.0;
+
+/// The most runways and frequencies the pinned card lists; the rest is a "+N".
+const CARD_RUNWAYS: usize = 4;
+const CARD_FREQS: usize = 6;
+/// Frequencies per line, so a long list stays narrow.
+const CARD_FREQS_PER_LINE: usize = 3;
+
+fn surface_name(s: crate::airdata::Surface) -> Option<String> {
+    use crate::airdata::Surface;
+    Some(match s {
+        Surface::Unknown => return None,
+        Surface::Asphalt => tr!("adsbmap-surface-asphalt"),
+        Surface::Concrete => tr!("adsbmap-surface-concrete"),
+        Surface::Grass => tr!("adsbmap-surface-grass"),
+        Surface::Gravel => tr!("adsbmap-surface-gravel"),
+        Surface::Dirt => tr!("adsbmap-surface-dirt"),
+        Surface::Water => tr!("adsbmap-surface-water"),
+    })
+}
+
+/// `118.100` for 118 100 kHz.
+fn mhz(khz: u32) -> String {
+    format!("{}.{:03}", khz / 1000, khz % 1000)
+}
+
+/// `20261031` as `2026-10-31`.
+fn iso_date(d: u32) -> String {
+    format!("{:04}-{:02}-{:02}", d / 10_000, d / 100 % 100, d % 100)
+}
+
+/// The runway and frequency lines of the pinned card, from the embedded
+/// OurAirports tables — nothing is looked up and nothing is invented: an
+/// airport the source says nothing about gets no lines. Lengths follow the
+/// chosen units (feet, or metres in the metric set).
+fn airport_detail_lines(a: &crate::airdata::Airport) -> Vec<String> {
+    let units = sdroxide_types::AirUnits::current();
+    let mut out = Vec::new();
+    let rwys = crate::airdata::runways_of(&a.ident);
+    for r in rwys.iter().take(CARD_RUNWAYS) {
+        let mut parts =
+            vec![format!("{}/{}", r.low, r.high), units.altitude(i32::from(r.length_ft))];
+        parts.extend(surface_name(r.surface));
+        if r.lit {
+            parts.push(tr!("adsbmap-airport-runway-lit"));
+        }
+        out.push(parts.join(" · "));
+    }
+    if rwys.len() > CARD_RUNWAYS {
+        out.push(tr!("adsbmap-airport-more", n = rwys.len() - CARD_RUNWAYS));
+    }
+    let freqs = crate::airdata::frequencies_of(&a.ident);
+    if !freqs.is_empty() {
+        out.push(tr!("adsbmap-airport-freq-head"));
+        for line in freqs.iter().take(CARD_FREQS).collect::<Vec<_>>().chunks(CARD_FREQS_PER_LINE) {
+            out.push(
+                line.iter()
+                    .map(|f| format!("{} {}", f.kind.label(), mhz(f.khz)))
+                    .collect::<Vec<_>>()
+                    .join(" · "),
+            );
+        }
+        if freqs.len() > CARD_FREQS {
+            out.push(tr!("adsbmap-airport-more", n = freqs.len() - CARD_FREQS));
+        }
+    }
+    if !out.is_empty() {
+        out.push(tr!("adsbmap-airport-data-date", date = iso_date(crate::airdata::extras_date())));
+    }
+    out
+}
 
 /// The airport's card: codes, name, the height of the field in the chosen
 /// units, how far and which way it is from the station, and how many of the
-/// aircraft on the map are near it. The data holds no runways or tower
-/// frequencies, so none are claimed.
+/// aircraft on the map are near it. With `detail` (the pinned card, not the
+/// hover) it adds the runways and the published frequencies.
 fn airport_card_text(
     a: &crate::airdata::Airport,
     home: Option<(f64, f64)>,
     live: &[&AdsbAircraft],
+    detail: bool,
+) -> String {
+    airport_card_text_with(a, home, live, detail, None)
+}
+
+/// The lines about an airport's clock and air, in the chosen units: the local
+/// time with its zone and the temperature when they are known (and the credit
+/// the service asks for), else UTC with the reason there is no local time.
+fn airport_clock_lines(w: &AirportWeather) -> Vec<String> {
+    let units = sdroxide_types::AirUnits::current();
+    let at = |offset_s: i32| units.clock(sdroxide_types::local_secs_of_day(w.now, offset_s));
+    match w.clock {
+        AirportClock::Known { utc_offset_s, temp_c } => {
+            let mut line = tr!(
+                "adsbmap-airport-local-time",
+                time = at(utc_offset_s),
+                zone = sdroxide_types::utc_label(utc_offset_s)
+            );
+            if let Some(t) = temp_c {
+                line.push_str(" · ");
+                line.push_str(&tr!("adsbmap-airport-temperature", temp = units.temperature(t)));
+            }
+            vec![line, tr!("adsbmap-airport-weather-credit")]
+        }
+        AirportClock::Asking => vec![tr!("adsbmap-airport-utc-wait", time = at(0))],
+        AirportClock::Offline => vec![tr!("adsbmap-airport-utc-offline", time = at(0))],
+    }
+}
+
+/// [`airport_card_text`] with the airport's clock and air, for the pinned box.
+fn airport_card_text_with(
+    a: &crate::airdata::Airport,
+    home: Option<(f64, f64)>,
+    live: &[&AdsbAircraft],
+    detail: bool,
+    weather: Option<&AirportWeather>,
 ) -> String {
     let units = sdroxide_types::AirUnits::current();
     let codes = match (a.iata.is_empty(), a.icao.is_empty() || a.icao == a.ident) {
@@ -447,11 +703,7 @@ fn airport_card_text(
         let bear = sdroxide_types::bearing_deg(h, (a.lat, a.lon));
         text.push_str(&format!(
             "\n{}",
-            tr!(
-                "adsbmap-from-station",
-                dist = units.distance(km),
-                bear = format!("{bear:.0}")
-            )
+            tr!("adsbmap-from-station", dist = units.distance(km), bear = format!("{bear:.0}"))
         ));
     }
     let near = live
@@ -466,6 +718,16 @@ fn airport_card_text(
             "\n{}",
             tr!("adsbmap-aircraft-within", n = near, dist = units.distance(AIRPORT_NEAR_KM))
         ));
+    }
+    if detail {
+        for line in weather.map(airport_clock_lines).unwrap_or_default() {
+            text.push('\n');
+            text.push_str(&line);
+        }
+        for line in airport_detail_lines(a) {
+            text.push('\n');
+            text.push_str(&line);
+        }
     }
     text
 }
@@ -790,7 +1052,7 @@ pub fn show(
     if let Some(h) = nav_hover.as_mut()
         && let Some(a) = h.airport.and_then(|i| crate::airdata::airports().get(i))
     {
-        h.text = airport_card_text(a, home, &live);
+        h.text = airport_card_text(a, home, &live, false);
     }
 
     // **A double-click on a station tunes it.** The map is where the stations
@@ -959,16 +1221,55 @@ pub fn show(
         }
     }
     // The open airport box stays where its airport is, until a click elsewhere.
+    let mut credit_clicked = false;
     if let Some(a) = state.airport_pin.and_then(|i| crate::airdata::airports().get(i)) {
         let at = project(a.lat, a.lon);
         if rect.contains(at) {
             let pinned = NavHover {
                 at,
-                text: format!("{}\n{}", airport_card_text(a, home, &live), tr!("adsbmap-click-to-close")),
+                text: format!(
+                    "{}\n{}",
+                    airport_card_text_with(
+                        a,
+                        home,
+                        &live,
+                        true,
+                        state
+                            .airport_weather
+                            .as_ref()
+                            .filter(|w| Some(w.airport) == state.airport_pin),
+                    ),
+                    tr!("adsbmap-click-to-close")
+                ),
                 freq_khz: None,
                 airport: state.airport_pin,
             };
-            draw_hover_label(&p, rect, map, &pinned);
+            let shown = state
+                .airport_photo
+                .as_ref()
+                .filter(|f| Some(f.airport) == state.airport_pin)
+                .map(|f| (f.photo, f.page_url.clone()));
+            let (photo, page) = shown.unwrap_or((CardPhoto::None, String::new()));
+            let drawn = draw_hover_card(
+                &p,
+                rect,
+                map,
+                &pinned,
+                photo,
+                Some(&tr!("adsbmap-airport-photo-credit")),
+            );
+            // The credit is a link to the article, where the picture's author and
+            // licence are. A click on it follows the link and does not close the box.
+            if let Some(r) = drawn.credit {
+                let link = ui.interact(r, resp.id.with("airport-photo-credit"), Sense::click());
+                if link.hovered() {
+                    ui.ctx().set_cursor_icon(eframe::egui::CursorIcon::PointingHand);
+                }
+                if link.clicked() && !page.is_empty() {
+                    ui.ctx().open_url(eframe::egui::OpenUrl::new_tab(page));
+                    credit_clicked = true;
+                }
+            }
         }
     }
 
@@ -1007,7 +1308,7 @@ pub fn show(
         state.airport_pin,
         hover.is_some(),
         nav_hover.as_ref().and_then(|h| h.airport),
-        resp.clicked(),
+        resp.clicked() && !credit_clicked,
     );
     state.pin_bounds = Some(rect);
     state.pin_anchor = state
@@ -1158,10 +1459,12 @@ mod tests {
     #[test]
     fn the_airport_card_says_codes_name_field_distance_and_traffic() {
         let a = crate::airdata::Airport {
-            ident: "EHAM".into(),
+            // Not a real ident, so the table has no runways for it and the
+            // card is only its first lines.
+            ident: "ZZZZ".into(),
             name: "Amsterdam Airport Schiphol".into(),
             iata: "AMS".into(),
-            icao: "EHAM".into(),
+            icao: "ZZZZ".into(),
             large: true,
             lat: 52.31,
             lon: 4.76,
@@ -1174,18 +1477,347 @@ mod tests {
         far.lat = Some(48.0);
         far.lon = Some(2.0);
         sdroxide_types::AirUnits::Aviation.set_current();
-        let t = airport_card_text(&a, Some((52.0, 5.0)), &[&near, &far]);
+        let t = airport_card_text(&a, Some((52.0, 5.0)), &[&near, &far], true);
         let lines: Vec<&str> = t.lines().collect();
-        assert_eq!(lines[0], "AMS / EHAM");
+        assert_eq!(lines[0], "AMS / ZZZZ");
         assert_eq!(lines[1], "Amsterdam Airport Schiphol");
         assert_eq!(lines[2], "large airport · field -11 ft");
         assert!(lines[3].ends_with("° from your station"), "{t}");
-        assert_eq!(lines[4], "1 aircraft within 25 km", "{t}");
+        assert_eq!(lines[4], "1 aircraft within 100 km", "{t}");
         // No home, nobody near: only the first three lines.
-        let bare = airport_card_text(&a, None, &[&far]);
+        let bare = airport_card_text(&a, None, &[&far], true);
         assert_eq!(bare.lines().count(), 3, "{bare}");
         sdroxide_types::AirUnits::Metric.set_current();
-        assert!(airport_card_text(&a, None, &[]).contains("field -3 m"));
+        assert!(airport_card_text(&a, None, &[], true).contains("field -3 m"));
+        sdroxide_types::AirUnits::Aviation.set_current();
+    }
+
+    fn real_airport(ident: &str) -> &'static crate::airdata::Airport {
+        crate::airdata::airports().iter().find(|a| a.ident == ident).expect("in the table")
+    }
+
+    /// The pinned card lists runways and frequencies from the embedded tables;
+    /// the hover card does not (it stays short).
+    #[test]
+    fn the_pinned_airport_card_lists_runways_and_frequencies() {
+        let a = real_airport("EHAM");
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let full = airport_card_text(a, None, &[], true);
+        assert!(full.contains("18R/36L · 1"), "{full}");
+        assert!(full.contains("asphalt") && full.contains("lit"), "{full}");
+        assert!(full.contains("TWR 1"), "{full}");
+        assert!(full.contains("Frequencies, MHz"), "{full}");
+        assert!(
+            full.lines().last().unwrap().starts_with("runway and frequency data of 20"),
+            "{full}"
+        );
+        // More than four runways: the rest is a count, not a long list.
+        let extra = crate::airdata::runways_of("EHAM").len() - CARD_RUNWAYS;
+        assert!(full.contains(&format!("+{extra} more")), "{full}");
+        let hover = airport_card_text(a, None, &[], false);
+        assert!(!hover.contains("18R") && !hover.contains("TWR"), "{hover}");
+    }
+
+    /// Lengths follow the chosen units: feet in the aviation and imperial
+    /// sets, metres in the metric one.
+    #[test]
+    fn runway_lengths_follow_the_unit_set() {
+        let a = real_airport("EHAM");
+        let ft = crate::airdata::runways_of("EHAM")[0].length_ft;
+        let m = (f64::from(ft) * 0.3048).round() as i32;
+        for (units, want) in [
+            (sdroxide_types::AirUnits::Aviation, format!("{ft} ft")),
+            (sdroxide_types::AirUnits::Imperial, format!("{ft} ft")),
+            (sdroxide_types::AirUnits::Metric, format!("{m} m")),
+        ] {
+            units.set_current();
+            let t = airport_card_text(a, None, &[], true);
+            assert!(t.contains(&want), "{units:?}: {t}");
+        }
+        sdroxide_types::AirUnits::Aviation.set_current();
+    }
+
+    /// 2026-10-31 13:05:00 UTC.
+    const CLOCK_NOW: i64 = 1_793_451_900;
+
+    fn clock_of(clock: AirportClock) -> AirportWeather {
+        AirportWeather { airport: 0, clock, now: CLOCK_NOW }
+    }
+
+    fn pinned_text(clock: AirportClock) -> String {
+        airport_card_text_with(real_airport("EHAM"), None, &[], true, Some(&clock_of(clock)))
+    }
+
+    /// One test per unit set: the same moment and the same air, written in the
+    /// set's own clock and degrees.
+    #[test]
+    fn the_pinned_card_gives_the_local_time_and_temperature_in_each_unit_set() {
+        let known = AirportClock::Known { utc_offset_s: 3600, temp_c: Some(11.6) };
+        for (units, time, temp) in [
+            (sdroxide_types::AirUnits::Aviation, "14:05", "12 °C"),
+            (sdroxide_types::AirUnits::Metric, "14:05", "12 °C"),
+            (sdroxide_types::AirUnits::Imperial, "2:05 PM", "53 °F"),
+        ] {
+            units.set_current();
+            let t = pinned_text(known);
+            assert!(
+                t.contains(&format!("Local time {time} (UTC+1) · Temperature {temp}")),
+                "{units:?}: {t}"
+            );
+            assert!(t.contains("Weather: Open-Meteo.com"), "{units:?}: {t}");
+            assert!(!t.contains("offline"), "{units:?}: {t}");
+        }
+        sdroxide_types::AirUnits::Aviation.set_current();
+    }
+
+    #[test]
+    fn without_a_temperature_the_local_time_stands_alone() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let t = pinned_text(AirportClock::Known { utc_offset_s: 19_800, temp_c: None });
+        assert!(t.contains("Local time 18:35 (UTC+5:30)"), "{t}");
+        assert!(!t.contains("Temperature") && !t.contains(" · Temp"), "{t}");
+    }
+
+    /// Offline the card gives UTC and says why there is no local time. It never
+    /// puts a local time in its place.
+    #[test]
+    fn offline_or_waiting_the_card_says_utc_and_never_invents_a_local_time() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let off = pinned_text(AirportClock::Offline);
+        assert!(off.contains("UTC 13:05 (local time: offline)"), "{off}");
+        assert!(!off.contains("Local time") && !off.contains("Temperature"), "{off}");
+        assert!(!off.contains("Open-Meteo"), "no credit for data it did not use: {off}");
+        let wait = pinned_text(AirportClock::Asking);
+        assert!(wait.contains("UTC 13:05 (local time: loading…)"), "{wait}");
+        sdroxide_types::AirUnits::Imperial.set_current();
+        assert!(pinned_text(AirportClock::Offline).contains("UTC 1:05 PM (local time: offline)"));
+        sdroxide_types::AirUnits::Aviation.set_current();
+    }
+
+    /// The hover box asks nothing of the station, so it says nothing of the clock.
+    #[test]
+    fn only_the_pinned_card_carries_the_clock() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let a = real_airport("EHAM");
+        let w = clock_of(AirportClock::Known { utc_offset_s: 3600, temp_c: Some(11.6) });
+        let hover = airport_card_text_with(a, None, &[], false, Some(&w));
+        assert!(!hover.contains("Local time") && !hover.contains("UTC"), "{hover}");
+        let none = airport_card_text(a, None, &[], true);
+        assert!(!none.contains("Local time") && !none.contains("UTC 1"), "{none}");
+    }
+
+    /// The clock is read before the runways: it is what a person glances for.
+    #[test]
+    fn the_clock_comes_before_the_runways() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let t = pinned_text(AirportClock::Known { utc_offset_s: 3600, temp_c: Some(11.6) });
+        let (clock, runway) = (t.find("Local time").unwrap(), t.find("18R").unwrap());
+        assert!(clock < runway, "{t}");
+    }
+
+    /// A zone behind UTC, and one that carries the date over midnight.
+    #[test]
+    fn the_local_time_follows_zones_behind_and_ahead_of_utc() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let west = pinned_text(AirportClock::Known { utc_offset_s: -5 * 3600, temp_c: None });
+        assert!(west.contains("Local time 08:05 (UTC-5)"), "{west}");
+        let east = pinned_text(AirportClock::Known { utc_offset_s: 11 * 3600, temp_c: None });
+        assert!(east.contains("Local time 00:05 (UTC+11)"), "{east}");
+        let utc = pinned_text(AirportClock::Known { utc_offset_s: 0, temp_c: None });
+        assert!(utc.contains("Local time 13:05 (UTC)"), "{utc}");
+    }
+
+    /// An airport the tables know nothing about: no runway line, no frequency
+    /// line, no "data of" line — nothing invented.
+    #[test]
+    fn an_airport_without_data_gets_no_detail_lines() {
+        let mut a = real_airport("EHAM").clone();
+        a.ident = "ZZZZ".into();
+        assert!(airport_detail_lines(&a).is_empty());
+    }
+
+    /// "Near an airport" is 100 km: 80 km counts, 120 km does not.
+    #[test]
+    fn aircraft_within_100_km_of_an_airport_are_counted() {
+        let a = real_airport("EHAM");
+        let mut at = |dlat: f64| {
+            let mut ac = AdsbAircraft::new(1, 0);
+            ac.lat = Some(a.lat + dlat);
+            ac.lon = Some(a.lon);
+            ac
+        };
+        let (inside, outside) = (at(80.0 / 111.19), at(120.0 / 111.19));
+        sdroxide_types::AirUnits::Aviation.set_current();
+        assert!(airport_card_text(a, None, &[&inside], false).contains("1 aircraft within 100 km"));
+        assert!(!airport_card_text(a, None, &[&outside], false).contains("within"));
+        sdroxide_types::AirUnits::Imperial.set_current();
+        assert!(airport_card_text(a, None, &[&inside], false).contains("within 62 mi"));
+        sdroxide_types::AirUnits::Aviation.set_current();
+    }
+
+    /// The card as drawn on a blank 360×300 map, headless: what it took.
+    fn drawn_card(text: &str, photo: CardPhoto, credit: Option<&str>) -> CardDrawn {
+        use eframe::egui;
+        let size = egui::vec2(360.0, 300.0);
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+            time: Some(1.0),
+            ..Default::default()
+        };
+        let mut got = None;
+        let mut full = ctx.run_ui(input, |ui| {
+            let h = NavHover {
+                at: egui::pos2(10.0, size.y - 10.0),
+                text: text.to_string(),
+                freq_khz: None,
+                airport: Some(0),
+            };
+            let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+            got = Some(draw_hover_card(ui.painter(), rect, theme::map(), &h, photo, credit));
+        });
+        full.textures_delta.clear();
+        got.unwrap()
+    }
+
+    fn ready(w: f32, h: f32) -> CardPhoto {
+        CardPhoto::Ready {
+            texture: eframe::egui::TextureId::default(),
+            size: eframe::egui::vec2(w, h),
+        }
+    }
+
+    #[test]
+    fn a_picture_is_fitted_into_the_card_with_its_proportions_kept() {
+        let wide = photo_fit(vec2(320.0, 213.0));
+        assert!((wide.x - CARD_PHOTO_W).abs() < 0.01, "{wide:?}");
+        assert!((wide.x / wide.y - 320.0 / 213.0).abs() < 0.01);
+        let tall = photo_fit(vec2(100.0, 400.0));
+        assert!((tall.y - CARD_PHOTO_MAX_H).abs() < 0.01 && tall.x < CARD_PHOTO_W, "{tall:?}");
+        assert_eq!(photo_fit(vec2(0.0, 10.0)), Vec2::ZERO, "an empty picture takes no room");
+    }
+
+    #[test]
+    fn a_card_without_a_picture_is_as_it_was_and_a_picture_adds_its_own_room() {
+        let text = "AMS / EHAM\nAmsterdam Airport Schiphol";
+        let bare = drawn_card(text, CardPhoto::None, Some("Photo: Wikipedia"));
+        assert!(bare.credit.is_none(), "no picture, no credit");
+        let waiting = drawn_card(text, CardPhoto::Pending, Some("Photo: Wikipedia"));
+        assert!(waiting.credit.is_none(), "the credit goes with a picture that is drawn");
+        assert!(
+            (waiting.box_.height() - bare.box_.height() - (CARD_PHOTO_PENDING_H + 2.0 + 4.0)).abs()
+                < 0.5,
+            "room is kept for what is on its way"
+        );
+        let full = drawn_card(text, ready(320.0, 213.0), Some("Photo: Wikipedia"));
+        let credit = full.credit.expect("a credit under the picture");
+        assert!(full.box_.contains_rect(credit), "{credit:?} in {:?}", full.box_);
+        assert!(full.box_.height() > bare.box_.height() + 100.0);
+        assert!(full.box_.width() >= CARD_PHOTO_W, "the card is as wide as its picture");
+        // The credit sits between the picture and the text.
+        assert!(credit.top() > full.box_.top() + 100.0);
+    }
+
+    #[test]
+    fn a_card_with_a_picture_stays_on_the_map() {
+        let full = drawn_card("AMS / EHAM", ready(320.0, 213.0), Some("Photo: Wikipedia"));
+        let map = eframe::egui::Rect::from_min_size(Pos2::ZERO, vec2(360.0, 300.0));
+        assert!(map.contains_rect(full.box_), "{:?}", full.box_);
+    }
+
+    /// A stand-in for a Wikipedia thumbnail (sky, field, runway), 320×213 as the
+    /// real ones are. Not a photograph of anything.
+    fn stand_in_picture() -> eframe::egui::ColorImage {
+        let (w, h) = (320usize, 213usize);
+        let mut px = Vec::with_capacity(w * h);
+        for y in 0..h {
+            for x in 0..w {
+                let horizon = 90;
+                let c = if y < horizon {
+                    let t = y as f32 / horizon as f32;
+                    Color32::from_rgb((90.0 + 90.0 * t) as u8, (140.0 + 70.0 * t) as u8, 235)
+                } else if (x as i32 - 160).abs() < ((y - horizon) as i32 / 3 + 4) {
+                    Color32::from_gray(70)
+                } else {
+                    Color32::from_rgb(70, 130, 60)
+                };
+                px.push(c);
+            }
+        }
+        eframe::egui::ColorImage::new([w, h], px)
+    }
+
+    /// Not a check: writes PNGs of the real pinned airport card, with a stand-in
+    /// picture, with the local time and temperature known, on their way and
+    /// offline, for a person to look at, in the three unit sets.
+    /// `cargo test -p sdroxide-ui --lib airport_card_preview -- --ignored`
+    #[test]
+    #[ignore]
+    fn airport_card_preview() {
+        use eframe::egui;
+        let dir = std::env::var("PREVIEW_DIR").unwrap_or_else(|_| "../../target/previews".into());
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = real_airport("EHAM");
+        let known = AirportClock::Known { utc_offset_s: 3600, temp_c: Some(11.6) };
+        let boards = [
+            (sdroxide_types::AirUnits::Aviation, "aviation", "ready", known),
+            (sdroxide_types::AirUnits::Metric, "metric", "ready", known),
+            (sdroxide_types::AirUnits::Imperial, "imperial", "ready", known),
+            (sdroxide_types::AirUnits::Aviation, "offline", "none", AirportClock::Offline),
+            (sdroxide_types::AirUnits::Aviation, "asking", "pending", AirportClock::Asking),
+        ];
+        for (units, name, state, clock) in boards {
+            units.set_current();
+            let weather = AirportWeather { airport: 0, clock, now: CLOCK_NOW };
+            let text = format!(
+                "{}\n{}",
+                airport_card_text_with(a, Some((52.0, 5.0)), &[], true, Some(&weather)),
+                tr!("adsbmap-click-to-close")
+            );
+            let size = egui::vec2(380.0, 460.0);
+            let ctx = egui::Context::default();
+            let handle =
+                ctx.load_texture("preview-airport", stand_in_picture(), Default::default());
+            let photo = match state {
+                "ready" => CardPhoto::Ready { texture: handle.id(), size: vec2(320.0, 213.0) },
+                "pending" => CardPhoto::Pending,
+                _ => CardPhoto::None,
+            };
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                time: Some(1.0),
+                ..Default::default()
+            };
+            let mut tex = crate::test_raster::Textures::default();
+            let mut out = None;
+            for _ in 0..3 {
+                let mut full = ctx.run_ui(input.clone(), |ui| {
+                    let p = ui.painter().clone();
+                    let map = theme::map();
+                    p.rect_filled(egui::Rect::from_min_size(egui::Pos2::ZERO, size), 0.0, map.land);
+                    let h = NavHover {
+                        at: egui::pos2(10.0, size.y - 10.0),
+                        text: text.clone(),
+                        freq_khz: None,
+                        airport: Some(0),
+                    };
+                    draw_hover_card(
+                        &p,
+                        egui::Rect::from_min_size(egui::Pos2::ZERO, size),
+                        map,
+                        &h,
+                        photo,
+                        Some(&tr!("adsbmap-airport-photo-credit")),
+                    );
+                });
+                tex.apply(&full.textures_delta);
+                full.textures_delta.clear();
+                out = Some(full);
+            }
+            let img =
+                crate::test_raster::rasterize(&ctx, out.unwrap(), &tex, size, theme::BG_DEEP());
+            img.save(format!("{dir}/pr4_airport_card_{name}.png")).unwrap();
+        }
         sdroxide_types::AirUnits::Aviation.set_current();
     }
 

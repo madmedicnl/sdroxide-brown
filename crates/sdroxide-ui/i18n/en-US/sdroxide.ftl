@@ -6949,7 +6949,7 @@ aircraft-missing-adsb = not heard yet — ADS-B carries it
 
 aircraft-missing-message = none yet — VDL2, or ACARS audio once VDL2 has named the aircraft
 
-aircraft-online-unavailable-disabled = online unavailable — the station has not switched the relay on
+aircraft-online-unavailable-disabled = online unavailable — the Online switch is off
 
 aircraft-online-unavailable-no-station = online unavailable — no station to ask; the radio data is all there is
 
@@ -7094,14 +7094,6 @@ aircraft-copy-summary = Copy summary
 aircraft-copy-summary-hover = Copy this card as text: what is known, and where each line came from. The position and the last message are left out.
 
 aircraft-asking-station-dots = asking the station…
-
-aircraft-online-turn-on = Turn on online lookup
-
-aircraft-online-turn-on-hover = Photos, type, operator and route come from adsbdb and Planespotters. Your station asks them for you, and only when this is on; it keeps your choice. Nothing else leaves the station.
-
-aircraft-online-turn-off = Turn off online lookup
-
-aircraft-online-turn-off-hover = Stop the station asking adsbdb and Planespotters.
 
 aircraft-not-changed = Not changed: { $why }.
 
@@ -8986,3 +8978,42 @@ tx-bands-listen = Listen mode
 tx-bands-listen-hint = Switch to the listening screen (no transmit controls) to tune to any band.
 
 tx-bands-ptt-off = Transmit is off for this band, or the transmit bands are not confirmed yet (Settings → Radio → Transmit bands).
+
+adsbmap-surface-asphalt = asphalt
+
+adsbmap-surface-concrete = concrete
+
+adsbmap-surface-grass = grass
+
+adsbmap-surface-gravel = gravel
+
+adsbmap-surface-dirt = dirt
+
+adsbmap-surface-water = water
+
+adsbmap-airport-runway-lit = lit
+
+adsbmap-airport-more = +{ $n } more
+
+adsbmap-airport-freq-head = Frequencies, MHz
+
+adsbmap-airport-data-date = runway and frequency data of { $date }
+aircraft-online-switch = Online
+
+aircraft-online-switch-on-hover = Online: type, operator, route and photo come from adsbdb and Planespotters, airport pictures from Wikipedia, and an airport's local time and temperature from Open-Meteo (only the airport's position is sent), asked by your station for you. Click to turn off; the station keeps your choice. Nothing else leaves the station.
+
+aircraft-online-switch-off-hover = Offline: nothing leaves the station. Click to turn on type, operator, route and photo (adsbdb and Planespotters), airport pictures (Wikipedia) and airport weather (Open-Meteo).
+
+aircraft-switch-held = the station's operator holds it with SDROXIDE_AIRCRAFT_ONLINE
+
+adsbmap-airport-photo-credit = Photo: Wikipedia
+
+adsbmap-airport-local-time = Local time { $time } ({ $zone })
+
+adsbmap-airport-temperature = Temperature { $temp }
+
+adsbmap-airport-weather-credit = Weather: Open-Meteo.com
+
+adsbmap-airport-utc-wait = UTC { $time } (local time: loading…)
+
+adsbmap-airport-utc-offline = UTC { $time } (local time: offline)
