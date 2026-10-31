@@ -89,6 +89,10 @@ pub(in crate::app) struct OnlineClient {
     switch_wanted: Option<bool>,
     /// A request is out and its answer not yet in.
     pub switch_asking: bool,
+    /// What the last request asked for, to tell an answer that did not follow it.
+    switch_asked: Option<bool>,
+    /// What the station last said the relay is, once the switch has been used.
+    switch_state: Option<bool>,
     /// Why the last request to switch did not work, if it did not.
     pub switch_note: Option<String>,
     tx: Sender<Msg>,
@@ -109,6 +113,8 @@ impl Default for OnlineClient {
             stats: StatsStore::default(),
             switch_wanted: None,
             switch_asking: false,
+            switch_asked: None,
+            switch_state: None,
             switch_note: None,
             tx,
             rx,
@@ -157,16 +163,23 @@ impl OnlineClient {
                 }
                 Msg::Switch { status, body } => {
                     self.switch_asking = false;
-                    match aircraft_online::classify_switch(status, &body) {
+                    let answer = aircraft_online::classify_switch(status, &body);
+                    let held = self
+                        .switch_asked
+                        .take()
+                        .and_then(|asked| aircraft_online::held_note(asked, &answer));
+                    match answer {
                         aircraft_online::SwitchAnswer::On => {
-                            self.switch_note = None;
+                            self.switch_state = Some(true);
                             self.store.unblock();
                         }
-                        aircraft_online::SwitchAnswer::Off => self.switch_note = None,
+                        aircraft_online::SwitchAnswer::Off => self.switch_state = Some(false),
                         aircraft_online::SwitchAnswer::Refused(why) => {
                             self.switch_note = Some(why);
+                            continue;
                         }
                     }
+                    self.switch_note = held;
                 }
                 Msg::Stats { status, body } => {
                     self.stats.deliver(aircraft_stats::classify(status, &body), now);
@@ -257,6 +270,12 @@ impl OnlineClient {
         send_info(url, station, Kind::Watch, post, self.tx.clone(), ctx.clone());
     }
 
+    /// Whether the relay is on, as far as this client knows: on until the
+    /// station has said otherwise, which is its default.
+    pub(in crate::app) fn relay_on(&self) -> bool {
+        !self.store.relay_off() && self.switch_state != Some(false)
+    }
+
     /// Ask to switch the station's online relay on or off; the request goes
     /// out on the next [`Self::ask_switch`].
     pub(in crate::app) fn want_switch(&mut self, on: bool) {
@@ -274,6 +293,7 @@ impl OnlineClient {
         };
         let station = peer.map(crate::login::station_key).unwrap_or_default();
         self.switch_asking = true;
+        self.switch_asked = Some(on);
         send_info(url, station, Kind::Switch, Some(String::new()), self.tx.clone(), ctx.clone());
     }
 
@@ -782,6 +802,69 @@ mod tests {
                 super::super::aircraft_online::Reason::Disabled
             )
         );
+    }
+
+    #[test]
+    fn the_switch_reads_on_by_default_and_follows_what_the_station_answers() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        assert!(c.relay_on(), "on by default, before anything was asked");
+        let reply = |c: &mut OnlineClient, on: bool| {
+            c.tx.send(Msg::Switch {
+                status: Some(200),
+                body: format!(r#"{{"enabled":{on},"forced":false}}"#),
+            })
+            .unwrap();
+            c.poll(&ctx, 1);
+        };
+        c.switch_asked = Some(false);
+        reply(&mut c, false);
+        assert!(!c.relay_on(), "the operator turned it off");
+        assert_eq!(c.switch_note, None);
+        c.switch_asked = Some(true);
+        reply(&mut c, true);
+        assert!(c.relay_on(), "turned on again");
+    }
+
+    #[test]
+    fn turning_the_relay_on_again_lets_the_cards_ask_after_it_was_off() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        let w = Want { icao: 7, callsign: None, registration: None };
+        assert!(c.store.next_request(Some(&w), true, 0).is_some());
+        c.store.deliver(
+            7,
+            super::super::aircraft_online::Answer::Unavailable(
+                super::super::aircraft_online::Reason::Disabled,
+            ),
+            1,
+        );
+        assert!(!c.relay_on(), "a card was refused: the relay is off");
+        assert!(c.store.next_request(Some(&w), true, 2).is_none());
+        c.switch_asked = Some(true);
+        c.tx.send(Msg::Switch {
+            status: Some(200),
+            body: r#"{"enabled":true,"forced":false}"#.into(),
+        })
+        .unwrap();
+        c.poll(&ctx, 3);
+        assert!(c.relay_on());
+        assert!(c.store.next_request(Some(&w), true, 4).is_some(), "the lock is lifted");
+    }
+
+    #[test]
+    fn a_relay_the_environment_holds_says_so_instead_of_pretending() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        c.switch_asked = Some(true);
+        c.tx.send(Msg::Switch {
+            status: Some(200),
+            body: r#"{"enabled":false,"forced":true}"#.into(),
+        })
+        .unwrap();
+        c.poll(&ctx, 1);
+        assert!(!c.relay_on(), "what the station says, not what was asked");
+        assert!(c.switch_note.as_deref().is_some_and(|n| n.contains("SDROXIDE_AIRCRAFT_ONLINE")));
     }
 
     /// **This test cannot catch a regression of the `peer.is_some()` guard.**

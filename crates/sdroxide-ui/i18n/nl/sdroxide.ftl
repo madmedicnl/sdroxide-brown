@@ -6948,7 +6948,7 @@ aircraft-missing-adsb = nog niet gehoord — ADS-B draagt het
 
 aircraft-missing-message = nog geen — VDL2, of ACARS-audio zodra VDL2 het vliegtuig heeft genoemd
 
-aircraft-online-unavailable-disabled = online niet beschikbaar — het station heeft de relay niet ingeschakeld
+aircraft-online-unavailable-disabled = online niet beschikbaar — de schakelaar Online staat uit
 
 aircraft-online-unavailable-no-station = online niet beschikbaar — geen station om te vragen; de radiodata is alles wat er is
 
@@ -7093,14 +7093,6 @@ aircraft-copy-summary = Samenvatting kopiëren
 aircraft-copy-summary-hover = Kopieer deze kaart als tekst: wat bekend is en waar elke regel vandaan komt. De positie en het laatste bericht worden weggelaten.
 
 aircraft-asking-station-dots = het station wordt gevraagd…
-
-aircraft-online-turn-on = Online opzoeken inschakelen
-
-aircraft-online-turn-on-hover = Foto's, type, operator en route komen van adsbdb en Planespotters. Je station vraagt ze voor je, en alleen als dit aan staat; het onthoudt je keuze. Verder verlaat niets het station.
-
-aircraft-online-turn-off = Online opzoeken uitschakelen
-
-aircraft-online-turn-off-hover = Stop het station met vragen aan adsbdb en Planespotters.
 
 aircraft-not-changed = Niet gewijzigd: { $why }.
 
@@ -8985,3 +8977,11 @@ tx-bands-listen = Luistermodus
 tx-bands-listen-hint = Naar het luisterscherm (zonder zendbediening) om op elke band af te stemmen.
 
 tx-bands-ptt-off = Zenden staat uit voor deze band, of de zendbanden zijn nog niet bevestigd (Instellingen → Radio → Zendbanden).
+
+aircraft-online-switch = Online
+
+aircraft-online-switch-on-hover = Online: type, exploitant, route en foto komen van adsbdb en Planespotters, door uw station voor u opgevraagd. Klik om uit te zetten; het station onthoudt uw keuze. Er verlaat verder niets het station.
+
+aircraft-online-switch-off-hover = Offline: er verlaat niets het station. Klik om type, exploitant, route en foto (adsbdb en Planespotters) aan te zetten.
+
+aircraft-switch-held = de beheerder van het station legt het vast met SDROXIDE_AIRCRAFT_ONLINE
