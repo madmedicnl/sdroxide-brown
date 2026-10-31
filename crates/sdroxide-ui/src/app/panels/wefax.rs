@@ -155,30 +155,6 @@ impl SdroxideApp {
             });
             self.digi_squelch_slider(ui, cmds);
 
-            // Receive sensitivity. Not a volume: a fax is frequency modulated,
-            // so its greys come from the 1500 / 2300 Hz tones and not from how
-            // strong the signal is. This scales the decoder's thresholds
-            // instead, and 0 is the reference behaviour. Persisted in DigiConfig.
-            ui.label(RichText::new(tr!("panels-sensitivity")).size(10.0).weak());
-            {
-                let mut v = self.digi_cfg_edit.wefax_rx_sensitivity;
-                let resp =
-                    crate::chrome::slider(ui, egui::Slider::new(&mut v, -5..=5).fixed_decimals(0))
-                        .on_hover_text(tr!("wefax-sensitivity-hint"));
-                if resp.changed() {
-                    self.digi_cfg_edit.wefax_rx_sensitivity = v;
-                    self.digi_cfg_edit.wefax_rx_auto = v == 0;
-                    cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
-                }
-            }
-            if crate::chrome::chip(ui, self.digi_cfg_edit.wefax_rx_auto, tr!("sstv-auto"))
-                .on_hover_text(tr!("wefax-auto-hint"))
-                .clicked()
-            {
-                self.digi_cfg_edit.wefax_rx_auto = true;
-                self.digi_cfg_edit.wefax_rx_sensitivity = 0;
-                cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
-            }
         });
 
         ui.add_space(4.0);
