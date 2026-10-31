@@ -60,6 +60,8 @@ pub fn run(
                 initial_antenna: boot.initial_antenna,
                 tx_ham_only,
                 cb_tx_allowed: settings.cb_tx_allowed,
+                // Production never bypasses the per-band TX list (tests only).
+                tx_bands_open: false,
                 // The SWR guard matters MORE headless, not less: there is no
                 // operator watching the meter, so an unattended beacon or a
                 // remote client would otherwise keep transmitting into a fault
@@ -145,6 +147,8 @@ pub fn run(
                 initial_antenna: (None, None),
                 tx_ham_only,
                 cb_tx_allowed: settings.cb_tx_allowed,
+                // Production never bypasses the per-band TX list (tests only).
+                tx_bands_open: false,
                 swr_guard: settings.swr_guard,
                 swr_limit: settings.swr_limit,
                 reopen: Some(crate::reopen_factory_for(&c, store.clone(), slot.id)),
