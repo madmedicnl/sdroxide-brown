@@ -1205,7 +1205,7 @@ impl eframe::App for SdroxideApp {
         //
         // Not during a playback: the radio standing in then is a file, and has
         // no transmitter by design rather than by nature.
-        self.tx_band_guard(&mut cmds);
+        self.tx_band_guard();
         let rx_only = !self.swl_mode()
             && self.state.playback.is_none()
             && self.caps.as_ref().is_some_and(|c| !c.is_transmit_capable());
@@ -1236,7 +1236,7 @@ impl eframe::App for SdroxideApp {
             }
         }
         // The engine's notice first, then another sdroxide on this machine.
-        // The transmit band list: why the dial was put back, then the standing
+        // The transmit band list: why transmit is off at the dial, then the standing
         // request to check and confirm the list (never dismissable — it stays
         // until the operator has confirmed).
         let tx_msg = self.radio_notice.is_none().then(|| self.tx_band_msg.clone()).flatten();
@@ -1298,14 +1298,6 @@ impl eframe::App for SdroxideApp {
                                     if rx_only {
                                         self.rx_only_nudge_dismissed = true;
                                     }
-                                }
-                                if tx_msg.is_some()
-                                    && ui
-                                        .button(RichText::new(tr!("tx-bands-listen")).size(13.0))
-                                        .on_hover_text(tr!("tx-bands-listen-hint"))
-                                        .clicked()
-                                {
-                                    self.enter_listen_mode();
                                 }
                                 // Only for a radio that truly cannot transmit:
                                 // the listening screen is the right shape for
@@ -4560,12 +4552,11 @@ impl SdroxideApp {
                 // client may not have had it yet, and the per-radio SWL mode
                 // (`hide_tx`) rides in it — a radio that is a listener's screen
                 // must not show transmit controls while the announcement is in
-                // flight. Later edits are the settings dialog's, so this only
-                // ever fills a gap.
+                // flight.
                 RadioEvent::RadioConfig(c) => {
-                    if self.radio_cfg.is_none() {
-                        self.radio_cfg = Some(*c);
-                    }
+                    // Always the latest: the engine sends it after every change,
+                    // and a stale copy would judge the transmit bands wrongly.
+                    self.radio_cfg = Some(*c);
                 }
             }
         }

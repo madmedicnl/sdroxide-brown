@@ -8971,14 +8971,6 @@ tx-bands-notice-new = L'émission est coupée sur toutes les bandes. Choisissez 
 
 tx-bands-notice-carried = Vos bandes d'émission ont été reprises de la version précédente. L'émission reste bloquée tant que vous ne les avez pas vérifiées et validées une fois. En raison des risques pour la radio, vérifiez bien chaque option.
 
-tx-bands-refused = L'émission est coupée sur { $band } : le cadran est revenu à { $mhz } MHz. Pour utiliser cette bande, activez-la dans Réglages → Radio, ou repassez par le mode écoute.
-
-tx-bands-launch = L'émission est coupée sur { $band } : démarrage en mode écoute. Activez la bande dans Réglages → Radio pour y émettre.
-
-tx-bands-listen = Mode écoute
-
-tx-bands-listen-hint = Passer à l'écran d'écoute (sans commandes d'émission) pour accéder à n'importe quelle bande.
-
 tx-bands-ptt-off = L'émission est coupée pour cette bande, ou les bandes d'émission ne sont pas encore validées (Réglages → Radio → Bandes d'émission).
 
 adsbmap-surface-asphalt = asphalte
@@ -9043,3 +9035,5 @@ schedule-col-target = Cible
 schedule-col-site = Lieu
 
 schedule-col-local = Locale
+
+tx-bands-off = L'émission est coupée sur { $band } : cette bande n'est pas autorisée dans vos réglages. Votre émetteur n'est donc pas compatible en émission sur cette bande. (Affiché { $max } fois maximum par session.)

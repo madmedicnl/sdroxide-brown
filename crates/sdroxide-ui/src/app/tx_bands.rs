@@ -4,11 +4,11 @@
 //! key on a band that is not in it (see `Engine::tx_band_refusal`). This is the
 //! half the operator sees: the notice that asks them to check and confirm the
 //! list once per radio, the PTT and TUNE that stay dark where TX is off, and the
-//! guard that keeps the dial on bands they have enabled while they operate.
+//! notice shown when the dial is on a band that is off. The dial is never held.
 //!
 //! None of it applies on a listening screen (SWL): there is nothing to key.
 
-use sdroxide_types::{Band, Command};
+use sdroxide_types::Band;
 
 use super::SdroxideApp;
 use crate::i18n::tr;
@@ -25,6 +25,9 @@ pub(in crate::app) enum TxBands {
     },
     Confirmed,
 }
+
+/// How many times per session and radio tab the refused-band notice shows.
+pub(in crate::app) const TX_BAND_NOTICES_MAX: u8 = 3;
 
 /// The name of the band `hz` is in, as the operator sees it.
 fn band_name(hz: f64) -> String {
@@ -67,55 +70,38 @@ impl SdroxideApp {
         }
     }
 
-    /// Switch to the listening screen: no transmit controls, free tuning.
-    pub(in crate::app) fn enter_listen_mode(&mut self) {
-        self.band_menu_tab = super::top_bar::BandMenuTab::Listen;
-        if !self.ui_settings.listen_tab_hides_tx {
-            self.ui_settings.listen_tab_hides_tx = true;
-        }
-        self.ui_settings.band_menu_listen = true;
-        super::persist::persist_ui_settings(&self.ui_settings);
-        self.tx_band_msg = None;
-    }
-
-    /// Keep the dial on a band the operator has enabled while they operate.
+    /// Warn, without ever touching the dial, when the frequency is outside the
+    /// bands the operator enabled and confirmed. Transmit is already off there
+    /// (the engine refuses to key); this is only the notice.
     ///
-    /// Run every frame on the state the radio reports, so it holds whoever moved
-    /// the dial — the wheel, a typed frequency, a memory, the scanner, a mode
-    /// change that retunes, a CAT, TCI or MIDI client. The dial goes back to
-    /// where it last was inside an enabled band. With nowhere to go back to — a
-    /// launch, or a return from the listening screen onto a refused band — the
-    /// screen goes to listening instead.
-    pub(in crate::app) fn tx_band_guard(&mut self, cmds: &mut Vec<Command>) {
+    /// The dial is free: nothing is put back and the screen is not changed.
+    /// Each move onto a refused band counts as one showing, at most
+    /// [`TX_BAND_NOTICES_MAX`] per session and per radio tab — the count is
+    /// not saved, so it starts again at the next launch.
+    pub(in crate::app) fn tx_band_guard(&mut self) {
         if self.tx_bands_status() != TxBands::Confirmed || self.state.playback.is_some() {
-            self.tx_band_last_ok = None;
-            self.tx_band_reverting = None;
+            self.tx_band_msg = None;
+            self.tx_band_refused_in = None;
             return;
         }
         let Some(cfg) = self.radio_cfg.as_ref() else { return };
         let hz = self.state.tx_freq_hz();
         if cfg.tx_dial_allowed(hz) {
-            self.tx_band_last_ok = Some((self.state.active_vfo, self.state.active_freq_hz()));
-            self.tx_band_reverting = None;
+            self.tx_band_msg = None;
+            self.tx_band_refused_in = None;
             return;
         }
-        match self.tx_band_last_ok {
-            Some((vfo, back)) => {
-                if self.tx_band_reverting != Some(back.to_bits()) {
-                    self.tx_band_reverting = Some(back.to_bits());
-                    cmds.push(Command::SetVfo { vfo, hz: back });
-                    self.tx_band_msg = Some(tr!(
-                        "tx-bands-refused",
-                        band = band_name(hz),
-                        mhz = format!("{:.3}", back / 1e6)
-                    ));
-                }
-            }
-            None => {
-                let band = band_name(hz);
-                self.enter_listen_mode();
-                self.tx_band_msg = Some(tr!("tx-bands-launch", band = band));
-            }
+        let band = Band::containing(hz);
+        if self.tx_band_refused_in == Some(band) {
+            return;
+        }
+        self.tx_band_refused_in = Some(band);
+        if self.tx_band_shown < TX_BAND_NOTICES_MAX {
+            self.tx_band_shown += 1;
+            self.tx_band_msg =
+                Some(tr!("tx-bands-off", band = band_name(hz), max = TX_BAND_NOTICES_MAX));
+        } else {
+            self.tx_band_msg = None;
         }
     }
 }

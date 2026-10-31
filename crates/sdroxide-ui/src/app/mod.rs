@@ -317,14 +317,13 @@ pub struct SdroxideApp {
     /// Persistent, non-fatal operator notice (e.g. radio audio input
     /// unavailable / mono card selected for IQ). Shown as a warning banner.
     radio_notice: Option<String>,
-    /// Why the dial was put back, or the screen sent to listening, because the
-    /// band is not enabled for transmit (see `tx_bands.rs`). Dismissable, with
-    /// a button that goes to the listening screen.
+    /// Why transmit is off at the dial: the band is not enabled (see
+    /// `tx_bands.rs`). A warning, dismissable; the dial is never moved.
     tx_band_msg: Option<String>,
-    /// The last dial inside an enabled band, which the guard puts back.
-    tx_band_last_ok: Option<(sdroxide_types::Vfo, f64)>,
-    /// The frequency (as bits) a put-back was already sent for, so it is sent once.
-    tx_band_reverting: Option<u64>,
+    /// The refused band the dial is in, so staying there shows nothing more.
+    tx_band_refused_in: Option<sdroxide_types::Band>,
+    /// Notices shown this session on this tab. Never saved.
+    tx_band_shown: u8,
     /// Another sdroxide found running on this machine at start-up — see
     /// [`SdroxideApp::warn_other_instance`]. Kept apart from `radio_notice`
     /// because the engine clears that one with its own notices, and this is
@@ -2101,8 +2100,8 @@ impl SdroxideApp {
             retry_backoff: RETRY_MIN_S,
             radio_notice: None,
             tx_band_msg: None,
-            tx_band_last_ok: None,
-            tx_band_reverting: None,
+            tx_band_refused_in: None,
+            tx_band_shown: 0,
             other_instance: None,
             #[cfg(not(target_arch = "wasm32"))]
             panel_undock_notice_mode: None,
@@ -7323,5 +7322,54 @@ mod tests {
                 row_end,
             );
         }
+    }
+
+    /// The transmit band notice: 80 m at 3.643 MHz is allowed and says nothing;
+    /// a refused band warns, never moves the dial, and shows 3 times at most.
+    #[test]
+    fn the_refused_band_notice_warns_three_times_and_never_moves_the_dial() {
+        use crate::multi::frame_test_lock;
+        use sdroxide_types::{Band, RadioConfig};
+        let _guard = frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-txband-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        crate::layout::set_tier(&ctx, crate::layout::Tier::Desktop);
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.ui_settings.listen_tab_hides_tx = false;
+        app.caps = Some(sdroxide_types::DeviceCaps { tx_channels: 1, ..Default::default() });
+        app.radio_cfg = Some(RadioConfig {
+            tx_band_enable: Some(vec![Band::M80, Band::M40]),
+            tx_bands_confirmed: true,
+            ..RadioConfig::default()
+        });
+        let tune = |app: &mut SdroxideApp, hz: f64| {
+            app.state.vfo_a_hz = hz;
+            app.tx_band_guard();
+        };
+        tune(&mut app, 3_643_000.0);
+        assert!(app.tx_band_msg.is_none(), "80 m is enabled: no banner");
+        // Four refused bands in turn: the banner shows for three of them.
+        let mut shown = 0;
+        for (hz, ok) in [(14_074_000.0, 7_074_000.0), (21_074_000.0, 7_074_000.0), (28_074_000.0, 7_074_000.0), (18_100_000.0, 7_074_000.0)] {
+            tune(&mut app, hz);
+            assert_eq!(app.state.vfo_a_hz, hz, "the dial is never moved");
+            if app.tx_band_msg.is_some() {
+                shown += 1;
+            }
+            tune(&mut app, ok);
+            assert!(app.tx_band_msg.is_none(), "an enabled band clears the banner");
+        }
+        assert_eq!(shown, 3, "3 showings per session, then silence");
+        assert_eq!(app.tx_band_shown, 3);
+        // Staying on one refused band counts once.
+        let mut fresh = app;
+        fresh.tx_band_shown = 0;
+        tune(&mut fresh, 14_074_000.0);
+        tune(&mut fresh, 14_080_000.0);
+        assert_eq!(fresh.tx_band_shown, 1);
     }
 }

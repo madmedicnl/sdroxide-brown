@@ -8959,14 +8959,6 @@ tx-bands-notice-new = La transmisión está desactivada en todas las bandas. Eli
 
 tx-bands-notice-carried = Sus bandas de transmisión se han recuperado de la versión anterior. La transmisión sigue bloqueada hasta que las compruebe y confirme una vez. Por el riesgo para la radio, compruebe bien cada opción.
 
-tx-bands-refused = La transmisión está desactivada en { $band }: el dial volvió a { $mhz } MHz. Para usar esa banda, actívela en Ajustes → Radio o pase por el modo escucha.
-
-tx-bands-launch = La transmisión está desactivada en { $band }: se inicia en modo escucha. Active la banda en Ajustes → Radio para transmitir en ella.
-
-tx-bands-listen = Modo escucha
-
-tx-bands-listen-hint = Pasar a la pantalla de escucha (sin controles de transmisión) para sintonizar cualquier banda.
-
 tx-bands-ptt-off = La transmisión está desactivada en esta banda, o las bandas de transmisión aún no están confirmadas (Ajustes → Radio → Bandas de transmisión).
 
 adsbmap-surface-asphalt = asfalto
@@ -9031,3 +9023,5 @@ schedule-col-target = Destino
 schedule-col-site = Lugar
 
 schedule-col-local = Local
+
+tx-bands-off = La transmisión está desactivada en { $band }: esta banda no está permitida en sus ajustes, por lo que su transmisor no es compatible para transmitir en ella. (Se muestra como máximo { $max } veces por sesión.)

@@ -48,3 +48,11 @@ radio, the whole bandwidth, zoom in or out, fast or slow. No drift, no jitter,
 no off/on to re-centre. Modes keep their preset bandwidth; CTR only moves the
 line. Touching waterfall or zoom code: keep the `ctr_zoom_sim` tests in
 `widgets/spectrum_view.rs` green and add the gesture.
+
+## Working rules
+
+- Answer and plan in French, short and direct. No automatic approval window
+  (do not call ExitPlanMode): ask questions as plain text in the chat.
+- Compact the conversation as often as possible.
+- If less than 10 GB of disk is free, free space first (build caches, unused
+  artifacts) before building.
