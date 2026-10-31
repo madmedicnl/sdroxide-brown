@@ -2947,8 +2947,9 @@ pub fn fetch_broadcast_master() -> Result<Vec<sdroxide_types::BroadcastStation>,
 
 /// Aoki's own shortwave schedule URL, **read from their index**.
 ///
-/// Picks the highest-numbered season in `pc/nc/`, because that is the newest file
-/// they have published and not necessarily the season we are in.
+/// Picks the highest-numbered season it finds on the index, whether published as
+/// `xtXX.zip` (e.g. `/binews/ut/xt/xta26.zip`) or the older `ncXX.zip` under
+/// `/pc/nc/`. The direct `xt{season}.zip` is tried first.
 fn aoki_latest(agent: &ureq::Agent) -> Result<(String, String), String> {
     let season = sdroxide_types::broadcast::season_file(now_unix());
     // **The season's own package first.** `xt{season}.zip` is what the season's
@@ -2957,9 +2958,12 @@ fn aoki_latest(agent: &ureq::Agent) -> Result<(String, String), String> {
     // lags: it still held **B24** while we were in A26, which is a file eighteen
     // months stale and a schedule of last season's transmitters.
     let url = format!("https://www1.m2.mediacat.ne.jp/binews/ut/xt/xt{season}.zip");
-    let resp = agent.get(&url).call().map_err(|e| e.to_string())?;
-    if resp.status().is_success() {
-        return Ok((url, format!("xt{season}")));
+    // ureq treats HTTP errors as errors by default; try to be permissive and
+    // also fall back if the call itself fails.
+    if let Ok(resp) = agent.get(&url).call() {
+        if resp.status().is_success() {
+            return Ok((url, format!("xt{season}")));
+        }
     }
     // Fall back to Aoki's own index: the newest **shortwave** file it lists, which
     // is not necessarily the season we are in. Better than nothing, and it names
@@ -2967,13 +2971,13 @@ fn aoki_latest(agent: &ureq::Agent) -> Result<(String, String), String> {
     let mut index = agent.get(AOKI_INDEX_URL).call().map_err(|e| {
         format!(
             "Aoki's seasonal package 404s ({}) and its index would not load: {e}",
-            resp.status()
+            url, e
         )
     })?;
     if !index.status().is_success() {
         return Err(format!(
             "Aoki's seasonal package is HTTP {} and its index is HTTP {}",
-            resp.status(),
+            404,
             index.status()
         ));
     }
@@ -2993,14 +2997,25 @@ fn aoki_latest(agent: &ureq::Agent) -> Result<(String, String), String> {
             continue;
         };
         let stem = name.strip_suffix(".zip").unwrap_or(name);
-        if !href.contains("/pc/nc/") || !stem.starts_with("nc") || stem.len() < 2 {
+        let lower = stem.to_ascii_lowercase();
+
+        // Accept ncXX, xtXX or bXX style schedules from wherever Aoki publishes them
+        let (ok, year) = if lower.starts_with("nc") && lower.len() >= 4 {
+            let y = &lower[2..4];
+            (y.chars().all(|c| c.is_ascii_digit()), y.to_string())
+        } else if lower.starts_with("xt") && lower.len() >= 4 {
+            let y = &lower[2..4];
+            (y.chars().all(|c| c.is_ascii_digit()), y.to_string())
+        } else if lower.starts_with('b') && lower.len() >= 3 {
+            let y = &lower[1..3];
+            (y.chars().all(|c| c.is_ascii_digit()), y.to_string())
+        } else {
+            (false, String::new())
+        };
+        if !ok {
             continue;
         }
-        let year = &stem[stem.len() - 2..];
-        if !year.chars().all(|c| c.is_ascii_digit()) {
-            continue;
-        }
-        if best.as_ref().is_none_or(|(_, y)| year > y.as_str()) {
+        if best.as_ref().is_none_or(|(_, y)| year > *y) {
             best = Some((href.to_string(), stem.to_string()));
         }
     }
@@ -3199,14 +3214,39 @@ pub fn import_schedule_file(path: &std::path::Path) -> Result<ImportedSchedule, 
 /// The season an Aoki file names itself with: `xta26` for `xta26.zip`, `b26` for
 /// `ncb26.txt`, and nothing when the name says nothing (`schedule.zip`), which
 /// leaves the caller to fall back to the season we are in.
+///
+/// A browser often appends copy numbers like `xta26 (1).zip` or `xta26 (3).zip`.
+/// Those must not be concatenated onto the year digits.
 fn aoki_season_from_path(path: &std::path::Path) -> Option<String> {
     let stem = path.file_stem()?.to_str()?;
-    let clean: String = stem
+    let lower = stem.to_ascii_lowercase();
+
+    // Prefer the exact Aoki naming: xtNN / ncNN / bNN, even if there is " (1)" etc
+    if let Some(i) = lower.find("xt") {
+        let bytes = lower.as_bytes();
+        if i + 4 <= bytes.len() && bytes[i + 2].is_ascii_digit() && bytes[i + 3].is_ascii_digit() {
+            return Some(format!("xt{}{}", bytes[i + 2] as char, bytes[i + 3] as char));
+        }
+    }
+    if let Some(i) = lower.find("nc") {
+        let bytes = lower.as_bytes();
+        if i + 4 <= bytes.len() && bytes[i + 2].is_ascii_digit() && bytes[i + 3].is_ascii_digit() {
+            return Some(format!("nc{}{}", bytes[i + 2] as char, bytes[i + 3] as char));
+        }
+    }
+    if let Some(i) = lower.find('b') {
+        let bytes = lower.as_bytes();
+        if i + 3 <= bytes.len() && bytes[i + 1].is_ascii_digit() && bytes[i + 2].is_ascii_digit() {
+            return Some(format!("b{}{}", bytes[i + 1] as char, bytes[i + 2] as char));
+        }
+    }
+
+    // Fallback to the old behaviour for odd names
+    let clean: String = lower
         .chars()
         .filter(|c| c.is_ascii_alphanumeric())
         .take(8)
-        .collect::<String>()
-        .to_ascii_lowercase();
+        .collect();
     let named = clean.starts_with("xt") || clean.starts_with("nc") || clean.starts_with("b2");
     (named && clean.chars().any(|c| c.is_ascii_digit())).then_some(clean)
 }
