@@ -7726,6 +7726,28 @@ pub struct RadioConfig {
     /// property of the hardware. Appended last, as the wire requires.
     #[serde(default)]
     pub swap_iq: bool,
+    /// The bands this radio may transmit on, as the operator chose them. The
+    /// first gate on every transmit route, ahead of every other rail: a band
+    /// that is not listed here is never keyed, whatever else would allow it.
+    ///
+    /// `Some(vec![])` is a radio that was never configured — every band off —
+    /// and `None` is a `radio.json` written before this existed, which the
+    /// engine fills from the amateur bands the radio can reach and leaves
+    /// unconfirmed (see [`Self::tx_bands_confirmed`]). Checked on the *real*
+    /// dial frequency through [`Band::containing`], so the ALL selector is not
+    /// a permission: a dial outside every band falls on [`Band::Gen`], the
+    /// "Autre" row, which is off until the operator turns it on.
+    ///
+    /// Per radio, on the server with the rest of `radio.json`. Appended last,
+    /// as the wire requires.
+    #[serde(default)]
+    pub tx_band_enable: Option<Vec<Band>>,
+    /// The operator has looked at [`Self::tx_band_enable`] and confirmed it.
+    /// Until then the radio does not transmit at all — an upgrade carries the
+    /// old bands over, but a list nobody has checked is not a licence to key.
+    /// Appended last, as the wire requires.
+    #[serde(default)]
+    pub tx_bands_confirmed: bool,
 }
 
 /// The lowest S-meter calibration offered, in S-units.
@@ -7736,6 +7758,35 @@ pub const SMETER_CAL_MAX: i8 = 5;
 pub const DB_PER_S_UNIT: f32 = 6.0;
 
 impl RadioConfig {
+    /// Whether this radio may transmit on `band`: validated, and listed.
+    pub fn tx_band_allowed(&self, band: Band) -> bool {
+        self.tx_bands_confirmed
+            && self.tx_band_enable.as_ref().is_some_and(|bands| bands.contains(&band))
+    }
+
+    /// Whether this radio may transmit at `dial_hz`. The band is the one the
+    /// frequency is in, never the selector the operator last clicked.
+    pub fn tx_dial_allowed(&self, dial_hz: f64) -> bool {
+        self.tx_band_allowed(Band::containing(dial_hz))
+    }
+
+    /// Fill in [`Self::tx_band_enable`] for a `radio.json` that predates it:
+    /// every amateur band `may_tx` says the radio can reach, left unconfirmed.
+    /// Returns whether anything changed. A list that exists is never touched.
+    pub fn migrate_tx_bands(&mut self, may_tx: impl Fn(f64) -> bool) -> bool {
+        if self.tx_band_enable.is_some() {
+            return false;
+        }
+        let bands = Band::ALL
+            .into_iter()
+            .filter(|b| b.is_amateur())
+            .filter(|b| b.edges().is_some_and(|(lo, hi)| may_tx(lo) || may_tx(hi)))
+            .collect();
+        self.tx_band_enable = Some(bands);
+        self.tx_bands_confirmed = false;
+        true
+    }
+
     /// Whether the engine is to conjugate this radio's I/Q.
     ///
     /// [`Self::swap_iq`] is the per-radio switch for a receiver whose I and Q

@@ -2,8 +2,8 @@
 
 Working queue. Rules in AGENTS.md. Last updated 2026-10-30.
 
-State: `main` at crate 2.2.0, PROTO_VERSION 256 (0x4C). Latest release
-v2.2.0.3_brown. Open PRs: 3 (#318, #339, #341). Open issues: 15 (re-measured 2026-10-29).
+State: `main` at crate 2.2.0, PROTO_VERSION 258 (0x4E; 259 / 0x4F on the TX band list branch). Latest release
+v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measured 2026-10-29).
 
 ## Task tracking rules
 
@@ -36,6 +36,7 @@ v2.2.0.3_brown. Open PRs: 3 (#318, #339, #341). Open issues: 15 (re-measured 202
 - UDP feed VDL2/ACARS/DSC/HFDL (added by Roy, owned by Roy) — PR #318 open.
   Rolling-window fix toegepast.
 - APRS panel: all messages heard, 500 kept, composer note, RX/TX engine tests (added by madmedicnl, owned by Roy; touches F4NRM's APRS area, PR for his review) — decoder fault #259 not reproduced in the engine; needs a real capture.
+- Per-band TX permission (added by madmedicnl, owned by Roy; touches the radio engine and every radio tab, PR for F4NRM's review) — PR #358 open, not merged. Every band has a YES/NO switch in Settings; new install = all off, upgrade = bands carried over but TX blocked until the operator confirms once per radio; not applied on SWL/listen screens. PROTO_VERSION 259 (0x4F). Needs a hands-on test with a real radio.
 
 ## Waiting on other people
 

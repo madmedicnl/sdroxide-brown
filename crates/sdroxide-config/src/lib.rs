@@ -874,7 +874,17 @@ impl Store {
     /// selected" a state that survives a restart, which is the only way it is
     /// any use.
     pub fn load_radio_config(&self) -> sdroxide_types::RadioConfig {
+        let existed = self
+            .dir()
+            .is_ok_and(|d| matches!(read_config_text(&d, "radio.json"), FileText::Text(_)));
         let (mut cfg, quarantined) = self.load_checked::<sdroxide_types::RadioConfig>("radio.json");
+        // A radio with no file — or one that had to be reset — is a new radio:
+        // every band off. Only a file that exists and has no list is an
+        // upgrade, which the engine fills in once it knows what the radio can
+        // reach.
+        if (!existed || quarantined) && cfg.tx_band_enable.is_none() {
+            cfg.tx_band_enable = Some(Vec::new());
+        }
         if quarantined {
             warn!(
                 "radio.json was reset, so no interface is selected — pick one in \
@@ -4972,9 +4982,19 @@ mod tests {
         assert_eq!(Store::radio(2).load_radio_config(), cfg);
         assert_eq!(
             Store::radio(0).load_radio_config(),
-            sdroxide_types::RadioConfig::default(),
+            sdroxide_types::RadioConfig {
+                // A radio with no file is a new radio: every band off.
+                tx_band_enable: Some(Vec::new()),
+                ..sdroxide_types::RadioConfig::default()
+            },
             "radio 0 must not see radio 2's file"
         );
+        // A file written before the transmit band list existed has none, which
+        // is what tells an upgrade (carried over by the engine, unconfirmed)
+        // from a new radio.
+        std::fs::write(root.join("radio-2/radio.json"), "{}").unwrap();
+        assert_eq!(Store::radio(2).load_radio_config().tx_band_enable, None);
+        assert_eq!(Store::radio(3).load_radio_config().tx_band_enable, Some(Vec::new()));
 
         // The roster: a missing file is the one legacy radio; creating a radio
         // allocates a fresh id, seeds its scope, and disables the TCI server
@@ -5074,6 +5094,8 @@ mod tests {
         fs::write(root.join("radio.json"), "{ \"backend\": \"Sdr").unwrap();
         let reset = sdroxide_types::RadioConfig {
             backend: sdroxide_types::Backend::None,
+            // A reset file is a new radio: every transmit band off.
+            tx_band_enable: Some(Vec::new()),
             ..Default::default()
         };
         assert_eq!(Store::station().load_radio_config(), reset);

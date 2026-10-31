@@ -8951,3 +8951,37 @@ aprs-all-chip-hint = Aan: elk bericht dat op het kanaal te horen is, voor wie he
 aprs-composer-hidden-swl = Verzenden is verborgen: de SWL-/luistermodus staat aan. Zet hem uit om een bericht te schrijven en te verzenden.
 
 aprs-compose-count-hint = Gebruikte tekens van de 67 die een APRS-bericht kan bevatten.
+
+tx-bands-title = Zendbanden
+
+tx-bands-note = Zet TX alleen op JA voor de banden waarop deze radio echt zendt. Dit gaat voor alle andere zendinstellingen; JA heft de andere veiligheidsgrenzen nooit op.
+
+tx-bands-careful = ⚠ Een verkeerde band kan de radio vernietigen: controleer elke optie zorgvuldig.
+
+tx-bands-yes = JA
+
+tx-bands-no = NEE
+
+tx-bands-confirmed = ✓ Zendbanden bevestigd voor deze radio
+
+tx-bands-ack = Ik heb deze banden met mijn radio vergeleken
+
+tx-bands-confirm = Deze banden bevestigen
+
+tx-bands-confirm-hint = Vink eerst het vakje aan: u bevestigt één keer per radio.
+
+tx-bands-check = Banden controleren…
+
+tx-bands-notice-new = Zenden staat op alle banden uit. Kies de banden waarop deze radio zendt en bevestig ze één keer. Vanwege het risico voor de radio: controleer de gekozen opties zorgvuldig.
+
+tx-bands-notice-carried = Uw zendbanden zijn overgenomen uit de vorige versie. Zenden blijft geblokkeerd tot u ze één keer hebt gecontroleerd en bevestigd. Vanwege het risico voor de radio: controleer elke optie zorgvuldig.
+
+tx-bands-refused = Zenden staat uit op { $band }: de afstemming ging terug naar { $mhz } MHz. Om die band te gebruiken, schakel hem in onder Instellingen → Radio of ga via de luistermodus.
+
+tx-bands-launch = Zenden staat uit op { $band }: start in luistermodus. Schakel de band in onder Instellingen → Radio om er te zenden.
+
+tx-bands-listen = Luistermodus
+
+tx-bands-listen-hint = Naar het luisterscherm (zonder zendbediening) om op elke band af te stemmen.
+
+tx-bands-ptt-off = Zenden staat uit voor deze band, of de zendbanden zijn nog niet bevestigd (Instellingen → Radio → Zendbanden).

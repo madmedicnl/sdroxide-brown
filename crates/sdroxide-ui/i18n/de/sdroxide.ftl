@@ -8941,3 +8941,37 @@ aprs-all-chip-hint = An: jede auf dem Kanal gehörte Nachricht, an wen auch imme
 aprs-composer-hidden-swl = Senden ist ausgeblendet: SWL-/Hörmodus ist aktiv. Schalten Sie ihn aus, um eine Nachricht zu schreiben und zu senden.
 
 aprs-compose-count-hint = Verwendete Zeichen von den 67, die eine APRS-Nachricht fassen kann.
+
+tx-bands-title = Sendebänder
+
+tx-bands-note = TX nur auf JA stellen, wo dieses Funkgerät wirklich sendet. Das gilt vor allen anderen Sendeeinstellungen; JA hebt die übrigen Sicherheitsgrenzen nie auf.
+
+tx-bands-careful = ⚠ Ein falsches Band kann das Funkgerät zerstören: Prüfen Sie jede Option sorgfältig.
+
+tx-bands-yes = JA
+
+tx-bands-no = NEIN
+
+tx-bands-confirmed = ✓ Sendebänder für dieses Funkgerät bestätigt
+
+tx-bands-ack = Ich habe diese Bänder mit meinem Funkgerät abgeglichen
+
+tx-bands-confirm = Diese Bänder bestätigen
+
+tx-bands-confirm-hint = Zuerst das Kästchen anhaken: die Bestätigung gilt einmal pro Funkgerät.
+
+tx-bands-check = Bänder prüfen…
+
+tx-bands-notice-new = Senden ist auf allen Bändern aus. Wählen Sie die Bänder, auf denen dieses Funkgerät sendet, und bestätigen Sie sie einmalig. Wegen der Gefahr für das Funkgerät prüfen Sie die gewählten Optionen sorgfältig.
+
+tx-bands-notice-carried = Ihre Sendebänder stammen aus der vorherigen Version. Senden bleibt gesperrt, bis Sie sie einmal geprüft und bestätigt haben. Wegen der Gefahr für das Funkgerät prüfen Sie jede Option sorgfältig.
+
+tx-bands-refused = Senden ist auf { $band } aus: Die Frequenz ging zurück auf { $mhz } MHz. Um dieses Band zu nutzen, schalten Sie es unter Einstellungen → Funkgerät ein oder gehen Sie über den Hörmodus.
+
+tx-bands-launch = Senden ist auf { $band } aus: Start im Hörmodus. Schalten Sie das Band unter Einstellungen → Funkgerät ein, um dort zu senden.
+
+tx-bands-listen = Hörmodus
+
+tx-bands-listen-hint = Zur Höransicht wechseln (ohne Sendebedienung), um jedes Band abzustimmen.
+
+tx-bands-ptt-off = Senden ist für dieses Band aus oder die Sendebänder sind noch nicht bestätigt (Einstellungen → Funkgerät → Sendebänder).

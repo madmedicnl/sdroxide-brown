@@ -1174,15 +1174,23 @@ impl SdroxideApp {
         });
 
         if tx_capable {
-            let resp = crate::chrome::chip_hold_sized(
-                ui,
-                self.state.tx.ptt,
-                RichText::new("PTT").size(STRIP_PTT_TEXT).strong(),
-                crate::theme::ALERT(),
-                Color32::WHITE,
-                egui::vec2(ptt_w, plan.box_h),
-            )
-            .on_hover_text(ptt_hold_hint());
+            // Dark where TX is off for this band or the list is not confirmed;
+            // the engine refuses the key-down either way.
+            let keyable = self.tx_keyable_here();
+            let resp = ui
+                .add_enabled_ui(keyable, |ui| {
+                    crate::chrome::chip_hold_sized(
+                        ui,
+                        self.state.tx.ptt,
+                        RichText::new("PTT").size(STRIP_PTT_TEXT).strong(),
+                        crate::theme::ALERT(),
+                        Color32::WHITE,
+                        egui::vec2(ptt_w, plan.box_h),
+                    )
+                })
+                .inner
+                .on_hover_text(ptt_hold_hint())
+                .on_disabled_hover_text(tr!("tx-bands-ptt-off"));
             self.apply_held_ptt(&resp, cmds);
         }
 
@@ -1493,14 +1501,20 @@ impl SdroxideApp {
             // PTT is on the strip already; TUNE rides with the levels it is
             // set up with.
             self.tx_controls(ui, cmds, true);
-            if crate::chrome::chip_accent(
-                ui,
-                self.state.tx.tune,
-                RichText::new(tr!("topbar-tune")).size(15.0),
-                crate::theme::YELLOW(),
-                crate::theme::INK_ON_CYAN(),
-            )
-            .clicked()
+            let keyable = self.tx_keyable_here() || self.state.tx.tune;
+            if ui
+                .add_enabled_ui(keyable, |ui| {
+                    crate::chrome::chip_accent(
+                        ui,
+                        self.state.tx.tune,
+                        RichText::new(tr!("topbar-tune")).size(15.0),
+                        crate::theme::YELLOW(),
+                        crate::theme::INK_ON_CYAN(),
+                    )
+                })
+                .inner
+                .on_disabled_hover_text(tr!("tx-bands-ptt-off"))
+                .clicked()
             {
                 cmds.push(Command::SetTune(!self.state.tx.tune));
             }

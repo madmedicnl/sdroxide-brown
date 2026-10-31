@@ -582,6 +582,12 @@ pub struct EngineConfig {
     /// deliberate opt-in; off unless they have asked for it, and it opens 11 m
     /// and nothing else.
     pub cb_tx_allowed: bool,
+    /// **For tests of the transmit chain only — nothing in the program sets it.**
+    /// Treats every band as enabled and confirmed, so a test of what happens
+    /// below the operator's transmit band list does not have to set one up. Off
+    /// by default, and no command line option, setting or configuration file
+    /// reaches it.
+    pub tx_bands_open: bool,
     /// Abort the over and latch out transmit when the rig reports an SWR at or
     /// above [`Self::swr_limit`]. Inert on rigs that do not measure SWR.
     pub swr_guard: bool,
@@ -648,6 +654,7 @@ impl Default for EngineConfig {
             initial_antenna: (None, None),
             tx_ham_only: true,
             cb_tx_allowed: false,
+            tx_bands_open: false,
             swr_guard: true,
             swr_limit: 2.5,
             reopen: None,
@@ -3114,6 +3121,13 @@ struct Engine {
     /// is read on every transmitted block. See
     /// [`sdroxide_types::RadioConfig::tx_drive_ceiling`] (issue #504).
     tx_drive_max: Option<f32>,
+    /// The bands the operator has enabled for transmit, and whether they have
+    /// confirmed the list — the first gate in [`Self::sync_tx_state`]. Held for
+    /// the same reason as `drive_trim`: a key-down cannot go back to the store.
+    tx_band_enable: Vec<Band>,
+    tx_bands_confirmed: bool,
+    /// [`EngineConfig::tx_bands_open`], for tests.
+    tx_bands_open: bool,
     /// The operator's fixed receive-audio trim, in dB — the other part of
     /// `radio.json` the engine keeps a copy of, and for the same reason as
     /// `drive_trim`: the mixer that applies it is rebuilt whenever the sound
@@ -4752,7 +4766,15 @@ fn engine_thread(
     // engine deliberately does not hold that file (see
     // [`Engine::emit_radio_config`]), and this one table is consulted on every
     // transmitted block.
-    let radio_cfg = engine_cfg.store.load_radio_config();
+    let mut radio_cfg = engine_cfg.store.load_radio_config();
+    // An upgrade: the bands the radio could already key become the operator's
+    // list, still unconfirmed, so nothing transmits until they have checked it.
+    if radio_cfg.migrate_tx_bands(|hz| caps.may_tx_hz(hz)) {
+        info!("radio.json had no transmit band list — carried the amateur bands over, unconfirmed");
+        if let Err(e) = engine_cfg.store.save_radio_config(&radio_cfg) {
+            warn!("saving the migrated transmit bands: {e}");
+        }
+    }
 
     // The UDP audio sink, from the radio's own configuration. Set here rather
     // than where the mixer is built because the configuration is read here.
@@ -4936,9 +4958,12 @@ fn engine_thread(
         drive_trim_db: 0.0,
         drive_trim: radio_cfg.tx_drive_trim.clone(),
         tx_drive_max: radio_cfg.tx_drive_ceiling(),
+        tx_band_enable: radio_cfg.tx_band_enable.clone().unwrap_or_default(),
+        tx_bands_confirmed: radio_cfg.tx_bands_confirmed,
         rx_af_gain_db: radio_cfg.rx_audio_gain_db,
         swap_iq: radio_cfg.swaps_iq(),
         tx_center_hz: 0.0,
+        tx_bands_open: engine_cfg.tx_bands_open,
         tx_ham_only: engine_cfg.tx_ham_only,
         cb_tx_allowed: engine_cfg.cb_tx_allowed,
         swr_guard: engine_cfg.swr_guard,
@@ -11587,6 +11612,8 @@ impl Engine {
                 // the radio running the configuration on disk, and the trim
                 // is corrected on the next reload either way.
                 self.drive_trim = cfg.tx_drive_trim.clone();
+                self.tx_band_enable = cfg.tx_band_enable.clone().unwrap_or_default();
+                self.tx_bands_confirmed = cfg.tx_bands_confirmed;
                 // And the ceiling beside it, live rather than at the next
                 // reopen: the operator setting one is very likely doing it
                 // because the radio is making too much power *now*.
@@ -16576,6 +16603,32 @@ impl Engine {
         let _ = self.event_tx.send(RadioEvent::Scanner(self.scan_cfg.clone()));
     }
 
+    /// Why `txf` may not be keyed under the operator's transmit band list, or
+    /// `None` when it may. The same test the interface runs before it offers a
+    /// PTT, so a refusal here is only ever a route that bypassed the screen.
+    fn tx_band_refusal(&self, txf: f64) -> Option<String> {
+        if self.tx_bands_open {
+            return None;
+        }
+        let band = Band::containing(txf);
+        if !self.tx_bands_confirmed {
+            return Some(
+                "the transmit bands of this radio have not been confirmed — open Settings → \
+                 Transmit bands, check them and confirm"
+                    .to_string(),
+            );
+        }
+        if !self.tx_band_enable.contains(&band) {
+            return Some(format!(
+                "TX is off for {} ({:.6} MHz) — switch it on in Settings → Transmit bands, \
+                 or go back through listen mode to another band",
+                if band == Band::Gen { "other frequencies" } else { band.label() },
+                txf / 1e6
+            ));
+        }
+        None
+    }
+
     /// Refuse a transmit request, and *say so*.
     ///
     /// This used to be a `warn!` and nothing else, which meant an unattended
@@ -18710,6 +18763,13 @@ impl Engine {
                 },
                 None => self.state.tx_freq_hz(),
             };
+            // **The operator's band list comes first.** Checked on the real
+            // frequency we would radiate on — the dial band, or the satellite
+            // uplink — never on the band selector, so ALL is no way round it:
+            // a frequency outside every band is `Band::Gen`, "Autre".
+            if let Some(why) = self.tx_band_refusal(txf) {
+                return self.deny_tx(&why);
+            }
             if !self.caps.is_transmit_capable() {
                 return self.deny_tx("this device cannot transmit");
             }

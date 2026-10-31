@@ -8942,3 +8942,37 @@ aprs-all-chip-hint = Encendido: todos los mensajes oídos en el canal, sea cual 
 aprs-composer-hidden-swl = El envío está oculto: el modo SWL / escucha está activo. Desactívelo para escribir y enviar un mensaje.
 
 aprs-compose-count-hint = Caracteres usados de los 67 que admite un mensaje APRS.
+
+tx-bands-title = Bandas de transmisión
+
+tx-bands-note = Ponga TX en SÍ solo en las bandas en las que esta radio transmite de verdad. Va antes que cualquier otro ajuste de transmisión; SÍ nunca anula los demás límites de seguridad.
+
+tx-bands-careful = ⚠ Una banda equivocada puede destruir la radio: compruebe bien cada opción.
+
+tx-bands-yes = SÍ
+
+tx-bands-no = NO
+
+tx-bands-confirmed = ✓ Bandas de transmisión confirmadas para esta radio
+
+tx-bands-ack = He comprobado estas bandas con mi radio
+
+tx-bands-confirm = Confirmar estas bandas
+
+tx-bands-confirm-hint = Marque primero la casilla: se confirma una vez por radio.
+
+tx-bands-check = Revisar bandas…
+
+tx-bands-notice-new = La transmisión está desactivada en todas las bandas. Elija las bandas en las que transmite esta radio y confírmelas una sola vez. Por el riesgo para la radio, compruebe bien las opciones elegidas.
+
+tx-bands-notice-carried = Sus bandas de transmisión se han recuperado de la versión anterior. La transmisión sigue bloqueada hasta que las compruebe y confirme una vez. Por el riesgo para la radio, compruebe bien cada opción.
+
+tx-bands-refused = La transmisión está desactivada en { $band }: el dial volvió a { $mhz } MHz. Para usar esa banda, actívela en Ajustes → Radio o pase por el modo escucha.
+
+tx-bands-launch = La transmisión está desactivada en { $band }: se inicia en modo escucha. Active la banda en Ajustes → Radio para transmitir en ella.
+
+tx-bands-listen = Modo escucha
+
+tx-bands-listen-hint = Pasar a la pantalla de escucha (sin controles de transmisión) para sintonizar cualquier banda.
+
+tx-bands-ptt-off = La transmisión está desactivada en esta banda, o las bandas de transmisión aún no están confirmadas (Ajustes → Radio → Bandas de transmisión).
