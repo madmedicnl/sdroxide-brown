@@ -153,6 +153,20 @@ impl SdroxideApp {
                     });
                 }
             });
+            if crate::chrome::chip(ui, self.wefax.auto_centre, "AUTO CENTRE").clicked() {
+                self.wefax.auto_centre = !self.wefax.auto_centre;
+            }
+            if self.wefax.auto_centre {
+                if can_centre && self.wefax.auto_centre_armed {
+                    cmds.push(Command::SetVfo {
+                        vfo: self.state.active_vfo,
+                        hz: centred_dial_hz(self.state.active_freq_hz(), f64::from(st.subcarrier_hz)),
+                    });
+                    self.wefax.auto_centre_armed = false;
+                } else if !can_centre {
+                    self.wefax.auto_centre_armed = true;
+                }
+            }
             self.digi_squelch_slider(ui, cmds);
 
         });
