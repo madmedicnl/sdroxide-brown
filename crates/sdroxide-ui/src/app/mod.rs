@@ -2384,9 +2384,11 @@ impl SdroxideApp {
             swl_selected: None,
             swl_antenna: String::new(),
             swl_filter: Default::default(),
-            schedule: Default::default(),
+            schedule: crate::app::schedule::ScheduleUi::from_settings(&ui_settings.programs),
             broadcast_favs: load_broadcast_favourites(storage),
-            broadcast_all: false,
+            // The chip as it was left. Only the chip: the favourites it made are
+            // loaded above, and replaying `set_broadcast_all` would rewrite them.
+            broadcast_all: ui_settings.programs.all,
             hfdl_channels: load_hfdl_channels(storage),
             recording_jobs: load_recording_jobs(storage),
             jobs: Default::default(),
@@ -3153,6 +3155,8 @@ impl SdroxideApp {
     /// in one place.
     pub fn set_broadcast_all(&mut self, on: bool) {
         self.broadcast_all = on;
+        self.ui_settings.programs.all = on;
+        crate::app::persist::persist_ui_settings(&self.ui_settings);
         if on {
             self.broadcast_favs.clear();
             for s in &self.broadcast {

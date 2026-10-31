@@ -6070,11 +6070,11 @@ schedule-all-favs = ⭐ ALLES
 
 schedule-all-favs-hint = Maak van elk schemastation een favoriet en toon hun labels op de waterfall zolang dit aan staat. Klik opnieuw om alle favorieten te wissen.
 
-schedule-solar-time = ZONNETIJD
+schedule-solar-time = LOKALE TIJD
 
-schedule-solar-time-hint = Toon de lokale tijd van elke rij bij de zender — de klok van de zon, vier minuten per graad vanaf de lengtegraad, geen burgerlijke tijdzone. Het weet niets van zomertijd of zonegrenzen, daarom heet het zonnetijd en niet lokale tijd.
+schedule-solar-time-hint = Toon de lokale tijd van elke rij bij de zender. Het is de klok van de zon — vier minuten per graad lengte — en geen burgerlijke tijdzone: zomertijd en zonegrenzen kent het niet.
 
-schedule-map = KAART
+schedule-map = KAART TONEN
 
 schedule-map-hint = Open LISTEN — dit schema als kaart. Kies er een station op, schrijf op wat je hoorde en log het. Het geselecteerde station komt mee
 
@@ -9016,3 +9016,27 @@ adsbmap-airport-weather-credit = Weer: Open-Meteo.com
 adsbmap-airport-utc-wait = UTC { $time } (lokale tijd: laden…)
 
 adsbmap-airport-utc-offline = UTC { $time } (lokale tijd: offline)
+
+schedule-listen = LUISTER
+
+schedule-listen-hint = Stem de ontvanger af op dit station
+
+schedule-sort = Sorteren
+
+schedule-sort-asc = Oplopend
+
+schedule-sort-desc = Aflopend
+
+schedule-col-freq = Freq.
+
+schedule-col-band = Band
+
+schedule-col-name = Naam
+
+schedule-col-lang = Taal
+
+schedule-col-target = Doelgebied
+
+schedule-col-site = Locatie
+
+schedule-col-local = Lokaal

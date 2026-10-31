@@ -28,10 +28,7 @@ pub(in crate::app) fn parse_colour(text: &str) -> Option<[u8; 3]> {
 /// changed, by the picker or by a paste. A paste is taken from the PASTE chip,
 /// or from Cmd/Ctrl+V while the pointer is over the swatch or its picker is open.
 pub(in crate::app) fn colour_edit(ui: &mut egui::Ui, col: &mut [u8; 3]) -> bool {
-    let mut changed = false;
     let swatch = ui.color_edit_button_srgb(col);
-    changed |= swatch.changed();
-    let id = swatch.id.with("paste");
     // Small: this sits on every row of the memory list, and a roomy chip beside
     // each swatch widened the window the list lives in.
     let paste = crate::chrome::chip_sized(
@@ -39,8 +36,36 @@ pub(in crate::app) fn colour_edit(ui: &mut egui::Ui, col: &mut [u8; 3]) -> bool 
         false,
         egui::RichText::new("PST").size(8.0),
         egui::vec2(22.0, 14.0),
-    )
-    .on_hover_text(tr!("colouredit-paste-a-colour-code-rrggbb-or-r-g"));
+    );
+    colour_paste(ui, col, &swatch, paste)
+}
+
+/// The swatch's size inside [`colour_swatch_framed`].
+const SWATCH: egui::Vec2 = egui::vec2(30.0, 14.0);
+
+/// How wide [`colour_swatch_framed`] stands.
+pub(in crate::app) fn colour_swatch_framed_width() -> f32 {
+    crate::chrome::chip_frame_width(SWATCH.x)
+}
+
+/// The picker's colour square inside a chip-shaped frame, so it reads as one of
+/// the chips it sits among. The frame goes round the colour only.
+pub(in crate::app) fn colour_swatch_framed(ui: &mut egui::Ui, col: &mut [u8; 3]) -> egui::Response {
+    crate::chrome::chip_frame(ui, SWATCH, |ui| ui.color_edit_button_srgb(col))
+}
+
+/// The paste half of [`colour_edit`], for a swatch and a PST chip that are not
+/// side by side — a column header puts them over different columns. `paste` is
+/// the PST chip's response, already drawn with its tooltip untouched here.
+pub(in crate::app) fn colour_paste(
+    ui: &mut egui::Ui,
+    col: &mut [u8; 3],
+    swatch: &egui::Response,
+    paste: egui::Response,
+) -> bool {
+    let mut changed = swatch.changed();
+    let paste = paste.on_hover_text(tr!("colouredit-paste-a-colour-code-rrggbb-or-r-g"));
+    let id = swatch.id.with("paste");
     if swatch.clicked() {
         ui.data_mut(|d| d.insert_temp(id, true));
     }

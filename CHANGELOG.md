@@ -17,6 +17,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 - **Choppy audio and a stuttering waterfall in the web client on a healthy network** — the server now sets `TCP_NODELAY` on every connection, serves audio ahead of the other lanes, gives the audio lane twice the room, and logs when it has to drop audio packets. Plan and the native/Linux checks still owed: `docs/WEB-LAG-PLAN.md`.
 
 ### Added
+- **PROGRAMS window tidied** — aligned columns with a Sort menu over each, the colour in a chip-style frame, a two-row top bar that no longer overlaps, ACCORD → LISTEN, SOLAR TIME → LOCAL TIME, CARTE → SHOW MAP, and every filter, the sort and ALL kept between sessions.
 - **Radio Classic** — EXTRAS → RADIO: a classic-radio face for broadcast listening (bands, memories, schedule, S-meter, stereo VU, 9-digit VFO, RDS name and RadioText), docked under the waterfall in the voice modes and detachable from Settings. — madmedicnl (wire 257)
 
 ## [2.2.0.2_brown] - 2026-10-27
