@@ -25,6 +25,7 @@ use crate::model::{
     AircraftInfo, Image, Lookup, Photo, Reply, Request, Route, clean_callsign, clean_registration,
     image_ok, thumb_url_ok,
 };
+use crate::wikipedia::Article;
 
 /// The version of [`Info`]'s shape. Bump on any change a client cannot ignore.
 pub const FORMAT_VERSION: u32 = 1;
@@ -94,6 +95,13 @@ pub trait Upstream: Send + Sync {
     /// an address [`thumb_url_ok`] accepted. A stand-in that has no pictures
     /// need not say so.
     fn image(&self, _url: &str) -> Option<Image> {
+        None
+    }
+
+    /// The thumbnail of a Wikipedia article, or `None` for any failure: the
+    /// page has no picture, the host is down, the reply is not a small JPEG or
+    /// PNG. A stand-in that has none need not say so.
+    fn wikipedia_thumbnail(&self, _article: &Article) -> Option<Image> {
         None
     }
 }
@@ -187,6 +195,15 @@ impl<U: Upstream> Relay<U> {
             return None;
         }
         self.upstream.image(url).filter(|i| image_ok(&i.content_type, i.bytes.len()))
+    }
+
+    /// The Wikipedia thumbnail of an airport's article, if it has one and it
+    /// comes back a JPEG or PNG that is not too big. Blocking, not cached here:
+    /// like [`Relay::image`], the caller keeps it for as long as one card is open.
+    pub fn wikipedia_thumbnail(&self, article: &Article) -> Option<Image> {
+        self.upstream
+            .wikipedia_thumbnail(article)
+            .filter(|i| image_ok(&i.content_type, i.bytes.len()))
     }
 
     /// How long a client waits for a question already out. For tests.

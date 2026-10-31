@@ -8989,8 +8989,10 @@ adsbmap-airport-freq-head = Frequenzen, MHz
 adsbmap-airport-data-date = Bahn- und Frequenzdaten vom { $date }
 aircraft-online-switch = Online
 
-aircraft-online-switch-on-hover = Online: Typ, Betreiber, Route und Foto stammen von adsbdb und Planespotters, von Ihrer Station für Sie abgefragt. Klicken zum Ausschalten; die Station merkt sich Ihre Wahl. Sonst verlässt nichts die Station.
+aircraft-online-switch-on-hover = Online: Typ, Betreiber, Route und Foto stammen von adsbdb und Planespotters, Flughafenbilder von Wikipedia, von Ihrer Station für Sie abgefragt. Klicken zum Ausschalten; die Station merkt sich Ihre Wahl. Sonst verlässt nichts die Station.
 
-aircraft-online-switch-off-hover = Offline: nichts verlässt die Station. Klicken, um Typ, Betreiber, Route und Foto (adsbdb und Planespotters) einzuschalten.
+aircraft-online-switch-off-hover = Offline: nichts verlässt die Station. Klicken, um Typ, Betreiber, Route und Foto (adsbdb und Planespotters) sowie Flughafenbilder (Wikipedia) einzuschalten.
 
 aircraft-switch-held = der Betreiber der Station legt es mit SDROXIDE_AIRCRAFT_ONLINE fest
+
+adsbmap-airport-photo-credit = Foto: Wikipedia

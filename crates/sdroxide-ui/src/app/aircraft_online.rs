@@ -195,6 +195,33 @@ pub(in crate::app) fn photo_release_url(peer_url: &str, icao: u32) -> Option<Str
     photo_url(peer_url, icao)
 }
 
+/// Where the station hands over the Wikipedia picture of the airport whose card
+/// is open: `GET {station}/airport-photo?lang=en&title=Amsterdam_Airport_Schiphol`
+/// (and `DELETE` of the same lets it go). A language and a title, never an
+/// address: the station builds every address itself.
+pub(in crate::app) fn airport_photo_url(peer_url: &str, lang: &str, title: &str) -> Option<String> {
+    let base = crate::login::http_base(&crate::login::station_key(peer_url))?;
+    Some(format!("{base}/airport-photo?lang={}&title={}", escape_query(lang), escape_query(title)))
+}
+
+/// The article's page, where the picture's credit points: its author and licence
+/// are on that page. `lang` and `title` are the table's own.
+pub(in crate::app) fn airport_page_url(lang: &str, title: &str) -> String {
+    format!("https://{}.wikipedia.org/wiki/{}", escape_query(lang), escape_query(title))
+}
+
+/// Everything but letters, digits and `-._~` as `%XX`, byte by byte.
+fn escape_query(text: &str) -> String {
+    text.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                char::from(b).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
 /// Seconds a thumbnail that failed waits before it is asked for again while its
 /// card stays open, and how many times: the station may have been busy or the
 /// picture's host slow, which mends itself.
@@ -594,6 +621,33 @@ pub(in crate::app) fn photo_view(state: &OnlineState, thumb: ThumbStatus) -> Opt
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_airport_photo_is_asked_by_language_and_title_never_by_address() {
+        assert_eq!(
+            super::airport_photo_url(
+                "wss://shack.example/sdr/ws/2",
+                "en",
+                "Amsterdam_Airport_Schiphol"
+            )
+            .as_deref(),
+            Some(
+                "https://shack.example/sdr/airport-photo?lang=en&title=Amsterdam_Airport_Schiphol"
+            )
+        );
+        assert_eq!(
+            super::airport_photo_url("ws://shack.test:4950/ws", "es", "Aeropuerto_de_Málaga_(x&y)")
+                .as_deref(),
+            Some(
+                "http://shack.test:4950/airport-photo?lang=es&title=Aeropuerto_de_M%C3%A1laga_%28x%26y%29"
+            ),
+            "nothing in a title can end the query or start another"
+        );
+        assert_eq!(
+            super::airport_page_url("en", "Amsterdam_Airport_Schiphol"),
+            "https://en.wikipedia.org/wiki/Amsterdam_Airport_Schiphol"
+        );
+    }
+
     #[test]
     fn the_photo_is_asked_by_aircraft_and_released_by_one_address() {
         assert_eq!(

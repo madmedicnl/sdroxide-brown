@@ -60,6 +60,28 @@ pub(in crate::app) fn lookup_after(
 }
 
 impl SdroxideApp {
+    /// Give the open airport box its Wikipedia picture, and keep it only while
+    /// the box is open: the box asks every frame it is drawn, and the picture
+    /// goes (here and at the station) when it stops.
+    pub(in crate::app) fn adsb_airport_photo(&mut self, ctx: &egui::Context, now: i64) {
+        let Some(i) = self.adsb_map.airport_pin else {
+            self.adsb_map.airport_photo = None;
+            return;
+        };
+        let Some(ident) = crate::airdata::airports().get(i).map(|a| a.ident.clone()) else {
+            self.adsb_map.airport_photo = None;
+            return;
+        };
+        // What the line delivered since the last frame also arrives here, when
+        // the box is the only thing open.
+        self.aircraft_online.poll(ctx, now);
+        let peer = self.ctrl.peer_url();
+        self.adsb_map.airport_photo = self
+            .aircraft_online
+            .airport_card_photo(ctx, peer.as_deref(), &ident)
+            .map(|(photo, page_url)| adsb_map::AirportPhoto { airport: i, photo, page_url });
+    }
+
     /// Draw the pinned card over the map, and do what was pressed in it.
     pub(in crate::app) fn adsb_pinned_card(
         &mut self,

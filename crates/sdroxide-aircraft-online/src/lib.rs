@@ -24,6 +24,7 @@ mod cache;
 mod model;
 mod parse;
 mod relay;
+mod wikipedia;
 
 #[cfg(feature = "fetch")]
 pub mod fetch;
@@ -35,3 +36,4 @@ pub use model::{
 };
 pub use parse::{parse_adsbdb, parse_photo, reply_for};
 pub use relay::{FORMAT_VERSION, Info, Relay, Status, Upstream};
+pub use wikipedia::{Article, image_url_ok, parse_summary};

@@ -533,6 +533,7 @@ impl SdroxideApp {
         // A click on an aircraft pins its card beside it. The click asks for
         // nothing; the card's own button does.
         self.adsb_pinned_card(ui, &st.aircraft, home, now);
+        self.adsb_airport_photo(ui.ctx(), now);
     }
 
     /// The operator's own position, from the grid in the digital-mode setup.

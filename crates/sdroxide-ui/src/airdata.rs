@@ -35,6 +35,7 @@ const NAVAIDS: &[u8] = include_bytes!("../assets/airdata/navaids.bin");
 const AIRPORTS: &[u8] = include_bytes!("../assets/airdata/airports.bin");
 const RUNWAYS: &[u8] = include_bytes!("../assets/airdata/runways.bin");
 const FREQS: &[u8] = include_bytes!("../assets/airdata/freqs.bin");
+const WIKI: &[u8] = include_bytes!("../assets/airdata/wiki.bin");
 
 /// The kind of radio navigation aid — which is also its symbol on a chart, and
 /// which bands it can be heard on.
@@ -219,6 +220,8 @@ struct Extras {
     date: u32,
     runways: std::collections::HashMap<String, Vec<Runway>>,
     freqs: std::collections::HashMap<String, Vec<Frequency>>,
+    /// Language and article title of the airport's Wikipedia page.
+    wiki: std::collections::HashMap<String, (String, String)>,
 }
 
 const RUNWAY_LEN: usize = 22;
@@ -282,12 +285,33 @@ fn parse_freqs(blob: &[u8]) -> (u32, std::collections::HashMap<String, Vec<Frequ
     (date, map)
 }
 
+/// `wiki.bin`: magic, `u32` date, `u32` count, then `{ident[8] lang[2] len title[len]}`
+/// records. A record that runs past the end ends the table there; nothing is guessed.
+fn parse_wiki(blob: &[u8]) -> std::collections::HashMap<String, (String, String)> {
+    let mut map = std::collections::HashMap::new();
+    let Some((_, mut body, count)) = dated(blob, b"SDXWIK01", 0, "wiki.bin") else {
+        return map;
+    };
+    for _ in 0..count {
+        if body.len() < 11 || body.len() < 11 + usize::from(body[10]) {
+            eprintln!("sdroxide: wiki.bin ends in the middle of a record");
+            break;
+        }
+        let len = usize::from(body[10]);
+        let (ident, lang) = (field(&body[0..8]), field(&body[8..10]));
+        let title = String::from_utf8_lossy(&body[11..11 + len]).into_owned();
+        map.insert(ident, (lang, title));
+        body = &body[11 + len..];
+    }
+    map
+}
+
 fn extras() -> &'static Extras {
     static ONCE: std::sync::OnceLock<Extras> = std::sync::OnceLock::new();
     ONCE.get_or_init(|| {
         let (d1, runways) = parse_runways(RUNWAYS);
         let (d2, freqs) = parse_freqs(FREQS);
-        Extras { date: d1.min(d2), runways, freqs }
+        Extras { date: d1.min(d2), runways, freqs, wiki: parse_wiki(WIKI) }
     })
 }
 
@@ -301,6 +325,13 @@ pub fn runways_of(ident: &str) -> &'static [Runway] {
 /// ATIS, approach…). Empty when the source publishes none.
 pub fn frequencies_of(ident: &str) -> &'static [Frequency] {
     extras().freqs.get(ident).map_or(&[], Vec::as_slice)
+}
+
+/// The Wikipedia page of an airport (by its `ident`) as `(language, title)`, the
+/// title with underscores and no escapes, e.g. `("en", "Amsterdam_Airport_Schiphol")`.
+/// `None` for an airport OurAirports links to no article.
+pub fn wikipedia_of(ident: &str) -> Option<(&'static str, &'static str)> {
+    extras().wiki.get(ident).map(|(l, t)| (l.as_str(), t.as_str()))
 }
 
 /// The day the runway and frequency tables were built, `yyyymmdd`; 0 when they
@@ -545,6 +576,28 @@ mod tests {
         let d = extras_date();
         assert!((2026_0101..=2099_1231).contains(&d), "{d}");
         assert!((1..=12).contains(&(d / 100 % 100)) && (1..=31).contains(&(d % 100)), "{d}");
+    }
+
+    #[test]
+    fn schiphol_has_its_wikipedia_article_and_an_unknown_airport_has_none() {
+        assert_eq!(wikipedia_of("EHAM"), Some(("en", "Amsterdam_Airport_Schiphol")));
+        assert_eq!(wikipedia_of("ZZZZ"), None);
+        // Percent-escapes are undone in the table, so the station escapes once.
+        let (lang, title) = wikipedia_of("LEMG").expect("Malaga has an article");
+        assert!(!title.contains('%') && lang.len() == 2, "{lang} {title}");
+    }
+
+    #[test]
+    fn a_foreign_or_cut_wikipedia_table_is_refused_or_ends_where_it_is_cut() {
+        assert!(parse_wiki(b"nope").is_empty());
+        let mut b = b"SDXWIK01".to_vec();
+        b.extend_from_slice(&[0; 4]);
+        b.extend_from_slice(&2u32.to_le_bytes());
+        b.extend_from_slice(b"EHAM\0\0\0\0en\x04Spam");
+        b.extend_from_slice(b"LFPG\0\0\0\0fr\x09Paris");
+        let got = parse_wiki(&b);
+        assert_eq!(got.get("EHAM"), Some(&("en".to_string(), "Spam".to_string())));
+        assert_eq!(got.len(), 1, "the cut record is dropped, not half-read");
     }
 
     /// Foreign or short runway/frequency files are refused, never half-read.

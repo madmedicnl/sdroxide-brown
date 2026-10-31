@@ -6162,6 +6162,14 @@ one. An airport the source says nothing about shows no runway or frequency line.
 Lengths follow the units chip (feet; metres in **Metric**). "Aircraft within" now
 counts out to 100 km (62 mi).
 
+**The pinned airport card shows the airport's Wikipedia picture** when the
+airport has an article and the station's **Online** switch is on (it is by
+default). The picture is asked of your station, which fetches it from Wikipedia
+for you, keeps it in memory for the open card only and drops it the moment you
+close the card (it never touches a disk). Click **Photo: Wikipedia** under it to
+open the article, where the picture's author and licence are. Without a station,
+with the switch off, or for an airport without an article, the card is text alone.
+
 **A target with a stale position is not drawn at all.** Past the timeout it
 comes off the map — square, dots and block together — while staying on the list,
 greyed. It is deliberately not faded instead: a dim square at a half-minute-old

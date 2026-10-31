@@ -3,7 +3,10 @@
 use std::time::Duration;
 
 use crate::model::{ADSBDB_BASE, MAX_IMAGE, PLANESPOTTERS_BASE};
-use crate::{Image, Reply, Request, Upstream, image_ok, reply_for, user_agent};
+use crate::{
+    Article, Image, Reply, Request, Upstream, image_ok, image_url_ok, parse_summary, reply_for,
+    user_agent,
+};
 
 /// A reply bigger than this is not read: both services answer in a few hundred
 /// bytes, and a body past this is not theirs.
@@ -18,6 +21,9 @@ pub struct HttpUpstream {
     agent: ureq::Agent,
     adsbdb: String,
     planespotters: String,
+    /// Where Wikipedia summaries are asked; `None` is `https://xx.wikipedia.org`.
+    /// Only a test sets it.
+    wikipedia: Option<String>,
 }
 
 impl HttpUpstream {
@@ -35,7 +41,33 @@ impl HttpUpstream {
             .http_status_as_error(false)
             .build()
             .into();
-        HttpUpstream { agent, adsbdb: adsbdb.to_string(), planespotters: planespotters.to_string() }
+        HttpUpstream {
+            agent,
+            adsbdb: adsbdb.to_string(),
+            planespotters: planespotters.to_string(),
+            wikipedia: None,
+        }
+    }
+
+    /// Ask Wikipedia summaries of another host, for a test on loopback.
+    pub fn with_wikipedia(mut self, base: &str) -> HttpUpstream {
+        self.wikipedia = Some(base.to_string());
+        self
+    }
+
+    /// The address of the article's thumbnail, from its summary. Wikipedia's
+    /// REST API wants the `User-Agent` the other two do.
+    fn wikipedia_thumb_url(&self, article: &Article) -> Option<String> {
+        let url = match &self.wikipedia {
+            Some(base) => format!("{base}{}", article.summary_path()),
+            None => format!("https://{}{}", article.host(), article.summary_path()),
+        };
+        let mut resp = self.agent.get(&url).call().ok()?;
+        if resp.status().as_u16() != 200 {
+            return None;
+        }
+        let body = resp.body_mut().with_config().limit(MAX_BODY).read_to_string().ok()?;
+        parse_summary(&body)
     }
 
     fn url(&self, req: &Request) -> String {
@@ -83,6 +115,13 @@ impl Upstream for HttpUpstream {
         }
         let bytes = resp.body_mut().with_config().limit(MAX_IMAGE as u64).read_to_vec().ok()?;
         image_ok(&content_type, bytes.len()).then_some(Image { content_type, bytes })
+    }
+
+    /// The summary names the thumbnail, then the thumbnail is fetched: two plain
+    /// GETs, the second only to an address [`image_url_ok`] accepted.
+    fn wikipedia_thumbnail(&self, article: &Article) -> Option<Image> {
+        let url = self.wikipedia_thumb_url(article).filter(|u| image_url_ok(u))?;
+        self.image(&url)
     }
 }
 
@@ -188,6 +227,42 @@ mod tests {
         assert!(up.image(&serve("text/html", b"<html>")).is_none());
         let big = vec![0u8; MAX_IMAGE + 1];
         assert!(up.image(&serve("image/png", &big)).is_none());
+    }
+
+    #[test]
+    fn a_summary_is_asked_by_path_with_the_stations_user_agent_and_gives_the_thumbnail() {
+        let body = r#"{"thumbnail":{"source":"https://upload.wikimedia.org/a/b/320px-x.jpg"}}"#;
+        let (base, seen) = serve_once("200 OK", body.to_string());
+        let up = HttpUpstream::with_bases("http://127.0.0.1:1", "http://127.0.0.1:1")
+            .with_wikipedia(&base);
+        let a = Article::new("en", "Amsterdam_Airport_Schiphol").unwrap();
+        assert_eq!(
+            up.wikipedia_thumb_url(&a).as_deref(),
+            Some("https://upload.wikimedia.org/a/b/320px-x.jpg")
+        );
+        let head = seen.recv().unwrap();
+        assert!(
+            head.starts_with("GET /api/rest_v1/page/summary/Amsterdam_Airport_Schiphol HTTP/1.1"),
+            "{head}"
+        );
+        assert!(head.to_ascii_lowercase().contains("user-agent: sdr-oxide-brown/"), "{head}");
+        assert!(!head.to_ascii_lowercase().contains("cookie"), "nothing of the client goes out");
+    }
+
+    #[test]
+    fn a_page_without_a_picture_or_with_a_picture_elsewhere_gives_no_thumbnail() {
+        let a = Article::new("en", "Somewhere").unwrap();
+        for (status, body) in [
+            ("404 Not Found", "{}"),
+            ("200 OK", r#"{"title":"Somewhere"}"#),
+            ("200 OK", r#"{"thumbnail":{"source":"https://evil.example/a.jpg"}}"#),
+            ("200 OK", "<html>"),
+        ] {
+            let (base, _) = serve_once(status, body.to_string());
+            let up = HttpUpstream::with_bases("http://127.0.0.1:1", "http://127.0.0.1:1")
+                .with_wikipedia(&base);
+            assert_eq!(up.wikipedia_thumb_url(&a), None, "{status} {body}");
+        }
     }
 
     #[test]
