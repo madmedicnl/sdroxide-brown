@@ -486,9 +486,9 @@ impl PhasingStack {
     }
 
     /// Add a line; once `want` are held, where the picture begins in the line
-    /// just added (samples from its start), where the pulse is, and which
-    /// polarity the signal has, if they make a phasing signal.
-    fn push(&mut self, line: &[f32], want: usize) -> Option<(u32, PulseRegion, bool)> {
+    /// just added (samples from its start) and where the pulse is, if they make
+    /// a phasing signal.
+    fn push(&mut self, line: &[f32], want: usize) -> Option<(u32, PulseRegion)> {
         self.lines.push_back(line.to_vec());
         while self.lines.len() > want {
             self.lines.pop_front();
@@ -506,19 +506,14 @@ impl PhasingStack {
         }
         let k = self.lines.len() as f32;
         profile.iter_mut().for_each(|p| *p /= k);
-        // The pulse is found in whichever polarity the signal arrived; `negative`
-        // reports a transmission received on the wrong sideband, where black and
-        // white are swapped and the pulse reads as a dip.
-        let (pulse, negative) = pulse_region_polarity(&profile, false)?;
+        let pulse = pulse_region(&profile, false)?;
         // The vote: the pulse has to be in nearly every line, or the average is
-        // a few bright lines and a chart. A negative line's pulse is a dip, so
-        // each line is judged on its own polarity.
-        let present =
-            self.lines.iter().filter(|l| pulse.stands_out_polarity(&l[..n], negative)).count();
+        // a few bright lines and a chart.
+        let present = self.lines.iter().filter(|l| pulse.stands_out(&l[..n])).count();
         if present + 1 < self.lines.len() {
             return None;
         }
-        Some((pulse.picture_start(n), pulse, negative))
+        Some((pulse.picture_start(n), pulse))
     }
 }
 
@@ -638,11 +633,6 @@ pub struct WefaxRx {
     idle_hold_until: u64,
     /// The operator's receive sensitivity, `-5..=+5`. See [`WefaxRx::sens_k`].
     sensitivity: i8,
-    /// Whether the transmission in progress arrived negative — black and white
-    /// swapped, as a receiver on the wrong sideband hears it. Detected from the
-    /// phasing signal (a negative one reads white with a black pulse) and used
-    /// to invert the emitted pixels so the chart prints the right way round.
-    negative: bool,
 }
 
 /// How long a tone-detector window is, in seconds. Long enough that a chart's
@@ -864,7 +854,6 @@ impl WefaxRx {
             lead_skipped: 0,
             idle_hold_until: 0,
             sensitivity: 0,
-            negative: false,
         }
     }
 
@@ -1048,7 +1037,6 @@ impl WefaxRx {
         self.lead_skipped = 0;
         self.reset_idle();
         self.rephase_lines = 0;
-        self.negative = false;
         self.had_content = false;
         self.blank_run = 0;
         self.blank_gap = 0;
@@ -1108,17 +1096,6 @@ impl WefaxRx {
     /// actually are.
     fn level_of(&self, hz: f64) -> f32 {
         brightness_between(hz, self.black_hz, self.white_hz)
-    }
-
-    /// The finished pixel row for a scan line: the resampled brightness,
-    /// inverted when the transmission arrived negative (wrong sideband), so a
-    /// chart is always emitted with black where the station printed black.
-    fn emit_line(&self, line: &[f32]) -> Vec<u8> {
-        let mut gray = resample_line(line, self.ioc.width() as usize);
-        if self.negative {
-            gray.iter_mut().for_each(|g| *g = 255 - *g);
-        }
-        gray
     }
 
     /// Re-measure black and white from a line that is known to be phasing.
@@ -1281,12 +1258,11 @@ impl WefaxRx {
         let hz = std::mem::take(&mut self.idle_hz);
         let line_s = spl / self.rate;
         let need = ((IDLE_PHASING_S / line_s).ceil() as usize).max(LOCK_LINES as usize);
-        let Some((skew, pulse, negative)) = self.phasing_stack.push(&line, need) else {
+        let Some((skew, pulse)) = self.phasing_stack.push(&line, need) else {
             return;
         };
         self.calibrate(&line, &hz);
         self.arm(self.ioc, true);
-        self.negative = negative;
         self.phase = Phase::Image;
         self.line_start = self.sample_idx as f64 + f64::from(skew);
         self.lead_phasing = Some(pulse);
@@ -1376,7 +1352,7 @@ impl WefaxRx {
     /// does not turn into a wobble, and only when the drift is large enough to
     /// mean something ([`SLANT_MIN_PPM`]).
     fn probe_slant(&mut self, line: &[f32]) {
-        let Some(pos) = self.strict_skew(line) else { return };
+        let Some(pos) = phasing_skew_strict(line) else { return };
         self.phasing_lines += 1;
         let pos = pos as f64;
         let i = self.phasing_lines;
@@ -1402,7 +1378,7 @@ impl WefaxRx {
     fn note_phasing_line(&mut self, line: &[f32]) -> bool {
         // The strict test: mid-picture, a line that is merely "mostly black
         // with a white patch" is a chart's own graphic, not a phasing pulse.
-        let Some(skew) = self.strict_skew(line) else {
+        let Some(skew) = phasing_skew_strict(line) else {
             self.rephase_lines = 0;
             return false;
         };
@@ -1415,24 +1391,6 @@ impl WefaxRx {
             if self.rephase_lines > 0 && moved { 1 } else { self.rephase_lines + 1 };
         self.rephase_skew = skew;
         self.rephase_lines >= REPHASE_LINES
-    }
-
-    /// The strict phasing test on a line read the right way up.
-    ///
-    /// A negative page's phasing signal is a mirror image — white where the
-    /// standard puts black and a black pulse where it puts the white one — so
-    /// its lines are judged flipped. The polarity is the page's own, settled at
-    /// lock time, never re-derived from a line's mean: re-deriving it here would
-    /// let a normal chart's bright feature be mistaken for a negative phasing
-    /// pulse, which is exactly the false positive [`phasing_skew_strict`]'s mean
-    /// threshold exists to stop.
-    fn strict_skew(&self, line: &[f32]) -> Option<u32> {
-        if self.negative {
-            let flipped: Vec<f32> = line.iter().map(|l| 1.0 - l).collect();
-            phasing_skew_strict(&flipped)
-        } else {
-            phasing_skew_strict(line)
-        }
     }
 
     /// Track a white carrier after the chart. Returns true once an automatic
@@ -1518,13 +1476,10 @@ impl WefaxRx {
             Phase::Phasing => {
                 self.phase_samples += line.len() as u64;
                 self.probe_slant(&line);
-                if let Some((mean, _, negative)) =
-                    self.phasing_stack.push(&line, self.lock_lines as usize)
-                {
+                if let Some((mean, _)) = self.phasing_stack.push(&line, self.lock_lines as usize) {
                     // The pulse sits at the *end* of a phasing line, so the
                     // picture starts just after it.
                     self.calibrate(&line, &line_hz);
-                    self.negative = negative;
                     self.line_start += f64::from(mean);
                     // The line clock has just been re-aligned to the pulse, so
                     // the pulse position's baseline moved: the auto-slant's
@@ -1593,30 +1548,21 @@ impl WefaxRx {
                     // to show a pulse of its own.
                     let room =
                         (PHASING_SIGNAL_S * 1.5 * self.rate / self.samples_per_line()) as u32;
-                    // A negative page's lines read the opposite way round, so
-                    // the skip is judged on them flipped.
-                    let (mean, pulse_here) = if self.negative {
-                        let flipped: Vec<f32> = line.iter().map(|l| 1.0 - l).collect();
-                        let m = flipped.iter().sum::<f32>() / flipped.len().max(1) as f32;
-                        (m, pulse.stands_out_by(&flipped, 0.12))
-                    } else {
-                        let m = line.iter().sum::<f32>() / line.len().max(1) as f32;
-                        (m, pulse.stands_out_by(&line, 0.12))
-                    };
-                    if self.lead_skipped < room && mean <= 0.4 && pulse_here {
+                    let mean = line.iter().sum::<f32>() / line.len().max(1) as f32;
+                    if self.lead_skipped < room && mean <= 0.4 && pulse.stands_out_by(&line, 0.12) {
                         self.lead_skipped += 1;
                         return;
                     }
                     self.lead_phasing = None;
                 }
                 if self.auto_begun && self.note_blank_line(&line) {
-                    let gray = self.emit_line(&line);
+                    let gray = resample_line(&line, self.ioc.width() as usize);
                     out.push(WefaxEvent::Line { y: self.line_no, gray });
                     self.line_no = self.line_no.saturating_add(1);
                     self.finish(false, out);
                     return;
                 }
-                let gray = self.emit_line(&line);
+                let gray = resample_line(&line, self.ioc.width() as usize);
                 out.push(WefaxEvent::Line { y: self.line_no, gray });
                 self.line_no = self.line_no.saturating_add(1);
                 if self.line_no >= MAX_LINES {
@@ -1748,18 +1694,6 @@ impl PulseRegion {
             (inside / self.width as f32, (total - inside) / (n - self.width) as f32);
         inside - outside >= margin
     }
-
-    /// Whether `line` carries the pulse in the given polarity. A negative line
-    /// (received on the wrong sideband) shows the pulse as a dip rather than a
-    /// rise, so it is judged on its flip.
-    fn stands_out_polarity(&self, line: &[f32], negative: bool) -> bool {
-        if negative {
-            let flipped: Vec<f32> = line.iter().map(|l| 1.0 - l).collect();
-            self.stands_out(&flipped)
-        } else {
-            self.stands_out(line)
-        }
-    }
 }
 
 /// Find the white pulse of a phasing line, or `None` if it is not one.
@@ -1822,32 +1756,6 @@ fn pulse_region(line: &[f32], strict: bool) -> Option<PulseRegion> {
     Some(PulseRegion { start: (best.1 + n - before) % n, width })
 }
 
-/// Find the phasing pulse of a line whichever polarity it arrived in, and say
-/// which one it was.
-///
-/// A phasing line is black with a white pulse. Received on the wrong sideband
-/// the frequency axis inverts, so the whole line reads negative — white with a
-/// black pulse, a dip instead of a rise. The pulse's *position* is the same
-/// either way, so a mostly-bright line is read flipped and the pulse found in
-/// the same place; the returned flag reports that flip. Used only while locking
-/// (and while idle), where a transmission's polarity is not yet known — once a
-/// page is under way [`WefaxRx::strict_skew`] judges lines on the polarity
-/// already settled on, so a normal chart's bright feature cannot be mistaken
-/// for a negative phasing pulse.
-fn pulse_region_polarity(line: &[f32], strict: bool) -> Option<(PulseRegion, bool)> {
-    if line.len() < 32 {
-        return None;
-    }
-    let mean = line.iter().sum::<f32>() / line.len() as f32;
-    let negative = mean > 0.5;
-    if negative {
-        let flipped: Vec<f32> = line.iter().map(|l| 1.0 - l).collect();
-        pulse_region(&flipped, strict).map(|p| (p, true))
-    } else {
-        pulse_region(line, strict).map(|p| (p, false))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1866,25 +1774,6 @@ mod tests {
             .iter()
             .map(|&l| {
                 let hz = BLACK_HZ + (WHITE_HZ - BLACK_HZ) * l as f64;
-                ph += TAU * hz / RATE;
-                if ph > TAU {
-                    ph -= TAU;
-                }
-                (ph.sin() * 0.5) as f32
-            })
-            .collect()
-    }
-
-    /// The mirror of [`modulate`]: the subcarrier reflected about its centre,
-    /// so black comes out at 2300 Hz and white at 1500 Hz. That is what a
-    /// receiver on the wrong sideband hears — black reads white and white black
-    /// — and it is the *negative* the auto-orientation corrects.
-    fn modulate_negative(levels: &[f32]) -> Vec<f32> {
-        let mut ph = 0.0f64;
-        levels
-            .iter()
-            .map(|&l| {
-                let hz = WHITE_HZ - (WHITE_HZ - BLACK_HZ) * l as f64;
                 ph += TAU * hz / RATE;
                 if ph > TAU {
                     ph -= TAU;
@@ -1921,19 +1810,6 @@ mod tests {
             levels.extend(std::iter::repeat_n(1.0f32, pulse));
         }
         modulate(&levels)
-    }
-
-    /// The same phasing lines on the wrong sideband: the black lines and white
-    /// pulse heard inverted, so they read white lines with a black pulse.
-    fn phasing_negative(lpm: Lpm, count: usize) -> Vec<f32> {
-        let per = (RATE * lpm.line_secs()) as usize;
-        let pulse = (per as f64 * 0.05) as usize;
-        let mut levels = Vec::new();
-        for _ in 0..count {
-            levels.extend(std::iter::repeat_n(0.0f32, per - pulse));
-            levels.extend(std::iter::repeat_n(1.0f32, pulse));
-        }
-        modulate_negative(&levels)
     }
 
     /// The same, with the pulse at `frac` of the line.
@@ -1983,18 +1859,6 @@ mod tests {
             }
         }
         modulate(&levels)
-    }
-
-    /// The same ramp picture on the wrong sideband: black and white swapped.
-    fn ramp_picture_negative(lpm: Lpm, lines: usize) -> Vec<f32> {
-        let per = (RATE * lpm.line_secs()) as usize;
-        let mut levels = Vec::new();
-        for _ in 0..lines {
-            for i in 0..per {
-                levels.push(i as f32 / per as f32);
-            }
-        }
-        modulate_negative(&levels)
     }
 
     /// A dark chart: every line mostly black with one broad bright band at
@@ -2188,44 +2052,6 @@ mod tests {
             .max()
             .unwrap_or(0);
         assert!(biggest_step < 60, "the row wraps: biggest step {biggest_step}");
-    }
-
-    /// A chart received on the wrong sideband arrives negative — black and white
-    /// swapped — and the receiver must notice from the phasing signal (which
-    /// reads white with a black pulse) and invert the pixels, so the chart comes
-    /// out the right way round. No geometry changes: only the brightness flips.
-    #[test]
-    fn a_negative_signal_is_corrected_to_the_right_polarity() {
-        let lpm = Lpm::L120;
-        let mut rx = WefaxRx::new(RATE);
-        rx.set_lpm(lpm);
-        let mut out = Vec::new();
-        rx.start_manual(&mut out);
-        let mut audio = phasing_negative(lpm, 8);
-        audio.extend(ramp_picture_negative(lpm, 6));
-        let ev = drain(&mut rx, &audio);
-
-        // The inverted pulse still locks the line — the negative is detected, not
-        // merely survived.
-        assert!(
-            ev.iter().any(|e| matches!(e, WefaxEvent::Phased { .. })),
-            "the negative phasing signal was not phased: {ev:?}"
-        );
-        let lines: Vec<&Vec<u8>> = ev
-            .iter()
-            .filter_map(|e| match e {
-                WefaxEvent::Line { gray, .. } => Some(gray),
-                _ => None,
-            })
-            .collect();
-        assert!(lines.len() >= 3, "only {} lines", lines.len());
-
-        // The ramp must rise black → white, the way the station sent it. Left
-        // uncorrected a negative signal falls white → black.
-        let row = lines[lines.len() - 2];
-        let w = row.len();
-        let (a, b) = (row[w / 4] as i32, row[3 * w / 4] as i32);
-        assert!(b - a > 80, "the negative ramp was not inverted: {a} → {b}");
     }
 
     /// Issue #276: the next chart begins and the stop tone never arrives.
@@ -2763,30 +2589,6 @@ mod tests {
         // Degenerate input is refused rather than panicking.
         assert_eq!(phasing_skew(&[]), None);
         assert_eq!(phasing_skew(&[0.0; 8]), None);
-    }
-
-    /// The pulse is found in either polarity, in the same place, and the flag
-    /// says which way the line arrived.
-    #[test]
-    fn a_negative_phasing_line_is_found_and_flagged() {
-        let n = 6000;
-        let pulse = n / 20;
-        let mut normal = vec![0.0f32; n];
-        for v in normal.iter_mut().skip(n - pulse) {
-            *v = 1.0;
-        }
-        let mut negative = vec![1.0f32; n];
-        for v in negative.iter_mut().skip(n - pulse) {
-            *v = 0.0;
-        }
-
-        let (p, flag) = pulse_region_polarity(&normal, false).expect("a normal pulse");
-        assert!(!flag, "a normal line was flagged negative");
-        assert_eq!(p.picture_start(n), 0, "the pulse is at the end of the line");
-
-        let (q, flag) = pulse_region_polarity(&negative, false).expect("a negative pulse");
-        assert!(flag, "a negative line was not flagged");
-        assert_eq!(q, p, "the pulse is in the same place either way");
     }
 
     #[test]
@@ -3331,25 +3133,6 @@ mod carrier_tests {
         // The first row is the ramp, not a black phasing line.
         let mean = l[0].1.iter().map(|&g| f64::from(g)).sum::<f64>() / l[0].1.len() as f64 / 255.0;
         assert!(mean > 0.3, "the page opens on the phasing signal: {mean:.2}");
-    }
-
-    /// The same on the wrong sideband: a page begun by an inverted phasing
-    /// signal alone is detected as negative and the chart comes out the right
-    /// way round.
-    #[test]
-    fn a_negative_phasing_signal_alone_begins_a_corrected_page() {
-        let mut rx = WefaxRx::new(RATE);
-        let mut audio = fm(&phasing(12, 0.95, 0.05, 1.0), WHITE_HZ, BLACK_HZ);
-        audio.extend(fm(&ramp(20), WHITE_HZ, BLACK_HZ));
-        let ev = feed(&mut rx, &audio);
-        assert!(ev.iter().any(|e| matches!(e, WefaxEvent::Start { auto: true, .. })), "{ev:?}");
-        let l = lines(&ev);
-        assert!(l.len() >= 15, "only {} lines", l.len());
-        // The ramp rises black → white; uncorrected it would fall white → black.
-        let row = &l[l.len() / 2].1;
-        let w = row.len();
-        let (lo, hi) = (row[w / 4] as i32, row[3 * w / 4] as i32);
-        assert!(hi - lo > 80, "the negative ramp was not inverted: {lo} → {hi}");
     }
 
     /// A weak signal's pulse is a scatter of blips a fifth of a line wide, not a
