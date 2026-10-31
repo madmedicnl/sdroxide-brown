@@ -336,7 +336,10 @@ impl SdroxideApp {
                 if let Some(ft) = a.altitude_ft {
                     rows.push((
                         tr!("adsb-row-altitude").to_string(),
-                        tr!("adsb-ft-barometric", ft = sdroxide_types::AirUnits::current().altitude(ft)),
+                        tr!(
+                            "adsb-ft-barometric",
+                            ft = sdroxide_types::AirUnits::current().altitude(ft)
+                        ),
                     ));
                 }
                 if let Some(ft) = a.gnss_altitude_ft {
@@ -441,9 +444,13 @@ impl SdroxideApp {
             // The two layers the picture is read *for*: where the flight has
             // been and is going, and what is on the ground under it.
             let mut layers = self.adsb_map.layers;
-            if crate::chrome::chip(ui, layers.paths, RichText::new(tr!("adsbpanel-paths")).size(9.5))
-                .on_hover_text(tr!("adsbpanel-paths-hint"))
-                .clicked()
+            if crate::chrome::chip(
+                ui,
+                layers.paths,
+                RichText::new(tr!("adsbpanel-paths")).size(9.5),
+            )
+            .on_hover_text(tr!("adsbpanel-paths-hint"))
+            .clicked()
             {
                 layers.paths = !layers.paths;
                 self.adsb_map.layers = layers;
@@ -533,7 +540,7 @@ impl SdroxideApp {
         // A click on an aircraft pins its card beside it. The click asks for
         // nothing; the card's own button does.
         self.adsb_pinned_card(ui, &st.aircraft, home, now);
-        self.adsb_airport_photo(ui.ctx(), now);
+        self.adsb_airport_online(ui.ctx(), now);
     }
 
     /// The operator's own position, from the grid in the digital-mode setup.
@@ -608,11 +615,7 @@ impl SdroxideApp {
             self.air_units_picker(ui);
             ui.end_row();
             ui.label("");
-            ui.label(
-                RichText::new(tr!("adsbpanel-units-hint"))
-                .size(10.0)
-                .weak(),
-            );
+            ui.label(RichText::new(tr!("adsbpanel-units-hint")).size(10.0).weak());
             ui.end_row();
 
             ui.label(tr!("adsb-drop-map-after"));
@@ -622,13 +625,7 @@ impl SdroxideApp {
             });
             ui.end_row();
             ui.label("");
-            ui.label(
-                RichText::new(
-                    tr!("adsb-past-aircraft-comes-off-map"),
-                )
-                .size(10.0)
-                .weak(),
-            );
+            ui.label(RichText::new(tr!("adsb-past-aircraft-comes-off-map")).size(10.0).weak());
             ui.end_row();
 
             ui.label(tr!("adsb-drop-list-after"));
@@ -649,7 +646,9 @@ impl SdroxideApp {
                         .range(0..=sdroxide_types::ADSB_TRACK_MAX as u16)
                         .suffix(tr!("adsb-points")),
                 );
-                ui.label(RichText::new(tr!("adsb-history-dots-behind-each-target")).size(9.5).weak());
+                ui.label(
+                    RichText::new(tr!("adsb-history-dots-behind-each-target")).size(9.5).weak(),
+                );
             });
             ui.end_row();
 
@@ -666,28 +665,20 @@ impl SdroxideApp {
             ui.end_row();
             ui.label("");
             ui.label(
-                RichText::new(
-                    tr!("adsb-one-minute-usual-radar-convention"),
-                )
-                .size(10.0)
-                .weak(),
+                RichText::new(tr!("adsb-one-minute-usual-radar-convention")).size(10.0).weak(),
             );
             ui.end_row();
 
             ui.label(tr!("adsb-track-most"));
             ui.add(
-                egui::DragValue::new(&mut cfg.max_aircraft).range(10..=2000).suffix(tr!("adsb-aircraft-2")),
+                egui::DragValue::new(&mut cfg.max_aircraft)
+                    .range(10..=2000)
+                    .suffix(tr!("adsb-aircraft-2")),
             );
             ui.end_row();
         });
         ui.separator();
-        ui.label(
-            RichText::new(
-                tr!("adsb-aircraft-ground-are-placed-against"),
-            )
-            .size(10.0)
-            .weak(),
-        );
+        ui.label(RichText::new(tr!("adsb-aircraft-ground-are-placed-against")).size(10.0).weak());
     }
 }
 

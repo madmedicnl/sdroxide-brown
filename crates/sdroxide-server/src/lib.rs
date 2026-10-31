@@ -729,6 +729,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
             "/airport-photo",
             get(aircraft::airport_photo_route).delete(aircraft::airport_photo_release),
         )
+        .route("/airport-weather", get(aircraft::weather_route))
         .route("/aircraft-online", get(aircraft::switch_get).post(aircraft::switch_post))
         .route("/aircraft-history", get(history::list_route))
         .route("/aircraft-history/{icao}", get(history::one_route))

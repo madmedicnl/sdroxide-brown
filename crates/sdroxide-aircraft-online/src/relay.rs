@@ -25,6 +25,7 @@ use crate::model::{
     AircraftInfo, Image, Lookup, Photo, Reply, Request, Route, clean_callsign, clean_registration,
     image_ok, thumb_url_ok,
 };
+use crate::weather::{Spot, Weather};
 use crate::wikipedia::Article;
 
 /// The version of [`Info`]'s shape. Bump on any change a client cannot ignore.
@@ -104,6 +105,22 @@ pub trait Upstream: Send + Sync {
     fn wikipedia_thumbnail(&self, _article: &Article) -> Option<Image> {
         None
     }
+
+    /// The weather at `spot`, or `None` for any failure: no route, a refusal, a
+    /// body that is not a forecast. A stand-in that has none need not say so.
+    fn weather(&self, _spot: &Spot) -> Option<Weather> {
+        None
+    }
+}
+
+/// How a question about the weather at a place ended.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Outlook {
+    Got(Weather),
+    /// The station's ceiling on questions per minute was reached.
+    Busy,
+    /// No usable answer: offline, refused, or not understood.
+    Failed,
 }
 
 struct RateLimit {
@@ -204,6 +221,16 @@ impl<U: Upstream> Relay<U> {
         self.upstream
             .wikipedia_thumbnail(article)
             .filter(|i| image_ok(&i.content_type, i.bytes.len()))
+    }
+
+    /// The weather at `spot`. Counts against the same ceiling as every other
+    /// question out. Blocking, and not cached here: the caller keeps the answer
+    /// in memory for half a minute and no longer.
+    pub fn weather(&self, now: i64, spot: &Spot) -> Outlook {
+        if !self.lock().limit.take(now) {
+            return Outlook::Busy;
+        }
+        self.upstream.weather(spot).map_or(Outlook::Failed, Outlook::Got)
     }
 
     /// How long a client waits for a question already out. For tests.
@@ -394,6 +421,34 @@ mod tests {
         ] {
             assert!(r.image(bad).is_none(), "{bad}");
         }
+    }
+
+    #[test]
+    fn the_weather_asks_the_upstream_once_per_call_and_shares_the_ceiling() {
+        struct Sunny(AtomicUsize);
+        impl Upstream for Sunny {
+            fn fetch(&self, _: &Request) -> Reply {
+                Reply::Photo(Lookup::Failed)
+            }
+            fn weather(&self, _: &Spot) -> Option<Weather> {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                crate::parse_forecast(crate::weather::FORECAST)
+            }
+        }
+        let spot = Spot::new(52.31, 4.76).unwrap();
+        let r = Relay::new(Sunny(AtomicUsize::new(0)), 2, OnlineCache::default());
+        assert!(matches!(r.weather(NOW, &spot), Outlook::Got(w) if w.utc_offset_s == 3600));
+        assert!(matches!(r.weather(NOW, &spot), Outlook::Got(_)));
+        assert_eq!(r.weather(NOW, &spot), Outlook::Busy, "the third in a minute is turned away");
+        assert_eq!(r.upstream.0.load(Ordering::SeqCst), 2, "a refused one never went out");
+        assert!(matches!(r.weather(NOW + 60, &spot), Outlook::Got(_)), "a minute later it may");
+    }
+
+    #[test]
+    fn an_upstream_with_no_weather_is_a_failure_not_a_panic() {
+        let up = Fake::working();
+        let r = Relay::new(up, 10, OnlineCache::default());
+        assert_eq!(r.weather(NOW, &Spot::new(0.0, 0.0).unwrap()), Outlook::Failed);
     }
 
     fn relay(up: &Arc<Fake>) -> Relay<Arc<Fake>> {

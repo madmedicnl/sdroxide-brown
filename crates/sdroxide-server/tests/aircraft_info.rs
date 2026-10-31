@@ -284,3 +284,48 @@ async fn an_airport_title_that_is_not_plain_is_refused_and_a_release_needs_the_h
             .await;
     assert!(junk.starts_with("HTTP/1.1 400"), "{junk}");
 }
+
+const PORT_WEATHER_SHUT: u16 = 39490;
+const PORT_WEATHER_PASSWORD: u16 = 39491;
+const PORT_WEATHER_OPEN: u16 = 39492;
+
+const PLACE: &str = "?lat=52.31&lon=4.76";
+
+/// An airport's weather follows the same switch as the aircraft's, through a prefix too.
+#[tokio::test]
+async fn the_airport_weather_is_shut_while_the_relay_is_off() {
+    spawn_station(PORT_WEATHER_SHUT, false, false).await;
+    for path in ["/airport-weather", "/sdroxide/airport-weather"] {
+        let answer = get(PORT_WEATHER_SHUT, &format!("{path}{PLACE}"), None).await;
+        assert!(answer.starts_with("HTTP/1.1 503"), "{path}: {answer}");
+        assert!(answer.to_ascii_lowercase().contains("cache-control: no-store"), "{answer}");
+    }
+}
+
+/// Same door as the sockets.
+#[tokio::test]
+async fn the_airport_weather_wants_the_cookie() {
+    spawn_station(PORT_WEATHER_PASSWORD, true, true).await;
+    let without = get(PORT_WEATHER_PASSWORD, &format!("/airport-weather{PLACE}"), None).await;
+    assert!(without.starts_with("HTTP/1.1 401"), "{without}");
+}
+
+/// The client names a place and nothing else: what is not two numbers on the
+/// globe is refused before the station reaches out.
+#[tokio::test]
+async fn a_place_that_is_not_on_the_globe_is_refused_before_anything_goes_out() {
+    spawn_station(PORT_WEATHER_OPEN, false, true).await;
+    for query in [
+        "",
+        "?lat=52.31",
+        "?lon=4.76",
+        "?lat=abc&lon=4.76",
+        "?lat=91&lon=0",
+        "?lat=0&lon=181",
+        "?lat=NaN&lon=0",
+        "?lat=52.31&lon=4.76%26x%3D1",
+    ] {
+        let bad = get(PORT_WEATHER_OPEN, &format!("/airport-weather{query}"), None).await;
+        assert!(bad.starts_with("HTTP/1.1 400"), "{query}: {bad}");
+    }
+}

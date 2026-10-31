@@ -28,7 +28,8 @@ use axum::response::{IntoResponse, Response};
 
 use sdroxide_aircraft_online::fetch::HttpUpstream;
 use sdroxide_aircraft_online::{
-    Article, Image, Info, OnlineCache, Relay, Status, Upstream, clean_callsign, clean_registration,
+    Article, Image, Info, OnlineCache, Outlook, Relay, Spot, Status, Upstream, Weather,
+    clean_callsign, clean_registration,
 };
 
 use crate::Station;
@@ -147,6 +148,12 @@ pub(crate) const PHOTO_PARALLEL: usize = 3;
 
 /// How long a client that asks for a picture already on its way waits for it.
 const PHOTO_WAIT: Duration = Duration::from_secs(10);
+
+/// How long an airport's weather is kept in memory, and how many places at once.
+/// Temperature moves slowly; half a minute is what makes ten clients on one
+/// airport cost one question.
+pub(crate) const WEATHER_HOLD: Duration = Duration::from_secs(30);
+const WEATHER_KEEP: usize = 32;
 
 /// The thumbnails' addresses the relay has handed out, newest last. The photo
 /// route looks the address up here and never takes one from a client.
@@ -289,6 +296,41 @@ fn held_or_fetch<K: std::hash::Hash + Eq + Clone>(
     }
 }
 
+/// How a request for an airport's weather ended.
+#[derive(Debug, PartialEq)]
+pub(crate) enum Forecast {
+    Held(Weather),
+    /// The station's ceiling on questions, or too many places on their way.
+    Busy,
+    Failed,
+}
+
+/// The weather of the places asked about, in memory only and never on disk:
+/// at most [`WEATHER_KEEP`], each gone [`WEATHER_HOLD`] after it was got.
+#[derive(Default)]
+struct WeatherBook {
+    held: Mutex<Vec<(String, Instant, Weather)>>,
+}
+
+impl WeatherBook {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<(String, Instant, Weather)>> {
+        self.held.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn get_at(&self, now: Instant, key: &str) -> Option<Weather> {
+        self.lock().iter().find(|(k, until, _)| k == key && *until > now).map(|&(.., w)| w)
+    }
+
+    fn put_at(&self, now: Instant, key: String, w: Weather) {
+        let mut g = self.lock();
+        g.retain(|(k, until, _)| *k != key && *until > now);
+        g.push((key, now + WEATHER_HOLD, w));
+        while g.len() > WEATHER_KEEP {
+            g.remove(0);
+        }
+    }
+}
+
 /// How a request for a picture ended.
 pub(crate) enum Photo {
     Held {
@@ -318,6 +360,9 @@ pub(crate) struct AircraftHub<U = HttpUpstream> {
     /// The airport cards' thumbnails, by article.
     pub(crate) airport_store: PhotoStore<String>,
     airport_fetching: Fetching<String>,
+    /// The airport cards' local time and temperature, by place.
+    weather_book: WeatherBook,
+    weather_fetching: Fetching<String>,
 }
 
 fn now_unix() -> i64 {
@@ -350,6 +395,8 @@ impl AircraftHub<HttpUpstream> {
             fetching: Fetching::default(),
             airport_store: PhotoStore::default(),
             airport_fetching: Fetching::default(),
+            weather_book: WeatherBook::default(),
+            weather_fetching: Fetching::default(),
         }
     }
 }
@@ -368,6 +415,8 @@ impl<U: Upstream> AircraftHub<U> {
             fetching: Fetching::default(),
             airport_store: PhotoStore::default(),
             airport_fetching: Fetching::default(),
+            weather_book: WeatherBook::default(),
+            weather_fetching: Fetching::default(),
         }
     }
 
@@ -442,6 +491,47 @@ impl<U: Upstream> AircraftHub<U> {
         held_or_fetch(&self.airport_store, &self.airport_fetching, article.key(), true, || {
             self.relay.wikipedia_thumbnail(article)
         })
+    }
+
+    /// The weather at an airport: the one held in memory if it is under half a
+    /// minute old; else the single question for that place (waited for by
+    /// whoever asks meanwhile), within the same [`PHOTO_PARALLEL`] ceiling and
+    /// the relay's per-minute one. Blocking.
+    pub(crate) fn weather(&self, spot: &Spot) -> Forecast {
+        let key = spot.key();
+        let deadline = Instant::now() + PHOTO_WAIT;
+        let mut set = self.weather_fetching.set.lock().unwrap_or_else(|e| e.into_inner());
+        loop {
+            if let Some(w) = self.weather_book.get_at(Instant::now(), &key) {
+                return Forecast::Held(w);
+            }
+            if !set.contains(&key) {
+                if set.len() >= PHOTO_PARALLEL {
+                    return Forecast::Busy;
+                }
+                set.insert(key.clone());
+                break;
+            }
+            let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+                return Forecast::Busy;
+            };
+            set = self
+                .weather_fetching
+                .done
+                .wait_timeout(set, left)
+                .unwrap_or_else(|e| e.into_inner())
+                .0;
+        }
+        drop(set);
+        let _place = Place { fetching: &self.weather_fetching, key: key.clone() };
+        match self.relay.weather(now_unix(), spot) {
+            Outlook::Got(w) => {
+                self.weather_book.put_at(Instant::now(), key, w);
+                Forecast::Held(w)
+            }
+            Outlook::Busy => Forecast::Busy,
+            Outlook::Failed => Forecast::Failed,
+        }
     }
 }
 
@@ -601,6 +691,65 @@ pub(crate) async fn airport_photo_release(
         None => return picture(StatusCode::BAD_REQUEST, None),
     }
     picture(StatusCode::NO_CONTENT, None)
+}
+
+/// `?lat=52.31&lon=4.76`: the place of the airport whose card is open, and
+/// nothing else; the station builds the address itself.
+fn spot_of(query: &HashMap<String, String>) -> Option<Spot> {
+    let number = |k: &str| {
+        let v = query.get(k)?;
+        (v.len() <= 16).then(|| v.parse::<f64>().ok()).flatten()
+    };
+    Spot::new(number("lat")?, number("lon")?)
+}
+
+/// What `/airport-weather` answers before any work is done, as [`judge`] does
+/// for the aircraft's: sign-in first, then the switch, then the query.
+pub(crate) fn weather_verdict(
+    enabled: bool,
+    sign_in_needed: bool,
+    signed_in: bool,
+    query: &HashMap<String, String>,
+) -> Result<Spot, Status> {
+    if sign_in_needed && !signed_in {
+        return Err(Status::Unauthorized);
+    }
+    if !enabled {
+        return Err(Status::Disabled);
+    }
+    spot_of(query).ok_or(Status::Invalid)
+}
+
+/// `GET /airport-weather?lat=..&lon=..`: the local time's offset from UTC and the
+/// temperature at the airport whose card is open. Same door and same switch as
+/// the other online routes; the client says which place and nothing more, and
+/// only that place goes to the service.
+pub(crate) async fn weather_route(
+    State(station): State<Arc<Station>>,
+    Query(query): Query<HashMap<String, String>>,
+    headers: HeaderMap,
+) -> Response {
+    let hub = station.aircraft.clone();
+    let needed = station.auth.required().is_some();
+    let signed = crate::session_cookie::from_headers(&headers, &station.auth).is_some();
+    let plain =
+        |status: StatusCode| (status, [(header::CACHE_CONTROL, "no-store")]).into_response();
+    let spot = match weather_verdict(hub.enabled(), needed, signed, &query) {
+        Err(status) => return plain(http_status(status)),
+        Ok(spot) => spot,
+    };
+    let got =
+        tokio::task::spawn_blocking(move || hub.weather(&spot)).await.unwrap_or(Forecast::Failed);
+    match got {
+        Forecast::Held(w) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")],
+            serde_json::to_string(&w).unwrap_or_default(),
+        )
+            .into_response(),
+        Forecast::Busy => plain(StatusCode::TOO_MANY_REQUESTS),
+        Forecast::Failed => plain(StatusCode::BAD_GATEWAY),
+    }
 }
 
 /// The sign-in and header a release needs, as for the switch.
@@ -930,6 +1079,11 @@ mod tests {
             self.pictures_asked.fetch_add(1, Ordering::SeqCst);
             Some(Image { content_type: self.kind.into(), bytes: article.key().into_bytes() })
         }
+
+        fn weather(&self, spot: &Spot) -> Option<Weather> {
+            self.pictures_asked.fetch_add(1, Ordering::SeqCst);
+            Some(Weather { v: 1, utc_offset_s: 3600, temp_c: Some(spot.key().len() as f32) })
+        }
     }
 
     fn hub(kind: &'static str) -> (AircraftHub<Pictures>, Arc<AtomicUsize>) {
@@ -1036,6 +1190,15 @@ mod tests {
                 panic!("the picture's host blew up");
             }
             Some(Image { content_type: "image/jpeg".into(), bytes: article.key().into_bytes() })
+        }
+
+        fn weather(&self, spot: &Spot) -> Option<Weather> {
+            let n = self.asked.fetch_add(1, Ordering::SeqCst);
+            std::thread::sleep(self.pause);
+            if self.panic_first && n == 0 {
+                panic!("the weather's host blew up");
+            }
+            Some(Weather { v: 1, utc_offset_s: -18000, temp_c: Some(spot.key().len() as f32) })
         }
     }
 
@@ -1207,6 +1370,131 @@ mod tests {
             airport_verdict(true, false, false, &HashMap::from([("lang".into(), "en".into())])),
             Err(Status::Invalid),
             "a title is needed"
+        );
+    }
+
+    fn spot(lat: f64, lon: f64) -> Spot {
+        Spot::new(lat, lon).unwrap()
+    }
+
+    fn place(lat: &str, lon: &str) -> HashMap<String, String> {
+        HashMap::from([("lat".to_string(), lat.to_string()), ("lon".to_string(), lon.to_string())])
+    }
+
+    #[test]
+    fn the_weather_of_a_place_is_asked_once_and_held_in_memory() {
+        let (hub, asked) = hub("image/jpeg");
+        let here = spot(52.31, 4.76);
+        assert!(matches!(hub.weather(&here), Forecast::Held(w) if w.utc_offset_s == 3600));
+        assert!(matches!(hub.weather(&spot(52.308, 4.763)), Forecast::Held(_)));
+        assert_eq!(asked.load(Ordering::SeqCst), 1, "the same kilometre: one question");
+        assert!(matches!(hub.weather(&spot(40.64, -73.78)), Forecast::Held(_)));
+        assert_eq!(asked.load(Ordering::SeqCst), 2, "another airport: its own");
+    }
+
+    #[test]
+    fn the_weather_runs_out_thirty_seconds_after_it_was_got() {
+        let book = WeatherBook::default();
+        let t0 = Instant::now();
+        let w = Weather { v: 1, utc_offset_s: 0, temp_c: None };
+        book.put_at(t0, "a".into(), w);
+        assert!(book.get_at(t0 + Duration::from_secs(29), "a").is_some());
+        assert!(book.get_at(t0 + Duration::from_secs(31), "a").is_none());
+        assert_eq!(WEATHER_HOLD, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn only_thirty_two_places_are_held_and_the_oldest_goes_first() {
+        let book = WeatherBook::default();
+        let t0 = Instant::now();
+        let w = Weather { v: 1, utc_offset_s: 0, temp_c: None };
+        for i in 0..=WEATHER_KEEP {
+            book.put_at(t0, i.to_string(), w);
+        }
+        assert!(book.get_at(t0, "0").is_none());
+        assert!(
+            book.get_at(t0, "1").is_some() && book.get_at(t0, &WEATHER_KEEP.to_string()).is_some()
+        );
+    }
+
+    #[test]
+    fn a_place_asked_by_two_clients_at_once_is_one_question_and_a_fourth_place_waits() {
+        let (hub, asked) = slow(300, false);
+        let h = hub.clone();
+        let first = std::thread::spawn(move || h.weather(&spot(1.0, 1.0)));
+        std::thread::sleep(Duration::from_millis(80));
+        assert!(matches!(hub.weather(&spot(1.0, 1.0)), Forecast::Held(_)), "waited for");
+        assert!(matches!(first.join().unwrap(), Forecast::Held(_)));
+        assert_eq!(asked.load(Ordering::SeqCst), 1);
+
+        let mut running = Vec::new();
+        for i in 0..3 {
+            let h = hub.clone();
+            running.push(std::thread::spawn(move || h.weather(&spot(10.0 + f64::from(i), 0.0))));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+        assert_eq!(hub.weather(&spot(20.0, 0.0)), Forecast::Busy, "past three at once");
+        for r in running {
+            assert!(matches!(r.join().unwrap(), Forecast::Held(_)));
+        }
+    }
+
+    #[test]
+    fn a_weather_question_that_blows_up_does_not_block_the_next_one() {
+        let (hub, _) = slow(0, true);
+        let h = hub.clone();
+        assert!(std::thread::spawn(move || h.weather(&spot(5.0, 5.0))).join().is_err());
+        assert!(matches!(hub.weather(&spot(5.0, 5.0)), Forecast::Held(_)));
+    }
+
+    #[test]
+    fn no_weather_is_a_failure_and_the_ceiling_a_busy_and_neither_is_held() {
+        struct Nothing;
+        impl Upstream for Nothing {
+            fn fetch(&self, _: &Request) -> Reply {
+                Reply::Photo(Lookup::Failed)
+            }
+        }
+        let hub = AircraftHub::with(true, Nothing, 100);
+        assert_eq!(hub.weather(&spot(1.0, 2.0)), Forecast::Failed);
+        let (hub, asked) = {
+            let n = Arc::new(AtomicUsize::new(0));
+            (
+                AircraftHub::with(
+                    true,
+                    Pictures { pictures_asked: n.clone(), kind: "image/png" },
+                    1,
+                ),
+                n,
+            )
+        };
+        assert!(matches!(hub.weather(&spot(1.0, 2.0)), Forecast::Held(_)));
+        assert_eq!(hub.weather(&spot(3.0, 4.0)), Forecast::Busy, "one question a minute");
+        assert_eq!(asked.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn the_weather_route_answers_the_door_then_the_switch_then_the_query() {
+        let q = place("52.31", "4.76");
+        assert_eq!(weather_verdict(true, true, false, &q), Err(Status::Unauthorized));
+        assert_eq!(weather_verdict(false, false, false, &q), Err(Status::Disabled));
+        assert_eq!(weather_verdict(true, true, true, &q).unwrap().key(), "52.31,4.76");
+        for bad in [
+            place("", "4.76"),
+            place("abc", "4.76"),
+            place("91", "0"),
+            place("0", "181"),
+            place("NaN", "0"),
+            place("inf", "0"),
+            place("0.000000000000000001", "0"),
+            place("52.31", "4.76&x=1"),
+        ] {
+            assert_eq!(weather_verdict(true, false, false, &bad), Err(Status::Invalid), "{bad:?}");
+        }
+        assert_eq!(
+            weather_verdict(true, false, false, &HashMap::from([("lat".into(), "1".into())])),
+            Err(Status::Invalid),
+            "both numbers are needed"
         );
     }
 

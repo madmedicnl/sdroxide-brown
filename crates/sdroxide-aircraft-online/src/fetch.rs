@@ -3,9 +3,10 @@
 use std::time::Duration;
 
 use crate::model::{ADSBDB_BASE, MAX_IMAGE, PLANESPOTTERS_BASE};
+use crate::weather::OPEN_METEO_BASE;
 use crate::{
-    Article, Image, Reply, Request, Upstream, image_ok, image_url_ok, parse_summary, reply_for,
-    user_agent,
+    Article, Image, Reply, Request, Spot, Upstream, Weather, image_ok, image_url_ok,
+    parse_forecast, parse_summary, reply_for, user_agent,
 };
 
 /// A reply bigger than this is not read: both services answer in a few hundred
@@ -24,6 +25,8 @@ pub struct HttpUpstream {
     /// Where Wikipedia summaries are asked; `None` is `https://xx.wikipedia.org`.
     /// Only a test sets it.
     wikipedia: Option<String>,
+    /// Where Open-Meteo is asked; `None` is the real host. Only a test sets it.
+    open_meteo: Option<String>,
 }
 
 impl HttpUpstream {
@@ -46,12 +49,19 @@ impl HttpUpstream {
             adsbdb: adsbdb.to_string(),
             planespotters: planespotters.to_string(),
             wikipedia: None,
+            open_meteo: None,
         }
     }
 
     /// Ask Wikipedia summaries of another host, for a test on loopback.
     pub fn with_wikipedia(mut self, base: &str) -> HttpUpstream {
         self.wikipedia = Some(base.to_string());
+        self
+    }
+
+    /// Ask Open-Meteo of another host, for a test on loopback.
+    pub fn with_open_meteo(mut self, base: &str) -> HttpUpstream {
+        self.open_meteo = Some(base.to_string());
         self
     }
 
@@ -122,6 +132,18 @@ impl Upstream for HttpUpstream {
     fn wikipedia_thumbnail(&self, article: &Article) -> Option<Image> {
         let url = self.wikipedia_thumb_url(article).filter(|u| image_url_ok(u))?;
         self.image(&url)
+    }
+
+    /// One plain GET of the forecast API, with the station's `User-Agent` and
+    /// nothing of the client: the place is the only thing in the request.
+    fn weather(&self, spot: &Spot) -> Option<Weather> {
+        let base = self.open_meteo.as_deref().unwrap_or(OPEN_METEO_BASE);
+        let mut resp = self.agent.get(&format!("{base}{}", spot.path_and_query())).call().ok()?;
+        if resp.status().as_u16() != 200 {
+            return None;
+        }
+        let body = resp.body_mut().with_config().limit(MAX_BODY).read_to_string().ok()?;
+        parse_forecast(&body)
     }
 }
 
@@ -263,6 +285,43 @@ mod tests {
                 .with_wikipedia(&base);
             assert_eq!(up.wikipedia_thumb_url(&a), None, "{status} {body}");
         }
+    }
+
+    #[test]
+    fn the_weather_is_asked_of_the_forecast_api_by_place_alone() {
+        let (base, seen) = serve_once("200 OK", crate::weather::FORECAST.to_string());
+        let up = HttpUpstream::with_bases("http://127.0.0.1:1", "http://127.0.0.1:1")
+            .with_open_meteo(&base);
+        let w = up.weather(&Spot::new(52.308_613, 4.763_889).unwrap()).unwrap();
+        assert_eq!(w.utc_offset_s, 3600);
+        let head = seen.recv().unwrap();
+        assert!(
+            head.starts_with(
+                "GET /v1/forecast?latitude=52.31&longitude=4.76&current=temperature_2m&timezone=auto HTTP/1.1"
+            ),
+            "{head}"
+        );
+        assert!(head.to_ascii_lowercase().contains("user-agent: sdr-oxide-brown/"), "{head}");
+        assert!(!head.to_ascii_lowercase().contains("cookie"), "nothing of the client goes out");
+    }
+
+    #[test]
+    fn a_refusal_or_a_page_that_is_not_a_forecast_gives_no_weather() {
+        let spot = Spot::new(52.3, 4.76).unwrap();
+        for (status, body) in [
+            ("400 Bad Request", r#"{"error":true,"reason":"x"}"#),
+            ("429 Too Many Requests", "{}"),
+            ("200 OK", "<html>"),
+            ("200 OK", "{}"),
+        ] {
+            let (base, _) = serve_once(status, body.to_string());
+            let up = HttpUpstream::with_bases("http://127.0.0.1:1", "http://127.0.0.1:1")
+                .with_open_meteo(&base);
+            assert_eq!(up.weather(&spot), None, "{status} {body}");
+        }
+        let up = HttpUpstream::with_bases("http://127.0.0.1:1", "http://127.0.0.1:1")
+            .with_open_meteo("http://127.0.0.1:1");
+        assert_eq!(up.weather(&spot), None, "nobody listening");
     }
 
     #[test]

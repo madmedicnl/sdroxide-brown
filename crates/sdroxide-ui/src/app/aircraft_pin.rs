@@ -60,16 +60,18 @@ pub(in crate::app) fn lookup_after(
 }
 
 impl SdroxideApp {
-    /// Give the open airport box its Wikipedia picture, and keep it only while
-    /// the box is open: the box asks every frame it is drawn, and the picture
-    /// goes (here and at the station) when it stops.
-    pub(in crate::app) fn adsb_airport_photo(&mut self, ctx: &egui::Context, now: i64) {
-        let Some(i) = self.adsb_map.airport_pin else {
+    /// Give the open airport box what the station can tell it — the Wikipedia
+    /// picture, and the local time and temperature — and keep it only while the
+    /// box is open: the box asks every frame it is drawn, and what it holds goes
+    /// (here and at the station) when it stops.
+    pub(in crate::app) fn adsb_airport_online(&mut self, ctx: &egui::Context, now: i64) {
+        let airport = self
+            .adsb_map
+            .airport_pin
+            .and_then(|i| crate::airdata::airports().get(i).map(|a| (i, a)));
+        let Some((i, a)) = airport else {
             self.adsb_map.airport_photo = None;
-            return;
-        };
-        let Some(ident) = crate::airdata::airports().get(i).map(|a| a.ident.clone()) else {
-            self.adsb_map.airport_photo = None;
+            self.adsb_map.airport_weather = None;
             return;
         };
         // What the line delivered since the last frame also arrives here, when
@@ -78,8 +80,20 @@ impl SdroxideApp {
         let peer = self.ctrl.peer_url();
         self.adsb_map.airport_photo = self
             .aircraft_online
-            .airport_card_photo(ctx, peer.as_deref(), &ident)
+            .airport_card_photo(ctx, peer.as_deref(), &a.ident)
             .map(|(photo, page_url)| adsb_map::AirportPhoto { airport: i, photo, page_url });
+        let clock = self.aircraft_online.airport_clock(ctx, peer.as_deref(), i, (a.lat, a.lon));
+        self.adsb_map.airport_weather = Some(adsb_map::AirportWeather {
+            airport: i,
+            clock: match clock {
+                aircraft_online::Clock::Offline => adsb_map::AirportClock::Offline,
+                aircraft_online::Clock::Asking => adsb_map::AirportClock::Asking,
+                aircraft_online::Clock::Known(w) => {
+                    adsb_map::AirportClock::Known { utc_offset_s: w.utc_offset_s, temp_c: w.temp_c }
+                }
+            },
+            now,
+        });
     }
 
     /// Draw the pinned card over the map, and do what was pressed in it.

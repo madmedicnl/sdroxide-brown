@@ -103,6 +103,9 @@ pub struct AdsbMapState {
     /// frame from what the station delivered; drawn only while it is for the
     /// airport that is pinned.
     pub airport_photo: Option<AirportPhoto>,
+    /// The local time and temperature of the open airport box, written by the
+    /// app each frame like the picture; drawn only for the pinned airport.
+    pub airport_weather: Option<AirportWeather>,
     /// The aircraft the operator pressed "Look up online" for: its thumbnail is
     /// loaded once the answer is in. `None` until that button is pressed.
     pub lookup: Option<u32>,
@@ -135,6 +138,32 @@ pub enum CardPhoto {
         /// The picture's size in pixels.
         size: Vec2,
     },
+}
+
+/// What an open airport box knows about its airport's clock and air.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AirportClock {
+    /// No station, the relay is off, or the station could not say: UTC only, and
+    /// the box says so. A local time is never guessed.
+    Offline,
+    /// Asked, not yet answered.
+    Asking,
+    Known {
+        /// The zone's offset from UTC now, summer time included, in seconds.
+        utc_offset_s: i32,
+        /// The air temperature in °C, when the service gave one.
+        temp_c: Option<f32>,
+    },
+}
+
+/// The clock and air of one airport's box, with the moment they are read at.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AirportWeather {
+    /// Index into [`crate::airdata::airports`].
+    pub airport: usize,
+    pub clock: AirportClock,
+    /// Now, in unix seconds: the local time is this moved by the zone's offset.
+    pub now: i64,
 }
 
 /// The picture of one airport's box, with the article it comes from.
@@ -617,6 +646,41 @@ fn airport_card_text(
     live: &[&AdsbAircraft],
     detail: bool,
 ) -> String {
+    airport_card_text_with(a, home, live, detail, None)
+}
+
+/// The lines about an airport's clock and air, in the chosen units: the local
+/// time with its zone and the temperature when they are known (and the credit
+/// the service asks for), else UTC with the reason there is no local time.
+fn airport_clock_lines(w: &AirportWeather) -> Vec<String> {
+    let units = sdroxide_types::AirUnits::current();
+    let at = |offset_s: i32| units.clock(sdroxide_types::local_secs_of_day(w.now, offset_s));
+    match w.clock {
+        AirportClock::Known { utc_offset_s, temp_c } => {
+            let mut line = tr!(
+                "adsbmap-airport-local-time",
+                time = at(utc_offset_s),
+                zone = sdroxide_types::utc_label(utc_offset_s)
+            );
+            if let Some(t) = temp_c {
+                line.push_str(" · ");
+                line.push_str(&tr!("adsbmap-airport-temperature", temp = units.temperature(t)));
+            }
+            vec![line, tr!("adsbmap-airport-weather-credit")]
+        }
+        AirportClock::Asking => vec![tr!("adsbmap-airport-utc-wait", time = at(0))],
+        AirportClock::Offline => vec![tr!("adsbmap-airport-utc-offline", time = at(0))],
+    }
+}
+
+/// [`airport_card_text`] with the airport's clock and air, for the pinned box.
+fn airport_card_text_with(
+    a: &crate::airdata::Airport,
+    home: Option<(f64, f64)>,
+    live: &[&AdsbAircraft],
+    detail: bool,
+    weather: Option<&AirportWeather>,
+) -> String {
     let units = sdroxide_types::AirUnits::current();
     let codes = match (a.iata.is_empty(), a.icao.is_empty() || a.icao == a.ident) {
         (true, true) => a.ident.clone(),
@@ -656,6 +720,10 @@ fn airport_card_text(
         ));
     }
     if detail {
+        for line in weather.map(airport_clock_lines).unwrap_or_default() {
+            text.push('\n');
+            text.push_str(&line);
+        }
         for line in airport_detail_lines(a) {
             text.push('\n');
             text.push_str(&line);
@@ -1161,7 +1229,16 @@ pub fn show(
                 at,
                 text: format!(
                     "{}\n{}",
-                    airport_card_text(a, home, &live, true),
+                    airport_card_text_with(
+                        a,
+                        home,
+                        &live,
+                        true,
+                        state
+                            .airport_weather
+                            .as_ref()
+                            .filter(|w| Some(w.airport) == state.airport_pin),
+                    ),
                     tr!("adsbmap-click-to-close")
                 ),
                 freq_khz: None,
@@ -1460,6 +1537,96 @@ mod tests {
         sdroxide_types::AirUnits::Aviation.set_current();
     }
 
+    /// 2026-10-31 13:05:00 UTC.
+    const CLOCK_NOW: i64 = 1_793_451_900;
+
+    fn clock_of(clock: AirportClock) -> AirportWeather {
+        AirportWeather { airport: 0, clock, now: CLOCK_NOW }
+    }
+
+    fn pinned_text(clock: AirportClock) -> String {
+        airport_card_text_with(real_airport("EHAM"), None, &[], true, Some(&clock_of(clock)))
+    }
+
+    /// One test per unit set: the same moment and the same air, written in the
+    /// set's own clock and degrees.
+    #[test]
+    fn the_pinned_card_gives_the_local_time_and_temperature_in_each_unit_set() {
+        let known = AirportClock::Known { utc_offset_s: 3600, temp_c: Some(11.6) };
+        for (units, time, temp) in [
+            (sdroxide_types::AirUnits::Aviation, "14:05", "12 °C"),
+            (sdroxide_types::AirUnits::Metric, "14:05", "12 °C"),
+            (sdroxide_types::AirUnits::Imperial, "2:05 PM", "53 °F"),
+        ] {
+            units.set_current();
+            let t = pinned_text(known);
+            assert!(
+                t.contains(&format!("Local time {time} (UTC+1) · Temperature {temp}")),
+                "{units:?}: {t}"
+            );
+            assert!(t.contains("Weather: Open-Meteo.com"), "{units:?}: {t}");
+            assert!(!t.contains("offline"), "{units:?}: {t}");
+        }
+        sdroxide_types::AirUnits::Aviation.set_current();
+    }
+
+    #[test]
+    fn without_a_temperature_the_local_time_stands_alone() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let t = pinned_text(AirportClock::Known { utc_offset_s: 19_800, temp_c: None });
+        assert!(t.contains("Local time 18:35 (UTC+5:30)"), "{t}");
+        assert!(!t.contains("Temperature") && !t.contains(" · Temp"), "{t}");
+    }
+
+    /// Offline the card gives UTC and says why there is no local time. It never
+    /// puts a local time in its place.
+    #[test]
+    fn offline_or_waiting_the_card_says_utc_and_never_invents_a_local_time() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let off = pinned_text(AirportClock::Offline);
+        assert!(off.contains("UTC 13:05 (local time: offline)"), "{off}");
+        assert!(!off.contains("Local time") && !off.contains("Temperature"), "{off}");
+        assert!(!off.contains("Open-Meteo"), "no credit for data it did not use: {off}");
+        let wait = pinned_text(AirportClock::Asking);
+        assert!(wait.contains("UTC 13:05 (local time: loading…)"), "{wait}");
+        sdroxide_types::AirUnits::Imperial.set_current();
+        assert!(pinned_text(AirportClock::Offline).contains("UTC 1:05 PM (local time: offline)"));
+        sdroxide_types::AirUnits::Aviation.set_current();
+    }
+
+    /// The hover box asks nothing of the station, so it says nothing of the clock.
+    #[test]
+    fn only_the_pinned_card_carries_the_clock() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let a = real_airport("EHAM");
+        let w = clock_of(AirportClock::Known { utc_offset_s: 3600, temp_c: Some(11.6) });
+        let hover = airport_card_text_with(a, None, &[], false, Some(&w));
+        assert!(!hover.contains("Local time") && !hover.contains("UTC"), "{hover}");
+        let none = airport_card_text(a, None, &[], true);
+        assert!(!none.contains("Local time") && !none.contains("UTC 1"), "{none}");
+    }
+
+    /// The clock is read before the runways: it is what a person glances for.
+    #[test]
+    fn the_clock_comes_before_the_runways() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let t = pinned_text(AirportClock::Known { utc_offset_s: 3600, temp_c: Some(11.6) });
+        let (clock, runway) = (t.find("Local time").unwrap(), t.find("18R").unwrap());
+        assert!(clock < runway, "{t}");
+    }
+
+    /// A zone behind UTC, and one that carries the date over midnight.
+    #[test]
+    fn the_local_time_follows_zones_behind_and_ahead_of_utc() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let west = pinned_text(AirportClock::Known { utc_offset_s: -5 * 3600, temp_c: None });
+        assert!(west.contains("Local time 08:05 (UTC-5)"), "{west}");
+        let east = pinned_text(AirportClock::Known { utc_offset_s: 11 * 3600, temp_c: None });
+        assert!(east.contains("Local time 00:05 (UTC+11)"), "{east}");
+        let utc = pinned_text(AirportClock::Known { utc_offset_s: 0, temp_c: None });
+        assert!(utc.contains("Local time 13:05 (UTC)"), "{utc}");
+    }
+
     /// An airport the tables know nothing about: no runway line, no frequency
     /// line, no "data of" line — nothing invented.
     #[test]
@@ -1581,8 +1748,8 @@ mod tests {
     }
 
     /// Not a check: writes PNGs of the real pinned airport card, with a stand-in
-    /// picture, with the room kept for one on its way, and without any, for a
-    /// person to look at, in the three unit sets.
+    /// picture, with the local time and temperature known, on their way and
+    /// offline, for a person to look at, in the three unit sets.
     /// `cargo test -p sdroxide-ui --lib airport_card_preview -- --ignored`
     #[test]
     #[ignore]
@@ -1591,20 +1758,23 @@ mod tests {
         let dir = std::env::var("PREVIEW_DIR").unwrap_or_else(|_| "../../target/previews".into());
         std::fs::create_dir_all(&dir).unwrap();
         let a = real_airport("EHAM");
+        let known = AirportClock::Known { utc_offset_s: 3600, temp_c: Some(11.6) };
         let boards = [
-            (sdroxide_types::AirUnits::Aviation, "photo_aviation", "ready"),
-            (sdroxide_types::AirUnits::Metric, "photo_metric", "ready"),
-            (sdroxide_types::AirUnits::Aviation, "waiting", "pending"),
-            (sdroxide_types::AirUnits::Aviation, "none", "none"),
+            (sdroxide_types::AirUnits::Aviation, "aviation", "ready", known),
+            (sdroxide_types::AirUnits::Metric, "metric", "ready", known),
+            (sdroxide_types::AirUnits::Imperial, "imperial", "ready", known),
+            (sdroxide_types::AirUnits::Aviation, "offline", "none", AirportClock::Offline),
+            (sdroxide_types::AirUnits::Aviation, "asking", "pending", AirportClock::Asking),
         ];
-        for (units, name, state) in boards {
+        for (units, name, state, clock) in boards {
             units.set_current();
+            let weather = AirportWeather { airport: 0, clock, now: CLOCK_NOW };
             let text = format!(
                 "{}\n{}",
-                airport_card_text(a, Some((52.0, 5.0)), &[], true),
+                airport_card_text_with(a, Some((52.0, 5.0)), &[], true, Some(&weather)),
                 tr!("adsbmap-click-to-close")
             );
-            let size = egui::vec2(380.0, 420.0);
+            let size = egui::vec2(380.0, 460.0);
             let ctx = egui::Context::default();
             let handle =
                 ctx.load_texture("preview-airport", stand_in_picture(), Default::default());
@@ -1646,7 +1816,7 @@ mod tests {
             }
             let img =
                 crate::test_raster::rasterize(&ctx, out.unwrap(), &tex, size, theme::BG_DEEP());
-            img.save(format!("{dir}/pr3_airport_card_{name}.png")).unwrap();
+            img.save(format!("{dir}/pr4_airport_card_{name}.png")).unwrap();
         }
         sdroxide_types::AirUnits::Aviation.set_current();
     }
