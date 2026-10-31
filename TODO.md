@@ -38,6 +38,7 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
   Rolling-window fix toegepast.
 - APRS panel: all messages heard, 500 kept, composer note, RX/TX engine tests (added by madmedicnl, owned by Roy; touches F4NRM's APRS area, PR for his review) — decoder fault #259 not reproduced in the engine; needs a real capture.
 - Per-band TX permission (added by madmedicnl, owned by Roy; touches the radio engine and every radio tab, PR for F4NRM's review) — PR #358 open, not merged. Every band has a YES/NO switch in Settings; new install = all off, upgrade = bands carried over but TX blocked until the operator confirms once per radio; not applied on SWL/listen screens. PROTO_VERSION 259 (0x4F). Needs a hands-on test with a real radio.
+- MEMORIES panel fit (added by F4NRM, owned by Claude) — branch `f4nrm/memories-panel-fit`, PR pending: name rows sized to their button, chip-framed colour, PST at chip height. Wacht op F4NRM's review.
 
 ## Waiting on other people
 

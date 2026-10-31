@@ -27,6 +27,7 @@ pub(in crate::app) fn parse_colour(text: &str) -> Option<[u8; 3]> {
 /// The picker button with a PASTE chip beside it. Returns whether the colour
 /// changed, by the picker or by a paste. A paste is taken from the PASTE chip,
 /// or from Cmd/Ctrl+V while the pointer is over the swatch or its picker is open.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(in crate::app) fn colour_edit(ui: &mut egui::Ui, col: &mut [u8; 3]) -> bool {
     let swatch = ui.color_edit_button_srgb(col);
     // Small: this sits on every row of the memory list, and a roomy chip beside
