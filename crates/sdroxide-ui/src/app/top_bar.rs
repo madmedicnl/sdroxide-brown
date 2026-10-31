@@ -2126,7 +2126,7 @@ impl SdroxideApp {
                 ui.painter().text(
                     egui::pos2(r.left() + readout_w / 2.0, r.top() + gap / 2.0),
                     egui::Align2::CENTER_CENTER,
-                    format!("v{}", sdroxide_version::VERSION),
+                    sdroxide_version::VERSION.to_string(),
                     egui::FontId::proportional((gap - 1.5).clamp(7.0, 10.0)),
                     crate::theme::gray(120),
                 );

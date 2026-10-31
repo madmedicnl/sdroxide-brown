@@ -2477,17 +2477,13 @@ impl SdroxideApp {
         match io.tab {
             SettingsTab::General => {
                 // Which build this is — so a bug report can name the version
-                // without the operator having to find the binary. Stamped, so
-                // a nightly says so here rather than naming the release it was
-                // cut from; a release reads exactly as it always did.
+                // without the operator having to find the binary. Show the exact
+                // build string the binary reports to avoid confusion during
+                // remote support.
                 ui.label(
-                    RichText::new(format!(
-                        "{} {}",
-                        sdroxide_version::FLAVOR,
-                        sdroxide_version::VERSION
-                    ))
-                    .size(15.0)
-                    .strong(),
+                    RichText::new(sdroxide_version::LONG_VERSION)
+                        .size(15.0)
+                        .strong(),
                 );
                 // What this build is, in one line, so an operator who opened
                 // Settings to see which build this is knows it is not the
