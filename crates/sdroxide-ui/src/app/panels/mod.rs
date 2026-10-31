@@ -1484,10 +1484,10 @@ impl SdroxideApp {
     ) {
         let mut sq = self.digi_cfg_edit.digi_squelch;
         ui.spacing_mut().slider_width = 84.0;
+        ui.label(RichText::new("SQL").size(10.0).color(crate::theme::CYAN_DIM()));
         let resp =
             crate::chrome::slider(ui, egui::Slider::new(&mut sq, 0.0..=1.0).show_value(false))
                 .on_hover_text(tr!("panels-decode-squelch-raise-stop-decoding"));
-        ui.label(RichText::new("SQL").size(10.0).color(crate::theme::CYAN_DIM()));
         if resp.changed() && self.digi_cfg_seeded {
             self.digi_cfg_edit.digi_squelch = sq;
             cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));

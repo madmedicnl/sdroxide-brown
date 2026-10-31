@@ -890,6 +890,84 @@ impl<'de> Deserialize<'de> for UiLanguage {
     }
 }
 
+/// The column the PROGRAMS list is ordered by.
+///
+/// `#[serde(other)]` on the default for the reason [`crate::MemorySort`] has it:
+/// a typo in a hand-edited `config.toml` degrades to frequency order rather than
+/// throwing the whole `[ui]` table away.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProgramsSort {
+    /// Metre band, then frequency.
+    Band,
+    /// Station name, without regard to case.
+    Name,
+    /// Language.
+    Lang,
+    /// Target area.
+    Target,
+    /// Transmitter site.
+    Site,
+    /// Carrier frequency — the order the list has always had. Declared last
+    /// because `#[serde(other)]` must be on the last variant.
+    #[default]
+    #[serde(other)]
+    Freq,
+}
+
+/// What the PROGRAMS window remembers: every filter, the sort and the ALL chip.
+///
+/// A view preference like [`UiSettings::memory_sort`] — it belongs to whoever is
+/// reading the list, not to the station. `use_now` defaults to **on**, which is
+/// why this has a hand-written `Default` rather than a derived one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProgramsFilters {
+    /// Free-text search.
+    pub query: String,
+    /// Language filter (substring).
+    pub lang: String,
+    /// Target-area filter (substring).
+    pub target: String,
+    /// Metre band, or empty for any.
+    pub band: String,
+    /// The fixed filter time as UTC `HHMM`, used while `use_now` is off.
+    pub hhmm: u16,
+    /// Filter at the present moment rather than at `hhmm`.
+    pub use_now: bool,
+    /// Only the starred stations.
+    pub favourites_only: bool,
+    /// One schedule only, or `None` for all of them.
+    pub source: Option<crate::ScheduleSource>,
+    /// Show each row's local time at the transmitter.
+    pub local_time: bool,
+    /// The ALL chip. The favourites it produced are kept on their own, so this
+    /// is only whether the chip is lit; restoring it must not rewrite them.
+    pub all: bool,
+    /// The column the list is ordered by.
+    pub sort: ProgramsSort,
+    /// Read that order backwards.
+    pub sort_desc: bool,
+}
+
+impl Default for ProgramsFilters {
+    fn default() -> Self {
+        ProgramsFilters {
+            query: String::new(),
+            lang: String::new(),
+            target: String::new(),
+            band: String::new(),
+            hhmm: 0,
+            use_now: true,
+            favourites_only: false,
+            source: None,
+            local_time: false,
+            all: false,
+            sort: ProgramsSort::Freq,
+            sort_desc: false,
+        }
+    }
+}
+
 /// User display preferences. All have defaults so a missing `[ui]` table loads.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -1072,6 +1150,10 @@ pub struct UiSettings {
     /// key PROGRAMS' favourites use. Chosen in the PROGRAMS window.
     #[serde(default)]
     pub programs_colours: std::collections::BTreeMap<String, [u8; 3]>,
+    /// The PROGRAMS window's filters and sort, kept between sessions so the
+    /// window opens as it was left. See [`ProgramsFilters`].
+    #[serde(default)]
+    pub programs: ProgramsFilters,
     /// How the FT8/FT4 decode list orders the stations. This screen's
     /// preference like [`UiSettings::memory_sort`] above, and for the same
     /// reason: the decodes are the station's, the order they are read in is
@@ -1788,6 +1870,7 @@ impl Default for UiSettings {
             memory_waterfall_color: [70, 224, 125],
             programs_colour_all: None,
             programs_colours: std::collections::BTreeMap::new(),
+            programs: ProgramsFilters::default(),
             decode_sort: crate::DecodeSort::None,
             // Strongest and farthest first, which is the useful end of both
             // numbers; the Country order flips this when it is picked.
@@ -2434,6 +2517,45 @@ pub fn set_force_swl(on: bool) {
 
 #[cfg(test)]
 mod tests {
+
+    /// The PROGRAMS filters survive a save and a load, and a config written
+    /// before they existed opens on the defaults — notably "now", not a stale
+    /// fixed time.
+    #[test]
+    fn the_programs_filters_round_trip_and_default_to_now() {
+        let mut s = UiSettings::default();
+        s.programs = ProgramsFilters {
+            query: "bbc".into(),
+            lang: "En".into(),
+            target: "Af".into(),
+            band: "49m".into(),
+            hhmm: 1423,
+            use_now: false,
+            favourites_only: true,
+            source: Some(crate::ScheduleSource::Aoki),
+            local_time: true,
+            all: true,
+            sort: ProgramsSort::Name,
+            sort_desc: true,
+        };
+        let text = serde_json::to_string(&s).unwrap();
+        let back: UiSettings = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.programs, s.programs);
+
+        let fresh = ProgramsFilters::default();
+        assert!(fresh.use_now, "a new install filters at the present moment");
+        assert_eq!(fresh.sort, ProgramsSort::Freq);
+        assert!(!fresh.all && !fresh.sort_desc);
+    }
+
+    /// A column name the file does not know falls back to frequency order
+    /// instead of losing the whole table.
+    #[test]
+    fn an_unknown_programs_sort_reads_as_frequency() {
+        let f: ProgramsFilters = serde_json::from_str(r#"{"sort":"Sideways"}"#).unwrap();
+        assert_eq!(f.sort, ProgramsSort::Freq);
+        assert!(f.use_now, "the other fields keep their defaults");
+    }
     use super::*;
 
     /// **A stored section order is the operator's, and nothing in it is lost by

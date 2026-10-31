@@ -20,6 +20,7 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 
 ## Now
 
+- PROGRAMS window layout and persistence (added by F4NRM, owned by Claude) — branch `f4nrm/stoic-fermi-a0z0zp`, PR pending: columns, Sort menus, chip-framed colour, two-row bar, saved filters. Wacht op F4NRM's review.
 - SAT Doppler for CAT rigs (added by Roy, owned by Roy/SP9TKN) — step 1+2a+2b+2c
   implemented on branch `fork/sat-doppler-cat`. MSI build available. Wacht op
   SP9TKN's testresultaten. Design doc: `docs/SAT-DOPPLER-CAT-PLAN.md`.
@@ -65,6 +66,7 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 - #283 Settings question — gesloten (fix da78715b).
 
 ## Parked
+- WEFAX broadcast schedules (added by Roy, owned by Roy) — station picker chip with times/links, offline data. Batch with other UI tweaks.
 
 - 4 brede PSK-banken (PSK125C12, PSK500C4, PSK500RC4, PSK1000C2) — 0/3
   words. Geparkeerd tot iemand ze op de band hoort.

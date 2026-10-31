@@ -45,7 +45,6 @@ pub(in crate::app) fn colour_edit(ui: &mut egui::Ui, col: &mut [u8; 3]) -> bool 
 const SWATCH: egui::Vec2 = egui::vec2(30.0, 14.0);
 
 /// How wide [`colour_swatch_framed`] stands.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(in crate::app) fn colour_swatch_framed_width() -> f32 {
     crate::chrome::chip_frame_width(SWATCH.x)
 }

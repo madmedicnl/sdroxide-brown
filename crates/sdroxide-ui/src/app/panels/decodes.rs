@@ -1925,7 +1925,11 @@ impl SdroxideApp {
                 }
                 if crate::chrome::chip(ui, false, RichText::new(tr!("decodes-stop-qso")).size(14.0)).clicked()
                 {
-                    cmds.push(Command::DigiStopQso);
+                    if self.auto_role.is_some() {
+                        self.stop_auto(tr!("decodes-auto-stopped-by-operator", role = self.auto_role.unwrap().label()), cmds);
+                    } else {
+                        cmds.push(Command::DigiStopQso);
+                    }
                 }
                 if crate::chrome::chip_accent(
                     ui,
@@ -1936,7 +1940,11 @@ impl SdroxideApp {
                 )
                 .clicked()
                 {
-                    cmds.push(Command::DigiAbortTx);
+                    if self.auto_role.is_some() {
+                        self.stop_auto(tr!("decodes-auto-stopped-by-operator", role = self.auto_role.unwrap().label()), cmds);
+                    } else {
+                        cmds.push(Command::DigiAbortTx);
+                    }
                 }
             });
             if self.auto_role.is_some() {

@@ -6057,11 +6057,11 @@ schedule-all-favs = ⭐ TODAS
 
 schedule-all-favs-hint = Marcar como favoritas todas las emisoras del horario y mostrar sus etiquetas en la cascada mientras esté activado. Pulse de nuevo para borrar todos los favoritos.
 
-schedule-solar-time = HORA SOLAR
+schedule-solar-time = HORA LOCAL
 
-schedule-solar-time-hint = Mostrar en cada fila la hora local en el transmisor: la hora del Sol, cuatro minutos por grado de longitud, no un huso horario civil. Ignora el horario de verano y las fronteras de zona, por eso se llama solar y no local.
+schedule-solar-time-hint = Mostrar en cada fila la hora local en el transmisor. Es la hora del Sol — cuatro minutos por grado de longitud — y no un huso horario civil: ignora el horario de verano y las fronteras de zona.
 
-schedule-map = MAPA
+schedule-map = VER MAPA
 
 schedule-map-hint = Abrir ESCUCHA — este horario como mapa. Elija una emisora, escriba lo que oyó y regístrelo. La emisora seleccionada se traslada
 
@@ -9007,3 +9007,27 @@ adsbmap-airport-weather-credit = Tiempo: Open-Meteo.com
 adsbmap-airport-utc-wait = UTC { $time } (hora local: cargando…)
 
 adsbmap-airport-utc-offline = UTC { $time } (hora local: sin conexión)
+
+schedule-listen = ESCUCHAR
+
+schedule-listen-hint = Sintonizar el receptor en esta emisora
+
+schedule-sort = Ordenar
+
+schedule-sort-asc = Ascendente
+
+schedule-sort-desc = Descendente
+
+schedule-col-freq = Frec.
+
+schedule-col-band = Banda
+
+schedule-col-name = Nombre
+
+schedule-col-lang = Idioma
+
+schedule-col-target = Destino
+
+schedule-col-site = Lugar
+
+schedule-col-local = Local

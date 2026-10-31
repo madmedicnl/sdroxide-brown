@@ -18,6 +18,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 - **MEMORIES panel no longer overflows on the right** — the name and folder boxes now take what their button leaves ("Nouveau dossier" was wider than the 100 pt the row assumed, so the window grew and the button stuck out). The colour swatch wears a chip frame and PST is chip height. Opens at 510 pt; still resizable and detachable.
 
 ### Added
+- **PROGRAMS window tidied** — aligned columns with a Sort menu over each, the colour in a chip-style frame, a two-row top bar that no longer overlaps, ACCORD → LISTEN, SOLAR TIME → LOCAL TIME, CARTE → SHOW MAP, and every filter, the sort and ALL kept between sessions.
 - **Radio Classic** — EXTRAS → RADIO: a classic-radio face for broadcast listening (bands, memories, schedule, S-meter, stereo VU, 9-digit VFO, RDS name and RadioText), docked under the waterfall in the voice modes and detachable from Settings. — madmedicnl (wire 257)
 
 ## [2.2.0.2_brown] - 2026-10-27

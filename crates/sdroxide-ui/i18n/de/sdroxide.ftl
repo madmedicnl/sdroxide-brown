@@ -6056,11 +6056,11 @@ schedule-all-favs = ⭐ ALLE
 
 schedule-all-favs-hint = Alle Stationen des Sendeplans als Favoriten markieren und ihre Beschriftungen im Wasserfall zeigen, solange es eingeschaltet ist. Erneut klicken, um alle Favoriten zu löschen.
 
-schedule-solar-time = SONNENZEIT
+schedule-solar-time = ORTSZEIT
 
-schedule-solar-time-hint = Pro Zeile die Ortszeit am Sender anzeigen — die Sonnenzeit, vier Minuten pro Längengrad, keine bürgerliche Zeitzone. Sie kennt weder Sommerzeit noch Zonengrenzen und heißt deshalb Sonnenzeit statt Ortszeit.
+schedule-solar-time-hint = Pro Zeile die Ortszeit am Sender anzeigen. Es ist die Sonnenzeit — vier Minuten pro Längengrad — und keine bürgerliche Zeitzone: Sommerzeit und Zonengrenzen kennt sie nicht.
 
-schedule-map = KARTE
+schedule-map = KARTE ZEIGEN
 
 schedule-map-hint = HÖREN öffnen — dieser Sendeplan als Karte. Eine Station darauf wählen, aufschreiben, was Sie gehört haben, und loggen. Die gewählte Station wird übernommen
 
@@ -9006,3 +9006,27 @@ adsbmap-airport-weather-credit = Wetter: Open-Meteo.com
 adsbmap-airport-utc-wait = UTC { $time } (Ortszeit: wird geladen …)
 
 adsbmap-airport-utc-offline = UTC { $time } (Ortszeit: offline)
+
+schedule-listen = HÖREN
+
+schedule-listen-hint = Den Empfänger auf diese Station abstimmen
+
+schedule-sort = Sortieren
+
+schedule-sort-asc = Aufsteigend
+
+schedule-sort-desc = Absteigend
+
+schedule-col-freq = Freq.
+
+schedule-col-band = Band
+
+schedule-col-name = Name
+
+schedule-col-lang = Sprache
+
+schedule-col-target = Zielgebiet
+
+schedule-col-site = Standort
+
+schedule-col-local = Ort
