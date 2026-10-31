@@ -15,6 +15,7 @@ and the [README](https://github.com/madmedicnl/sdroxide-brown#readme).
 
 ### Fixed
 - **Choppy audio and a stuttering waterfall in the web client on a healthy network** — the server now sets `TCP_NODELAY` on every connection, serves audio ahead of the other lanes, gives the audio lane twice the room, and logs when it has to drop audio packets. Plan and the native/Linux checks still owed: `docs/WEB-LAG-PLAN.md`.
+- **MEMORIES panel no longer overflows on the right** — the name and folder boxes now take what their button leaves ("Nouveau dossier" was wider than the 100 pt the row assumed, so the window grew and the button stuck out). The colour swatch wears a chip frame and PST is chip height. Opens at 510 pt; still resizable and detachable.
 
 ### Added
 - **Radio Classic** — EXTRAS → RADIO: a classic-radio face for broadcast listening (bands, memories, schedule, S-meter, stereo VU, 9-digit VFO, RDS name and RadioText), docked under the waterfall in the voice modes and detachable from Settings. — madmedicnl (wire 257)

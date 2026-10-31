@@ -155,7 +155,7 @@ fn memory_row(
             // Per-memory label colour on the waterfall: a small coloured chip
             // that opens the palette on click. None = use the global colour.
             let mut col = m.color.unwrap_or(global_color);
-            if super::colour_edit::colour_edit(ui, &mut col) {
+            if framed_colour_edit(ui, &mut col) {
                 cmds.push(Command::SetMemoryColor { id: m.id, color: Some(col) });
             }
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
@@ -478,6 +478,36 @@ fn memory_repeater_rows(ui: &mut egui::Ui, e: &mut MemoryEdit) {
     });
 }
 
+/// A text box and its button on one row: the box takes **what the button leaves**.
+///
+/// The button was budgeted as 100 pt (`available_width() - 100.0`). "Nouveau
+/// dossier" in French, Spanish and German is wider than that, so the row was wider
+/// than the window, the auto-sized window grew to hold it and the button stuck out
+/// of the frame. Here the button's real width is measured and taken off, so the
+/// row always fits and the right margin matches the left. Returns whether the
+/// button was clicked with something typed in the box.
+fn name_row(ui: &mut egui::Ui, text: &mut String, hint: &str, button: &str) -> bool {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let button_w =
+        crate::chrome::text_width(ui, button, font) + 2.0 * ui.spacing().button_padding.x;
+    let mut clicked = false;
+    ui.horizontal(|ui| {
+        let w = (ui.available_width() - button_w - ui.spacing().item_spacing.x - 2.0).max(60.0);
+        crate::chrome::field(ui, egui::TextEdit::singleline(text).hint_text(hint).desired_width(w));
+        let ok = !text.trim().is_empty();
+        clicked = ui.add_enabled(ok, egui::Button::new(button)).clicked();
+    });
+    clicked
+}
+
+/// The colour picker as a memory row and the sort bar draw it: the swatch in a
+/// chip-style frame, and a PST chip as tall as every other chip beside it.
+fn framed_colour_edit(ui: &mut egui::Ui, col: &mut [u8; 3]) -> bool {
+    let swatch = super::colour_edit::colour_swatch_framed(ui, col);
+    let paste = crate::chrome::chip(ui, false, "PST");
+    super::colour_edit::colour_paste(ui, col, &swatch, paste)
+}
+
 impl SdroxideApp {
     pub(in crate::app) fn memories_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>) {
         // The shell's window: an egui window or its own OS one, with the ⇱
@@ -499,7 +529,7 @@ impl SdroxideApp {
             ctx,
             "memories",
             &tr!("windows-memories"),
-            [460.0, 460.0],
+            [510.0, 460.0],
             [320.0, 200.0],
             epoch,
             |me, ui| me.memories_body(ui, cmds),
@@ -523,34 +553,21 @@ impl SdroxideApp {
         {
             self.mem_edit = None;
         }
-        ui.horizontal(|ui| {
-            crate::chrome::field(
-                ui,
-                egui::TextEdit::singleline(&mut self.mem_name)
-                    .hint_text(tr!("windows-memory-name"))
-                    .desired_width(ui.available_width() - 100.0),
-            );
-            let name_ok = !self.mem_name.trim().is_empty();
-            if ui.add_enabled(name_ok, egui::Button::new(tr!("windows-store"))).clicked() {
-                cmds.push(Command::StoreMemory { name: self.mem_name.trim().to_string() });
-                self.mem_name.clear();
-            }
-        });
-        ui.horizontal(|ui| {
-            crate::chrome::field(
-                ui,
-                egui::TextEdit::singleline(&mut self.mem_folder_name)
-                    .hint_text(tr!("windows-folder-name"))
-                    .desired_width(ui.available_width() - 100.0),
-            );
-            let name_ok = !self.mem_folder_name.trim().is_empty();
-            if ui.add_enabled(name_ok, egui::Button::new(tr!("windows-new-folder"))).clicked() {
-                cmds.push(Command::CreateMemoryFolder {
-                    name: self.mem_folder_name.trim().to_string(),
-                });
-                self.mem_folder_name.clear();
-            }
-        });
+        if name_row(ui, &mut self.mem_name, &tr!("windows-memory-name"), &tr!("windows-store")) {
+            cmds.push(Command::StoreMemory { name: self.mem_name.trim().to_string() });
+            self.mem_name.clear();
+        }
+        if name_row(
+            ui,
+            &mut self.mem_folder_name,
+            &tr!("windows-folder-name"),
+            &tr!("windows-new-folder"),
+        ) {
+            cmds.push(Command::CreateMemoryFolder {
+                name: self.mem_folder_name.trim().to_string(),
+            });
+            self.mem_folder_name.clear();
+        }
         // A channel list from somewhere else. CHIRP's CSV because that is what
         // every repeater directory hands out — RepeaterBook exports it by
         // county, and the marine and PMR tables circulate as it — so an
@@ -730,8 +747,7 @@ impl SdroxideApp {
             {
                 desc = !desc;
             }
-            let color_changed =
-                super::colour_edit::colour_edit(ui, &mut self.ui_settings.memory_waterfall_color);
+            let color_changed = framed_colour_edit(ui, &mut self.ui_settings.memory_waterfall_color);
             if color_changed {
                 crate::app::persist::persist_ui_settings(&self.ui_settings);
             }

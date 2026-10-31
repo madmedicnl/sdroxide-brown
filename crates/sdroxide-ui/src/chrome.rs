@@ -1748,6 +1748,30 @@ pub fn split_handle(ui: &mut Ui, size: egui::Vec2, bg: Option<Color32>) -> Respo
     resp
 }
 
+/// A chip-shaped frame — the same fill, stroke and corner as [`chip`] — drawn
+/// around a widget of `inner` size that `add` places in it.
+///
+/// For a swatch or a small control that has to sit in a row of chips and read
+/// as one of them: a colour square on its own looked like a different kind of
+/// object next to the buttons. The frame is as tall as a chip, whatever the
+/// style, so the row keeps one height.
+pub fn chip_frame<R>(ui: &mut Ui, inner: egui::Vec2, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let size = vec2(chip_frame_width(inner.x), chip_height(ui, None));
+    let frame = chip_impl(ui, false, RichText::new(""), None, Sense::hover(), Some(size));
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(Rect::from_center_size(frame.rect.center(), inner))
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    );
+    child.spacing_mut().interact_size = inner;
+    add(&mut child)
+}
+
+/// How wide [`chip_frame`] stands around a widget `inner_w` wide.
+pub fn chip_frame_width(inner_w: f32) -> f32 {
+    inner_w + 12.0
+}
+
 /// How wide `text` lays out in `font`.
 pub fn text_width(ui: &Ui, text: &str, font: egui::FontId) -> f32 {
     ui.painter().layout_no_wrap(text.to_owned(), font, Color32::WHITE).size().x
