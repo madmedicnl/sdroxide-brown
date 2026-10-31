@@ -2979,9 +2979,7 @@ fn aoki_latest(agent: &ureq::Agent) -> Result<(String, String), String> {
     // is not necessarily the season we are in. Better than nothing, and it names
     // itself so the cache says which file it holds.
     let mut index = agent.get(AOKI_INDEX_URL).call().map_err(|e| {
-        format!(
-            "Aoki's seasonal package 404s ({url}) and its index would not load: {e}"
-        )
+        format!("Aoki's seasonal package 404s ({url}) and its index would not load: {e}")
     })?;
     if !index.status().is_success() {
         return Err(format!(
@@ -3053,9 +3051,7 @@ pub fn cached_broadcast_sources() -> Vec<(sdroxide_types::ScheduleSource, Option
                         .map(|p| p.exists())
                         .unwrap_or(false)
             } else {
-                broadcast_cache_path_for(&season, source)
-                    .map(|p| p.exists())
-                    .unwrap_or(false)
+                broadcast_cache_path_for(&season, source).map(|p| p.exists()).unwrap_or(false)
             };
             (source, here.then(|| cached_schedule_for(source).map(|v| v.len()).unwrap_or(0)))
         })
@@ -3259,11 +3255,7 @@ fn aoki_season_from_path(path: &std::path::Path) -> Option<String> {
     }
 
     // Fallback to the old behaviour for odd names
-    let clean: String = lower
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
-        .take(8)
-        .collect();
+    let clean: String = lower.chars().filter(|c| c.is_ascii_alphanumeric()).take(8).collect();
     let named = clean.starts_with("xt") || clean.starts_with("nc") || clean.starts_with("b2");
     (named && clean.chars().any(|c| c.is_ascii_digit())).then_some(clean)
 }
