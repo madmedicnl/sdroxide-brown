@@ -5387,6 +5387,13 @@ navtex-sensitivity-hint =
     
     Keine Lautstärke: NAVTEX ist FSK, die Graustufen stammen aus den Tönen, nicht aus der Signalstärke.
 
+
+navtex-loss-limit-hint =
+    Anzahl aufeinanderfolgender Slots ohne lesbaren Teil, bevor Sync aufgegeben wird.
+    
+navtex-disagree-limit-hint =
+    Anzahl aufeinanderfolgender Slots, in denen beide Kopien legal, aber unterschiedlich sind, bevor Sync aufgegeben wird.
+    
 navtex-auto-hint = Kehrt zu den Referenzschwellen (0) zurück. Hervorgehoben, solange aktiv.
 
 navtex-tune-dial-usb-below-channel = Stellt die Frequenz hier ein (USB, 1,710 kHz unter dem Kanal).

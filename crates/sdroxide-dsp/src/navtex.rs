@@ -235,7 +235,7 @@ const LOSS_LIMIT: u32 = 24;
 /// happens. Shorter than the loss limit because it is much stronger evidence: a
 /// pair of legal codes that differ cannot both be right, and in the wrong phase
 /// it is the ordinary case rather than the exception.
-const DISAGREE_LIMIT: u32 = 6;
+const DISAGREE_LIMIT: u32 = 3;
 
 /// The state of one character slot, for the panel's quality readout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -547,6 +547,13 @@ impl NavtexRx {
     #[must_use]
     pub fn afc_offset_hz(&self) -> f32 {
         self.afc_hz
+    }
+
+    /// Restore a previously found AFC pull. Called after the receiver is
+    /// created; the loop then starts from where it left off.
+    pub fn set_afc_hz(&mut self, hz: f32) {
+        self.afc_hz = hz.clamp(-AFC_LIMIT_HZ, AFC_LIMIT_HZ);
+        self.apply_afc();
     }
 
     /// Signal level at the two tones, for a squelch or a meter.

@@ -5388,6 +5388,13 @@ navtex-sensitivity-hint =
     
     No es volumen: NAVTEX es FSK, los grises vienen de los tonos, no de la intensidad de la señal.
 
+
+navtex-loss-limit-hint =
+    Ranuras consecutivas sin copia legible antes de abandonar la sincronización.
+    
+navtex-disagree-limit-hint =
+    Ranuras consecutivas cuyas dos copias son legales pero distintas antes de abandonar la sincronización.
+    
 navtex-auto-hint = Vuelve a los umbrales de referencia (0). Resaltado mientras está activo.
 
 navtex-tune-dial-usb-below-channel = Sintoniza el dial aquí (USB, 1,710 kHz por debajo del canal).

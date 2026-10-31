@@ -27,11 +27,15 @@ and release asset names stay shared with upstream. Origin: `madmedicnl/sdroxide-
 - Two divergences are deliberate: Olivia's polarity (positive) and spoken alerts
   (speak regardless of window focus). Do not "fix" either by taking upstream's side.
 
+  
+- CTR on = the frequency is always in the middle With the CTR chip lit the red line is at the centre of the waterfall on every frame — wheel, pinch, keyboard zoom, pan, fit, mode or decoder change, every radio, the whole bandwidth, zoom in or out, fast or slow. No drift, no jitter, no off/on to re-centre. Modes keep their preset bandwidth; CTR only moves the line. Touching waterfall or zoom code: keep the ctr_zoom_sim tests in widgets/spectrum_view.rs green and add the gesture.
+- Never perform a zoom correction on all radios at the same time. Each radio is different. A correction should not affect the other radios (example: PLUTO = 1 radio = 1 Interface radio).
+
 ## F4NRM's areas (PR required, never straight to main)
 
 F4NRM owns: decoders SSTV, DAB, NAVTEX, APRS, WFM, DSC, Olivia, RTTY, WEFAX,
 FT8, RDS and backends HackRF, PlutoSDR. RSP1 is NOT on his list (bench receiver).
-Confirmed on air by his radio group: WEFAX, DAB, SSTV, DSC.
+Confirmed on air by his radio group: WEFAX, DAB, SSTV, DSC, radio classic, aircraft.
 
 Anything touching these — a fault fix, a wire change, a panel change — goes up as
 a PR, never straight to `main`. No refactor or "improvement" without a report
@@ -209,6 +213,7 @@ are closed/unlicensed (research only). SDRuno look is parked.
 - Airspy HF+: PR #309 open, wacht op Graeme's test.
 - Antenna: PR #304 open.
 - FT8 auto queue UI: PR #323 open (not live-tested).
+
 
 ## History
 

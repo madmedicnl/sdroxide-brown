@@ -2159,16 +2159,19 @@ use sdroxide_types::{
 /// VU and bars. Until now only the DAB status carried a level. It is sent only
 /// while a screen holds a lease: `Command` gains `WantAudioLevel` last, renewed
 /// about once a second by an open panel. `PROTO_VERSION` 256 → 257, `VERSION_BYTE` 0x4C → 0x4D. A downstream (fork) change.
-/// v258: **the transmit band list.** [`sdroxide_types::RadioConfig`] gains
+/// v258: **NAVTEX drop limits.** The NAVTEX settings gained adjustable drop
+/// limits (loss/disagree), which moved the layout. `PROTO_VERSION` 257 → 258,
+/// `VERSION_BYTE` 0x4D → 0x4E.
+/// v259: **the transmit band list.** [`sdroxide_types::RadioConfig`] gains
 /// `tx_band_enable` and `tx_bands_confirmed` at its tail: the bands the operator
 /// has switched TX on for, and whether they have confirmed the list. The engine
 /// refuses a key-down on any other band, ahead of every other rail.
 /// `RadioConfig` rides `ServerMsg::RadioConfig` and `Command::SetRadioConfig`
 /// whole, so the appended fields move their layout. `#[serde(default)]`, so a
 /// `radio.json` written before this loads unchanged — and is carried over
-/// unconfirmed. `PROTO_VERSION` 257 → 258, `VERSION_BYTE` 0x4D → 0x4E.
-pub const PROTO_VERSION: u16 = 258;
-const VERSION_BYTE: u8 = 0x4E;
+/// unconfirmed. `PROTO_VERSION` 258 → 259, `VERSION_BYTE` 0x4E → 0x4F.
+pub const PROTO_VERSION: u16 = 259;
+const VERSION_BYTE: u8 = 0x4F;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3411,7 +3414,7 @@ mod tests {
         // Byte 0 is `VERSION_BYTE`; byte 1 is the variant index (< 128 here).
         let (a, b) = (encode(&slide).unwrap()[1], encode(&level).unwrap()[1]);
         assert_eq!(b, a + 1, "AudioLevel must directly follow DabSlide");
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (258, 0x4E));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (259, 0x4F));
     }
 
     /// postcard is positional: a field inserted mid-struct shifts every byte
@@ -3433,12 +3436,12 @@ mod tests {
         let net = postcard::to_allocvec(&sdroxide_types::NetworkConfig::default()).unwrap();
         assert_eq!(
             (digi.len(), fnv1a(&digi)),
-            (477, 2_903_949_547_993_043_639),
+            (479, 221_087_630_763_656_457),
             "DigiConfig's wire layout shifted — append fields, never insert them"
         );
         assert_eq!(
             (radio.len(), fnv1a(&radio)),
-            (887, 11_921_450_238_979_962_418),
+            (889, 17_500_317_737_597_158_402),
             "RadioConfig's wire layout shifted — append fields, never insert them"
         );
         assert_eq!(

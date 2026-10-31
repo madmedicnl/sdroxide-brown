@@ -5401,6 +5401,13 @@ navtex-sensitivity-hint =
     
     Geen volume: NAVTEX is FSK, dus de grijstinten komen van de tonen, niet van de signaalsterkte.
 
+
+navtex-loss-limit-hint =
+    Aantal opeenvolgende slots zonder leesbaar teken voordat sync wordt losgelaten.
+    
+navtex-disagree-limit-hint =
+    Aantal opeenvolgende slots waar beide kopieën legaal maar verschillend zijn voordat sync wordt losgelaten.
+    
 navtex-auto-hint = Keert terug naar de referentiedrempels (0). Gemarkeerd zolang actief.
 
 navtex-tune-dial-usb-below-channel = Stem de dial hier af (USB, 1.710 kHz onder het kanaal).
