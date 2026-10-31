@@ -6170,11 +6170,14 @@ aircraft moves it, **✕** or **Esc** closes it, and it closes by itself when th
 aircraft drops off the map. In the pinned card the **Planespotters** link opens
 the photo's page, and the picture is shown if it has already been loaded.
 
-**Look up online** is the one thing that asks, and only when you press it. It
-appears when you are connected to a station and the aircraft has not been asked
-about, and asks that station's relay for that aircraft alone, one lookup at a
-time. If the station's operator has not switched the relay on, or you are not
-signed in, the card says so instead of offering the button.
+**Online.** The **Online** switch at the top right of the AIRCRAFT window is on
+by default. While it is on, the card you open asks the station's relay for that
+aircraft alone, one lookup at a time, and shows its type, operator, route and
+photo with no click. Switch it off and nothing leaves the station; the station keeps
+your choice across restarts. If you are not signed in, or the operator holds the
+relay with `SDROXIDE_AIRCRAFT_ONLINE` (`=0` holds it off, `=1` on; unset leaves it to
+the switch), the card or a short note says so. With no station to connect to there is
+no switch.
 
 **Searching.** The **search** box above the table, in the AIRCRAFT window's
 **Cards** list and above the map is one and the same box: type there and the

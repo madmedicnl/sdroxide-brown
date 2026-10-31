@@ -38,15 +38,26 @@ use crate::Station;
 /// runs into it.
 pub(crate) const MAX_QUESTIONS_PER_MINUTE: usize = 30;
 
-/// The variable that switches the relay on.
+/// The variable that holds the relay on or off whatever the window says.
 pub const ENV_SWITCH: &str = "SDROXIDE_AIRCRAFT_ONLINE";
 
-/// Whether a value of [`ENV_SWITCH`] switches the relay on. Anything but a
-/// plain yes is off: a typo must not open a way out of the machine.
-pub fn enabled_by(value: Option<&str>) -> bool {
-    value.is_some_and(|v| {
-        matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on")
-    })
+/// What a value of [`ENV_SWITCH`] decides: `Some(true)` holds the relay on,
+/// `Some(false)` holds it off, `None` leaves it to the operator's switch in the
+/// AIRCRAFT window. Unset or blank is `None`; a plain yes is on; anything else
+/// is off, because a typo must not open a way out of the machine.
+pub fn forced_by(value: Option<&str>) -> Option<bool> {
+    let v = value?.trim().to_ascii_lowercase();
+    if v.is_empty() {
+        return None;
+    }
+    Some(matches!(v.as_str(), "1" | "true" | "yes" | "on"))
+}
+
+/// Whether the relay answers when the station starts: the environment variable
+/// first, then the operator's "off" mark, else on. On is the default so that a
+/// card shows its type, route and photo without anyone hunting for a switch.
+pub(crate) fn starts_on(forced: Option<bool>, off_mark: bool) -> bool {
+    forced.unwrap_or(!off_mark)
 }
 
 /// What the route answers to, decided before anything is sent.
@@ -111,8 +122,10 @@ pub(crate) fn http_status(s: Status) -> StatusCode {
 }
 
 /// The file whose presence in the config directory means the operator switched
-/// the relay on from the AIRCRAFT window. Presence only; there is nothing in it.
-pub(crate) const SWITCH_FILE: &str = "aircraft-online.on";
+/// the relay off from the AIRCRAFT window. Presence only; there is nothing in it.
+/// Without it the relay is on. (Older versions wrote `aircraft-online.on` when
+/// it was switched on; that file is no longer read.)
+pub(crate) const OFF_FILE: &str = "aircraft-online.off";
 
 /// The header a switch request must carry. A page on another site cannot add a
 /// custom header to a request without the station's say-so (a preflight), so
@@ -238,10 +251,11 @@ pub(crate) enum Photo {
 /// The relay and the file its cache lives in.
 pub(crate) struct AircraftHub<U = HttpUpstream> {
     /// Whether the relay answers. Starts from the environment variable or the
-    /// switch file, and the AIRCRAFT window can change it while running.
+    /// off file, and the AIRCRAFT window can change it while running.
     enabled: AtomicBool,
-    /// The environment variable is on, which no window can undo.
-    forced: bool,
+    /// What the environment variable holds the relay at, which no window can
+    /// undo; `None` leaves it to the window.
+    forced: Option<bool>,
     relay: Relay<U>,
     file: Option<PathBuf>,
     switch_file: Option<PathBuf>,
@@ -259,10 +273,10 @@ fn now_unix() -> i64 {
 impl AircraftHub<HttpUpstream> {
     /// The station's relay. When it is off nothing is read, nothing is
     /// written and no connection is ever made.
-    pub(crate) fn start(forced: bool) -> AircraftHub {
+    pub(crate) fn start(forced: Option<bool>) -> AircraftHub {
         let dir = sdroxide_config::config_dir().ok();
-        let switch_file = dir.as_ref().map(|d| d.join(SWITCH_FILE));
-        let enabled = forced || switch_file.as_ref().is_some_and(|f| f.exists());
+        let switch_file = dir.as_ref().map(|d| d.join(OFF_FILE));
+        let enabled = starts_on(forced, switch_file.as_ref().is_some_and(|f| f.exists()));
         let file = enabled.then(|| dir.as_ref().map(|d| d.join("aircraft-online.json"))).flatten();
         let cache = file
             .as_ref()
@@ -287,7 +301,7 @@ impl<U: Upstream> AircraftHub<U> {
     pub(crate) fn with(enabled: bool, upstream: U, max_per_minute: usize) -> AircraftHub<U> {
         AircraftHub {
             enabled: AtomicBool::new(enabled),
-            forced: false,
+            forced: None,
             relay: Relay::new(upstream, max_per_minute, OnlineCache::default()),
             file: None,
             switch_file: None,
@@ -301,18 +315,21 @@ impl<U: Upstream> AircraftHub<U> {
         self.enabled.load(Ordering::Relaxed)
     }
 
-    /// Switch the relay on or off from a client, and remember the choice in the
+    /// Switch the relay on or off from a client, and remember an "off" in the
     /// config directory so a restart keeps it. The environment variable wins
-    /// over a request to turn it off: it is the operator's, set on the machine.
+    /// over a request either way: it is the operator's, set on the machine.
     /// Returns what the relay is now.
     pub(crate) fn set_enabled(&self, on: bool) -> bool {
-        let on = on || self.forced;
+        if let Some(held) = self.forced {
+            self.enabled.store(held, Ordering::Relaxed);
+            return held;
+        }
         if let Some(f) = &self.switch_file {
-            if on && !self.forced {
-                // A switch that cannot be remembered still works until restart.
-                let _ = std::fs::write(f, b"");
-            } else if !on {
+            // A switch that cannot be remembered still works until restart.
+            if on {
                 let _ = std::fs::remove_file(f);
+            } else {
+                let _ = std::fs::write(f, b"");
             }
         }
         self.enabled.store(on, Ordering::Relaxed);
@@ -512,7 +529,7 @@ pub(crate) async fn photo_release_one(
 }
 
 /// What `/aircraft-online` says: whether the relay is on, and whether the
-/// station's environment variable holds it on.
+/// station's environment variable holds it there.
 #[derive(serde::Serialize)]
 struct Switch {
     enabled: bool,
@@ -520,7 +537,7 @@ struct Switch {
 }
 
 fn switch_json(status: StatusCode, hub: &AircraftHub) -> Response {
-    let body = Switch { enabled: hub.enabled(), forced: hub.forced };
+    let body = Switch { enabled: hub.enabled(), forced: hub.forced.is_some() };
     (
         status,
         [(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")],
@@ -568,7 +585,7 @@ pub(crate) async fn switch_post(
     if let Some(code) = switch_refusal(needed, signed, true, headers.contains_key(SWITCH_HEADER)) {
         return code.into_response();
     }
-    let Some(on) = query.get("on").map(|v| enabled_by(Some(v.as_str()))) else {
+    let Some(on) = query.get("on").map(|v| forced_by(Some(v.as_str())).unwrap_or(false)) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     station.aircraft.set_enabled(on);
@@ -604,42 +621,66 @@ mod tests {
         assert!(!hub.enabled());
         assert!(hub.set_enabled(true) && hub.enabled());
         assert!(!hub.set_enabled(false) && !hub.enabled());
-        let forced = AircraftHub {
-            forced: true,
+        let held_on = AircraftHub {
+            forced: Some(true),
             ..AircraftHub::with(true, Counting(Arc::new(AtomicUsize::new(0))), 10)
         };
-        assert!(forced.set_enabled(false), "the environment variable wins");
-        assert!(forced.enabled());
+        assert!(held_on.set_enabled(false), "the environment variable wins");
+        assert!(held_on.enabled());
+        let held_off = AircraftHub {
+            forced: Some(false),
+            ..AircraftHub::with(false, Counting(Arc::new(AtomicUsize::new(0))), 10)
+        };
+        assert!(!held_off.set_enabled(true), "it holds the relay off too");
+        assert!(!held_off.enabled());
     }
 
     #[test]
-    fn the_choice_is_remembered_in_a_file_and_the_route_turns_a_question_away_while_off() {
+    fn the_relay_starts_on_unless_the_environment_or_the_operator_said_off() {
+        // Nothing configured: on.
+        assert!(starts_on(None, false));
+        // The operator's off mark keeps it off across a restart.
+        assert!(!starts_on(None, true));
+        // The environment variable outranks the mark, both ways.
+        assert!(starts_on(Some(true), true));
+        assert!(!starts_on(Some(false), false));
+    }
+
+    #[test]
+    fn the_off_choice_is_remembered_in_a_file_and_the_route_turns_a_question_away_while_off() {
         let dir =
             std::env::temp_dir().join(format!("sdroxide-aircraft-switch-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let file = dir.join(SWITCH_FILE);
-        let mut hub = AircraftHub::with(false, Counting(Arc::new(AtomicUsize::new(0))), 10);
+        let file = dir.join(OFF_FILE);
+        let mut hub = AircraftHub::with(true, Counting(Arc::new(AtomicUsize::new(0))), 10);
         hub.switch_file = Some(file.clone());
-        hub.set_enabled(true);
-        assert!(file.exists(), "on is written down");
         hub.set_enabled(false);
-        assert!(!file.exists(), "off is written down too");
+        assert!(file.exists(), "off is written down");
         assert_eq!(
             judge(hub.enabled(), false, false, "484006", &q(&[])),
             Verdict::Reject(Status::Disabled)
         );
+        hub.set_enabled(true);
+        assert!(!file.exists(), "on removes the mark: on is the default, nothing to remember");
+        assert!(matches!(
+            judge(hub.enabled(), false, false, "484006", &q(&[])),
+            Verdict::Run { .. }
+        ));
     }
 
     #[test]
-    fn only_a_plain_yes_switches_the_relay_on() {
+    fn the_environment_variable_holds_the_relay_on_or_off_and_blank_leaves_it_to_the_window() {
         for on in ["1", "true", "TRUE", "yes", " on "] {
-            assert!(enabled_by(Some(on)), "{on:?}");
+            assert_eq!(forced_by(Some(on)), Some(true), "{on:?}");
         }
-        for off in ["", "0", "false", "no", "off", "tru", "enabled", "2"] {
-            assert!(!enabled_by(Some(off)), "{off:?}");
+        // Anything else that is written is off: a typo must not open a way out.
+        for off in ["0", "false", "no", "off", "tru", "enabled", "2"] {
+            assert_eq!(forced_by(Some(off)), Some(false), "{off:?}");
         }
-        assert!(!enabled_by(None), "off by default");
+        for free in [None, Some(""), Some("  ")] {
+            assert_eq!(forced_by(free), None, "{free:?}");
+        }
     }
 
     #[test]

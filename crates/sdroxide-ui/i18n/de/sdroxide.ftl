@@ -6934,7 +6934,7 @@ aircraft-missing-adsb = noch nicht gehört — ADS-B überträgt es
 
 aircraft-missing-message = noch keine — VDL2 oder ACARS-Audio, sobald VDL2 das Flugzeug benannt hat
 
-aircraft-online-unavailable-disabled = online nicht verfügbar — die Station hat das Relay nicht eingeschaltet
+aircraft-online-unavailable-disabled = online nicht verfügbar — der Schalter Online ist aus
 
 aircraft-online-unavailable-no-station = online nicht verfügbar — keine Station zum Fragen; die Funkdaten sind alles, was es gibt
 
@@ -7083,14 +7083,6 @@ aircraft-copy-summary = Zusammenfassung kopieren
 aircraft-copy-summary-hover = Diese Karte als Text kopieren: was bekannt ist und woher jede Zeile stammt. Position und letzte Nachricht bleiben weg.
 
 aircraft-asking-station-dots = Station wird gefragt…
-
-aircraft-online-turn-on = Online-Abfrage einschalten
-
-aircraft-online-turn-on-hover = Fotos, Typ, Betreiber und Route stammen von adsbdb und Planespotters. Ihre Station fragt sie für Sie ab, und nur wenn dies eingeschaltet ist; sie merkt sich Ihre Wahl. Sonst verlässt nichts die Station.
-
-aircraft-online-turn-off = Online-Abfrage ausschalten
-
-aircraft-online-turn-off-hover = Die Station daran hindern, adsbdb und Planespotters abzufragen.
 
 aircraft-not-changed = Nicht geändert: { $why }.
 
@@ -8975,3 +8967,11 @@ tx-bands-listen = Hörmodus
 tx-bands-listen-hint = Zur Höransicht wechseln (ohne Sendebedienung), um jedes Band abzustimmen.
 
 tx-bands-ptt-off = Senden ist für dieses Band aus oder die Sendebänder sind noch nicht bestätigt (Einstellungen → Funkgerät → Sendebänder).
+
+aircraft-online-switch = Online
+
+aircraft-online-switch-on-hover = Online: Typ, Betreiber, Route und Foto stammen von adsbdb und Planespotters, von Ihrer Station für Sie abgefragt. Klicken zum Ausschalten; die Station merkt sich Ihre Wahl. Sonst verlässt nichts die Station.
+
+aircraft-online-switch-off-hover = Offline: nichts verlässt die Station. Klicken, um Typ, Betreiber, Route und Foto (adsbdb und Planespotters) einzuschalten.
+
+aircraft-switch-held = der Betreiber der Station legt es mit SDROXIDE_AIRCRAFT_ONLINE fest
