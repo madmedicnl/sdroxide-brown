@@ -8969,14 +8969,6 @@ tx-bands-notice-new = Transmit is off on every band. Choose the bands this radio
 
 tx-bands-notice-carried = Your transmit bands were carried over from the previous version. Transmit stays blocked until you check and confirm them once. Because of the risk to the radio, check every option carefully.
 
-tx-bands-refused = Transmit is off on { $band }: the dial went back to { $mhz } MHz. To use that band, switch it on in Settings → Radio, or go through listen mode.
-
-tx-bands-launch = Transmit is off on { $band }: starting in listen mode. Switch the band on in Settings → Radio to transmit there.
-
-tx-bands-listen = Listen mode
-
-tx-bands-listen-hint = Switch to the listening screen (no transmit controls) to tune to any band.
-
 tx-bands-ptt-off = Transmit is off for this band, or the transmit bands are not confirmed yet (Settings → Radio → Transmit bands).
 
 adsbmap-surface-asphalt = asphalt
@@ -9041,3 +9033,5 @@ schedule-col-target = Target
 schedule-col-site = Site
 
 schedule-col-local = Local
+
+tx-bands-off = Transmit is off on { $band }: this band is not allowed in your settings, so your transmitter is not compatible for transmitting on this band. (Shown at most { $max } times per session.)

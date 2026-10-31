@@ -8958,14 +8958,6 @@ tx-bands-notice-new = Senden ist auf allen Bändern aus. Wählen Sie die Bänder
 
 tx-bands-notice-carried = Ihre Sendebänder stammen aus der vorherigen Version. Senden bleibt gesperrt, bis Sie sie einmal geprüft und bestätigt haben. Wegen der Gefahr für das Funkgerät prüfen Sie jede Option sorgfältig.
 
-tx-bands-refused = Senden ist auf { $band } aus: Die Frequenz ging zurück auf { $mhz } MHz. Um dieses Band zu nutzen, schalten Sie es unter Einstellungen → Funkgerät ein oder gehen Sie über den Hörmodus.
-
-tx-bands-launch = Senden ist auf { $band } aus: Start im Hörmodus. Schalten Sie das Band unter Einstellungen → Funkgerät ein, um dort zu senden.
-
-tx-bands-listen = Hörmodus
-
-tx-bands-listen-hint = Zur Höransicht wechseln (ohne Sendebedienung), um jedes Band abzustimmen.
-
 tx-bands-ptt-off = Senden ist für dieses Band aus oder die Sendebänder sind noch nicht bestätigt (Einstellungen → Funkgerät → Sendebänder).
 
 adsbmap-surface-asphalt = Asphalt
@@ -9030,3 +9022,5 @@ schedule-col-target = Zielgebiet
 schedule-col-site = Standort
 
 schedule-col-local = Ort
+
+tx-bands-off = Senden ist auf { $band } aus: Dieses Band ist in Ihren Einstellungen nicht erlaubt, daher ist Ihr Sender auf diesem Band nicht sendefähig. (Höchstens { $max }-mal pro Sitzung angezeigt.)

@@ -8968,14 +8968,6 @@ tx-bands-notice-new = Zenden staat op alle banden uit. Kies de banden waarop dez
 
 tx-bands-notice-carried = Uw zendbanden zijn overgenomen uit de vorige versie. Zenden blijft geblokkeerd tot u ze één keer hebt gecontroleerd en bevestigd. Vanwege het risico voor de radio: controleer elke optie zorgvuldig.
 
-tx-bands-refused = Zenden staat uit op { $band }: de afstemming ging terug naar { $mhz } MHz. Om die band te gebruiken, schakel hem in onder Instellingen → Radio of ga via de luistermodus.
-
-tx-bands-launch = Zenden staat uit op { $band }: start in luistermodus. Schakel de band in onder Instellingen → Radio om er te zenden.
-
-tx-bands-listen = Luistermodus
-
-tx-bands-listen-hint = Naar het luisterscherm (zonder zendbediening) om op elke band af te stemmen.
-
 tx-bands-ptt-off = Zenden staat uit voor deze band, of de zendbanden zijn nog niet bevestigd (Instellingen → Radio → Zendbanden).
 
 adsbmap-surface-asphalt = asfalt
@@ -9040,3 +9032,5 @@ schedule-col-target = Doelgebied
 schedule-col-site = Locatie
 
 schedule-col-local = Lokaal
+
+tx-bands-off = Zenden staat uit op { $band }: deze band is in uw instellingen niet toegestaan, dus uw zender is niet geschikt om op deze band te zenden. (Maximaal { $max } keer per sessie getoond.)
