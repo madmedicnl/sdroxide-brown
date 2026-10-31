@@ -9035,3 +9035,5 @@ schedule-col-site = Site
 schedule-col-local = Local
 
 tx-bands-off = Transmit is off on { $band }: this band is not allowed in your settings, so your transmitter is not compatible for transmitting on this band. (Shown at most { $max } times per session.)
+
+frame-band-tx = BAND TX

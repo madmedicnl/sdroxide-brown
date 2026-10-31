@@ -7372,4 +7372,46 @@ mod tests {
         tune(&mut fresh, 14_080_000.0);
         assert_eq!(fresh.tx_band_shown, 1);
     }
+
+    /// BAND TX pill: green on an allowed band, red on a refused one, blinking
+    /// red while transmitting; hidden with no confirmed band or on a listen screen.
+    #[test]
+    fn the_band_tx_pill_has_three_states_and_hides_when_it_should() {
+        use super::tx_bands::BandTxPill;
+        use crate::multi::frame_test_lock;
+        use sdroxide_types::{Band, RadioConfig};
+        let _guard = frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-txpill-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+        let ctx = egui::Context::default();
+        crate::layout::set_tier(&ctx, crate::layout::Tier::Desktop);
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
+        app.ui_settings.listen_tab_hides_tx = false;
+        app.swl_start = false;
+        app.state.rx[0].mode = sdroxide_types::Mode::Usb;
+        app.caps = Some(sdroxide_types::DeviceCaps { tx_channels: 1, ..Default::default() });
+        let cfg = RadioConfig {
+            tx_band_enable: Some(vec![Band::M80]),
+            tx_bands_confirmed: true,
+            ..RadioConfig::default()
+        };
+        app.radio_cfg = Some(cfg.clone());
+        app.state.vfo_a_hz = 3_643_000.0;
+        assert_eq!(app.band_tx_pill(), Some(BandTxPill::Allowed));
+        app.state.tx.ptt = true;
+        assert_eq!(app.band_tx_pill(), Some(BandTxPill::Transmitting));
+        app.state.tx.ptt = false;
+        app.state.vfo_a_hz = 14_074_000.0;
+        assert_eq!(app.band_tx_pill(), Some(BandTxPill::Refused));
+        app.state.vfo_a_hz = 3_643_000.0;
+        app.radio_cfg = Some(RadioConfig { tx_bands_confirmed: false, ..cfg.clone() });
+        assert_eq!(app.band_tx_pill(), None, "list not confirmed");
+        app.radio_cfg = Some(RadioConfig { tx_band_enable: Some(vec![]), ..cfg.clone() });
+        assert_eq!(app.band_tx_pill(), None, "no band ticked");
+        app.radio_cfg = Some(RadioConfig { hide_tx: true, ..cfg });
+        assert_eq!(app.band_tx_pill(), None, "SWL");
+    }
 }

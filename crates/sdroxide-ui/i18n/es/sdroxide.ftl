@@ -9025,3 +9025,5 @@ schedule-col-site = Lugar
 schedule-col-local = Local
 
 tx-bands-off = La transmisión está desactivada en { $band }: esta banda no está permitida en sus ajustes, por lo que su transmisor no es compatible para transmitir en ella. (Se muestra como máximo { $max } veces por sesión.)
+
+frame-band-tx = BAND TX
