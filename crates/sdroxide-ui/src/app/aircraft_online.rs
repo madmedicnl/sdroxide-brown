@@ -235,6 +235,264 @@ pub(in crate::app) fn thumb_unwanted(last_wanted: Option<u64>, frame: u64) -> bo
     last_wanted.is_none_or(|w| frame > w + 1)
 }
 
+/// Where the station hands over the local time's offset and the temperature at
+/// the airport whose box is open: `GET {station}/airport-weather?lat=52.31&lon=4.76`.
+/// The airport's place and nothing else: the station builds the address.
+pub(in crate::app) fn airport_weather_url(peer_url: &str, lat: f64, lon: f64) -> Option<String> {
+    let base = crate::login::http_base(&crate::login::station_key(peer_url))?;
+    // The same rounding the station applies, so that what is asked is what is kept.
+    let key = sdroxide_aircraft_online::Spot::new(lat, lon)?.key();
+    let (lat, lon) = key.split_once(',')?;
+    Some(format!("{base}/airport-weather?lat={lat}&lon={lon}"))
+}
+
+/// What the station's answer to a weather question means.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::app) enum Reading {
+    Got(sdroxide_aircraft_online::Weather),
+    /// Busy, down or out of reach: worth asking again in a moment.
+    Retry,
+    /// Turned away (relay off, sign-in refused, a place it will not look up) or
+    /// an answer that is not one: asking again would only repeat it.
+    Gone,
+}
+
+pub(in crate::app) fn classify_weather(status: Option<u16>, body: &str) -> Reading {
+    match status {
+        Some(200) => serde_json::from_str::<sdroxide_aircraft_online::Weather>(body)
+            .ok()
+            .filter(|w| w.v == sdroxide_aircraft_online::WEATHER_VERSION)
+            .map_or(Reading::Gone, Reading::Got),
+        Some(429 | 502 | 504) | None => Reading::Retry,
+        Some(_) => Reading::Gone,
+    }
+}
+
+/// How long the weather of an open box is trusted before it is asked again. The
+/// station keeps an answer half a minute; the temperature moves slowly and the
+/// zone's offset changes twice a year.
+pub(in crate::app) const WEATHER_REFRESH_S: f64 = 600.0;
+
+/// The weather of the one airport whose box is open, in memory, for as long as
+/// the box stays open. Nothing is written anywhere.
+#[derive(Default)]
+pub(in crate::app) struct WeatherStore {
+    entry: Option<WeatherEntry>,
+}
+
+struct WeatherEntry {
+    airport: usize,
+    /// The pass in which the box last asked, as for the thumbnails.
+    wanted: u64,
+    weather: Option<sdroxide_aircraft_online::Weather>,
+    asking: bool,
+    /// Questions sent since the last answer that came.
+    tries: u8,
+    /// When the last question was sent or answered (egui seconds).
+    at: f64,
+    gone: bool,
+}
+
+/// What an open box knows about its airport's clock and air.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::app) enum Clock {
+    /// Not asked, not asked any more, or never answered: UTC only.
+    Offline,
+    /// On its way.
+    Asking,
+    Known(sdroxide_aircraft_online::Weather),
+}
+
+impl WeatherStore {
+    /// Called every frame the box is drawn. True when a question is due: the
+    /// first one for this airport, a repeat after a failure (a few times, a few
+    /// seconds apart) or a refresh once the answer is old.
+    pub(in crate::app) fn step(&mut self, airport: usize, pass: u64, now: f64) -> bool {
+        let Some(e) = self.entry.as_mut().filter(|e| e.airport == airport) else {
+            self.entry = Some(WeatherEntry {
+                airport,
+                wanted: pass,
+                weather: None,
+                asking: true,
+                tries: 1,
+                at: now,
+                gone: false,
+            });
+            return true;
+        };
+        e.wanted = pass;
+        if e.asking || e.gone {
+            return false;
+        }
+        let due = match e.weather {
+            Some(_) => now - e.at >= WEATHER_REFRESH_S,
+            None => e.tries < THUMB_TRIES && now - e.at >= THUMB_RETRY_S,
+        };
+        if due {
+            e.asking = true;
+            e.tries += 1;
+            e.at = now;
+        }
+        due
+    }
+
+    /// Take the station's answer for `airport`; one for another airport (the box
+    /// moved on while it was on its way) is dropped.
+    pub(in crate::app) fn deliver(&mut self, airport: usize, reading: Reading, now: f64) {
+        let Some(e) = self.entry.as_mut().filter(|e| e.airport == airport) else { return };
+        e.asking = false;
+        e.at = now;
+        match reading {
+            Reading::Got(w) => {
+                e.weather = Some(w);
+                e.tries = 0;
+            }
+            Reading::Retry => {}
+            Reading::Gone => e.gone = true,
+        }
+    }
+
+    pub(in crate::app) fn clock(&self, airport: usize) -> Clock {
+        let Some(e) = self.entry.as_ref().filter(|e| e.airport == airport) else {
+            return Clock::Offline;
+        };
+        match e.weather {
+            Some(w) => Clock::Known(w),
+            None if e.asking || (!e.gone && e.tries < THUMB_TRIES) => Clock::Asking,
+            None => Clock::Offline,
+        }
+    }
+
+    /// Whether something must look again soon: a repeat is waiting on its pause,
+    /// or a good answer is waiting to be refreshed.
+    pub(in crate::app) fn needs_a_later_look(&self) -> bool {
+        self.entry.as_ref().is_some_and(|e| !e.gone && !e.asking)
+    }
+
+    /// Once a frame: a box nothing has asked for in the pass before this one or
+    /// the one before that is closed, and what it held goes with it.
+    pub(in crate::app) fn release(&mut self, pass: u64) {
+        if self.entry.as_ref().is_some_and(|e| thumb_unwanted(Some(e.wanted), pass)) {
+            self.entry = None;
+        }
+    }
+
+    /// Forget everything: the relay was switched off or there is no station.
+    pub(in crate::app) fn clear(&mut self) {
+        self.entry = None;
+    }
+}
+
+#[cfg(test)]
+mod weather_tests {
+    use sdroxide_aircraft_online::{WEATHER_VERSION, Weather};
+
+    use super::*;
+
+    fn w() -> Weather {
+        Weather { v: WEATHER_VERSION, utc_offset_s: 3600, temp_c: Some(11.6) }
+    }
+
+    #[test]
+    fn the_station_is_asked_for_the_airports_place_and_only_that() {
+        assert_eq!(
+            airport_weather_url("ws://10.0.0.2:8080/ws", 52.308_613, 4.763_889).as_deref(),
+            Some("http://10.0.0.2:8080/airport-weather?lat=52.31&lon=4.76")
+        );
+        assert_eq!(
+            airport_weather_url("ws://10.0.0.2:8080/ws", -33.9461, -118.408).as_deref(),
+            Some("http://10.0.0.2:8080/airport-weather?lat=-33.95&lon=-118.41")
+        );
+        assert_eq!(airport_weather_url("ws://10.0.0.2:8080/ws", 91.0, 0.0), None);
+        assert_eq!(airport_weather_url("ws://10.0.0.2:8080/ws", f64::NAN, 0.0), None);
+    }
+
+    #[test]
+    fn an_answer_is_read_by_its_status_and_its_shape() {
+        let body = serde_json::to_string(&w()).unwrap();
+        assert_eq!(classify_weather(Some(200), &body), Reading::Got(w()));
+        for status in [Some(429), Some(502), None] {
+            assert_eq!(classify_weather(status, ""), Reading::Retry, "{status:?}");
+        }
+        for status in [Some(401), Some(503), Some(400), Some(404)] {
+            assert_eq!(classify_weather(status, ""), Reading::Gone, "{status:?}");
+        }
+        assert_eq!(classify_weather(Some(200), "<html>"), Reading::Gone);
+        let future = body.replace(&format!("\"v\":{WEATHER_VERSION}"), "\"v\":99");
+        assert_eq!(classify_weather(Some(200), &future), Reading::Gone, "a shape it does not know");
+    }
+
+    #[test]
+    fn an_open_box_asks_once_and_shows_waiting_then_the_answer() {
+        let mut s = WeatherStore::default();
+        assert_eq!(s.clock(7), Clock::Offline, "nothing asked yet");
+        assert!(s.step(7, 10, 0.0), "the first frame asks");
+        assert!(!s.step(7, 11, 0.1), "the next frames wait for the answer");
+        assert_eq!(s.clock(7), Clock::Asking);
+        s.deliver(7, Reading::Got(w()), 0.5);
+        assert_eq!(s.clock(7), Clock::Known(w()));
+        assert!(!s.step(7, 12, 1.0), "a good answer is not asked for again at once");
+    }
+
+    #[test]
+    fn a_failed_question_is_repeated_a_few_times_then_the_box_says_offline() {
+        let mut s = WeatherStore::default();
+        assert!(s.step(1, 1, 0.0));
+        s.deliver(1, Reading::Retry, 0.2);
+        assert_eq!(s.clock(1), Clock::Asking, "tries remain: the room is kept");
+        assert!(!s.step(1, 2, 1.0), "not before the pause");
+        assert!(s.step(1, 3, THUMB_RETRY_S + 1.0));
+        s.deliver(1, Reading::Retry, 5.5);
+        assert!(s.step(1, 4, 12.0));
+        s.deliver(1, Reading::Retry, 12.1);
+        assert_eq!(s.clock(1), Clock::Offline, "three tries spent");
+        assert!(!s.step(1, 5, 100.0), "and no more");
+    }
+
+    #[test]
+    fn a_refusal_is_not_asked_again() {
+        let mut s = WeatherStore::default();
+        assert!(s.step(1, 1, 0.0));
+        s.deliver(1, Reading::Gone, 0.1);
+        assert_eq!(s.clock(1), Clock::Offline);
+        assert!(!s.step(1, 2, 60.0));
+        assert!(!s.needs_a_later_look());
+    }
+
+    #[test]
+    fn a_good_answer_is_refreshed_after_ten_minutes_and_kept_if_the_refresh_fails() {
+        let mut s = WeatherStore::default();
+        s.step(1, 1, 0.0);
+        s.deliver(1, Reading::Got(w()), 0.5);
+        assert!(!s.step(1, 2, WEATHER_REFRESH_S - 1.0));
+        assert!(s.step(1, 3, WEATHER_REFRESH_S + 1.0));
+        assert_eq!(s.clock(1), Clock::Known(w()), "the old one shows meanwhile");
+        s.deliver(1, Reading::Retry, WEATHER_REFRESH_S + 2.0);
+        assert_eq!(s.clock(1), Clock::Known(w()), "and after a failure too");
+    }
+
+    #[test]
+    fn another_airport_replaces_the_first_and_a_late_answer_for_the_first_is_dropped() {
+        let mut s = WeatherStore::default();
+        s.step(1, 1, 0.0);
+        assert!(s.step(2, 2, 1.0), "the box moved to another airport");
+        s.deliver(1, Reading::Got(w()), 2.0);
+        assert_eq!(s.clock(1), Clock::Offline);
+        assert_eq!(s.clock(2), Clock::Asking, "the late answer did not become B's");
+    }
+
+    #[test]
+    fn closing_the_box_lets_the_weather_go() {
+        let mut s = WeatherStore::default();
+        s.step(1, 5, 0.0);
+        s.deliver(1, Reading::Got(w()), 0.5);
+        s.release(6);
+        assert_eq!(s.clock(1), Clock::Known(w()), "still asked for in the pass before");
+        s.release(7);
+        assert_eq!(s.clock(1), Clock::Offline, "two passes without a question: gone");
+    }
+}
+
 /// What the station answered to a request to switch the relay.
 #[derive(Debug, Clone, PartialEq)]
 pub(in crate::app) enum SwitchAnswer {

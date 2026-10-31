@@ -9000,10 +9000,20 @@ adsbmap-airport-freq-head = Frequencies, MHz
 adsbmap-airport-data-date = runway and frequency data of { $date }
 aircraft-online-switch = Online
 
-aircraft-online-switch-on-hover = Online: type, operator, route and photo come from adsbdb and Planespotters, and airport pictures from Wikipedia, asked by your station for you. Click to turn off; the station keeps your choice. Nothing else leaves the station.
+aircraft-online-switch-on-hover = Online: type, operator, route and photo come from adsbdb and Planespotters, airport pictures from Wikipedia, and an airport's local time and temperature from Open-Meteo (only the airport's position is sent), asked by your station for you. Click to turn off; the station keeps your choice. Nothing else leaves the station.
 
-aircraft-online-switch-off-hover = Offline: nothing leaves the station. Click to turn on type, operator, route and photo (adsbdb and Planespotters) and airport pictures (Wikipedia).
+aircraft-online-switch-off-hover = Offline: nothing leaves the station. Click to turn on type, operator, route and photo (adsbdb and Planespotters), airport pictures (Wikipedia) and airport weather (Open-Meteo).
 
 aircraft-switch-held = the station's operator holds it with SDROXIDE_AIRCRAFT_ONLINE
 
 adsbmap-airport-photo-credit = Photo: Wikipedia
+
+adsbmap-airport-local-time = Local time { $time } ({ $zone })
+
+adsbmap-airport-temperature = Temperature { $temp }
+
+adsbmap-airport-weather-credit = Weather: Open-Meteo.com
+
+adsbmap-airport-utc-wait = UTC { $time } (local time: loading…)
+
+adsbmap-airport-utc-offline = UTC { $time } (local time: offline)

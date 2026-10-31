@@ -6170,6 +6170,19 @@ close the card (it never touches a disk). Click **Photo: Wikipedia** under it to
 open the article, where the picture's author and licence are. Without a station,
 with the switch off, or for an airport without an article, the card is text alone.
 
+**The pinned airport card also gives the airport's local time and temperature**,
+when your station can reach the internet and the **Online** switch is on. They
+come from Open-Meteo (free, no key; the card says so), asked by your station:
+the only thing sent is the airport's position, rounded to about a kilometre —
+never yours. The time is your clock moved by the airport's zone, summer time
+included, so it stays right as the minutes pass; the card asks again after ten
+minutes while it stays open and forgets everything when you close it (nothing is
+written to a disk). Time and temperature follow the units chip: **Aviation** and
+**Metric** show 24 h and °C, **Imperial** shows 12 h (AM/PM) and °F. Without a
+station, with the switch off or if the service does not answer, the card shows
+**UTC hh:mm (local time: offline)** — never a local time it could not know — and
+no temperature line.
+
 **A target with a stale position is not drawn at all.** Past the timeout it
 comes off the map — square, dots and block together — while staying on the list,
 greyed. It is deliberately not faded instead: a dim square at a half-minute-old

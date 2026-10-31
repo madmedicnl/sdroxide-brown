@@ -570,6 +570,35 @@ impl AirUnits {
         }
     }
 
+    /// A time of day, from the seconds since local midnight: `14:05` in the
+    /// aviation and metric sets, `2:05 PM` in the imperial one.
+    pub fn clock(self, secs_of_day: u32) -> String {
+        let (h, m) = ((secs_of_day / 3600) % 24, (secs_of_day / 60) % 60);
+        match self {
+            AirUnits::Imperial => {
+                let (h12, half) = match h {
+                    0 => (12, "AM"),
+                    1..=11 => (h, "AM"),
+                    12 => (12, "PM"),
+                    _ => (h - 12, "PM"),
+                };
+                format!("{h12}:{m:02} {half}")
+            }
+            _ => format!("{h:02}:{m:02}"),
+        }
+    }
+
+    /// An air temperature given in °C: `12 °C` in the aviation and metric sets
+    /// (the weather codes an airport publishes are in Celsius), `54 °F` in the
+    /// imperial one.
+    pub fn temperature(self, celsius: f32) -> String {
+        let c = f64::from(celsius);
+        match self {
+            AirUnits::Imperial => format!("{} °F", (c * 9.0 / 5.0 + 32.0).round() as i32),
+            _ => format!("{} °C", c.round() as i32),
+        }
+    }
+
     pub fn altitude_head(self) -> &'static str {
         match self {
             AirUnits::Metric => "ALT m",
@@ -585,9 +614,74 @@ impl AirUnits {
     }
 }
 
+/// The seconds since local midnight of the zone `utc_offset_s` east of UTC, at
+/// the unix time `now`.
+pub fn local_secs_of_day(now: i64, utc_offset_s: i32) -> u32 {
+    (now + i64::from(utc_offset_s)).rem_euclid(86_400) as u32
+}
+
+/// A zone's name as an offset from UTC: `UTC`, `UTC+1`, `UTC+5:30`, `UTC-3:30`.
+pub fn utc_label(utc_offset_s: i32) -> String {
+    let sign = if utc_offset_s < 0 { '-' } else { '+' };
+    let mins = utc_offset_s.unsigned_abs() / 60;
+    match (mins / 60, mins % 60) {
+        (0, 0) => "UTC".to_string(),
+        (h, 0) => format!("UTC{sign}{h}"),
+        (h, m) => format!("UTC{sign}{h}:{m:02}"),
+    }
+}
+
 #[cfg(test)]
 mod air_units_tests {
     use super::*;
+
+    #[test]
+    fn a_time_of_day_is_24_hours_except_in_the_imperial_set_which_is_12() {
+        for (secs, h24, h12) in [
+            (0, "00:00", "12:00 AM"),
+            (5 * 3600 + 7 * 60, "05:07", "5:07 AM"),
+            (12 * 3600, "12:00", "12:00 PM"),
+            (14 * 3600 + 5 * 60 + 59, "14:05", "2:05 PM"),
+            (23 * 3600 + 59 * 60, "23:59", "11:59 PM"),
+        ] {
+            assert_eq!(AirUnits::Aviation.clock(secs), h24);
+            assert_eq!(AirUnits::Metric.clock(secs), h24);
+            assert_eq!(AirUnits::Imperial.clock(secs), h12);
+        }
+    }
+
+    #[test]
+    fn a_temperature_is_celsius_except_in_the_imperial_set_which_is_fahrenheit() {
+        assert_eq!(AirUnits::Aviation.temperature(11.6), "12 °C");
+        assert_eq!(AirUnits::Metric.temperature(11.6), "12 °C");
+        assert_eq!(AirUnits::Imperial.temperature(11.6), "53 °F");
+        assert_eq!(AirUnits::Imperial.temperature(0.0), "32 °F");
+        assert_eq!(AirUnits::Imperial.temperature(-40.0), "-40 °F");
+        assert_eq!(AirUnits::Metric.temperature(-0.3), "0 °C", "never a negative zero");
+        assert_eq!(AirUnits::Metric.temperature(-17.5), "-18 °C");
+    }
+
+    #[test]
+    fn local_time_is_the_clock_in_utc_moved_by_the_zones_offset() {
+        // 2026-10-31 13:05:00 UTC.
+        let now = 1_793_451_900;
+        assert_eq!(local_secs_of_day(now, 0), 13 * 3600 + 5 * 60);
+        assert_eq!(local_secs_of_day(now, 3600), 14 * 3600 + 5 * 60);
+        assert_eq!(local_secs_of_day(now, -5 * 3600), 8 * 3600 + 5 * 60);
+        assert_eq!(local_secs_of_day(now, 19_800), 18 * 3600 + 35 * 60, "India, half an hour");
+        assert_eq!(local_secs_of_day(now, 11 * 3600), 5 * 60, "past midnight");
+        assert_eq!(local_secs_of_day(60, -3600), 23 * 3600 + 60, "before the epoch's midnight");
+    }
+
+    #[test]
+    fn a_zone_is_named_by_its_offset() {
+        assert_eq!(utc_label(0), "UTC");
+        assert_eq!(utc_label(3600), "UTC+1");
+        assert_eq!(utc_label(-5 * 3600), "UTC-5");
+        assert_eq!(utc_label(19_800), "UTC+5:30");
+        assert_eq!(utc_label(-12_600), "UTC-3:30");
+        assert_eq!(utc_label(14 * 3600), "UTC+14");
+    }
 
     #[test]
     fn each_set_writes_the_same_flight_in_its_own_units() {

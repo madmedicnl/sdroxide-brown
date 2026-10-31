@@ -46,6 +46,8 @@ const MAX_WATCH_BYTES: u64 = 16 * 1024;
 const MAX_STATS_BYTES: u64 = 4 * 1024 * 1024;
 /// The most bytes read of the answer to the relay switch: two booleans.
 const MAX_SWITCH_BYTES: u64 = 1024;
+/// The station's weather answer is a few dozen bytes.
+const MAX_WEATHER_BYTES: u64 = 1024;
 /// The most bytes read of a thumbnail. They are a few tens of kilobytes.
 const MAX_THUMB_BYTES: u64 = 2 * 1024 * 1024;
 /// Widest or tallest a thumbnail may decode to.
@@ -66,6 +68,7 @@ enum Msg {
     Watch { status: Option<u16>, body: String },
     Stats { status: Option<u16>, body: String },
     Switch { status: Option<u16>, body: String },
+    Weather { airport: usize, status: Option<u16>, body: String },
     Thumb { url: String, bytes: Option<Vec<u8>> },
 }
 
@@ -138,6 +141,8 @@ pub(in crate::app) struct OnlineClient {
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
     thumbs: Vec<Thumb>,
+    /// The local time and temperature of the airport whose box is open.
+    weather: aircraft_online::WeatherStore,
 }
 
 impl Default for OnlineClient {
@@ -157,6 +162,7 @@ impl Default for OnlineClient {
             tx,
             rx,
             thumbs: Vec::new(),
+            weather: aircraft_online::WeatherStore::default(),
         }
     }
 }
@@ -220,6 +226,14 @@ impl OnlineClient {
                 }
                 Msg::Stats { status, body } => {
                     self.stats.deliver(aircraft_stats::classify(status, &body), now);
+                }
+                Msg::Weather { airport, status, body } => {
+                    let at = ctx.input(|i| i.time);
+                    self.weather.deliver(
+                        airport,
+                        aircraft_online::classify_weather(status, &body),
+                        at,
+                    );
                 }
                 Msg::Thumb { url, bytes } => {
                     let image = bytes.as_deref().and_then(decode_thumb);
@@ -395,6 +409,47 @@ impl OnlineClient {
         Some((photo, aircraft_online::airport_page_url(lang, title)))
     }
 
+    /// What the open airport box says about its airport's clock and air this
+    /// frame. Asking here, every frame the box is drawn, is what keeps the
+    /// answer; with no station, or the relay off, nothing is asked and the box
+    /// shows UTC alone, never an invented local time.
+    pub(in crate::app) fn airport_clock(
+        &mut self,
+        ctx: &egui::Context,
+        peer: Option<&str>,
+        airport: usize,
+        place: (f64, f64),
+    ) -> aircraft_online::Clock {
+        let Some(peer) = peer.filter(|_| self.relay_on()) else {
+            self.weather.clear();
+            return aircraft_online::Clock::Offline;
+        };
+        let pass = ctx.cumulative_pass_nr();
+        let now = ctx.input(|i| i.time);
+        if self.weather.step(airport, pass, now) {
+            match aircraft_online::airport_weather_url(peer, place.0, place.1) {
+                Some(url) => {
+                    let station = crate::login::station_key(peer);
+                    send_info(
+                        url,
+                        station,
+                        Kind::Weather(airport),
+                        None,
+                        self.tx.clone(),
+                        ctx.clone(),
+                    );
+                }
+                None => self.weather.deliver(airport, aircraft_online::Reading::Gone, now),
+            }
+        }
+        let clock = self.weather.clock(airport);
+        if self.weather.needs_a_later_look() || matches!(clock, aircraft_online::Clock::Known(_)) {
+            // The pause before a repeat, the refresh, and the minute hand.
+            ctx.request_repaint_after(std::time::Duration::from_secs(5));
+        }
+        clock
+    }
+
     /// Whether a thumbnail is on its way or will be asked again: its card keeps
     /// the room for it. False once it has come, or has failed for good.
     pub(in crate::app) fn thumb_pending(&self, url: &str) -> bool {
@@ -484,6 +539,7 @@ impl OnlineClient {
     /// picture here and tell the station to drop its own. A station that never
     /// hears (tab closed, line cut) drops it itself after half a minute.
     pub(in crate::app) fn release_thumbs(&mut self, ctx: &egui::Context, peer: Option<&str>) {
+        self.weather.release(ctx.cumulative_pass_nr());
         if self.thumbs.is_empty() {
             return;
         }
@@ -530,6 +586,7 @@ enum Kind {
     Watch,
     Stats,
     Switch,
+    Weather(usize),
 }
 
 impl Kind {
@@ -541,6 +598,7 @@ impl Kind {
             Kind::Watch => MAX_WATCH_BYTES,
             Kind::Stats => MAX_STATS_BYTES,
             Kind::Switch => MAX_SWITCH_BYTES,
+            Kind::Weather(_) => MAX_WEATHER_BYTES,
         }
     }
 
@@ -552,6 +610,7 @@ impl Kind {
             Kind::Watch => Msg::Watch { status, body },
             Kind::Stats => Msg::Stats { status, body },
             Kind::Switch => Msg::Switch { status, body },
+            Kind::Weather(airport) => Msg::Weather { airport, status, body },
         }
     }
 }
@@ -1009,6 +1068,89 @@ mod tests {
             c.want_airport_thumb(&ctx, Some(NO_STATION), "en", "Amsterdam_Airport_Schiphol");
         }
         assert!(!c.thumb_pending(&key));
+    }
+
+    const BOX: usize = 3;
+    const PLACE: (f64, f64) = (52.31, 4.76);
+
+    fn clock(
+        c: &mut OnlineClient,
+        ctx: &egui::Context,
+        peer: Option<&str>,
+    ) -> aircraft_online::Clock {
+        frame(ctx);
+        c.airport_clock(ctx, peer, BOX, PLACE)
+    }
+
+    /// Wait for the question that went out to nobody to come back as a failure.
+    fn weather_settled(c: &mut OnlineClient, ctx: &egui::Context) {
+        let t = std::time::Instant::now();
+        while !c.weather.needs_a_later_look() && t.elapsed().as_secs() < 5 {
+            c.poll(ctx, 0);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    fn answer(c: &mut OnlineClient, ctx: &egui::Context, body: &str) {
+        let status = Some(200);
+        c.tx.send(Msg::Weather { airport: BOX, status, body: body.into() }).unwrap();
+        c.poll(ctx, 0);
+    }
+
+    const SUNNY: &str = r#"{"v":1,"utc_offset_s":3600,"temp_c":11.6}"#;
+
+    #[test]
+    fn an_airport_clock_is_not_asked_without_a_station_or_with_the_relay_off() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        assert_eq!(clock(&mut c, &ctx, None), aircraft_online::Clock::Offline);
+        assert!(!c.weather.needs_a_later_look(), "nothing was asked");
+        c.switch_state = Some(false);
+        assert_eq!(clock(&mut c, &ctx, Some(NO_STATION)), aircraft_online::Clock::Offline);
+        assert!(!c.weather.needs_a_later_look(), "the relay is off: nothing was asked");
+    }
+
+    #[test]
+    fn an_open_box_asks_the_station_for_its_airports_place_and_reads_the_answer() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        assert_eq!(clock(&mut c, &ctx, Some(NO_STATION)), aircraft_online::Clock::Asking);
+        weather_settled(&mut c, &ctx); // nobody answers at that address: a failure, and a repeat is due
+        assert_eq!(clock(&mut c, &ctx, Some(NO_STATION)), aircraft_online::Clock::Asking);
+        answer(&mut c, &ctx, SUNNY);
+        match clock(&mut c, &ctx, Some(NO_STATION)) {
+            aircraft_online::Clock::Known(w) => {
+                assert_eq!(w.utc_offset_s, 3600);
+                assert!((w.temp_c.unwrap() - 11.6).abs() < 0.01);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_answer_that_is_not_a_forecast_leaves_the_box_on_utc() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        clock(&mut c, &ctx, Some(NO_STATION));
+        weather_settled(&mut c, &ctx);
+        answer(&mut c, &ctx, "<html>");
+        assert_eq!(clock(&mut c, &ctx, Some(NO_STATION)), aircraft_online::Clock::Offline);
+    }
+
+    #[test]
+    fn closing_the_box_lets_the_clock_go_and_the_next_box_starts_clean() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        clock(&mut c, &ctx, Some(NO_STATION));
+        weather_settled(&mut c, &ctx);
+        answer(&mut c, &ctx, SUNNY);
+        assert!(matches!(c.weather.clock(BOX), aircraft_online::Clock::Known(_)));
+        // Two frames in which no box asks.
+        for _ in 0..3 {
+            frame(&ctx);
+            c.release_thumbs(&ctx, Some(NO_STATION));
+        }
+        assert_eq!(c.weather.clock(BOX), aircraft_online::Clock::Offline, "nothing kept");
     }
 
     #[test]

@@ -8999,10 +8999,20 @@ adsbmap-airport-freq-head = Frequenties, MHz
 adsbmap-airport-data-date = baan- en frequentiegegevens van { $date }
 aircraft-online-switch = Online
 
-aircraft-online-switch-on-hover = Online: type, exploitant, route en foto komen van adsbdb en Planespotters, luchthavenbeelden van Wikipedia, door uw station voor u opgevraagd. Klik om uit te zetten; het station onthoudt uw keuze. Er verlaat verder niets het station.
+aircraft-online-switch-on-hover = Online: type, exploitant, route en foto komen van adsbdb en Planespotters, luchthavenbeelden van Wikipedia en de lokale tijd en temperatuur van een luchthaven van Open-Meteo (alleen de positie van de luchthaven wordt verzonden), door uw station voor u opgevraagd. Klik om uit te zetten; het station onthoudt uw keuze. Er verlaat verder niets het station.
 
-aircraft-online-switch-off-hover = Offline: er verlaat niets het station. Klik om type, exploitant, route en foto (adsbdb en Planespotters) en luchthavenbeelden (Wikipedia) aan te zetten.
+aircraft-online-switch-off-hover = Offline: er verlaat niets het station. Klik om type, exploitant, route en foto (adsbdb en Planespotters), luchthavenbeelden (Wikipedia) en het luchthavenweer (Open-Meteo) aan te zetten.
 
 aircraft-switch-held = de beheerder van het station legt het vast met SDROXIDE_AIRCRAFT_ONLINE
 
 adsbmap-airport-photo-credit = Foto: Wikipedia
+
+adsbmap-airport-local-time = Lokale tijd { $time } ({ $zone })
+
+adsbmap-airport-temperature = Temperatuur { $temp }
+
+adsbmap-airport-weather-credit = Weer: Open-Meteo.com
+
+adsbmap-airport-utc-wait = UTC { $time } (lokale tijd: laden…)
+
+adsbmap-airport-utc-offline = UTC { $time } (lokale tijd: offline)

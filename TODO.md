@@ -102,6 +102,7 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 - 2026-10-29 — STANAG 4285 finished (coded payload not implemented — legal)
 - 2026-10-29 — Olivia proven (RX+TX)
 - 2026-10-29 — S-meter still an issue
+- 2026-10-31 — Airport card (PR 4 of 4): the pinned card shows the airport's local time and temperature, online only — the station asks Open-Meteo (`/airport-weather?lat=&lon=`, only the airport's position rounded to ~1 km, kept 30 s in memory, same sign-in/switch/ceiling as the other online routes, credit shown); local time is the client's UTC clock moved by the zone's offset (summer time included), 12 h/°F in Imperial and 24 h/°C otherwise; offline it reads "UTC hh:mm (local time: offline)", never an invented local time (added by madmedicnl, owned by Roy)
 - 2026-10-28 — NAVTEX false-sync fix
 - 2026-10-28 — WEFAX negative auto-correct
 - 2026-10-28 — #265 "outside receive range" notice fixed (logged, not shown)
