@@ -2980,8 +2980,7 @@ fn aoki_latest(agent: &ureq::Agent) -> Result<(String, String), String> {
     // itself so the cache says which file it holds.
     let mut index = agent.get(AOKI_INDEX_URL).call().map_err(|e| {
         format!(
-            "Aoki's seasonal package 404s ({}) and its index would not load: {e}",
-            url, e
+            "Aoki's seasonal package 404s ({url}) and its index would not load: {e}"
         )
     })?;
     if !index.status().is_success() {
