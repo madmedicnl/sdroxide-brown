@@ -975,7 +975,7 @@ fn tx_bands_table(ui: &mut egui::Ui, cfg: &mut sdroxide_types::RadioConfig) {
                 ui.label(if *band == Band::Gen {
                     tr!("settings-other")
                 } else {
-                    band.label().to_string()
+                    super::tx_bands::tx_band_label(*band)
                 });
                 let mut choice = on;
                 egui::ComboBox::from_id_salt(("tx-band", i))

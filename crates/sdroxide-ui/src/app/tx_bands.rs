@@ -29,15 +29,57 @@ pub(in crate::app) enum TxBands {
 /// How many times per session and radio tab the refused-band notice shows.
 pub(in crate::app) const TX_BAND_NOTICES_MAX: u8 = 3;
 
-/// The name of the band `hz` is in, as the operator sees it.
-fn band_name(hz: f64) -> String {
-    match Band::containing(hz) {
-        Band::Gen => tr!("settings-other"),
+/// A band's name as the operator reads it. The CB band is "11M-CB" here only:
+/// `Band::label()` stays "11M" for logs, contests and the config.
+pub(in crate::app) fn tx_band_label(b: Band) -> String {
+    match b {
+        Band::M11 => "11M-CB".to_string(),
         b => b.label().to_string(),
     }
 }
 
+/// The name of the band `hz` is in, as the operator sees it.
+fn band_name(hz: f64) -> String {
+    match Band::containing(hz) {
+        Band::Gen => tr!("settings-other"),
+        b => tx_band_label(b),
+    }
+}
+
+/// What the BAND TX pill shows.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(in crate::app) enum BandTxPill {
+    /// The dial is on a band the operator enabled and confirmed: receiving.
+    Allowed,
+    /// The dial is on a band that is off: transmit is cut.
+    Refused,
+    /// The radio is transmitting (PTT or TUNE) on an allowed band.
+    Transmitting,
+}
+
 impl SdroxideApp {
+    /// The pill, or `None` where it is hidden: a listening screen (SWL, listen
+    /// mode), a receive-only radio or mode, a playback, a list nobody confirmed,
+    /// or no band ticked at all.
+    pub(in crate::app) fn band_tx_pill(&self) -> Option<BandTxPill> {
+        let cfg = self.radio_cfg.as_ref()?;
+        let any_band = cfg.tx_band_enable.as_ref().is_some_and(|b| !b.is_empty());
+        if !self.tx_chrome_ok()
+            || self.state.playback.is_some()
+            || !cfg.tx_bands_confirmed
+            || !any_band
+        {
+            return None;
+        }
+        Some(if !cfg.tx_dial_allowed(self.state.tx_freq_hz()) {
+            BandTxPill::Refused
+        } else if self.state.tx.ptt || self.state.tx.tune {
+            BandTxPill::Transmitting
+        } else {
+            BandTxPill::Allowed
+        })
+    }
+
     pub(in crate::app) fn tx_bands_status(&self) -> TxBands {
         if !self.tx_capable() {
             return TxBands::NotApplicable;

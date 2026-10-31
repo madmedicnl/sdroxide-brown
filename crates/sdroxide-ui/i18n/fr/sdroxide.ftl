@@ -9037,3 +9037,5 @@ schedule-col-site = Lieu
 schedule-col-local = Locale
 
 tx-bands-off = L'émission est coupée sur { $band } : cette bande n'est pas autorisée dans vos réglages. Votre émetteur n'est donc pas compatible en émission sur cette bande. (Affiché { $max } fois maximum par session.)
+
+frame-band-tx = BAND TX
