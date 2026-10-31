@@ -6935,7 +6935,7 @@ aircraft-missing-adsb = aún no se ha oído — ADS-B lo transporta
 
 aircraft-missing-message = ninguno todavía — VDL2, o audio ACARS una vez que VDL2 haya nombrado la aeronave
 
-aircraft-online-unavailable-disabled = en línea no disponible — la estación no ha activado el relé
+aircraft-online-unavailable-disabled = en línea no disponible — el interruptor En línea está apagado
 
 aircraft-online-unavailable-no-station = en línea no disponible — no hay estación a la que preguntar; los datos de radio son todo lo que hay
 
@@ -7084,14 +7084,6 @@ aircraft-copy-summary = Copiar resumen
 aircraft-copy-summary-hover = Copiar esta ficha como texto: lo que se sabe y de dónde viene cada línea. Se omiten la posición y el último mensaje.
 
 aircraft-asking-station-dots = preguntando a la estación…
-
-aircraft-online-turn-on = Activar la consulta en línea
-
-aircraft-online-turn-on-hover = Las fotos, el tipo, el operador y la ruta vienen de adsbdb y Planespotters. Su estación les pregunta por usted, y solo cuando esto está activado; conserva su elección. Nada más sale de la estación.
-
-aircraft-online-turn-off = Desactivar la consulta en línea
-
-aircraft-online-turn-off-hover = Impedir que la estación consulte adsbdb y Planespotters.
 
 aircraft-not-changed = No cambiado: { $why }.
 
@@ -8996,3 +8988,10 @@ adsbmap-airport-more = +{ $n } más
 adsbmap-airport-freq-head = Frecuencias, MHz
 
 adsbmap-airport-data-date = datos de pistas y frecuencias del { $date }
+aircraft-online-switch = En línea
+
+aircraft-online-switch-on-hover = En línea: el tipo, el operador, la ruta y la foto proceden de adsbdb y Planespotters, que su estación consulta por usted. Pulse para desactivar; la estación recuerda su elección. Nada más sale de la estación.
+
+aircraft-online-switch-off-hover = Sin conexión: nada sale de la estación. Pulse para activar el tipo, el operador, la ruta y la foto (adsbdb y Planespotters).
+
+aircraft-switch-held = el operador de la estación lo fija con SDROXIDE_AIRCRAFT_ONLINE

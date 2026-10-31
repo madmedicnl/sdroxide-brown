@@ -26,8 +26,8 @@ use sdroxide_aircraft_online::{
 };
 
 use super::aircraft_card::{self, CardKey, icao_hex};
-use crate::i18n::tr;
 use super::aircraft_registry::AircraftCard;
+use crate::i18n::tr;
 
 /// Seconds before a question the registry could not answer may be asked again.
 pub(in crate::app) const RETRY_S: i64 = 300;
@@ -241,6 +241,16 @@ pub(in crate::app) fn classify_switch(http_status: Option<u16>, body: &str) -> S
     }
 }
 
+/// What to say when the station did not do what the switch asked: it answered
+/// with the other state, so something holds the relay there (the station's
+/// environment variable). `None` when it did as asked or refused outright.
+pub(in crate::app) fn held_note(asked: bool, answer: &SwitchAnswer) -> Option<String> {
+    match (asked, answer) {
+        (true, SwitchAnswer::Off) | (false, SwitchAnswer::On) => Some(tr!("aircraft-switch-held")),
+        _ => None,
+    }
+}
+
 struct Entry {
     state: OnlineState,
     /// When a failure may be asked again; `None` is not this session.
@@ -276,6 +286,11 @@ impl OnlineStore {
     #[cfg(test)]
     pub(in crate::app) fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    /// The station said its relay is off, for every card.
+    pub(in crate::app) fn relay_off(&self) -> bool {
+        matches!(self.blocked, Some(OnlineState::Unavailable(Reason::Disabled)))
     }
 
     /// Every card the relay has answered for this session, with its address.
@@ -638,6 +653,27 @@ mod tests {
                 "{status:?}"
             );
         }
+    }
+
+    #[test]
+    fn the_relay_is_taken_as_on_until_the_station_says_it_is_off() {
+        let mut s = OnlineStore::default();
+        assert!(!s.relay_off(), "on by default: nothing has been asked yet");
+        s.deliver(1, Answer::Unavailable(Reason::Offline), 1);
+        assert!(!s.relay_off(), "a failed read is not a switched-off relay");
+        s.deliver(1, Answer::Unavailable(Reason::Disabled), 2);
+        assert!(s.relay_off());
+        s.unblock();
+        assert!(!s.relay_off(), "switching it on clears it");
+    }
+
+    #[test]
+    fn a_station_that_answers_with_the_other_state_is_said_to_hold_the_relay() {
+        assert!(held_note(true, &SwitchAnswer::Off).is_some(), "asked on, still off");
+        assert!(held_note(false, &SwitchAnswer::On).is_some(), "asked off, still on");
+        assert_eq!(held_note(true, &SwitchAnswer::On), None);
+        assert_eq!(held_note(false, &SwitchAnswer::Off), None);
+        assert_eq!(held_note(true, &SwitchAnswer::Refused("x".into())), None);
     }
 
     #[test]

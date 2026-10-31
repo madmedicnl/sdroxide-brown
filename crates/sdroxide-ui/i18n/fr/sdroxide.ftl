@@ -6947,7 +6947,7 @@ aircraft-missing-adsb = pas encore entendu — ADS-B le transporte
 
 aircraft-missing-message = aucun pour l'instant — VDL2, ou l'audio ACARS une fois que VDL2 a nommé l'aéronef
 
-aircraft-online-unavailable-disabled = en ligne indisponible — la station n'a pas activé le relais
+aircraft-online-unavailable-disabled = en ligne indisponible — l'interrupteur En ligne est coupé
 
 aircraft-online-unavailable-no-station = en ligne indisponible — pas de station à interroger ; les données radio sont tout ce qu'il y a
 
@@ -7096,14 +7096,6 @@ aircraft-copy-summary = Copier le résumé
 aircraft-copy-summary-hover = Copier cette fiche en texte : ce qui est connu, et d'où vient chaque ligne. La position et le dernier message sont omis.
 
 aircraft-asking-station-dots = interrogation de la station…
-
-aircraft-online-turn-on = Activer la recherche en ligne
-
-aircraft-online-turn-on-hover = Les photos, le type, l'exploitant et la route viennent d'adsbdb et de Planespotters. Votre station les interroge pour vous, et seulement quand c'est activé ; elle garde votre choix. Rien d'autre ne quitte la station.
-
-aircraft-online-turn-off = Désactiver la recherche en ligne
-
-aircraft-online-turn-off-hover = Empêcher la station d'interroger adsbdb et Planespotters.
 
 aircraft-not-changed = Non modifié : { $why }.
 
@@ -9008,3 +9000,10 @@ adsbmap-airport-more = +{ $n } autres
 adsbmap-airport-freq-head = Fréquences, MHz
 
 adsbmap-airport-data-date = données pistes et fréquences du { $date }
+aircraft-online-switch = En ligne
+
+aircraft-online-switch-on-hover = En ligne : le type, l'exploitant, la route et la photo viennent d'adsbdb et de Planespotters, demandés par votre station pour vous. Cliquez pour désactiver ; la station garde votre choix. Rien d'autre ne quitte la station.
+
+aircraft-online-switch-off-hover = Hors ligne : rien ne quitte la station. Cliquez pour activer le type, l'exploitant, la route et la photo (adsbdb et Planespotters).
+
+aircraft-switch-held = l'exploitant de la station le fixe avec SDROXIDE_AIRCRAFT_ONLINE

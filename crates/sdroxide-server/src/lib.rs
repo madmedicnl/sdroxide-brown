@@ -18,12 +18,12 @@
 mod aircraft;
 mod auth;
 mod history;
-mod watchlist;
 mod probe;
 mod session;
 mod session_cookie;
 mod signin;
 mod solar;
+mod watchlist;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -65,7 +65,7 @@ pub enum ServerError {
 /// empty, leaves the server open to anyone who can reach the port.
 pub type AccessFn = Box<dyn Fn() -> sdroxide_types::RemoteAccess + Send + Sync>;
 
-pub use aircraft::{ENV_SWITCH as AIRCRAFT_ONLINE_ENV, enabled_by as aircraft_online_enabled_by};
+pub use aircraft::{ENV_SWITCH as AIRCRAFT_ONLINE_ENV, forced_by as aircraft_online_forced_by};
 pub use probe::ProbeFn;
 
 /// How this station puts another radio in its roster: create the radio's
@@ -169,10 +169,11 @@ pub struct ServerParams {
     pub radio_power: Option<RadioPowerFn>,
     /// Whether this station answers `/aircraft-info` — the AIRCRAFT window's
     /// online type, operator, route and photo credit, got from adsbdb and
-    /// Planespotters on the clients' behalf. Off unless the operator says so
-    /// (see [`aircraft_online_enabled_by`]): it makes this machine reach the
-    /// internet for whoever is connected.
-    pub aircraft_online: bool,
+    /// Planespotters on the clients' behalf. `None` is the default: on, with the
+    /// operator's "En ligne" switch in the AIRCRAFT window able to turn it off
+    /// and the choice kept across restarts. `Some(true)` / `Some(false)` hold it
+    /// on / off whatever the window says (see [`aircraft_online_forced_by`]).
+    pub aircraft_online: Option<bool>,
 }
 
 /// How many receive-audio packets (20 ms each) the audio lane holds before the
@@ -720,7 +721,10 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         .route("/solar-ws", get(solar::ws_route))
         .route("/aircraft-info/{icao}", get(aircraft::info_route))
         .route("/aircraft-photo", axum::routing::delete(aircraft::photo_release))
-        .route("/aircraft-photo/{icao}", get(aircraft::photo_route).delete(aircraft::photo_release_one))
+        .route(
+            "/aircraft-photo/{icao}",
+            get(aircraft::photo_route).delete(aircraft::photo_release_one),
+        )
         .route("/aircraft-online", get(aircraft::switch_get).post(aircraft::switch_post))
         .route("/aircraft-history", get(history::list_route))
         .route("/aircraft-history/{icao}", get(history::one_route))
