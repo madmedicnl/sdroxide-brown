@@ -1,6 +1,6 @@
 # TODO — SDR Oxide Brown
 
-Working queue. Rules in AGENTS.md. Last updated 2026-10-30.
+Working queue. Rules in AGENTS.md. Last updated 2026-10-31.
 
 State: `main` at crate 2.2.0, PROTO_VERSION 258 (0x4E; 259 / 0x4F on the TX band list branch). Latest release
 v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measured 2026-10-29).
@@ -78,6 +78,7 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 - AppImage — beslissing nodig.
 
 ## Recently done
+- 2026-10-31 — Airport card (PR 2 of 4): the pinned card lists up to 4 runways and 6 frequencies from embedded OurAirports tables (offline, dated), lengths in the chosen units, and "aircraft within" reaches 100 km instead of 25 (added by madmedicnl, owned by Roy)
 - 2026-10-30 — Aircraft photo: the station keeps 10 thumbnails for 30 s (was 1), loads several aircraft at once (up to 3, same aircraft once) instead of answering 429, frees its place even if a download panics, a closing card releases only its own picture, and a failed thumbnail is asked again (3 times) while the card stays open (added by madmedicnl, owned by Roy)
 - 2026-10-29 — Every message log keeps at most 200 (ACARS, DSC, APRS, VDL2 were 300/300/300/2000), VDL2 list newest first (added by madmedicnl, owned by Roy; touches F4NRM's DSC/NAVTEX/APRS caps, PR for his review)
 - 2026-10-29 — ACARS channel chips tune the VFO in use, light the real channel, grey out unreachable ones (added by madmedicnl, owned by Roy)

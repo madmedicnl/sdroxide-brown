@@ -8988,3 +8988,23 @@ tx-bands-listen = Mode écoute
 tx-bands-listen-hint = Passer à l'écran d'écoute (sans commandes d'émission) pour accéder à n'importe quelle bande.
 
 tx-bands-ptt-off = L'émission est coupée pour cette bande, ou les bandes d'émission ne sont pas encore validées (Réglages → Radio → Bandes d'émission).
+
+adsbmap-surface-asphalt = asphalte
+
+adsbmap-surface-concrete = béton
+
+adsbmap-surface-grass = herbe
+
+adsbmap-surface-gravel = gravier
+
+adsbmap-surface-dirt = terre
+
+adsbmap-surface-water = eau
+
+adsbmap-airport-runway-lit = éclairée
+
+adsbmap-airport-more = +{ $n } autres
+
+adsbmap-airport-freq-head = Fréquences, MHz
+
+adsbmap-airport-data-date = données pistes et fréquences du { $date }

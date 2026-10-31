@@ -8975,3 +8975,23 @@ tx-bands-listen = Hörmodus
 tx-bands-listen-hint = Zur Höransicht wechseln (ohne Sendebedienung), um jedes Band abzustimmen.
 
 tx-bands-ptt-off = Senden ist für dieses Band aus oder die Sendebänder sind noch nicht bestätigt (Einstellungen → Funkgerät → Sendebänder).
+
+adsbmap-surface-asphalt = Asphalt
+
+adsbmap-surface-concrete = Beton
+
+adsbmap-surface-grass = Gras
+
+adsbmap-surface-gravel = Schotter
+
+adsbmap-surface-dirt = Erde
+
+adsbmap-surface-water = Wasser
+
+adsbmap-airport-runway-lit = befeuert
+
+adsbmap-airport-more = +{ $n } weitere
+
+adsbmap-airport-freq-head = Frequenzen, MHz
+
+adsbmap-airport-data-date = Bahn- und Frequenzdaten vom { $date }

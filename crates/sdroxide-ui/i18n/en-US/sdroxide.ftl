@@ -8986,3 +8986,23 @@ tx-bands-listen = Listen mode
 tx-bands-listen-hint = Switch to the listening screen (no transmit controls) to tune to any band.
 
 tx-bands-ptt-off = Transmit is off for this band, or the transmit bands are not confirmed yet (Settings → Radio → Transmit bands).
+
+adsbmap-surface-asphalt = asphalt
+
+adsbmap-surface-concrete = concrete
+
+adsbmap-surface-grass = grass
+
+adsbmap-surface-gravel = gravel
+
+adsbmap-surface-dirt = dirt
+
+adsbmap-surface-water = water
+
+adsbmap-airport-runway-lit = lit
+
+adsbmap-airport-more = +{ $n } more
+
+adsbmap-airport-freq-head = Frequencies, MHz
+
+adsbmap-airport-data-date = runway and frequency data of { $date }
