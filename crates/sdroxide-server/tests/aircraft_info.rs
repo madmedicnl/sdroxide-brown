@@ -221,3 +221,66 @@ async fn nothing_is_fetched_for_an_aircraft_nobody_asked_about_and_a_release_nee
     let junk = send(PORT_PHOTO_OPEN, "DELETE", "/aircraft-photo/zz", "x-sdroxide: 1\r\n").await;
     assert!(junk.starts_with("HTTP/1.1 400"), "{junk}");
 }
+
+const PORT_AIRPORT_SHUT: u16 = 39487;
+const PORT_AIRPORT_PASSWORD: u16 = 39488;
+const PORT_AIRPORT_OPEN: u16 = 39489;
+
+const ARTICLE: &str = "?lang=en&title=Amsterdam_Airport_Schiphol";
+
+/// An airport's picture follows the same switch as an aircraft's, through a prefix too.
+#[tokio::test]
+async fn the_airport_photo_is_shut_while_the_relay_is_off() {
+    spawn_station(PORT_AIRPORT_SHUT, false, false).await;
+    for path in ["/airport-photo", "/sdroxide/airport-photo"] {
+        let answer = get(PORT_AIRPORT_SHUT, &format!("{path}{ARTICLE}"), None).await;
+        assert!(answer.starts_with("HTTP/1.1 503"), "{path}: {answer}");
+        assert!(answer.to_ascii_lowercase().contains("cache-control: no-store"), "{answer}");
+    }
+}
+
+/// Same door as the sockets, for the picture and for letting it go.
+#[tokio::test]
+async fn the_airport_photo_and_its_release_want_the_cookie() {
+    spawn_station(PORT_AIRPORT_PASSWORD, true, true).await;
+    let without = get(PORT_AIRPORT_PASSWORD, &format!("/airport-photo{ARTICLE}"), None).await;
+    assert!(without.starts_with("HTTP/1.1 401"), "{without}");
+    let release = send(
+        PORT_AIRPORT_PASSWORD,
+        "DELETE",
+        &format!("/airport-photo{ARTICLE}"),
+        "x-sdroxide: 1\r\n",
+    )
+    .await;
+    assert!(release.starts_with("HTTP/1.1 401"), "{release}");
+}
+
+/// The client names a language and a title, never an address: anything that could
+/// aim the request elsewhere is refused before the station reaches out, and a
+/// release needs the custom header a stray page cannot send.
+#[tokio::test]
+async fn an_airport_title_that_is_not_plain_is_refused_and_a_release_needs_the_header() {
+    spawn_station(PORT_AIRPORT_OPEN, false, true).await;
+    for query in [
+        "",
+        "?lang=en",
+        "?title=Paris",
+        "?lang=en&title=..%2Fetc",
+        "?lang=en&title=a/b",
+        "?lang=eng&title=Paris",
+        "?lang=en&title=https://evil.example/x.jpg",
+        "?lang=en.evil.example&title=Paris",
+    ] {
+        let bad = get(PORT_AIRPORT_OPEN, &format!("/airport-photo{query}"), None).await;
+        assert!(bad.starts_with("HTTP/1.1 400"), "{query}: {bad}");
+    }
+    let path = format!("/airport-photo{ARTICLE}");
+    let bare = send(PORT_AIRPORT_OPEN, "DELETE", &path, "").await;
+    assert!(bare.starts_with("HTTP/1.1 403"), "{bare}");
+    let ok = send(PORT_AIRPORT_OPEN, "DELETE", &path, "x-sdroxide: 1\r\n").await;
+    assert!(ok.starts_with("HTTP/1.1 204"), "{ok}");
+    let junk =
+        send(PORT_AIRPORT_OPEN, "DELETE", "/airport-photo?lang=EN&title=x", "x-sdroxide: 1\r\n")
+            .await;
+    assert!(junk.starts_with("HTTP/1.1 400"), "{junk}");
+}

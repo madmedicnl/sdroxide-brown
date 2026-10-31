@@ -99,6 +99,10 @@ pub struct AdsbMapState {
     /// [`crate::airdata::airports`]. Set by a click on an airport (an aircraft
     /// under the pointer wins), cleared by a click on empty map or Esc.
     pub airport_pin: Option<usize>,
+    /// The Wikipedia picture of the open airport box, written by the app each
+    /// frame from what the station delivered; drawn only while it is for the
+    /// airport that is pinned.
+    pub airport_photo: Option<AirportPhoto>,
     /// The aircraft the operator pressed "Look up online" for: its thumbnail is
     /// loaded once the answer is in. `None` until that button is pressed.
     pub lookup: Option<u32>,
@@ -115,6 +119,32 @@ pub struct AdsbMapState {
     /// than the dot stipple the propagation maps use. Rebuilt only when the
     /// view moves by more than a texel.
     pub ground: crate::widgets::worldmap::GroundCache,
+}
+
+/// What the open airport box shows above its text.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum CardPhoto {
+    /// No picture: the airport has no article, the relay is off, or it failed.
+    /// The box is text alone, as before.
+    #[default]
+    None,
+    /// On its way: the room is kept, so the box does not jump when it arrives.
+    Pending,
+    Ready {
+        texture: eframe::egui::TextureId,
+        /// The picture's size in pixels.
+        size: Vec2,
+    },
+}
+
+/// The picture of one airport's box, with the article it comes from.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AirportPhoto {
+    /// Index into [`crate::airdata::airports`].
+    pub airport: usize,
+    pub photo: CardPhoto,
+    /// The Wikipedia page, where the credit points.
+    pub page_url: String,
 }
 
 /// One stretch of an aircraft's past track: two positions (latitude, longitude)
@@ -378,6 +408,43 @@ fn project_at(
 /// tooltip could only say "somewhere on the map", and what the operator wants
 /// is the name beside the symbol they are pointing at.
 fn draw_hover_label(p: &Painter, rect: Rect, map: &theme::MapPalette, hover: &NavHover) {
+    draw_hover_card(p, rect, map, hover, CardPhoto::None, None);
+}
+
+/// The widest a card's picture is drawn, and the tallest, in points. A
+/// Wikipedia thumbnail is 320 px wide; half of that is plenty for a card and
+/// keeps it a card.
+const CARD_PHOTO_W: f32 = 168.0;
+const CARD_PHOTO_MAX_H: f32 = 112.0;
+/// The room kept for a picture on its way: a landscape 3:2.
+const CARD_PHOTO_PENDING_H: f32 = 112.0;
+
+/// Where a picture of `size` pixels is drawn in a card: as wide as the card's
+/// picture may be and no taller than it may be, its proportions kept.
+fn photo_fit(size: Vec2) -> Vec2 {
+    if size.x < 1.0 || size.y < 1.0 {
+        return Vec2::ZERO;
+    }
+    let k = (CARD_PHOTO_W / size.x).min(CARD_PHOTO_MAX_H / size.y);
+    size * k
+}
+
+/// What a card took on the screen: the box, and the credit line when it has one.
+struct CardDrawn {
+    box_: Rect,
+    credit: Option<Rect>,
+}
+
+/// [`draw_hover_label`] with the picture of the place above its text and, under
+/// the picture, `credit` (the line that names where the picture is from).
+fn draw_hover_card(
+    p: &Painter,
+    rect: Rect,
+    map: &theme::MapPalette,
+    hover: &NavHover,
+    photo: CardPhoto,
+    credit: Option<&str>,
+) -> CardDrawn {
     // The gesture is *said*, where the station's name is read: a station that can
     // be tuned has to look like one, or the feature is invisible. Only the ones
     // that are on a frequency say it.
@@ -388,7 +455,18 @@ fn draw_hover_label(p: &Painter, rect: Rect, map: &theme::MapPalette, hover: &Na
         hint.map(|h| p.layout_no_wrap(h, FontId::proportional(9.0), alpha(map.city_label, 190.0)));
     let pad = vec2(6.0, 4.0);
     let hint_h = hint_galley.as_ref().map_or(0.0, |g| g.size().y + 2.0);
-    let size = galley.size() + pad * 2.0 + vec2(0.0, hint_h);
+    let pic = match photo {
+        CardPhoto::None => Vec2::ZERO,
+        CardPhoto::Pending => vec2(CARD_PHOTO_W, CARD_PHOTO_PENDING_H),
+        CardPhoto::Ready { size, .. } => photo_fit(size),
+    };
+    // The credit goes with a picture that is drawn, not with room that is kept.
+    let credit_galley = credit.filter(|_| matches!(photo, CardPhoto::Ready { .. })).map(|c| {
+        p.layout_no_wrap(c.to_string(), FontId::proportional(9.0), alpha(map.city_label, 200.0))
+    });
+    let credit_h = credit_galley.as_ref().map_or(0.0, |g| g.size().y);
+    let photo_h = if pic.y > 0.0 { pic.y + 2.0 + credit_h + 4.0 } else { 0.0 };
+    let size = vec2(galley.size().x.max(pic.x), galley.size().y + photo_h + hint_h) + pad * 2.0;
     let mut at = hover.at + vec2(11.0, -size.y - 7.0);
     // Kept on the map: a name for something at the edge is the one that most
     // needs to move, because the auto-fit leaves the outermost targets close to
@@ -403,13 +481,57 @@ fn draw_hover_label(p: &Painter, rect: Rect, map: &theme::MapPalette, hover: &Na
         Stroke::new(1.0, alpha(map.border, 210.0)),
         eframe::egui::StrokeKind::Inside,
     );
+    let mut y = box_.min.y + pad.y;
+    let mut credit_rect = None;
+    if pic.y > 0.0 {
+        let frame = Rect::from_min_size(pos2(box_.min.x + pad.x, y), pic);
+        match photo {
+            CardPhoto::Ready { texture, .. } => {
+                p.image(
+                    texture,
+                    frame,
+                    Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+                p.rect_stroke(
+                    frame,
+                    1.0,
+                    Stroke::new(1.0, alpha(map.border, 160.0)),
+                    eframe::egui::StrokeKind::Outside,
+                );
+            }
+            _ => {
+                p.rect_filled(frame, 2.0, alpha(map.border, 40.0));
+                p.text(
+                    frame.center(),
+                    Align2::CENTER_CENTER,
+                    "…",
+                    FontId::proportional(14.0),
+                    alpha(map.city_label, 150.0),
+                );
+            }
+        }
+        y += pic.y + 2.0;
+        if let Some(g) = credit_galley {
+            let r = Rect::from_min_size(pos2(box_.min.x + pad.x, y), g.size());
+            p.galley(r.min, g, map.city_label);
+            p.line_segment(
+                [r.left_bottom(), r.right_bottom()],
+                Stroke::new(0.8, alpha(map.city_label, 160.0)),
+            );
+            credit_rect = Some(r);
+            y += r.height();
+        }
+        y += 4.0;
+    }
     let text_h = galley.size().y;
-    p.galley(box_.min + pad, galley, map.city_label);
+    p.galley(pos2(box_.min.x + pad.x, y), galley, map.city_label);
     if let Some(g) = hint_galley {
-        p.galley(box_.min + pad + vec2(0.0, text_h + 2.0), g, map.city_label);
+        p.galley(pos2(box_.min.x + pad.x, y + text_h + 2.0), g, map.city_label);
     }
     // A ring on the symbol itself, so the name is attached to a mark.
     p.circle_stroke(hover.at, 4.5, Stroke::new(1.3, alpha(map.city_label, 220.0)));
+    CardDrawn { box_, credit: credit_rect }
 }
 
 /// How far from an airport an aircraft counts as "near" it, km.
@@ -1031,6 +1153,7 @@ pub fn show(
         }
     }
     // The open airport box stays where its airport is, until a click elsewhere.
+    let mut credit_clicked = false;
     if let Some(a) = state.airport_pin.and_then(|i| crate::airdata::airports().get(i)) {
         let at = project(a.lat, a.lon);
         if rect.contains(at) {
@@ -1044,7 +1167,32 @@ pub fn show(
                 freq_khz: None,
                 airport: state.airport_pin,
             };
-            draw_hover_label(&p, rect, map, &pinned);
+            let shown = state
+                .airport_photo
+                .as_ref()
+                .filter(|f| Some(f.airport) == state.airport_pin)
+                .map(|f| (f.photo, f.page_url.clone()));
+            let (photo, page) = shown.unwrap_or((CardPhoto::None, String::new()));
+            let drawn = draw_hover_card(
+                &p,
+                rect,
+                map,
+                &pinned,
+                photo,
+                Some(&tr!("adsbmap-airport-photo-credit")),
+            );
+            // The credit is a link to the article, where the picture's author and
+            // licence are. A click on it follows the link and does not close the box.
+            if let Some(r) = drawn.credit {
+                let link = ui.interact(r, resp.id.with("airport-photo-credit"), Sense::click());
+                if link.hovered() {
+                    ui.ctx().set_cursor_icon(eframe::egui::CursorIcon::PointingHand);
+                }
+                if link.clicked() && !page.is_empty() {
+                    ui.ctx().open_url(eframe::egui::OpenUrl::new_tab(page));
+                    credit_clicked = true;
+                }
+            }
         }
     }
 
@@ -1083,7 +1231,7 @@ pub fn show(
         state.airport_pin,
         hover.is_some(),
         nav_hover.as_ref().and_then(|h| h.airport),
-        resp.clicked(),
+        resp.clicked() && !credit_clicked,
     );
     state.pin_bounds = Some(rect);
     state.pin_anchor = state
@@ -1340,8 +1488,101 @@ mod tests {
         sdroxide_types::AirUnits::Aviation.set_current();
     }
 
-    /// Not a check: writes PNGs of the real pinned airport card in the three
-    /// unit sets, for a person to look at.
+    /// The card as drawn on a blank 360×300 map, headless: what it took.
+    fn drawn_card(text: &str, photo: CardPhoto, credit: Option<&str>) -> CardDrawn {
+        use eframe::egui;
+        let size = egui::vec2(360.0, 300.0);
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+            time: Some(1.0),
+            ..Default::default()
+        };
+        let mut got = None;
+        let mut full = ctx.run_ui(input, |ui| {
+            let h = NavHover {
+                at: egui::pos2(10.0, size.y - 10.0),
+                text: text.to_string(),
+                freq_khz: None,
+                airport: Some(0),
+            };
+            let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+            got = Some(draw_hover_card(ui.painter(), rect, theme::map(), &h, photo, credit));
+        });
+        full.textures_delta.clear();
+        got.unwrap()
+    }
+
+    fn ready(w: f32, h: f32) -> CardPhoto {
+        CardPhoto::Ready {
+            texture: eframe::egui::TextureId::default(),
+            size: eframe::egui::vec2(w, h),
+        }
+    }
+
+    #[test]
+    fn a_picture_is_fitted_into_the_card_with_its_proportions_kept() {
+        let wide = photo_fit(vec2(320.0, 213.0));
+        assert!((wide.x - CARD_PHOTO_W).abs() < 0.01, "{wide:?}");
+        assert!((wide.x / wide.y - 320.0 / 213.0).abs() < 0.01);
+        let tall = photo_fit(vec2(100.0, 400.0));
+        assert!((tall.y - CARD_PHOTO_MAX_H).abs() < 0.01 && tall.x < CARD_PHOTO_W, "{tall:?}");
+        assert_eq!(photo_fit(vec2(0.0, 10.0)), Vec2::ZERO, "an empty picture takes no room");
+    }
+
+    #[test]
+    fn a_card_without_a_picture_is_as_it_was_and_a_picture_adds_its_own_room() {
+        let text = "AMS / EHAM\nAmsterdam Airport Schiphol";
+        let bare = drawn_card(text, CardPhoto::None, Some("Photo: Wikipedia"));
+        assert!(bare.credit.is_none(), "no picture, no credit");
+        let waiting = drawn_card(text, CardPhoto::Pending, Some("Photo: Wikipedia"));
+        assert!(waiting.credit.is_none(), "the credit goes with a picture that is drawn");
+        assert!(
+            (waiting.box_.height() - bare.box_.height() - (CARD_PHOTO_PENDING_H + 2.0 + 4.0)).abs()
+                < 0.5,
+            "room is kept for what is on its way"
+        );
+        let full = drawn_card(text, ready(320.0, 213.0), Some("Photo: Wikipedia"));
+        let credit = full.credit.expect("a credit under the picture");
+        assert!(full.box_.contains_rect(credit), "{credit:?} in {:?}", full.box_);
+        assert!(full.box_.height() > bare.box_.height() + 100.0);
+        assert!(full.box_.width() >= CARD_PHOTO_W, "the card is as wide as its picture");
+        // The credit sits between the picture and the text.
+        assert!(credit.top() > full.box_.top() + 100.0);
+    }
+
+    #[test]
+    fn a_card_with_a_picture_stays_on_the_map() {
+        let full = drawn_card("AMS / EHAM", ready(320.0, 213.0), Some("Photo: Wikipedia"));
+        let map = eframe::egui::Rect::from_min_size(Pos2::ZERO, vec2(360.0, 300.0));
+        assert!(map.contains_rect(full.box_), "{:?}", full.box_);
+    }
+
+    /// A stand-in for a Wikipedia thumbnail (sky, field, runway), 320×213 as the
+    /// real ones are. Not a photograph of anything.
+    fn stand_in_picture() -> eframe::egui::ColorImage {
+        let (w, h) = (320usize, 213usize);
+        let mut px = Vec::with_capacity(w * h);
+        for y in 0..h {
+            for x in 0..w {
+                let horizon = 90;
+                let c = if y < horizon {
+                    let t = y as f32 / horizon as f32;
+                    Color32::from_rgb((90.0 + 90.0 * t) as u8, (140.0 + 70.0 * t) as u8, 235)
+                } else if (x as i32 - 160).abs() < ((y - horizon) as i32 / 3 + 4) {
+                    Color32::from_gray(70)
+                } else {
+                    Color32::from_rgb(70, 130, 60)
+                };
+                px.push(c);
+            }
+        }
+        eframe::egui::ColorImage::new([w, h], px)
+    }
+
+    /// Not a check: writes PNGs of the real pinned airport card, with a stand-in
+    /// picture, with the room kept for one on its way, and without any, for a
+    /// person to look at, in the three unit sets.
     /// `cargo test -p sdroxide-ui --lib airport_card_preview -- --ignored`
     #[test]
     #[ignore]
@@ -1350,19 +1591,28 @@ mod tests {
         let dir = std::env::var("PREVIEW_DIR").unwrap_or_else(|_| "../../target/previews".into());
         std::fs::create_dir_all(&dir).unwrap();
         let a = real_airport("EHAM");
-        for (units, name) in [
-            (sdroxide_types::AirUnits::Aviation, "aviation"),
-            (sdroxide_types::AirUnits::Metric, "metric"),
-            (sdroxide_types::AirUnits::Imperial, "imperial"),
-        ] {
+        let boards = [
+            (sdroxide_types::AirUnits::Aviation, "photo_aviation", "ready"),
+            (sdroxide_types::AirUnits::Metric, "photo_metric", "ready"),
+            (sdroxide_types::AirUnits::Aviation, "waiting", "pending"),
+            (sdroxide_types::AirUnits::Aviation, "none", "none"),
+        ];
+        for (units, name, state) in boards {
             units.set_current();
             let text = format!(
                 "{}\n{}",
                 airport_card_text(a, Some((52.0, 5.0)), &[], true),
                 tr!("adsbmap-click-to-close")
             );
-            let size = egui::vec2(360.0, 300.0);
+            let size = egui::vec2(380.0, 420.0);
             let ctx = egui::Context::default();
+            let handle =
+                ctx.load_texture("preview-airport", stand_in_picture(), Default::default());
+            let photo = match state {
+                "ready" => CardPhoto::Ready { texture: handle.id(), size: vec2(320.0, 213.0) },
+                "pending" => CardPhoto::Pending,
+                _ => CardPhoto::None,
+            };
             let input = egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
                 time: Some(1.0),
@@ -1381,11 +1631,13 @@ mod tests {
                         freq_khz: None,
                         airport: Some(0),
                     };
-                    draw_hover_label(
+                    draw_hover_card(
                         &p,
                         egui::Rect::from_min_size(egui::Pos2::ZERO, size),
                         map,
                         &h,
+                        photo,
+                        Some(&tr!("adsbmap-airport-photo-credit")),
                     );
                 });
                 tex.apply(&full.textures_delta);
@@ -1394,7 +1646,7 @@ mod tests {
             }
             let img =
                 crate::test_raster::rasterize(&ctx, out.unwrap(), &tex, size, theme::BG_DEEP());
-            img.save(format!("{dir}/pr2_airport_card_{name}.png")).unwrap();
+            img.save(format!("{dir}/pr3_airport_card_{name}.png")).unwrap();
         }
         sdroxide_types::AirUnits::Aviation.set_current();
     }

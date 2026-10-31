@@ -13,7 +13,7 @@ Writes four committed assets beside this script:
     runways.bin    the open runways of those airports
     freqs.bin      their published radio frequencies
 
-`--extras` rebuilds only `runways.bin` and `freqs.bin` and leaves the other two
+`--extras` rebuilds only `runways.bin`, `freqs.bin` and `wiki.bin` and leaves the other two
 alone, so a refresh of the frequencies does not rewrite 5 280 airports and 11 000
 navaids that did not change.
 
@@ -90,6 +90,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import os
 import struct
 import sys
@@ -278,6 +279,43 @@ def build_freqs(idents: set, date: int) -> bytes:
     return out.getvalue()
 
 
+def build_wiki(idents: set, date: int) -> bytes:
+    """`wiki.bin`: the Wikipedia article of each airport that has one.
+
+    Records are `{ident[8] lang[2] len u8 title[len]}`, the title as UTF-8 with
+    its percent-escapes undone and spaces as underscores. Only `xx.wikipedia.org`
+    links with a plain title are kept: anything the station would refuse to put
+    in a URL is dropped here too, so the table never promises a picture the
+    station will not ask for.
+    """
+    import urllib.parse
+
+    rows = list(csv.DictReader(io.StringIO(fetch("airports.csv"))))
+    body = io.BytesIO()
+    count = 0
+    for r in sorted(rows, key=lambda r: r["ident"]):
+        if r["ident"] not in idents or not r["wikipedia_link"]:
+            continue
+        m = re.fullmatch(r"https?://([a-z]{2})\.wikipedia\.org/wiki/([^?#]+)", r["wikipedia_link"].strip())
+        if not m:
+            continue
+        lang, title = m.group(1), urllib.parse.unquote(m.group(2)).replace(" ", "_")
+        raw = title.encode("utf-8")
+        if not 1 <= len(raw) <= 120 or re.search(r"[/\\%?#<>|\x00-\x1f]", title):
+            continue
+        body.write(fixed(r["ident"], 8))
+        body.write(lang.encode("ascii"))
+        body.write(struct.pack("<B", len(raw)))
+        body.write(raw)
+        count += 1
+    out = io.BytesIO()
+    out.write(b"SDXWIK01")
+    out.write(struct.pack("<II", date, count))
+    out.write(body.getvalue())
+    sys.stderr.write(f"  {count} Wikipedia articles\n")
+    return out.getvalue()
+
+
 def airport_idents() -> set:
     """The idents of the airports `build_airports` keeps."""
     rows = list(csv.DictReader(io.StringIO(fetch("airports.csv"))))
@@ -320,9 +358,11 @@ def main() -> None:
     idents = airport_idents()
     open(os.path.join(HERE, "runways.bin"), "wb").write(build_runways(idents, date))
     open(os.path.join(HERE, "freqs.bin"), "wb").write(build_freqs(idents, date))
-    # Record sizes: 8+4+4+2+2+1+1 and 8+1+4.
+    open(os.path.join(HERE, "wiki.bin"), "wb").write(build_wiki(idents, date))
+    # Record sizes: 8+4+4+2+2+1+1 and 8+1+4 (wiki.bin's are not fixed).
     verify_dated(os.path.join(HERE, "runways.bin"), b"SDXRWY01", 22)
     verify_dated(os.path.join(HERE, "freqs.bin"), b"SDXFRQ01", 13)
+    sys.stderr.write(f"  wrote wiki.bin: {os.path.getsize(os.path.join(HERE, 'wiki.bin')) / 1024:.0f} KiB\n")
     if extras:
         return
     navaids = build_navaids()

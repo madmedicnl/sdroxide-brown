@@ -107,3 +107,4 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 - 2026-10-28 — #265 "outside receive range" notice fixed (logged, not shown)
 - 2026-10-27 — Aircraft window clean-up (10 PRs)
 - 2026-10-27 — #283 settings question resolved (da78715b)
+- 2026-10-31 — Airport card (PR 3 of 4): the pinned card shows the airport's Wikipedia thumbnail, asked of the station (`/airport-photo?lang=&title=`, hosts fixed to `*.wikipedia.org` and `upload.wikimedia.org`), held in memory for the open card only and dropped when it closes, credit links to the article; `PhotoStore` is now generic on its key (added by madmedicnl, owned by Roy)
