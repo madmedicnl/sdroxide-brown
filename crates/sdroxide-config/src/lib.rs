@@ -3031,18 +3031,26 @@ fn aoki_latest(agent: &ureq::Agent) -> Result<(String, String), String> {
 /// per-source line, so *"which of my schedules is actually here"* has an answer
 /// instead of being inferred from a list that happens to be short.
 pub fn cached_broadcast_sources() -> Vec<(sdroxide_types::ScheduleSource, Option<usize>)> {
+    use sdroxide_types::ScheduleSource as S;
     let season = sdroxide_types::broadcast::season_file(now_unix());
-    [
-        sdroxide_types::ScheduleSource::Eibi,
-        sdroxide_types::ScheduleSource::Aoki,
-        sdroxide_types::ScheduleSource::Hfcc,
-    ]
-    .into_iter()
-    .map(|source| {
-        let here = broadcast_cache_path_for(&season, source).map(|p| p.exists()).unwrap_or(false);
-        (source, here.then(|| cached_schedule_for(source).map(|v| v.len()).unwrap_or(0)))
-    })
-    .collect()
+    [S::Eibi, S::Aoki, S::Hfcc]
+        .into_iter()
+        .map(|source| {
+            let here = if source == S::Aoki {
+                // Aoki publishes under its own season name (e.g. xta26). Look for any
+                // cached aoki-*.txt, not just the one for the current sdroxide season.
+                !aoki_cached_seasons().is_empty()
+                    || broadcast_cache_path_for(&season, source)
+                        .map(|p| p.exists())
+                        .unwrap_or(false)
+            } else {
+                broadcast_cache_path_for(&season, source)
+                    .map(|p| p.exists())
+                    .unwrap_or(false)
+            };
+            (source, here.then(|| cached_schedule_for(source).map(|v| v.len()).unwrap_or(0)))
+        })
+        .collect()
 }
 
 /// Import a listener's own station list into `broadcast_stations.json`.
