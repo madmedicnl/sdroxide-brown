@@ -23,7 +23,7 @@ pub(in crate::app) const SCHEDULE_WINDOW_W: f32 = 1000.0;
 /// budget they are drawn to**: each row's widgets add up to less than this in
 /// every language (see the `bar_budget` test), so the chips never stack on one
 /// another or wrap onto a third row. Below it the window simply stops shrinking.
-pub(in crate::app) const SCHEDULE_WINDOW_MIN_W: f32 = 800.0;
+pub(in crate::app) const SCHEDULE_WINDOW_MIN_W: f32 = 860.0;
 
 /// Widths of the three text fields on the first bar row.
 const FIND_W: f32 = 130.0;
@@ -201,16 +201,6 @@ fn schedule_time(now: i64, ui: &ScheduleUi) -> i64 {
 
 fn hhmm_text(hhmm: u16) -> String {
     format!("{:02}:{:02}", hhmm / 100, hhmm % 100)
-}
-
-fn truncate(s: &str, n: usize) -> String {
-    if s.chars().count() <= n {
-        s.to_string()
-    } else {
-        let mut out: String = s.chars().take(n.saturating_sub(1)).collect();
-        out.push('…');
-        out
-    }
 }
 
 impl SdroxideApp {
@@ -781,16 +771,15 @@ fn cell<R>(
 ) -> R {
     let layout = match align {
         egui::Align::Max => egui::Layout::right_to_left(egui::Align::Center),
-        _ => egui::Layout::left_to_right(egui::Align::Center),
+        // Centred by the layout, not by a justified one that would stretch the
+        // widget: the cell is as tall as the widgets it holds.
+        egui::Align::Center => egui::Layout::top_down(egui::Align::Center),
+        egui::Align::Min => egui::Layout::left_to_right(egui::Align::Center),
     };
     let mut out = None;
     ui.allocate_ui_with_layout(egui::vec2(w, h), layout, |ui| {
         ui.set_width(w);
         ui.set_clip_rect(ui.clip_rect().intersect(ui.max_rect()));
-        if align == egui::Align::Center {
-            // Centred by hand: a justified layout would stretch the widget.
-            ui.add_space(0.0);
-        }
         out = Some(add(ui));
     });
     out.expect("the cell body ran")
@@ -819,7 +808,7 @@ impl Cols {
     fn new(ui: &egui::Ui, avail: f32, local: bool) -> Self {
         let font = egui::FontId::proportional(10.5);
         let sort_w =
-            crate::chrome::text_width(ui, &format!("{} ▼", tr!("schedule-sort")), font) + 34.0;
+            crate::chrome::text_width(ui, &format!("{} ▼", tr!("schedule-sort")), font) + 28.0;
         let chip = |label: String| crate::chrome::chip_width(ui, &label, None);
         let colour = super::colour_edit::colour_swatch_framed_width();
         let star = chip("PST".into()).max(30.0);
