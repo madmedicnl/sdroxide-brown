@@ -20,6 +20,7 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 
 ## Now
 
+- PROGRAMS window layout and persistence (added by F4NRM, owned by Claude) — branch `f4nrm/stoic-fermi-a0z0zp`, PR pending: columns, Sort menus, chip-framed colour, two-row bar, saved filters. Wacht op F4NRM's review.
 - SAT Doppler for CAT rigs (added by Roy, owned by Roy/SP9TKN) — step 1+2a+2b+2c
   implemented on branch `fork/sat-doppler-cat`. MSI build available. Wacht op
   SP9TKN's testresultaten. Design doc: `docs/SAT-DOPPLER-CAT-PLAN.md`.

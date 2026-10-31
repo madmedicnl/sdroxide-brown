@@ -6071,11 +6071,11 @@ schedule-all-favs = ⭐ ALL
 
 schedule-all-favs-hint = Favourite every schedule station, and show their labels on the waterfall while it stays on. Click again to clear all favourites.
 
-schedule-solar-time = SOLAR TIME
+schedule-solar-time = LOCAL TIME
 
-schedule-solar-time-hint = Show each row's local time at the transmitter — the Sun's clock, four minutes a degree from its longitude, not a civil time zone. It knows nothing of daylight saving or zone borders, so it is labelled solar rather than local.
+schedule-solar-time-hint = Show each row's local time at the transmitter. It is the Sun's clock — four minutes a degree from its longitude — not a civil time zone, so it knows nothing of daylight saving or zone borders.
 
-schedule-map = MAP
+schedule-map = SHOW MAP
 
 schedule-map-hint = Open LISTEN — this schedule as a map. Pick a station on it, write what you heard, and log it. The selected station comes across
 
@@ -9017,3 +9017,27 @@ adsbmap-airport-weather-credit = Weather: Open-Meteo.com
 adsbmap-airport-utc-wait = UTC { $time } (local time: loading…)
 
 adsbmap-airport-utc-offline = UTC { $time } (local time: offline)
+
+schedule-listen = LISTEN
+
+schedule-listen-hint = Tune the receiver to this station
+
+schedule-sort = Sort
+
+schedule-sort-asc = Ascending
+
+schedule-sort-desc = Descending
+
+schedule-col-freq = Freq.
+
+schedule-col-band = Band
+
+schedule-col-name = Name
+
+schedule-col-lang = Language
+
+schedule-col-target = Target
+
+schedule-col-site = Site
+
+schedule-col-local = Local

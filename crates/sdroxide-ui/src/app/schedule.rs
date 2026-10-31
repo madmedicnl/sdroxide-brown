@@ -8,21 +8,32 @@
 
 use crate::i18n::tr;
 use eframe::egui::{self, RichText};
-use sdroxide_types::{BroadcastStation, Command, RxId, ScheduleSource, Vfo, broadcast};
+use sdroxide_types::{
+    BroadcastStation, Command, ProgramsFilters, ProgramsSort, RxId, ScheduleSource, Vfo, broadcast,
+};
 
 use crate::app::SdroxideApp;
 use crate::app::swl_log::SwlEditForm;
 use crate::time::now_unix;
 
-/// The SCHEDULE window's default width, and what the filter row has to fit in.
-///
-/// **The row is one `horizontal` and does not wrap**, so this is a budget and not
-/// a preference: the source combobox was added beside `Band` because that is where
-/// filters live, and the row was already at the window's edge — "Aoki" sat half
-/// off it in the first build. Two things came out of that screenshot, and both are
-/// here rather than in the commit: the combobox moved to the chip row, and the
-/// window got wide enough that the row genuinely fits.
+/// The SCHEDULE window's default width.
 pub(in crate::app) const SCHEDULE_WINDOW_W: f32 = 1000.0;
+
+/// The narrowest the window goes. **The top bar is two rows and this is the
+/// budget they are drawn to**: each row's widgets add up to less than this in
+/// every language (see the `bar_budget` test), so the chips never stack on one
+/// another or wrap onto a third row. Below it the window simply stops shrinking.
+pub(in crate::app) const SCHEDULE_WINDOW_MIN_W: f32 = 860.0;
+
+/// Widths of the three text fields on the first bar row.
+const FIND_W: f32 = 130.0;
+const LANG_W: f32 = 80.0;
+const TARGET_W: f32 = 80.0;
+/// Widths of the two comboboxes on the second bar row.
+const BAND_W: f32 = 72.0;
+const SOURCE_W: f32 = 96.0;
+/// The gap between two columns of the list.
+const GAP: f32 = 8.0;
 
 /// The sources offered in the source filter, in the order the store ranks them.
 const SOURCE_FILTERS: &[(ScheduleSource, &str)] = &[
@@ -74,16 +85,25 @@ pub(in crate::app) struct ScheduleUi {
     /// the master store holds every downloaded source and the repetition is
     /// accepted, because this window is where the detail belongs.
     pub source: Option<ScheduleSource>,
-    /// Show each row's local mean solar time at the transmitter, from the
-    /// site's longitude. Off by default: most listeners work in UTC, and the
+    /// Show each row's local time at the transmitter (mean solar time, from the
+    /// site's longitude). Off by default: most listeners work in UTC, and the
     /// column is only as good as the site coordinate.
-    pub solar_time: bool,
+    pub local_time: bool,
+    /// The column the list is ordered by, and whether it is read backwards.
+    pub sort: ProgramsSort,
+    pub sort_desc: bool,
+    /// A filter changed and has not been written to the config yet. It waits for
+    /// the keyboard to be free so typing does not rewrite the file per letter.
+    unsaved: bool,
     /// The filtered list, and the key it was built for. Rebuilt only when the
     /// filters, the favourites, the loaded schedule or the UTC minute change —
     /// not sixty times a second over four and a half thousand rows.
-    cache_key: Option<(String, String, String, String, bool, usize, i64, Option<ScheduleSource>)>,
+    cache_key: Option<CacheKey>,
     cache: Vec<BroadcastStation>,
 }
+
+type CacheKey =
+    (String, String, String, String, bool, usize, i64, Option<ScheduleSource>, ProgramsSort, bool);
 
 impl Default for ScheduleUi {
     fn default() -> Self {
@@ -97,11 +117,77 @@ impl Default for ScheduleUi {
             use_now: true,
             favourites_only: false,
             source: None,
-            solar_time: false,
+            local_time: false,
+            sort: ProgramsSort::Freq,
+            sort_desc: false,
+            unsaved: false,
             cache_key: None,
             cache: Vec::new(),
         }
     }
+}
+
+impl ScheduleUi {
+    /// The window as it was left, from the saved filters.
+    pub(in crate::app) fn from_settings(f: &ProgramsFilters) -> Self {
+        ScheduleUi {
+            query: f.query.clone(),
+            lang: f.lang.clone(),
+            target: f.target.clone(),
+            band: f.band.clone(),
+            hhmm: f.hhmm,
+            use_now: f.use_now,
+            favourites_only: f.favourites_only,
+            source: f.source,
+            local_time: f.local_time,
+            sort: f.sort,
+            sort_desc: f.sort_desc,
+            ..Default::default()
+        }
+    }
+
+    /// The filters to save. `all` is the ALL chip, which lives on the app.
+    fn to_settings(&self, all: bool) -> ProgramsFilters {
+        ProgramsFilters {
+            query: self.query.clone(),
+            lang: self.lang.clone(),
+            target: self.target.clone(),
+            band: self.band.clone(),
+            hhmm: self.hhmm,
+            use_now: self.use_now,
+            favourites_only: self.favourites_only,
+            source: self.source,
+            local_time: self.local_time,
+            all,
+            sort: self.sort,
+            sort_desc: self.sort_desc,
+        }
+    }
+}
+
+/// Order the list by `col`, the other way round when `desc`. Ties fall back to
+/// frequency (always ascending), so equal names or bands stay in dial order.
+fn sort_rows(rows: &mut [BroadcastStation], col: ProgramsSort, desc: bool) {
+    use std::cmp::Ordering;
+    fn by_freq(a: &BroadcastStation, b: &BroadcastStation) -> Ordering {
+        a.freq_khz.partial_cmp(&b.freq_khz).unwrap_or(Ordering::Equal)
+    }
+    fn band_rank(khz: f64) -> usize {
+        broadcast::metre_band(khz)
+            .and_then(|b| BAND_FILTERS.iter().position(|x| *x == b))
+            .unwrap_or(usize::MAX)
+    }
+    rows.sort_by(|a, b| {
+        let primary = match col {
+            ProgramsSort::Freq => by_freq(a, b),
+            ProgramsSort::Band => band_rank(a.freq_khz).cmp(&band_rank(b.freq_khz)),
+            ProgramsSort::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            ProgramsSort::Lang => a.lang.to_lowercase().cmp(&b.lang.to_lowercase()),
+            ProgramsSort::Target => a.target.to_lowercase().cmp(&b.target.to_lowercase()),
+            ProgramsSort::Site => a.site.to_lowercase().cmp(&b.site.to_lowercase()),
+        };
+        (if desc { primary.reverse() } else { primary }).then_with(|| by_freq(a, b))
+    });
 }
 
 /// The UTC instant the schedule is filtered at: now, or today at `hhmm`.
@@ -117,16 +203,6 @@ fn hhmm_text(hhmm: u16) -> String {
     format!("{:02}:{:02}", hhmm / 100, hhmm % 100)
 }
 
-fn truncate(s: &str, n: usize) -> String {
-    if s.chars().count() <= n {
-        s.to_string()
-    } else {
-        let mut out: String = s.chars().take(n.saturating_sub(1)).collect();
-        out.push('…');
-        out
-    }
-}
-
 impl SdroxideApp {
     /// The SCHEDULE window. Tuning and logging are done by the commands and the
     /// entry form it fills in, after the window has closed the borrow of the log
@@ -138,6 +214,10 @@ impl SdroxideApp {
         let mut all_toggle: Option<bool> = None;
         if !self.schedule.show {
             self.schedule_was_open = false;
+            // Closed with a filter still unwritten (the keyboard was busy).
+            if self.schedule.unsaved {
+                self.save_programs_filters(ctx);
+            }
         } else {
             // Each opening gets its own window id, so the remembered geometry
             // is what applies — see `remembered_tool_window`.
@@ -151,12 +231,13 @@ impl SdroxideApp {
                 "schedule",
                 &tr!("schedule-title"),
                 [SCHEDULE_WINDOW_W, 560.0],
-                [480.0, 240.0],
+                [SCHEDULE_WINDOW_MIN_W, 240.0],
                 epoch,
                 |me, ui| {
                     me.schedule_body(ui, &mut tune, &mut log, &mut fav_toggle, &mut all_toggle)
                 },
             );
+            self.save_programs_filters(ctx);
         }
 
         if let Some((name, on)) = fav_toggle {
@@ -192,6 +273,22 @@ impl SdroxideApp {
                 antenna,
             ));
             self.show_swl = true;
+        }
+    }
+
+    /// Keep the PROGRAMS filters between sessions. A change is copied into the
+    /// settings at once; it is written to the config when no text box is being
+    /// typed in (or the window has closed), so a search is one write and not one
+    /// per letter.
+    fn save_programs_filters(&mut self, ctx: &egui::Context) {
+        let now = self.schedule.to_settings(self.ui_settings.programs.all);
+        if now != self.ui_settings.programs {
+            self.ui_settings.programs = now;
+            self.schedule.unsaved = true;
+        }
+        if self.schedule.unsaved && (ctx.memory(|m| m.focused()).is_none() || !self.schedule.show) {
+            self.schedule.unsaved = false;
+            crate::app::persist::persist_ui_settings(&self.ui_settings);
         }
     }
 
@@ -235,7 +332,7 @@ impl SdroxideApp {
         // edit the filters and to open the log.
         // On-air status changes at the minute, so the cache keys on the minute,
         // not on the second.
-        let key = (
+        let key: CacheKey = (
             self.schedule.query.clone(),
             self.schedule.lang.clone(),
             self.schedule.target.clone(),
@@ -244,6 +341,8 @@ impl SdroxideApp {
             self.broadcast.len(),
             at.div_euclid(60),
             self.schedule.source,
+            self.schedule.sort,
+            self.schedule.sort_desc,
         );
         let rows: Vec<BroadcastStation> = if self.schedule.cache_key.as_ref() == Some(&key) {
             // Lifted out for the frame and put back afterwards, so the closure
@@ -266,13 +365,16 @@ impl SdroxideApp {
                 })
                 .cloned()
                 .collect();
-            v.sort_by(|a, b| {
-                a.freq_khz.partial_cmp(&b.freq_khz).unwrap_or(std::cmp::Ordering::Equal)
-            });
+            sort_rows(&mut v, f.sort, f.sort_desc);
             v
         };
         let count = rows.len();
 
+        // **Two rows, no more.** The first is the time and the three text
+        // searches; the second the two dropdowns, the chips and the clock. Each is
+        // budgeted against `SCHEDULE_WINDOW_MIN_W` (see `bar_budget`), so the chips
+        // do not climb over one another when the window is narrow. `wrapped` is
+        // only the safety net for a screen narrower than the window's floor.
         ui.horizontal_wrapped(|ui| {
             ui.label(tr!("schedule-at"));
             if crate::chrome::chip(ui, self.schedule.use_now, tr!("schedule-now-chip")).clicked() {
@@ -297,22 +399,24 @@ impl SdroxideApp {
             crate::chrome::field(
                 ui,
                 egui::TextEdit::singleline(&mut self.schedule.query)
-                    .desired_width(150.0)
+                    .desired_width(FIND_W)
                     .hint_text(tr!("schedule-find-hint")),
             );
             ui.label(tr!("settings-ui-language"));
             crate::chrome::field(
                 ui,
-                egui::TextEdit::singleline(&mut self.schedule.lang).desired_width(90.0),
+                egui::TextEdit::singleline(&mut self.schedule.lang).desired_width(LANG_W),
             );
             ui.label(tr!("schedule-target"));
             crate::chrome::field(
                 ui,
-                egui::TextEdit::singleline(&mut self.schedule.target).desired_width(90.0),
+                egui::TextEdit::singleline(&mut self.schedule.target).desired_width(TARGET_W),
             );
+        });
+        ui.horizontal_wrapped(|ui| {
             ui.label(tr!("settings-relay-band"));
             egui::ComboBox::from_id_salt("sched-band")
-                .width(72.0)
+                .width(BAND_W)
                 .selected_text(if self.schedule.band.is_empty() {
                     tr!("schedule-any")
                 } else {
@@ -324,17 +428,17 @@ impl SdroxideApp {
                         ui.selectable_value(&mut self.schedule.band, b.to_string(), label);
                     }
                 });
-            // On the **chip row**, not beside Band: the filter row was already at
-            // the window's edge and a third combobox put "Aoki" half off it. The
-            // house rule is that a new control is priced before it is added, and
-            // this one was not.
             ui.label(tr!("schedule-source"));
             egui::ComboBox::from_id_salt("sched-source")
-                .width(96.0)
+                .width(SOURCE_W)
                 .selected_text(source_label(self.schedule.source))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.schedule.source, None, tr!("schedule-all-of-them"))
-                        .on_hover_text(tr!("schedule-all-hint"));
+                    ui.selectable_value(
+                        &mut self.schedule.source,
+                        None,
+                        tr!("schedule-all-of-them"),
+                    )
+                    .on_hover_text(tr!("schedule-all-hint"));
                     for (src, what) in SOURCE_FILTERS {
                         ui.selectable_value(
                             &mut self.schedule.source,
@@ -355,11 +459,11 @@ impl SdroxideApp {
             {
                 *all_toggle = Some(!self.broadcast_all);
             }
-            if crate::chrome::chip(ui, self.schedule.solar_time, tr!("schedule-solar-time"))
+            if crate::chrome::chip(ui, self.schedule.local_time, tr!("schedule-solar-time"))
                 .on_hover_text(tr!("schedule-solar-time-hint"))
                 .clicked()
             {
-                self.schedule.solar_time = !self.schedule.solar_time;
+                self.schedule.local_time = !self.schedule.local_time;
             }
             ui.separator();
             // **The way into LISTEN**, and deliberately here rather than as a
@@ -386,104 +490,111 @@ impl SdroxideApp {
                     self.listen_select(&name);
                 }
             }
-            ui.separator();
-            ui.label(
-                RichText::new(crate::time::utc_and_local_now(now))
-                    .monospace()
-                    .color(crate::theme::CYAN()),
-            );
-            // The build, beside the clock — see the SWL LOG window.
-            ui.label(
-                RichText::new(format!("v{}", sdroxide_version::VERSION))
-                    .size(10.5)
-                    .color(crate::theme::gray(120)),
-            )
-            .on_hover_text(sdroxide_version::LONG_VERSION);
         });
         ui.add_space(2.0);
-        ui.label(
-            RichText::new(tr!(
-                "schedule-on-air",
-                count = count,
-                time = if self.schedule.use_now {
-                    tr!("schedule-now")
-                } else {
-                    hhmm_text(self.schedule.hhmm)
-                }
-            ))
-            .size(11.0)
-            .color(crate::theme::gray(150)),
-        );
-        // The waterfall label colour for every station, and the way back to the
-        // stock tint. A single station's colour is on its row.
+        // The count on the left; the clock and the build on the right. They were
+        // on the chip row until that row ran out of width.
         ui.horizontal(|ui| {
-            ui.label(RichText::new(tr!("schedule-colour-all")).size(11.0))
-                .on_hover_text(tr!("schedule-colour-all-hint"));
-            let stock = crate::theme::spot_color(sdroxide_types::SpotKind::Broadcast);
-            let mut all = self.ui_settings.programs_colour_all.unwrap_or([stock.0, stock.1, stock.2]);
-            if super::colour_edit::colour_edit(ui, &mut all) {
-                // "All" means all: the colours picked one by one give way to it.
-                self.ui_settings.programs_colour_all = Some(all);
-                self.ui_settings.programs_colours.clear();
-                crate::app::persist::persist_ui_settings(&self.ui_settings);
-            }
-            if crate::chrome::chip(ui, false, RichText::new(tr!("schedule-colour-reset")).size(11.0))
-                .on_hover_text(tr!("schedule-colour-reset-hint"))
-                .clicked()
-            {
-                self.ui_settings.programs_colour_all = None;
-                self.ui_settings.programs_colours.clear();
-                crate::app::persist::persist_ui_settings(&self.ui_settings);
-            }
+            ui.label(
+                RichText::new(tr!(
+                    "schedule-on-air",
+                    count = count,
+                    time = if self.schedule.use_now {
+                        tr!("schedule-now")
+                    } else {
+                        hhmm_text(self.schedule.hhmm)
+                    }
+                ))
+                .size(11.0)
+                .color(crate::theme::gray(150)),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // The build, beside the clock — see the SWL LOG window.
+                ui.label(
+                    RichText::new(format!("v{}", sdroxide_version::VERSION))
+                        .size(10.5)
+                        .color(crate::theme::gray(120)),
+                )
+                .on_hover_text(sdroxide_version::LONG_VERSION);
+                ui.label(
+                    RichText::new(crate::time::utc_and_local_now(now))
+                        .monospace()
+                        .color(crate::theme::CYAN()),
+                );
+            });
         });
+        ui.add_space(2.0);
+
+        // The list's columns. The header and every row are cut to the same
+        // widths, so a long name or a missing language no longer moves the rest
+        // of its row, and the controls sit over the column they act on.
+        let cols = Cols::new(ui, ui.available_width(), self.schedule.local_time);
+        let row_h = crate::chrome::chip_height(ui, None);
+        self.schedule_header(ui, &cols, row_h);
         ui.separator();
-        egui::ScrollArea::vertical().auto_shrink([false, false]).id_salt("sched-list").show(
+
+        let local_time = self.schedule.local_time;
+        egui::ScrollArea::vertical().auto_shrink([false, false]).id_salt("sched-list").show_rows(
             ui,
-            |ui| {
-                for s in &rows {
+            row_h,
+            rows.len(),
+            |ui, range| {
+                for s in &rows[range] {
                     ui.horizontal(|ui| {
-                        ui.label(
-                            RichText::new(format!("{:>6}", s.freq_khz.round() as i64)).monospace(),
-                        );
-                        ui.label(
-                            RichText::new(broadcast::metre_band(s.freq_khz).unwrap_or(""))
-                                .size(11.0)
-                                .color(crate::theme::CYAN()),
-                        );
-                        ui.label(RichText::new(truncate(&s.name, 30)).strong());
-                        ui.label(
-                            RichText::new(truncate(&s.lang, 12))
-                                .size(11.0)
-                                .color(crate::theme::gray(160)),
-                        );
-                        ui.label(
-                            RichText::new(truncate(&s.target, 12))
-                                .size(11.0)
-                                .color(crate::theme::gray(160)),
-                        );
-                        ui.label(
-                            RichText::new(truncate(&s.site, 18))
-                                .size(11.0)
-                                .color(crate::theme::gray(140)),
-                        );
-                        if self.schedule.solar_time
-                            && let Some(lon) = s.lon
-                        {
-                            let (_, _, _, h, mi, _) = sdroxide_types::utc_ymd_hms(now);
-                            let local =
-                                broadcast::local_solar_hhmm(h as u16 * 100 + mi as u16, lon);
+                        ui.spacing_mut().item_spacing.x = GAP;
+                        cell(ui, cols.freq, row_h, egui::Align::Max, |ui| {
                             ui.label(
-                                RichText::new(local.clone())
+                                RichText::new(format!("{}", s.freq_khz.round() as i64)).monospace(),
+                            );
+                        });
+                        cell(ui, cols.band, row_h, egui::Align::Min, |ui| {
+                            ui.label(
+                                RichText::new(broadcast::metre_band(s.freq_khz).unwrap_or(""))
                                     .size(11.0)
-                                    .monospace()
-                                    .color(crate::theme::gray(140)),
-                            )
-                            .on_hover_text(tr!(
-                                "schedule-solar-hover",
-                                local = local,
-                                site = s.site,
-                                lon = format!("{lon:.1}")
-                            ));
+                                    .color(crate::theme::CYAN()),
+                            );
+                        });
+                        cell(ui, cols.name, row_h, egui::Align::Min, |ui| {
+                            ui.add(egui::Label::new(RichText::new(&s.name).strong()).truncate());
+                        });
+                        for (w, text, grey) in [
+                            (cols.lang, &s.lang, 160),
+                            (cols.target, &s.target, 160),
+                            (cols.site, &s.site, 140),
+                        ] {
+                            cell(ui, w, row_h, egui::Align::Min, |ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(text)
+                                            .size(11.0)
+                                            .color(crate::theme::gray(grey)),
+                                    )
+                                    .truncate(),
+                                );
+                            });
+                        }
+                        if local_time {
+                            cell(ui, cols.local, row_h, egui::Align::Min, |ui| {
+                                if let Some(lon) = s.lon {
+                                    let (_, _, _, h, mi, _) = sdroxide_types::utc_ymd_hms(now);
+                                    let local = broadcast::local_solar_hhmm(
+                                        h as u16 * 100 + mi as u16,
+                                        lon,
+                                    );
+                                    ui.label(
+                                        RichText::new(local.clone())
+                                            .size(11.0)
+                                            .monospace()
+                                            .color(crate::theme::gray(140)),
+                                    )
+                                    .on_hover_text(tr!(
+                                        "schedule-solar-hover",
+                                        local = local,
+                                        site = s.site,
+                                        lon = format!("{lon:.1}")
+                                    ));
+                                }
+                            });
                         }
                         let stock = crate::theme::spot_color(sdroxide_types::SpotKind::Broadcast);
                         let mut col = self
@@ -493,28 +604,38 @@ impl SdroxideApp {
                             .copied()
                             .or(self.ui_settings.programs_colour_all)
                             .unwrap_or([stock.0, stock.1, stock.2]);
-                        if ui
-                            .color_edit_button_srgb(&mut col)
-                            .on_hover_text(tr!("schedule-colour-station-hint"))
-                            .changed()
-                        {
-                            self.ui_settings.programs_colours.insert(s.name.clone(), col);
-                            crate::app::persist::persist_ui_settings(&self.ui_settings);
-                        }
+                        cell(ui, cols.colour, row_h, egui::Align::Center, |ui| {
+                            if super::colour_edit::colour_swatch_framed(ui, &mut col)
+                                .on_hover_text(tr!("schedule-colour-station-hint"))
+                                .changed()
+                            {
+                                self.ui_settings.programs_colours.insert(s.name.clone(), col);
+                                crate::app::persist::persist_ui_settings(&self.ui_settings);
+                            }
+                        });
                         let fav = self.broadcast_favs.iter().any(|n| n == &s.name);
-                        if ui
-                            .small_button(if fav { "★" } else { "☆" })
-                            .on_hover_text(tr!("schedule-favourite-hint"))
-                            .clicked()
-                        {
-                            *fav_toggle = Some((s.name.clone(), !fav));
-                        }
-                        if ui.small_button(tr!("sat-tune")).clicked() {
-                            *tune = Some(s.clone());
-                        }
-                        if ui.small_button(tr!("topbar-chip-log")).clicked() {
-                            *log = Some(s.clone());
-                        }
+                        cell(ui, cols.star, row_h, egui::Align::Center, |ui| {
+                            if ui
+                                .small_button(if fav { "★" } else { "☆" })
+                                .on_hover_text(tr!("schedule-favourite-hint"))
+                                .clicked()
+                            {
+                                *fav_toggle = Some((s.name.clone(), !fav));
+                            }
+                        });
+                        cell(ui, cols.listen, row_h, egui::Align::Min, |ui| {
+                            if crate::chrome::chip(ui, false, tr!("schedule-listen"))
+                                .on_hover_text(tr!("schedule-listen-hint"))
+                                .clicked()
+                            {
+                                *tune = Some(s.clone());
+                            }
+                        });
+                        cell(ui, cols.log, row_h, egui::Align::Min, |ui| {
+                            if crate::chrome::chip(ui, false, tr!("topbar-chip-log")).clicked() {
+                                *log = Some(s.clone());
+                            }
+                        });
                     });
                 }
             },
@@ -522,6 +643,184 @@ impl SdroxideApp {
 
         self.schedule.cache = rows;
         self.schedule.cache_key = Some(key);
+    }
+
+    /// The list's header, in three rows over the same columns as the data: a
+    /// SORT menu over each data column, the column names, then the colour
+    /// controls — the palette over the colour column, PST over the stars and
+    /// DEFAULT over LISTEN.
+    fn schedule_header(&mut self, ui: &mut egui::Ui, cols: &Cols, row_h: f32) {
+        let local = self.schedule.local_time;
+        let data: [(ProgramsSort, f32, String); 6] = [
+            (ProgramsSort::Freq, cols.freq, tr!("schedule-col-freq")),
+            (ProgramsSort::Band, cols.band, tr!("schedule-col-band")),
+            (ProgramsSort::Name, cols.name, tr!("schedule-col-name")),
+            (ProgramsSort::Lang, cols.lang, tr!("schedule-col-lang")),
+            (ProgramsSort::Target, cols.target, tr!("schedule-col-target")),
+            (ProgramsSort::Site, cols.site, tr!("schedule-col-site")),
+        ];
+
+        // Row 1 — the SORT menus.
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = GAP;
+            for (col, w, _) in &data {
+                let active = self.schedule.sort == *col;
+                let arrow = match (active, self.schedule.sort_desc) {
+                    (false, _) => "",
+                    (true, false) => " ▲",
+                    (true, true) => " ▼",
+                };
+                cell(ui, *w, row_h, egui::Align::Min, |ui| {
+                    egui::ComboBox::from_id_salt(("sched-sort", *col as u8))
+                        .width(*w - 20.0)
+                        .selected_text(
+                            RichText::new(format!("{}{arrow}", tr!("schedule-sort"))).size(10.5),
+                        )
+                        .show_ui(ui, |ui| {
+                            let asc = active && !self.schedule.sort_desc;
+                            let desc = active && self.schedule.sort_desc;
+                            if ui.selectable_label(asc, tr!("schedule-sort-asc")).clicked() {
+                                self.schedule.sort = *col;
+                                self.schedule.sort_desc = false;
+                            }
+                            if ui.selectable_label(desc, tr!("schedule-sort-desc")).clicked() {
+                                self.schedule.sort = *col;
+                                self.schedule.sort_desc = true;
+                            }
+                        });
+                });
+            }
+        });
+
+        // Row 2 — the column names.
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = GAP;
+            for (_, w, name) in &data {
+                cell(ui, *w, row_h, egui::Align::Min, |ui| {
+                    ui.label(RichText::new(name).size(10.5).color(crate::theme::gray(150)));
+                });
+            }
+            if local {
+                cell(ui, cols.local, row_h, egui::Align::Min, |ui| {
+                    ui.label(
+                        RichText::new(tr!("schedule-col-local"))
+                            .size(10.5)
+                            .color(crate::theme::gray(150)),
+                    );
+                });
+            }
+            cell(ui, cols.colour, row_h, egui::Align::Center, |ui| {
+                ui.label(
+                    RichText::new(tr!("schedule-colour-all"))
+                        .size(10.5)
+                        .color(crate::theme::gray(150)),
+                )
+                .on_hover_text(tr!("schedule-colour-all-hint"));
+            });
+        });
+
+        // Row 3 — the colour for every station: palette, PST, DEFAULT.
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = GAP;
+            let before = cols.freq
+                + cols.band
+                + cols.name
+                + cols.lang
+                + cols.target
+                + cols.site
+                + if local { cols.local } else { 0.0 }
+                + (if local { 7.0 } else { 6.0 }) * GAP;
+            ui.add_space(before);
+            let stock = crate::theme::spot_color(sdroxide_types::SpotKind::Broadcast);
+            let mut all =
+                self.ui_settings.programs_colour_all.unwrap_or([stock.0, stock.1, stock.2]);
+            let swatch = cell(ui, cols.colour, row_h, egui::Align::Center, |ui| {
+                super::colour_edit::colour_swatch_framed(ui, &mut all)
+            });
+            let paste = cell(ui, cols.star, row_h, egui::Align::Center, |ui| {
+                crate::chrome::chip(ui, false, "PST")
+            });
+            if super::colour_edit::colour_paste(ui, &mut all, &swatch, paste) | swatch.changed() {
+                // "All" means all: the colours picked one by one give way to it.
+                self.ui_settings.programs_colour_all = Some(all);
+                self.ui_settings.programs_colours.clear();
+                crate::app::persist::persist_ui_settings(&self.ui_settings);
+            }
+            cell(ui, cols.listen, row_h, egui::Align::Min, |ui| {
+                if crate::chrome::chip(ui, false, tr!("schedule-colour-reset"))
+                    .on_hover_text(tr!("schedule-colour-reset-hint"))
+                    .clicked()
+                {
+                    self.ui_settings.programs_colour_all = None;
+                    self.ui_settings.programs_colours.clear();
+                    crate::app::persist::persist_ui_settings(&self.ui_settings);
+                }
+            });
+        });
+    }
+}
+
+/// One cell of the list: `w` wide whatever it holds, so the columns line up
+/// from row to row. The content is aligned inside it by `align`.
+fn cell<R>(
+    ui: &mut egui::Ui,
+    w: f32,
+    h: f32,
+    align: egui::Align,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let layout = match align {
+        egui::Align::Max => egui::Layout::right_to_left(egui::Align::Center),
+        // Centred by the layout, not by a justified one that would stretch the
+        // widget: the cell is as tall as the widgets it holds.
+        egui::Align::Center => egui::Layout::top_down(egui::Align::Center),
+        egui::Align::Min => egui::Layout::left_to_right(egui::Align::Center),
+    };
+    let mut out = None;
+    ui.allocate_ui_with_layout(egui::vec2(w, h), layout, |ui| {
+        ui.set_width(w);
+        ui.set_clip_rect(ui.clip_rect().intersect(ui.max_rect()));
+        out = Some(add(ui));
+    });
+    out.expect("the cell body ran")
+}
+
+/// The widths of the list's columns.
+struct Cols {
+    freq: f32,
+    band: f32,
+    name: f32,
+    lang: f32,
+    target: f32,
+    site: f32,
+    local: f32,
+    colour: f32,
+    star: f32,
+    listen: f32,
+    log: f32,
+}
+
+impl Cols {
+    /// The columns for a list `avail` wide. Every column is as wide as the
+    /// widest thing that ever goes in it — its SORT menu, its chip — measured in
+    /// the language on screen, so nothing overlaps its neighbour; the name takes
+    /// whatever is left.
+    fn new(ui: &egui::Ui, avail: f32, local: bool) -> Self {
+        let font = egui::FontId::proportional(10.5);
+        let sort_w =
+            crate::chrome::text_width(ui, &format!("{} ▼", tr!("schedule-sort")), font) + 28.0;
+        let chip = |label: String| crate::chrome::chip_width(ui, &label, None);
+        let colour = super::colour_edit::colour_swatch_framed_width();
+        let star = chip("PST".into()).max(30.0);
+        let listen = chip(tr!("schedule-listen")).max(chip(tr!("schedule-colour-reset")));
+        let log = chip(tr!("topbar-chip-log"));
+        let (freq, band) = (sort_w.max(54.0), sort_w.max(46.0));
+        let (lang, target, site) = (sort_w.max(64.0), sort_w.max(64.0), sort_w.max(100.0));
+        let local_w = if local { 52.0 } else { 0.0 };
+        let n = if local { 11.0 } else { 10.0 };
+        let fixed = freq + band + lang + target + site + local_w + colour + star + listen + log;
+        let name = (avail - fixed - (n - 1.0) * GAP - 2.0).max(90.0);
+        Cols { freq, band, name, lang, target, site, local: local_w, colour, star, listen, log }
     }
 }
 
@@ -565,46 +864,140 @@ mod source_filter_tests {
 }
 
 #[cfg(test)]
-mod filter_row_width {
-    use super::{BAND_FILTERS, SCHEDULE_WINDOW_W, ScheduleUi};
+mod bar_budget {
+    use super::*;
 
-    /// What is left of the window's width for content: egui's window margin
-    /// either side plus the frame's stroke.
-    const INNER_W: f32 = SCHEDULE_WINDOW_W - 2.0 * 10.0 - 2.0;
+    /// What each of the two bar rows asks of the window, in points, measured
+    /// with the real chip and text metrics. Labels are English stretched by a
+    /// third — German and Dutch run about that much longer — because the language
+    /// is process-wide and a test cannot switch it without racing the others.
+    fn rows_need(ctx: &egui::Context) -> (f32, f32) {
+        let mut out = (0.0, 0.0);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1000.0, 600.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| {
+            let gap = ui.spacing().item_spacing.x;
+            let label =
+                |t: &str| crate::chrome::text_width(ui, t, egui::FontId::proportional(14.0)) * 1.33;
+            let chip = |t: &str| crate::chrome::chip_width(ui, t, None) * 1.33;
+            let btn = |t: &str| label(t) + 2.0 * ui.spacing().button_padding.x;
+            let sep = 1.0;
+            let row1 = [
+                label("At"),
+                chip("NOW"),
+                50.0,
+                btn("set time"),
+                sep,
+                label("Find"),
+                FIND_W,
+                label("Language"),
+                LANG_W,
+                label("Target"),
+                TARGET_W,
+            ];
+            let row2 = [
+                label("Band"),
+                BAND_W + 20.0,
+                label("Source"),
+                SOURCE_W + 20.0,
+                chip("★ FAVS"),
+                chip("⭐ ALL"),
+                chip("LOCAL TIME"),
+                sep,
+                chip("SHOW MAP"),
+            ];
+            let total = |r: &[f32]| r.iter().sum::<f32>() + gap * (r.len() as f32 - 1.0);
+            out = (total(&row1), total(&row2));
+        });
+        out
+    }
 
-    /// The filter row's cheapest honest description: it is a single `horizontal`,
-    /// so **anything added to it is added to one line**. That is the whole reason
-    /// the source combobox overflowed the window — it went in beside `Band`
-    /// because that is where filters live, and the row was already at the edge.
-    ///
-    /// This is a budget, not a layout test: it cannot see egui's own widths, so
-    /// it pins the *decision* (Source is not on this row) and the number that
-    /// made the decision. A pixel-accurate guard belongs to the window oracle,
-    /// which measures ink — and ink, not geometry, is what an operator sees.
+    /// **Two rows, and each fits the window's floor.** The chips of the old
+    /// single wrapping row stacked on one another in a narrow window; the bar is
+    /// now two rows whose widths are checked here against the narrowest the
+    /// window goes, window margins taken off.
     #[test]
-    fn the_filter_row_has_room_left_after_the_two_comboboxes() {
-        // The widths the row actually asks for, as the widgets are written.
-        let fields = [150.0_f32, 90.0, 90.0]; // Find, Language, Target
-        let band = 72.0;
-        let chips = ["At", "NOW", "set time", "Band"];
-        let field = fields.iter().sum::<f32>();
-        // egui's own overhead per label and per widget, measured rather than
-        // guessed: a label is ~7 pt of text plus ~6 pt of spacing.
-        let per_label = 13.0;
-        let budget: f32 = fields.iter().sum::<f32>()
-            + band
-            + chips.len() as f32 * (28.0 + per_label)
-            + (chips.len() + 3) as f32 * per_label
-            + 8.0 * 13.0;
-        assert!(
-            budget < INNER_W,
-            "the filter row asks {budget:.0} pt against {inner:.0} pt of window; \
-             that is what put \"Aoki\" half off the edge",
-            inner = INNER_W
+    fn each_bar_row_fits_the_narrowest_window() {
+        let ctx = egui::Context::default();
+        let inner = SCHEDULE_WINDOW_MIN_W - 2.0 * 10.0 - 2.0;
+        let (r1, r2) = rows_need(&ctx);
+        assert!(r1 < inner, "the time and search row needs {r1:.0} pt of {inner:.0}");
+        assert!(r2 < inner, "the dropdown and chip row needs {r2:.0} pt of {inner:.0}");
+    }
+}
+
+#[cfg(test)]
+mod sort_and_filters {
+    use super::*;
+
+    fn st(name: &str, khz: f64, lang: &str) -> BroadcastStation {
+        BroadcastStation {
+            name: name.into(),
+            freq_khz: khz,
+            lang: lang.into(),
+            ..Default::default()
+        }
+    }
+
+    fn names(rows: &[BroadcastStation]) -> Vec<&str> {
+        rows.iter().map(|s| s.name.as_str()).collect()
+    }
+
+    #[test]
+    fn the_list_sorts_by_each_column_both_ways() {
+        let mut v = vec![
+            st("bravo", 9410.0, "FR"),
+            st("Alpha", 6070.0, "en"),
+            st("charlie", 15735.0, "FR"),
+        ];
+        sort_rows(&mut v, ProgramsSort::Freq, false);
+        assert_eq!(names(&v), ["Alpha", "bravo", "charlie"]);
+        sort_rows(&mut v, ProgramsSort::Freq, true);
+        assert_eq!(names(&v), ["charlie", "bravo", "Alpha"]);
+        sort_rows(&mut v, ProgramsSort::Name, false);
+        assert_eq!(names(&v), ["Alpha", "bravo", "charlie"], "names compare without case");
+        sort_rows(&mut v, ProgramsSort::Name, true);
+        assert_eq!(names(&v), ["charlie", "bravo", "Alpha"]);
+        sort_rows(&mut v, ProgramsSort::Lang, false);
+        assert_eq!(names(&v), ["Alpha", "bravo", "charlie"], "equal languages keep dial order");
+        sort_rows(&mut v, ProgramsSort::Band, false);
+        assert_eq!(
+            names(&v),
+            ["Alpha", "bravo", "charlie"],
+            "49m, 31m, 19m is 6070 before 9410 before 15735"
         );
-        assert!(field > 0.0 && !BAND_FILTERS.is_empty());
-        assert!(INNER_W > 0.0);
-        // And the state still has somewhere to put a source.
-        let _ = ScheduleUi::default().source;
+    }
+
+    /// Every filter, the sort and the TOUT chip go out and come back as they
+    /// were, and the window built from them filters the same way.
+    #[test]
+    fn the_window_reopens_as_it_was_left() {
+        let mut ui = ScheduleUi::default();
+        ui.query = "bbc".into();
+        ui.lang = "en".into();
+        ui.target = "af".into();
+        ui.band = "49m".into();
+        ui.hhmm = 1423;
+        ui.use_now = false;
+        ui.favourites_only = true;
+        ui.source = Some(ScheduleSource::Hfcc);
+        ui.local_time = true;
+        ui.sort = ProgramsSort::Site;
+        ui.sort_desc = true;
+        let saved = ui.to_settings(true);
+        assert!(saved.all, "TOUT is kept");
+        let back = ScheduleUi::from_settings(&saved);
+        assert_eq!(back.to_settings(true), saved);
+        assert!(!back.use_now && back.local_time && back.sort_desc);
+        assert_eq!(back.source, Some(ScheduleSource::Hfcc));
+        // A fresh install opens on "now", sorted by frequency.
+        let fresh = ScheduleUi::from_settings(&ProgramsFilters::default());
+        assert!(fresh.use_now);
+        assert_eq!(fresh.sort, ProgramsSort::Freq);
     }
 }
