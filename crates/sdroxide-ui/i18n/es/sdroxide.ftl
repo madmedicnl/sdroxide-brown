@@ -8969,6 +8969,25 @@ tx-bands-listen-hint = Pasar a la pantalla de escucha (sin controles de transmis
 
 tx-bands-ptt-off = La transmisión está desactivada en esta banda, o las bandas de transmisión aún no están confirmadas (Ajustes → Radio → Bandas de transmisión).
 
+adsbmap-surface-asphalt = asfalto
+
+adsbmap-surface-concrete = hormigón
+
+adsbmap-surface-grass = hierba
+
+adsbmap-surface-gravel = grava
+
+adsbmap-surface-dirt = tierra
+
+adsbmap-surface-water = agua
+
+adsbmap-airport-runway-lit = iluminada
+
+adsbmap-airport-more = +{ $n } más
+
+adsbmap-airport-freq-head = Frecuencias, MHz
+
+adsbmap-airport-data-date = datos de pistas y frecuencias del { $date }
 aircraft-online-switch = En línea
 
 aircraft-online-switch-on-hover = En línea: el tipo, el operador, la ruta y la foto proceden de adsbdb y Planespotters, que su estación consulta por usted. Pulse para desactivar; la estación recuerda su elección. Nada más sale de la estación.

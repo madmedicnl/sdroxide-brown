@@ -8968,6 +8968,25 @@ tx-bands-listen-hint = Zur Höransicht wechseln (ohne Sendebedienung), um jedes 
 
 tx-bands-ptt-off = Senden ist für dieses Band aus oder die Sendebänder sind noch nicht bestätigt (Einstellungen → Funkgerät → Sendebänder).
 
+adsbmap-surface-asphalt = Asphalt
+
+adsbmap-surface-concrete = Beton
+
+adsbmap-surface-grass = Gras
+
+adsbmap-surface-gravel = Schotter
+
+adsbmap-surface-dirt = Erde
+
+adsbmap-surface-water = Wasser
+
+adsbmap-airport-runway-lit = befeuert
+
+adsbmap-airport-more = +{ $n } weitere
+
+adsbmap-airport-freq-head = Frequenzen, MHz
+
+adsbmap-airport-data-date = Bahn- und Frequenzdaten vom { $date }
 aircraft-online-switch = Online
 
 aircraft-online-switch-on-hover = Online: Typ, Betreiber, Route und Foto stammen von adsbdb und Planespotters, von Ihrer Station für Sie abgefragt. Klicken zum Ausschalten; die Station merkt sich Ihre Wahl. Sonst verlässt nichts die Station.

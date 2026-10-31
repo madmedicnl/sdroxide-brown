@@ -8978,6 +8978,25 @@ tx-bands-listen-hint = Naar het luisterscherm (zonder zendbediening) om op elke 
 
 tx-bands-ptt-off = Zenden staat uit voor deze band, of de zendbanden zijn nog niet bevestigd (Instellingen → Radio → Zendbanden).
 
+adsbmap-surface-asphalt = asfalt
+
+adsbmap-surface-concrete = beton
+
+adsbmap-surface-grass = gras
+
+adsbmap-surface-gravel = grind
+
+adsbmap-surface-dirt = aarde
+
+adsbmap-surface-water = water
+
+adsbmap-airport-runway-lit = verlicht
+
+adsbmap-airport-more = +{ $n } meer
+
+adsbmap-airport-freq-head = Frequenties, MHz
+
+adsbmap-airport-data-date = baan- en frequentiegegevens van { $date }
 aircraft-online-switch = Online
 
 aircraft-online-switch-on-hover = Online: type, exploitant, route en foto komen van adsbdb en Planespotters, door uw station voor u opgevraagd. Klik om uit te zetten; het station onthoudt uw keuze. Er verlaat verder niets het station.

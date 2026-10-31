@@ -78,6 +78,7 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 - AppImage — beslissing nodig.
 
 ## Recently done
+- 2026-10-31 — Airport card (PR 2 of 4): the pinned card lists up to 4 runways and 6 frequencies from embedded OurAirports tables (offline, dated), lengths in the chosen units, and "aircraft within" reaches 100 km instead of 25 (added by madmedicnl, owned by Roy)
 - 2026-10-31 — Aircraft online relay is ON by default and one visible "Online" switch sits at the top of the AIRCRAFT window (was off, hidden under a selected card, 4 clicks away). The station keeps an "off" mark (`aircraft-online.off`); `SDROXIDE_AIRCRAFT_ONLINE=0` holds it off, `=1` on. First of 4 PRs for the airport card (runways/frequencies, Wikipedia thumbnail, local time/temperature follow) (added by madmedicnl, owned by Roy; changes a privacy default, PR for F4NRM's review)
 - 2026-10-30 — Aircraft photo: the station keeps 10 thumbnails for 30 s (was 1), loads several aircraft at once (up to 3, same aircraft once) instead of answering 429, frees its place even if a download panics, a closing card releases only its own picture, and a failed thumbnail is asked again (3 times) while the card stays open (added by madmedicnl, owned by Roy)
 - 2026-10-29 — Every message log keeps at most 200 (ACARS, DSC, APRS, VDL2 were 300/300/300/2000), VDL2 list newest first (added by madmedicnl, owned by Roy; touches F4NRM's DSC/NAVTEX/APRS caps, PR for his review)

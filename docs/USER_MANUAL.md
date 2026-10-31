@@ -6148,8 +6148,19 @@ aid transmits, and an aid parked on a dial still in a lane mode would be silence
 and then a retune. The same rule holds for every mode whose frequency is fixed:
 a click that tunes goes to the dial that mode is not using.
 
-**An airport cannot be tuned** — no frequency is published for one. What is
-tunable is the aid beside it.
+**An airport cannot be tuned** — its frequencies are listed, not wired to the
+dial. What is tunable is the aid beside it.
+
+**Click an airport to open its card.** Hovering gives the short card (codes,
+name, field height, distance, traffic). Clicking pins the full one: up to four
+**runways** (both ends, length, surface, lit or not; `+N more` for the rest) and
+up to six **frequencies** (tower, ground, ATIS, approach, departure, CTAF,
+UNICOM, delivery, AFIS; `+N more`), with the date of the data at the bottom.
+They come from the OurAirports tables inside the program, so they work offline —
+and because frequencies change, check the date and the chart before you rely on
+one. An airport the source says nothing about shows no runway or frequency line.
+Lengths follow the units chip (feet; metres in **Metric**). "Aircraft within" now
+counts out to 100 km (62 mi).
 
 **A target with a stale position is not drawn at all.** Past the timeout it
 comes off the map — square, dots and block together — while staying on the list,

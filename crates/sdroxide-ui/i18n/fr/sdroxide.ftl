@@ -8981,6 +8981,25 @@ tx-bands-listen-hint = Passer à l'écran d'écoute (sans commandes d'émission)
 
 tx-bands-ptt-off = L'émission est coupée pour cette bande, ou les bandes d'émission ne sont pas encore validées (Réglages → Radio → Bandes d'émission).
 
+adsbmap-surface-asphalt = asphalte
+
+adsbmap-surface-concrete = béton
+
+adsbmap-surface-grass = herbe
+
+adsbmap-surface-gravel = gravier
+
+adsbmap-surface-dirt = terre
+
+adsbmap-surface-water = eau
+
+adsbmap-airport-runway-lit = éclairée
+
+adsbmap-airport-more = +{ $n } autres
+
+adsbmap-airport-freq-head = Fréquences, MHz
+
+adsbmap-airport-data-date = données pistes et fréquences du { $date }
 aircraft-online-switch = En ligne
 
 aircraft-online-switch-on-hover = En ligne : le type, l'exploitant, la route et la photo viennent d'adsbdb et de Planespotters, demandés par votre station pour vous. Cliquez pour désactiver ; la station garde votre choix. Rien d'autre ne quitte la station.

@@ -8979,6 +8979,25 @@ tx-bands-listen-hint = Switch to the listening screen (no transmit controls) to 
 
 tx-bands-ptt-off = Transmit is off for this band, or the transmit bands are not confirmed yet (Settings → Radio → Transmit bands).
 
+adsbmap-surface-asphalt = asphalt
+
+adsbmap-surface-concrete = concrete
+
+adsbmap-surface-grass = grass
+
+adsbmap-surface-gravel = gravel
+
+adsbmap-surface-dirt = dirt
+
+adsbmap-surface-water = water
+
+adsbmap-airport-runway-lit = lit
+
+adsbmap-airport-more = +{ $n } more
+
+adsbmap-airport-freq-head = Frequencies, MHz
+
+adsbmap-airport-data-date = runway and frequency data of { $date }
 aircraft-online-switch = Online
 
 aircraft-online-switch-on-hover = Online: type, operator, route and photo come from adsbdb and Planespotters, asked by your station for you. Click to turn off; the station keeps your choice. Nothing else leaves the station.
