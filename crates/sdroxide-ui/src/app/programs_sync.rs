@@ -28,6 +28,9 @@ enum Phase {
     Reading,
     /// The station's state is known; changes are written.
     Ready,
+    /// The station has no `/programs-state` (404, 405 or 501 on the read):
+    /// nothing more is sent this session.
+    Absent,
 }
 
 /// What was last asked, to know what an answer is the answer to.
@@ -81,7 +84,7 @@ impl ProgramsSync {
                 self.in_flight = true;
                 Some(None)
             }
-            Phase::Reading => None,
+            Phase::Reading | Phase::Absent => None,
             Phase::Ready => {
                 if typing || self.synced.as_ref() == Some(current) {
                     return None;
@@ -110,6 +113,13 @@ impl ProgramsSync {
             .then(|| serde_json::from_str::<ProgramsState>(body).ok())
             .flatten();
         let Some(state) = state else {
+            if self.asked == Asked::Read && matches!(status, Some(404 | 405 | 501)) {
+                // The station has no such route (an older binary): it will not
+                // grow one during this session, so stop asking. The config
+                // file keeps the state, as without a station.
+                self.phase = Phase::Absent;
+                return Outcome::Nothing;
+            }
             // No answer, a refusal, or something that is not a state: try again.
             self.retry_at = now + RETRY_SECS;
             if self.asked == Asked::Read {
@@ -255,6 +265,25 @@ mod tests {
         assert_eq!(s.next_request(true, &d, false, RETRY_SECS), Some(None));
         assert_eq!(s.deliver(None, "", &d, RETRY_SECS), Outcome::Nothing);
         assert_eq!(s.deliver(Some(200), "garbage", &d, RETRY_SECS), Outcome::Nothing);
+    }
+
+    #[test]
+    fn a_station_without_the_route_is_asked_once() {
+        for status in [404u16, 405, 501] {
+            let mut s = ProgramsSync::default();
+            let d = ProgramsState::default();
+            assert_eq!(s.next_request(true, &d, false, 0), Some(None));
+            assert_eq!(s.deliver(Some(status), "", &d, 0), Outcome::Nothing);
+            for t in [RETRY_SECS, 1000, 100_000] {
+                assert_eq!(s.next_request(true, &lit(), false, t), None, "{status} at {t}");
+            }
+        }
+        // A server error or a refusal is not "no such route": keep trying.
+        let mut s = ProgramsSync::default();
+        let d = ProgramsState::default();
+        s.next_request(true, &d, false, 0);
+        s.deliver(Some(500), "", &d, 0);
+        assert_eq!(s.next_request(true, &d, false, RETRY_SECS), Some(None));
     }
 
     #[test]
