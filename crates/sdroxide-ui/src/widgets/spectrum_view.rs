@@ -1383,6 +1383,11 @@ pub struct AudioCursor {
     /// — see `SdroxideApp::panadapter_focus_hz`, where it is written out — so
     /// the two paths agree about where the middle of the window is.
     pub center_on_cursor: bool,
+    /// Signed offset from the dial to centre the window on, when the mode
+    /// decodes anywhere in the passband (FT8…): the middle of that band, a
+    /// fixed figure that never chases the transmit tone. Wins over
+    /// `center_on_cursor`. See `Mode::audio_band_centre_hz`.
+    pub center_offset_hz: Option<f32>,
 }
 
 /// The panadapter: spectrum trace, frequency scale and waterfall, with the
@@ -2258,7 +2263,11 @@ pub fn show_ext(
         // anchor itself, not on the dial, so nudging an RTTY offset by 5 Hz
         // brings the window along exactly as turning the dial does.
         let vfo = state.active_freq_hz()
-            + cursor.filter(|c| c.center_on_cursor).map_or(0.0, |c| f64::from(c.hz));
+            + cursor.map_or(0.0, |c| match c.center_offset_hz {
+                Some(o) => f64::from(o),
+                None if c.center_on_cursor => f64::from(c.hz),
+                None => 0.0,
+            });
         let mut asked = asked;
         let target_id = ui.id().with("centre-target");
         let mut target: CtrTarget = ui.data(|d| d.get_temp(target_id)).unwrap_or(None);
@@ -4651,6 +4660,8 @@ mod ctr_zoom_sim {
         /// `SetCenter` commands sent so far.
         sent: usize,
         target: CtrTarget,
+        /// What CTR centres, in Hz above the dial: 0 for the dial, 1500 for FT8's band.
+        anchor_off: f64,
     }
 
     /// What the operator sees at the end of one frame.
@@ -4681,6 +4692,7 @@ mod ctr_zoom_sim {
                 centred_at: None,
                 sent: 0,
                 target: None,
+                anchor_off: 0.0,
             }
         }
 
@@ -4716,7 +4728,7 @@ mod ctr_zoom_sim {
             }
 
             // --- mirror of the CTR block in `show` ---
-            let vfo = state.active_freq_hz();
+            let vfo = state.active_freq_hz() + self.anchor_off;
             let mut asked = self.asked;
             refresh_ctr_target(&mut self.target, asked.is_some(), dev_center);
             if let Some(ask) = asked {
@@ -4776,7 +4788,7 @@ mod ctr_zoom_sim {
                 }
             }
             let mid = (self.view.view_lo_hz + self.view.view_hi_hz) / 2.0;
-            Seen { off_hz: DIAL - mid, span: self.view.span(), mid }
+            Seen { off_hz: DIAL + self.anchor_off - mid, span: self.view.span(), mid }
         }
     }
 
@@ -4907,6 +4919,31 @@ mod ctr_zoom_sim {
                 "lag={lag}: dial {:+.0} Hz off the middle after a fit",
                 seen.off_hz
             );
+        }
+    }
+
+    /// FT8 with CTR on: the middle of the decode band (dial + 1500 Hz) is the
+    /// middle of the window through a fit, a wheel zoom in and out and a retune
+    /// in flight, on a front end that holds its LO a guard from the dial.
+    #[test]
+    fn ft8_band_stays_in_the_middle_with_ctr_on() {
+        for lag in [0usize, 3] {
+            for factor in [0.85, 0.97] {
+                let mut sim = Sim::new(lag, 300_000.0);
+                sim.anchor_off = 1500.0;
+                settled(&mut sim, lag + 10);
+                for step in 0..60 {
+                    let f = if step < 30 { factor } else { 1.0 / factor };
+                    sim.frame(300.0, f);
+                }
+                sim.view.fit(sim.state.center_hz, DEV_SPAN);
+                let seen = settled(&mut sim, lag + 8);
+                assert!(
+                    seen.off_hz.abs() <= seen.span / WIDTH as f64 + 1.0,
+                    "lag={lag} factor={factor}: band centre {:+.0} Hz off the middle",
+                    seen.off_hz
+                );
+            }
         }
     }
 

@@ -1598,6 +1598,23 @@ impl Mode {
         }
     }
 
+    /// The middle of the audio band a mode decodes **anywhere inside**, in hertz
+    /// above the dial — `None` for every mode that has its own anchor (tone
+    /// pair, picture, fixed audio centre) or none at all.
+    ///
+    /// FT8 and its slotted cousins, WSPR, Pi4 and PSK listen to the whole
+    /// 200–3000 Hz passband, so the signals are *all above the dial*. A window
+    /// centred on the dial shows half of that band at most and leaves the
+    /// other half empty; CTR has to centre the band instead. A **view** anchor
+    /// only: the logged frequency stays the dial.
+    pub fn audio_band_centre_hz(self) -> Option<f32> {
+        if self.is_slotted() || matches!(self, Mode::Wspr | Mode::Pi4 | Mode::Psk) {
+            Some(1500.0)
+        } else {
+            None
+        }
+    }
+
     /// True where [`Self::standard_tone_offset_hz`] has an answer: the mode's
     /// tone offset is fixed by convention, so a click tunes the dial onto the
     /// signal rather than moving the tones onto it.

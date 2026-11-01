@@ -46,7 +46,9 @@ With the CTR chip lit the red line is at the centre of the waterfall on every
 frame — wheel, pinch, keyboard zoom, pan, fit, mode or decoder change, every
 radio, the whole bandwidth, zoom in or out, fast or slow. No drift, no jitter,
 no off/on to re-centre. Modes keep their preset bandwidth; CTR only moves the
-line. Touching waterfall or zoom code: keep the `ctr_zoom_sim` tests in
+line. Exception by design: modes that decode anywhere in the passband (FT8, FT4,
+JS8, WSPR, Pi4, PSK) centre the middle of their band (`Mode::audio_band_centre_hz`,
+dial + 1500 Hz), like SSTV's picture. Touching waterfall or zoom code: keep the `ctr_zoom_sim` tests in
 `widgets/spectrum_view.rs` green and add the gesture.
 
 ## Working rules
