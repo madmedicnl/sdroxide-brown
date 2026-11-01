@@ -2950,6 +2950,7 @@ impl SdroxideApp {
                 .clicked()
             {
                 self.band_dock_visible = !self.band_dock_visible;
+                self.remember_band_dock();
             }
             return;
         }
@@ -3016,6 +3017,7 @@ impl SdroxideApp {
         if dock {
             self.band_docked = true;
             self.band_dock_visible = true;
+            self.remember_band_dock();
             egui::Popup::close_id(ui.ctx(), popup_id);
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -3106,6 +3108,7 @@ impl SdroxideApp {
             });
         if !visible {
             self.band_dock_visible = false;
+            self.remember_band_dock();
         }
     }
 

@@ -989,6 +989,17 @@ impl Default for ProgramsFilters {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiSettings {
+    /// Radios whose **docked band/mode selector** the operator left open, by
+    /// roster id.
+    ///
+    /// Presentation only, and per radio on purpose: a phone gets no dock at all
+    /// (`band_dock_room` decides), so a station that keeps it open on the shack
+    /// display must not force it on the phone that later connects to the same
+    /// radio. Reported by the SWL users group (2026-11-01): the dock had to be
+    /// opened by hand on every start.
+    #[serde(default)]
+    pub band_dock_open: std::collections::BTreeSet<u32>,
+
     /// GUI repaint + spectrum frame rate, in frames per second.
     pub frame_rate_fps: u32,
     /// How fast the waterfall scrolls.
@@ -1844,6 +1855,7 @@ impl UiSettings {
 impl Default for UiSettings {
     fn default() -> Self {
         UiSettings {
+            band_dock_open: Default::default(),
             // Off: the dial is what every other radio shows, and an operator
             // who has not asked for the change should not find their readout
             // reading differently from the rig beside it.

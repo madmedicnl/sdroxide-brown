@@ -2329,8 +2329,13 @@ impl SdroxideApp {
             bw_popup_since: None,
             duplex_popup_since: None,
             rpt_tone_popup_since: None,
-            band_docked: false,
-            band_dock_visible: false,
+            // A station that keeps the band/mode selector docked gets it back
+            // on the next start. Per radio and presentation only: the dock's
+            // own width rule (`band_dock_room`) still decides whether there is
+            // room for it — an open-on-a-phone setting is not a promise that a
+            // phone can show it. (SWL users group, 2026-11-01.)
+            band_docked: ui_settings.band_dock_open.contains(&radio_id),
+            band_dock_visible: ui_settings.band_dock_open.contains(&radio_id),
             #[cfg(not(target_arch = "wasm32"))]
             band_keypad: Default::default(),
             // Corrected on the first frame, once the viewport size is known.
@@ -3632,6 +3637,45 @@ mod tests {
     /// typed field are in the picture"* — and a probe that only ever looks at
     /// one kind of radio cannot see what the other kind is missing. That is the
     /// same shape as a `EngineConfig::default()` harness reading like "nothing
+    /// **A station that keeps the band/mode selector docked gets it back on the
+    /// next start**, per radio.
+    ///
+    /// Per radio matters: the dock needs room the window may not have, so a
+    /// phone that later connects to the same station must not be able to turn
+    /// the shack display's dock off, nor the other way round. Reported by the
+    /// SWL users group (2026-11-01), who had to open it by hand on every start.
+    #[test]
+    fn the_docked_band_selector_comes_back_on_the_next_start() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-banddock-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        // As the operator left it: radio 1 with the dock open, radio 0 without.
+        let mut settings = crate::app::persist::load_ui_settings(None);
+        settings.band_dock_open.insert(1);
+        crate::app::persist::persist_ui_settings(&settings);
+
+        let ctx = egui::Context::default();
+        let mut make = |radio: u32| {
+            let controller: Box<dyn RadioController> = Box::new(RecordingController::default());
+            SdroxideApp::new_tab(&ctx, None, None, controller, radio, true)
+        };
+        let mut one = make(1);
+        assert!(one.band_docked, "radio 1 had the dock open");
+        assert!(one.band_dock_visible, "and visible");
+        let zero = make(0);
+        assert!(!zero.band_docked && !zero.band_dock_visible, "radio 0 never did");
+
+        // Hiding it is written out at once, not only on a clean quit.
+        one.band_dock_visible = false;
+        one.remember_band_dock();
+        let read = crate::app::persist::load_ui_settings(None);
+        assert!(!read.band_dock_open.contains(&1), "hiding it is remembered");
+        assert!(read.band_dock_open.is_empty(), "and nothing else was touched: {read:?}");
+    }
+
     /// special" while actually being one of two configurations.
     ///
     /// Verified failing before the fix: with `Backend::SdrPlay` the row was
