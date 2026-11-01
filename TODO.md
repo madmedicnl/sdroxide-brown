@@ -1,11 +1,10 @@
 # TODO — SDR Oxide Brown
 
-Working queue. Rules in AGENTS.md. Last updated 2026-11-01.
+Working queue. Rules in AGENTS.md. Last updated 2026-11-02.
 
 State: `main` at crate 2.2.0, PROTO_VERSION 260 (0x50). Latest release
-v2.2.3.5_brown (pre-release). Open PRs: 6 (#385 F4NRM's PROGRAMS, #389 revert
-of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 16
-(re-measured 2026-11-01).
+v2.2.3.5_brown (pre-release). Open PRs: 2 (#408 transmit bands, #409 band dock).
+Open issues: 7 (re-measured 2026-11-02).
 
 ## Task tracking rules
 
@@ -23,6 +22,7 @@ of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 
 ## Now
 
 - SWL users group requests (added by the SWL users group, owned by Roy) — three of four in review: **1** band/mode dock remembered per radio (PR #409), **3** a band never visited keeps the mode in use (PR #406), **4** CTR ratchets the span down on keyboard tuning while the user cannot widen it again — ours, and exposed by #397's per-rate usable span, needs a `ctr_zoom_sim` case with `usable < rate`. **2** (start in Listening/Operating per radio) parked.
+- USB-audio radio (CRT SS9900v, radio 1): FT8 transmit audio falls away mid-over and the RX audio stalls for seconds at a time (reported by Roy, owned by Claude) — measured on the machine 2026-11-01/02: the AB13X card is healthy (5 s read directly with `arecord`: 240022 frames, real signal, no gaps), and with the program running it stops reading the card for 2–5 s of every 5 s (99 456 → 238 720 samples dropped per window), while FT8 reports the period arriving 9.1 s short of 15. Everything the operator hears (carrier dropping, 2 s on/off rhythm, no decodes) follows from that one stall. Next: a heartbeat in the engine loop naming the stage that stops calling `read`. Diagnostics already in the tree on branch `diag/digi-tx-trace` (silent stream, dropped samples, short TX block, and where a digi over really ends — `DigiAction::UnkeyTx` is never constructed). Also found: the latter half of the reason the radio refused to key was a UI/engine split — the screen said "confirmed", the engine's copy did not.
 
 - Translation rules in AGENTS.md and the "new language" sync rule in CLAUDE.md (added by F4NRM, owned by Claude) — branch `f4nrm/compassionate-mendel-e3kjll`, PR pending: the maintainer's agent is driven by AGENTS.md, which lacked the translation rule, and shipped English-only messages (#395); AGENTS.md now carries the eleven-language rule, and CLAUDE.md says a new language must update the list in both files. Docs only. Wacht op F4NRM's review.
 - Airport card: one airport = one card (added by F4NRM, owned by Claude) — branch `f4nrm/youthful-mayer-38fi1q`, PR pending: radio aids within 3 km of a field (EPL beside LFSG) are listed on the airport's card and no longer have a symbol that steals the click; the card shows height, distances, runway lengths and temperature in both systems; "no frequency published" is said instead of silence.
@@ -107,6 +107,9 @@ of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 
 
 ## Recently done
 - 2026-11-01 — Custom receive filter presets: right-click a chip in the BW popup to edit label and edges (`filter_presets.json`), Reset restores the built-in chip, CW keeps the operator's pitch; 12 new messages in 11 languages. Wacht op F4NRM's review.
+- 2026-11-02 — PR #409 (band dock) review round: the popup's "window" entry and the dock header's two chips wrote `band_docked = false` without remembering it; `band_dock_open` is now a map (key = docked, value = shown), the write re-reads the stored map so a second tab cannot erase the first radio, docs put back on their functions, SAFETY on the test's env var (added by F4NRM, owned by Claude; PR back for his re-review)
+- 2026-11-02 — PR #408 (transmit bands) review round: the settings grid bypassed `set_tx_band` (the bench case was still open under a green "confirmed"), so the grid now goes through `apply_tx_band_choice`; three tests, all verified red on the old body; German "eines Bandes"; upgrade note in the description (added by F4NRM, owned by Claude; PR back for his re-review)
+- 2026-11-02 — PR #395 (WEFAX station picker) merged by F4NRM at 23:26Z on 2026-11-01 (added by madmedicnl, owned by Claude)
 - 2026-11-01 — WEFAX measured on the air until four charts were asked for: the phasing between two transmissions was drawn into the picture instead of cutting the page (strict pulse test wanted a line mean ≤ 0.20; off air it measured 0.28–0.50 with the pulse at 1.00), so charts were glued together and pages ran to `MAX_LINES` 2600. Median + contrast, one missed line no longer resets the run, two pieces of the real recording in the tree as reference (PR #401, merged). Auto-slant guarded against a 47 500 ppm mis-read (PR #393). The two tests our last merges left red (PR #391) (added by F4NRM, owned by Roy)
 - 2026-11-01 — Paired radios (transceiver + attached panadapter receiver): the S-meter of the transceiver tab is now the attached receiver's (engine measures its I/Q; `PanadapterSource::rx_signal_dbm` returns `None`; with no main chain the channel power is read off the spectrum; audio level only as last resort). Before, a CAT rig without a usable meter (Wolf) made the meter follow its audio level. Squelch/scan unchanged. Tests in `external_rx_audio.rs` and `panadapter_source.rs` updated. Trade-off: a rig with an accurate CAT S-meter no longer drives the meter in a pairing.
 - 2026-11-01 — PR #74 (S-Meter calib) re-checked against `main` (added by F4NRM, owned by Claude): the feature is intact (`smeter_cal` ±5 S, applied once in `frame.rs`, row under "Antenna is", 11 languages, manual §2.9); the two UI tests, the `sdroxide-types` test and the i18n tests pass. Found the real bug: an out-of-range `smeter_cal` (old dB-era `-15`) was clamped to -5 S = -30 dB and pinned the needle; now it counts as 0. Also tidied the Settings row (stray blank line, `rustfmt` shape) and gave the feature one accurate CHANGELOG line.
