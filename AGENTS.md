@@ -67,6 +67,15 @@ or stackable and add it to the Detachable page in Settings.
   looking proves it's there.
 - **Never claim fixed/shipped when it isn't.** "Needs feedback" is a request.
 - **A control must never silently do nothing.** Name what's off, say why.
+- **Every on-screen message, in all eleven languages, in the same change.** Not
+  English first and a translation batch later — that batch has been "next" for
+  two releases. New ids go through `tools/i18n_add.py` (JSON lines, one per
+  message, all languages at once); changing an existing message means editing
+  that line in every `sdroxide-ui/i18n/*/sdroxide.ftl` by hand, because the tool
+  skips ids that already exist. Run `cargo test -p sdroxide-ui --lib i18n`
+  before pushing; `every_english_message_is_used` and
+  `every_translation_matches_the_english_messages` are what catch a half-done
+  one.
 - **No paid service, no API key, no account. Ever.** Program works offline.
 - **`git checkout --` destroys work.** Undo scratch patches with the patch.
 - **`rg -n`, never `rg -rn`.**
