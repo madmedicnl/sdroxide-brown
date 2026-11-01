@@ -2347,6 +2347,9 @@ impl eframe::App for SdroxideApp {
             eframe::set_value(storage, "input", &self.input.cfg);
             // The Morse trainer's progress, so it carries to the browser build.
             eframe::set_value(storage, "morse_progress", &self.morse.progress);
+            // The custom filter presets: filter_presets.json natively.
+            #[cfg(target_arch = "wasm32")]
+            eframe::set_value(storage, "filter_presets", &self.filter_presets);
         }
     }
 }

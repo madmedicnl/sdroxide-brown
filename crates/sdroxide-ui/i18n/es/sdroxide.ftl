@@ -9005,3 +9005,27 @@ aircraft-hover-lookup-retry = sin respuesta — nuevo intento en { $s } s
 adsbmap-airport-navaids-head = Radioayudas en el campo
 
 adsbmap-airport-no-freq = Ninguna frecuencia publicada para este aeropuerto
+
+topbar-preset-right-click = Clic derecho para cambiar este preajuste
+
+topbar-preset-edit = EDITAR PREAJUSTE
+
+topbar-preset-label = Etiqueta
+
+topbar-preset-label-hint = Lo que dice la ficha. Hasta 8 caracteres.
+
+topbar-preset-lo = Inf.
+
+topbar-preset-hi = Sup.
+
+topbar-preset-use-current = Usar actual
+
+topbar-preset-use-current-hint = Tomar los bordes del filtro que tiene ahora el receptor
+
+topbar-preset-save = Guardar
+
+topbar-preset-reset = Restablecer
+
+topbar-preset-reset-hint = Restaurar el preajuste integrado de este modo
+
+topbar-preset-cancel = Cancelar

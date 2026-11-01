@@ -9021,3 +9021,27 @@ aircraft-hover-lookup-retry = нет ответа — повтор через { 
 adsbmap-airport-navaids-head = Радионавигационные средства на аэродроме
 
 adsbmap-airport-no-freq = Для этого аэропорта частоты не опубликованы
+
+topbar-preset-right-click = Щёлкните правой кнопкой, чтобы изменить этот пресет
+
+topbar-preset-edit = ИЗМЕНИТЬ ПРЕСЕТ
+
+topbar-preset-label = Метка
+
+topbar-preset-label-hint = Текст на кнопке. До 8 символов.
+
+topbar-preset-lo = Низ
+
+topbar-preset-hi = Верх
+
+topbar-preset-use-current = Взять текущий
+
+topbar-preset-use-current-hint = Взять границы фильтра, который сейчас стоит в приёмнике
+
+topbar-preset-save = Сохранить
+
+topbar-preset-reset = Сбросить
+
+topbar-preset-reset-hint = Вернуть встроенный пресет этого режима
+
+topbar-preset-cancel = Отмена
