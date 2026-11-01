@@ -20,6 +20,8 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 
 ## Now
 
+- FT8 setup window draws its controls off the window (#357) (added by F4NRM, owned by Roy; FT8 is his area, PR for his review) — the caption message `setup-tx-audio` had a hint paragraph pasted into it, and the dialog draws it as a row label in a two-column grid, so the label column measured 1356 pt and the controls beside it were pushed past the right edge. Reproduced in a render, paragraph removed from all 11 languages, caption test added.
+
 - PROGRAMS window layout and persistence (added by F4NRM, owned by Claude) — branch `f4nrm/stoic-fermi-a0z0zp`, PR pending: columns, Sort menus, chip-framed colour, two-row bar, saved filters. Wacht op F4NRM's review.
 - SAT Doppler for CAT rigs (added by Roy, owned by Roy/SP9TKN) — step 1+2a+2b+2c
   implemented on branch `fork/sat-doppler-cat`. MSI build available. Wacht op

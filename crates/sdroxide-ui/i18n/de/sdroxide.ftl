@@ -2749,10 +2749,6 @@ setup-fox-signals = Fox-Signale
 setup-once = {" "}auf einmal
 setup-simultaneous-transmissions-spaced-60-hz = Gleichzeitige Aussendungen im Abstand von 60 Hz. Sie teilen sich die Leistung des Senders, daher ist jedes Signal schwächer, je mehr es sind.
 setup-tx-audio = TX-Audio
-
-    Dieser Pegel gehört dieser Betriebsart allein. Eine Betriebsart, die Sie nie eingestellt haben, startet beim FM-Wert, und die Seitenbandbetriebsarten starten bei ihren eigenen — daher landet ein für 1200 Baud eingestellter Hub nie bei FT8.
-
-    Dieser Pegel gehört dieser Betriebsart allein: FT8, RTTY, PSK und MCW behalten jeweils ihren eigenen, weil sie einen Modulator nicht gleich belasten. Dieselbe Leiste steht auf der Sendeleiste, wo Sie sie während des Sendens erreichen.
 setup-deviation-fm = Hub bei FM
 setup-drive-ssb = Aussteuerung bei SSB
 setup-grid = Locator

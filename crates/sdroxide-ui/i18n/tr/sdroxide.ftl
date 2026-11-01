@@ -2756,10 +2756,6 @@ setup-fox-signals = Fox sinyalleri
 setup-once = {" "}bir kerede
 setup-simultaneous-transmissions-spaced-60-hz = Birbirinden 60 Hz aralıklı eş zamanlı yayınlar. Verici gücünü paylaşırlar, bu yüzden daha fazla sinyal her birini daha zayıf yapar.
 setup-tx-audio = TX sesi
-
-    This level belongs to this mode alone. A mode you have never set starts from the FM figure, and the sideband modes start from their own — so a deviation set for 1200 baud never lands on FT8.
-
-    This level belongs to this mode alone: FT8, RTTY, PSK and MCW each keep their own, because they do not load a modulator the same way. The same rail is on the transmit strip, where you can reach it while you are transmitting.
 setup-deviation-fm = FM'de sapma
 setup-drive-ssb = SSB'de sürüş
 setup-grid = Lokatör

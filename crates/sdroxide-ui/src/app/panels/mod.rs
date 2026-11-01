@@ -41,6 +41,8 @@ pub(in crate::app) mod rade;
 pub(in crate::app) mod radio_classic;
 pub(in crate::app) mod rf_paint;
 pub(in crate::app) mod setup;
+#[cfg(test)]
+mod setup_probe;
 pub(in crate::app) mod sstv;
 pub(in crate::app) mod text_modem;
 pub(in crate::app) mod uvpacket;

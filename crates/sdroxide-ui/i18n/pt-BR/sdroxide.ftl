@@ -2756,10 +2756,6 @@ setup-fox-signals = Sinais Fox
 setup-once = {" "}de uma vez
 setup-simultaneous-transmissions-spaced-60-hz = Transmissões simultâneas, espaçadas 60 Hz umas das outras. Elas dividem a potência do transmissor, então mais sinais significa que cada um é mais fraco.
 setup-tx-audio = Áudio TX
-
-    This level belongs to this mode alone. A mode you have never set starts from the FM figure, and the sideband modes start from their own — so a deviation set for 1200 baud never lands on FT8.
-
-    This level belongs to this mode alone: FT8, RTTY, PSK and MCW each keep their own, because they do not load a modulator the same way. The same rail is on the transmit strip, where you can reach it while you are transmitting.
 setup-deviation-fm = desvio, em FM
 setup-drive-ssb = excitação, em SSB
 setup-grid = Locator

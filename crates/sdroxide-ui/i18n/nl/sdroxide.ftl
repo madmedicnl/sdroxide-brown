@@ -2754,10 +2754,6 @@ setup-fox-signals = Fox-signalen
 setup-once = {" "}tegelijk
 setup-simultaneous-transmissions-spaced-60-hz = Gelijktijdige zendingen, 60 Hz uit elkaar. Ze delen het vermogen van de zender, dus meer signalen betekent dat elk zwakker is.
 setup-tx-audio = TX-audio
-
-    Dit niveau hoort bij alleen deze modus. Een modus die je nooit hebt ingesteld begint bij de FM-waarde, en de zijbandmodi beginnen bij hun eigen — zodat een deviatie voor 1200 baud nooit op FT8 terechtkomt.
-
-    Dit niveau hoort bij alleen deze modus: FT8, RTTY, PSK en MCW houden elk hun eigen waarde, omdat ze een modulator niet op dezelfde manier belasten. Dezelfde rail staat op de zendstrook, waar je erbij kunt terwijl je zendt.
 setup-deviation-fm = deviatie, bij FM
 setup-drive-ssb = drive, bij SSB
 setup-grid = Locator
