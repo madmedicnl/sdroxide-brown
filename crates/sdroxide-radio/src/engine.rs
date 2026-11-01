@@ -15810,18 +15810,23 @@ impl Engine {
             return Some(dbm);
         }
         // Listening to the transceiver behind an attached panadapter receiver:
-        // the main chain is still running, but on the *other* radio's antenna,
-        // and a meter reading a signal nobody is listening to is worse than no
-        // meter. The audio actually being heard is the only honest measurement
-        // left once the rig has declined to report its own.
-        //
-        // Without `cal_offset_db`: that offset is the *attached receiver's*
-        // dBFS→dBm figure, set against its own front end, and the transceiver's
-        // audio is an AGC'd level on a different scale altogether. Adding it
-        // moved the meter by the whole calibration the moment the audio source
-        // switched (issue #427).
+        // the transceiver is only the transmitter and the speaker here — its
+        // own meter is not used (see `PanadapterSource::rx_signal_dbm`) and its
+        // audio is an AGC'd level that says nothing about the RF. The S-meter
+        // is the *attached receiver's*, measured on its I/Q like any SDR and
+        // calibrated with `cal_offset_db`, which is that receiver's own
+        // dBFS→dBm figure. With no audio output there is no main chain, and
+        // the channel power is read off the spectrum instead. The audio level
+        // is the last resort, for a receiver that gives neither.
         if self.caps.rx_audio_external {
-            return Some(self.audio_level_dbfs());
+            let dbfs = match self.main.as_ref().and_then(|c| c.power_dbfs()) {
+                Some(p) => Some(p),
+                None => self.spectrum_channel_dbfs(),
+            };
+            return Some(match dbfs {
+                Some(p) => p - self.source.rx_gain_db().unwrap_or(0.0) + self.cal_offset_db,
+                None => self.audio_level_dbfs(),
+            });
         }
         if let Some(p) = self.main.as_ref().and_then(|c| c.power_dbfs()) {
             let gain = self.source.rx_gain_db().unwrap_or(0.0);
