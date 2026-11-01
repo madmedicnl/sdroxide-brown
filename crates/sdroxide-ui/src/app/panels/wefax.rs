@@ -115,7 +115,8 @@ impl SdroxideApp {
             } else {
                 (tr!("wefax-listening"), theme::LINE_LIT())
             };
-            ui.label(RichText::new(text).color(colour).size(11.0)).on_hover_text(tr!("wefax-status-hint"));
+            ui.label(RichText::new(text).color(colour).size(11.0))
+                .on_hover_text(tr!("wefax-status-hint"));
 
             // The tuning readout. A correctly tuned receiver puts the
             // subcarrier's excursions around 1900 Hz; several hundred hertz off
@@ -127,9 +128,7 @@ impl SdroxideApp {
                     .size(11.0)
                     .monospace(),
             )
-            .on_hover_text(
-                tr!("wefax-subcarrier-offset-1900-hz-tune"),
-            );
+            .on_hover_text(tr!("wefax-subcarrier-offset-1900-hz-tune"));
             // **A way to act on that number.** The readout turns yellow when the
             // offset is too large, and until now it could only tell the operator
             // that the picture would be blank: 480 Hz off is invisible to the ear
@@ -149,7 +148,10 @@ impl SdroxideApp {
                 {
                     cmds.push(Command::SetVfo {
                         vfo: self.state.active_vfo,
-                        hz: centred_dial_hz(self.state.active_freq_hz(), f64::from(st.subcarrier_hz)),
+                        hz: centred_dial_hz(
+                            self.state.active_freq_hz(),
+                            f64::from(st.subcarrier_hz),
+                        ),
                     });
                 }
             });
@@ -160,7 +162,10 @@ impl SdroxideApp {
                 if can_centre && self.wefax.auto_centre_armed {
                     cmds.push(Command::SetVfo {
                         vfo: self.state.active_vfo,
-                        hz: centred_dial_hz(self.state.active_freq_hz(), f64::from(st.subcarrier_hz)),
+                        hz: centred_dial_hz(
+                            self.state.active_freq_hz(),
+                            f64::from(st.subcarrier_hz),
+                        ),
                     });
                     self.wefax.auto_centre_armed = false;
                 } else if !can_centre {
@@ -168,7 +173,6 @@ impl SdroxideApp {
                 }
             }
             self.digi_squelch_slider(ui, cmds);
-
         });
 
         ui.add_space(4.0);
@@ -342,12 +346,7 @@ impl SdroxideApp {
                 self.wefax.clear_live();
             }
             let payload = self.wefax.save_payload(crate::time::now_unix());
-            if super::save_chip_with(
-                ui,
-                payload.is_some(),
-                &tr!("wefax-save-chart-hint"),
-            )
-            .clicked()
+            if super::save_chip_with(ui, payload.is_some(), &tr!("wefax-save-chart-hint")).clicked()
             {
                 if let Some((name, png)) = &payload {
                     crate::download::save_as(name, png, crate::download::Mime::Png);
@@ -449,8 +448,8 @@ impl SdroxideApp {
                                 ui.centered_and_justified(|ui| {
                                     ui.label(
                                         RichText::new(tr!("wefax-waiting-for-chart"))
-                                        .color(theme::LINE_LIT())
-                                        .size(11.5),
+                                            .color(theme::LINE_LIT())
+                                            .size(11.5),
                                     );
                                 });
                             }
@@ -681,7 +680,7 @@ impl SdroxideApp {
     /// below the published carrier — the subtraction that otherwise produces a
     /// blank page and no clue why.
     fn wefax_station_chip(&self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
-        use sdroxide_types::{WefaxStation, WEFAX_STATIONS};
+        use sdroxide_types::{WEFAX_STATIONS, WefaxStation};
         let dial = self.state.active_freq_hz();
         // The station we are on, if any, so the chip reads as a position.
         let here = WefaxStation::at_dial(dial);
@@ -710,7 +709,10 @@ impl SdroxideApp {
                     .show(ui, |ui| {
                         for s in WEFAX_STATIONS {
                             ui.label(
-                                RichText::new(s.name).color(crate::theme::CYAN_DIM()).size(10.0).strong(),
+                                RichText::new(s.name)
+                                    .color(crate::theme::CYAN_DIM())
+                                    .size(10.0)
+                                    .strong(),
                             );
                             ui.horizontal_wrapped(|ui| {
                                 for &f in s.carriers_khz {
@@ -940,7 +942,7 @@ impl SdroxideApp {
 
 #[cfg(test)]
 mod tests {
-    use super::{centred_dial_hz, CENTRE_THRESHOLD_HZ};
+    use super::{CENTRE_THRESHOLD_HZ, centred_dial_hz};
 
     /// **The dial that puts the subcarrier back on 1900 Hz.**
     ///
