@@ -3,8 +3,8 @@
 Working queue. Rules in AGENTS.md. Last updated 2026-11-01.
 
 State: `main` at crate 2.2.0, PROTO_VERSION 259 (0x4F). Latest release
-v2.2.3.5_brown (pre-release). Open PRs: 5 (#385 F4NRM's PROGRAMS, #389 revert
-of #371, #390 #357, #391 the two red tests, #392 #354). Open issues: 16
+v2.2.3.5_brown (pre-release). Open PRs: 6 (#385 F4NRM's PROGRAMS, #389 revert
+of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 16
 (re-measured 2026-11-01).
 
 ## Task tracking rules
@@ -22,6 +22,7 @@ of #371, #390 #357, #391 the two red tests, #392 #354). Open issues: 16
 
 ## Now
 
+- WEFAX auto-slant believes a bad measurement (#239) (added by F4NRM, owned by Roy; WEFAX is his area, PR for his review) — a noisy phasing pulse read as a 47 500 ppm clock error, the line was cut 4.75 % short, and charts came out as bands. Guarded to 2000 ppm with the baseline re-taken; test fails on the old code. PR #393. Next: a full-chart decode in the WEFAX tests, which is the gap this fell through.
 - PROGRAMS window layout and persistence (added by F4NRM, owned by Claude) — branch `f4nrm/stoic-fermi-a0z0zp`, PR pending: columns, Sort menus, chip-framed colour, two-row bar, saved filters. Wacht op F4NRM's review.
 - SAT Doppler for CAT rigs (added by Roy, owned by Roy/SP9TKN) — step 1+2a+2b+2c
   implemented on branch `fork/sat-doppler-cat`. MSI build available. Wacht op
@@ -44,6 +45,16 @@ of #371, #390 #357, #391 the two red tests, #392 #354). Open issues: 16
 - BAND TX pill + "11M-CB" label (added by madmedicnl, owned by Claude; PR B, re-pushed on main after #377 merged into the PR A branch) — pill under "BW cascade": green = allowed, red = refused, blinking red = transmitting; hidden on SWL, listen mode, receive-only radios and when no band is ticked and confirmed. "11M" shown as "11M-CB" in the TX band plan only.
 - APRS panel fit and heard text (added by madmedicnl, owned by Claude; touches F4NRM's APRS area) — branch `f4nrm/amazing-einstein-sqkc6q`, PR pending: the message pane is sized from what is really left (map chip row and gaps counted) so the composer no longer hangs off the window bottom; ALL also lists station comments/status heard. Not live-tested on screen.
 - MEMORIES panel fit (added by F4NRM, owned by Claude) — branch `f4nrm/memories-panel-fit`, PR pending: name rows sized to their button, chip-framed colour, PST at chip height. Wacht op F4NRM's review.
+
+## Backlog — our open issues (board: Todo)
+
+- #388 HL2 (HPSDR P1) datagram loss every ~2 s (added by DK8JV, owned by Roy).
+- #340 S-meter (added by F4NRM, owned by Roy) — measurement disagrees with the report; the measurement is the first suspect.
+- #331 Long labels in the tab strip (added by F4NRM, owned by Roy).
+- #264 Public SDR stuck fetching the list in a web session (added by F4NRM, owned by Roy).
+- #263 Zoom (added by F4NRM, owned by Roy).
+- #251 FT8 continuous automatic operation (added by madmedicnl, owned by Roy; enhancement).
+- #132 Wrong frequency display (added by emi83170, owned by Roy).
 
 ## Waiting on other people
 

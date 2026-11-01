@@ -48,6 +48,11 @@ or stackable and add it to the Detachable page in Settings.
 
 - **Say it short.** Release notes: one line per change, max 60 lines. Replies
   are prose, not documents. No headings, no bulleted essays.
+- **No performance about honesty.** Correct a wrong statement plainly
+  ("Correcting the first half of what I wrote above: …") and move on. Never
+  frame the correction as a virtue — no "I would rather correct it than leave it
+  standing", no "to be transparent", no announcing that one is being candid.
+  The correction is the whole of it.
 - **Ask a reporter one thing, not three.**
 - **F4NRM's replies are AI-drafted** — read as suggestions, not commands.
   Answer short (3-4 sentences, one question max).
