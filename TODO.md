@@ -2,7 +2,7 @@
 
 Working queue. Rules in AGENTS.md. Last updated 2026-11-01.
 
-State: `main` at crate 2.2.0, PROTO_VERSION 259 (0x4F). Latest release
+State: `main` at crate 2.2.0, PROTO_VERSION 260 (0x50). Latest release
 v2.2.3.5_brown (pre-release). Open PRs: 6 (#385 F4NRM's PROGRAMS, #389 revert
 of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 16
 (re-measured 2026-11-01).
@@ -106,6 +106,7 @@ of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 
 - AppImage — beslissing nodig.
 
 ## Recently done
+- 2026-11-01 — PR #74 (S-Meter calib) re-checked against `main` (added by F4NRM, owned by Claude): the feature is intact (`smeter_cal` ±5 S, applied once in `frame.rs`, row under "Antenna is", 11 languages, manual §2.9); the two UI tests, the `sdroxide-types` test and the i18n tests pass. Only tidied the Settings row (stray blank line, `rustfmt` shape) and gave the feature one accurate CHANGELOG line.
 - 2026-11-01 — TX lock on listening/broadcast frequencies: PTT and TUNE (desktop strip and classic layout, which had no guard) are greyed with a big red message on hover and on every press (mouse, key, MIDI; uncapped); one rule — transmit only on bands ticked AND validated in Settings → Radio, refused everywhere else (SWL/broadcast/Other included, no more separate amateur-only rail while the list is in force); "Allow transmit on 11 m (CB)" and the 11M-CB tick are one setting in both directions; unknown capabilities grey the PTT. Not yet built or tested here: the sandbox cannot download Opus for `sdroxide-rade` (403), so the UI crate was only syntax-checked; `sdroxide-types` tests pass. The engine's band refusal is typed (`RadioEvent::TxRefused` / `ServerMsg::TxRefused`, PROTO_VERSION 259 → 260) and worded in the operator's language by the UI; other engine refusals stay English. Branch `f4nrm/relaxed-wozniak-b4m3da` (added by madmedicnl, owned by Claude; PR only with F4NRM's OK)
 - 2026-11-01 — CTR on FT8/FT4/JS8/WSPR/Pi4/PSK centres the middle of the decode band (dial + 1500 Hz) instead of the dial, so the whole 0–3 kHz spectrum is in the window and the station boxes sit on their signals; `ctr_zoom_sim` gesture test added (added by F4NRM, owned by Claude; PR for his review)
 - 2026-10-31 — Airport card (PR 2 of 4): the pinned card lists up to 4 runways and 6 frequencies from embedded OurAirports tables (offline, dated), lengths in the chosen units, and "aircraft within" reaches 100 km instead of 25 (added by madmedicnl, owned by Roy)

@@ -3227,7 +3227,6 @@ impl SdroxideApp {
                     ui.label(RichText::new(tr!("settings-radio-smeter-calib")).strong());
                     smeter_cal_combo(ui, &mut cfg.smeter_cal);
                     ui.end_row();
-
                 });
                 if let sdroxide_types::RxSite::Elsewhere(g) = &*site {
                     let g = g.trim();
@@ -5417,9 +5416,7 @@ fn smeter_cal_combo(ui: &mut egui::Ui, cal: &mut i8) {
             }
         })
         .response
-        .on_hover_text(
-            tr!("settings-smeter-cal-hint"),
-        );
+        .on_hover_text(tr!("settings-smeter-cal-hint"));
 }
 
 #[cfg(test)]
