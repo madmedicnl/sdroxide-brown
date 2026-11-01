@@ -3227,7 +3227,6 @@ impl SdroxideApp {
                     ui.label(RichText::new(tr!("settings-radio-smeter-calib")).strong());
                     smeter_cal_combo(ui, &mut cfg.smeter_cal);
                     ui.end_row();
-
                 });
                 if let sdroxide_types::RxSite::Elsewhere(g) = &*site {
                     let g = g.trim();
@@ -5409,6 +5408,10 @@ fn smeter_cal_label(steps: i8) -> String {
 /// at once.
 fn smeter_cal_combo(ui: &mut egui::Ui, cal: &mut i8) {
     use sdroxide_types::{SMETER_CAL_MAX, SMETER_CAL_MIN};
+    // A leftover out of range (old dB-era value) is read as 0: show and save 0.
+    if !(SMETER_CAL_MIN..=SMETER_CAL_MAX).contains(cal) {
+        *cal = 0;
+    }
     egui::ComboBox::from_id_salt("smeter-cal")
         .selected_text(smeter_cal_label(*cal))
         .show_ui(ui, |ui| {
@@ -5417,9 +5420,7 @@ fn smeter_cal_combo(ui: &mut egui::Ui, cal: &mut i8) {
             }
         })
         .response
-        .on_hover_text(
-            tr!("settings-smeter-cal-hint"),
-        );
+        .on_hover_text(tr!("settings-smeter-cal-hint"));
 }
 
 #[cfg(test)]
