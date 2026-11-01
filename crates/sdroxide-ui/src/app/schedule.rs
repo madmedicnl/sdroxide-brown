@@ -100,6 +100,10 @@ pub(in crate::app) struct ScheduleUi {
     /// not sixty times a second over four and a half thousand rows.
     cache_key: Option<CacheKey>,
     cache: Vec<BroadcastStation>,
+    /// The width the list needs in the language on screen, measured by the last
+    /// frame. The window never goes narrower than this, so a long language grows
+    /// the window instead of pushing the right-hand chips out of it.
+    floor_w: f32,
 }
 
 type CacheKey =
@@ -123,6 +127,7 @@ impl Default for ScheduleUi {
             unsaved: false,
             cache_key: None,
             cache: Vec::new(),
+            floor_w: 0.0,
         }
     }
 }
@@ -231,7 +236,7 @@ impl SdroxideApp {
                 "schedule",
                 &tr!("schedule-title"),
                 [SCHEDULE_WINDOW_W, 560.0],
-                [SCHEDULE_WINDOW_MIN_W, 240.0],
+                [SCHEDULE_WINDOW_MIN_W.max(self.schedule.floor_w), 240.0],
                 epoch,
                 |me, ui| {
                     me.schedule_body(ui, &mut tune, &mut log, &mut fav_toggle, &mut all_toggle)
@@ -528,7 +533,16 @@ impl SdroxideApp {
         // The list's columns. The header and every row are cut to the same
         // widths, so a long name or a missing language no longer moves the rest
         // of its row, and the controls sit over the column they act on.
-        let cols = Cols::new(ui, ui.available_width(), self.schedule.local_time);
+        // What the rows get is the width left once the scroll bar has its own: the
+        // list is built for that, so its right-hand chip is not under the bar.
+        let list_w = ui.available_width() - ui.spacing().scroll.allocated_width();
+        let cols = Cols::new(ui, list_w, self.schedule.local_time);
+        // What the list needs, window margins and scroll bar included, for the
+        // window's floor next frame.
+        self.schedule.floor_w =
+            Cols::floor_width(ui, &ColLabels::current(), self.schedule.local_time)
+                + ui.spacing().scroll.allocated_width()
+                + 2.0 * 10.0;
         let row_h = crate::chrome::chip_height(ui, None);
         self.schedule_header(ui, &cols, row_h);
         ui.separator();
@@ -672,7 +686,7 @@ impl SdroxideApp {
                 };
                 cell(ui, *w, row_h, egui::Align::Min, |ui| {
                     egui::ComboBox::from_id_salt(("sched-sort", *col as u8))
-                        .width(*w - 20.0)
+                        .width((*w - 20.0).min(SORT_MENU_MAX_W))
                         .selected_text(
                             RichText::new(format!("{}{arrow}", tr!("schedule-sort"))).size(10.5),
                         )
@@ -800,27 +814,103 @@ struct Cols {
     log: f32,
 }
 
+/// The words that set a column's width, in the language on screen. Kept apart
+/// from egui so a test can measure every language without switching the
+/// process-wide one.
+struct ColLabels {
+    sort: String,
+    listen: String,
+    reset: String,
+    log: String,
+}
+
+impl ColLabels {
+    fn current() -> Self {
+        ColLabels {
+            sort: format!("{} ▼", tr!("schedule-sort")),
+            listen: tr!("schedule-listen"),
+            reset: tr!("schedule-colour-reset"),
+            log: tr!("topbar-chip-log"),
+        }
+    }
+}
+
+/// The most width the three text columns (language, target, site) take beyond
+/// their floors; any more goes to the name.
+const GROW_TEXT_MAX: f32 = 160.0;
+
+/// The widest a SORT menu is drawn, however wide its column.
+const SORT_MENU_MAX_W: f32 = 120.0;
+
+/// The narrowest the name column goes: wide enough to tell two stations apart.
+const NAME_MIN_W: f32 = 140.0;
+
 impl Cols {
-    /// The columns for a list `avail` wide. Every column is as wide as the
-    /// widest thing that ever goes in it — its SORT menu, its chip — measured in
-    /// the language on screen, so nothing overlaps its neighbour; the name takes
-    /// whatever is left.
+    /// The columns for a list `avail` wide — **the width the rows really get**,
+    /// scroll bar already taken off. Each column has a floor, the widest thing
+    /// that ever goes in it (its SORT menu, its chip) measured in the language on
+    /// screen, so nothing overlaps its neighbour. Width beyond the floors is
+    /// shared out between the name and the three text columns that truncate,
+    /// rather than all going to the name.
     fn new(ui: &egui::Ui, avail: f32, local: bool) -> Self {
-        let font = egui::FontId::proportional(10.5);
-        let sort_w =
-            crate::chrome::text_width(ui, &format!("{} ▼", tr!("schedule-sort")), font) + 28.0;
-        let chip = |label: String| crate::chrome::chip_width(ui, &label, None);
-        let colour = super::colour_edit::colour_swatch_framed_width();
-        let star = chip("PST".into()).max(30.0);
-        let listen = chip(tr!("schedule-listen")).max(chip(tr!("schedule-colour-reset")));
-        let log = chip(tr!("topbar-chip-log"));
-        let (freq, band) = (sort_w.max(54.0), sort_w.max(46.0));
-        let (lang, target, site) = (sort_w.max(64.0), sort_w.max(64.0), sort_w.max(100.0));
-        let local_w = if local { 52.0 } else { 0.0 };
+        Self::for_labels(ui, &ColLabels::current(), avail, local)
+    }
+
+    /// The width every column needs at its floor, gaps and the 2 pt margin
+    /// included. A window narrower than this cannot hold its own list.
+    fn floor_width(ui: &egui::Ui, labels: &ColLabels, local: bool) -> f32 {
+        let c = Self::floors(ui, labels, local);
         let n = if local { 11.0 } else { 10.0 };
-        let fixed = freq + band + lang + target + site + local_w + colour + star + listen + log;
-        let name = (avail - fixed - (n - 1.0) * GAP - 2.0).max(90.0);
-        Cols { freq, band, name, lang, target, site, local: local_w, colour, star, listen, log }
+        c.freq
+            + c.band
+            + c.name
+            + c.lang
+            + c.target
+            + c.site
+            + c.local
+            + c.colour
+            + c.star
+            + c.listen
+            + c.log
+            + (n - 1.0) * GAP
+            + 2.0
+    }
+
+    fn floors(ui: &egui::Ui, labels: &ColLabels, local: bool) -> Self {
+        let font = egui::FontId::proportional(10.5);
+        let sort_w = crate::chrome::text_width(ui, &labels.sort, font) + 28.0;
+        let chip = |label: &str| crate::chrome::chip_width(ui, label, None);
+        let colour = super::colour_edit::colour_swatch_framed_width();
+        let star = chip("PST").max(30.0);
+        let listen = chip(&labels.listen).max(chip(&labels.reset));
+        let log = chip(&labels.log);
+        Cols {
+            freq: sort_w.max(54.0),
+            band: sort_w.max(46.0),
+            name: NAME_MIN_W,
+            lang: sort_w.max(64.0),
+            target: sort_w.max(64.0),
+            site: sort_w.max(100.0),
+            local: if local { 52.0 } else { 0.0 },
+            colour,
+            star,
+            listen,
+            log,
+        }
+    }
+
+    fn for_labels(ui: &egui::Ui, labels: &ColLabels, avail: f32, local: bool) -> Self {
+        let mut c = Self::floors(ui, labels, local);
+        let spare = (avail - Self::floor_width(ui, labels, local)).max(0.0);
+        // The three text columns truncate, so they get some room first, up to a
+        // cap; everything past that is the name's, which is the one column whose
+        // text is long.
+        let text = spare.min(GROW_TEXT_MAX);
+        c.lang += text * 0.25;
+        c.target += text * 0.25;
+        c.site += text * 0.5;
+        c.name += spare - text;
+        c
     }
 }
 
@@ -1029,7 +1119,8 @@ mod preview {
     #[ignore = "writes pictures to look at; not an assertion"]
     fn schedule_preview() {
         let _guard = crate::multi::frame_test_lock();
-        let dir = std::env::temp_dir().join(format!("sdroxide-sched-preview-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("sdroxide-sched-preview-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
@@ -1042,7 +1133,7 @@ mod preview {
             format!("{}/../../target/schedule_preview", env!("CARGO_MANIFEST_DIR"))
         });
         std::fs::create_dir_all(&out_dir).unwrap();
-        let screen = egui::vec2(width + 24.0, 640.0);
+        let screen = egui::vec2(width.max(1150.0) + 24.0, 640.0);
 
         for tag in langs.split(',').map(str::trim).filter(|t| !t.is_empty()) {
             let ctx = egui::Context::default();
@@ -1078,5 +1169,156 @@ mod preview {
             img.save(&out).expect("write the preview");
             println!("{tag}: window {:?} -> {out}", app.tool_rect);
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod fit_and_keep {
+    use super::*;
+    use eframe::App as _;
+    use sdroxide_types::{RadioController, RadioEvent};
+
+    struct Quiet;
+    impl RadioController for Quiet {
+        fn send(&mut self, _cmd: Command) {}
+        fn poll_event(&mut self) -> Option<RadioEvent> {
+            None
+        }
+    }
+
+    /// One message's text from a language's `.ftl` file, so every language can be
+    /// measured without switching the process-wide one under other tests.
+    fn message(lang: &str, id: &str) -> String {
+        let path = format!("{}/i18n/{lang}/sdroxide.ftl", env!("CARGO_MANIFEST_DIR"));
+        let text = std::fs::read_to_string(&path).unwrap();
+        text.lines()
+            .find_map(|l| l.strip_prefix(&format!("{id} = ")))
+            .unwrap_or_else(|| panic!("{id} is missing from {path}"))
+            .trim()
+            .to_owned()
+    }
+
+    /// **No language needs a window wider than a laptop screen**, and the floor
+    /// the window reports covers it. Russian asks for ~1040 pt (six "Сортировка"
+    /// menus and "ПО УМОЛЧАНИЮ"); before, the floor was a fixed 860, so the row
+    /// came out wider than the frame, the window grew by itself and the
+    /// right-hand chips left it (German 922 pt, Russian 1055 pt at 860).
+    #[test]
+    fn every_language_fits_a_reasonable_window() {
+        let ctx = egui::Context::default();
+        let chrome = 2.0 * 10.0;
+        let langs: Vec<String> = std::fs::read_dir(format!("{}/i18n", env!("CARGO_MANIFEST_DIR")))
+            .unwrap()
+            .filter_map(|e| e.ok()?.file_name().into_string().ok())
+            .filter(|n| n != "README.md" && !n.contains('.'))
+            .collect();
+        assert!(langs.len() >= 11, "{langs:?}");
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1000.0, 600.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| {
+            let bar = ui.spacing().scroll.allocated_width();
+            for lang in &langs {
+                let labels = ColLabels {
+                    sort: format!("{} ▼", message(lang, "schedule-sort")),
+                    listen: message(lang, "schedule-listen"),
+                    reset: message(lang, "schedule-colour-reset"),
+                    log: message(lang, "topbar-chip-log"),
+                };
+                let need = Cols::floor_width(ui, &labels, true) + bar + chrome;
+                assert!(need <= 1100.0, "{lang} needs {need:.0} pt for its list");
+            }
+        });
+    }
+
+    /// The columns add up to the width they were given, wide or narrow, so the
+    /// row is neither short of the frame nor past it.
+    #[test]
+    fn the_columns_use_exactly_the_width_they_are_given() {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1000.0, 600.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| {
+            let labels = ColLabels {
+                sort: "Sort ▼".into(),
+                listen: "LISTEN".into(),
+                reset: "DEFAULT".into(),
+                log: "LOG".into(),
+            };
+            for local in [false, true] {
+                let floor = Cols::floor_width(ui, &labels, local);
+                for avail in [floor, floor + 120.0, 1400.0, 1960.0] {
+                    let c = Cols::for_labels(ui, &labels, avail, local);
+                    let n = if local { 11.0 } else { 10.0 };
+                    let sum = c.freq
+                        + c.band
+                        + c.name
+                        + c.lang
+                        + c.target
+                        + c.site
+                        + c.local
+                        + c.colour
+                        + c.star
+                        + c.listen
+                        + c.log
+                        + (n - 1.0) * GAP
+                        + 2.0;
+                    assert!((sum - avail).abs() < 0.01, "local={local}: {sum} for {avail}");
+                }
+            }
+        });
+    }
+
+    /// **TOUT survives a restart.** Lit, written, the app built again over the
+    /// same config folder: the chip is lit and the favourites it made are kept.
+    #[test]
+    fn tout_is_still_lit_in_the_next_session() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-tout-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, Box::new(Quiet), 0, true);
+        assert!(!app.broadcast_all, "a fresh install starts with TOUT off");
+        app.set_broadcast_all(true);
+        let favs = app.broadcast_favs.len();
+        drop(app);
+
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, Box::new(Quiet), 0, true);
+        assert!(app.broadcast_all, "TOUT was lit and is lost");
+        assert_eq!(app.broadcast_favs.len(), favs, "the favourites it made are lost");
+        // And a frame with the window open keeps it, whatever the bar writes back.
+        app.schedule.show = true;
+        for i in 0..3 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1100.0, 640.0),
+                )),
+                time: Some(1.0 + i as f64 / 30.0),
+                ..Default::default()
+            };
+            ctx.run_ui(input, |ui| {
+                app.ui(ui, &mut eframe::Frame::_new_kittest());
+            })
+            .drop_without_applying_deltas();
+        }
+        assert!(app.broadcast_all && app.ui_settings.programs.all);
+        drop(app);
+        let ctx = egui::Context::default();
+        let app = SdroxideApp::new_tab(&ctx, None, None, Box::new(Quiet), 0, true);
+        assert!(app.broadcast_all, "TOUT is lost after the window was drawn");
     }
 }
