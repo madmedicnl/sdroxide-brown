@@ -22,6 +22,8 @@ of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 
 
 ## Now
 
+- SWL users group requests (added by the SWL users group, owned by Roy) — three of four in review: **1** band/mode dock remembered per radio (PR #409), **3** a band never visited keeps the mode in use (PR #406), **4** CTR ratchets the span down on keyboard tuning while the user cannot widen it again — ours, and exposed by #397's per-rate usable span, needs a `ctr_zoom_sim` case with `usable < rate`. **2** (start in Listening/Operating per radio) parked.
+
 - Translation rules in AGENTS.md and the "new language" sync rule in CLAUDE.md (added by F4NRM, owned by Claude) — branch `f4nrm/compassionate-mendel-e3kjll`, PR pending: the maintainer's agent is driven by AGENTS.md, which lacked the translation rule, and shipped English-only messages (#395); AGENTS.md now carries the eleven-language rule, and CLAUDE.md says a new language must update the list in both files. Docs only. Wacht op F4NRM's review.
 - Airport card: one airport = one card (added by F4NRM, owned by Claude) — branch `f4nrm/youthful-mayer-38fi1q`, PR pending: radio aids within 3 km of a field (EPL beside LFSG) are listed on the airport's card and no longer have a symbol that steals the click; the card shows height, distances, runway lengths and temperature in both systems; "no frequency published" is said instead of silence.
 - Airport card: Wikipedia picture stays on "…" (added by F4NRM, owned by Claude) — same branch and PR: repaint when the picture arrives (the poll runs after the map is drawn), a 404 from the station settles at once instead of three retries.
