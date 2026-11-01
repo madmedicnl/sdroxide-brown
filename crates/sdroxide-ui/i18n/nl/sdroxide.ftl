@@ -3226,7 +3226,7 @@ wefax-finished-charts-collect-here = Voltooide kaarten verzamelen zich hier.
 wefax-delete-chart = Deze kaart verwijderen
 wefax-loading = laden…
 wefax-stations = STATIONS
-wefax-broadcast-radiofax-schedules-picking-one = Radiofax-uitzendschema's — een kiezen stemt de afstemknop af
+wefax-broadcast-radiofax-schedules-picking-one = Radiofax-uitzendschema's — een kiezen stemt de afstemknop af en zet de lijnsnelheid
 wefax-frequencies-are-published-carrier-dial = Frequenties zijn de gepubliceerde draaggolf; de afstemming gaat 1,9 kHz eronder, dat wordt voor je gedaan. Schema's veranderen en stations sluiten — zie dit als waar je kunt beginnen te zoeken, niet als dienstregeling.
 wefax-delete-chart-store = Deze kaart uit de opslag verwijderen
 wefax-newer = ◀ NIEUWER
@@ -9038,3 +9038,5 @@ topbar-preset-reset = Herstellen
 topbar-preset-reset-hint = De ingebouwde voorinstelling van deze modus terugzetten
 
 topbar-preset-cancel = Annuleren
+wefax-schedule = SCHEMA
+wefax-schedule-hint = Opent het door { $station } gepubliceerde schema — kaarten en UTC-tijden — in een browser.

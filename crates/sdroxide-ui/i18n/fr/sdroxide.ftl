@@ -3226,7 +3226,7 @@ wefax-finished-charts-collect-here = Les cartes terminées s'accumulent ici.
 wefax-delete-chart = Supprimer cette carte
 wefax-loading = chargement…
 wefax-stations = STATIONS
-wefax-broadcast-radiofax-schedules-picking-one = Créneaux de radiofax de radiodiffusion — en choisir un accorde le cadran
+wefax-broadcast-radiofax-schedules-picking-one = Créneaux de radiofax de radiodiffusion — en choisir un accorde le cadran et règle la vitesse de ligne
 wefax-frequencies-are-published-carrier-dial = Les fréquences sont la porteuse publiée ; le cadran est réglé 1,9 kHz en dessous, ce qui est fait pour vous. Les créneaux changent et les stations ferment — considérez cela comme un point de départ pour chercher, non comme un horaire.
 wefax-delete-chart-store = Supprimer cette carte du stock
 wefax-newer = ◀ PLUS RÉCENTE
@@ -9041,3 +9041,5 @@ topbar-preset-reset = Réinitialiser
 topbar-preset-reset-hint = Remettre le préréglage d'origine de ce mode
 
 topbar-preset-cancel = Annuler
+wefax-schedule = HORAIRES
+wefax-schedule-hint = Ouvre dans un navigateur les horaires publiés par { $station } — cartes et heures UTC.

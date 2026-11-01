@@ -3236,7 +3236,7 @@ wefax-finished-charts-collect-here = Готовые карты собирают�
 wefax-delete-chart = Удалить эту карту
 wefax-loading = загрузка…
 wefax-stations = СТАНЦИИ
-wefax-broadcast-radiofax-schedules-picking-one = Расписания радиофакса вещательных станций — выбор одного настраивает шкалу
+wefax-broadcast-radiofax-schedules-picking-one = Расписания радиофакса вещательных станций — выбор одного настраивает шкалу и задаёт скорость строк
 wefax-frequencies-are-published-carrier-dial = Частоты — опубликованные несущие; шкала уходит на 1,9 кГц ниже, это сделано за вас. Расписания меняются, а станции закрываются — считайте это местом, с которого начинать поиск, а не расписанием.
 wefax-delete-chart-store = Удалить эту карту из хранилища
 wefax-newer = ◀ НОВЕЕ
@@ -9045,3 +9045,5 @@ topbar-preset-reset = Сбросить
 topbar-preset-reset-hint = Вернуть встроенный пресет этого режима
 
 topbar-preset-cancel = Отмена
+wefax-schedule = ГРАФИК
+wefax-schedule-hint = Открывает в браузере расписание, которое публикует { $station }, — карты и время UTC.

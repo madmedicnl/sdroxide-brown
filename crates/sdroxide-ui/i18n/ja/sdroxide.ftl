@@ -3204,7 +3204,7 @@ wefax-finished-charts-collect-here = 完了したチャートはここに集ま�
 wefax-delete-chart = このチャートを削除
 wefax-loading = 読み込み中…
 wefax-stations = 局
-wefax-broadcast-radiofax-schedules-picking-one = 放送のラジオファクスのスケジュール。1 つ選ぶとダイヤルが同調します
+wefax-broadcast-radiofax-schedules-picking-one = 放送のラジオファクスのスケジュール。1 つ選ぶとダイヤルが同調し、回線速度も設定されます
 wefax-frequencies-are-published-carrier-dial = 周波数は公表されたキャリアです。ダイヤルはその 1.9 kHz 下になります。これは自動で行われます。スケジュールは変わり、局は停止するため、これは探し始める場所として扱ってください。時刻表ではありません。
 wefax-delete-chart-store = このチャートをストアから削除
 wefax-newer = ◀ 新しい
@@ -8978,3 +8978,5 @@ topbar-preset-reset = リセット
 topbar-preset-reset-hint = このモードの組み込みプリセットに戻す
 
 topbar-preset-cancel = キャンセル
+wefax-schedule = スケジュール
+wefax-schedule-hint = { $station } が公開しているスケジュール（図と UTC 時刻）をブラウザーで開きます。

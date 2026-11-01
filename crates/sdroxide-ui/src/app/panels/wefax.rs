@@ -678,8 +678,10 @@ impl SdroxideApp {
     /// not the kind anyone remembers, so without this the mode starts with a
     /// trip to a web page. Picking one tunes the **dial**, which is 1.9 kHz
     /// below the published carrier — the subtraction that otherwise produces a
-    /// blank page and no clue why.
-    fn wefax_station_chip(&self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+    /// blank page and no clue why — and sets the line rate and index the
+    /// station actually sends, which the LPM chips would otherwise carry over
+    /// from whatever was listened to last.
+    fn wefax_station_chip(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
         use sdroxide_types::{WEFAX_STATIONS, WefaxStation};
         let dial = self.state.active_freq_hz();
         // The station we are on, if any, so the chip reads as a position.
@@ -695,7 +697,8 @@ impl SdroxideApp {
         let btn = crate::chrome::chip(ui, here.is_some(), RichText::new(face).size(11.0))
             .on_hover_text(tr!("wefax-broadcast-radiofax-schedules-picking-one"));
 
-        let mut pick = None;
+        // The station, not only its dial: its line rate and index come with it.
+        let mut pick: Option<(&WefaxStation, f64)> = None;
         let resp = egui::Popup::from_toggle_button_response(&btn)
             .frame(crate::chrome::window_frame())
             .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
@@ -714,6 +717,30 @@ impl SdroxideApp {
                                     .size(10.0)
                                     .strong(),
                             );
+                            // What the station sends, and where its timetable
+                            // is published. The geometry is the part that has
+                            // to reach the decoder — a chart on the wrong line
+                            // rate is not a worse picture, it is not a picture
+                            // — and the timetable is a link because it is
+                            // seasonal and belongs where it is maintained.
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} LPM · IOC {}",
+                                        s.lpm.value() as u32,
+                                        s.ioc.value()
+                                    ))
+                                    .color(crate::theme::gray(140))
+                                    .size(9.5),
+                                );
+                                if let Some(url) = s.schedule
+                                    && crate::chrome::chip(ui, false, tr!("wefax-schedule"))
+                                        .on_hover_text(tr!("wefax-schedule-hint", station = s.name))
+                                        .clicked()
+                                {
+                                    crate::download::open_external(url);
+                                }
+                            });
                             ui.horizontal_wrapped(|ui| {
                                 for &f in s.carriers_khz {
                                     let d = WefaxStation::dial_hz(f);
@@ -726,7 +753,7 @@ impl SdroxideApp {
                                         ))
                                         .clicked()
                                     {
-                                        pick = Some(d);
+                                        pick = Some((s, d));
                                     }
                                 }
                             });
@@ -742,8 +769,15 @@ impl SdroxideApp {
         if let Some(r) = &resp {
             crate::chrome::paint_popup_cut_border(ui.ctx(), &r.response, 1.0);
         }
-        if let Some(hz) = pick {
+        if let Some((station, hz)) = pick {
             cmds.push(Command::SetVfo { vfo: self.state.active_vfo, hz });
+            // The station's geometry with its dial. Left on the chips, picking
+            // DWD after an evening on a 240 LPM satellite chart would receive
+            // every chart as a page of bands, and the operator would have no
+            // reason to suspect the line rate.
+            if take_station_geometry(&mut self.digi_cfg_edit, station) {
+                cmds.push(Command::SetDigiConfig(self.digi_cfg_edit.clone()));
+            }
         }
     }
 
@@ -940,6 +974,26 @@ impl SdroxideApp {
     }
 }
 
+/// Give the decoder the geometry the station sends, and say whether that
+/// changed anything.
+///
+/// Picking a station moves the dial; it has to move the line rate with it.
+/// Every station in the list sends 120 LPM at IOC 576, but the chips are the
+/// operator's and one of them may have been left on 240 for a satellite chart —
+/// and at the wrong rate a chart is not a worse picture, it is a page of bands
+/// with nothing to say why.
+fn take_station_geometry(
+    cfg: &mut sdroxide_types::DigiConfig,
+    st: &sdroxide_types::WefaxStation,
+) -> bool {
+    if cfg.wefax_lpm == st.lpm && cfg.wefax_ioc == st.ioc {
+        return false;
+    }
+    cfg.wefax_lpm = st.lpm;
+    cfg.wefax_ioc = st.ioc;
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::{CENTRE_THRESHOLD_HZ, centred_dial_hz};
@@ -961,5 +1015,31 @@ mod tests {
         // The threshold is the readout's own yellow: inside it, no offer.
         assert!(120.0 <= CENTRE_THRESHOLD_HZ);
         assert!(CENTRE_THRESHOLD_HZ <= 200.0, "a chart this far off is already unreadable");
+    }
+
+    /// Picking a station sets the line rate and index it sends, and says so —
+    /// the `true` is what makes the panel send the config to the engine.
+    #[test]
+    fn picking_a_station_sets_the_geometry_it_sends() {
+        use super::take_station_geometry;
+        use sdroxide_types::{DigiConfig, WEFAX_STATIONS, WefaxIoc, WefaxLpm};
+
+        // The chips left on something else: a 240 LPM satellite chart, or an
+        // index half the width of a chart's.
+        let mut cfg = DigiConfig {
+            wefax_lpm: WefaxLpm::L240,
+            wefax_ioc: WefaxIoc::I288,
+            ..Default::default()
+        };
+        let dwd = WEFAX_STATIONS
+            .iter()
+            .find(|s| s.name.starts_with("DWD"))
+            .expect("DWD Pinneberg is in the list");
+        assert!(take_station_geometry(&mut cfg, dwd), "the change has to reach the engine");
+        assert_eq!(cfg.wefax_lpm, WefaxLpm::L120);
+        assert_eq!(cfg.wefax_ioc, WefaxIoc::I576);
+        // Already right: nothing is sent, so a station picked twice does not
+        // rewrite the config every time it is clicked.
+        assert!(!take_station_geometry(&mut cfg, dwd));
     }
 }

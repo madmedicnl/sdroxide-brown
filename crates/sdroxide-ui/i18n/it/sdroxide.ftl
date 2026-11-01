@@ -3237,7 +3237,7 @@ wefax-finished-charts-collect-here = Le carte completate si raccolgono qui.
 wefax-delete-chart = Elimina questa carta
 wefax-loading = caricamento…
 wefax-stations = STAZIONI
-wefax-broadcast-radiofax-schedules-picking-one = Programmi di radiofax di radiodiffusione — sceglierne uno sintonizza la sintonia
+wefax-broadcast-radiofax-schedules-picking-one = Programmi di radiofax di radiodiffusione — sceglierne uno sintonizza la sintonia e imposta la velocità di linea
 wefax-frequencies-are-published-carrier-dial = Le frequenze sono la portante pubblicata; la sintonia va 1,9 kHz sotto di essa, cosa che viene fatta per te. I programmi cambiano e le stazioni chiudono — consideralo un punto da cui iniziare a cercare, non un orario.
 wefax-delete-chart-store = Elimina questa carta dall'archivio
 wefax-newer = ◀ PIÙ RECENTE
@@ -9039,3 +9039,5 @@ topbar-preset-reset = Ripristina
 topbar-preset-reset-hint = Ripristina il preset integrato di questa modalità
 
 topbar-preset-cancel = Annulla
+wefax-schedule = ORARIO
+wefax-schedule-hint = Apre nel browser gli orari pubblicati da { $station } — carte e orari UTC.

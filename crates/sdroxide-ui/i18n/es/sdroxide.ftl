@@ -3212,7 +3212,7 @@ wefax-finished-charts-collect-here = Las cartas terminadas se acumulan aquí.
 wefax-delete-chart = Eliminar esta carta
 wefax-loading = cargando…
 wefax-stations = ESTACIONES
-wefax-broadcast-radiofax-schedules-picking-one = Horarios de radiofax — elegir uno sintoniza el dial
+wefax-broadcast-radiofax-schedules-picking-one = Horarios de radiofax — elegir uno sintoniza el dial y ajusta la velocidad de línea
 wefax-frequencies-are-published-carrier-dial = Las frecuencias son la portadora publicada; el dial va 1,9 kHz por debajo, lo que se hace por ti. Los horarios cambian y las estaciones cierran — tómalo como un lugar donde empezar a buscar, no como un horario.
 wefax-delete-chart-store = Eliminar esta carta del almacén
 wefax-newer = ◀ MÁS NUEVA
@@ -9029,3 +9029,5 @@ topbar-preset-reset = Restablecer
 topbar-preset-reset-hint = Restaurar el preajuste integrado de este modo
 
 topbar-preset-cancel = Cancelar
+wefax-schedule = HORARIO
+wefax-schedule-hint = Abre en un navegador el horario que publica { $station }, con cartas y horas UTC.

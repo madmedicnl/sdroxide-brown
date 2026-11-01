@@ -3200,7 +3200,7 @@ wefax-finished-charts-collect-here = 完成的图表会收集在这里。
 wefax-delete-chart = 删除此图表
 wefax-loading = 加载中……
 wefax-stations = 电台
-wefax-broadcast-radiofax-schedules-picking-one = 广播无线电传真时刻表——选择其中一项即可调谐表盘
+wefax-broadcast-radiofax-schedules-picking-one = 广播无线电传真时刻表——选择其中一项即可调谐表盘并设定行速
 wefax-frequencies-are-published-carrier-dial = 频率为公布的载波；表盘位于其下方 1.9 kHz，此操作已为你完成。时刻表会变化，电台也会停播——请将其作为开始查找的地方，而不是时间表。
 wefax-delete-chart-store = 从存储中删除此图表
 wefax-newer = ◀ 较新
@@ -8968,3 +8968,5 @@ topbar-preset-reset = 重置
 topbar-preset-reset-hint = 恢复此模式的内置预设
 
 topbar-preset-cancel = 取消
+wefax-schedule = 时刻表
+wefax-schedule-hint = 在浏览器中打开 { $station } 发布的时刻表，含图卡与 UTC 时间。

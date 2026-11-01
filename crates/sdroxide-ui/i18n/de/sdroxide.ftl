@@ -3221,7 +3221,7 @@ wefax-finished-charts-collect-here = Fertige Karten sammeln sich hier.
 wefax-delete-chart = Diese Karte löschen
 wefax-loading = lädt…
 wefax-stations = STATIONEN
-wefax-broadcast-radiofax-schedules-picking-one = Rundfunk-Radiofax-Fahrpläne — eine zu wählen stimmt die Skala ab
+wefax-broadcast-radiofax-schedules-picking-one = Rundfunk-Radiofax-Fahrpläne — eine zu wählen stimmt die Skala ab und stellt die Zeilenrate ein
 wefax-frequencies-are-published-carrier-dial = Die Frequenzen sind die veröffentlichten Träger; die Skala liegt 1,9 kHz darunter, was für Sie erledigt wird. Fahrpläne ändern sich und Stationen schalten ab — das hier als Ort nehmen, wo man zu suchen beginnt, nicht als Zeitplan.
 wefax-delete-chart-store = Diese Karte aus dem Speicher löschen
 wefax-newer = ◀ NEUER
@@ -9028,3 +9028,5 @@ topbar-preset-reset = Zurücksetzen
 topbar-preset-reset-hint = Die eingebaute Voreinstellung dieses Modus wiederherstellen
 
 topbar-preset-cancel = Abbrechen
+wefax-schedule = SENDEZEITEN
+wefax-schedule-hint = Öffnet den von { $station } veröffentlichten Fahrplan — Karten und UTC-Zeiten — im Browser.
