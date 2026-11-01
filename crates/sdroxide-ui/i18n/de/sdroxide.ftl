@@ -9033,4 +9033,4 @@ wefax-schedule-hint = Öffnet den von { $station } veröffentlichten Fahrplan �
 
 tx-bands-check-again = PRÜFEN
 
-tx-bands-check-again-hint = Nimmt die Bestätigung zurück, damit die Liste erneut geprüft werden kann. Das Ändern einer Bandes tut das von selbst.
+tx-bands-check-again-hint = Nimmt die Bestätigung zurück, damit die Liste erneut geprüft werden kann. Das Ändern eines Bandes tut das von selbst.

@@ -8020,7 +8020,6 @@ impl RadioConfig {
 
 #[cfg(test)]
 mod tests {
-
     /// **A change to the transmit band list withdraws the confirmation.**
     ///
     /// The flag means "I have looked at every band on this list". Ticking a
