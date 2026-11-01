@@ -55,6 +55,10 @@ dial + 1500 Hz), like SSTV's picture. Touching waterfall or zoom code: keep the 
 
 - Answer and plan in French, short and direct. No automatic approval window
   (do not call ExitPlanMode): ask questions as plain text in the chat.
+- **Pull requests are written in English** (title, description, comments), so
+  the other contributors can read and review them. Talk to the user in French.
+  Push the branch and open the PR only when asked; **never merge it and never
+  follow it** (no `subscribe_pr_activity`) unless the user says so.
 - You must complete TODO.md
 - You must write on multiple lines if you are doing multiple PRs and complete the TODO.md file.
 
