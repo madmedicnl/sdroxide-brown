@@ -3,10 +3,10 @@
 
 Reads JSON lines on stdin, one message per line:
 
-    {"id": "radio-foo", "en": "Foo", "fr": "Foo", "es": "Foo", "de": "Foo", "nl": "Foo", "it": "Foo", "pt-BR": "Foo", "ru": "Foo", "tr": "Foo",
+    {"id": "radio-foo", "en": "Foo", "fr": "Foo", "es": "Foo", "de": "Foo", "nl": "Foo", "it": "Foo", "pt-BR": "Foo", "ru": "Foo", "tr": "Foo", "ja": "Foo", "zh-CN": "Foo",
      "note": "optional comment for translators"}
 
-and appends it to crates/sdroxide-ui/i18n/{en-US,fr,es,de,nl,it,pt-BR,ru,tr}/sdroxide.ftl under a
+and appends it to crates/sdroxide-ui/i18n/{en-US,fr,es,de,nl,it,pt-BR,ru,tr,ja,zh-CN}/sdroxide.ftl under a
 lock, so several people (or agents) can add messages at the same time. An id
 that already exists is reported and skipped. `{ $name }` placeables are kept as
 they are; a value with a newline is written as a Fluent multi-line value.
@@ -16,7 +16,7 @@ they are; a value with a newline is written as a Fluent multi-line value.
 import fcntl, json, os, re, sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "crates", "sdroxide-ui", "i18n")
-LANGS = {"en": "en-US", "fr": "fr", "es": "es", "de": "de", "nl": "nl", "it": "it", "pt-BR": "pt-BR", "ru": "ru", "tr": "tr"}
+LANGS = {"en": "en-US", "fr": "fr", "es": "es", "de": "de", "nl": "nl", "it": "it", "pt-BR": "pt-BR", "ru": "ru", "tr": "tr", "ja": "ja", "zh-CN": "zh-CN"}
 
 
 def fmt(id_, text, note=None):
