@@ -536,7 +536,15 @@ impl SdroxideApp {
         // What the rows get is the width left once the scroll bar has its own: the
         // list is built for that, so its right-hand chip is not under the bar.
         let list_w = ui.available_width() - ui.spacing().scroll.allocated_width();
-        let cols = Cols::new(ui, list_w, self.schedule.local_time);
+        // The name column is as wide as the longest name plus 40 characters.
+        let body = egui::TextStyle::Body.resolve(ui.style());
+        let name_w = rows
+            .iter()
+            .map(|s| &s.name)
+            .max_by_key(|n| n.chars().count())
+            .map_or(0.0, |n| crate::chrome::text_width(ui, n, body.clone()))
+            + NAME_SLACK_CHARS as f32 * crate::chrome::text_width(ui, "0", body);
+        let cols = Cols::new(ui, list_w, self.schedule.local_time, name_w);
         // What the list needs, window margins and scroll bar included, for the
         // window's floor next frame.
         self.schedule.floor_w =
@@ -610,6 +618,7 @@ impl SdroxideApp {
                                 }
                             });
                         }
+                        ui.add_space(cols.free);
                         let stock = crate::theme::spot_color(sdroxide_types::SpotKind::Broadcast);
                         let mut col = self
                             .ui_settings
@@ -723,6 +732,7 @@ impl SdroxideApp {
                     );
                 });
             }
+            ui.add_space(cols.free);
             cell(ui, cols.colour, row_h, egui::Align::Center, |ui| {
                 ui.label(
                     RichText::new(tr!("schedule-colour-all"))
@@ -743,7 +753,8 @@ impl SdroxideApp {
                 + cols.target
                 + cols.site
                 + if local { cols.local } else { 0.0 }
-                + (if local { 7.0 } else { 6.0 }) * GAP;
+                + cols.free
+                + (if local { 8.0 } else { 7.0 }) * GAP;
             ui.add_space(before);
             let stock = crate::theme::spot_color(sdroxide_types::SpotKind::Broadcast);
             let mut all =
@@ -808,6 +819,9 @@ struct Cols {
     target: f32,
     site: f32,
     local: f32,
+    /// The empty stretch between the text columns and the right-hand group
+    /// (colour, PST, LISTEN, LOG), which stays against the right edge.
+    free: f32,
     colour: f32,
     star: f32,
     listen: f32,
@@ -836,8 +850,12 @@ impl ColLabels {
 }
 
 /// The most width the three text columns (language, target, site) take beyond
-/// their floors; any more goes to the name.
+/// their floors, once the name has what it asks for.
 const GROW_TEXT_MAX: f32 = 160.0;
+
+/// The empty room kept after the longest name, in characters: the gap between
+/// the name column and the language never goes past it.
+const NAME_SLACK_CHARS: usize = 40;
 
 /// The widest a SORT menu is drawn, however wide its column.
 const SORT_MENU_MAX_W: f32 = 120.0;
@@ -850,10 +868,11 @@ impl Cols {
     /// scroll bar already taken off. Each column has a floor, the widest thing
     /// that ever goes in it (its SORT menu, its chip) measured in the language on
     /// screen, so nothing overlaps its neighbour. Width beyond the floors is
-    /// shared out between the name and the three text columns that truncate,
-    /// rather than all going to the name.
-    fn new(ui: &egui::Ui, avail: f32, local: bool) -> Self {
-        Self::for_labels(ui, &ColLabels::current(), avail, local)
+    /// shared out: the name first, up to `name_w` (its longest text plus 40
+    /// characters), then the three text columns, and what is left becomes an
+    /// empty stretch before the right-hand group — never a gap after the name.
+    fn new(ui: &egui::Ui, avail: f32, local: bool, name_w: f32) -> Self {
+        Self::for_labels(ui, &ColLabels::current(), avail, local, name_w)
     }
 
     /// The width every column needs at its floor, gaps and the 2 pt margin
@@ -872,7 +891,7 @@ impl Cols {
             + c.star
             + c.listen
             + c.log
-            + (n - 1.0) * GAP
+            + n * GAP
             + 2.0
     }
 
@@ -892,6 +911,7 @@ impl Cols {
             target: sort_w.max(64.0),
             site: sort_w.max(100.0),
             local: if local { 52.0 } else { 0.0 },
+            free: 0.0,
             colour,
             star,
             listen,
@@ -899,17 +919,22 @@ impl Cols {
         }
     }
 
-    fn for_labels(ui: &egui::Ui, labels: &ColLabels, avail: f32, local: bool) -> Self {
+    fn for_labels(ui: &egui::Ui, labels: &ColLabels, avail: f32, local: bool, name_w: f32) -> Self {
         let mut c = Self::floors(ui, labels, local);
-        let spare = (avail - Self::floor_width(ui, labels, local)).max(0.0);
-        // The three text columns truncate, so they get some room first, up to a
-        // cap; everything past that is the name's, which is the one column whose
-        // text is long.
+        let mut spare = (avail - Self::floor_width(ui, labels, local)).max(0.0);
+        // The name is the column whose text is long: it takes what it asks for,
+        // so a long name is shown whole whenever the window allows.
+        let name = spare.min((name_w - c.name).max(0.0));
+        c.name += name;
+        spare -= name;
+        // The three text columns truncate, so they get some room next, up to a cap.
         let text = spare.min(GROW_TEXT_MAX);
         c.lang += text * 0.25;
         c.target += text * 0.25;
         c.site += text * 0.5;
-        c.name += spare - text;
+        spare -= text;
+        // Past that the window is simply wider than the list needs.
+        c.free = spare;
         c
     }
 }
@@ -970,7 +995,7 @@ mod bar_budget {
             )),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| {
+        ctx.run_ui(input, |ui| {
             let gap = ui.spacing().item_spacing.x;
             let label =
                 |t: &str| crate::chrome::text_width(ui, t, egui::FontId::proportional(14.0)) * 1.33;
@@ -1003,7 +1028,8 @@ mod bar_budget {
             ];
             let total = |r: &[f32]| r.iter().sum::<f32>() + gap * (r.len() as f32 - 1.0);
             out = (total(&row1), total(&row2));
-        });
+        })
+        .drop_without_applying_deltas();
         out
     }
 
@@ -1220,7 +1246,7 @@ mod fit_and_keep {
             )),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| {
+        ctx.run_ui(input, |ui| {
             let bar = ui.spacing().scroll.allocated_width();
             for lang in &langs {
                 let labels = ColLabels {
@@ -1232,7 +1258,8 @@ mod fit_and_keep {
                 let need = Cols::floor_width(ui, &labels, true) + bar + chrome;
                 assert!(need <= 1100.0, "{lang} needs {need:.0} pt for its list");
             }
-        });
+        })
+        .drop_without_applying_deltas();
     }
 
     /// The columns add up to the width they were given, wide or narrow, so the
@@ -1247,7 +1274,7 @@ mod fit_and_keep {
             )),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| {
+        ctx.run_ui(input, |ui| {
             let labels = ColLabels {
                 sort: "Sort ▼".into(),
                 listen: "LISTEN".into(),
@@ -1257,7 +1284,7 @@ mod fit_and_keep {
             for local in [false, true] {
                 let floor = Cols::floor_width(ui, &labels, local);
                 for avail in [floor, floor + 120.0, 1400.0, 1960.0] {
-                    let c = Cols::for_labels(ui, &labels, avail, local);
+                    let c = Cols::for_labels(ui, &labels, avail, local, 400.0);
                     let n = if local { 11.0 } else { 10.0 };
                     let sum = c.freq
                         + c.band
@@ -1266,16 +1293,54 @@ mod fit_and_keep {
                         + c.target
                         + c.site
                         + c.local
+                        + c.free
                         + c.colour
                         + c.star
                         + c.listen
                         + c.log
-                        + (n - 1.0) * GAP
+                        + n * GAP
                         + 2.0;
                     assert!((sum - avail).abs() < 0.01, "local={local}: {sum} for {avail}");
                 }
             }
-        });
+        })
+        .drop_without_applying_deltas();
+    }
+
+    /// **The name never gets more than its longest text plus 40 characters.**
+    /// A wide window puts the rest after the text columns, not between the name
+    /// and the language; a longer name than that still gets all the room it asks
+    /// for, as far as the window goes.
+    #[test]
+    fn the_gap_after_the_name_stays_within_forty_characters() {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1000.0, 600.0),
+            )),
+            ..Default::default()
+        };
+        ctx.run_ui(input, |ui| {
+            let labels = ColLabels {
+                sort: "Sort ▼".into(),
+                listen: "LISTEN".into(),
+                reset: "DEFAULT".into(),
+                log: "LOG".into(),
+            };
+            let floor = Cols::floor_width(ui, &labels, false);
+            let wide = Cols::for_labels(ui, &labels, 1960.0, false, 300.0);
+            assert!((wide.name - 300.0).abs() < 0.01, "name {}", wide.name);
+            assert!(wide.free > 0.0, "the surplus goes before the right-hand group");
+            // An 80-character name (about 560 pt) is shown whole when the room exists.
+            let long = Cols::for_labels(ui, &labels, 1960.0, false, 560.0);
+            assert!(long.name >= 560.0 - 0.01);
+            // Narrow: the name takes the room first and nothing is left over.
+            let tight = Cols::for_labels(ui, &labels, floor + 50.0, false, 300.0);
+            assert!((tight.name - (NAME_MIN_W + 50.0)).abs() < 0.01);
+            assert_eq!(tight.free, 0.0);
+        })
+        .drop_without_applying_deltas();
     }
 
     /// **TOUT survives a restart.** Lit, written, the app built again over the
