@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use sdroxide_radio::{Complex32, EngineConfig, IqSource, Result, start_engine};
-use sdroxide_types::{Command, DeviceCaps, Mode, RadioEvent, RxId, Vfo, WsjtxConfig};
+use sdroxide_types::{Band, Command, DeviceCaps, Mode, RadioEvent, RxId, Vfo, WsjtxConfig};
 
 /// Point the whole process's configuration at a scratch directory, once.
 ///
@@ -310,5 +310,33 @@ fn a_qsy_empties_the_call_queue() {
         digi_settles(&h, |st| st.call_queue.is_empty()),
         "a QSY must drop the queue: its offsets belong to the dial we have left"
     );
+    shutdown(h);
+
+
+}
+
+/// **A band this receiver has never been on takes the mode already in use.**
+///
+/// The band's own default is what it opens in — AM on the broadcast bands — and
+/// the band stack only remembers bands that have been visited. A listener who
+/// works in USB was therefore dropped into AM on every band without a stack of
+/// its own and had to put the mode back, band after band. Reported by the SWL
+/// users group (2026-11-01).
+#[test]
+fn a_band_with_no_stack_takes_the_mode_in_use() {
+    let _ = isolate_config();
+    let center = Arc::new(Mutex::new(DIAL_20M));
+    let h = start_engine(Box::new(Silent { center }), caps(), config(0));
+    h.cmd_tx.send(Command::SetVfo { vfo: Vfo::A, hz: DIAL_20M }).expect("the engine is running");
+    settle(&h, |s| s.vfo_a_hz == DIAL_20M);
+    h.cmd_tx
+        .send(Command::SetMode { rx: RxId::Main, mode: Mode::Usb })
+        .expect("the engine is running");
+    settle(&h, |s| s.rx[0].mode == Mode::Usb);
+
+    // The shortwave band opens in AM and this engine has never been on it, so
+    // there is no stack entry to restore.
+    h.cmd_tx.send(Command::SetBand(Band::Sw)).expect("the engine is running");
+    settle(&h, |s| s.band == Band::Sw && s.rx[0].mode == Mode::Usb);
     shutdown(h);
 }

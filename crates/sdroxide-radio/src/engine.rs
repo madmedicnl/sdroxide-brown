@@ -15744,7 +15744,19 @@ impl Engine {
 
         let mut entry =
             self.stacks.get(&band).and_then(|s| s.first().copied()).unwrap_or_else(|| {
-                let (freq_hz, mode) = band.default_entry();
+                let (freq_hz, default_mode) = band.default_entry();
+                // **A band this receiver has never been on takes the mode it is
+                // already using**, where that band can carry it. The band's own
+                // default is what the band *opens* in — AM on the broadcast
+                // bands — and an operator who listens in USB was being dropped
+                // into AM on every band without a stack of its own, then having
+                // to put the mode back each time. Reported by the SWL users
+                // group (2026-11-01).
+                //
+                // The `accepts_mode` check is the same one below: a band that
+                // cannot carry the mode keeps its own default, which is how
+                // picking the FM broadcast band from USB still lands on WFM.
+                let mode = if band.accepts_mode(rx.mode) { rx.mode } else { default_mode };
                 let (filter_lo, filter_hi) = mode.default_filter_at(freq_hz);
                 BandStackEntry { freq_hz, mode, filter_lo, filter_hi }
             });
