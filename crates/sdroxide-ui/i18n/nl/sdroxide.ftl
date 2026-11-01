@@ -5402,12 +5402,6 @@ navtex-sensitivity-hint =
     Geen volume: NAVTEX is FSK, dus de grijstinten komen van de tonen, niet van de signaalsterkte.
 
 
-navtex-loss-limit-hint =
-    Aantal opeenvolgende slots zonder leesbaar teken voordat sync wordt losgelaten.
-    
-navtex-disagree-limit-hint =
-    Aantal opeenvolgende slots waar beide kopieën legaal maar verschillend zijn voordat sync wordt losgelaten.
-    
 navtex-auto-hint = Keert terug naar de referentiedrempels (0). Gemarkeerd zolang actief.
 
 navtex-tune-dial-usb-below-channel = Stem de dial hier af (USB, 1.710 kHz onder het kanaal).
@@ -5788,26 +5782,9 @@ wefax-centre = CENTREREN
 
 wefax-centre-hint = Verschuif de dial { $sign }{ $off } Hz zodat de subdraaggolf weer op 1900 Hz zit — de ontvanger zit { $off } Hz ernaast, waardoor de kaart een witte pagina wordt.
 
-wefax-sensitivity-hint =
-    Gevoeligheid — hoe snel de decoder een kaart start en vasthoudt.
-    
-    Auto gebruikt de drempels gemeten uit het eigen fasesignaal van de kaart, wat de referentie 0 is.
-    
-    + accepteert zwakkere, vagere of ruigere kaarten; − wacht op een schoon signaal voordat hij start.
-    
-    Geen volume en geen contrast: een fax is frequentiegemoduleerd, dus de grijstinten komen van de tonen van 1500 / 2300 Hz, niet van de signaalsterkte.
-
-wefax-auto-hint = Keert terug naar de referentiedrempels (0) en laat de eigen metingen van de decoder de leiding. Gemarkeerd zolang actief.
-
 wefax-auto-start-hint = Begin een kaart wanneer de starttoon van 300 Hz (IOC 576) of 675 Hz wordt gehoord, of, als de toon in een fade of onder een draaggolf verloren ging, wanneer enkele seconden van het fasesignaal binnenkomen — en beëindig de lopende kaart en fase de nieuwe wanneer de volgende uitzending aankomt, ongeacht of er eerst een stoptoon kwam. Een draaggolf op het kanaal start niets.
 
 wefax-fit = PASSEND
-
-wefax-rotate-180 = DRAAI 180°
-
-wefax-rotate-hint = Draai de kaart op het scherm 180° — voor een beeld dat ondersteboven is aangekomen. Draait het beeld dat je ziet; sla het daarna op om de draai te bewaren.
-
-wefax-rotate-unavailable-hint = Draai de kaart op het scherm 180°. Beschikbaar zodra de kaart compleet is — een beeld draaien dat nog binnenkomt zou het door elkaar halen.
 
 wefax-save-chart-hint = Sla de kaart op het scherm op deze computer op, voor zover die is aangekomen
 
@@ -7932,10 +7909,6 @@ sstv-keep-dial-off-hint = Uit: SSTV kiezen verplaatst de draaiknop naar de SSTV-
 sstv-clear-rx = RX wissen
 
 sstv-clear-rx-hint = Wis de afbeelding die nu in de LIVE-weergave staat. De decoder blijft draaien — gebruik RX herstarten om een afbeelding in uitvoering te laten varen en op de volgende header te luisteren.
-
-sstv-sensitivity-hint = Past het signaalniveau aan dat naar de SSTV-decoder gaat. 0 = huidig automatisch niveau (Auto). Negatieve waarden dempen, positieve waarden versterken. Klik op Auto om terug te keren naar het automatische niveau.
-
-sstv-auto-level-hint = Keert terug naar het automatische niveau (referentie 0) en schakelt handmatige aanpassing uit. Gemarkeerd zolang actief.
 
 sstv-audio-present-no-header = audio aanwezig · nog geen SSTV-header
 

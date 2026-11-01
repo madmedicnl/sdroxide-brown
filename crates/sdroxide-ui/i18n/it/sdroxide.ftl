@@ -5405,17 +5405,6 @@ navtex-hunting-hint =
 
 navtex-sensitivity-hint =
     Sensibilità — con quanta facilità il decodificatore si aggancia a un segnale e lo mantiene.
-navtex-loss-limit-hint =
-    Slot consecutivi in cui nessuna delle due copie è leggibile prima che la sincronizzazione venga persa.
-navtex-disagree-limit-hint =
-    Slot consecutivi in cui entrambe le copie sono state interpretate ma discordano prima che la sincronizzazione venga persa.
-
-    Auto usa le soglie di riferimento (0), cioè il comportamento di fabbrica.
-
-    + accetta un segnale più debole o più rumoroso; − attende un segnale più pulito prima di dichiarare la sincronizzazione, ed è ciò che impedisce al rumore di essere letto come caratteri.
-
-    Non è il volume: NAVTEX è FSK, quindi i grigi dipendono dai toni, non dall'intensità del segnale.
-
 navtex-auto-hint = Torna alle soglie di riferimento (0). Evidenziato quando attivo.
 
 navtex-tune-dial-usb-below-channel = Sintonizza qui (USB, 1.710 kHz sotto il canale).
@@ -5796,26 +5785,9 @@ wefax-centre = CENTRA
 
 wefax-centre-hint = Sposta la sintonia di { $sign }{ $off } Hz in modo che la sottoportante torni a 1900 Hz — il ricevitore è fuori di { $off } Hz, ed è ciò che trasforma la carta in una pagina bianca.
 
-wefax-sensitivity-hint =
-    Sensibilità — con quanta facilità il decodificatore avvia e mantiene una carta.
-
-    Auto usa le soglie misurate dal segnale di fasatura della carta stessa, che è il riferimento 0.
-
-    + accetta carte più deboli, più tenui o più rumorose; − attende un segnale pulito prima di iniziare.
-
-    Non è volume né contrasto: un fax è modulato in frequenza, quindi i grigi derivano dai toni a 1500 / 2300 Hz, non dalla forza del segnale.
-
-wefax-auto-hint = Torna alle soglie di riferimento (0) e lascia al comando le misurazioni proprie del decodificatore. Evidenziato quando attivo.
-
 wefax-auto-start-hint = Inizia una carta quando si sente il tono di avvio a 300 Hz (IOC 576) o a 675 Hz, oppure, se il tono è andato perso in un fading o sotto una portante, quando arrivano alcuni secondi del segnale di fasatura — e termina quella in corso e fasa la nuova quando arriva la trasmissione successiva, che sia o no arrivato prima un tono di stop. Una portante sul canale non avvia nulla.
 
 wefax-fit = ADATTA
-
-wefax-rotate-180 = RUOTA 180°
-
-wefax-rotate-hint = Ruota la carta sullo schermo di 180° — per un'immagine arrivata capovolta. Gira l'immagine che vedi; salvala poi per mantenere la rotazione.
-
-wefax-rotate-unavailable-hint = Ruota la carta sullo schermo di 180°. Disponibile a carta completa — ruotare un'immagine ancora in arrivo la rovinerebbe.
 
 wefax-save-chart-hint = Salva su questo computer la carta sullo schermo, per quanto è arrivata
 
@@ -7940,10 +7912,6 @@ sstv-keep-dial-off-hint = Off: scegliendo SSTV il dial si sposta sulla frequenza
 sstv-clear-rx = Cancella Rx
 
 sstv-clear-rx-hint = Cancella l'immagine attualmente mostrata nella vista LIVE. Il decodificatore continua a funzionare: usa Riavvia RX per abbandonare un'immagine in corso e attendere la prossima intestazione.
-
-sstv-sensitivity-hint = Regola il livello del segnale inviato al decodificatore SSTV. 0 = livello automatico attuale (Auto). I valori negativi attenuano, quelli positivi amplificano. Clicca Auto per tornare al livello automatico.
-
-sstv-auto-level-hint = Torna al livello automatico (riferimento 0) e disattiva la regolazione manuale. Evidenziato quando attivo.
 
 sstv-audio-present-no-header = audio presente · ancora nessuna intestazione SSTV
 

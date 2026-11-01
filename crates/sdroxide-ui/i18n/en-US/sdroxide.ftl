@@ -5397,18 +5397,6 @@ navtex-hunting-hint =
 navtex-sensitivity-hint =
     Sensitivity — how readily the decoder locks onto and keeps a signal.
     
-navtex-loss-limit-hint =
-    Consecutive slots with neither copy readable before sync is dropped.
-    
-navtex-disagree-limit-hint =
-    Consecutive slots whose two copies both parsed and disagreed before sync is dropped.
-    
-    Auto uses the reference thresholds (0), which is the behaviour as shipped.
-    
-    + accepts a weaker or noisier signal; − waits for a cleaner one before declaring sync, which is what stops noise being read as characters.
-    
-    Not volume: NAVTEX is FSK, so the greys come from the tones, not from how strong the signal is.
-
 navtex-auto-hint = Returns to the reference thresholds (0). Highlighted while active.
 
 navtex-tune-dial-usb-below-channel = Tune the dial here (USB, 1.710 kHz below the channel).
@@ -5789,26 +5777,9 @@ wefax-centre = CENTRE
 
 wefax-centre-hint = Nudge the dial { $sign }{ $off } Hz so the subcarrier sits on 1900 Hz again — the receiver is { $off } Hz off, which is what turns the chart into a white page.
 
-wefax-sensitivity-hint =
-    Sensitivity — how readily the decoder starts and keeps a chart.
-    
-    Auto uses the thresholds measured from the chart's own phasing signal, which is the reference 0.
-    
-    + accepts weaker, fainter or noisier charts; − waits for a clean signal before it starts.
-    
-    Not volume and not contrast: a fax is frequency modulated, so the greys come from the 1500 / 2300 Hz tones, not from how strong the signal is.
-
-wefax-auto-hint = Returns to the reference thresholds (0) and leaves the decoder's own measurements in charge. Highlighted while active.
-
 wefax-auto-start-hint = Begin a chart when the 300 Hz (IOC 576) or 675 Hz start tone is heard, or, if the tone was lost in a fade or under a carrier, when a few seconds of the phasing signal arrive — and end the one in progress and phase the new one when the next transmission arrives, whether or not a stop tone came first. A carrier on the channel starts nothing.
 
 wefax-fit = FIT
-
-wefax-rotate-180 = ROTATE 180°
-
-wefax-rotate-hint = Rotate the chart on screen 180° — for a picture that has arrived upside down. Turns the picture you see; save it afterwards to keep the turn.
-
-wefax-rotate-unavailable-hint = Rotate the chart on screen 180°. Available once the chart is complete — turning a picture that is still arriving would scramble it.
 
 wefax-save-chart-hint = Save the chart on screen to this computer, as far as it has arrived
 
@@ -7933,10 +7904,6 @@ sstv-keep-dial-off-hint = Off: choosing SSTV moves the dial onto the band's SSTV
 sstv-clear-rx = Clear Rx
 
 sstv-clear-rx-hint = Clear the picture currently shown in the LIVE view. The decoder keeps running — use Restart RX to abandon an in-progress picture and listen for the next header.
-
-sstv-sensitivity-hint = Adjusts the signal level fed to the SSTV decoder. 0 = current automatic level (Auto). Negative values attenuate, positive values boost. Click Auto to return to the automatic level.
-
-sstv-auto-level-hint = Returns to the automatic level (reference 0) and disables manual adjustment. Highlighted while active.
 
 sstv-audio-present-no-header = audio present · no SSTV header yet
 

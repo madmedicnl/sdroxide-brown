@@ -5401,12 +5401,6 @@ navtex-sensitivity-hint =
     Ce n'est pas le volume : NAVTEX est de la FSK, les gris viennent des tons et non de la force du signal.
 
 
-navtex-loss-limit-hint =
-    Nombre de slots consécutifs sans copie lisible avant abandon de la synchronisation.
-    
-navtex-disagree-limit-hint =
-    Nombre de slots consécutifs dont les deux copies sont légales mais différentes avant abandon de la synchronisation.
-    
 navtex-auto-hint = Revient aux seuils de référence (0). Mis en évidence quand actif.
 
 navtex-tune-dial-usb-below-channel = Accorde le cadran ici (USB, 1,710 kHz sous le canal).
@@ -5787,26 +5781,9 @@ wefax-centre = CENTRER
 
 wefax-centre-hint = Décale le cadran de { $sign }{ $off } Hz pour que la sous-porteuse retombe sur 1900 Hz — le récepteur est décalé de { $off } Hz, ce qui transforme la carte en page blanche.
 
-wefax-sensitivity-hint =
-    Sensibilité — la facilité avec laquelle le décodeur démarre et conserve une carte.
-    
-    Auto utilise les seuils mesurés sur le signal de phasage de la carte elle-même, ce qui correspond à la référence 0.
-    
-    + accepte des cartes plus faibles, plus pâles ou plus bruitées ; − attend un signal propre avant de démarrer.
-    
-    Ce n'est ni le volume ni le contraste : un fax est modulé en fréquence, les gris viennent des tons 1500 / 2300 Hz et non de la force du signal.
-
-wefax-auto-hint = Revient aux seuils de référence (0) et laisse les mesures propres du décodeur aux commandes. Mis en évidence quand actif.
-
 wefax-auto-start-hint = Démarre une carte à l'écoute du ton de début de 300 Hz (IOC 576) ou 675 Hz, ou, si le ton s'est perdu dans un évanouissement ou sous une porteuse, quand quelques secondes de signal de phasage arrivent — et termine la carte en cours pour phaser la nouvelle à l'arrivée de l'émission suivante, qu'un ton d'arrêt soit venu ou non. Une porteuse sur le canal ne déclenche rien.
 
 wefax-fit = AJUST.
-
-wefax-rotate-180 = PIVOTER 180°
-
-wefax-rotate-hint = Fait pivoter la carte à l'écran de 180° — pour une image arrivée à l'envers. Tourne l'image affichée ; enregistrez-la ensuite pour conserver la rotation.
-
-wefax-rotate-unavailable-hint = Fait pivoter la carte à l'écran de 180°. Disponible une fois la carte terminée — tourner une image encore en cours de réception la brouillerait.
 
 wefax-save-chart-hint = Enregistre sur cet ordinateur la carte affichée, dans l'état où elle est arrivée
 
@@ -7935,10 +7912,6 @@ sstv-keep-dial-off-hint = Désactivé : choisir SSTV déplace le cadran sur la f
 sstv-clear-rx = Effacer Rx
 
 sstv-clear-rx-hint = Efface l'image actuellement affichée dans la vue LIVE. Le décodeur continue de tourner — utilisez Redémarrer RX pour abandonner une image en cours et attendre le prochain en-tête.
-
-sstv-sensitivity-hint = Ajuste le niveau du signal envoyé au décodeur SSTV. 0 = niveau automatique actuel (Auto). Les valeurs négatives atténuent, les positives amplifient. Cliquez sur Auto pour revenir au niveau automatique.
-
-sstv-auto-level-hint = Revient au niveau automatique (référence 0) et désactive le réglage manuel. Mis en évidence quand actif.
 
 sstv-audio-present-no-header = audio présent · pas encore d'en-tête SSTV
 

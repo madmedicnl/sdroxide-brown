@@ -5396,17 +5396,6 @@ navtex-hunting-hint =
 
 navtex-sensitivity-hint =
     Hassasiyet — çözücünün bir sinyale ne kadar kolay kilitlenip onu ne kadar iyi tuttuğu.
-navtex-loss-limit-hint =
-    Senkronizasyon bırakılmadan önce iki kopyanın da okunamadığı ardışık aralık sayısı.
-navtex-disagree-limit-hint =
-    Senkronizasyon bırakılmadan önce iki kopyanın da çözülüp birbiriyle çeliştiği ardışık aralık sayısı.
-
-    Otomatik, referans eşiklerini (0) kullanır; bu, sürümle gelen varsayılan davranıştır.
-
-    + daha zayıf veya daha gürültülü bir sinyali kabul eder; − senkronizasyonu ilan etmeden önce daha temiz bir sinyal bekler, gürültünün karakter olarak okunmasını engelleyen de budur.
-
-    Ses seviyesi değil: NAVTEX bir FSK sistemidir, gri tonlar sinyalin gücünden değil, tonlardan gelir.
-
 navtex-auto-hint = Referans eşiklere (0) döner. Etkinken vurgulanır.
 
 navtex-tune-dial-usb-below-channel = Kadranı buraya ayarlayın (USB, kanalın 1.710 kHz altı).
@@ -5787,26 +5776,9 @@ wefax-centre = ORTALA
 
 wefax-centre-hint = Alt taşıyıcı yeniden 1900 Hz'e otursun diye kadranı { $sign }{ $off } Hz kaydırın — alıcı { $off } Hz kaymış durumda, haritayı beyaz bir sayfaya çeviren de budur.
 
-wefax-sensitivity-hint =
-    Hassasiyet — çözücünün bir haritayı ne kadar kolay başlatıp sürdürdüğü.
-
-    Otomatik, haritanın kendi fazlama sinyalinden ölçülen eşikleri kullanır; bu, referans 0'dır.
-
-    + daha zayıf, soluk veya gürültülü haritaları kabul eder; − başlamadan önce temiz bir sinyal bekler.
-
-    Ses düzeyi ve kontrast değildir: bir faks frekans modülasyonludur, gri tonlar sinyalin gücünden değil 1500 / 2300 Hz tonlarından gelir.
-
-wefax-auto-hint = Referans eşiklere (0) döner ve çözücünün kendi ölçümlerini yönetimde bırakır. Etkinken vurgulanır.
-
 wefax-auto-start-hint = 300 Hz (IOC 576) veya 675 Hz başlangıç tonu duyulduğunda ya da ton bir fadingde veya bir taşıyıcının altında kaybolmuşsa fazlama sinyalinin birkaç saniyesi geldiğinde bir harita başlat — ve sonraki iletim geldiğinde, bir durdurma tonu önce gelmiş olsun olmasın, süren haritayı bitirip yenisini fazla. Kanaldaki bir taşıyıcı hiçbir şey başlatmaz.
 
 wefax-fit = SIĞDIR
-
-wefax-rotate-180 = 180° ÇEVİR
-
-wefax-rotate-hint = Ekrandaki haritayı 180° çevir — baş aşağı gelmiş bir resim için. Gördüğünüz resmi çevirir; çevirmeyi korumak için sonra kaydedin.
-
-wefax-rotate-unavailable-hint = Ekrandaki haritayı 180° çevir. Harita tamamlandıktan sonra kullanılabilir — hâlâ gelmekte olan bir resmi çevirmek onu bozar.
 
 wefax-save-chart-hint = Ekrandaki haritayı, gelmiş olduğu kadarıyla bu bilgisayara kaydet
 
@@ -7931,10 +7903,6 @@ sstv-keep-dial-off-hint = Kapalı: SSTV seçmek, bir tanesinden 3 kHz'den fazla 
 sstv-clear-rx = Rx'i temizle
 
 sstv-clear-rx-hint = CANLI görünümde o an gösterilen resmi temizler. Çözücü çalışmaya devam eder — süren bir resmi bırakıp bir sonraki başlığı dinlemek için RX'i Yeniden Başlat'ı kullanın.
-
-sstv-sensitivity-hint = SSTV çözücüsüne verilen sinyal seviyesini ayarlar. 0 = geçerli otomatik seviye (Auto). Negatif değerler zayıflatır, pozitif değerler güçlendirir. Otomatik seviyeye dönmek için Auto'ya tıklayın.
-
-sstv-auto-level-hint = Otomatik seviyeye (referans 0) döner ve elle ayarı devre dışı bırakır. Etkinken vurgulanır.
 
 sstv-audio-present-no-header = ses var · henüz SSTV başlığı yok
 
