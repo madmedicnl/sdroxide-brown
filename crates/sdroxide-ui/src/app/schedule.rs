@@ -151,6 +151,23 @@ impl ScheduleUi {
         }
     }
 
+    /// Take the filters the station sent, leaving the window itself (open or
+    /// not, where it sits) as it is. The list is rebuilt next frame.
+    pub(in crate::app) fn apply_filters(&mut self, f: &ProgramsFilters) {
+        self.query = f.query.clone();
+        self.lang = f.lang.clone();
+        self.target = f.target.clone();
+        self.band = f.band.clone();
+        self.hhmm = f.hhmm;
+        self.use_now = f.use_now;
+        self.favourites_only = f.favourites_only;
+        self.source = f.source;
+        self.local_time = f.local_time;
+        self.sort = f.sort;
+        self.sort_desc = f.sort_desc;
+        self.cache_key = None;
+    }
+
     /// The filters to save. `all` is the ALL chip, which lives on the app.
     fn to_settings(&self, all: bool) -> ProgramsFilters {
         ProgramsFilters {
@@ -1365,6 +1382,38 @@ mod fit_and_keep {
             assert_eq!(tight.free, 0.0);
         })
         .drop_without_applying_deltas();
+    }
+
+    /// **What the station sends is what the window shows.** TOUT, the stars, the
+    /// filters and the colours arrive in one piece, and the app hands the same
+    /// piece back when it is asked for its state — so the round trip through the
+    /// station changes nothing.
+    #[test]
+    fn the_stations_state_is_shown_and_handed_back_as_it_came() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-state-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let ctx = egui::Context::default();
+        let mut app = SdroxideApp::new_tab(&ctx, None, None, Box::new(Quiet), 0, true);
+        let mut state = sdroxide_types::ProgramsState::default();
+        state.filters.all = true;
+        state.filters.query = "BBC".into();
+        state.filters.lang = "French".into();
+        state.filters.favourites_only = true;
+        state.favourites = vec!["BBC".into(), "RFI".into()];
+        state.colour_all = Some([1, 2, 3]);
+        state.colours.insert("RFI".into(), [4, 5, 6]);
+        app.apply_programs_state(state.clone());
+        assert!(app.broadcast_all, "the chip is lit");
+        assert_eq!(app.broadcast_favs, ["BBC", "RFI"], "the labels have their stations");
+        assert_eq!((app.schedule.query.as_str(), app.schedule.lang.as_str()), ("BBC", "French"));
+        assert!(app.schedule.favourites_only);
+        assert_eq!(app.programs_state(), state, "and it is handed back as it came");
+        // No station to ask: the tick sends nothing and changes nothing.
+        app.programs_sync_tick(&ctx);
+        assert_eq!(app.programs_state(), state);
     }
 
     /// **TOUT survives a restart.** Lit, written, the app built again over the

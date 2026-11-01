@@ -20,7 +20,7 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 
 ## Now
 
-- PROGRAMS list overflow in long languages and wide windows (added by F4NRM, owned by Claude) — branch `f4nrm/kind-maxwell-8m2ipv`, same family as MEMORIES #373: columns built for the width left after the scroll bar, window floor follows the language, `schedule_preview` test renders the real window. Update: gap after the name capped at 40 characters, right-hand group against the edge. Wacht op F4NRM's review.
+- PROGRAMS list overflow in long languages and wide windows (added by F4NRM, owned by Claude) — branch `f4nrm/kind-maxwell-8m2ipv`, same family as MEMORIES #373: columns built for the width left after the scroll bar, window floor follows the language, `schedule_preview` test renders the real window. Update: gap after the name capped at 40 characters, right-hand group against the edge. Update 2: PROGRAMS state (TOUT, stars, filters, colours) moves to the station — `/programs-state` route + client sync, nothing kept in the browser. Not compiled here: `sdroxide-server` needs network for its `rade` build (opus download is refused in this sandbox); the hub logic was tested in isolation, the route glue copies `/aircraft-watch`. Wacht op F4NRM's review.
 - PROGRAMS window layout and persistence (added by F4NRM, owned by Claude) — branch `f4nrm/stoic-fermi-a0z0zp`, PR pending: columns, Sort menus, chip-framed colour, two-row bar, saved filters. Wacht op F4NRM's review.
 - SAT Doppler for CAT rigs (added by Roy, owned by Roy/SP9TKN) — step 1+2a+2b+2c
   implemented on branch `fork/sat-doppler-cat`. MSI build available. Wacht op
