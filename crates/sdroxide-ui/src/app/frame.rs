@@ -2406,6 +2406,7 @@ impl SdroxideApp {
                 // it there — see `UiSettings::cw_qrg`.
                 line_on_cursor: self.ui_settings.cw_qrg,
                 center_on_cursor: self.ui_settings.cw_qrg,
+                center_offset_hz: None,
             })
         } else if mode.has_bottom_panel() {
             // **SSTV.** Its view is anchored on the
@@ -2453,6 +2454,8 @@ impl SdroxideApp {
                     || Self::centres_on_picture(mode)
                     || sstv_picture
                     || mode.holds_audio_centre(),
+                // FT8 and co: the middle of the decode band, not the dial.
+                center_offset_hz: mode.audio_band_centre_hz().map(|c| side * c),
             })
         } else {
             None

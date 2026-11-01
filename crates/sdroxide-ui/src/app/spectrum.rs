@@ -1274,6 +1274,17 @@ fn focus_hz(mode: Mode, dial_hz: f64, audio_hz: f32, cw_qrg: bool, audio_front_e
             dial_hz + audio_hz as f64
         };
     }
+    // **FT8 and the modes that decode anywhere in the passband.** Their signals
+    // are all above the dial (200-3000 Hz), so CTR centres the middle of that
+    // band, not the dial: centred on the dial, half the window is empty and
+    // half the decode band is out of it. A view anchor only, like SSTV's.
+    if let Some(centre) = mode.audio_band_centre_hz() {
+        return if mode.is_lower_sideband_at(dial_hz) {
+            dial_hz - f64::from(centre)
+        } else {
+            dial_hz + f64::from(centre)
+        };
+    }
     //
     // **And the same for RTTY, NAVTEX and DSC — the SSTV case's twin.** Their
     // tone pair is off the dial *only* on a front end that hands over demodulated
@@ -1387,8 +1398,11 @@ mod tests {
         // screenshots showed: the picture either side of an empty centre line.
         assert_eq!(focus_hz(Mode::Sstv, 27_700_000.0, 0.0, false, true), 27_701_750.0);
         assert_eq!(focus_hz(Mode::Sstv, 3_730_000.0, 0.0, false, true), 3_728_250.0);
-        // A mode that really is worked on the dial is untouched...
-        assert_eq!(focus_hz(Mode::Ft8, 14_074_000.0, 0.0, false, true), 14_074_000.0);
+        // FT8 decodes 200-3000 Hz above the dial: CTR centres that band...
+        assert_eq!(focus_hz(Mode::Ft8, 14_074_000.0, 0.0, false, true), 14_075_500.0);
+        assert_eq!(focus_hz(Mode::Ft8, 3_573_000.0, 700.0, false, false), 3_574_500.0);
+        // ...and a mode really worked on the dial is untouched.
+        assert_eq!(focus_hz(Mode::Usb, 14_074_000.0, 0.0, false, true), 14_074_000.0);
         // **Olivia listens at one audio centre and cannot find a signal that is
         // not there.** A click puts the signal on that centre, so the dial ends
         // up beside it — and the window has to follow the signal, or the
@@ -1850,21 +1864,24 @@ mod focus_tests {
         assert_eq!(focus_hz(Mode::Dsc, dial, sdroxide_types::DSC_TONE_HZ, false, false), dial);
     }
 
-    /// The modes that pick a slot inside a sub-band stay on the dial. FT8's
-    /// tone offset moves by itself whenever the engine chooses a new transmit
+    /// The modes that pick a slot inside a sub-band centre the **middle of the
+    /// decode band** (dial + 1500 Hz), whatever their own tone offset is: FT8's
+    /// offset moves by itself whenever the engine chooses a new transmit
     /// frequency, and a window that followed it would slide out from under the
-    /// operator mid-QSO.
+    /// operator mid-QSO. The anchor is a constant, not the offset.
     #[test]
-    fn the_slotted_modes_stay_on_the_dial() {
+    fn the_slotted_modes_centre_the_decode_band() {
         let dial = 14_074_000.0;
         // Olivia is not here: it holds an audio centre and `focus_hz` follows
         // the signal, which is its own test below.
-        for m in [Mode::Ft8, Mode::Ft4, Mode::Js8, Mode::Psk] {
-            assert_eq!(
-                focus_hz(m, dial, 1500.0, false, false),
-                dial,
-                "{m:?} chased its own tone offset"
-            );
+        for m in [Mode::Ft8, Mode::Ft4, Mode::Js8, Mode::Psk, Mode::Wspr] {
+            for tx_offset in [300.0, 1500.0, 2700.0] {
+                assert_eq!(
+                    focus_hz(m, dial, tx_offset, false, false),
+                    dial + 1500.0,
+                    "{m:?} chased its own tone offset {tx_offset}"
+                );
+            }
         }
     }
 
