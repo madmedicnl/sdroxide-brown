@@ -5330,17 +5330,6 @@ navtex-hunting-hint =
 
 navtex-sensitivity-hint =
     灵敏度：解码器锁定并保持信号的难易程度。
-navtex-loss-limit-hint =
-    两份副本均不可读的连续时隙数，超过后同步将被丢弃。
-navtex-disagree-limit-hint =
-    两份副本均已解析但内容不一致的连续时隙数，超过后同步将被丢弃。
-
-    自动使用参考阈值 (0)，即出厂行为。
-
-    + 接受更弱或噪声更大的信号；- 等待更干净的信号再宣告同步，这样可避免把噪声读成字符。
-
-    与音量无关：NAVTEX 是 FSK，灰度来自音调，而不是信号强度。
-
 navtex-auto-hint = 恢复为参考阈值 (0)。启用时高亮显示。
 
 navtex-tune-dial-usb-below-channel = 在此调谐拨盘（USB，比信道低 1.710 kHz）。
@@ -5721,26 +5710,9 @@ wefax-centre = 居中
 
 wefax-centre-hint = 将拨盘微调 { $sign }{ $off } Hz，使副载波重新回到 1900 Hz，接收机偏了 { $off } Hz，这会使图表变成白页。
 
-wefax-sensitivity-hint =
-    灵敏度：解码器开始并保持图表的难易程度。
-
-    自动使用由图表自身相位信号测得的阈值，即参考值 0。
-
-    + 接受更弱、更淡或噪声更大的图表；- 等待干净的信号再开始。
-
-    与音量和对比度无关：传真是调频的，灰度来自 1500 / 2300 Hz 音调，而不是信号强度。
-
-wefax-auto-hint = 恢复为参考阈值 (0)，由解码器自己的测量负责。启用时高亮显示。
-
 wefax-auto-start-hint = 听到 300 Hz (IOC 576) 或 675 Hz 起始音时开始一幅图表；如果起始音在衰落中或载波下丢失，则在收到几秒相位信号时开始。下一次发射到来时，无论是否先有停止音，都会结束正在进行的图表并为新图表定相。信道上的载波不会触发任何开始。
 
 wefax-fit = 适应
-
-wefax-rotate-180 = 旋转 180°
-
-wefax-rotate-hint = 将屏幕上的图表旋转 180°，用于上下颠倒到达的图片。只转动您看到的图片；之后请保存以保留旋转结果。
-
-wefax-rotate-unavailable-hint = 将屏幕上的图表旋转 180°。图表完整后才可用，旋转仍在到达的图片会使其错乱。
 
 wefax-save-chart-hint = 将屏幕上的图表按已到达的部分保存到本计算机
 
@@ -7865,10 +7837,6 @@ sstv-keep-dial-off-hint = 关：选择 SSTV 时，若你距离任一 SSTV 频率
 sstv-clear-rx = 清除接收
 
 sstv-clear-rx-hint = 清除“实时”视图中当前显示的图片。解码器继续运行；要放弃正在接收的图片并等待下一个帧头，请使用“重启接收”。
-
-sstv-sensitivity-hint = 调整送入 SSTV 解码器的信号电平。0 = 当前的自动电平（自动）。负值衰减，正值增强。点击“自动”可回到自动电平。
-
-sstv-auto-level-hint = 回到自动电平（参考值 0）并停用手动调整。启用时高亮显示。
 
 sstv-audio-present-no-header = 有音频 · 尚无 SSTV 帧头
 

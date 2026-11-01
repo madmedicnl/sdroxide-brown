@@ -4725,20 +4725,17 @@ mod tests {
     /// other either.**
     ///
     /// It is the longest header row in the tree: the mode's name, START/STOP,
-    /// what the receiver is making of the signal, the squelch and the receive
-    /// sensitivity all ride on one `horizontal_wrapped`. That is the shape the
-    /// PSK test above was written for — a wrapped row nested inside a wrapped
-    /// row lays its lines out against the line it starts on and then paints
-    /// downward, so line two lands on line one — and the sensitivity control is
-    /// the newcomer that made the row break at all at the widths an operator
-    /// uses.
+    /// what the receiver is making of the signal, the squelch and the chart's
+    /// controls all ride on one `horizontal_wrapped`. That is the shape the PSK
+    /// test above was written for — a wrapped row nested inside a wrapped row
+    /// lays its lines out against the line it starts on and then paints
+    /// downward, so line two lands on line one — and the `NEG` chip below is
+    /// the one that made the row break at the widths an operator uses.
     ///
     /// Only the chips are measured, for the reason given above: in a wrapped
     /// row a `ui.label` reports the rest of its line as its rect, so the
     /// captions (`LPM`, `IOC`, `PHASE`, `SLANT`, `VIEW`, `HEIGHT`) would fail on
-    /// correct code. `Sensitivity` is a caption and is deliberately not in the
-    /// list; the slider itself is a `chrome::slider`, which draws no value
-    /// readout, so the block's only text is the `Auto` chip.
+    /// correct code.
     #[test]
     fn the_fax_header_row_does_not_draw_on_itself() {
         use crate::multi::frame_test_lock;
@@ -4749,7 +4746,7 @@ mod tests {
         let labels = [
             "● START",
             "■ STOP",
-            "Auto",
+            "NEG",
             "AUTO START",
             "AUTO STOP",
             "−100",
@@ -4774,8 +4771,8 @@ mod tests {
             let mine: Vec<(String, egui::Rect)> =
                 texts.into_iter().filter(|(t, _)| labels.contains(&t.trim())).collect();
             assert!(
-                mine.iter().any(|(t, _)| t.trim() == "Auto"),
-                "the sensitivity control is missing at {w:.0} pt: {mine:?}"
+                mine.iter().any(|(t, _)| t.trim() == "NEG"),
+                "the inversion chip is missing at {w:.0} pt: {mine:?}"
             );
             assert!(mine.len() >= 10, "the fax header row is missing at {w:.0} pt: {mine:?}");
             for i in 0..mine.len() {
