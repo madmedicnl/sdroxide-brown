@@ -1,9 +1,11 @@
 # TODO — SDR Oxide Brown
 
-Working queue. Rules in AGENTS.md. Last updated 2026-10-31.
+Working queue. Rules in AGENTS.md. Last updated 2026-11-01.
 
-State: `main` at crate 2.2.0, PROTO_VERSION 258 (0x4E; 259 / 0x4F on the TX band list branch). Latest release
-v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measured 2026-10-29).
+State: `main` at crate 2.2.0, PROTO_VERSION 259 (0x4F). Latest release
+v2.2.3.5_brown (pre-release). Open PRs: 5 (#385 F4NRM's PROGRAMS, #389 revert
+of #371, #390 #357, #391 the two red tests, #392 #354). Open issues: 16
+(re-measured 2026-11-01).
 
 ## Task tracking rules
 
