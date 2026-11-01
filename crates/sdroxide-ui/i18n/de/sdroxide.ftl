@@ -9004,3 +9004,27 @@ aircraft-hover-lookup-retry = keine Antwort — neuer Versuch in { $s } s
 adsbmap-airport-navaids-head = Funknavigationsanlagen am Platz
 
 adsbmap-airport-no-freq = Keine Frequenz für diesen Flughafen veröffentlicht
+
+topbar-preset-right-click = Rechtsklick, um diese Voreinstellung zu ändern
+
+topbar-preset-edit = VOREINSTELLUNG BEARBEITEN
+
+topbar-preset-label = Bezeichnung
+
+topbar-preset-label-hint = Was der Chip anzeigt. Bis zu 8 Zeichen.
+
+topbar-preset-lo = Unten
+
+topbar-preset-hi = Oben
+
+topbar-preset-use-current = Aktuellen übernehmen
+
+topbar-preset-use-current-hint = Die Grenzen des aktuell eingestellten Empfängerfilters übernehmen
+
+topbar-preset-save = Speichern
+
+topbar-preset-reset = Zurücksetzen
+
+topbar-preset-reset-hint = Die eingebaute Voreinstellung dieses Modus wiederherstellen
+
+topbar-preset-cancel = Abbrechen

@@ -9014,3 +9014,27 @@ aircraft-hover-lookup-retry = geen antwoord — opnieuw proberen over { $s } s
 adsbmap-airport-navaids-head = Radiobakens op het terrein
 
 adsbmap-airport-no-freq = Geen frequentie gepubliceerd voor deze luchthaven
+
+topbar-preset-right-click = Rechtsklik om deze voorinstelling te wijzigen
+
+topbar-preset-edit = VOORINSTELLING BEWERKEN
+
+topbar-preset-label = Label
+
+topbar-preset-label-hint = Wat de chip toont. Maximaal 8 tekens.
+
+topbar-preset-lo = Laag
+
+topbar-preset-hi = Hoog
+
+topbar-preset-use-current = Huidige gebruiken
+
+topbar-preset-use-current-hint = De randen van het huidige filter van de ontvanger overnemen
+
+topbar-preset-save = Opslaan
+
+topbar-preset-reset = Herstellen
+
+topbar-preset-reset-hint = De ingebouwde voorinstelling van deze modus terugzetten
+
+topbar-preset-cancel = Annuleren

@@ -113,9 +113,10 @@ use self::panels::fsq::fsq_load_contacts;
 use self::panels::rf_paint::RfPaintUi;
 use self::panels::sstv::SstvUi;
 use self::persist::{
-    load_alerts_settings, load_broadcast_favourites, load_broadcast_stations, load_hfdl_channels,
-    load_morse_progress, load_qso_log, load_recording_jobs, load_speech_settings, load_swl_log,
-    load_swl_report, load_ui_settings, recordings_dir_for_display,
+    load_alerts_settings, load_broadcast_favourites, load_broadcast_stations, load_filter_presets,
+    load_hfdl_channels, load_morse_progress, load_qso_log, load_recording_jobs,
+    load_speech_settings, load_swl_log, load_swl_report, load_ui_settings,
+    recordings_dir_for_display,
 };
 use self::settings::servers::TciServerStatus;
 use self::settings::{SatEditState, SettingsTab, TestOutcome};
@@ -757,6 +758,12 @@ pub struct SdroxideApp {
     /// HFDL: filter for the decode log; matches a kind, a ground station or the
     /// payload details.
     hfdl_filter: String,
+    /// The operator's own filter presets (`filter_presets.json`), each in
+    /// place of one of a mode's built-in chips in the BW popup.
+    filter_presets: Vec<sdroxide_types::CustomFilterPreset>,
+    /// The filter preset being edited in the BW popup after a right-click on
+    /// its chip, if any.
+    preset_edit: Option<top_bar::PresetEdit>,
     show_settings: bool,
     /// Tool windows for the mode panels that can be pulled out of the main window.
     show_dsc: bool,
@@ -2287,6 +2294,8 @@ impl SdroxideApp {
             // The settings trace is *for* the settings page, so turning it on
             // opens the window: a browser cannot be asked to click the chip,
             // and a screenshot of the numbers is the whole point.
+            filter_presets: load_filter_presets(storage),
+            preset_edit: None,
             show_settings: crate::chrome::trace_on(),
             settings_scroll_top: true,
             voice: sdroxide_types::VoiceStatus::default(),

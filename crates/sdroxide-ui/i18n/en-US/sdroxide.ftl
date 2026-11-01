@@ -9009,3 +9009,27 @@ aircraft-hover-lookup-retry = no answer — trying again in { $s } s
 adsbmap-airport-navaids-head = Radio aids on the field
 
 adsbmap-airport-no-freq = No frequency published for this airport
+
+topbar-preset-right-click = Right-click to change this preset
+
+topbar-preset-edit = EDIT PRESET
+
+topbar-preset-label = Label
+
+topbar-preset-label-hint = What the chip says. Up to 8 characters.
+
+topbar-preset-lo = Lo
+
+topbar-preset-hi = Hi
+
+topbar-preset-use-current = Use current
+
+topbar-preset-use-current-hint = Take the edges of the filter the receiver has now
+
+topbar-preset-save = Save
+
+topbar-preset-reset = Reset
+
+topbar-preset-reset-hint = Put back this mode's built-in preset
+
+topbar-preset-cancel = Cancel

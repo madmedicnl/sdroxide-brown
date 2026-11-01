@@ -8944,3 +8944,27 @@ aircraft-hover-lookup-retry = 无响应，{ $s } 秒后重试
 adsbmap-airport-navaids-head = 机场内的无线电导航设施
 
 adsbmap-airport-no-freq = 该机场未公布频率
+
+topbar-preset-right-click = 右键单击可修改此预设
+
+topbar-preset-edit = 编辑预设
+
+topbar-preset-label = 标签
+
+topbar-preset-label-hint = 按钮上显示的文字，最多 8 个字符。
+
+topbar-preset-lo = 下限
+
+topbar-preset-hi = 上限
+
+topbar-preset-use-current = 使用当前值
+
+topbar-preset-use-current-hint = 采用接收机当前滤波器的边沿
+
+topbar-preset-save = 保存
+
+topbar-preset-reset = 重置
+
+topbar-preset-reset-hint = 恢复此模式的内置预设
+
+topbar-preset-cancel = 取消

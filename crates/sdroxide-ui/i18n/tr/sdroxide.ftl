@@ -9006,3 +9006,27 @@ aircraft-hover-lookup-retry = yanıt yok — { $s } sn sonra yeniden denenecek
 adsbmap-airport-navaids-head = Sahadaki telsiz yardımcıları
 
 adsbmap-airport-no-freq = Bu havalimanı için yayımlanmış frekans yok
+
+topbar-preset-right-click = Bu ön ayarı değiştirmek için sağ tıklayın
+
+topbar-preset-edit = ÖN AYARI DÜZENLE
+
+topbar-preset-label = Etiket
+
+topbar-preset-label-hint = Düğmede yazan metin. En fazla 8 karakter.
+
+topbar-preset-lo = Alt
+
+topbar-preset-hi = Üst
+
+topbar-preset-use-current = Geçerliyi kullan
+
+topbar-preset-use-current-hint = Alıcının şu anki filtre kenarlarını al
+
+topbar-preset-save = Kaydet
+
+topbar-preset-reset = Sıfırla
+
+topbar-preset-reset-hint = Bu modun yerleşik ön ayarını geri yükle
+
+topbar-preset-cancel = İptal

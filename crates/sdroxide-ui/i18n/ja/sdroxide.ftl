@@ -8954,3 +8954,27 @@ aircraft-hover-lookup-retry = 応答なし。{ $s } 秒後に再試行します
 adsbmap-airport-navaids-head = 場内の無線航行援助
 
 adsbmap-airport-no-freq = この空港の周波数は公開されていません
+
+topbar-preset-right-click = 右クリックでこのプリセットを変更
+
+topbar-preset-edit = プリセットを編集
+
+topbar-preset-label = ラベル
+
+topbar-preset-label-hint = チップに表示される文字。最大8文字。
+
+topbar-preset-lo = 下限
+
+topbar-preset-hi = 上限
+
+topbar-preset-use-current = 現在値を使用
+
+topbar-preset-use-current-hint = 受信機の現在のフィルターの端を取り込む
+
+topbar-preset-save = 保存
+
+topbar-preset-reset = リセット
+
+topbar-preset-reset-hint = このモードの組み込みプリセットに戻す
+
+topbar-preset-cancel = キャンセル

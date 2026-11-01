@@ -9017,3 +9017,27 @@ aircraft-hover-lookup-retry = pas de réponse — nouvel essai dans { $s } s
 adsbmap-airport-navaids-head = Balises sur le terrain
 
 adsbmap-airport-no-freq = Aucune fréquence publiée pour cet aéroport
+
+topbar-preset-right-click = Clic droit pour modifier ce préréglage
+
+topbar-preset-edit = MODIFIER LE PRÉRÉGLAGE
+
+topbar-preset-label = Libellé
+
+topbar-preset-label-hint = Le texte de la pastille. 8 caractères au maximum.
+
+topbar-preset-lo = Bas
+
+topbar-preset-hi = Haut
+
+topbar-preset-use-current = Prendre l'actuel
+
+topbar-preset-use-current-hint = Reprendre les bords du filtre actuellement réglé sur le récepteur
+
+topbar-preset-save = Enregistrer
+
+topbar-preset-reset = Réinitialiser
+
+topbar-preset-reset-hint = Remettre le préréglage d'origine de ce mode
+
+topbar-preset-cancel = Annuler
