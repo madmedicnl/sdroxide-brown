@@ -22,6 +22,7 @@ of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 
 
 ## Now
 
+- Translation rules in AGENTS.md and the "new language" sync rule in CLAUDE.md (added by F4NRM, owned by Claude) — branch `f4nrm/compassionate-mendel-e3kjll`, PR pending: the maintainer's agent is driven by AGENTS.md, which lacked the translation rule, and shipped English-only messages (#395); AGENTS.md now carries the eleven-language rule, and CLAUDE.md says a new language must update the list in both files. Docs only. Wacht op F4NRM's review.
 - Airport card: one airport = one card (added by F4NRM, owned by Claude) — branch `f4nrm/youthful-mayer-38fi1q`, PR pending: radio aids within 3 km of a field (EPL beside LFSG) are listed on the airport's card and no longer have a symbol that steals the click; the card shows height, distances, runway lengths and temperature in both systems; "no frequency published" is said instead of silence.
 - Airport card: Wikipedia picture stays on "…" (added by F4NRM, owned by Claude) — same branch and PR: repaint when the picture arrives (the poll runs after the map is drawn), a 404 from the station settles at once instead of three retries.
 - Airport card: 91 airports never got a picture (added by F4NRM, owned by Claude) — same branch and PR: `Article::new` refused titles with an en dash or a quote (KATL, CYUL, EDAC…); test over every title of `wiki.bin`.

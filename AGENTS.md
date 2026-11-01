@@ -81,6 +81,36 @@ or stackable and add it to the Detachable page in Settings.
   waterfall or zoom code: keep the `ctr_zoom_sim` tests in
   `widgets/spectrum_view.rs` green and add the gesture you changed.
 
+## Every piece of interface text is translated
+
+The interface speaks eleven languages: English (`en`), French (`fr`), Spanish
+(`es`), German (`de`), Dutch (`nl`), Italian (`it`), Brazilian Portuguese
+(`pt-BR`), Russian (`ru`), Turkish (`tr`), Japanese (`ja`) and Simplified
+Chinese (`zh-CN`). **Any change that adds or edits text a person reads on
+screen must add or update the message in all eleven languages in the same
+change.** That covers labels, buttons, hover text, window titles, notes, status
+lines, error messages shown to the operator and the names of values (`label()`
+of an enum drawn on screen). "The next batch will carry the translations" is not
+an option: a PR with English only is not finished, and it is not mergeable.
+
+- Never write display text as a string literal in `crates/sdroxide-ui`. Use
+  `tr!("some-id")`, or `tr!("some-id", n = 3)` for `{ $n }` placeables, or
+  `tr!("some-id", "hint")` for an attribute.
+- Add each message to every language with `tools/i18n_add.py` (JSON on stdin,
+  one key per language, ids `area-words-of-the-text`). Keep `{ $name }`
+  placeables as they are. Do not translate ids, file names, protocol names, mode
+  names (FT8, SSTV…) or units.
+- A value an enum shows on screen gets an arm in
+  `crates/sdroxide-ui/src/i18n/labels.rs`, not a `label()` call from the UI.
+  `const`/`static` items cannot call `tr!`: keep the English there and translate
+  when drawing.
+- Run `cargo test -p sdroxide-ui --lib i18n` before pushing.
+- Full rules and the Fluent syntax: `CLAUDE.md` and
+  `crates/sdroxide-ui/i18n/README.md`.
+
+**This list must match `CLAUDE.md`.** When a language is added or removed, both
+files are updated in the same change (see "Adding a language" in `CLAUDE.md`).
+
 ## Working autonomously
 
 When the end goal is clear and boundaries are set, keep going, not ask.

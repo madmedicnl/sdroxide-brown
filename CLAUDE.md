@@ -40,6 +40,25 @@ Read `crates/sdroxide-ui/i18n/README.md` for the Fluent syntax and the rules for
 translators. A change that adds a literal to the interface and no messages is
 not finished.
 
+### Adding a language
+
+Languages are the folders under `crates/sdroxide-ui/i18n/` (one per tag, the
+steps are in its `README.md`); no Rust list has to change. **The list of
+languages is also written in this file (above) and in `AGENTS.md`, and the
+agent of the other contributor reads only `AGENTS.md`.** So a change that adds
+(or removes) a language must, in the same PR:
+
+1. update the list and the word "eleven" in the first paragraph of this section;
+2. update the language list and the word "eleven" in `AGENTS.md`, section
+   "Every piece of interface text is translated", and the `tools/i18n_add.py`
+   example above so it carries a key for the new tag;
+3. give the new language every message (or accept the English fall-back only
+   if the PR says so in its description), and run
+   `cargo test -p sdroxide-ui --lib i18n`.
+
+A language added in the folders but missing from `AGENTS.md` means the other
+agent keeps writing ten languages.
+
 ## CTR on = the frequency is always in the middle
 
 With the CTR chip lit the red line is at the centre of the waterfall on every
