@@ -1001,3 +1001,81 @@ mod sort_and_filters {
         assert_eq!(fresh.sort, ProgramsSort::Freq);
     }
 }
+
+/// A picture of the real PROGRAMS window, for looking at rather than asserting.
+///
+/// ```sh
+/// SCHED_LANGS=en,fr,de,ru SCHED_W=860 SCHED_LOCAL=1 \
+///   cargo test --release -p sdroxide-ui --lib schedule_preview -- --ignored --nocapture
+/// ```
+/// `SCHED_W` is the window width (default: the narrowest it goes), `SCHED_LOCAL=1`
+/// turns on the LOCAL TIME column, `SCHED_OUT` the folder the PNGs go to. The
+/// language is process-wide, so one run draws each of `SCHED_LANGS` in turn.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod preview {
+    use super::*;
+    use sdroxide_types::{DetachedWindow, RadioController, RadioEvent};
+
+    struct Quiet;
+    impl RadioController for Quiet {
+        fn send(&mut self, _cmd: Command) {}
+        fn poll_event(&mut self) -> Option<RadioEvent> {
+            None
+        }
+    }
+
+    #[test]
+    #[ignore = "writes pictures to look at; not an assertion"]
+    fn schedule_preview() {
+        let _guard = crate::multi::frame_test_lock();
+        let dir = std::env::temp_dir().join(format!("sdroxide-sched-preview-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("SDROXIDE_CONFIG_DIR", &dir) };
+        let num =
+            |var: &str, d: f32| std::env::var(var).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
+        let width = num("SCHED_W", SCHEDULE_WINDOW_MIN_W);
+        let local = std::env::var("SCHED_LOCAL").is_ok_and(|v| v == "1");
+        let langs = std::env::var("SCHED_LANGS").unwrap_or_else(|_| "en".into());
+        let out_dir = std::env::var("SCHED_OUT").unwrap_or_else(|_| {
+            format!("{}/../../target/schedule_preview", env!("CARGO_MANIFEST_DIR"))
+        });
+        std::fs::create_dir_all(&out_dir).unwrap();
+        let screen = egui::vec2(width + 24.0, 640.0);
+
+        for tag in langs.split(',').map(str::trim).filter(|t| !t.is_empty()) {
+            let ctx = egui::Context::default();
+            let mut app = SdroxideApp::new_tab(&ctx, None, None, Box::new(Quiet), 0, true);
+            crate::i18n::set_language(sdroxide_types::UiLanguage::from_tag(tag).unwrap());
+            app.schedule.show = true;
+            app.schedule.local_time = local;
+            app.ui_settings.schedule_window =
+                Some(DetachedWindow { size: [width, 600.0], pos: Some([4.0, 4.0]) });
+            let mut tex = crate::test_raster::Textures::default();
+            let mut last = None;
+            for i in 0..6 {
+                let input = egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, screen)),
+                    time: Some(10.0 + i as f64 / 30.0),
+                    ..Default::default()
+                };
+                let mut full = ctx.run_ui(input, |ui| {
+                    app.ui(ui, &mut eframe::Frame::_new_kittest());
+                });
+                tex.apply(&full.textures_delta);
+                full.textures_delta.clear();
+                last = Some(full);
+            }
+            let img = crate::test_raster::rasterize(
+                &ctx,
+                last.unwrap(),
+                &tex,
+                screen,
+                crate::theme::BG_DEEP(),
+            );
+            let out = format!("{out_dir}/{tag}_{}.png", if local { "local" } else { "utc" });
+            img.save(&out).expect("write the preview");
+            println!("{tag}: window {:?} -> {out}", app.tool_rect);
+        }
+    }
+}
