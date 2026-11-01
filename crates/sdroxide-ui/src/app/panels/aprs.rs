@@ -51,7 +51,15 @@ impl SdroxideApp {
         let pane = self.phone_pane(ui, self.state.rx[0].mode);
         let full_w = ui.available_width();
 
-        ui.horizontal_top(|ui| {
+        // The body gets exactly `avail_h` and no more. Whatever a column does
+        // inside it, the parent only advances by this rectangle, so the pink
+        // frame round the panel (`angled_frame`) is drawn round the panel and
+        // not round the overflow — it used to grow with a column that came out
+        // too tall and drop its bottom edge under the task bar.
+        let body = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(full_w, avail_h));
+        ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+            ui.set_clip_rect(body.intersect(ui.clip_rect()));
+            ui.horizontal_top(|ui| {
             if pane.is_none_or(|p| p == 0) {
                 ui.allocate_ui_with_layout(
                     egui::vec2(
@@ -88,7 +96,9 @@ impl SdroxideApp {
             if pane == Some(2) {
                 ui.vertical(|ui| self.aprs_map_pane(ui, &st, now, avail_h));
             }
+            });
         });
+        ui.allocate_rect(body, egui::Sense::hover());
     }
 
     /// The channel, the beacon and the buttons.
@@ -264,7 +274,7 @@ impl SdroxideApp {
         // laid out straight after the list, which put it half way up the panel
         // on a quiet channel and moved it every time somebody new was heard.
         let card_h = if card.is_some() { (avail_h * 0.42).clamp(120.0, 260.0) } else { 0.0 };
-        let list_h = (avail_h - card_h - 24.0).max(48.0);
+        let list_h = (avail_h - card_h - 34.0).max(48.0);
 
         let mut pick = None;
         egui::ScrollArea::vertical()
