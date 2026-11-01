@@ -9024,3 +9024,5 @@ schedule-col-site = Standort
 schedule-col-local = Ort
 
 tx-bands-off = Senden ist auf { $band } aus: Dieses Band ist in Ihren Einstellungen nicht erlaubt, daher ist Ihr Sender auf diesem Band nicht sendefähig. (Höchstens { $max }-mal pro Sitzung angezeigt.)
+
+frame-band-tx = BAND TX

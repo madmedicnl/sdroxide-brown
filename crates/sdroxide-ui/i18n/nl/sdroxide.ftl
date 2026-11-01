@@ -9034,3 +9034,5 @@ schedule-col-site = Locatie
 schedule-col-local = Lokaal
 
 tx-bands-off = Zenden staat uit op { $band }: deze band is in uw instellingen niet toegestaan, dus uw zender is niet geschikt om op deze band te zenden. (Maximaal { $max } keer per sessie getoond.)
+
+frame-band-tx = BAND TX

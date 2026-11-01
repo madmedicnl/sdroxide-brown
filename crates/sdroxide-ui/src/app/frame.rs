@@ -239,6 +239,17 @@ fn panadapter_pill_rects(
     clock_text: egui::Vec2,
     bw_text: egui::Vec2,
 ) -> (egui::Rect, egui::Rect) {
+    let (clock, bw, _) = panadapter_pill_stack(area, clock_text, bw_text);
+    (clock, bw)
+}
+
+/// The three pills: the BAND TX pill sits under the bandwidth line with the
+/// same width and twice the height.
+fn panadapter_pill_stack(
+    area: egui::Rect,
+    clock_text: egui::Vec2,
+    bw_text: egui::Vec2,
+) -> (egui::Rect, egui::Rect, egui::Rect) {
     let size = egui::vec2(clock_text.x.max(bw_text.x) + 12.0, clock_text.y + 7.0);
     let clock =
         egui::Rect::from_min_size(egui::pos2(area.right() - size.x - 8.0, area.top() + 8.0), size);
@@ -246,7 +257,11 @@ fn panadapter_pill_rects(
         egui::pos2(clock.left(), clock.bottom() + PANADAPTER_PILL_GAP),
         size,
     );
-    (clock, bw)
+    let band_tx = egui::Rect::from_min_size(
+        egui::pos2(clock.left(), bw.bottom() + PANADAPTER_PILL_GAP),
+        egui::vec2(size.x, size.y * 2.0),
+    );
+    (clock, bw, band_tx)
 }
 
 /// The wall clock and the waterfall's visible bandwidth, top-right of the
@@ -255,19 +270,49 @@ fn panadapter_pill_rects(
 ///
 /// Draw-only over the picture — it never reflows the strip — and the local half
 /// of the clock is dropped when the operator is already on UTC.
-fn paint_panadapter_clock(ui: &egui::Ui, area: egui::Rect, span_hz: f64) {
+fn paint_panadapter_clock(
+    ui: &egui::Ui,
+    area: egui::Rect,
+    span_hz: f64,
+    pill: Option<super::tx_bands::BandTxPill>,
+) {
     let clock = crate::time::utc_and_local_now(crate::time::now_unix());
     let bw = waterfall_bw_text(span_hz);
     let p = ui.painter_at(area);
     let ink = egui::Color32::LIGHT_GRAY;
     let clock_galley = p.layout_no_wrap(clock, egui::FontId::proportional(11.0), ink);
     let bw_galley = p.layout_no_wrap(bw, egui::FontId::proportional(BW_LINE_FONT_PT), ink);
+    let (clock_galley_size, bw_galley_size) = (clock_galley.size(), bw_galley.size());
     let (clock_rect, bw_rect) = panadapter_pill_rects(area, clock_galley.size(), bw_galley.size());
     for rect in [clock_rect, bw_rect] {
         p.rect_filled(rect, 4.0, egui::Color32::from_black_alpha(150));
     }
     p.galley(clock_rect.center() - clock_galley.size() / 2.0, clock_galley, ink);
     p.galley(bw_rect.center() - bw_galley.size() / 2.0, bw_galley, ink);
+    if let Some(pill) = pill {
+        use super::tx_bands::BandTxPill;
+        let (_, _, rect) = panadapter_pill_stack(area, clock_galley_size, bw_galley_size);
+        let t = ui.input(|i| i.time);
+        // Blinking is driven by the interface clock: a repaint twice a second
+        // while transmitting, nothing otherwise.
+        let lit = pill != BandTxPill::Transmitting || (t * 2.0) as i64 % 2 == 0;
+        if pill == BandTxPill::Transmitting {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
+        }
+        let color = match pill {
+            BandTxPill::Allowed => egui::Color32::from_rgb(46, 204, 64),
+            _ => egui::Color32::from_rgb(255, 59, 48),
+        };
+        p.rect_filled(rect, 4.0, egui::Color32::BLACK);
+        if lit {
+            let g = p.layout_no_wrap(
+                tr!("frame-band-tx"),
+                egui::FontId::proportional(BW_LINE_FONT_PT),
+                color,
+            );
+            p.galley(rect.center() - g.size() / 2.0, g, color);
+        }
+    }
 }
 
 /// The dial as a large readout string, MHz with trailing zeros trimmed —
@@ -2599,7 +2644,7 @@ impl SdroxideApp {
                 self.view.auto_fit = false;
             }
             paint_panadapter_chrome(ui, area);
-            paint_panadapter_clock(ui, area, self.view.span());
+            paint_panadapter_clock(ui, area, self.view.span(), self.band_tx_pill());
             if self.levels_hidden(now) && levels_hidden_chip(ui, spec_area) {
                 self.view.auto_fit = true;
                 self.fit_levels_now(now);
@@ -5973,6 +6018,19 @@ mod tests {
         assert_eq!(bw.top() - clock.bottom(), 4.0, "the line sits under the clock");
         // The wider text sets the width, plus the pill's 12 pt of padding.
         assert_eq!(clock.width(), 222.0 + 12.0);
+    }
+
+    /// BAND TX: same width and edge as the other two, twice their height,
+    /// under the bandwidth line.
+    #[test]
+    fn the_band_tx_pill_is_double_height_under_the_bandwidth_line() {
+        let area = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(800.0, 400.0));
+        let (clock, bw, tx) =
+            super::panadapter_pill_stack(area, egui::vec2(221.0, 15.0), egui::vec2(222.0, 16.0));
+        assert_eq!(tx.width(), clock.width());
+        assert_eq!(tx.right(), clock.right());
+        assert_eq!(tx.height(), clock.height() * 2.0);
+        assert_eq!(tx.top() - bw.bottom(), 4.0);
     }
 
     /// On UTC the clock drops its local half and is narrower than the
