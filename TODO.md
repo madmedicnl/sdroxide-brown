@@ -20,8 +20,6 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 
 ## Now
 
-- FT8 setup window draws its controls off the window (#357) (added by F4NRM, owned by Roy; FT8 is his area, PR for his review) — the caption message `setup-tx-audio` had a hint paragraph pasted into it, and the dialog draws it as a row label in a two-column grid, so the label column measured 1356 pt and the controls beside it were pushed past the right edge. Reproduced in a render, paragraph removed from all 11 languages, caption test added.
-
 - PROGRAMS window layout and persistence (added by F4NRM, owned by Claude) — branch `f4nrm/stoic-fermi-a0z0zp`, PR pending: columns, Sort menus, chip-framed colour, two-row bar, saved filters. Wacht op F4NRM's review.
 - SAT Doppler for CAT rigs (added by Roy, owned by Roy/SP9TKN) — step 1+2a+2b+2c
   implemented on branch `fork/sat-doppler-cat`. MSI build available. Wacht op
@@ -85,6 +83,7 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 - AppImage — beslissing nodig.
 
 ## Recently done
+- 2026-11-01 — FT8 setup window drew its captions with no controls beside them (#357, PR #390): the caption message `setup-tx-audio` carried a hint paragraph, and a two-column grid's first column is as wide as its widest cell, so the label column measured 1356 pt and pushed every control off the window. Removed from all 11 languages, render probe + caption test added (added by F4NRM, owned by Roy; FT8 is his area)
 - 2026-10-31 — Airport card (PR 2 of 4): the pinned card lists up to 4 runways and 6 frequencies from embedded OurAirports tables (offline, dated), lengths in the chosen units, and "aircraft within" reaches 100 km instead of 25 (added by madmedicnl, owned by Roy)
 - 2026-10-31 — Aircraft online relay is ON by default and one visible "Online" switch sits at the top of the AIRCRAFT window (was off, hidden under a selected card, 4 clicks away). The station keeps an "off" mark (`aircraft-online.off`); `SDROXIDE_AIRCRAFT_ONLINE=0` holds it off, `=1` on. First of 4 PRs for the airport card (runways/frequencies, Wikipedia thumbnail, local time/temperature follow) (added by madmedicnl, owned by Roy; changes a privacy default, PR for F4NRM's review)
 - 2026-10-30 — Aircraft photo: the station keeps 10 thumbnails for 30 s (was 1), loads several aircraft at once (up to 3, same aircraft once) instead of answering 429, frees its place even if a download panics, a closing card releases only its own picture, and a failed thumbnail is asked again (3 times) while the card stays open (added by madmedicnl, owned by Roy)
