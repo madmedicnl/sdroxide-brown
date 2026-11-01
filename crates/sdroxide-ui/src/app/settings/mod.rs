@@ -5378,7 +5378,7 @@ fn smeter_cal_label(steps: i8) -> String {
     }
 }
 
-/// The S-Meter calib picker on Settings → Radio: `-15..=+15` S-units, written
+/// The S-Meter calib picker on Settings → Radio: `-5..=+5` S-units, written
 /// straight into the radio's configuration, which is saved and takes effect
 /// at once.
 fn smeter_cal_combo(ui: &mut egui::Ui, cal: &mut i8) {
