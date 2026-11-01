@@ -7751,9 +7751,9 @@ pub struct RadioConfig {
 }
 
 /// The lowest S-meter calibration offered, in S-units.
-pub const SMETER_CAL_MIN: i8 = -5;
+pub const SMETER_CAL_MIN: i8 = -15;
 /// The highest S-meter calibration offered, in S-units.
-pub const SMETER_CAL_MAX: i8 = 5;
+pub const SMETER_CAL_MAX: i8 = 15;
 /// One S-unit, in dB — the IARU step the meter is drawn in.
 pub const DB_PER_S_UNIT: f32 = 6.0;
 
@@ -9324,7 +9324,11 @@ mod tests {
         assert_eq!(cal(-2), -12.0);
         assert_eq!(cal(5), 30.0);
         assert_eq!(cal(-5), -30.0);
-        assert_eq!(cal(40), 30.0, "a hand-edited file cannot go past +5");
-        assert_eq!(cal(-40), -30.0, "nor past -5");
+        // ±15 S-units is ±90 dB: a front end that reports its gain has it taken
+        // off the reading, which moves the reading by tens of dB.
+        assert_eq!(cal(15), 90.0);
+        assert_eq!(cal(-15), -90.0);
+        assert_eq!(cal(40), 90.0, "a hand-edited file cannot go past +15");
+        assert_eq!(cal(-40), -90.0, "nor past -15");
     }
 }

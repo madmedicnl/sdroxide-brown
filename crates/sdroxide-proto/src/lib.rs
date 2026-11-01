@@ -1809,7 +1809,7 @@ use sdroxide_types::{
 /// 205 → 206, `VERSION_BYTE` 0x19 → 0x1A. A downstream (fork) change.
 ///
 /// v207: the per-radio S-meter calibration. `RadioConfig` gains
-/// `smeter_cal: i8` at its tail (S-units, `-5..=5`, display only), and
+/// `smeter_cal: i8` at its tail (S-units, `-5..=5` at v207, widened to `-15..=15`; display only), and
 /// `RadioConfig` rides `ServerMsg::RadioConfig` and `Command::SetRadioConfig`
 /// whole. `PROTO_VERSION` 206 → 207, `VERSION_BYTE` 0x1A → 0x1B. A downstream
 /// (fork) change.
