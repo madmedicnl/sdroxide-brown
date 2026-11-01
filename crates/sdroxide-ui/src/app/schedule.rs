@@ -552,15 +552,15 @@ impl SdroxideApp {
                 + ui.spacing().scroll.allocated_width()
                 + 2.0 * 10.0;
         let row_h = crate::chrome::chip_height(ui, None);
-        self.schedule_header(ui, &cols, row_h);
+        let x0 = ui.cursor().min.x;
+        let names_top = self.schedule_header(ui, &cols, row_h);
         ui.separator();
 
         let local_time = self.schedule.local_time;
-        egui::ScrollArea::vertical().auto_shrink([false, false]).id_salt("sched-list").show_rows(
-            ui,
-            row_h,
-            rows.len(),
-            |ui, range| {
+        let list = egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .id_salt("sched-list")
+            .show_rows(ui, row_h, rows.len(), |ui, range| {
                 for s in &rows[range] {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = GAP;
@@ -661,18 +661,48 @@ impl SdroxideApp {
                         });
                     });
                 }
-            },
-        );
+            });
+        // Like a spreadsheet: a thin rule between the columns, from the names
+        // down to the bottom of the list, at the same x as the header's cells.
+        {
+            let mut x = x0;
+            let widths = [
+                cols.freq,
+                cols.band,
+                cols.name,
+                cols.lang,
+                cols.target,
+                cols.site,
+                cols.local,
+                cols.free,
+                cols.colour,
+                cols.star,
+                cols.listen,
+            ];
+            let bottom = list.inner_rect.bottom();
+            let stroke = egui::Stroke::new(1.0, crate::theme::gray(48));
+            for w in widths {
+                if w == 0.0 {
+                    continue;
+                }
+                x += w + GAP;
+                ui.painter().vline(x - GAP / 2.0, names_top..=bottom, stroke);
+            }
+        }
 
         self.schedule.cache = rows;
         self.schedule.cache_key = Some(key);
     }
 
-    /// The list's header, in three rows over the same columns as the data: a
-    /// SORT menu over each data column, the column names, then the colour
-    /// controls — the palette over the colour column, PST over the stars and
-    /// DEFAULT over LISTEN.
-    fn schedule_header(&mut self, ui: &mut egui::Ui, cols: &Cols, row_h: f32) {
+    /// The list's header, in two rows over the same columns as the data, the
+    /// names touching the first row of data: a SORT menu over each data column
+    /// and, on the same row, the colour controls over the right-hand group — the
+    /// palette over the colour column, PST over the stars and DEFAULT over
+    /// LISTEN — then the column names. Numbers are right-aligned, header
+    /// included.
+    ///
+    /// Returns the y of the names row, where the column rules begin.
+    fn schedule_header(&mut self, ui: &mut egui::Ui, cols: &Cols, row_h: f32) -> f32 {
         let local = self.schedule.local_time;
         let data: [(ProgramsSort, f32, String); 6] = [
             (ProgramsSort::Freq, cols.freq, tr!("schedule-col-freq")),
@@ -713,49 +743,10 @@ impl SdroxideApp {
                         });
                 });
             }
-        });
-
-        // Row 2 — the column names.
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = GAP;
-            for (_, w, name) in &data {
-                cell(ui, *w, row_h, egui::Align::Min, |ui| {
-                    ui.label(RichText::new(name).size(10.5).color(crate::theme::gray(150)));
-                });
-            }
             if local {
-                cell(ui, cols.local, row_h, egui::Align::Min, |ui| {
-                    ui.label(
-                        RichText::new(tr!("schedule-col-local"))
-                            .size(10.5)
-                            .color(crate::theme::gray(150)),
-                    );
-                });
+                cell(ui, cols.local, row_h, egui::Align::Min, |_| {});
             }
             ui.add_space(cols.free);
-            cell(ui, cols.colour, row_h, egui::Align::Center, |ui| {
-                ui.label(
-                    RichText::new(tr!("schedule-colour-all"))
-                        .size(10.5)
-                        .color(crate::theme::gray(150)),
-                )
-                .on_hover_text(tr!("schedule-colour-all-hint"));
-            });
-        });
-
-        // Row 3 — the colour for every station: palette, PST, DEFAULT.
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = GAP;
-            let before = cols.freq
-                + cols.band
-                + cols.name
-                + cols.lang
-                + cols.target
-                + cols.site
-                + if local { cols.local } else { 0.0 }
-                + cols.free
-                + (if local { 8.0 } else { 7.0 }) * GAP;
-            ui.add_space(before);
             let stock = crate::theme::spot_color(sdroxide_types::SpotKind::Broadcast);
             let mut all =
                 self.ui_settings.programs_colour_all.unwrap_or([stock.0, stock.1, stock.2]);
@@ -782,6 +773,40 @@ impl SdroxideApp {
                 }
             });
         });
+
+        // Row 2 — the column names, right against the data.
+        let names_top = ui.cursor().min.y;
+        let names_h = 18.0;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = GAP;
+            for (col, w, name) in &data {
+                // The frequency is a number: its name sits over its right edge.
+                let align =
+                    if *col == ProgramsSort::Freq { egui::Align::Max } else { egui::Align::Min };
+                cell(ui, *w, names_h, align, |ui| {
+                    ui.label(RichText::new(name).size(10.5).color(crate::theme::gray(150)));
+                });
+            }
+            if local {
+                cell(ui, cols.local, names_h, egui::Align::Min, |ui| {
+                    ui.label(
+                        RichText::new(tr!("schedule-col-local"))
+                            .size(10.5)
+                            .color(crate::theme::gray(150)),
+                    );
+                });
+            }
+            ui.add_space(cols.free);
+            cell(ui, cols.colour, names_h, egui::Align::Center, |ui| {
+                ui.label(
+                    RichText::new(tr!("schedule-colour-all"))
+                        .size(10.5)
+                        .color(crate::theme::gray(150)),
+                )
+                .on_hover_text(tr!("schedule-colour-all-hint"));
+            });
+        });
+        names_top
     }
 }
 
