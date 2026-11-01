@@ -9002,3 +9002,7 @@ tx-off-band = TRANSMISSÃO PROIBIDA — { $freq } MHz ({ $band }) não é uma ba
 tx-off-unconfirmed = TRANSMISSÃO PROIBIDA — as bandas de transmissão deste rádio ainda não foram validadas. Verifique e confirme em Configurações → Rádio → Bandas de transmissão.
 
 aircraft-hover-lookup-retry = sem resposta — nova tentativa em { $s } s
+
+adsbmap-airport-navaids-head = Auxílios de rádio no aeródromo
+
+adsbmap-airport-no-freq = Nenhuma frequência publicada para este aeroporto

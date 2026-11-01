@@ -72,7 +72,7 @@ enum Msg {
     Stats { status: Option<u16>, body: String },
     Switch { status: Option<u16>, body: String },
     Weather { airport: usize, status: Option<u16>, body: String },
-    Thumb { url: String, bytes: Option<Vec<u8>> },
+    Thumb { url: String, bytes: Option<Vec<u8>>, missing: bool },
 }
 
 /// What a held thumbnail is of, which says where it is fetched from and let go.
@@ -245,7 +245,9 @@ impl OnlineClient {
                         at,
                     );
                 }
-                Msg::Thumb { url, bytes } => {
+                // `missing`: the station answered 404 — the page has no picture,
+                // which asking again will not change.
+                Msg::Thumb { url, bytes, missing } => {
                     let image = bytes.as_deref().and_then(decode_thumb);
                     if let Some(t) = self.thumbs.iter_mut().find(|t| t.url == url) {
                         match image {
@@ -260,6 +262,10 @@ impl OnlineClient {
                             None => {
                                 t.status = ThumbStatus::Failed;
                                 t.failed_at = ctx.input(|i| i.time);
+                                if missing {
+                                    // No picture to wait for: no "…" and no retries.
+                                    t.tries = aircraft_online::THUMB_TRIES;
+                                }
                             }
                         }
                     }
@@ -775,6 +781,7 @@ fn send_thumb(key: String, of: &ThumbOf, peer: Option<&str>, tx: Sender<Msg>, ct
     let station = peer.map(crate::login::station_key).unwrap_or_default();
     std::thread::spawn(move || {
         let agent = agent();
+        let mut missing = false;
         let bytes = if direct {
             agent.get(&key).call().ok().filter(|r| r.status().as_u16() == 200).and_then(|mut r| {
                 r.body_mut().with_config().limit(MAX_THUMB_BYTES).read_to_vec().ok()
@@ -793,10 +800,11 @@ fn send_thumb(key: String, of: &ThumbOf, peer: Option<&str>, tx: Sender<Msg>, ct
                         got = get_bytes(&agent, &url, Some(&c));
                     }
                 }
+                missing = got.as_ref().is_some_and(|(s, _)| *s == 404);
                 got.filter(|(s, _)| *s == 200).map(|(_, b)| b)
             })
         };
-        let _ = tx.send(Msg::Thumb { url: key, bytes });
+        let _ = tx.send(Msg::Thumb { url: key, bytes, missing });
         ctx.request_repaint();
     });
 }
@@ -888,9 +896,11 @@ fn send_release(url: String, _of: &ThumbOf, _peer: Option<&str>) {
 fn send_thumb(url: String, of: &ThumbOf, peer: Option<&str>, tx: Sender<Msg>, ctx: egui::Context) {
     let via = of.fetch_url(peer);
     wasm_bindgen_futures::spawn_local(async move {
+        let mut missing = false;
         let bytes = async {
             let r = fetch(via.as_deref()?, true, None).await?;
             if r.status() != 200 {
+                missing = r.status() == 404;
                 return None;
             }
             let buf = wasm_bindgen_futures::JsFuture::from(r.array_buffer().ok()?).await.ok()?;
@@ -898,7 +908,7 @@ fn send_thumb(url: String, of: &ThumbOf, peer: Option<&str>, tx: Sender<Msg>, ct
             (bytes.len() as u64 <= MAX_THUMB_BYTES).then_some(bytes)
         }
         .await;
-        let _ = tx.send(Msg::Thumb { url, bytes });
+        let _ = tx.send(Msg::Thumb { url, bytes, missing });
         ctx.request_repaint();
     });
 }
@@ -936,7 +946,8 @@ mod tests {
         let url = "https://t.plnspttrs.net/a_t.jpg";
         c.want_thumb(&ctx, None, 7, url);
         assert_eq!(c.thumb_status(url), ThumbStatus::Loading);
-        c.tx.send(Msg::Thumb { url: url.into(), bytes: Some(b"nope".to_vec()) }).unwrap();
+        c.tx.send(Msg::Thumb { url: url.into(), bytes: Some(b"nope".to_vec()), missing: false })
+            .unwrap();
         c.poll(&ctx, 0);
         assert_eq!(c.thumb_status(url), ThumbStatus::Failed);
         c.want_thumb(&ctx, None, 7, url);
@@ -957,7 +968,7 @@ mod tests {
         c.want_thumb(&ctx, None, 7, url);
         for (i, t) in [1.0, 6.0, 12.0].into_iter().enumerate() {
             at(&ctx, t);
-            c.tx.send(Msg::Thumb { url: url.into(), bytes: None }).unwrap();
+            c.tx.send(Msg::Thumb { url: url.into(), bytes: None, missing: false }).unwrap();
             c.poll(&ctx, 0);
             assert_eq!(c.thumb_status(url), ThumbStatus::Failed, "try {}", i + 1);
             at(&ctx, t + 1.0);
@@ -983,7 +994,7 @@ mod tests {
         let url = "https://t.plnspttrs.net/a_t.jpg";
         frame(&ctx);
         c.want_thumb(&ctx, None, 7, url);
-        c.tx.send(Msg::Thumb { url: url.into(), bytes: Some(png(4, 3)) }).unwrap();
+        c.tx.send(Msg::Thumb { url: url.into(), bytes: Some(png(4, 3)), missing: false }).unwrap();
         c.poll(&ctx, 0);
         assert!(c.thumb_texture(url).is_some());
         // The card is open: it asks every frame, and the picture stays.
@@ -1052,7 +1063,8 @@ mod tests {
         assert_eq!(photo, crate::adsb_map::CardPhoto::Pending, "room is kept while it loads");
         assert_eq!(page, "https://en.wikipedia.org/wiki/Amsterdam_Airport_Schiphol");
         settled(&mut c, &ctx, &schiphol_key());
-        c.tx.send(Msg::Thumb { url: schiphol_key(), bytes: Some(png(4, 3)) }).unwrap();
+        c.tx.send(Msg::Thumb { url: schiphol_key(), bytes: Some(png(4, 3)), missing: false })
+            .unwrap();
         c.poll(&ctx, 0);
         match c.airport_card_photo(&ctx, Some(NO_STATION), ident).unwrap().0 {
             crate::adsb_map::CardPhoto::Ready { size, .. } => {
@@ -1085,7 +1097,7 @@ mod tests {
         for (i, t) in [1.0, 6.0, 12.0].into_iter().enumerate() {
             at(&ctx, t);
             settled(&mut c, &ctx, &key);
-            c.tx.send(Msg::Thumb { url: key.clone(), bytes: None }).unwrap();
+            c.tx.send(Msg::Thumb { url: key.clone(), bytes: None, missing: false }).unwrap();
             c.poll(&ctx, 0);
             assert_eq!(c.thumb_status(&key), ThumbStatus::Failed, "try {}", i + 1);
             let more = i + 1 < usize::from(aircraft_online::THUMB_TRIES);
@@ -1094,6 +1106,24 @@ mod tests {
             c.want_airport_thumb(&ctx, Some(NO_STATION), "en", "Amsterdam_Airport_Schiphol");
         }
         assert!(!c.thumb_pending(&key));
+    }
+
+    /// A 404 from the station says the page has no picture: the card goes back
+    /// to text at once, with no "…" and none of the three retries a busy
+    /// station gets.
+    #[test]
+    fn an_airport_page_without_a_picture_is_settled_at_the_first_answer() {
+        let ctx = egui::Context::default();
+        let mut c = OnlineClient::default();
+        ctx.begin_pass(egui::RawInput { time: Some(0.0), ..Default::default() });
+        ctx.end_pass().drop_without_applying_deltas();
+        c.want_airport_thumb(&ctx, Some(NO_STATION), "en", "Amsterdam_Airport_Schiphol");
+        let key = schiphol_key();
+        settled(&mut c, &ctx, &key);
+        c.tx.send(Msg::Thumb { url: key.clone(), bytes: None, missing: true }).unwrap();
+        c.poll(&ctx, 0);
+        assert!(!c.thumb_pending(&key), "no waiting frame for a picture that does not exist");
+        assert_eq!(c.thumb_status(&key), ThumbStatus::Failed);
     }
 
     const BOX: usize = 3;
@@ -1191,8 +1221,9 @@ mod tests {
         assert_eq!(c.thumb_status(plane), ThumbStatus::Loading, "the airport did not evict it");
         assert_eq!(c.thumb_status(&key), ThumbStatus::Loading);
         settled(&mut c, &ctx, &key);
-        c.tx.send(Msg::Thumb { url: plane.into(), bytes: Some(png(4, 3)) }).unwrap();
-        c.tx.send(Msg::Thumb { url: key.clone(), bytes: Some(png(4, 3)) }).unwrap();
+        c.tx.send(Msg::Thumb { url: plane.into(), bytes: Some(png(4, 3)), missing: false })
+            .unwrap();
+        c.tx.send(Msg::Thumb { url: key.clone(), bytes: Some(png(4, 3)), missing: false }).unwrap();
         c.poll(&ctx, 0);
         // The aircraft card is closed; the airport box stays open.
         for _ in 0..3 {

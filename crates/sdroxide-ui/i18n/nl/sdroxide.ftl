@@ -9010,3 +9010,7 @@ tx-off-band = ZENDEN VERBODEN — { $freq } MHz ({ $band }) is geen gevalideerde
 tx-off-unconfirmed = ZENDEN VERBODEN — de zendbanden van deze radio zijn nog niet gevalideerd. Controleer en bevestig onder Instellingen → Radio → Zendbanden.
 
 aircraft-hover-lookup-retry = geen antwoord — opnieuw proberen over { $s } s
+
+adsbmap-airport-navaids-head = Radiobakens op het terrein
+
+adsbmap-airport-no-freq = Geen frequentie gepubliceerd voor deze luchthaven

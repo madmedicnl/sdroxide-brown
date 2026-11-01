@@ -8950,3 +8950,7 @@ tx-off-band = 送信禁止 — { $freq } MHz（{ $band }）は確認済みの送
 tx-off-unconfirmed = 送信禁止 — この無線機の送信バンドはまだ確認されていません。設定 → 無線機 → 送信バンドで確認してください。
 
 aircraft-hover-lookup-retry = 応答なし。{ $s } 秒後に再試行します
+
+adsbmap-airport-navaids-head = 場内の無線航行援助
+
+adsbmap-airport-no-freq = この空港の周波数は公開されていません

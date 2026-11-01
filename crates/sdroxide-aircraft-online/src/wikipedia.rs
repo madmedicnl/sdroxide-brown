@@ -26,14 +26,15 @@ pub struct Article {
 
 impl Article {
     /// `lang` is two lowercase letters; `title` is letters, digits and
-    /// `_ - ( ) , . ' ! : &` (so `Amsterdam_Airport_Schiphol`), not starting
+    /// `_ - ( ) , . ' ! : & " – — ’` (so `Amsterdam_Airport_Schiphol`; the dashes
+    /// and the quote are in real airport titles, e.g. `Hartsfield–Jackson_Atlanta_International_Airport`), not starting
     /// with a dot. Anything else is not an article this station looks up.
     pub fn new(lang: &str, title: &str) -> Option<Article> {
         let lang_ok = lang.len() == 2 && lang.bytes().all(|b| b.is_ascii_lowercase());
         let title_ok = !title.is_empty()
             && title.len() <= MAX_TITLE
             && !title.starts_with('.')
-            && title.chars().all(|c| c.is_alphanumeric() || "_-(),.'!:&".contains(c));
+            && title.chars().all(|c| c.is_alphanumeric() || "_-(),.'!:&\"–—’".contains(c));
         (lang_ok && title_ok).then(|| Article { lang: lang.to_string(), title: title.to_string() })
     }
 
@@ -112,6 +113,20 @@ mod tests {
     const SUMMARY: &str = r#"{"type":"standard","title":"Amsterdam Airport Schiphol",
         "thumbnail":{"source":"https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Schiphol.jpg/320px-Schiphol.jpg","width":320,"height":213},
         "originalimage":{"source":"https://upload.wikimedia.org/wikipedia/commons/a/a1/Schiphol.jpg"}}"#;
+
+    /// Real airport titles carry an en dash or a quotation mark (Atlanta's
+    /// `Hartsfield–Jackson…`, Ottawa's `Ottawa_Macdonald–Cartier…`); they are
+    /// escaped like any other byte and must not be refused.
+    #[test]
+    fn titles_with_a_dash_or_a_quote_are_articles() {
+        let a = Article::new("en", "Hartsfield–Jackson_Atlanta_International_Airport").unwrap();
+        assert_eq!(
+            a.summary_path(),
+            "/api/rest_v1/page/summary/Hartsfield%E2%80%93Jackson_Atlanta_International_Airport"
+        );
+        let q = Article::new("fr", "Aéroport_\"X\"").unwrap();
+        assert!(q.page_url().ends_with("A%C3%A9roport_%22X%22"), "{}", q.page_url());
+    }
 
     #[test]
     fn the_station_builds_the_address_from_a_language_and_a_title() {

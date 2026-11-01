@@ -9002,3 +9002,7 @@ tx-off-band = VERİCİ YASAK — { $freq } MHz ({ $band }) doğrulanmış bir ve
 tx-off-unconfirmed = VERİCİ YASAK — bu telsizin verici bantları henüz doğrulanmadı. Ayarlar → Radyo → Verici bantları bölümünde kontrol edip onaylayın.
 
 aircraft-hover-lookup-retry = yanıt yok — { $s } sn sonra yeniden denenecek
+
+adsbmap-airport-navaids-head = Sahadaki telsiz yardımcıları
+
+adsbmap-airport-no-freq = Bu havalimanı için yayımlanmış frekans yok

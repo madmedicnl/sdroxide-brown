@@ -8940,3 +8940,7 @@ tx-off-band = 禁止发射 — { $freq } MHz（{ $band }）不是已确认的发
 tx-off-unconfirmed = 禁止发射 — 此电台的发射频段尚未确认。请在 设置 → 电台 → 发射频段 中检查并确认。
 
 aircraft-hover-lookup-retry = 无响应，{ $s } 秒后重试
+
+adsbmap-airport-navaids-head = 机场内的无线电导航设施
+
+adsbmap-airport-no-freq = 该机场未公布频率
