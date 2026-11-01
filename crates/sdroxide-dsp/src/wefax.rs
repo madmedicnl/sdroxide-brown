@@ -796,6 +796,14 @@ const SLANT_MIN_PPM: f64 = 25.0;
 /// page of bands — issue #239, where the decoder was worse than leaving the
 /// clock alone.
 const SLANT_MAX_PPM: f64 = 2_000.0;
+/// How far a phasing line's pulse must stand above the line's own median
+/// brightness to be read as a pulse rather than as a chart's own bright area.
+///
+/// Measured on a real, weak chart (GHI, 2026-11-01): the body of a phasing line
+/// sat at a median near 0.3 with noise on it, and the pulse still reached 1.00,
+/// so a contrast of 0.35 is comfortably met by a real pulse and not by the
+/// smeared bright areas a chart produces.
+const PHASING_CONTRAST: f32 = 0.35;
 /// How far two phasing lines' pulses may sit apart, as a fraction of a line,
 /// and still be read as the same phasing signal. The line clock drifts by parts
 /// per million between lines, so a real signal's pulse barely moves; what this
@@ -1398,7 +1406,16 @@ impl WefaxRx {
         // The strict test: mid-picture, a line that is merely "mostly black
         // with a white patch" is a chart's own graphic, not a phasing pulse.
         let Some(skew) = phasing_skew_strict(line) else {
-            self.rephase_lines = 0;
+            // **One missed pulse does not undo the ones that agreed.** On a
+            // weak chart roughly a quarter of the phasing lines fail the pulse
+            // test — the pulse is there, the noise just won that line — and a
+            // hard reset meant the run restarted before it ever reached
+            // [`REPHASE_LINES`]. Measured on a real chart (2026-11-01): thirty
+            // of forty phasing lines read, in runs of three or four, and the
+            // page never cut. Costing one instead of all makes the run survive
+            // the dropouts while a chart's stray bright patch still cannot
+            // build eight.
+            self.rephase_lines = self.rephase_lines.saturating_sub(1);
             return false;
         };
         let (skew, n) = (skew as f64, line.len() as f64);
@@ -1722,10 +1739,25 @@ fn pulse_region(line: &[f32], strict: bool) -> Option<PulseRegion> {
     if n < 32 || pulse == 0 {
         return None;
     }
-    // A phasing line is mostly black. If it is not, this is picture.
-    let mean: f32 = line.iter().sum::<f32>() / n as f32;
-    let max_mean = if strict { 0.20 } else { 0.35 };
-    if mean > max_mean {
+    // A phasing line is mostly black with one narrow bright pulse. "Mostly
+    // black" was an absolute mean before — 0.20 strict, 0.35 loose — and on a
+    // real, weak signal that never holds: noise lifts every black sample, so a
+    // measured phasing line sat at a mean of 0.19 in its best moments and 0.28
+    // to 0.50 for the rest, while its pulse still reached 1.00. Every line
+    // failed, the eight-in-a-row that announce the next transmission never
+    // accumulated, and the phasing was drawn into the picture as a black band
+    // instead of cutting the page (issue #239: charts glued together, pages
+    // running to the length limit).
+    //
+    // The floor is judged on the **median** — what most of the line is — and
+    // the pulse has to stand clear of it by `PHASING_CONTRAST`. That is the
+    // property a phasing line actually has, and it survives a noisy signal
+    // because noise moves the median and the pulse together.
+    let mut sorted: Vec<f32> = line.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let median = sorted[sorted.len() / 2];
+    let max_body = if strict { 0.55 } else { 0.75 };
+    if median > max_body {
         return None;
     }
     // Running sum over a pulse-wide window, wrapping, so a pulse split across
@@ -1739,9 +1771,14 @@ fn pulse_region(line: &[f32], strict: bool) -> Option<PulseRegion> {
         acc -= line[start];
         acc += line[(start + pulse) % n];
     }
-    // The window has to actually be white, or there was no pulse to find.
+    // The window has to actually be white, or there was no pulse to find —
+    // and on the strict path it has to stand clear of the line's own body.
     let min_pulse = if strict { 0.75 } else { 0.55 };
-    if best.0 / pulse as f32 <= min_pulse {
+    let window = best.0 / pulse as f32;
+    if window <= min_pulse {
+        return None;
+    }
+    if strict && window < median + PHASING_CONTRAST {
         return None;
     }
     // Grow the window to the pulse: out to where the line goes black on either
@@ -1844,6 +1881,20 @@ mod tests {
             s ^= s << 17;
             *v += (((s >> 40) as f32) / 16_777_216.0 - 0.5) * level;
         }
+    }
+
+    /// Phasing lines whose black is lifted to `body` — what a weak off-air
+    /// signal does, because the noise floor raises every black sample. The pulse
+    /// is still full white.
+    fn phasing_lifted(lpm: Lpm, count: usize, body: f32) -> Vec<f32> {
+        let per = (RATE * lpm.line_secs()) as usize;
+        let pulse = (per as f64 * 0.05) as usize;
+        let mut levels = Vec::new();
+        for _ in 0..count {
+            levels.extend(std::iter::repeat_n(body, per - pulse));
+            levels.extend(std::iter::repeat_n(1.0f32, pulse));
+        }
+        modulate(&levels)
     }
 
     /// The same, with the pulse at `frac` of the line.
@@ -1956,6 +2007,46 @@ mod tests {
                 rx.slant_ppm()
             );
         }
+    }
+
+    /// **A noisy phasing signal still cuts the page.**
+    ///
+    /// The strict pulse test used to require the line's *mean* to be under 0.20
+    /// — "mostly black". On a real chart the noise floor lifts every black
+    /// sample and that never holds: measured on one off-air capture the phasing
+    /// lines sat at 0.19 in their best moments and 0.28–0.50 otherwise while the
+    /// pulse still reached 1.00. Every line failed, the eight-in-a-row never
+    /// accumulated, and the next transmission was drawn into the picture as a
+    /// black band instead of starting a new page (issue #239).
+    ///
+    /// Both defects are in this test: the absolute floor, and a hard reset on a
+    /// single missed line. The phasing here carries noise on its black, which is
+    /// what an off-air signal has.
+    #[test]
+    fn a_noisy_phasing_signal_still_cuts_the_page() {
+        let mut audio = phasing(Lpm::L120, 30);
+        audio.extend(ramp_picture(Lpm::L120, 90));
+        // The phasing's black sits at 0.35 rather than 0: that is what noise
+        // does to it off air, and it is what the old "mean under 0.20" test
+        // could not survive.
+        audio.extend(phasing_lifted(Lpm::L120, 30, 0.35));
+        audio.extend(ramp_picture(Lpm::L120, 40));
+
+        let mut rx = WefaxRx::new(RATE);
+        rx.set_lpm(Lpm::L120);
+        rx.set_auto_start(true);
+        let ev = drain(&mut rx, &audio);
+
+        let starts = ev.iter().filter(|e| matches!(e, WefaxEvent::Start { .. })).count();
+        let complete = ev
+            .iter()
+            .filter(|e| matches!(e, WefaxEvent::Complete { by_tone: false, .. }))
+            .count();
+        assert!(
+            complete >= 1,
+            "the noisy phasing never ended the page: {starts} start(s), no complete"
+        );
+        assert!(starts >= 2, "the next chart did not begin a page: {starts} start(s)");
     }
 
     /// Noise on the phasing signal must leave the clock where it was.
