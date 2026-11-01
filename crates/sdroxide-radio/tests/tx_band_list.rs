@@ -164,10 +164,13 @@ fn a_dial_outside_every_band_needs_the_other_row() {
     assert_eq!(keyed_on(on, &[OUTSIDE, 7_074_000.0]), [true, false]);
 }
 
-/// YES lifts nothing else: with the amateur-only rail armed, a band that is on
-/// but is not an amateur band still does not key.
+/// One rule: with the list in force, a ticked and validated band keys, even
+/// with the amateur-only flag armed (a listening band the radio can transmit on
+/// included) — and a band that is not ticked never does.
 #[test]
-fn yes_does_not_lift_the_other_rails() {
+fn the_list_is_the_single_rule_even_with_the_amateur_only_flag() {
     let cfg = list(&[Band::Gen, Band::M40], true);
-    assert_eq!(keyed_on_with(cfg, &[35_000_000.0, 7_074_000.0], true), [false, true]);
+    assert_eq!(keyed_on_with(cfg, &[35_000_000.0, 7_074_000.0], true), [true, true]);
+    let no_other = list(&[Band::M40], true);
+    assert_eq!(keyed_on_with(no_other, &[35_000_000.0, 7_074_000.0], true), [false, true]);
 }
