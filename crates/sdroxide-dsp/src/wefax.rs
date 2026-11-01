@@ -784,6 +784,18 @@ const SLANT_PROBE_LINES: u32 = 20;
 /// this the picture's own edge-wander swamps the measurement, and "correcting"
 /// it would only add a wobble the operator never asked for.
 const SLANT_MIN_PPM: f64 = 25.0;
+/// The largest line-clock error the auto-slant will believe, in parts per
+/// million.
+///
+/// A sound card's crystal and the sending station's own clock are a few hundred
+/// ppm apart at the very worst, so nothing this large is a clock error: it is a
+/// *different* white patch matched by mistake, or noise that moved the measured
+/// pulse. Acting on it is worse than doing nothing. On a noisy phasing signal
+/// the drift measurement came out at **47 500 ppm**, the trim took the line
+/// 4.75 % short, and a chart that should have been merely grainy came out as a
+/// page of bands — issue #239, where the decoder was worse than leaving the
+/// clock alone.
+const SLANT_MAX_PPM: f64 = 2_000.0;
 /// How far two phasing lines' pulses may sit apart, as a fraction of a line,
 /// and still be read as the same phasing signal. The line clock drifts by parts
 /// per million between lines, so a real signal's pulse barely moves; what this
@@ -1369,8 +1381,15 @@ impl WefaxRx {
         // exactly the amount the trim must come down by.
         let nominal = self.rate * self.lpm.line_secs();
         let ppm = (pos - p0) / di / nominal * 1e6;
-        if ppm.abs() >= SLANT_MIN_PPM {
-            self.slant_ppm += ppm;
+        if (SLANT_MIN_PPM..=SLANT_MAX_PPM).contains(&ppm.abs()) {
+            // Clamped as well as filtered: a handful of small mis-measures in a
+            // row must not walk the clock away from the signal either.
+            self.slant_ppm = (self.slant_ppm + ppm).clamp(-SLANT_MAX_PPM, SLANT_MAX_PPM);
+        } else if ppm.abs() > SLANT_MAX_PPM {
+            // Not drift: re-take the baseline from this line rather than keep
+            // measuring the same mistake against a stale anchor.
+            self.slant_anchor = Some((pos, i));
+            return;
         }
         self.slant_anchor = None;
     }
@@ -1812,6 +1831,21 @@ mod tests {
         modulate(&levels)
     }
 
+    /// Add white noise, of `level` against the subcarrier's own 0.5 amplitude.
+    ///
+    /// Deterministic, so a failing case is the same case next time. Noise is
+    /// what a weak chart on a real band actually has, and it is the one thing a
+    /// synthetic signal has to carry to be worth testing against.
+    fn noise(audio: &mut [f32], level: f32) {
+        let mut s = 0x2545_F491_4F6C_DD1Du64;
+        for v in audio.iter_mut() {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            *v += (((s >> 40) as f32) / 16_777_216.0 - 0.5) * level;
+        }
+    }
+
     /// The same, with the pulse at `frac` of the line.
     ///
     /// Mid-picture the line buffer is cut on the *old* transmission's clock, so
@@ -1919,6 +1953,38 @@ mod tests {
                 (rx.slant_ppm() as f64 - slant).abs() < 80.0,
                 "slant {} ppm was left at {}",
                 slant,
+                rx.slant_ppm()
+            );
+        }
+    }
+
+    /// Noise on the phasing signal must leave the clock where it was.
+    ///
+    /// The probe reads the *position* of the white pulse, and noise moves the
+    /// position it reads. Believed in full, a noisy phasing signal measured
+    /// **47 500 ppm** — a clock 4.75 % short — and a chart that should have been
+    /// merely marred came out as a page of horizontal bands, which reads as "the
+    /// decoder is broken" (issue #239). Nothing in a sound card or a station's
+    /// clock is that far out, so a measurement that large is not a clock error
+    /// and must be dropped rather than applied.
+    #[test]
+    fn noise_on_the_phasing_signal_does_not_move_the_line_clock() {
+        for level in [0.1f32, 0.3, 0.8] {
+            let mut rx = WefaxRx::new(RATE);
+            rx.set_lpm(Lpm::L120);
+            rx.set_auto_start(true);
+            let mut audio = phasing(Lpm::L120, 60);
+            noise(&mut audio, level);
+            let _ = drain(&mut rx, &audio);
+            assert!(
+                rx.slant_ppm().abs() <= SLANT_MAX_PPM as f32,
+                "noise at {level} moved the clock to {} ppm",
+                rx.slant_ppm()
+            );
+            // And in practice a noisy signal gets nowhere near the bound.
+            assert!(
+                rx.slant_ppm().abs() < SLANT_MAX_PPM as f32 / 4.0,
+                "noise at {level} moved the clock to {} ppm",
                 rx.slant_ppm()
             );
         }
