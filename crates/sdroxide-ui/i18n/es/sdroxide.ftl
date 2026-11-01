@@ -8959,7 +8959,6 @@ tx-bands-notice-new = La transmisión está desactivada en todas las bandas. Eli
 
 tx-bands-notice-carried = Sus bandas de transmisión se han recuperado de la versión anterior. La transmisión sigue bloqueada hasta que las compruebe y confirme una vez. Por el riesgo para la radio, compruebe bien cada opción.
 
-tx-bands-ptt-off = La transmisión está desactivada en esta banda, o las bandas de transmisión aún no están confirmadas (Ajustes → Radio → Bandas de transmisión).
 
 adsbmap-surface-asphalt = asfalto
 
@@ -9027,3 +9026,7 @@ schedule-col-local = Local
 tx-bands-off = La transmisión está desactivada en { $band }: esta banda no está permitida en sus ajustes, por lo que su transmisor no es compatible para transmitir en ella. (Se muestra como máximo { $max } veces por sesión.)
 
 frame-band-tx = BAND TX
+
+tx-off-band = TRANSMISIÓN PROHIBIDA — { $freq } MHz ({ $band }) no es una banda de transmisión validada. Márquela y valídela en Ajustes → Radio → Bandas de transmisión.
+
+tx-off-unconfirmed = TRANSMISIÓN PROHIBIDA — las bandas de transmisión de esta radio aún no están validadas. Revíselas y valídelas en Ajustes → Radio → Bandas de transmisión.

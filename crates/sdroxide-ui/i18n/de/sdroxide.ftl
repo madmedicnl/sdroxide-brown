@@ -8958,7 +8958,6 @@ tx-bands-notice-new = Senden ist auf allen Bändern aus. Wählen Sie die Bänder
 
 tx-bands-notice-carried = Ihre Sendebänder stammen aus der vorherigen Version. Senden bleibt gesperrt, bis Sie sie einmal geprüft und bestätigt haben. Wegen der Gefahr für das Funkgerät prüfen Sie jede Option sorgfältig.
 
-tx-bands-ptt-off = Senden ist für dieses Band aus oder die Sendebänder sind noch nicht bestätigt (Einstellungen → Funkgerät → Sendebänder).
 
 adsbmap-surface-asphalt = Asphalt
 
@@ -9026,3 +9025,7 @@ schedule-col-local = Ort
 tx-bands-off = Senden ist auf { $band } aus: Dieses Band ist in Ihren Einstellungen nicht erlaubt, daher ist Ihr Sender auf diesem Band nicht sendefähig. (Höchstens { $max }-mal pro Sitzung angezeigt.)
 
 frame-band-tx = BAND TX
+
+tx-off-band = SENDEN VERBOTEN — { $freq } MHz ({ $band }) ist kein bestätigtes Sendeband. Haken setzen und bestätigen unter Einstellungen → Radio → Sendebänder.
+
+tx-off-unconfirmed = SENDEN VERBOTEN — die Sendebänder dieses Funkgeräts sind noch nicht bestätigt. Prüfen und bestätigen unter Einstellungen → Radio → Sendebänder.

@@ -8968,7 +8968,6 @@ tx-bands-notice-new = Zenden staat op alle banden uit. Kies de banden waarop dez
 
 tx-bands-notice-carried = Uw zendbanden zijn overgenomen uit de vorige versie. Zenden blijft geblokkeerd tot u ze één keer hebt gecontroleerd en bevestigd. Vanwege het risico voor de radio: controleer elke optie zorgvuldig.
 
-tx-bands-ptt-off = Zenden staat uit voor deze band, of de zendbanden zijn nog niet bevestigd (Instellingen → Radio → Zendbanden).
 
 adsbmap-surface-asphalt = asfalt
 
@@ -9036,3 +9035,7 @@ schedule-col-local = Lokaal
 tx-bands-off = Zenden staat uit op { $band }: deze band is in uw instellingen niet toegestaan, dus uw zender is niet geschikt om op deze band te zenden. (Maximaal { $max } keer per sessie getoond.)
 
 frame-band-tx = BAND TX
+
+tx-off-band = ZENDEN VERBODEN — { $freq } MHz ({ $band }) is geen gevalideerde zendband. Vink aan en valideer onder Instellingen → Radio → Zendbanden.
+
+tx-off-unconfirmed = ZENDEN VERBODEN — de zendbanden van deze radio zijn nog niet gevalideerd. Controleer en bevestig onder Instellingen → Radio → Zendbanden.

@@ -12,22 +12,20 @@
 
 use crate::i18n::tr;
 use sdroxide_types::auto;
-use sdroxide_types::{Band, Command, QsoStep};
+use sdroxide_types::{Command, QsoStep};
 
 use super::SdroxideApp;
 
 impl SdroxideApp {
-    /// Whether this station may key the band the dial is on, by the same
-    /// band-level rule the engine's key-down gate applies: an amateur
-    /// allocation always, 11 m once the operator has opened it, and the
-    /// broadcast and general-coverage bands never.
+    /// Whether this station may key the band the dial is on: the one rule of
+    /// the operator's transmit band list (ticked and validated), the same the
+    /// engine's key-down gate applies.
     ///
     /// The engine still has the final say at key-down — the device's own range,
     /// the offset against the band plan — but this is the question auto mode
     /// has to answer before it offers to arm at all.
     pub(in crate::app) fn auto_tx_permitted(&self) -> bool {
-        let band = Band::containing(self.state.rx_freq_hz());
-        auto::band_may_transmit(band, !self.state.oob_tx, sdroxide_types::cb_tx_allowed())
+        self.radio_cfg.as_ref().is_some_and(|c| c.tx_dial_allowed(self.state.rx_freq_hz()))
     }
 
     /// The inactivity stop for this radio, in seconds, from its own setting,

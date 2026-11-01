@@ -95,12 +95,91 @@ impl SdroxideApp {
     }
 
     /// Whether PTT and TUNE may be offered at the dial this radio would
-    /// transmit on. Always `true` where nothing is offered anyway.
+    /// transmit on: the dial is in a band that is ticked and validated.
+    ///
+    /// `true` where nothing is offered anyway (a listening screen, a radio that
+    /// is known not to transmit). **Fail-safe**: while the radio's capabilities
+    /// are not known yet, a screen that is not a listening one is NOT keyable
+    /// until the band list says so.
     pub(in crate::app) fn tx_keyable_here(&self) -> bool {
-        if !self.tx_capable() {
+        if self.swl_mode() || self.caps.as_ref().is_some_and(|c| !c.is_transmit_capable()) {
             return true;
         }
-        self.radio_cfg.as_ref().is_some_and(|c| c.tx_dial_allowed(self.state.tx_freq_hz()))
+        self.tx_block().is_none()
+    }
+
+    /// Why the dial may not be keyed, from the one rule (`tx_block_reason`).
+    /// No configuration yet counts as blocked.
+    fn tx_block(&self) -> Option<sdroxide_types::TxBlock> {
+        match self.radio_cfg.as_ref() {
+            Some(c) => c.tx_block_reason(self.state.tx_freq_hz()),
+            None => Some(sdroxide_types::TxBlock::Unconfirmed),
+        }
+    }
+
+    /// The big red message shown on hover and on every press attempt of a PTT
+    /// or TUNE that is off, or `None` when keying is allowed here. Never capped:
+    /// the three-times limit is the yellow banner's alone.
+    pub(in crate::app) fn tx_off_text(&self) -> Option<String> {
+        if self.tx_keyable_here() {
+            return None;
+        }
+        let hz = self.state.tx_freq_hz();
+        Some(match self.tx_block() {
+            Some(sdroxide_types::TxBlock::BandOff(_)) => {
+                tr!("tx-off-band", freq = format!("{:.3}", hz / 1e6), band = band_name(hz))
+            }
+            _ => tr!("tx-off-unconfirmed"),
+        })
+    }
+
+    /// Put over a PTT or TUNE that is greyed out: the big red message on hover,
+    /// and every press attempt (mouse or touch) raises the red banner.
+    pub(in crate::app) fn tx_off_overlay(
+        &mut self,
+        ui: &mut eframe::egui::Ui,
+        chip: &eframe::egui::Response,
+    ) {
+        if chip.enabled() {
+            return;
+        }
+        let Some(text) = self.tx_off_text() else { return };
+        let r = ui.interact(chip.rect, chip.id.with("tx-off"), eframe::egui::Sense::click());
+        r.clone().on_hover_ui(|ui| {
+            ui.label(
+                eframe::egui::RichText::new(text).size(20.0).strong().color(crate::theme::ALERT()),
+            );
+        });
+        if r.hovered() && ui.input(|i| i.pointer.primary_pressed()) {
+            self.tx_press_refused_at = Some(crate::time::now_unix_f64());
+        }
+    }
+
+    /// The red banner's text while a refused press is recent (5 s, renewed by
+    /// every new attempt), or `None`.
+    pub(in crate::app) fn tx_press_banner(&self, now: f64) -> Option<String> {
+        let at = self.tx_press_refused_at?;
+        if !(0.0..5.0).contains(&(now - at)) {
+            return None;
+        }
+        self.tx_off_text()
+    }
+
+    /// Keep "Allow transmit on 11 m (CB)" and the 11M-CB band tick as one
+    /// setting. The settings window keeps them in step when either is edited;
+    /// this also settles a configuration saved before they were tied together.
+    fn sync_cb_with_m11_band(&mut self) {
+        let Some(cfg) = self.radio_cfg.as_mut() else { return };
+        let Some(bands) = cfg.tx_band_enable.as_ref() else { return };
+        let ticked = bands.contains(&Band::M11);
+        if self.cb_tx_edit && !ticked {
+            cfg.set_tx_band(Band::M11, true);
+            self.ctrl.set_radio_config(cfg.clone());
+        } else if !self.cb_tx_edit && ticked {
+            self.cb_tx_edit = true;
+            sdroxide_types::set_cb_tx_allowed(true);
+            self.ctrl.send(sdroxide_types::Command::SetCbTxAllowed(true));
+        }
     }
 
     /// The notice for an unconfirmed list, or `None` when there is nothing to say.
@@ -121,6 +200,7 @@ impl SdroxideApp {
     /// [`TX_BAND_NOTICES_MAX`] per session and per radio tab — the count is
     /// not saved, so it starts again at the next launch.
     pub(in crate::app) fn tx_band_guard(&mut self) {
+        self.sync_cb_with_m11_band();
         if self.tx_bands_status() != TxBands::Confirmed || self.state.playback.is_some() {
             self.tx_band_msg = None;
             self.tx_band_refused_in = None;

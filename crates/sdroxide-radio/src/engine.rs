@@ -18793,7 +18793,10 @@ impl Engine {
             // stay locked either way: they are receive-only everywhere.
             let band = Band::containing(txf);
             let cb_allowed = band == Band::M11 && self.cb_tx_allowed;
-            if self.tx_ham_only && !band.is_amateur() && !cb_allowed {
+            // Only where the operator's band list is bypassed (`tx_bands_open`):
+            // with the list in force it is the single rule, and a ticked and
+            // validated band — a listening band included — may be keyed.
+            if self.tx_bands_open && self.tx_ham_only && !band.is_amateur() && !cb_allowed {
                 return self.deny_tx(&if band == Band::M11 {
                     "11 m (CB) is not an amateur band — turn on \"Allow transmit on 11 m \
                      (CB)\" on Settings → General to work the citizens' band, or pass \
