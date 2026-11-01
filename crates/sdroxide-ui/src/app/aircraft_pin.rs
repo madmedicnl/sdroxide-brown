@@ -78,10 +78,19 @@ impl SdroxideApp {
         // the box is the only thing open.
         self.aircraft_online.poll(ctx, now);
         let peer = self.ctrl.peer_url();
+        let before = self.adsb_map.airport_photo.as_ref().map(|p| std::mem::discriminant(&p.photo));
         self.adsb_map.airport_photo = self
             .aircraft_online
             .airport_card_photo(ctx, peer.as_deref(), &a.ident)
             .map(|(photo, page_url)| adsb_map::AirportPhoto { airport: i, photo, page_url });
+        // This runs after the map is drawn: a picture that arrived (or was
+        // given up on) in the poll above is only seen by a frame drawn after
+        // it, and nothing else asks for one — the card stayed on its "…" until
+        // the pointer moved.
+        let after = self.adsb_map.airport_photo.as_ref().map(|p| std::mem::discriminant(&p.photo));
+        if before != after {
+            ctx.request_repaint();
+        }
         let clock = self.aircraft_online.airport_clock(ctx, peer.as_deref(), i, (a.lat, a.lon));
         self.adsb_map.airport_weather = Some(adsb_map::AirportWeather {
             airport: i,
@@ -155,7 +164,8 @@ impl SdroxideApp {
             let none = AircraftCard::default();
             let card = super::aircraft_card::lookup(&self.aircraft_registry, &CardKey::Icao(icao))
                 .unwrap_or(&none);
-            let want = lookup_want(Some(pinned), aircraft_online::want_for(&CardKey::Icao(icao), card));
+            let want =
+                lookup_want(Some(pinned), aircraft_online::want_for(&CardKey::Icao(icao), card));
             self.aircraft_online.ask(&ctx, peer.as_deref(), want.as_ref(), now);
             if !matches!(state, OnlineState::Ready(_)) {
                 // The countdown moves, and a lost question is given up on.

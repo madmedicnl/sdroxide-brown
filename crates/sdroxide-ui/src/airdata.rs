@@ -429,6 +429,91 @@ pub fn airports() -> &'static [Airport] {
     ONCE.get_or_init(|| parse_airports(AIRPORTS))
 }
 
+/// How close a radio aid must be to an airport to be part of it, km. A VOR
+/// on the field, or the NDB of its approach, is the airport's own; a VOR ten
+/// kilometres off is an en-route aid and stays a symbol of its own.
+pub const NAVAID_ON_FIELD_KM: f64 = 3.0;
+
+/// Which airport each navaid belongs to, and the navaids of each airport.
+struct NavLinks {
+    /// Per navaid (same index as [`navaids`]): the airport it belongs to.
+    owner: Vec<Option<u32>>,
+    /// Per airport (same index as [`airports`]): its navaids, nearest first.
+    of: Vec<Vec<u32>>,
+}
+
+/// Each navaid goes to the *nearest* airport within [`NAVAID_ON_FIELD_KM`], so
+/// an aid is never listed on two cards. Worked out once, on first use, with a
+/// one-degree grid so it is a few thousand lookups rather than 58 million.
+fn nav_links() -> &'static NavLinks {
+    static ONCE: std::sync::OnceLock<NavLinks> = std::sync::OnceLock::new();
+    ONCE.get_or_init(|| {
+        let (navs, apts) = (navaids(), airports());
+        let cell = |lat: f64, lon: f64| (lat.floor() as i32, lon.floor() as i32);
+        let mut grid: std::collections::HashMap<(i32, i32), Vec<usize>> = Default::default();
+        for (i, a) in apts.iter().enumerate() {
+            grid.entry(cell(a.lat, a.lon)).or_default().push(i);
+        }
+        let mut owner = vec![None; navs.len()];
+        let mut of: Vec<Vec<(f64, u32)>> = vec![Vec::new(); apts.len()];
+        for (ni, n) in navs.iter().enumerate() {
+            let (cl, co) = cell(n.lat, n.lon);
+            let mut best: Option<(f64, usize)> = None;
+            for dl in -1..=1 {
+                for dc in -1..=1 {
+                    // Longitude wraps at the antimeridian.
+                    let key = (cl + dl, (co + dc + 180).rem_euclid(360) - 180);
+                    for &ai in grid.get(&key).map_or(&[][..], Vec::as_slice) {
+                        let d = sdroxide_types::distance_km(
+                            (n.lat, n.lon),
+                            (apts[ai].lat, apts[ai].lon),
+                        );
+                        if d <= NAVAID_ON_FIELD_KM && best.is_none_or(|(b, _)| d < b) {
+                            best = Some((d, ai));
+                        }
+                    }
+                }
+            }
+            if let Some((d, ai)) = best {
+                owner[ni] = Some(ai as u32);
+                of[ai].push((d, ni as u32));
+            }
+        }
+        let of = of
+            .into_iter()
+            .map(|mut v| {
+                v.sort_by(|a, b| a.0.total_cmp(&b.0));
+                v.into_iter().map(|(_, i)| i).collect()
+            })
+            .collect();
+        NavLinks { owner, of }
+    })
+}
+
+/// The airport (index into [`airports`]) a navaid (index into [`navaids`])
+/// belongs to, when it stands on the field. Such an aid has no symbol of its
+/// own on the map: it is listed on the airport's card.
+pub fn navaid_airport(navaid: usize) -> Option<usize> {
+    nav_links().owner.get(navaid).copied().flatten().map(|i| i as usize)
+}
+
+/// The radio aids on an airport's field (by index into [`airports`]), nearest
+/// first, each with its distance from the airport reference point in km.
+pub fn navaids_of(airport: usize) -> Vec<(&'static Navaid, f64)> {
+    let (navs, apts) = (navaids(), airports());
+    let Some(a) = apts.get(airport) else {
+        return Vec::new();
+    };
+    nav_links().of.get(airport).map_or_else(Vec::new, |v| {
+        v.iter()
+            .map(|&i| {
+                let n = &navs[i as usize];
+                (n, sdroxide_types::distance_km((a.lat, a.lon), (n.lat, n.lon)))
+            })
+            .collect()
+    })
+}
+
 /// Whether the tables were read at all — a data file that failed its magic
 /// leaves empty tables, and empty tables look exactly like "no airports near
 /// here" on a map. A screen that can tell the difference can say so.
@@ -551,6 +636,53 @@ mod tests {
 
     /// Schiphol's runways read back as the source publishes them: six, the
     /// longest first, asphalt and lit; and its tower is on the list.
+    /// The VOR of Épinal stands on the field of Épinal-Mirecourt: it is the
+    /// airport's, not a second symbol next to it.
+    #[test]
+    fn a_vor_on_the_field_belongs_to_its_airport() {
+        let ai = airports().iter().position(|a| a.ident == "LFSG").expect("LFSG");
+        let epl =
+            navaids().iter().position(|n| n.ident == "EPL" && n.country == "FR").expect("EPL");
+        assert_eq!(navaid_airport(epl), Some(ai));
+        assert!(navaids_of(ai).iter().any(|(n, _)| n.ident == "EPL"));
+        assert!(navaids_of(ai).iter().all(|(_, km)| *km <= NAVAID_ON_FIELD_KM));
+        // The Venezuelan El Pinal shares the ident and is nowhere near.
+        let other = navaids().iter().position(|n| n.ident == "EPL" && n.country != "FR").unwrap();
+        assert_ne!(navaid_airport(other), Some(ai));
+    }
+
+    /// An aid belongs to one airport only, and the two directions agree.
+    #[test]
+    fn every_navaid_is_listed_on_at_most_one_airport() {
+        let mut seen = std::collections::HashSet::new();
+        for ai in 0..airports().len() {
+            for (n, _) in navaids_of(ai) {
+                let ni = navaids().iter().position(|x| std::ptr::eq(x, n)).unwrap();
+                assert!(seen.insert(ni), "{} listed twice", n.ident);
+                assert_eq!(navaid_airport(ni), Some(ai));
+            }
+        }
+        assert!(!seen.is_empty());
+    }
+
+    /// Every article title in the table is one the station will look up: a
+    /// title it refuses is an airport that never gets its picture.
+    #[test]
+    fn every_wikipedia_title_in_the_table_is_an_article_the_station_accepts() {
+        let refused: Vec<_> = extras()
+            .wiki
+            .iter()
+            .filter(|(_, (l, t))| sdroxide_aircraft_online::Article::new(l, t).is_none())
+            .map(|(i, (l, t))| format!("{i} {l}:{t}"))
+            .collect();
+        assert!(
+            refused.is_empty(),
+            "{} refused: {:?}",
+            refused.len(),
+            &refused[..refused.len().min(5)]
+        );
+    }
+
     #[test]
     fn schiphol_has_its_runways_and_a_tower_frequency() {
         let rw = runways_of("EHAM");

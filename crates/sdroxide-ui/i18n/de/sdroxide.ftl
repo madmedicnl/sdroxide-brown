@@ -9000,3 +9000,7 @@ tx-off-band = SENDEN VERBOTEN — { $freq } MHz ({ $band }) ist kein bestätigte
 tx-off-unconfirmed = SENDEN VERBOTEN — die Sendebänder dieses Funkgeräts sind noch nicht bestätigt. Prüfen und bestätigen unter Einstellungen → Radio → Sendebänder.
 
 aircraft-hover-lookup-retry = keine Antwort — neuer Versuch in { $s } s
+
+adsbmap-airport-navaids-head = Funknavigationsanlagen am Platz
+
+adsbmap-airport-no-freq = Keine Frequenz für diesen Flughafen veröffentlicht

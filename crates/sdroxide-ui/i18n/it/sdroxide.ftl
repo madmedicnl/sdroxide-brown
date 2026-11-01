@@ -9011,3 +9011,7 @@ tx-off-band = TRASMISSIONE VIETATA — { $freq } MHz ({ $band }) non è una band
 tx-off-unconfirmed = TRASMISSIONE VIETATA — le bande di trasmissione di questa radio non sono ancora convalidate. Controllale e convalidale in Impostazioni → Radio → Bande di trasmissione.
 
 aircraft-hover-lookup-retry = nessuna risposta — nuovo tentativo tra { $s } s
+
+adsbmap-airport-navaids-head = Radioassistenze sul campo
+
+adsbmap-airport-no-freq = Nessuna frequenza pubblicata per questo aeroporto

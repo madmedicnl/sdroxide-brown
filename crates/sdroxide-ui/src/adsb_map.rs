@@ -364,8 +364,10 @@ fn draw_nav_layer(
             airport,
         });
     }
-    for n in crate::airdata::navaids() {
-        if !in_view(n.lat, n.lon) {
+    for (ni, n) in crate::airdata::navaids().iter().enumerate() {
+        // An aid on an airport's field is listed on the airport's card and has
+        // no symbol of its own: one place, one thing to click.
+        if !in_view(n.lat, n.lon) || crate::airdata::navaid_airport(ni).is_some() {
             continue;
         }
         let c = project(n.lat, n.lon);
@@ -569,6 +571,8 @@ const AIRPORT_NEAR_KM: f64 = 100.0;
 /// The most runways and frequencies the pinned card lists; the rest is a "+N".
 const CARD_RUNWAYS: usize = 4;
 const CARD_FREQS: usize = 6;
+/// The most radio aids of the field the pinned card lists.
+const CARD_NAVAIDS: usize = 6;
 /// Frequencies per line, so a long list stays narrow.
 const CARD_FREQS_PER_LINE: usize = 3;
 
@@ -605,7 +609,7 @@ fn airport_detail_lines(a: &crate::airdata::Airport) -> Vec<String> {
     let rwys = crate::airdata::runways_of(&a.ident);
     for r in rwys.iter().take(CARD_RUNWAYS) {
         let mut parts =
-            vec![format!("{}/{}", r.low, r.high), units.altitude(i32::from(r.length_ft))];
+            vec![format!("{}/{}", r.low, r.high), units.altitude_dual(i32::from(r.length_ft))];
         parts.extend(surface_name(r.surface));
         if r.lit {
             parts.push(tr!("adsbmap-airport-runway-lit"));
@@ -628,6 +632,25 @@ fn airport_detail_lines(a: &crate::airdata::Airport) -> Vec<String> {
         }
         if freqs.len() > CARD_FREQS {
             out.push(tr!("adsbmap-airport-more", n = freqs.len() - CARD_FREQS));
+        }
+    }
+    // The radio aids on the field — a VOR or an NDB is part of the airport,
+    // not a second thing on the map — with the same one-line shape as the hover.
+    let navaids = crate::airdata::airports()
+        .iter()
+        .position(|x| x.ident == a.ident)
+        .map(crate::airdata::navaids_of)
+        .unwrap_or_default();
+    if freqs.is_empty() && (!out.is_empty() || !navaids.is_empty()) {
+        out.push(tr!("adsbmap-airport-no-freq"));
+    }
+    if !navaids.is_empty() {
+        out.push(tr!("adsbmap-airport-navaids-head"));
+        for (n, _) in navaids.iter().take(CARD_NAVAIDS) {
+            out.push(navaid_hover_text(n));
+        }
+        if navaids.len() > CARD_NAVAIDS {
+            out.push(tr!("adsbmap-airport-more", n = navaids.len() - CARD_NAVAIDS));
         }
     }
     if !out.is_empty() {
@@ -664,7 +687,10 @@ fn airport_clock_lines(w: &AirportWeather) -> Vec<String> {
             );
             if let Some(t) = temp_c {
                 line.push_str(" · ");
-                line.push_str(&tr!("adsbmap-airport-temperature", temp = units.temperature(t)));
+                line.push_str(&tr!(
+                    "adsbmap-airport-temperature",
+                    temp = units.temperature_dual(t)
+                ));
             }
             vec![line, tr!("adsbmap-airport-weather-credit")]
         }
@@ -688,7 +714,7 @@ fn airport_card_text_with(
         (false, true) => format!("{} / {}", a.iata, a.ident),
         (false, false) => format!("{} / {} / {}", a.iata, a.icao, a.ident),
     };
-    let elev = units.altitude(i32::from(a.elev_ft));
+    let elev = units.altitude_dual(i32::from(a.elev_ft));
     let mut text = format!(
         "{codes}\n{}\n{}",
         a.name,
@@ -703,7 +729,11 @@ fn airport_card_text_with(
         let bear = sdroxide_types::bearing_deg(h, (a.lat, a.lon));
         text.push_str(&format!(
             "\n{}",
-            tr!("adsbmap-from-station", dist = units.distance(km), bear = format!("{bear:.0}"))
+            tr!(
+                "adsbmap-from-station",
+                dist = units.distance_dual(km),
+                bear = format!("{bear:.0}")
+            )
         ));
     }
     let near = live
@@ -716,7 +746,7 @@ fn airport_card_text_with(
     if near > 0 {
         text.push_str(&format!(
             "\n{}",
-            tr!("adsbmap-aircraft-within", n = near, dist = units.distance(AIRPORT_NEAR_KM))
+            tr!("adsbmap-aircraft-within", n = near, dist = units.distance_dual(AIRPORT_NEAR_KM))
         ));
     }
     if detail {
@@ -1483,9 +1513,9 @@ mod tests {
         let lines: Vec<&str> = t.lines().collect();
         assert_eq!(lines[0], "AMS / ZZZZ");
         assert_eq!(lines[1], "Amsterdam Airport Schiphol");
-        assert_eq!(lines[2], "large airport · field -11 ft");
+        assert_eq!(lines[2], "large airport · field -11 ft / -3 m");
         assert!(lines[3].ends_with("° from your station"), "{t}");
-        assert_eq!(lines[4], "1 aircraft within 100 km", "{t}");
+        assert_eq!(lines[4], "1 aircraft within 100 km / 62 mi", "{t}");
         // No home, nobody near: only the first three lines.
         let bare = airport_card_text(&a, None, &[&far], true);
         assert_eq!(bare.lines().count(), 3, "{bare}");
@@ -1520,17 +1550,17 @@ mod tests {
         assert!(!hover.contains("18R") && !hover.contains("TWR"), "{hover}");
     }
 
-    /// Lengths follow the chosen units: feet in the aviation and imperial
-    /// sets, metres in the metric one.
+    /// Lengths are written in both systems, the chosen one first: feet then
+    /// metres in the aviation and imperial sets, metres then feet in the metric one.
     #[test]
     fn runway_lengths_follow_the_unit_set() {
         let a = real_airport("EHAM");
         let ft = crate::airdata::runways_of("EHAM")[0].length_ft;
         let m = (f64::from(ft) * 0.3048).round() as i32;
         for (units, want) in [
-            (sdroxide_types::AirUnits::Aviation, format!("{ft} ft")),
-            (sdroxide_types::AirUnits::Imperial, format!("{ft} ft")),
-            (sdroxide_types::AirUnits::Metric, format!("{m} m")),
+            (sdroxide_types::AirUnits::Aviation, format!("{ft} ft / {m} m")),
+            (sdroxide_types::AirUnits::Imperial, format!("{ft} ft / {m} m")),
+            (sdroxide_types::AirUnits::Metric, format!("{m} m / {ft} ft")),
         ] {
             units.set_current();
             let t = airport_card_text(a, None, &[], true);
@@ -1556,9 +1586,9 @@ mod tests {
     fn the_pinned_card_gives_the_local_time_and_temperature_in_each_unit_set() {
         let known = AirportClock::Known { utc_offset_s: 3600, temp_c: Some(11.6) };
         for (units, time, temp) in [
-            (sdroxide_types::AirUnits::Aviation, "14:05", "12 °C"),
-            (sdroxide_types::AirUnits::Metric, "14:05", "12 °C"),
-            (sdroxide_types::AirUnits::Imperial, "2:05 PM", "53 °F"),
+            (sdroxide_types::AirUnits::Aviation, "14:05", "12 °C / 53 °F"),
+            (sdroxide_types::AirUnits::Metric, "14:05", "12 °C / 53 °F"),
+            (sdroxide_types::AirUnits::Imperial, "2:05 PM", "53 °F / 12 °C"),
         ] {
             units.set_current();
             let t = pinned_text(known);
@@ -1629,6 +1659,27 @@ mod tests {
         assert!(utc.contains("Local time 13:05 (UTC)"), "{utc}");
     }
 
+    /// One airport, one card: the VOR of Épinal is listed on the card of
+    /// Épinal-Mirecourt with its frequency, has no symbol of its own to steal
+    /// the click, and a field with no published frequency says so.
+    #[test]
+    fn the_vor_on_the_field_is_on_the_airports_card() {
+        sdroxide_types::AirUnits::Aviation.set_current();
+        let a = real_airport("LFSG");
+        let text = airport_card_text(a, None, &[], true);
+        assert!(text.contains("Radio aids on the field"), "{text}");
+        assert!(text.contains("EPL · VOR"), "{text}");
+        assert!(text.contains("113.000 MHz"), "{text}");
+        let hover = airport_card_text(a, None, &[], false);
+        assert!(!hover.contains("EPL · VOR"), "{hover}");
+        // The aid stands on the field, so the map keeps only the airport.
+        let ni = crate::airdata::navaids()
+            .iter()
+            .position(|n| n.ident == "EPL" && n.country == "FR")
+            .unwrap();
+        assert!(crate::airdata::navaid_airport(ni).is_some());
+    }
+
     /// An airport the tables know nothing about: no runway line, no frequency
     /// line, no "data of" line — nothing invented.
     #[test]
@@ -1650,10 +1701,13 @@ mod tests {
         };
         let (inside, outside) = (at(80.0 / 111.19), at(120.0 / 111.19));
         sdroxide_types::AirUnits::Aviation.set_current();
-        assert!(airport_card_text(a, None, &[&inside], false).contains("1 aircraft within 100 km"));
+        assert!(
+            airport_card_text(a, None, &[&inside], false)
+                .contains("1 aircraft within 100 km / 62 mi")
+        );
         assert!(!airport_card_text(a, None, &[&outside], false).contains("within"));
         sdroxide_types::AirUnits::Imperial.set_current();
-        assert!(airport_card_text(a, None, &[&inside], false).contains("within 62 mi"));
+        assert!(airport_card_text(a, None, &[&inside], false).contains("within 62 mi / 100 km"));
         sdroxide_types::AirUnits::Aviation.set_current();
     }
 
@@ -2006,6 +2060,51 @@ mod tests {
         assert!(text.contains("VOR/DME"), "{text}");
         assert!(text.contains("MHz"), "{text}");
         assert!(!text.contains("kHz"), "{text}");
+    }
+
+    /// The reported fault: the VOR of Épinal stood next to its airport, was
+    /// the nearer of the two to the pointer and took the click, so the airport
+    /// could not be pinned. With the aid attached to the field, the pointer on
+    /// the VOR's own position finds the airport and nothing else.
+    #[test]
+    fn the_vor_beside_an_airport_no_longer_takes_the_click() {
+        let ctx = eframe::egui::Context::default();
+        let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
+        let (clat, clon, lon_span) = (48.3, 6.07, 3.0);
+        let lat_span = lon_span * 0.66;
+        let project = |lat: f64, lon: f64| {
+            pos2(
+                rect.left() + (0.5 + (wrap180(lon - clon) / lon_span) as f32) * rect.width(),
+                rect.top() + (0.5 - ((lat - clat) / lat_span) as f32) * rect.height(),
+            )
+        };
+        let map = theme::map_styled(sdroxide_types::MapStyle::Radar);
+        let airports = crate::airdata::airports();
+        let ai = airports.iter().position(|a| a.ident == "LFSG").unwrap();
+        let epl = crate::airdata::navaids()
+            .iter()
+            .find(|n| n.ident == "EPL" && n.country == "FR")
+            .unwrap();
+        let on_vor = project(epl.lat, epl.lon);
+        let mut got = None;
+        let input = eframe::egui::RawInput { screen_rect: Some(rect), ..Default::default() };
+        ctx.run_ui(input, |ui| {
+            let p = ui.painter().clone();
+            got = draw_nav_layer(
+                Some(&p),
+                &map,
+                MapLayers { paths: true, nav: true },
+                clat,
+                clon,
+                lon_span,
+                lat_span,
+                &project,
+                Some(on_vor),
+            );
+        })
+        .drop_without_applying_deltas();
+        let hit = got.expect("the airport is within reach of the pointer");
+        assert_eq!(hit.airport, Some(ai), "{}", hit.text);
     }
 
     /// **The hover finds the airport under the pointer**, on the real tables

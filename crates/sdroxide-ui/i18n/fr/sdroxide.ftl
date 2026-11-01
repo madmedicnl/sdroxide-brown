@@ -9013,3 +9013,7 @@ tx-off-band = ÉMISSION INTERDITE — { $freq } MHz ({ $band }) n'est pas une ba
 tx-off-unconfirmed = ÉMISSION INTERDITE — les bandes d'émission de cette radio ne sont pas encore validées. Vérifiez-les et validez dans Réglages → Radio → Bandes d'émission.
 
 aircraft-hover-lookup-retry = pas de réponse — nouvel essai dans { $s } s
+
+adsbmap-airport-navaids-head = Balises sur le terrain
+
+adsbmap-airport-no-freq = Aucune fréquence publiée pour cet aéroport

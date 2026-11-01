@@ -9005,3 +9005,7 @@ tx-off-band = TRANSMIT FORBIDDEN — { $freq } MHz ({ $band }) is not a validate
 tx-off-unconfirmed = TRANSMIT FORBIDDEN — the transmit bands of this radio are not validated yet. Check them and confirm in Settings → Radio → Transmit bands.
 
 aircraft-hover-lookup-retry = no answer — trying again in { $s } s
+
+adsbmap-airport-navaids-head = Radio aids on the field
+
+adsbmap-airport-no-freq = No frequency published for this airport

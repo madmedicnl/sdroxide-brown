@@ -599,6 +599,39 @@ impl AirUnits {
         }
     }
 
+    /// A height in both systems at once, the chosen set first: `1230 ft / 375 m`
+    /// in the aviation and imperial sets, `375 m / 1230 ft` in the metric one.
+    /// For the airport card, which shows the conversion beside the value.
+    pub fn altitude_dual(self, ft: i32) -> String {
+        let (feet, metres) =
+            (format!("{ft} ft"), format!("{} m", (f64::from(ft) * FT_M).round() as i32));
+        match self {
+            AirUnits::Metric => format!("{metres} / {feet}"),
+            _ => format!("{feet} / {metres}"),
+        }
+    }
+
+    /// A distance in both systems at once, the chosen set first:
+    /// `24 km / 15 mi`, or `15 mi / 24 km` in the imperial set.
+    pub fn distance_dual(self, km: f64) -> String {
+        let (k, mi) = (format!("{km:.0} km"), format!("{:.0} mi", km * KM_MI));
+        match self {
+            AirUnits::Imperial => format!("{mi} / {k}"),
+            _ => format!("{k} / {mi}"),
+        }
+    }
+
+    /// A temperature given in °C in both systems at once, the chosen set
+    /// first: `12 °C / 54 °F`, or `54 °F / 12 °C` in the imperial set.
+    pub fn temperature_dual(self, celsius: f32) -> String {
+        let (c, f) =
+            (AirUnits::Metric.temperature(celsius), AirUnits::Imperial.temperature(celsius));
+        match self {
+            AirUnits::Imperial => format!("{f} / {c}"),
+            _ => format!("{c} / {f}"),
+        }
+    }
+
     pub fn altitude_head(self) -> &'static str {
         match self {
             AirUnits::Metric => "ALT m",
@@ -659,6 +692,16 @@ mod air_units_tests {
         assert_eq!(AirUnits::Imperial.temperature(-40.0), "-40 °F");
         assert_eq!(AirUnits::Metric.temperature(-0.3), "0 °C", "never a negative zero");
         assert_eq!(AirUnits::Metric.temperature(-17.5), "-18 °C");
+    }
+
+    #[test]
+    fn the_airport_card_shows_both_systems_with_the_chosen_one_first() {
+        assert_eq!(AirUnits::Aviation.altitude_dual(1000), "1000 ft / 305 m");
+        assert_eq!(AirUnits::Metric.altitude_dual(1000), "305 m / 1000 ft");
+        assert_eq!(AirUnits::Aviation.distance_dual(100.0), "100 km / 62 mi");
+        assert_eq!(AirUnits::Imperial.distance_dual(100.0), "62 mi / 100 km");
+        assert_eq!(AirUnits::Metric.temperature_dual(11.6), "12 °C / 53 °F");
+        assert_eq!(AirUnits::Imperial.temperature_dual(11.6), "53 °F / 12 °C");
     }
 
     #[test]
