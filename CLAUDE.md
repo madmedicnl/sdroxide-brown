@@ -56,3 +56,5 @@ line. Touching waterfall or zoom code: keep the `ctr_zoom_sim` tests in
 - Compact the conversation as often as possible.
 - If less than 10 GB of disk is free, free space first (build caches, unused
   artifacts) before building.
+- You must complete TODO.md
+- You must write on multiple lines if you are doing multiple PRs and complete the TODO.md file.
