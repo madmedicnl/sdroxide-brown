@@ -8998,3 +8998,5 @@ frame-band-tx = BAND TX
 tx-off-band = SENDEN VERBOTEN — { $freq } MHz ({ $band }) ist kein bestätigtes Sendeband. Haken setzen und bestätigen unter Einstellungen → Radio → Sendebänder.
 
 tx-off-unconfirmed = SENDEN VERBOTEN — die Sendebänder dieses Funkgeräts sind noch nicht bestätigt. Prüfen und bestätigen unter Einstellungen → Radio → Sendebänder.
+
+aircraft-hover-lookup-retry = keine Antwort — neuer Versuch in { $s } s

@@ -321,6 +321,20 @@ fn draw_inner(
                     }
                     out.lookup = Some(r.rect);
                 }
+                LookupOffer::Retry(secs) => {
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(tr!("aircraft-hover-lookup-retry", s = secs))
+                            .size(10.0)
+                            .weak(),
+                    );
+                    let r = ui.small_button(tr!("aircraft-hover-lookup"))
+                        .on_hover_text(tr!("aircraft-hover-lookup-hint"));
+                    if r.clicked() {
+                        out.actions.push(PinAction::Lookup);
+                    }
+                    out.lookup = Some(r.rect);
+                }
                 LookupOffer::Asking => {
                     ui.add_space(4.0);
                     ui.label(RichText::new(tr!("aircraft-asking-station-dots")).size(10.0).weak());
@@ -362,20 +376,35 @@ pub(in crate::app) enum LookupOffer {
     Asking,
     /// Another aircraft's question is out; one at a time.
     Waiting,
+    /// The question failed and will be asked again by itself in this many
+    /// seconds; the button asks now.
+    Retry(i64),
 }
 
-/// Whether the pinned card offers the lookup. Only an aircraft nobody has asked
-/// about, on a station that will answer: once asked, whatever came back is what
-/// the card says, and the card's own back-off decides about asking again.
+impl LookupOffer {
+    /// Whether a press on the button is taken: the first question, or a retry.
+    pub(in crate::app) fn pressable(self) -> bool {
+        matches!(self, LookupOffer::Button | LookupOffer::Retry(_))
+    }
+}
+
+/// Whether the pinned card offers the lookup: for an aircraft nobody has asked
+/// about, on a station that will answer, and again after a failure that mends
+/// itself (`retry_in` is the seconds left of its back-off). Once asked, the
+/// card follows the question on its own; the button only hurries a retry.
 pub(in crate::app) fn lookup_offer(
     state: &OnlineState,
     has_station: bool,
     line_busy: bool,
+    retry_in: Option<i64>,
 ) -> LookupOffer {
     match state {
         OnlineState::Idle if has_station && line_busy => LookupOffer::Waiting,
         OnlineState::Idle if has_station => LookupOffer::Button,
         OnlineState::Loading => LookupOffer::Asking,
+        OnlineState::Unavailable(_) if has_station => {
+            retry_in.map_or(LookupOffer::None, LookupOffer::Retry)
+        }
         _ => LookupOffer::None,
     }
 }
@@ -1059,20 +1088,25 @@ mod tests {
     }
 
     #[test]
-    fn the_lookup_button_is_offered_only_for_an_aircraft_nobody_has_asked_about() {
+    fn the_lookup_button_is_offered_for_an_aircraft_nobody_asked_and_after_a_failure_that_mends() {
         use LookupOffer::*;
-        assert_eq!(lookup_offer(&OnlineState::Idle, true, false), Button);
-        assert_eq!(lookup_offer(&OnlineState::Idle, true, true), Waiting);
-        assert_eq!(lookup_offer(&OnlineState::Loading, true, true), Asking);
-        assert_eq!(lookup_offer(&ready(info()), true, false), None);
+        assert_eq!(lookup_offer(&OnlineState::Idle, true, false, Option::None), Button);
+        assert_eq!(lookup_offer(&OnlineState::Idle, true, true, Option::None), Waiting);
+        assert_eq!(lookup_offer(&OnlineState::Loading, true, true, Option::None), Asking);
+        assert_eq!(lookup_offer(&ready(info()), true, false, Option::None), None);
         for r in [Reason::Offline, Reason::Busy, Reason::Unknown] {
-            assert_eq!(
-                lookup_offer(&OnlineState::Unavailable(r), true, false),
-                None,
-                "{r:?} is mended by the back-off, not by a button"
-            );
+            let st = OnlineState::Unavailable(r);
+            assert_eq!(lookup_offer(&st, true, false, Some(12)), Retry(12), "{r:?}");
+            assert!(Retry(12).pressable());
+            assert_eq!(lookup_offer(&st, true, false, Option::None), None, "{r:?}: no retry");
         }
-        assert_eq!(lookup_offer(&OnlineState::Idle, false, false), None, "no station");
+        assert!(Button.pressable());
+        for o in [None, Asking, Waiting] {
+            assert!(!o.pressable(), "{o:?}");
+        }
+        assert_eq!(lookup_offer(&OnlineState::Idle, false, false, Option::None), None, "no station");
+        let off = OnlineState::Unavailable(Reason::NoStation);
+        assert_eq!(lookup_offer(&off, false, false, Some(3)), None, "no station");
     }
 
     #[test]
@@ -1081,19 +1115,19 @@ mod tests {
         use LookupOffer::*;
         // Control: the same aircraft on a station that has not said no is offered it.
         let fresh = super::super::aircraft_online::OnlineStore::default();
-        assert_eq!(lookup_offer(fresh.state_for(1, true), true, false), Button);
+        assert_eq!(lookup_offer(fresh.state_for(1, true), true, false, Option::None), Button);
         let mut store = super::super::aircraft_online::OnlineStore::default();
         // The station says it will not answer: every aircraft's state follows.
         store.deliver(1, Answer::Unavailable(Reason::Disabled), NOW);
         for icao in [1_u32, 2, 3] {
             let st = store.state_for(icao, true);
-            assert_eq!(lookup_offer(st, true, false), None, "{icao}: {st:?}");
+            assert_eq!(lookup_offer(st, true, false, Option::None), None, "{icao}: {st:?}");
         }
         let mut store = super::super::aircraft_online::OnlineStore::default();
         store.deliver(1, Answer::Unavailable(Reason::Unauthorized), NOW);
-        assert_eq!(lookup_offer(store.state_for(2, true), true, false), None);
+        assert_eq!(lookup_offer(store.state_for(2, true), true, false, Option::None), None);
         let store = super::super::aircraft_online::OnlineStore::default();
-        assert_eq!(lookup_offer(store.state_for(2, false), false, false), None);
+        assert_eq!(lookup_offer(store.state_for(2, false), false, false, Option::None), None);
     }
 
     // ── pressing the pinned card ──────────────────────────────────────────
@@ -1195,6 +1229,7 @@ mod tests {
             (LookupOffer::Button, true),
             (LookupOffer::Asking, false),
             (LookupOffer::Waiting, false),
+            (LookupOffer::Retry(7), true),
         ] {
             let out = pinned_frame(&ctx, vec![], &card, offer);
             assert_eq!(out.lookup.is_some(), drawn, "{offer:?}");

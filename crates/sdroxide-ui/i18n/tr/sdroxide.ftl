@@ -9000,3 +9000,5 @@ tx-bands-off = { $band } bandında yayın kapalı: bu banda ayarlarınızda izin
 tx-off-band = VERİCİ YASAK — { $freq } MHz ({ $band }) doğrulanmış bir verici bandı değil. Ayarlar → Radyo → Verici bantları bölümünde işaretleyip doğrulayın.
 
 tx-off-unconfirmed = VERİCİ YASAK — bu telsizin verici bantları henüz doğrulanmadı. Ayarlar → Radyo → Verici bantları bölümünde kontrol edip onaylayın.
+
+aircraft-hover-lookup-retry = yanıt yok — { $s } sn sonra yeniden denenecek

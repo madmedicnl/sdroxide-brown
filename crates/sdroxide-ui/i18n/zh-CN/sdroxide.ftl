@@ -8938,3 +8938,5 @@ tx-bands-off = { $band } 上的发射已关闭：您的设置不允许此波段�
 tx-off-band = 禁止发射 — { $freq } MHz（{ $band }）不是已确认的发射频段。请在 设置 → 电台 → 发射频段 中勾选并确认。
 
 tx-off-unconfirmed = 禁止发射 — 此电台的发射频段尚未确认。请在 设置 → 电台 → 发射频段 中检查并确认。
+
+aircraft-hover-lookup-retry = 无响应，{ $s } 秒后重试

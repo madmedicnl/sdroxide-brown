@@ -9011,3 +9011,5 @@ frame-band-tx = BAND TX
 tx-off-band = ÉMISSION INTERDITE — { $freq } MHz ({ $band }) n'est pas une bande d'émission validée. Cochez et validez-la dans Réglages → Radio → Bandes d'émission.
 
 tx-off-unconfirmed = ÉMISSION INTERDITE — les bandes d'émission de cette radio ne sont pas encore validées. Vérifiez-les et validez dans Réglages → Radio → Bandes d'émission.
+
+aircraft-hover-lookup-retry = pas de réponse — nouvel essai dans { $s } s

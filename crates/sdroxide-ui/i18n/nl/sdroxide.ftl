@@ -9008,3 +9008,5 @@ frame-band-tx = BAND TX
 tx-off-band = ZENDEN VERBODEN — { $freq } MHz ({ $band }) is geen gevalideerde zendband. Vink aan en valideer onder Instellingen → Radio → Zendbanden.
 
 tx-off-unconfirmed = ZENDEN VERBODEN — de zendbanden van deze radio zijn nog niet gevalideerd. Controleer en bevestig onder Instellingen → Radio → Zendbanden.
+
+aircraft-hover-lookup-retry = geen antwoord — opnieuw proberen over { $s } s

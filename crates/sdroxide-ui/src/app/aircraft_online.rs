@@ -606,6 +606,28 @@ impl OnlineStore {
         self.in_flight.iter().filter(|(_, at)| now - at < FLIGHT_TIMEOUT_S).count() >= MAX_IN_FLIGHT
     }
 
+    /// Seconds before a failed question for `icao` may be asked again, `0` when
+    /// it is due. `None` when it did not fail, or will not be retried.
+    pub(in crate::app) fn retry_in(&self, icao: u32, now: i64) -> Option<i64> {
+        let e = self.entries.get(&icao)?;
+        match (&e.state, e.retry_at) {
+            (OnlineState::Unavailable(_), Some(t)) => Some((t - now).max(0)),
+            _ => None,
+        }
+    }
+
+    /// A press on the lookup button: whatever back-off a failure left for
+    /// `icao` is over, so the next [`Self::next_request`] sends it. One press,
+    /// one question; the line's own ceiling (three out at once) still holds.
+    pub(in crate::app) fn retry_now(&mut self, icao: u32) {
+        if let Some(e) = self.entries.get_mut(&icao)
+            && matches!(e.state, OnlineState::Unavailable(_))
+            && e.retry_at.is_some()
+        {
+            e.retry_at = Some(0);
+        }
+    }
+
     /// The question to send now, if any. Called every frame the card is open:
     /// it answers `Some` once, and then only when a back-off has run out.
     pub(in crate::app) fn next_request(
