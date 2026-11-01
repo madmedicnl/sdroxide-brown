@@ -7806,10 +7806,19 @@ impl RadioConfig {
 
     /// The S-meter calibration in dB, to be added to
     /// [`Meters::s_dbm`](crate::Meters::s_dbm): [`Self::smeter_cal`] S-units of
-    /// [`DB_PER_S_UNIT`] each, held to the offered range so a hand-edited
-    /// `radio.json` cannot throw the needle off its scale.
+    /// [`DB_PER_S_UNIT`] each.
+    ///
+    /// A value outside the offered range counts as **0**, not as the nearest
+    /// end of the range. The range was once ±15: a `radio.json` saved then and
+    /// clamped to ±5 would keep shifting the meter by 30 dB on every radio it
+    /// was saved for, with nothing on screen to say why. A value the picker
+    /// cannot offer is not one the operator chose now.
     pub fn smeter_cal_db(&self) -> f32 {
-        f32::from(self.smeter_cal.clamp(SMETER_CAL_MIN, SMETER_CAL_MAX)) * DB_PER_S_UNIT
+        if (SMETER_CAL_MIN..=SMETER_CAL_MAX).contains(&self.smeter_cal) {
+            f32::from(self.smeter_cal) * DB_PER_S_UNIT
+        } else {
+            0.0
+        }
     }
 
     /// The converter offset that is actually in force at `dial_hz`, to be
@@ -9324,7 +9333,10 @@ mod tests {
         assert_eq!(cal(-2), -12.0);
         assert_eq!(cal(5), 30.0);
         assert_eq!(cal(-5), -30.0);
-        assert_eq!(cal(40), 30.0, "a hand-edited file cannot go past +5");
-        assert_eq!(cal(-40), -30.0, "nor past -5");
+        assert_eq!(cal(40), 0.0, "a value past +5 is not one the picker offers: no shift");
+        assert_eq!(cal(-40), 0.0, "nor past -5");
+        assert_eq!(cal(-15), 0.0, "a leftover from when the range was ±15 is ignored");
+        assert_eq!(cal(6), 0.0);
+        assert_eq!(cal(-6), 0.0);
     }
 }
