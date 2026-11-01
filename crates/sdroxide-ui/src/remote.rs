@@ -628,6 +628,9 @@ impl RemoteController {
             ServerMsg::Recordings(l) => self.pending.push_back(RadioEvent::Recordings(l)),
             ServerMsg::DabSlide(s) => self.pending.push_back(RadioEvent::DabSlide(s)),
             ServerMsg::AudioLevel(l) => self.pending.push_back(RadioEvent::AudioLevel(l)),
+            ServerMsg::TxRefused(why, hz) => {
+                self.pending.push_back(RadioEvent::TxRefused(why, hz));
+            }
             ServerMsg::ClientAcks(a) => self.pending.push_back(RadioEvent::ClientAcks(a)),
             // Dropped rather than decoded while another tab holds the page's
             // single output: the work saved is the point on a browser tab

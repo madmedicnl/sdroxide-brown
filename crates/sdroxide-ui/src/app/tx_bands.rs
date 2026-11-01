@@ -46,6 +46,16 @@ fn band_name(hz: f64) -> String {
     }
 }
 
+/// The red refusal text for `why` at `hz`, in the operator's language.
+fn tx_block_text(why: Option<sdroxide_types::TxBlock>, hz: f64) -> String {
+    match why {
+        Some(sdroxide_types::TxBlock::BandOff(_)) => {
+            tr!("tx-off-band", freq = format!("{:.3}", hz / 1e6), band = band_name(hz))
+        }
+        _ => tr!("tx-off-unconfirmed"),
+    }
+}
+
 /// What the BAND TX pill shows.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(in crate::app) enum BandTxPill {
@@ -124,13 +134,7 @@ impl SdroxideApp {
         if self.tx_keyable_here() {
             return None;
         }
-        let hz = self.state.tx_freq_hz();
-        Some(match self.tx_block() {
-            Some(sdroxide_types::TxBlock::BandOff(_)) => {
-                tr!("tx-off-band", freq = format!("{:.3}", hz / 1e6), band = band_name(hz))
-            }
-            _ => tr!("tx-off-unconfirmed"),
-        })
+        Some(tx_block_text(self.tx_block(), self.state.tx_freq_hz()))
     }
 
     /// Put over a PTT or TUNE that is greyed out: the big red message on hover,
@@ -151,8 +155,16 @@ impl SdroxideApp {
             );
         });
         if r.hovered() && ui.input(|i| i.pointer.primary_pressed()) {
+            self.tx_engine_refusal = None;
             self.tx_press_refused_at = Some(crate::time::now_unix_f64());
         }
+    }
+
+    /// The engine refused a key-down: raise the red banner with its reason, at
+    /// the frequency it names.
+    pub(in crate::app) fn on_tx_refused(&mut self, why: sdroxide_types::TxBlock, hz: f64) {
+        self.tx_engine_refusal = Some((why, hz));
+        self.tx_press_refused_at = Some(crate::time::now_unix_f64());
     }
 
     /// The red banner's text while a refused press is recent (5 s, renewed by
@@ -162,7 +174,10 @@ impl SdroxideApp {
         if !(0.0..5.0).contains(&(now - at)) {
             return None;
         }
-        self.tx_off_text()
+        match self.tx_engine_refusal {
+            Some((why, hz)) => Some(tx_block_text(Some(why), hz)),
+            None => self.tx_off_text(),
+        }
     }
 
     /// Keep "Allow transmit on 11 m (CB)" and the 11M-CB band tick as one

@@ -3498,6 +3498,7 @@ impl SdroxideApp {
             if matches!(c, Command::SetPtt(true) | Command::SetTune(true))
                 && !self.tx_keyable_here()
             {
+                self.tx_engine_refusal = None;
                 self.tx_press_refused_at = Some(crate::time::now_unix_f64());
                 continue;
             }
@@ -4424,6 +4425,7 @@ impl SdroxideApp {
                         self.slot_follow.edge(&t, edge);
                     }
                 }
+                RadioEvent::TxRefused(why, hz) => self.on_tx_refused(why, hz),
                 RadioEvent::AudioLevel(l) => {
                     self.audio_level = Some((crate::time::now_unix_f64(), *l))
                 }

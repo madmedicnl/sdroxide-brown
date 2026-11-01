@@ -1385,6 +1385,7 @@ fn handle_event(shared: &Shared, ev: RadioEvent) {
             // The speaker feed's level: the station's audio, so a remote screen
             // has no other way to draw a meter that follows it.
             RadioEvent::AudioLevel(l) => Some(ServerMsg::AudioLevel(l)),
+            RadioEvent::TxRefused(why, hz) => Some(ServerMsg::TxRefused(why, hz)),
             // Found where the sound reaches the speakers, so a remote client
             // finds its own from the audio it is sent.
             RadioEvent::HeardFrame(_) => None,

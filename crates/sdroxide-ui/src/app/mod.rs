@@ -322,6 +322,10 @@ pub struct SdroxideApp {
     tx_band_msg: Option<String>,
     /// When the operator last tried to key a PTT or TUNE that is off : raises the big red banner for a few seconds, uncapped.
     tx_press_refused_at: Option<f64>,
+    /// What the engine itself last refused (reason, frequency in Hz), when that
+    /// is the press the red banner is about — it can be a frequency the dial is
+    /// not on (a satellite uplink). `None` once the banner is about the dial.
+    tx_engine_refusal: Option<(sdroxide_types::TxBlock, f64)>,
     /// The refused band the dial is in, so staying there shows nothing more.
     tx_band_refused_in: Option<sdroxide_types::Band>,
     /// Notices shown this session on this tab. Never saved.
@@ -2103,6 +2107,7 @@ impl SdroxideApp {
             radio_notice: None,
             tx_band_msg: None,
             tx_press_refused_at: None,
+            tx_engine_refusal: None,
             tx_band_refused_in: None,
             tx_band_shown: 0,
             other_instance: None,

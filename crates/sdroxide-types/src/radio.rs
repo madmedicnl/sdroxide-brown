@@ -7750,8 +7750,10 @@ pub struct RadioConfig {
     pub tx_bands_confirmed: bool,
 }
 
-/// Why [`RadioConfig::tx_block_reason`] refuses a frequency.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// Why [`RadioConfig::tx_block_reason`] refuses a frequency. Also what the
+/// engine reports when it refuses a key-down (`RadioEvent::TxRefused`), so the
+/// screen can say it in the operator's language.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum TxBlock {
     /// The operator has not validated the transmit band list yet.
     Unconfirmed,
