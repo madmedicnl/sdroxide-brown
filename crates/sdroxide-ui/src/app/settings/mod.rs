@@ -1003,6 +1003,19 @@ fn tx_bands_table(ui: &mut egui::Ui, cfg: &mut sdroxide_types::RadioConfig) {
     }
 
     ui.add_space(6.0);
+    // **The list can be reviewed and checked again at any time.** Confirming is
+    // the operator saying "I have looked at every band here", and the row used
+    // to answer that with a green label and nothing else for the rest of the
+    // radio's life: a list that later changed showed "confirmed" for something
+    // nobody had checked, and there was no way back to the control that would
+    // have said so. (Bench report, 2026-11-01.)
+    if cfg.tx_bands_confirmed
+        && crate::chrome::chip(ui, true, tr!("tx-bands-check-again"))
+            .on_hover_text(tr!("tx-bands-check-again-hint"))
+            .clicked()
+    {
+        cfg.tx_bands_confirmed = false;
+    }
     if cfg.tx_bands_confirmed {
         ui.label(RichText::new(tr!("tx-bands-confirmed")).color(crate::theme::GREEN()));
     } else {
