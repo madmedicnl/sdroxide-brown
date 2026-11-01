@@ -51,7 +51,15 @@ impl SdroxideApp {
         let pane = self.phone_pane(ui, self.state.rx[0].mode);
         let full_w = ui.available_width();
 
-        ui.horizontal_top(|ui| {
+        // The body gets exactly `avail_h` and no more. Whatever a column does
+        // inside it, the parent only advances by this rectangle, so the pink
+        // frame round the panel (`angled_frame`) is drawn round the panel and
+        // not round the overflow — it used to grow with a column that came out
+        // too tall and drop its bottom edge under the task bar.
+        let body = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(full_w, avail_h));
+        ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+            ui.set_clip_rect(body.intersect(ui.clip_rect()));
+            ui.horizontal_top(|ui| {
             if pane.is_none_or(|p| p == 0) {
                 ui.allocate_ui_with_layout(
                     egui::vec2(
@@ -70,10 +78,16 @@ impl SdroxideApp {
             if pane.is_none_or(|p| p == 1) {
                 ui.vertical(|ui| {
                     if pane.is_none() {
-                        let map_h = (avail_h * 0.56).max(crate::aprs_map::MIN_HEIGHT);
+                        // The map pane adds its own chip row above the map, which
+                        // is not part of the height it is given: count it, or the
+                        // messages below start that much too low and the box you
+                        // type into hangs off the bottom of the window.
+                        let chip_row = ui.spacing().interact_size.y + ui.spacing().item_spacing.y;
+                        let map_h = (avail_h * 0.56 - chip_row).max(crate::aprs_map::MIN_HEIGHT);
                         self.aprs_map_pane(ui, &st, now, map_h);
                         ui.add_space(2.0);
-                        self.aprs_message_pane(ui, cmds, &st, avail_h - map_h - 6.0, tx_ok);
+                        let left = (content_bottom - ui.cursor().top()).max(60.0);
+                        self.aprs_message_pane(ui, cmds, &st, left, tx_ok);
                     } else {
                         self.aprs_message_pane(ui, cmds, &st, avail_h, tx_ok);
                     }
@@ -82,7 +96,9 @@ impl SdroxideApp {
             if pane == Some(2) {
                 ui.vertical(|ui| self.aprs_map_pane(ui, &st, now, avail_h));
             }
+            });
         });
+        ui.allocate_rect(body, egui::Sense::hover());
     }
 
     /// The channel, the beacon and the buttons.
@@ -258,7 +274,7 @@ impl SdroxideApp {
         // laid out straight after the list, which put it half way up the panel
         // on a quiet channel and moved it every time somebody new was heard.
         let card_h = if card.is_some() { (avail_h * 0.42).clamp(120.0, 260.0) } else { 0.0 };
-        let list_h = (avail_h - card_h - 24.0).max(48.0);
+        let list_h = (avail_h - card_h - 34.0).max(48.0);
 
         let mut pick = None;
         egui::ScrollArea::vertical()
@@ -607,6 +623,7 @@ impl SdroxideApp {
         // shown as ours whichever field the callsign came from.
         let me = self.digi_cfg_edit.aprs_call();
         let have_call = !me.is_empty();
+        let pane_bottom = ui.cursor().top() + h;
         ui.horizontal(|ui| {
             ui.label(
                 RichText::new(if self.aprs_show_traffic {
@@ -657,8 +674,12 @@ impl SdroxideApp {
             });
         });
 
-        let compose_h = 30.0;
-        let list_h = (h - compose_h - 22.0).max(40.0);
+        // What is really left once the header row is drawn, less the composer
+        // row and the gaps the layout puts between the three.
+        let compose_h = ui.spacing().interact_size.y.max(22.0) + 2.0;
+        let list_h =
+            (pane_bottom - ui.cursor().top() - compose_h - 3.0 * ui.spacing().item_spacing.y)
+                .max(40.0);
         egui::ScrollArea::vertical()
             .id_salt("aprs-messages")
             .max_height(list_h)
@@ -700,8 +721,40 @@ impl SdroxideApp {
                         && (m.from.eq_ignore_ascii_case(&me) || m.to.eq_ignore_ascii_case(&me))
                         || m.to.to_ascii_uppercase().starts_with("BLN")
                 };
-                let shown: Vec<&sdroxide_types::AprsMessage> =
-                    st.messages.iter().filter(|m| self.aprs_msgs_all || mine(m)).collect();
+                let mut shown: Vec<sdroxide_types::AprsMessage> = st
+                    .messages
+                    .iter()
+                    .filter(|m| self.aprs_msgs_all || mine(m))
+                    .cloned()
+                    .collect();
+                // With ALL lit, what stations say about themselves — the comment
+                // of a position, a status report — belongs in the conversation
+                // column too: most channels carry far more of that than real
+                // messages, and a column that stays empty reads as broken. They
+                // have no addressee and no id, so they are never answered or
+                // acknowledged.
+                if self.aprs_msgs_all {
+                    for sta in &st.stations {
+                        let text = if sta.status.trim().is_empty() {
+                            sta.comment.trim()
+                        } else {
+                            sta.status.trim()
+                        };
+                        if text.is_empty() || sta.last_heard <= 0 {
+                            continue;
+                        }
+                        shown.push(sdroxide_types::AprsMessage {
+                            at: sta.last_heard,
+                            from: sta.name.clone(),
+                            to: String::new(),
+                            text: text.to_string(),
+                            id: String::new(),
+                            state: AprsMsgState::Received,
+                            tries: 0,
+                        });
+                    }
+                    shown.sort_by_key(|m| m.at);
+                }
                 if shown.is_empty() {
                     ui.label(RichText::new(tr!("aprs-no-messages")).weak().size(10.5));
                 }
@@ -723,6 +776,8 @@ impl SdroxideApp {
                             (format!("→{}", m.to), theme::GREEN())
                         } else if to_me {
                             (m.from.clone(), theme::YELLOW())
+                        } else if m.to.is_empty() {
+                            (m.from.clone(), theme::gray(150))
                         } else {
                             (format!("{}→{}", m.from, m.to), theme::gray(150))
                         };
