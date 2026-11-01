@@ -3234,36 +3234,26 @@ pub fn import_schedule_file(path: &std::path::Path) -> Result<ImportedSchedule, 
 /// Those must not be concatenated onto the year digits.
 fn aoki_season_from_path(path: &std::path::Path) -> Option<String> {
     let stem = path.file_stem()?.to_str()?;
-    let lower = stem.to_ascii_lowercase();
-
-    // Prefer the exact Aoki naming: xtNN / ncNN / bNN, even if there is " (1)" etc
-    if let Some(i) = lower.find("xt") {
-        let bytes = lower.as_bytes();
-        if i + 4 <= bytes.len() && bytes[i + 2].is_ascii_digit() && bytes[i + 3].is_ascii_digit() {
-            return Some(format!("xt{}{}", bytes[i + 2] as char, bytes[i + 3] as char));
-        }
-    }
-    if let Some(i) = lower.find("nc") {
-        let bytes = lower.as_bytes();
-        if i + 4 <= bytes.len() && bytes[i + 2].is_ascii_digit() && bytes[i + 3].is_ascii_digit() {
-            return Some(format!("nc{}{}", bytes[i + 2] as char, bytes[i + 3] as char));
-        }
-    }
-    if let Some(i) = lower.find('b') {
-        let bytes = lower.as_bytes();
-        if i + 3 <= bytes.len() && bytes[i + 1].is_ascii_digit() && bytes[i + 2].is_ascii_digit() {
-            return Some(format!("b{}{}", bytes[i + 1] as char, bytes[i + 2] as char));
-        }
-    }
-
-    // Fallback to the old behaviour for odd names
-    let clean: String = lower
+    // A browser that downloads the same file twice appends " (1)", " (2)"; the
+    // season is everything before that. It is then kept **as published** —
+    // `xta26`, `ncb24`, `b24` — because that is the name a *download* files the
+    // same schedule under, and two spellings of one season would leave two
+    // cache files to choose between (see
+    // `importing_another_season_leaves_one_aoki_file_to_find`).
+    let name: String = stem
+        .split(" (")
+        .next()
+        .unwrap_or(stem)
         .chars()
         .filter(|c| c.is_ascii_alphanumeric())
-        .take(8)
-        .collect();
-    let named = clean.starts_with("xt") || clean.starts_with("nc") || clean.starts_with("b2");
-    (named && clean.chars().any(|c| c.is_ascii_digit())).then_some(clean)
+        .collect::<String>()
+        .to_ascii_lowercase();
+    let named = name.starts_with("xt") || name.starts_with("nc") || name.starts_with('b');
+    let has_season = name.len() >= 3
+        && name.len() <= 8
+        && named
+        && name.chars().any(|c| c.is_ascii_digit());
+    has_season.then_some(name)
 }
 
 /// HFCC's cached package, unpacked and parsed.
