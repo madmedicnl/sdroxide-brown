@@ -989,16 +989,24 @@ impl Default for ProgramsFilters {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiSettings {
-    /// Radios whose **docked band/mode selector** the operator left open, by
-    /// roster id.
+    /// Radios with the **docked band/mode selector** on screen, by roster id,
+    /// and whether it was left *showing*.
+    ///
+    /// The key is what matters: present means the operator docked the selector
+    /// for that radio, so it comes back docked on the next start. The value is
+    /// the eye on it — `false` is a dock they docked and then hid, which is a
+    /// state that has to survive too, or the next start shows a dock they had
+    /// put away and offers no chip to put it away again (review, 2026-11-01).
     ///
     /// Presentation only, and per radio on purpose: a phone gets no dock at all
     /// (`band_dock_room` decides), so a station that keeps it open on the shack
     /// display must not force it on the phone that later connects to the same
     /// radio. Reported by the SWL users group (2026-11-01): the dock had to be
-    /// opened by hand on every start.
+    /// opened by hand on every start. The key is the same radio id the view
+    /// state beside it already uses (`view:{id}`) — a station's radios are
+    /// numbered locally.
     #[serde(default)]
-    pub band_dock_open: std::collections::BTreeSet<u32>,
+    pub band_dock_open: std::collections::BTreeMap<u32, bool>,
 
     /// GUI repaint + spectrum frame rate, in frames per second.
     pub frame_rate_fps: u32,

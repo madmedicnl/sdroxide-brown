@@ -1046,30 +1046,37 @@ impl SdroxideApp {
         }
     }
 
-    /// Center the view on the tuned frequency after big jumps (band change,
-    /// memory recall, startup) — i.e. whenever the tuning changed AND left
-    /// the visible span. Deliberate pans away from the VFO are never
-    /// snapped back, and drag-tuning keeps the VFO in view by itself.
-    /// Remember whether this radio's docked band/mode selector is open, so the
-    /// next start opens it too.
+    /// Remember whether this radio's docked band/mode selector is on screen,
+    /// and whether it was left showing, so the next start matches.
     ///
     /// Per radio and presentation-only: a phone gets no dock at all
     /// (`layout::band_dock_room` decides at draw time), so this records what the
     /// operator asked for rather than what a given window can show. Written out
     /// the moment it changes, because a setting that only survives a clean quit
     /// is a setting the operator will make twice. (SWL users group, 2026-11-01.)
+    ///
+    /// The stored map is **re-read before it is changed**. Every radio tab holds
+    /// its own copy of `UiSettings` and the write is of the whole struct, so a
+    /// tab loaded before another tab docked would write its stale copy back and
+    /// erase that tab's radio (review, 2026-11-01). Merging on the stored map is
+    /// what makes "per radio" true between tabs and not only between restarts.
     pub(in crate::app) fn remember_band_dock(&mut self) {
-        let open = self.band_docked && self.band_dock_visible;
-        let changed = if open {
-            self.ui_settings.band_dock_open.insert(self.radio_id)
+        let mut stored = crate::app::persist::load_ui_settings(None).band_dock_open;
+        let changed = if self.band_docked {
+            stored.insert(self.radio_id, self.band_dock_visible) != Some(self.band_dock_visible)
         } else {
-            self.ui_settings.band_dock_open.remove(&self.radio_id)
+            stored.remove(&self.radio_id).is_some()
         };
+        self.ui_settings.band_dock_open = stored;
         if changed {
             crate::app::persist::persist_ui_settings(&self.ui_settings);
         }
     }
 
+    /// Center the view on the tuned frequency after big jumps (band change,
+    /// memory recall, startup) — i.e. whenever the tuning changed AND left
+    /// the visible span. Deliberate pans away from the VFO are never
+    /// snapped back, and drag-tuning keeps the VFO in view by itself.
     pub(in crate::app) fn recenter_if_tuned_away(
         &mut self,
         prev_vfo: f64,
@@ -1978,4 +1985,3 @@ mod focus_tests {
         assert!((0.05..0.30).contains(&at), "the noise sits at {:.0}% of the map", at * 100.0);
     }
 }
-
