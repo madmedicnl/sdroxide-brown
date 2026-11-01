@@ -55,8 +55,50 @@ dial + 1500 Hz), like SSTV's picture. Touching waterfall or zoom code: keep the 
 
 - Answer and plan in French, short and direct. No automatic approval window
   (do not call ExitPlanMode): ask questions as plain text in the chat.
-- Compact the conversation as often as possible.
-- If less than 10 GB of disk is free, free space first (build caches, unused
-  artifacts) before building.
+- **Pull requests are written in English** (title, description, comments), so
+  the other contributors can read and review them. Talk to the user in French.
+  Push the branch and open the PR only when asked; **never merge it and never
+  follow it** (no `subscribe_pr_activity`) unless the user says so.
 - You must complete TODO.md
 - You must write on multiple lines if you are doing multiple PRs and complete the TODO.md file.
+
+## Building in a sandbox without GitHub archive access (Opus)
+
+`sdroxide-rade` (RADE) builds a patched Opus from a GitHub **archive** zip. In a
+cloud session the proxy answers **403** to `github.com/.../archive/*.zip` and to
+`codeload.github.com`, so any build or test of `sdroxide-radio` or
+`sdroxide-ui` stops there. `git fetch` of a public repo does work, so build the
+archive locally and hand it to the build script through `OPUS_URL` (read by
+`crates/sdroxide-rade/build.rs`, which passes it to rade_c's `BuildOpus.cmake`).
+
+1. Read the commit the build wants: `grep -n OPUS_URL vendor/rade_c/cmake/BuildOpus.cmake`
+   (today `940d4e5af64351ca8ba8390df3f555484c567fbb`; take it from that file,
+   not from here, if it changed).
+2. Make the zip. The folder inside it must be a single top-level directory:
+
+   ```bash
+   C=940d4e5af64351ca8ba8390df3f555484c567fbb
+   mkdir -p /tmp/opus-dl && cd /tmp/opus-dl && git init -q opus && cd opus
+   git remote add origin https://github.com/xiph/opus.git
+   git fetch --depth 1 origin $C
+   git archive --format=zip --prefix=opus-$C/ -o /tmp/opus-dl/opus-$C.zip FETCH_HEAD
+   ```
+
+3. Build and test with the variable set (a local path, not a URL):
+
+   ```bash
+   export OPUS_URL=/tmp/opus-dl/opus-$C.zip
+   cargo check -p sdroxide-radio -p sdroxide-ui
+   cargo test -p sdroxide-ui --lib i18n
+   ```
+
+Notes: the first build of the UI crates takes several minutes (run it in the
+background); Opus's model download from `media.xiph.org` is reachable. Also
+needed once: the vendor submodules (`git submodule update --init --depth 1`) and
+the system libraries (alsa, soapysdr, udev, cmake, clang) via apt.
+
+**Disk:** a full `cargo test` links hundreds of large binaries and fills the
+session disk (linking then fails with `linking with cc failed` or a rustc
+panic). Run tests one `--test <name>` at a time and delete the binaries after
+(`find target/debug/deps -maxdepth 1 -type f -name '<name>-*' -perm -u+x -delete`),
+or delete `target/debug/incremental`.

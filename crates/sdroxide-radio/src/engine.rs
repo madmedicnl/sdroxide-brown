@@ -423,6 +423,7 @@ const SWR_TUNE_SETTLE_SAMPLES: u16 = 150;
 /// limit works out to and a second copy of the formula would drift from this
 /// one. Only the grace periods above are the engine's own business — they are
 /// counted in meter samples, which nothing outside this file knows about.
+use sdroxide_types::TxBlock;
 use sdroxide_types::{SWR_LIMIT_MAX, SWR_LIMIT_MIN, swr_tune_limit};
 
 /// Forward power below which an SWR reading is ignored, purely to reject a
@@ -16606,27 +16607,29 @@ impl Engine {
     /// Why `txf` may not be keyed under the operator's transmit band list, or
     /// `None` when it may. The same test the interface runs before it offers a
     /// PTT, so a refusal here is only ever a route that bypassed the screen.
-    fn tx_band_refusal(&self, txf: f64) -> Option<String> {
+    fn tx_band_refusal(&self, txf: f64) -> Option<TxBlock> {
         if self.tx_bands_open {
             return None;
         }
         let band = Band::containing(txf);
         if !self.tx_bands_confirmed {
-            return Some(
-                "the transmit bands of this radio have not been confirmed — open Settings → \
-                 Transmit bands, check them and confirm"
-                    .to_string(),
-            );
+            return Some(TxBlock::Unconfirmed);
         }
         if !self.tx_band_enable.contains(&band) {
-            return Some(format!(
-                "TX is off for {} ({:.6} MHz) — switch it on in Settings → Transmit bands, \
-                 or go back through listen mode to another band",
-                if band == Band::Gen { "other frequencies" } else { band.label() },
-                txf / 1e6
-            ));
+            return Some(TxBlock::BandOff(band));
         }
         None
+    }
+
+    /// Refuse a key-down that the transmit band list forbids. Typed
+    /// (`RadioEvent::TxRefused`) instead of an English notice, so the screen
+    /// words it in the operator's language; the log keeps an English line.
+    fn deny_tx_band(&mut self, why: TxBlock, txf: f64) {
+        warn!("TX refused: {why:?} at {:.6} MHz", txf / 1e6);
+        self.state.tx.ptt = false;
+        self.state.tx.tune = false;
+        self.release_tx_gate();
+        let _ = self.event_tx.send(RadioEvent::TxRefused(why, txf));
     }
 
     /// Refuse a transmit request, and *say so*.
@@ -18768,7 +18771,7 @@ impl Engine {
             // uplink — never on the band selector, so ALL is no way round it:
             // a frequency outside every band is `Band::Gen`, "Autre".
             if let Some(why) = self.tx_band_refusal(txf) {
-                return self.deny_tx(&why);
+                return self.deny_tx_band(why, txf);
             }
             if !self.caps.is_transmit_capable() {
                 return self.deny_tx("this device cannot transmit");
@@ -18793,7 +18796,10 @@ impl Engine {
             // stay locked either way: they are receive-only everywhere.
             let band = Band::containing(txf);
             let cb_allowed = band == Band::M11 && self.cb_tx_allowed;
-            if self.tx_ham_only && !band.is_amateur() && !cb_allowed {
+            // Only where the operator's band list is bypassed (`tx_bands_open`):
+            // with the list in force it is the single rule, and a ticked and
+            // validated band — a listening band included — may be keyed.
+            if self.tx_bands_open && self.tx_ham_only && !band.is_amateur() && !cb_allowed {
                 return self.deny_tx(&if band == Band::M11 {
                     "11 m (CB) is not an amateur band — turn on \"Allow transmit on 11 m \
                      (CB)\" on Settings → General to work the citizens' band, or pass \

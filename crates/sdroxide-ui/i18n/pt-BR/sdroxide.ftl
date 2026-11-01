@@ -8967,7 +8967,6 @@ tx-bands-notice-new = A transmissão está desligada em todas as bandas. Escolha
 
 tx-bands-notice-carried = Suas bandas de transmissão foram trazidas da versão anterior. A transmissão continua bloqueada até que você as verifique e confirme uma vez. Devido ao risco para o rádio, verifique cada opção com atenção.
 
-tx-bands-ptt-off = A transmissão está desligada para esta banda, ou as bandas de transmissão ainda não foram confirmadas (Configurações → Rádio → Bandas de transmissão).
 
 adsbmap-surface-asphalt = asfalto
 
@@ -9033,3 +9032,7 @@ schedule-col-site = Local
 schedule-col-local = Local
 
 tx-bands-off = A transmissão está desligada em { $band }: esta banda não é permitida nas suas configurações, portanto seu transmissor não é compatível com transmissão nesta banda. (Mostrado no máximo { $max } vezes por sessão.)
+
+tx-off-band = TRANSMISSÃO PROIBIDA — { $freq } MHz ({ $band }) não é uma banda de transmissão validada. Marque e valide em Configurações → Rádio → Bandas de transmissão.
+
+tx-off-unconfirmed = TRANSMISSÃO PROIBIDA — as bandas de transmissão deste rádio ainda não foram validadas. Verifique e confirme em Configurações → Rádio → Bandas de transmissão.

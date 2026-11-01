@@ -8905,7 +8905,6 @@ tx-bands-notice-new = 所有波段的发射均已关闭。请选择此电台发�
 
 tx-bands-notice-carried = 您的发射波段是从上一版本沿用的。在您检查并确认一次之前，发射仍被禁止。由于存在损坏电台的风险，请仔细检查每个选项。
 
-tx-bands-ptt-off = 此波段的发射已关闭，或发射波段尚未确认（设置 → 电台 → 发射波段）。
 
 adsbmap-surface-asphalt = 沥青
 
@@ -8971,3 +8970,7 @@ schedule-col-site = 发射站
 schedule-col-local = 本地
 
 tx-bands-off = { $band } 上的发射已关闭：您的设置不允许此波段，因此您的发射机不适合在此波段上发射。（每次会话最多显示 { $max } 次。）
+
+tx-off-band = 禁止发射 — { $freq } MHz（{ $band }）不是已确认的发射频段。请在 设置 → 电台 → 发射频段 中勾选并确认。
+
+tx-off-unconfirmed = 禁止发射 — 此电台的发射频段尚未确认。请在 设置 → 电台 → 发射频段 中检查并确认。

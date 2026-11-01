@@ -2280,6 +2280,32 @@ impl SdroxideApp {
         self.converter_edit_hz = converter_hz;
         self.range_edit = ranges;
         self.rx_site_edit = rx_site;
+        // 11 m is one setting shown twice: the 11M-CB tick of the transmit
+        // bands and "Allow transmit on 11 m (CB)". Whichever the operator just
+        // changed drives the other, in both directions.
+        {
+            let has_m11 = |c: &Option<sdroxide_types::RadioConfig>| {
+                c.as_ref().is_some_and(|c| {
+                    c.tx_band_enable.as_ref().is_some_and(|b| b.contains(&sdroxide_types::Band::M11))
+                })
+            };
+            let (m11_old, m11_new) = (has_m11(&self.radio_cfg), has_m11(&radio_edit));
+            let acked = self.ui_settings.cb_tx_warning_ack;
+            if let Some(cfg) = radio_edit.as_mut() {
+                if m11_new != m11_old {
+                    if m11_new && !cb_tx_edit && !acked {
+                        // First time on: the CB warning must be acknowledged
+                        // before anything is granted; the tick waits for it.
+                        cfg.set_tx_band(sdroxide_types::Band::M11, false);
+                        self.cb_tx_confirm_open = true;
+                    } else {
+                        cb_tx_edit = m11_new;
+                    }
+                } else if cb_tx_edit != self.cb_tx_edit && (!cb_tx_edit || acked) {
+                    cfg.set_tx_band(sdroxide_types::Band::M11, cb_tx_edit);
+                }
+            }
+        }
         let hide_changed =
             radio_edit.as_ref().map(|c| c.hide_tx) != self.radio_cfg.as_ref().map(|c| c.hide_tx);
         if radio_edit != self.radio_cfg {

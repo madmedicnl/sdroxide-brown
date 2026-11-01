@@ -8967,7 +8967,6 @@ tx-bands-notice-new = Yayın tüm bantlarda kapalı. Bu telsizin yayın yaptığ
 
 tx-bands-notice-carried = Verici bantlarınız önceki sürümden aktarıldı. Bunları kontrol edip bir kez onaylayana kadar yayın engelli kalır. Telsize zarar verme riski nedeniyle her seçeneği dikkatle kontrol edin.
 
-tx-bands-ptt-off = Bu bant için yayın kapalı veya verici bantları henüz onaylanmadı (Ayarlar → Telsiz → Verici bantları).
 
 adsbmap-surface-asphalt = asfalt
 
@@ -9033,3 +9032,7 @@ schedule-col-site = Yer
 schedule-col-local = Yerel
 
 tx-bands-off = { $band } bandında yayın kapalı: bu banda ayarlarınızda izin verilmiyor, dolayısıyla vericiniz bu bandda yayın yapmaya uygun değil. (Oturum başına en çok { $max } kez gösterilir.)
+
+tx-off-band = VERİCİ YASAK — { $freq } MHz ({ $band }) doğrulanmış bir verici bandı değil. Ayarlar → Radyo → Verici bantları bölümünde işaretleyip doğrulayın.
+
+tx-off-unconfirmed = VERİCİ YASAK — bu telsizin verici bantları henüz doğrulanmadı. Ayarlar → Radyo → Verici bantları bölümünde kontrol edip onaylayın.

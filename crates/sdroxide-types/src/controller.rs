@@ -490,6 +490,11 @@ pub enum RadioEvent {
     /// while a speaker feed exists. The engine's, so it rides
     /// `ServerMsg::AudioLevel`. Appended last.
     AudioLevel(Box<crate::AudioLevel>),
+    /// The engine refused a key-down because of the operator's transmit band
+    /// list: why, and the frequency it would have radiated on (Hz). Typed rather
+    /// than a [`RadioEvent::Notice`] so the screen can word it in the operator's
+    /// language. Rides `ServerMsg::TxRefused`. Appended last.
+    TxRefused(crate::TxBlock, f64),
 }
 
 /// Snapshot of the frontend's switchable sound devices (native clients).

@@ -2170,8 +2170,14 @@ use sdroxide_types::{
 /// whole, so the appended fields move their layout. `#[serde(default)]`, so a
 /// `radio.json` written before this loads unchanged — and is carried over
 /// unconfirmed. `PROTO_VERSION` 258 → 259, `VERSION_BYTE` 0x4E → 0x4F.
-pub const PROTO_VERSION: u16 = 259;
-const VERSION_BYTE: u8 = 0x4F;
+/// v260: **the transmit refusal is typed.** [`sdroxide_types::TxBlock`] gains
+/// serde, `RadioEvent::TxRefused(TxBlock, f64)` and `ServerMsg::TxRefused(TxBlock,
+/// f64)` are appended last: a key-down refused by the band list used to travel as
+/// an English `Notice`; now it carries the reason and the frequency, and the
+/// screen words it in the operator's language. `PROTO_VERSION` 259 → 260,
+/// `VERSION_BYTE` 0x4F → 0x50.
+pub const PROTO_VERSION: u16 = 260;
+const VERSION_BYTE: u8 = 0x50;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -2734,6 +2740,12 @@ pub enum ServerMsg {
     ///
     /// Appended last, for the usual reason.
     AudioLevel(Box<sdroxide_types::AudioLevel>),
+
+    /// `RadioEvent::TxRefused`: the engine refused a key-down under the
+    /// operator's transmit band list — why, and the frequency in Hz.
+    ///
+    /// Appended last, for the usual reason.
+    TxRefused(sdroxide_types::TxBlock, f64),
 }
 
 /// What [`ServerMsg::ClientSettings`] carries.
@@ -3414,7 +3426,22 @@ mod tests {
         // Byte 0 is `VERSION_BYTE`; byte 1 is the variant index (< 128 here).
         let (a, b) = (encode(&slide).unwrap()[1], encode(&level).unwrap()[1]);
         assert_eq!(b, a + 1, "AudioLevel must directly follow DabSlide");
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (259, 0x4F));
+    }
+
+    /// `TxRefused` rides last, after `AudioLevel`; the version is pinned here.
+    #[test]
+    fn the_tx_refused_message_is_appended_last() {
+        let level = ServerMsg::AudioLevel(Box::new(sdroxide_types::AudioLevel::silent()));
+        let why = sdroxide_types::TxBlock::BandOff(sdroxide_types::Band::M40);
+        let refused = ServerMsg::TxRefused(why, 7_074_000.0);
+        let bytes = encode(&refused).unwrap();
+        let (a, b) = (encode(&level).unwrap()[1], bytes[1]);
+        assert_eq!(b, a + 1, "TxRefused must directly follow AudioLevel");
+        match decode::<ServerMsg>(&bytes).unwrap() {
+            ServerMsg::TxRefused(w, hz) => assert_eq!((w, hz), (why, 7_074_000.0)),
+            _ => panic!("TxRefused did not round-trip"),
+        }
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (260, 0x50));
     }
 
     /// postcard is positional: a field inserted mid-struct shifts every byte

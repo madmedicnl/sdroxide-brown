@@ -7750,6 +7750,17 @@ pub struct RadioConfig {
     pub tx_bands_confirmed: bool,
 }
 
+/// Why [`RadioConfig::tx_block_reason`] refuses a frequency. Also what the
+/// engine reports when it refuses a key-down (`RadioEvent::TxRefused`), so the
+/// screen can say it in the operator's language.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum TxBlock {
+    /// The operator has not validated the transmit band list yet.
+    Unconfirmed,
+    /// The frequency is in this band, which is not ticked.
+    BandOff(Band),
+}
+
 /// The lowest S-meter calibration offered, in S-units.
 pub const SMETER_CAL_MIN: i8 = -5;
 /// The highest S-meter calibration offered, in S-units.
@@ -7768,6 +7779,32 @@ impl RadioConfig {
     /// frequency is in, never the selector the operator last clicked.
     pub fn tx_dial_allowed(&self, dial_hz: f64) -> bool {
         self.tx_band_allowed(Band::containing(dial_hz))
+    }
+
+    /// Why this radio may not transmit at `dial_hz`, or `None` when it may.
+    ///
+    /// The single rule, for the interface and the engine alike: transmit is
+    /// allowed on the bands that are ticked in the list *and* validated, and
+    /// refused everywhere else — listening bands, broadcast, "Other" included.
+    pub fn tx_block_reason(&self, dial_hz: f64) -> Option<TxBlock> {
+        if !self.tx_bands_confirmed {
+            return Some(TxBlock::Unconfirmed);
+        }
+        let band = Band::containing(dial_hz);
+        if self.tx_band_enable.as_ref().is_some_and(|b| b.contains(&band)) {
+            None
+        } else {
+            Some(TxBlock::BandOff(band))
+        }
+    }
+
+    /// Tick or untick one band of the transmit list.
+    pub fn set_tx_band(&mut self, band: Band, on: bool) {
+        let bands = self.tx_band_enable.get_or_insert_with(Vec::new);
+        bands.retain(|b| *b != band);
+        if on {
+            bands.push(band);
+        }
     }
 
     /// Fill in [`Self::tx_band_enable`] for a `radio.json` that predates it:
@@ -9326,5 +9363,57 @@ mod tests {
         assert_eq!(cal(-5), -30.0);
         assert_eq!(cal(40), 30.0, "a hand-edited file cannot go past +5");
         assert_eq!(cal(-40), -30.0, "nor past -5");
+    }
+
+    fn tx_list(bands: &[Band], confirmed: bool) -> RadioConfig {
+        RadioConfig {
+            tx_band_enable: Some(bands.to_vec()),
+            tx_bands_confirmed: confirmed,
+            ..RadioConfig::default()
+        }
+    }
+
+    /// One rule: ticked and validated = allowed, refused everywhere else.
+    #[test]
+    fn tx_is_allowed_only_on_ticked_and_validated_bands() {
+        let sw41 = 7_205_000.0; // broadcast "SW 41m"
+        let sw75 = 3_912_000.0; // broadcast "SW 75m"
+        // 11 m alone: CB only.
+        let cb = tx_list(&[Band::M11], true);
+        assert_eq!(cb.tx_block_reason(27_185_000.0), None);
+        assert_eq!(cb.tx_block_reason(7_074_000.0), Some(TxBlock::BandOff(Band::M40)));
+        assert!(cb.tx_block_reason(sw41).is_some() && cb.tx_block_reason(sw75).is_some());
+        // 11 m + 40 m: those two, nothing else.
+        let two = tx_list(&[Band::M11, Band::M40], true);
+        assert_eq!(two.tx_block_reason(27_185_000.0), None);
+        assert_eq!(two.tx_block_reason(7_074_000.0), None);
+        assert!(two.tx_block_reason(14_074_000.0).is_some());
+        // 11 m unticked: no CB.
+        let no_cb = tx_list(&[Band::M40], true);
+        assert!(no_cb.tx_block_reason(27_185_000.0).is_some());
+        // Unvalidated list: nothing at all.
+        let unvalidated = tx_list(&[Band::M11, Band::M40], false);
+        assert_eq!(unvalidated.tx_block_reason(7_074_000.0), Some(TxBlock::Unconfirmed));
+        assert_eq!(RadioConfig::default().tx_block_reason(7_074_000.0), Some(TxBlock::Unconfirmed));
+        // A listening band is a band like another: ticked and validated, the
+        // radio may transmit there; otherwise never.
+        let sw = tx_list(&[Band::Sw], true);
+        assert_eq!(sw.tx_block_reason(sw41), None);
+        // And the same answer as `tx_dial_allowed`.
+        for hz in [sw41, sw75, 7_074_000.0, 27_185_000.0, 35_000_000.0] {
+            for c in [&cb, &two, &no_cb, &unvalidated, &sw] {
+                assert_eq!(c.tx_block_reason(hz).is_none(), c.tx_dial_allowed(hz));
+            }
+        }
+    }
+
+    #[test]
+    fn set_tx_band_ticks_and_unticks() {
+        let mut c = RadioConfig::default();
+        c.set_tx_band(Band::M11, true);
+        c.set_tx_band(Band::M11, true);
+        assert_eq!(c.tx_band_enable, Some(vec![Band::M11]));
+        c.set_tx_band(Band::M11, false);
+        assert_eq!(c.tx_band_enable, Some(vec![]));
     }
 }

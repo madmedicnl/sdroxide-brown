@@ -1299,6 +1299,21 @@ impl eframe::App for SdroxideApp {
                 tr!("frame-rx-only-nudge")
             })
         });
+        // A refused PTT or TUNE press: big, red, every time — no cap.
+        if let Some(red) = self.tx_press_banner(crate::time::now_unix_f64()) {
+            egui::Frame::new()
+                .fill(crate::theme::ALERT())
+                .inner_margin(egui::Margin::symmetric(10, 8))
+                .show(ui, |ui| {
+                    ui.label(
+                        RichText::new(format!("⛔ {red}"))
+                            .size(20.0)
+                            .strong()
+                            .color(Color32::WHITE),
+                    );
+                });
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
+        }
         if let Some(notice) = notice {
             let (wash, rule, mark, ink) = notice_banner_colors();
             egui::Frame::new()
@@ -3477,6 +3492,16 @@ impl SdroxideApp {
             self.disarm_auto(tr!("frame-auto-stopped-stop-control"));
         }
         for c in cmds {
+            // PTT or TUNE asked for where TX is off — a key, a MIDI button, any
+            // route: it never leaves, and the operator is told in red, every
+            // time (the engine would refuse it too).
+            if matches!(c, Command::SetPtt(true) | Command::SetTune(true))
+                && !self.tx_keyable_here()
+            {
+                self.tx_engine_refusal = None;
+                self.tx_press_refused_at = Some(crate::time::now_unix_f64());
+                continue;
+            }
             // Marked here rather than at the button, because the settings panel
             // holds borrows of `self` while it draws and cannot take a mutable
             // one. This is the point where the command is definitely going out,
@@ -4400,6 +4425,7 @@ impl SdroxideApp {
                         self.slot_follow.edge(&t, edge);
                     }
                 }
+                RadioEvent::TxRefused(why, hz) => self.on_tx_refused(why, hz),
                 RadioEvent::AudioLevel(l) => {
                     self.audio_level = Some((crate::time::now_unix_f64(), *l))
                 }
@@ -4795,6 +4821,11 @@ impl SdroxideApp {
             self.cb_tx_edit = true;
             sdroxide_types::set_cb_tx_allowed(true);
             cmds.push(Command::SetCbTxAllowed(true));
+            // The 11M-CB tick follows the permission, as everywhere else.
+            if let Some(cfg) = self.radio_cfg.as_mut() {
+                cfg.set_tx_band(Band::M11, true);
+                self.ctrl.set_radio_config(cfg.clone());
+            }
             self.cb_tx_confirm_open = false;
         } else if cancel {
             self.cb_tx_confirm_open = false;

@@ -8971,7 +8971,6 @@ tx-bands-notice-new = L'émission est coupée sur toutes les bandes. Choisissez 
 
 tx-bands-notice-carried = Vos bandes d'émission ont été reprises de la version précédente. L'émission reste bloquée tant que vous ne les avez pas vérifiées et validées une fois. En raison des risques pour la radio, vérifiez bien chaque option.
 
-tx-bands-ptt-off = L'émission est coupée pour cette bande, ou les bandes d'émission ne sont pas encore validées (Réglages → Radio → Bandes d'émission).
 
 adsbmap-surface-asphalt = asphalte
 
@@ -9039,3 +9038,7 @@ schedule-col-local = Locale
 tx-bands-off = L'émission est coupée sur { $band } : cette bande n'est pas autorisée dans vos réglages. Votre émetteur n'est donc pas compatible en émission sur cette bande. (Affiché { $max } fois maximum par session.)
 
 frame-band-tx = BAND TX
+
+tx-off-band = ÉMISSION INTERDITE — { $freq } MHz ({ $band }) n'est pas une bande d'émission validée. Cochez et validez-la dans Réglages → Radio → Bandes d'émission.
+
+tx-off-unconfirmed = ÉMISSION INTERDITE — les bandes d'émission de cette radio ne sont pas encore validées. Vérifiez-les et validez dans Réglages → Radio → Bandes d'émission.

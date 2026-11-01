@@ -1176,7 +1176,7 @@ impl SdroxideApp {
         if tx_capable {
             // Dark where TX is off for this band or the list is not confirmed;
             // the engine refuses the key-down either way.
-            let keyable = self.tx_keyable_here();
+            let keyable = self.tx_keyable_here() || self.state.tx.ptt;
             let resp = ui
                 .add_enabled_ui(keyable, |ui| {
                     crate::chrome::chip_hold_sized(
@@ -1189,8 +1189,8 @@ impl SdroxideApp {
                     )
                 })
                 .inner
-                .on_hover_text(ptt_hold_hint())
-                .on_disabled_hover_text(tr!("tx-bands-ptt-off"));
+                .on_hover_text(ptt_hold_hint());
+            self.tx_off_overlay(ui, &resp);
             self.apply_held_ptt(&resp, cmds);
         }
 
@@ -1502,7 +1502,7 @@ impl SdroxideApp {
             // set up with.
             self.tx_controls(ui, cmds, true);
             let keyable = self.tx_keyable_here() || self.state.tx.tune;
-            if ui
+            let resp = ui
                 .add_enabled_ui(keyable, |ui| {
                     crate::chrome::chip_accent(
                         ui,
@@ -1512,12 +1512,11 @@ impl SdroxideApp {
                         crate::theme::INK_ON_CYAN(),
                     )
                 })
-                .inner
-                .on_disabled_hover_text(tr!("tx-bands-ptt-off"))
-                .clicked()
-            {
+                .inner;
+            if resp.clicked() {
                 cmds.push(Command::SetTune(!self.state.tx.tune));
             }
+            self.tx_off_overlay(ui, &resp);
         });
     }
 
@@ -5272,37 +5271,48 @@ impl SdroxideApp {
         let label = RichText::new(tr!("topbar-ptt")).size(15.0).strong();
         // Tinted only while idle: keyed, the chip fills red and the label
         // needs its white ink (`chip_enabled_tinted` is the precedent).
-        let label = if tx.ptt { label } else { label.color(crate::theme::ALERT()) };
-        if crate::chrome::chip_accent_sized(
-            ui,
-            tx.ptt,
-            label,
-            crate::theme::ALERT(),
-            Color32::WHITE,
-            tx_key_chip_size(ui),
-        )
-        .clicked()
-        {
+        // Greyed (no red ink) where TX is off: the disabled look must read.
+        let keyable = self.tx_keyable_here() || tx.ptt;
+        let label = if tx.ptt || !keyable { label } else { label.color(crate::theme::ALERT()) };
+        let resp = ui
+            .add_enabled_ui(keyable, |ui| {
+                crate::chrome::chip_accent_sized(
+                    ui,
+                    tx.ptt,
+                    label,
+                    crate::theme::ALERT(),
+                    Color32::WHITE,
+                    tx_key_chip_size(ui),
+                )
+            })
+            .inner;
+        if resp.clicked() {
             cmds.push(Command::SetPtt(!tx.ptt));
         }
+        self.tx_off_overlay(ui, &resp);
     }
 
     /// The TUNE latching chip: keys a carrier at the tune level drawn beside
     /// it.
     pub(in crate::app) fn tx_tune_chip(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
         let tx = self.state.tx;
-        if crate::chrome::chip_accent_sized(
-            ui,
-            tx.tune,
-            RichText::new(tr!("topbar-tune")).size(15.0),
-            crate::theme::YELLOW(),
-            crate::theme::INK_ON_CYAN(),
-            tx_key_chip_size(ui),
-        )
-        .clicked()
-        {
+        let keyable = self.tx_keyable_here() || tx.tune;
+        let resp = ui
+            .add_enabled_ui(keyable, |ui| {
+                crate::chrome::chip_accent_sized(
+                    ui,
+                    tx.tune,
+                    RichText::new(tr!("topbar-tune")).size(15.0),
+                    crate::theme::YELLOW(),
+                    crate::theme::INK_ON_CYAN(),
+                    tx_key_chip_size(ui),
+                )
+            })
+            .inner;
+        if resp.clicked() {
             cmds.push(Command::SetTune(!tx.tune));
         }
+        self.tx_off_overlay(ui, &resp);
     }
 
     /// The voice keyer's chip, where the keyer can transmit — every voice mode

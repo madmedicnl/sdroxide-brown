@@ -8976,7 +8976,6 @@ tx-bands-notice-new = La trasmissione è disattivata su ogni banda. Scegli le ba
 
 tx-bands-notice-carried = Le tue bande di trasmissione sono state riportate dalla versione precedente. La trasmissione resta bloccata finché non le verifichi e le confermi una volta. Per il rischio di danni alla radio, controlla con attenzione ogni opzione.
 
-tx-bands-ptt-off = La trasmissione è disattivata per questa banda, oppure le bande di trasmissione non sono ancora confermate (Impostazioni → Radio → Bande di trasmissione).
 
 adsbmap-surface-asphalt = asfalto
 
@@ -9042,3 +9041,7 @@ schedule-col-site = Sito
 schedule-col-local = Locale
 
 tx-bands-off = La trasmissione è disattivata su { $band }: questa banda non è consentita nelle tue impostazioni, quindi il tuo trasmettitore non è compatibile con la trasmissione su questa banda. (Mostrato al massimo { $max } volte per sessione.)
+
+tx-off-band = TRASMISSIONE VIETATA — { $freq } MHz ({ $band }) non è una banda di trasmissione convalidata. Spuntala e convalidala in Impostazioni → Radio → Bande di trasmissione.
+
+tx-off-unconfirmed = TRASMISSIONE VIETATA — le bande di trasmissione di questa radio non sono ancora convalidate. Controllale e convalidale in Impostazioni → Radio → Bande di trasmissione.
