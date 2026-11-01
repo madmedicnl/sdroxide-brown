@@ -22,10 +22,6 @@ of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 
 
 ## Now
 
-- FT8 setup window drew its captions with no controls beside them (#357) (added by F4NRM, owned by Roy; FT8 is his area, PR for his review) — `setup-tx-audio` carried a hint paragraph as well as the caption, the dialog draws it as a row label of a two-column grid, so the label column measured 1356 pt and every control beside it was pushed off the window. Removed from all 11 languages, render probe + caption test added. PR #390.
-- Settings reports the crate version, not the installed release (#354) (added by F4NRM, owned by Roy) — a release now reports the tag's own version (`SDROXIDE_RELEASE` from `GITHUB_REF_NAME`), and the window title follows it. PR #392.
-- The two tests our last three merges left red on main (i18n orphans from #372/#368/#355, and the WEFAX header test still asking for the removed `Auto` chip) (added by Roy, owned by Roy; WEFAX is F4NRM's area, PR for his review) — PR #391.
-- WEFAX auto-slant believes a bad measurement (#239) (added by F4NRM, owned by Roy; WEFAX is his area, PR for his review) — a noisy phasing pulse read as a 47 500 ppm clock error, the line was cut 4.75 % short, and charts came out as bands. Guarded to 2000 ppm with the baseline re-taken; test fails on the old code. PR #393. Next: a full-chart decode in the WEFAX tests, which is the gap this fell through.
 - PROGRAMS window layout and persistence (added by F4NRM, owned by Claude) — branch `f4nrm/stoic-fermi-a0z0zp`, PR pending: columns, Sort menus, chip-framed colour, two-row bar, saved filters. Wacht op F4NRM's review.
 - SAT Doppler for CAT rigs (added by Roy, owned by Roy/SP9TKN) — step 1+2a+2b+2c
   implemented on branch `fork/sat-doppler-cat`. MSI build available. Wacht op
@@ -48,6 +44,10 @@ of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 
 - BAND TX pill + "11M-CB" label (added by madmedicnl, owned by Claude; PR B, re-pushed on main after #377 merged into the PR A branch) — pill under "BW cascade": green = allowed, red = refused, blinking red = transmitting; hidden on SWL, listen mode, receive-only radios and when no band is ticked and confirmed. "11M" shown as "11M-CB" in the TX band plan only.
 - APRS panel fit and heard text (added by madmedicnl, owned by Claude; touches F4NRM's APRS area) — branch `f4nrm/amazing-einstein-sqkc6q`, PR pending: the message pane is sized from what is really left (map chip row and gaps counted) so the composer no longer hangs off the window bottom; ALL also lists station comments/status heard. Not live-tested on screen.
 - MEMORIES panel fit (added by F4NRM, owned by Claude) — branch `f4nrm/memories-panel-fit`, PR pending: name rows sized to their button, chip-framed colour, PST at chip height. Wacht op F4NRM's review.
+- FT8 setup window drew its captions with no controls beside them (#357) (added by F4NRM, owned by Roy; FT8 is his area, PR for his review) — `setup-tx-audio` carried a hint paragraph as well as the caption, the dialog draws it as a row label of a two-column grid, so the label column measured 1356 pt and every control beside it was pushed off the window. Removed from all 11 languages, render probe + caption test added. PR #390.
+- Settings reports the crate version, not the installed release (#354) (added by F4NRM, owned by Roy) — a release now reports the tag's own version (`SDROXIDE_RELEASE` from `GITHUB_REF_NAME`), and the window title follows it. PR #392.
+- The two tests our last three merges left red on main (i18n orphans from #372/#368/#355, and the WEFAX header test still asking for the removed `Auto` chip) (added by Roy, owned by Roy; WEFAX is F4NRM's area, PR for his review) — PR #391.
+- WEFAX auto-slant believes a bad measurement (#239) (added by F4NRM, owned by Roy; WEFAX is his area, PR for his review) — a noisy phasing pulse read as a 47 500 ppm clock error, the line was cut 4.75 % short, and charts came out as bands. Guarded to 2000 ppm with the baseline re-taken; test fails on the old code. PR #393. Next: a full-chart decode in the WEFAX tests, which is the gap this fell through.
 
 ## Backlog — our open issues (board: Todo)
 
