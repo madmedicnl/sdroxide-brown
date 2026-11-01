@@ -20,6 +20,7 @@ v2.2.0.3_brown. Open PRs: 4 (#318, #339, #341, #358). Open issues: 15 (re-measur
 
 ## Now
 
+- Settings does not display the exact installed version (#354) (added by F4NRM, owned by Roy) — a release reports the tag's own version (`SDROXIDE_RELEASE` from `GITHUB_REF_NAME`), not the crate version, and the window title follows it. PR #392, waiting on review.
 - PROGRAMS window layout and persistence (added by F4NRM, owned by Claude) — branch `f4nrm/stoic-fermi-a0z0zp`, PR pending: columns, Sort menus, chip-framed colour, two-row bar, saved filters. Wacht op F4NRM's review.
 - SAT Doppler for CAT rigs (added by Roy, owned by Roy/SP9TKN) — step 1+2a+2b+2c
   implemented on branch `fork/sat-doppler-cat`. MSI build available. Wacht op
