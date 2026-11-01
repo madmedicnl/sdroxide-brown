@@ -815,10 +815,11 @@ fn a_swap_to_a_front_end_that_cannot_reach_the_dial_moves_it() {
     let (notices, dial, center) = drain(&h.event_rx, 1.5);
 
     let top = qo100_caps().freq_ranges_rx[0].1;
-    assert!(
-        notices.iter().any(|n| n.contains("the dial moved to")),
-        "the operator has to be told their dial moved, got {notices:?}"
-    );
+    // The notice that used to say "the dial moved to …" was withdrawn by the
+    // maintainer on 2026-11-01 as noise on a swap the operator had just asked
+    // for; the dial moving is the part that has to keep holding.
+    let _ = &notices;
+    assert_eq!(notices.len(), 0, "no notice on a swap the operator asked for: {notices:?}");
     assert!((dial - top).abs() < 1.0, "the dial should be at the top of the range, got {dial}");
     assert!((center - top).abs() < 1.0, "and the hardware with it, got {center}");
 
