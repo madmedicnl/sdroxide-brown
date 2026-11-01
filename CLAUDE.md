@@ -2,9 +2,9 @@
 
 ## Every piece of interface text is translated
 
-The interface speaks English, French, Spanish, German, Dutch, Italian, Brazilian Portuguese, Russian and Turkish. **Any change that
+The interface speaks English, French, Spanish, German, Dutch, Italian, Brazilian Portuguese, Russian, Turkish, Japanese and Simplified Chinese. **Any change that
 adds or edits text a person reads on screen must add or update the message in
-all nine languages in the same change.** That covers labels, buttons, hover
+all eleven languages in the same change.** That covers labels, buttons, hover
 text, window titles, notes, status lines, error messages shown to the operator
 and the names of values (`label()` of an enum drawn on screen).
 
@@ -19,7 +19,7 @@ How:
 
    ```bash
    python3 tools/i18n_add.py <<'JSON'
-   {"id": "area-thing", "en": "Thing", "fr": "Chose", "es": "Cosa", "de": "Ding", "nl": "Ding", "it": "Cosa", "pt-BR": "Coisa", "ru": "Вещь", "tr": "Şey"}
+   {"id": "area-thing", "en": "Thing", "fr": "Chose", "es": "Cosa", "de": "Ding", "nl": "Ding", "it": "Cosa", "pt-BR": "Coisa", "ru": "Вещь", "tr": "Şey", "ja": "もの", "zh-CN": "东西"}
    JSON
    ```
 
