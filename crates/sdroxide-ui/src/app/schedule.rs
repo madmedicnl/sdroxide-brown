@@ -1014,6 +1014,7 @@ mod sort_and_filters {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod preview {
     use super::*;
+    use eframe::App as _;
     use sdroxide_types::{DetachedWindow, RadioController, RadioEvent};
 
     struct Quiet;
