@@ -6197,8 +6197,8 @@ The card never asks the internet anything: an aircraft you have not opened or
 looked up simply has no online lines.
 
 A **click** on an aircraft pins its card beside it. The pin stays while you pan
-and zoom, and a click on empty map does not close it; a click on another
-aircraft moves it, **✕** or **Esc** closes it, and it closes by itself when the
+and zoom; a click on another aircraft moves it, a click on empty map, **✕** or
+**Esc** closes it, and it closes by itself when the
 aircraft drops off the map. In the pinned card the **Planespotters** link opens
 the photo's page, and the picture is shown if it has already been loaded.
 
