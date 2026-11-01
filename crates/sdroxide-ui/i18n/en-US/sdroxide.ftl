@@ -9003,3 +9003,5 @@ frame-band-tx = BAND TX
 tx-off-band = TRANSMIT FORBIDDEN — { $freq } MHz ({ $band }) is not a validated transmit band. Tick and validate it in Settings → Radio → Transmit bands.
 
 tx-off-unconfirmed = TRANSMIT FORBIDDEN — the transmit bands of this radio are not validated yet. Check them and confirm in Settings → Radio → Transmit bands.
+
+aircraft-hover-lookup-retry = no answer — trying again in { $s } s

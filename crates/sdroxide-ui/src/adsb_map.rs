@@ -81,9 +81,9 @@ pub struct AdsbMapState {
     /// The aircraft whose card is open, by ICAO address.
     pub selected: Option<u32>,
     /// The aircraft whose small card is pinned beside it, by ICAO address. Set
-    /// by a click on an aircraft, cleared only by the card's close button, Esc,
-    /// another aircraft's click (which moves it) or the aircraft leaving the
-    /// map. A click on empty map leaves it alone.
+    /// by a click on an aircraft, cleared by the card's close button, Esc, a
+    /// click on empty map, another aircraft's click (which moves it) or the
+    /// aircraft leaving the map.
     pub pinned: Option<u32>,
     /// Where the pinned aircraft is on screen this frame, written by [`show`].
     pub pin_anchor: Option<Pos2>,
@@ -1294,9 +1294,10 @@ pub fn show(
     } else if resp.clicked() {
         state.selected = None;
     }
-    // The pin follows the click on an aircraft only; the click on empty map that
-    // clears `selected` leaves it where it is.
-    state.pinned = pin_after_click(state.pinned, hover.map(|i| live[i].icao), resp.clicked());
+    // A click on an aircraft moves the pin there; a click on empty map closes it
+    // (a beginner never looks for the ✕). The credit link is not empty map.
+    state.pinned =
+        pin_after_click(state.pinned, hover.map(|i| live[i].icao), resp.clicked() && !credit_clicked);
     if hover.is_some() && resp.clicked() {
         state.pin_owner = pin_owner_after(state.pin_owner, ui.id(), frame, true);
     }
@@ -1341,10 +1342,11 @@ pub fn show(
 pub const PIN_GAP: f32 = 14.0;
 
 /// The pin after a click this frame: an aircraft under the pointer takes it, a
-/// click on empty map leaves it where it was.
+/// click on empty map closes it, no click changes nothing.
 pub fn pin_after_click(pinned: Option<u32>, hit: Option<u32>, clicked: bool) -> Option<u32> {
     match (clicked, hit) {
         (true, Some(icao)) => Some(icao),
+        (true, None) => None,
         _ => pinned,
     }
 }
@@ -1847,8 +1849,8 @@ mod tests {
     }
 
     #[test]
-    fn a_click_on_empty_map_keeps_the_pin() {
-        assert_eq!(pin_after_click(Some(0x4840D6), None, true), Some(0x4840D6));
+    fn a_click_on_empty_map_closes_the_pin() {
+        assert_eq!(pin_after_click(Some(0x4840D6), None, true), None);
         assert_eq!(pin_after_click(None, None, true), None);
     }
 
@@ -1858,12 +1860,10 @@ mod tests {
     }
 
     #[test]
-    fn only_the_close_button_unpins() {
+    fn the_pin_survives_a_frame_without_a_click() {
         assert_eq!(pin_after_close(Some(0x4840D6)), None);
-        // Nothing the map does by itself closes it: not a click on empty map,
-        // not a click with no aircraft under the pointer.
-        assert_eq!(pin_after_click(Some(0x4840D6), None, true), Some(0x4840D6));
         assert_eq!(pin_after_click(Some(0x4840D6), None, false), Some(0x4840D6));
+        assert_eq!(pin_after_click(Some(0x4840D6), Some(0x484006), false), Some(0x4840D6));
     }
 
     #[test]

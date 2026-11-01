@@ -8999,3 +8999,5 @@ frame-band-tx = BAND TX
 tx-off-band = TRANSMISIÓN PROHIBIDA — { $freq } MHz ({ $band }) no es una banda de transmisión validada. Márquela y valídela en Ajustes → Radio → Bandas de transmisión.
 
 tx-off-unconfirmed = TRANSMISIÓN PROHIBIDA — las bandas de transmisión de esta radio aún no están validadas. Revíselas y valídelas en Ajustes → Radio → Bandas de transmisión.
+
+aircraft-hover-lookup-retry = sin respuesta — nuevo intento en { $s } s

@@ -9000,3 +9000,5 @@ tx-bands-off = A transmissão está desligada em { $band }: esta banda não é p
 tx-off-band = TRANSMISSÃO PROIBIDA — { $freq } MHz ({ $band }) não é uma banda de transmissão validada. Marque e valide em Configurações → Rádio → Bandas de transmissão.
 
 tx-off-unconfirmed = TRANSMISSÃO PROIBIDA — as bandas de transmissão deste rádio ainda não foram validadas. Verifique e confirme em Configurações → Rádio → Bandas de transmissão.
+
+aircraft-hover-lookup-retry = sem resposta — nova tentativa em { $s } s

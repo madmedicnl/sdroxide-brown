@@ -9009,3 +9009,5 @@ tx-bands-off = La trasmissione è disattivata su { $band }: questa banda non è 
 tx-off-band = TRASMISSIONE VIETATA — { $freq } MHz ({ $band }) non è una banda di trasmissione convalidata. Spuntala e convalidala in Impostazioni → Radio → Bande di trasmissione.
 
 tx-off-unconfirmed = TRASMISSIONE VIETATA — le bande di trasmissione di questa radio non sono ancora convalidate. Controllale e convalidale in Impostazioni → Radio → Bande di trasmissione.
+
+aircraft-hover-lookup-retry = nessuna risposta — nuovo tentativo tra { $s } s
