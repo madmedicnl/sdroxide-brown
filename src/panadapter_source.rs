@@ -81,7 +81,8 @@ pub struct PanadapterSource {
     /// own gains and antenna.
     rx: Box<dyn IqSource>,
     /// The transceiver: the dial, the mode, the filter, the transmitter, the
-    /// keyer, its S-meter — and its audio, when that is what is being heard.
+    /// keyer — and its audio, when that is what is being heard. Not its
+    /// S-meter: that one is the attached receiver's.
     ctrl: Box<dyn IqSource>,
     cfg: PanadapterConfig,
     /// The mode the transceiver is in, which picks the offset. `None` until
@@ -613,8 +614,12 @@ impl IqSource for PanadapterSource {
         self.ctrl.set_rit_hz(hz);
     }
 
+    /// None: the S-meter is the *attached receiver's*, measured by the engine
+    /// on its I/Q. The transceiver here is the transmitter (often a CAT rig
+    /// whose own meter is absent or meaningless on the antenna the SDR is
+    /// watching), and its figure would hide the receiver's.
     fn rx_signal_dbm(&mut self) -> Option<f32> {
-        self.ctrl.rx_signal_dbm()
+        None
     }
 
     /// The *receiver's*, not the transceiver's: what overflows is the converter
@@ -1092,15 +1097,16 @@ mod tests {
         assert!(rx_log.lock().unwrap().tx_begins.is_empty(), "the receiver never transmits");
     }
 
-    /// The S-meter is the transceiver's: it is the radio on the antenna the
-    /// operator is working.
+    /// The S-meter is the attached receiver's: the transceiver is the
+    /// transmitter, so its own figure is left out and the engine measures the
+    /// receiver's I/Q.
     #[test]
-    fn the_s_meter_is_the_transceivers() {
+    fn the_s_meter_is_the_receivers_not_the_transceivers() {
         let (rx, _) = Fake::new("rx", 2e6, 14e6);
         let (mut ctrl, _) = Fake::new("rig", 48_000.0, 14e6);
         ctrl.signal_dbm = Some(-73.0);
         let mut src = PanadapterSource::new(Box::new(rx), Box::new(ctrl), cfg(), Some(Mode::Usb));
-        assert_eq!(src.rx_signal_dbm(), Some(-73.0));
+        assert_eq!(src.rx_signal_dbm(), None);
     }
 
     /// An inverted tap is mirrored about its centre on the way in.
