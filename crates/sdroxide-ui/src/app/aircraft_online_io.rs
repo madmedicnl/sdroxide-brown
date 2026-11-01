@@ -41,6 +41,8 @@ const MAX_HISTORY_BYTES: u64 = 256 * 1024;
 const MAX_EXPORT_BYTES: u64 = 8 * 1024 * 1024;
 /// The most bytes read of the operator's watch list: a hundred short entries.
 const MAX_WATCH_BYTES: u64 = 16 * 1024;
+/// The PROGRAMS state the station keeps: every station of the schedules starred.
+const MAX_PROGRAMS_BYTES: u64 = 1024 * 1024 + 4096;
 /// The most bytes read of the station's list of everything it kept: up to 4000
 /// aircraft, a few hundred bytes each.
 const MAX_STATS_BYTES: u64 = 4 * 1024 * 1024;
@@ -66,6 +68,7 @@ enum Msg {
     History { icao: u32, status: Option<u16>, body: String },
     Export { status: Option<u16>, body: String },
     Watch { status: Option<u16>, body: String },
+    Programs { status: Option<u16>, body: String },
     Stats { status: Option<u16>, body: String },
     Switch { status: Option<u16>, body: String },
     Weather { airport: usize, status: Option<u16>, body: String },
@@ -128,6 +131,9 @@ pub(in crate::app) struct OnlineClient {
     pub watch: WatchStore,
     /// The station's list of every aircraft it kept, for the statistics view.
     pub stats: StatsStore,
+    /// What the station answered about the PROGRAMS state, not yet taken by
+    /// [`SdroxideApp::programs_sync_tick`].
+    pub programs_inbox: Vec<(Option<u16>, String)>,
     /// A request to switch the station's online relay, waiting to be sent.
     switch_wanted: Option<bool>,
     /// A request is out and its answer not yet in.
@@ -154,6 +160,7 @@ impl Default for OnlineClient {
             export: ExportStore::default(),
             watch: WatchStore::default(),
             stats: StatsStore::default(),
+            programs_inbox: Vec::new(),
             switch_wanted: None,
             switch_asking: false,
             switch_asked: None,
@@ -203,6 +210,9 @@ impl OnlineClient {
                 }
                 Msg::Watch { status, body } => {
                     self.watch.deliver(aircraft_watch::classify(status, &body), now);
+                }
+                Msg::Programs { status, body } => {
+                    self.programs_inbox.push((status, body));
                 }
                 Msg::Switch { status, body } => {
                     self.switch_asking = false;
@@ -319,6 +329,19 @@ impl OnlineClient {
         let station = peer.map(crate::login::station_key).unwrap_or_default();
         let post = aircraft_watch::body_of(&req);
         send_info(url, station, Kind::Watch, post, self.tx.clone(), ctx.clone());
+    }
+
+    /// Send the PROGRAMS state request: a read, or the state as the body of a
+    /// write. Without a station nothing is sent.
+    pub(in crate::app) fn ask_programs(
+        &mut self,
+        ctx: &egui::Context,
+        peer: Option<&str>,
+        post: Option<String>,
+    ) {
+        let Some(url) = peer.and_then(super::programs_sync::programs_url) else { return };
+        let station = peer.map(crate::login::station_key).unwrap_or_default();
+        send_info(url, station, Kind::Programs, post, self.tx.clone(), ctx.clone());
     }
 
     /// Whether the relay is on, as far as this client knows: on until the
@@ -584,6 +607,7 @@ enum Kind {
     History(u32),
     Export,
     Watch,
+    Programs,
     Stats,
     Switch,
     Weather(usize),
@@ -596,6 +620,7 @@ impl Kind {
             Kind::History(_) => MAX_HISTORY_BYTES,
             Kind::Export => MAX_EXPORT_BYTES,
             Kind::Watch => MAX_WATCH_BYTES,
+            Kind::Programs => MAX_PROGRAMS_BYTES,
             Kind::Stats => MAX_STATS_BYTES,
             Kind::Switch => MAX_SWITCH_BYTES,
             Kind::Weather(_) => MAX_WEATHER_BYTES,
@@ -608,6 +633,7 @@ impl Kind {
             Kind::History(icao) => Msg::History { icao, status, body },
             Kind::Export => Msg::Export { status, body },
             Kind::Watch => Msg::Watch { status, body },
+            Kind::Programs => Msg::Programs { status, body },
             Kind::Stats => Msg::Stats { status, body },
             Kind::Switch => Msg::Switch { status, body },
             Kind::Weather(airport) => Msg::Weather { airport, status, body },

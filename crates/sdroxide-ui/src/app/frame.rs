@@ -2132,6 +2132,7 @@ impl eframe::App for SdroxideApp {
         self.extras_window(&ctx, &mut cmds);
         self.antenna_window(&ctx);
         self.aircraft_watch_tick(&ctx);
+        self.programs_sync_tick(&ctx);
         self.aircraft_window(&ctx, &mut cmds);
         self.help.ui(&ctx);
         // Last, so it lands on top of everything else that opened this frame.
@@ -2329,7 +2330,19 @@ impl eframe::App for SdroxideApp {
             eframe::set_value(storage, "qso_log", &self.qso_log);
             // Same split: authoritative on native is config.toml (written on
             // change).
-            eframe::set_value(storage, "ui_settings", &self.ui_settings);
+            // The browser keeps nothing of PROGRAMS (TOUT, stars, filters,
+            // colours): the station does, and hands it back at the next start.
+            #[cfg(target_arch = "wasm32")]
+            let ui = {
+                let mut ui = self.ui_settings.clone();
+                ui.programs = Default::default();
+                ui.programs_colour_all = None;
+                ui.programs_colours.clear();
+                ui
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            let ui = &self.ui_settings;
+            eframe::set_value(storage, "ui_settings", &ui);
             // Control-input bindings: authoritative on native is input.json.
             eframe::set_value(storage, "input", &self.input.cfg);
             // The Morse trainer's progress, so it carries to the browser build.

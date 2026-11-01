@@ -22,6 +22,7 @@ of #371, #390 #357, #391 the two red tests, #392 #354, #393 #239). Open issues: 
 
 ## Now
 
+- PROGRAMS list overflow in long languages and wide windows (added by F4NRM, owned by Claude) — branch `f4nrm/kind-maxwell-8m2ipv`, same family as MEMORIES #373: columns built for the width left after the scroll bar, window floor follows the language, `schedule_preview` test renders the real window. Update: gap after the name capped at 40 characters, right-hand group against the edge. Update 2: PROGRAMS state (TOUT, stars, filters, colours) moves to the station — `/programs-state` route + client sync, nothing kept in the browser. Built and tested: server (7 tests), ui (22), types, wasm32 check; the sandbox needs `OPUS_URL` set to a local zip of opus 940d4e5 (git fetch + `git archive`) because the archive download is refused. Wacht op F4NRM's review.
 - PROGRAMS window layout and persistence (added by F4NRM, owned by Claude) — branch `f4nrm/stoic-fermi-a0z0zp`, PR pending: columns, Sort menus, chip-framed colour, two-row bar, saved filters. Wacht op F4NRM's review.
 - SAT Doppler for CAT rigs (added by Roy, owned by Roy/SP9TKN) — step 1+2a+2b+2c
   implemented on branch `fork/sat-doppler-cat`. MSI build available. Wacht op

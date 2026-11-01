@@ -949,6 +949,23 @@ pub struct ProgramsFilters {
     pub sort_desc: bool,
 }
 
+/// Everything the PROGRAMS window keeps, in one piece: the filters and sort, the
+/// TOUT chip (inside [`ProgramsFilters`]), the stations it starred, and the
+/// colours. **The station owns it**: a client that talks to a station reads this
+/// from it and writes every change back, so the browser keeps nothing of it and
+/// every screen sees the same window.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProgramsState {
+    pub filters: ProgramsFilters,
+    /// The starred stations, by name — what the waterfall labels are drawn from.
+    pub favourites: Vec<String>,
+    /// The colour of every station's label, if one was chosen.
+    pub colour_all: Option<[u8; 3]>,
+    /// The colour of single stations, by name.
+    pub colours: std::collections::BTreeMap<String, [u8; 3]>,
+}
+
 impl Default for ProgramsFilters {
     fn default() -> Self {
         ProgramsFilters {

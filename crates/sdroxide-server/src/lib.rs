@@ -23,6 +23,7 @@ mod session;
 mod session_cookie;
 mod signin;
 mod solar;
+mod programs_state;
 mod watchlist;
 
 use std::net::SocketAddr;
@@ -324,6 +325,8 @@ pub(crate) struct Station {
     /// The aircraft the operator asked to be told about, served on
     /// `/aircraft-watch`. The same from every screen that connects.
     pub watch: Arc<watchlist::WatchHub>,
+    /// `/programs-state`: the PROGRAMS window as the station keeps it.
+    pub programs: Arc<programs_state::ProgramsHub>,
     /// The one probe worker, kept here so a radio added later shares it rather
     /// than starting a second thread that would scan the same bus.
     probes: Arc<probe::ProbeHub>,
@@ -673,6 +676,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         aircraft: Arc::new(aircraft::AircraftHub::start(params.aircraft_online)),
         history: Arc::new(history::HistoryHub::start()),
         watch: Arc::new(watchlist::WatchHub::start()),
+        programs: Arc::new(programs_state::ProgramsHub::start()),
         probes: Arc::new(probe::ProbeHub::start(params.probe)),
         add: params.add_radio,
         remove: params.remove_radio,
@@ -735,6 +739,7 @@ pub async fn serve(params: ServerParams) -> Result<(), ServerError> {
         .route("/aircraft-history/{icao}", get(history::one_route))
         .route("/aircraft-export", get(history::export_route))
         .route("/aircraft-watch", get(watchlist::get_route).post(watchlist::post_route))
+        .route("/programs-state", get(programs_state::get_route).post(programs_state::post_route))
         // Where a browser trades its password for a signed cookie, and gives
         // it back. Both are plain HTTP because a cookie is a response header
         // and the socket handshake's headers are spent before the sign-in

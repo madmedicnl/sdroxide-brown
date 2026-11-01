@@ -32,6 +32,7 @@ pub(in crate::app) mod aircraft_search;
 pub(in crate::app) mod aircraft_share;
 pub(in crate::app) mod aircraft_stats;
 pub(in crate::app) mod aircraft_watch;
+pub(in crate::app) mod programs_sync;
 pub(in crate::app) mod alerts;
 pub(in crate::app) mod antenna;
 pub(in crate::app) mod auto_mode;
@@ -1019,6 +1020,8 @@ pub struct SdroxideApp {
     /// on, a favourited station's name is drawn permanently rather than only
     /// when the dial is within a kilohertz (see `spot_visible`).
     pub(in crate::app) broadcast_all: bool,
+    /// The PROGRAMS state as the station keeps it: read once, written on change.
+    pub(in crate::app) programs_sync: programs_sync::ProgramsSync,
     /// The operator's own HFDL channels, in kHz (`hfdl_channels.json`) — the
     /// busy assigned frequencies that are not in the published plan, drawn as
     /// one-click chips beside it in the HFDL panel.
@@ -2396,6 +2399,7 @@ impl SdroxideApp {
             // The chip as it was left. Only the chip: the favourites it made are
             // loaded above, and replaying `set_broadcast_all` would rewrite them.
             broadcast_all: ui_settings.programs.all,
+            programs_sync: Default::default(),
             hfdl_channels: load_hfdl_channels(storage),
             recording_jobs: load_recording_jobs(storage),
             jobs: Default::default(),
