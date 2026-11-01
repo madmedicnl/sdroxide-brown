@@ -574,8 +574,13 @@ mod v3dv_tests {
 /// `FLAVOR`, not upstream's hard-coded name: **the version in the title is
 /// exactly what tells two sdroxide installs apart**, and a title that said
 /// "sdroxide" while carrying upstream's spelling would defeat the whole point.
+///
+/// `VERSION`, not `CARGO_PKG_VERSION`: the crate version is `2.2.0` for every
+/// build of this line, so a title carrying it names no build at all — and would
+/// disagree with Settings → General, which shows the release the operator
+/// actually installed (#354).
 pub fn window_title(detail: &str) -> String {
-    let base = format!("{} {}", sdroxide_version::FLAVOR, env!("CARGO_PKG_VERSION"));
+    let base = format!("{} {}", sdroxide_version::FLAVOR, sdroxide_version::VERSION);
     if detail.is_empty() { base } else { format!("{base} — {detail}") }
 }
 

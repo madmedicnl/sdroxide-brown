@@ -5622,10 +5622,16 @@ mod settings_probe {
                 ..Default::default()
             };
             app.radio_cfg = cat_radio(&app);
-            let out = ctx.run_ui(input, |ui| {
+            let mut out = ctx.run_ui(input, |ui| {
                 eframe::App::ui(&mut app, ui, &mut eframe::Frame::_new_kittest())
             });
             textures.apply(&out.textures_delta);
+            // A test has no renderer, and `epaint` asserts in `Drop` that
+            // somebody took the deltas — applied above, thrown away here. The
+            // same guard `test_support::run_frame` puts on every other frame;
+            // without it this probe aborts the whole test binary instead of
+            // writing a picture.
+            out.textures_delta.clear();
             full = Some(out);
         }
         let full = full.expect("at least one frame");
@@ -5674,10 +5680,16 @@ mod settings_probe {
                 )),
                 ..Default::default()
             };
-            let out = ctx.run_ui(input, |ui| {
+            let mut out = ctx.run_ui(input, |ui| {
                 eframe::App::ui(&mut app, ui, &mut eframe::Frame::_new_kittest())
             });
             textures.apply(&out.textures_delta);
+            // A test has no renderer, and `epaint` asserts in `Drop` that
+            // somebody took the deltas — applied above, thrown away here. The
+            // same guard `test_support::run_frame` puts on every other frame;
+            // without it this probe aborts the whole test binary instead of
+            // writing a picture.
+            out.textures_delta.clear();
             full = Some(out);
         }
         let full = full.expect("a frame");
