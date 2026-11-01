@@ -3228,7 +3228,7 @@ wefax-finished-charts-collect-here = Bitmiş grafikler burada toplanır.
 wefax-delete-chart = Bu grafiği sil
 wefax-loading = yükleniyor…
 wefax-stations = İSTASYONLAR
-wefax-broadcast-radiofax-schedules-picking-one = Yayın radyofaks programları — birini seçmek skalayı ayarlar
+wefax-broadcast-radiofax-schedules-picking-one = Yayın radyofaks programları — birini seçmek skalayı ayarlar ve satır hızını ayarlar
 wefax-frequencies-are-published-carrier-dial = Frekanslar yayımlanmış taşıyıcılardır; skala bunun 1,9 kHz altına gider ve bu sizin için yapılır. Programlar değişir ve istasyonlar kapanır — bunu bir zaman çizelgesi değil, aramaya nereden başlayacağınız olarak görün.
 wefax-delete-chart-store = Bu grafiği depodan sil
 wefax-newer = ◀ DAHA YENİ
@@ -9030,3 +9030,5 @@ topbar-preset-reset = Sıfırla
 topbar-preset-reset-hint = Bu modun yerleşik ön ayarını geri yükle
 
 topbar-preset-cancel = İptal
+wefax-schedule = PROGRAM
+wefax-schedule-hint = Tarayıcıda { $station } istasyonunun yayımladığı programı açar — haritalar ve UTC saatleri.

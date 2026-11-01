@@ -3228,7 +3228,7 @@ wefax-finished-charts-collect-here = Finished charts collect here.
 wefax-delete-chart = Delete this chart
 wefax-loading = loading…
 wefax-stations = STATIONS
-wefax-broadcast-radiofax-schedules-picking-one = Broadcast radiofax schedules — picking one tunes the dial
+wefax-broadcast-radiofax-schedules-picking-one = Broadcast radiofax schedules — picking one tunes the dial and sets its line rate
 wefax-frequencies-are-published-carrier-dial = Frequencies are the published carrier; the dial goes 1.9 kHz below it, which is done for you. Schedules change and stations close — treat this as where to start looking, not a timetable.
 wefax-delete-chart-store = Delete this chart from the store
 wefax-newer = ◀ NEWER
@@ -9033,3 +9033,5 @@ topbar-preset-reset = Reset
 topbar-preset-reset-hint = Put back this mode's built-in preset
 
 topbar-preset-cancel = Cancel
+wefax-schedule = SCHEDULE
+wefax-schedule-hint = Opens the timetable { $station } publishes, charts and UTC times, in a browser.
