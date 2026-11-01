@@ -2734,10 +2734,6 @@ setup-fox-signals = Fox 信号
 setup-once = {" "}同时
 setup-simultaneous-transmissions-spaced-60-hz = 同时发射，彼此相隔 60 Hz。它们共用发射机的功率，因此信号越多，每个信号就越弱。
 setup-tx-audio = 发射音频
-
-    This level belongs to this mode alone. A mode you have never set starts from the FM figure, and the sideband modes start from their own — so a deviation set for 1200 baud never lands on FT8.
-
-    This level belongs to this mode alone: FT8, RTTY, PSK and MCW each keep their own, because they do not load a modulator the same way. The same rail is on the transmit strip, where you can reach it while you are transmitting.
 setup-deviation-fm = 频偏，FM
 setup-drive-ssb = 驱动，SSB
 setup-grid = 网格

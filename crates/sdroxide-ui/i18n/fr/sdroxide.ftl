@@ -2754,10 +2754,6 @@ setup-fox-signals = Signaux Fox
 setup-once = {" "}à la fois
 setup-simultaneous-transmissions-spaced-60-hz = Émissions simultanées, espacées de 60 Hz. Elles se partagent la puissance de l'émetteur, donc davantage de signaux signifie que chacun est plus faible.
 setup-tx-audio = Audio d'émission
-
-    Ce niveau appartient à ce seul mode. Un mode que vous n'avez jamais réglé part de la valeur FM, et les modes à bande latérale partent de leur propre valeur — si bien qu'une excursion réglée pour le 1200 bauds n'atterrit jamais sur le FT8.
-
-    Ce niveau appartient à ce seul mode : FT8, RTTY, PSK et MCW gardent chacun le leur, car ils ne chargent pas un modulateur de la même façon. La même réglette se trouve sur la barre d'émission, où vous pouvez l'atteindre pendant que vous émettez.
 setup-deviation-fm = excursion, en FM
 setup-drive-ssb = excitation, en BLU
 setup-grid = Carré

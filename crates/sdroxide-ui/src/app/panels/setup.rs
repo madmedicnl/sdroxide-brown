@@ -1036,3 +1036,50 @@ mod repeats_hover_tests {
         assert!(!off.contains("min."), "no duration for a disabled count: {off}");
     }
 }
+
+#[cfg(test)]
+mod caption_tests {
+    use crate::i18n::tr;
+
+    /// Every row caption in this dialog is one line, because the dialog is two
+    /// columns of an `egui::Grid` and a grid's first column is as wide as its
+    /// widest cell.
+    ///
+    /// **This is issue #357.** `setup-tx-audio` had a hint pasted into it —
+    /// the caption, a blank line, and two paragraphs meant for the level's
+    /// hover text — and the dialog draws that message with `ui.label`. The
+    /// label column then measured 1356 pt, the control column was pushed past
+    /// the window's right edge, and in a browser the FT8 setup window showed
+    /// its captions with no controls beside them at all.
+    ///
+    /// So: a caption is a caption. A hint belongs in an `on_hover_text`, under
+    /// its own id, and a message that carries both will be drawn as both.
+    #[test]
+    fn every_row_caption_is_one_line() {
+        let captions = [
+            ("setup-my-callsign", tr!("setup-my-callsign")),
+            ("setup-my-grid", tr!("setup-my-grid")),
+            ("setup-tx-period", tr!("setup-tx-period")),
+            ("setup-auto-sequence", tr!("setup-auto-sequence")),
+            ("setup-decode-depth", tr!("setup-decode-depth")),
+            ("setup-auto-tx-frequency", tr!("setup-auto-tx-frequency")),
+            ("setup-hold-tx-frequency", tr!("setup-hold-tx-frequency")),
+            ("setup-tx-watchdog", tr!("setup-tx-watchdog")),
+            ("setup-give-up-after", tr!("setup-give-up-after")),
+            ("setup-contest", tr!("setup-contest")),
+            ("setup-dxpedition", tr!("setup-dxpedition")),
+            ("setup-fox-signals", tr!("setup-fox-signals")),
+            ("setup-tx-audio", tr!("setup-tx-audio")),
+            ("setup-message-templates", tr!("setup-message-templates")),
+        ];
+        for (id, text) in captions {
+            assert!(
+                !text.contains('\n'),
+                "{id} is drawn as a row caption but carries {n} lines; the first \
+                 column of the grid takes the width of its widest cell, so the \
+                 controls beside it are pushed out of the window (#357): {text:?}",
+                n = text.lines().count()
+            );
+        }
+    }
+}
