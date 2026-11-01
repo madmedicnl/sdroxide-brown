@@ -113,7 +113,10 @@ fn key_up(tx_audio: bool) -> (Log, Option<String>) {
         std::thread::sleep(Duration::from_millis(20));
     }
 
-    h.cmd_tx.send(Command::SetTune(false)).unwrap();
+    // The engine may already have stopped — that is the fault this test is
+    // about ("the over dies on the first block"), so asking it to stop tuning
+    // is best effort rather than something to unwrap on.
+    let _ = h.cmd_tx.send(Command::SetTune(false));
     drop(h.cmd_tx);
     if let Some(t) = thread {
         let _ = t.join();
