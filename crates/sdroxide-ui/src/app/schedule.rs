@@ -564,7 +564,7 @@ impl SdroxideApp {
                 for s in &rows[range] {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = GAP;
-                        cell(ui, cols.freq, row_h, egui::Align::Max, |ui| {
+                        cell(ui, cols.freq, row_h, egui::Align::Min, |ui| {
                             ui.label(
                                 RichText::new(format!("{}", s.freq_khz.round() as i64)).monospace(),
                             );
@@ -725,7 +725,7 @@ impl SdroxideApp {
                 };
                 cell(ui, *w, row_h, egui::Align::Min, |ui| {
                     egui::ComboBox::from_id_salt(("sched-sort", *col as u8))
-                        .width((*w - 20.0).min(SORT_MENU_MAX_W))
+                        .width((*w).min(SORT_MENU_MAX_W))
                         .selected_text(
                             RichText::new(format!("{}{arrow}", tr!("schedule-sort"))).size(10.5),
                         )
@@ -779,11 +779,8 @@ impl SdroxideApp {
         let names_h = 18.0;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = GAP;
-            for (col, w, name) in &data {
-                // The frequency is a number: its name sits over its right edge.
-                let align =
-                    if *col == ProgramsSort::Freq { egui::Align::Max } else { egui::Align::Min };
-                cell(ui, *w, names_h, align, |ui| {
+            for (_, w, name) in &data {
+                cell(ui, *w, names_h, egui::Align::Min, |ui| {
                     ui.label(RichText::new(name).size(10.5).color(crate::theme::gray(150)));
                 });
             }
@@ -922,7 +919,9 @@ impl Cols {
 
     fn floors(ui: &egui::Ui, labels: &ColLabels, local: bool) -> Self {
         let font = egui::FontId::proportional(10.5);
-        let sort_w = crate::chrome::text_width(ui, &labels.sort, font) + 28.0;
+        // The SORT menu is as wide as its text, arrow and caret need — a
+        // sorted one reads "SORT ▲" and is the widest. The column is at least that.
+        let sort_w = crate::chrome::text_width(ui, &labels.sort, font) + 42.0;
         let chip = |label: &str| crate::chrome::chip_width(ui, label, None);
         let colour = super::colour_edit::colour_swatch_framed_width();
         let star = chip("PST").max(30.0);
@@ -1281,7 +1280,7 @@ mod fit_and_keep {
                     log: message(lang, "topbar-chip-log"),
                 };
                 let need = Cols::floor_width(ui, &labels, true) + bar + chrome;
-                assert!(need <= 1100.0, "{lang} needs {need:.0} pt for its list");
+                assert!(need <= 1150.0, "{lang} needs {need:.0} pt for its list");
             }
         })
         .drop_without_applying_deltas();
