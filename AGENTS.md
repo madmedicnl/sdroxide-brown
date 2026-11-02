@@ -31,6 +31,31 @@ and release asset names stay shared with upstream. Origin: `madmedicnl/sdroxide-
 - CTR on = the frequency is always in the middle With the CTR chip lit the red line is at the centre of the waterfall on every frame — wheel, pinch, keyboard zoom, pan, fit, mode or decoder change, every radio, the whole bandwidth, zoom in or out, fast or slow. No drift, no jitter, no off/on to re-centre. Modes keep their preset bandwidth; CTR only moves the line. Touching waterfall or zoom code: keep the ctr_zoom_sim tests in widgets/spectrum_view.rs green and add the gesture.
 - Never perform a zoom correction on all radios at the same time. Each radio is different. A correction should not affect the other radios (example: PLUTO = 1 radio = 1 Interface radio).
 
+## 11 m / CB and the FT modes: ask madmedicnl first
+
+11 m is the core audience of this program, and the people there have no CAT,
+no meters and no second chance: the sound card *is* the interface. Work that
+touches the CB path directly is therefore **put to madmedicnl before a branch
+or a PR exists**, not after it is written. In particular:
+
+- the per-band transmit settings — the transmit band list, confirming it, what
+  is and is not allowed on 11 m, the CB permission and its relation to the band
+  tick;
+- the USB sound card as a radio interface — how it is opened, buffered, paced
+  and named, and anything that changes which device or which rate is used;
+- the FT modes (FT8, FT4, FT2, JS8) and anything in the record or transmit
+  audio chain under them.
+
+No "improvement" and no tidy-up under those three without that conversation. A
+fault may always be reported at once; the question is whether we fix it the way
+proposed, not whether it exists.
+
+Ease of use counts as part of the fix. A setting that costs more clicks, more
+text or more choices than it is worth is a bad trade even when it is correct —
+and the operator at the bench is the one who pays for it. Nobody is pushed to
+the back of the queue for being the reason the program exists.
+
+
 ## F4NRM's areas (PR required, never straight to main)
 
 F4NRM owns: decoders SSTV, DAB, NAVTEX, APRS, WFM, DSC, Olivia, RTTY, WEFAX,

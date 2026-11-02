@@ -80,6 +80,11 @@ dial + 1500 Hz), like SSTV's picture. Touching waterfall or zoom code: keep the 
   follow it** (no `subscribe_pr_activity`) unless the user says so.
 - You must complete TODO.md
 - You must write on multiple lines if you are doing multiple PRs and complete the TODO.md file.
+- **11 m / CB and the FT modes are the core audience: ask madmedicnl before
+  branching.** Per-band transmit settings, the USB sound card as a radio
+  interface, and the FT modes (FT8/FT4/FT2/JS8) and their audio chain. A fault
+  may be reported at once; whether we fix it the way proposed is his call. Ease
+  of use counts as part of the fix. See the same rule in `AGENTS.md`.
 
 ## Building in a sandbox without GitHub archive access (Opus)
 
