@@ -12020,6 +12020,58 @@ impl Engine {
                 }
             }
 
+            ImportBandPlan(text) => {
+                // Validate first: a bad plan must not destroy the working file.
+                let plan = match serde_json::from_str::<sdroxide_types::BandPlan>(&text) {
+                    Ok(p) if p.problems().is_empty() => p,
+                    Ok(p) => {
+                        let problems = p.problems().join("; ");
+                        self.notice(&format!("Import failed: {problems}"));
+                        return;
+                    }
+                    Err(e) => {
+                        self.notice(&format!("Import failed: not a band plan ({e})"));
+                        return;
+                    }
+                };
+                // Backup the previous plan.
+                let dir = match sdroxide_config::config_dir() {
+                    Ok(d) => d,
+                    Err(e) => {
+                        self.notice(&format!("Import failed: {e}"));
+                        return;
+                    }
+                };
+                let path = dir.join(sdroxide_config::BAND_PLAN_FILE);
+                if path.exists() {
+                    let bak = dir.join(format!("{}.bak", sdroxide_config::BAND_PLAN_FILE));
+                    let _ = std::fs::copy(&path, &bak);
+                }
+                // Write and reload.
+                if let Err(e) = sdroxide_config::save_band_plan(&plan) {
+                    self.notice(&format!("Import failed: {e}"));
+                    return;
+                }
+                let loaded = sdroxide_config::load_band_plan();
+                let custom = !loaded.is_default();
+                sdroxide_types::set_band_plan(loaded);
+                self.state.band = Band::containing(self.state.active_freq_hz());
+                self.relay_bands_told = None;
+                // An imported plan (not a shipped preset) changes the band
+                // edges, so the transmit-band confirmation no longer covers
+                // what it said it did. Reset it so the operator re-checks.
+                self.tx_bands_confirmed = false;
+                if let Some(cfg) = self.state.rx.get_mut(0) {
+                    // best-effort: the radio config is re-sent by the client
+                }
+                self.emit_station_config();
+                self.notice(if custom {
+                    "Band plan imported. The station is running on it."
+                } else {
+                    "Band plan imported — it matches the built-in IARU tables."
+                });
+            }
+
             // This radio's own `radio.json` (no RadioState change → return
             // before the State emit below). The engine is the one that writes
             // it: the file is in *this* machine's config directory, and the

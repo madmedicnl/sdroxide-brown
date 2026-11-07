@@ -551,7 +551,16 @@ const RTL433_FLEX_SEED: &str = "\
 /// silently — their spacing, their ordering and anything they added to the
 /// `readme` survive until they themselves pick another plan.
 pub fn save_band_plan(plan: &sdroxide_types::BandPlan) -> Result<(), ConfigError> {
-    write_atomic(&config_dir()?, BAND_PLAN_FILE, &plan.to_json_document())
+    let dir = config_dir()?;
+    let path = dir.join(BAND_PLAN_FILE);
+    // Keep the previous plan as a backup so a bad import cannot destroy
+    // the working file. The backup is best-effort: a missing or unreadable
+    // previous file is not an error.
+    if path.exists() {
+        let bak = dir.join(format!("{BAND_PLAN_FILE}.bak"));
+        let _ = fs::copy(&path, &bak);
+    }
+    write_atomic(&dir, BAND_PLAN_FILE, &plan.to_json_document())
 }
 
 /// The operator's own receive filter presets (`filter_presets.json`), each

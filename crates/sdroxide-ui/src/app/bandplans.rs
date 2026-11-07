@@ -23,7 +23,11 @@ pub const GERMANY_NRW: &str = include_str!("../../assets/bandplans/bandplan-de-n
 /// A band plan parsed from the text of a JSON file — a shipped preset or one
 /// the operator imported — or `None` when it does not fit this build's plan.
 pub fn parse_plan(json: &str) -> Option<BandPlan> {
-    serde_json::from_str::<BandPlan>(json).ok()
+    let plan: BandPlan = serde_json::from_str(json).ok()?;
+    if !plan.problems().is_empty() {
+        return None;
+    }
+    Some(plan)
 }
 
 /// Whether `plan` is exactly the Germany (NRW) preset, so the chooser can name

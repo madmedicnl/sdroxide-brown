@@ -480,21 +480,12 @@ impl SdroxideApp {
     pub(in crate::app) fn poll_band_plan_import(&mut self, cmds: &mut Vec<Command>) {
         let loaded = self.band_plan_import_inbox.lock().ok().and_then(|mut g| g.take());
         let Some(loaded) = loaded else { return };
-        // Said on screen rather than on stderr: an operator who pressed the
-        // button is looking at the window, and a parse failure has to name
-        // itself or they would think the click did nothing.
         self.band_plan_note = Some(match loaded {
             Err(e) => tr!("settings-general-import-failed", error = e),
-            Ok(loaded) => match crate::app::bandplans::parse_plan(&loaded.text) {
-                None => tr!("settings-general-band-plan-import-not-a-plan"),
-                Some(plan) => match sdroxide_config::save_band_plan(&plan) {
-                    Ok(()) => {
-                        cmds.push(Command::ReloadBandPlan);
-                        tr!("settings-general-band-plan-imported")
-                    }
-                    Err(e) => tr!("settings-general-import-failed", error = e.to_string()),
-                },
-            },
+            Ok(loaded) => {
+                cmds.push(Command::ImportBandPlan(loaded.text));
+                tr!("settings-general-band-plan-imported")
+            }
         });
     }
 
