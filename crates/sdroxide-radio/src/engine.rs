@@ -12027,15 +12027,10 @@ impl Engine {
                     return;
                 }
                 // Validate first: a bad plan must not destroy the working file.
-                let plan = match serde_json::from_str::<sdroxide_types::BandPlan>(&text) {
-                    Ok(p) if p.problems().is_empty() => p,
-                    Ok(p) => {
-                        let problems = p.problems().join("; ");
-                        self.notice(&format!("Import failed: {problems}"));
-                        return;
-                    }
-                    Err(e) => {
-                        self.notice(&format!("Import failed: not a band plan ({e})"));
+                let plan = match sdroxide_config::parse_band_plan(&text) {
+                    Some(p) => p,
+                    None => {
+                        self.notice("Import failed: not a band plan or has problems.");
                         return;
                     }
                 };

@@ -563,6 +563,16 @@ pub fn save_band_plan(plan: &sdroxide_types::BandPlan) -> Result<(), ConfigError
     write_atomic(&dir, BAND_PLAN_FILE, &plan.to_json_document())
 }
 
+/// Parse a band plan from JSON text, returning `None` when it does not fit
+/// this build's plan or has problems.
+pub fn parse_band_plan(text: &str) -> Option<sdroxide_types::BandPlan> {
+    let plan: sdroxide_types::BandPlan = serde_json::from_str(text).ok()?;
+    if !plan.problems().is_empty() {
+        return None;
+    }
+    Some(plan)
+}
+
 /// The operator's own receive filter presets (`filter_presets.json`), each
 /// standing in for one of a mode's built-in chips. A missing file is none.
 pub fn load_filter_presets() -> Vec<sdroxide_types::CustomFilterPreset> {
