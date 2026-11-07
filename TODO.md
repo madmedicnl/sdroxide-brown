@@ -18,6 +18,8 @@ State: `main` at crate 2.3.0, PROTO_VERSION 271 (0x10F). Latest release v2.2.3.6
   kept current in the state line.
 
 ## Now
+- **#427 SSTV stays in RX on voice** (added by F4NRM, owned by Claude) — a free-run lock that the next lines do not bear out used to draw the whole mode (PD290 is nearly five minutes). It now goes back to hunting and the panel wipes the strip. The volume slider is not in the decoder's audio; needs a look on air.
+- **#444 WEFAX stops at the thick black line** (added by DK8JV, owned by Claude) — a plain thick black line's bright patch could pass as a phasing pulse. The pulse width is now capped at twice the standard width in strict mode. Slant calculation and rephasing unaffected for real phasing lines.
 - S-meter during TX on CAT radios (added by Roy, owned by Roy) - PR #513 open.
 
 - **PR #493 â€” radiosondes 1/6: the RS41 decoder on its own lane** (added by F4NRM, owned by Claude): the AIRCRAFT hint promised radiosondes and nothing decoded them. `xng-mode-sonde` (clean-room, anchored on rs1729/RS) joins the workspace next to `xng-mode-hfdl`; new `sdroxide-sonde` crate (worker thread, bounded I/Q queue, one track per serial); engine lane `sonde_ddc` (48 kS/s, resampled onto the decoder's exact rate like HFDL), `Command::SetSondeConfig`, `sonde.json`, `RadioEvent::SondeStatus`. Not a `Mode`: the radio keeps its mode, so no CAT crate changes. Wire 269 â†’ **270** (`0x5A`), postcard round trip. Tests on synthetic GFSK IQ of the rs1729 frame (serial, position, altitude); not run on air here.
