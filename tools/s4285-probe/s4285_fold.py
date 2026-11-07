@@ -109,7 +109,7 @@ def main():
     print(f"fold score {score:.3f} at frame phase {tau} symbols, offset {w:+.0f} Hz "
           f"({used} frames)")
     # where does the frame stand up? the sync and reference halves should
-    np.save("/tmp/opencode/s4285/folded.npy", folded)
+    np.save("/tmp/sdroxide/s4285/folded.npy", folded)
     half = [np.abs(folded[i * 64:(i + 1) * 64]).mean() for i in range(4)]
     print("folded amplitude by quarter of the frame:",
           "  ".join(f"{h:.4f}" for h in half))

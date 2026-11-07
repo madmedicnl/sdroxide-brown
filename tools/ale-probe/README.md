@@ -13,7 +13,7 @@ and from a carrier (one line).
 
 ```sh
 cd ../rsp1-capture && cargo build --release
-./target/release/rspcap 8992000 192000 600 /tmp/opencode/ale-8992.f32 25
+./target/release/rspcap 8992000 192000 600 /tmp/sdroxide/ale-8992.f32 25
 ```
 
 - **192 kHz is accepted** by an RSP1 (unlike 48 kHz, which it refuses while
@@ -44,12 +44,12 @@ python3 watch.py 3      # three rounds; about nine minutes a round at 45 s per c
 ```
 
 A round covers 11 channels: eight amateur HFN channels and three military ones,
-and a hit is left in `/tmp/opencode/ale-watch/` as `hit-<khz>-<utc>.f32`.
+and a hit is left in `/tmp/sdroxide/ale-watch/` as `hit-<khz>-<utc>.f32`.
 
 ## 2b. Scan one file for the shape
 
 ```sh
-python3 scan.py /tmp/opencode/ale-8992.f32
+python3 scan.py /tmp/sdroxide/ale-8992.f32
 ```
 
 Builds a spectrogram of the whole slice and scores every 2 kHz-wide, 8-sub-band
@@ -60,8 +60,8 @@ capture) and `offset=` (Hz above the dial, the centre of the tone block).
 ## 3. Cut one candidate and decode it
 
 ```sh
-python3 cut.py /tmp/opencode/ale-8992.f32 123.0 47_000 8 /tmp/opencode/cand.f32
-SDROXIDE_ALE_SAMPLE=/tmp/opencode/cand.f32 \
+python3 cut.py /tmp/sdroxide/ale-8992.f32 123.0 47_000 8 /tmp/sdroxide/cand.f32
+SDROXIDE_ALE_SAMPLE=/tmp/sdroxide/cand.f32 \
   cargo test -p sdroxide-dsp --release --lib ale:: -- --ignored --nocapture
 ```
 

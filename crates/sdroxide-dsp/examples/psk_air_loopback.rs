@@ -6,11 +6,11 @@
 //! ```sh
 //! # 1. Audio a transceiver can be keyed with: PSK31 or PSK63, known text.
 //! cargo run --release -p sdroxide-dsp --example psk_air_loopback -- \
-//!     tx 31 /tmp/opencode/psk31.wav
+//!     tx 31 /tmp/sdroxide/psk31.wav
 //!
 //! # 2. Decode what the receiver heard, from a CF32 capture.
 //! cargo run --release -p sdroxide-dsp --example psk_air_loopback -- \
-//!     decode /tmp/opencode/psk31.raw 31
+//!     decode /tmp/sdroxide/psk31.raw 31
 //! ```
 //!
 //! The point of it is that the text is known and the channel is ours: a word the

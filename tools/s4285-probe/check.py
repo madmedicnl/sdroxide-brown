@@ -1,7 +1,7 @@
 import sys, numpy as np
-sys.path.insert(0,'/tmp/opencode')
+sys.path.insert(0,'/tmp/sdroxide')
 from readwav import read_wav
-a,sr,_=read_wav('/tmp/opencode/skysweep/sta4285.wav')
+a,sr,_=read_wav('/tmp/sdroxide/skysweep/sta4285.wav')
 # analytic envelope of the band-passed signal (300-3300 Hz)
 A=np.fft.fft(a); f=np.fft.fftfreq(len(a),1/sr)
 A[(np.abs(f)<300)|(np.abs(f)>3300)]=0

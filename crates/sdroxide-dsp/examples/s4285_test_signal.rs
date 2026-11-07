@@ -1,7 +1,7 @@
 //! A bench signal generator: an Annex E coded STANAG 4285 transmission, as a WAV.
 //!
 //!     cargo run --release -p sdroxide-dsp --example s4285_test_signal -- \
-//!         /tmp/opencode/s4285-tx.wav 600 "RYRY TEST RYRY"
+//!         /tmp/sdroxide/s4285-tx.wav 600 "RYRY TEST RYRY"
 //!
 //! **This is not the mode's transmitter.** `Mode::Stanag4285` is receive-only and
 //! stays that way: what this generates is a known-good signal to prove the

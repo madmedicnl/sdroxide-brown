@@ -897,7 +897,7 @@ mod tests {
         if std::env::var("SDROXIDE_SSTV_DUMP").is_ok() {
             let (rgb, ww, hh2) =
                 compose(w, h, &src, w, h, "TEST", Some(&banner(true, 175)), &style);
-            let path = "/tmp/opencode/sstv-banner-bottom.png";
+            let path = "/tmp/sdroxide/sstv-banner-bottom.png";
             let _ = encode_png(&rgb, ww, hh2).map(|png| std::fs::write(path, png));
             eprintln!("wrote {path}");
         }

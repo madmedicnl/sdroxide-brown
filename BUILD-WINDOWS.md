@@ -32,7 +32,7 @@ either, and MSVC is much faster for the UI/wasm loop.
   `~\.cargo\bin` — cmake's patch step needs a POSIX `sh`/`patch` on the PATH.
 - **Offline Opus archive** for RADE's CMake `ExternalProject`, so the build does
   not reach the network:
-  `C:/Users/bigle/AppData/Local/Temp/opencode/opus-pinned.zip`
+  `D:/sdrfull/tools/opus/opus-pinned.zip`
   (pinned commit `940d4e5`, served via the `OPUS_URL` env var that
   `crates/sdroxide-rade/build.rs` passes to CMake).
   *Note:* `OPUS_URL` must be a **plain Windows path**, not `file:///C:/...` —

@@ -20,7 +20,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RSPCAP = os.path.normpath(os.path.join(HERE, "..", "rsp1-capture", "target", "release", "rspcap"))
-OUT = "/tmp/opencode/ale-watch"
+OUT = "/tmp/sdroxide/ale-watch"
 
 # kHz, in the order to visit them.
 CHANNELS = [

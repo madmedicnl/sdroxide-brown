@@ -12,7 +12,7 @@ so only a handful of audio extractions need the decoder.
 import sys
 import numpy as np
 
-path = sys.argv[1] if len(sys.argv) > 1 else "/tmp/opencode/ale-11175.f32"
+path = sys.argv[1] if len(sys.argv) > 1 else "/tmp/sdroxide/ale-11175.f32"
 rate = 192_000.0
 nfft = 8192          # 23.4 Hz bins
 hop = 8192           # 42.7 ms per frame

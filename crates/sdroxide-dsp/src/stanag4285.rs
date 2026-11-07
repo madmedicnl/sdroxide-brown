@@ -3270,10 +3270,10 @@ mod tests {
         eprintln!("pair order swapped: best {} {} of 32 at {}", b2.0, b2.2, b2.1);
         if b2.2 > a.2 {
             let text: String = swapped.iter().map(|b| if *b == 1 { '1' } else { '0' }).collect();
-            std::fs::write("/tmp/opencode/s4285_bits_swapped.txt", &text).expect("write");
+            std::fs::write("/tmp/sdroxide/s4285_bits_swapped.txt", &text).expect("write");
         }
         let text: String = bits.iter().map(|b| if *b == 1 { '1' } else { '0' }).collect();
-        std::fs::write("/tmp/opencode/s4285_bits.txt", &text).expect("write");
+        std::fs::write("/tmp/sdroxide/s4285_bits.txt", &text).expect("write");
         // Where the SOM and EOM patterns land, and how far off they are.
         let pat = |p: u32| -> Vec<u8> { (0..32).map(|k| ((p >> (31 - k)) & 1) as u8).collect() };
         for (name, p) in [("SOM", fec::SOM), ("EOM", fec::EOM)] {
@@ -3375,7 +3375,7 @@ mod tests {
     /// decisions.**
     ///
     /// The reference implementation (`luwangg/signal-analysis`, driven by a
-    /// small C++ driver in `/tmp/opencode/sa`) decodes this station's capture:
+    /// small C++ driver in `/tmp/sdroxide/sa`) decodes this station's capture:
     /// its ITA2 reading is `RYRYRYRY…`. This takes *its* 128 soft decisions per
     /// frame, runs **our** deinterleaver and Viterbi over them, and compares the
     /// bits. If they agree, the two implementations' coding chain is the same and
@@ -3385,9 +3385,9 @@ mod tests {
     #[ignore]
     fn the_reference_soft_decisions_through_our_chain() {
         let soft_path = std::env::var("SDROXIDE_S4285_REF_SOFT")
-            .unwrap_or_else(|_| "/tmp/opencode/ref_soft.bin".into());
+            .unwrap_or_else(|_| "/tmp/sdroxide/ref_soft.bin".into());
         let bits_path = std::env::var("SDROXIDE_S4285_REF_BITS")
-            .unwrap_or_else(|_| "/tmp/opencode/ref_bits_clean.txt".into());
+            .unwrap_or_else(|_| "/tmp/sdroxide/ref_bits_clean.txt".into());
         let raw = std::fs::read(&soft_path).expect("ref soft");
         let theirs = std::fs::read_to_string(&bits_path).expect("ref bits");
         let theirs: Vec<u8> =
@@ -3412,7 +3412,7 @@ mod tests {
         }
         eprintln!("ours: {} bits", ours.len());
         let text: String = ours.iter().map(|b| if *b == 1 { '1' } else { '0' }).collect();
-        let _ = std::fs::write("/tmp/opencode/our_bits_on_ref_soft.txt", &text);
+        let _ = std::fs::write("/tmp/sdroxide/our_bits_on_ref_soft.txt", &text);
         let n = ours.len().min(theirs.len());
         let same = (0..n).filter(|&i| ours[i] == theirs[i]).count();
         eprintln!("agree on {same} of {n} bits ({:.1}%)", 100.0 * same as f64 / n as f64);
@@ -3580,7 +3580,7 @@ mod tests {
         }
         eprintln!("soft values {} ({} frames)", soft.len(), soft.len() / 128);
         let n = bytes.len() / 128 * 128;
-        std::fs::write("/tmp/opencode/our_soft.bin", &bytes[..n]).expect("write");
+        std::fs::write("/tmp/sdroxide/our_soft.bin", &bytes[..n]).expect("write");
     }
 
     /// **Which wiring of the deinterleaver reproduces the reference decoder's own
@@ -3596,9 +3596,9 @@ mod tests {
     #[ignore]
     fn which_interleaver_wiring_matches_the_reference() {
         let soft_path = std::env::var("SDROXIDE_S4285_REF_SOFT")
-            .unwrap_or_else(|_| "/tmp/opencode/ref_soft.bin".into());
+            .unwrap_or_else(|_| "/tmp/sdroxide/ref_soft.bin".into());
         let bits_path = std::env::var("SDROXIDE_S4285_REF_BITS")
-            .unwrap_or_else(|_| "/tmp/opencode/ref_bits_clean.txt".into());
+            .unwrap_or_else(|_| "/tmp/sdroxide/ref_bits_clean.txt".into());
         let raw = std::fs::read(&soft_path).expect("ref soft");
         let theirs_txt = std::fs::read_to_string(&bits_path).expect("ref bits");
         let theirs: Vec<u8> =

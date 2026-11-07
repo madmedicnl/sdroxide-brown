@@ -1,5 +1,5 @@
 import sys, numpy as np
-sys.path.insert(0,'/tmp/opencode')
+sys.path.insert(0,'/tmp/sdroxide')
 from readwav import read_wav
 SPS=8; BAUD=2400.0
 def lfsr(taps,n,init):
@@ -9,7 +9,7 @@ def lfsr(taps,n,init):
         for tt in taps: fb^=st[tt]
         st=st[1:]+[fb]
     return np.array(o)
-a,sr,_=read_wav('/tmp/opencode/skysweep/sta4285.wav')
+a,sr,_=read_wav('/tmp/sdroxide/skysweep/sta4285.wav')
 t=np.arange(len(a))/sr
 bb=a*np.exp(-2j*np.pi*1800*t); h=np.hanning(151); h/=h.sum(); bb=np.convolve(bb,h,'same')
 FS=BAUD*SPS; n=int(len(bb)*FS/sr); k=np.arange(n)

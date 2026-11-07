@@ -5,8 +5,8 @@
 // signal at 12 kHz. Nothing here changes the decoder — this only replaces the
 // Octave glue, so the same bits come out without Octave installed.
 //
-//   ffmpeg -i capture.wav -ac 1 -ar 12000 -f f32le /tmp/opencode/cap.raw
-//   ./driver /tmp/opencode/cap.raw 2 > bits.txt
+//   ffmpeg -i capture.wav -ac 1 -ar 12000 -f f32le /tmp/sdroxide/cap.raw
+//   ./driver /tmp/sdroxide/cap.raw 2 > bits.txt
 //
 // argv[1] = raw mono f32le at 12 kHz, argv[2] = modulation bits per symbol.
 
@@ -95,11 +95,11 @@ int main(int argc, char** argv) {
   }
 
   fprintf(stderr, "chunks %d bits %zu frames %zu\n", d.chunks, d.bits.size(), d.soft.size()/128);
-  if (FILE* sf = fopen("/tmp/opencode/ref_soft.bin", "wb")) {
+  if (FILE* sf = fopen("/tmp/sdroxide/ref_soft.bin", "wb")) {
     fwrite(d.soft.data(), 1, d.soft.size(), sf);
     fclose(sf);
   }
-  if (FILE* bf = fopen("/tmp/opencode/ref_bits_clean.txt", "w")) {
+  if (FILE* bf = fopen("/tmp/sdroxide/ref_bits_clean.txt", "w")) {
     for (size_t i = 0; i < d.bits.size(); ++i) fputc(d.bits[i] ? '1' : '0', bf);
     fclose(bf);
   }

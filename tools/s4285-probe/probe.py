@@ -1,5 +1,5 @@
 import sys, numpy as np
-sys.path.insert(0,'/tmp/opencode')
+sys.path.insert(0,'/tmp/sdroxide')
 from readwav import read_wav
 
 BAUD=2400.0; CENTRE=1800.0; FRAME=256; SYNC=80; SPS=8   # samples per symbol after resampling
@@ -18,7 +18,7 @@ bits = lfsr([9,4], 511*3, 0b1).reshape(-1,3)
 n_sc = bits[:,0] + 2*bits[:,1] + 4*bits[:,2]
 scr = np.exp(1j*np.pi/4*n_sc)
 
-a, sr, meta = read_wav('/tmp/opencode/skysweep/sta4285.wav')
+a, sr, meta = read_wav('/tmp/sdroxide/skysweep/sta4285.wav')
 t = np.arange(len(a))/sr
 bb = a*np.exp(-2j*np.pi*CENTRE*t)
 h=np.hanning(201); h/=h.sum()                       # ~±1.5 kHz at 11025

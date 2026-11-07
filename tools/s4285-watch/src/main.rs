@@ -1,8 +1,8 @@
 //! Watch one frequency until a STANAG 4285 frame appears, then record it.
 //!
 //! ```text
-//! s4285watch 6348000 62500 /tmp/opencode/s4285 [gain] [threshold] [dwell]
-//! s4285watch 6348000,5215600,5155000 62500 /tmp/opencode/s4285
+//! s4285watch 6348000 62500 /tmp/sdroxide/s4285 [gain] [threshold] [dwell]
+//! s4285watch 6348000,5215600,5155000 62500 /tmp/sdroxide/s4285
 //! s4285watch --selftest
 //! ```
 //!

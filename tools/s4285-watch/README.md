@@ -7,8 +7,8 @@ STANAG 4285 frame is actually there**.
 
 ```sh
 cargo build --release
-./target/release/s4285watch 6348000 62500 /tmp/opencode/s4285 45 3.0 6
-./target/release/s4285watch 6348000,5215600,5155000,4232000,12857e3 62500 /tmp/opencode/s4285
+./target/release/s4285watch 6348000 62500 /tmp/sdroxide/s4285 45 3.0 6
+./target/release/s4285watch 6348000,5215600,5155000,4232000,12857e3 62500 /tmp/sdroxide/s4285
 ./target/release/s4285watch --selftest
 ```
 
@@ -52,7 +52,7 @@ night costs a few megabytes rather than tens of gigabytes.
 Read a file back with the probe:
 
 ```sh
-cd ../s4285-probe && ./s4285_verdict.py /tmp/opencode/s4285/6348.000kHz-20261022-031500Z.wav
+cd ../s4285-probe && ./s4285_verdict.py /tmp/sdroxide/s4285/6348.000kHz-20261022-031500Z.wav
 ```
 
 That prints the frame period, the best lag anywhere in 60–160 ms, and an 8PSK

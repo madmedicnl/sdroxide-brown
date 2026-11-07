@@ -32,8 +32,8 @@ g++ -O2 -std=c++17 -Iinclude \
 ./driver cap.raw 2 1800 >/dev/null      # 2 = BPSK; the carrier is mixed to 0 Hz
 ```
 
-It writes `/tmp/opencode/ref_bits_clean.txt` (its decoded bit stream) and
-`/tmp/opencode/ref_soft.bin` (128 soft decisions per frame — its equaliser's
+It writes `/tmp/sdroxide/ref_bits_clean.txt` (its decoded bit stream) and
+`/tmp/sdroxide/ref_soft.bin` (128 soft decisions per frame — its equaliser's
 output, which is what the A/B test in the DSP crate consumes).
 
 `-include` is not tidiness: the reference's headers assume an Octave prelude and

@@ -10,7 +10,7 @@ import argparse
 import sys
 import time
 
-sys.path.insert(0, "/tmp/opencode/atsmini")
+sys.path.insert(0, "/tmp/sdroxide/atsmini")
 from probe import Radio, fmt, dial_hz  # noqa: E402
 
 

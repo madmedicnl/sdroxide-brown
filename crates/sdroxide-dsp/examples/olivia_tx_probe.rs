@@ -9,7 +9,7 @@
 //! written to a file instead.
 //!
 //! ```sh
-//! cargo run -p sdroxide-dsp --example olivia_tx_probe -- "CQ CQ DE W1AW" /tmp/opencode/olivia_tx.wav
+//! cargo run -p sdroxide-dsp --example olivia_tx_probe -- "CQ CQ DE W1AW" /tmp/sdroxide/olivia_tx.wav
 //! ```
 //!
 //! then open that WAV in **fldigi** (Olivia, same tones/bandwidth) or
@@ -38,7 +38,7 @@ const AUDIO_HZ: f64 = 1500.0;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let msg = args.next().unwrap_or_else(|| "CQ CQ DE W1AW".into());
-    let path = args.next().unwrap_or_else(|| "/tmp/opencode/olivia_tx.wav".into());
+    let path = args.next().unwrap_or_else(|| "/tmp/sdroxide/olivia_tx.wav".into());
 
     // 16 tones over 500 Hz is the common Olivia format — 31.25 Hz spacing, which
     // is also what the mode's own tests use. Told to the user, because a decoder

@@ -7,7 +7,7 @@ use num_complex::Complex32;
 use sdroxide_dab::DabReceiver;
 
 fn main() {
-    let raw = std::fs::read("/tmp/opencode/dab-lab/nancy.cs16").unwrap();
+    let raw = std::fs::read("/tmp/sdroxide/dab-lab/nancy.cs16").unwrap();
     let native: Vec<Complex32> = raw
         .chunks_exact(4)
         .map(|b| {
