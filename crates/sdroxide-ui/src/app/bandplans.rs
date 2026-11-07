@@ -135,4 +135,15 @@ mod tests {
             "the personal remark must be gone"
         );
     }
+
+    /// The shipped NRW plan keeps medium wave where it belongs (#546).
+    #[test]
+    fn the_shipped_nrw_plan_keeps_medium_wave() {
+        let plan = parse_plan(GERMANY_NRW).expect("the shipped preset must parse");
+        assert_eq!(
+            plan.region(sdroxide_types::Region::R1).containing(1_000_000.0),
+            sdroxide_types::Band::Mw,
+            "MW listening must survive the shipped plan"
+        );
+    }
 }

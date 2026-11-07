@@ -12021,6 +12021,11 @@ impl Engine {
             }
 
             ImportBandPlan(text) => {
+                // Guard against oversized imports.
+                if text.len() > 1_000_000 {
+                    self.notice("Import failed: the file is too large.");
+                    return;
+                }
                 // Validate first: a bad plan must not destroy the working file.
                 let plan = match serde_json::from_str::<sdroxide_types::BandPlan>(&text) {
                     Ok(p) if p.problems().is_empty() => p,
@@ -12034,20 +12039,8 @@ impl Engine {
                         return;
                     }
                 };
-                // Backup the previous plan.
-                let dir = match sdroxide_config::config_dir() {
-                    Ok(d) => d,
-                    Err(e) => {
-                        self.notice(&format!("Import failed: {e}"));
-                        return;
-                    }
-                };
-                let path = dir.join(sdroxide_config::BAND_PLAN_FILE);
-                if path.exists() {
-                    let bak = dir.join(format!("{}.bak", sdroxide_config::BAND_PLAN_FILE));
-                    let _ = std::fs::copy(&path, &bak);
-                }
-                // Write and reload.
+                // Write and reload. save_band_plan keeps the previous file
+                // as bandplan.json.bak, so a bad import cannot destroy it.
                 if let Err(e) = sdroxide_config::save_band_plan(&plan) {
                     self.notice(&format!("Import failed: {e}"));
                     return;
@@ -12061,9 +12054,6 @@ impl Engine {
                 // edges, so the transmit-band confirmation no longer covers
                 // what it said it did. Reset it so the operator re-checks.
                 self.tx_bands_confirmed = false;
-                if let Some(cfg) = self.state.rx.get_mut(0) {
-                    // best-effort: the radio config is re-sent by the client
-                }
                 self.emit_station_config();
                 self.notice(if custom {
                     "Band plan imported. The station is running on it."
