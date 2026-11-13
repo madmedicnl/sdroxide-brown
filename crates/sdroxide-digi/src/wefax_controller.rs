@@ -10,20 +10,79 @@
 //! line rate, and not the height — so the operator's settings decide the
 //! geometry, and this is where they meet the demodulator.
 
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use sdroxide_dsp::wefax::{Ioc, Lpm, WefaxEvent, WefaxRx};
 use sdroxide_types::{
     DigiConfig, DigiStatus, Mode, QsoStep, TranscriptLine, WefaxIoc, WefaxLpm, WefaxStatus,
 };
 
-use crate::controller::DigiAction;
 use crate::DigiEngine;
+use crate::controller::DigiAction;
 
 /// Rows accumulated before the picture is grown. A chart is 1809 pixels wide,
 /// so each block is a couple of hundred kilobytes; growing by one row at a time
 /// would reallocate two thousand times over a transmission.
 const GROW_ROWS: usize = 256;
+
+/// **A lane nobody is feeding**, and how it comes back.
+///
+/// The decoder only ever sees the audio that reaches it: when the tap goes
+/// quiet, `on_rx_audio` is not called at all and there is nothing inside the
+/// DSP that can tell a dead tap from a dead band. One night of that was enough
+/// — a WEFAX reception ran from 23:19 to morning with no audio and nothing
+/// said about it (issue #721), while the FT8 lane has warned about exactly this
+/// since #393.
+///
+/// So the arrival of audio is stamped, and the time since then is the measure.
+/// Kept apart from the controller so the rule — once, not once per poll, and
+/// re-armed the moment audio returns — is a decision that can be tested without
+/// a clock or a log in the room.
+#[derive(Debug)]
+struct SilenceWatch {
+    /// When audio last arrived, or the moment the lane was built if it never
+    /// has. A lane that has heard nothing since start-up is silent too.
+    since: Instant,
+    reported: bool,
+}
+
+impl SilenceWatch {
+    fn new(now: Instant) -> Self {
+        SilenceWatch { since: now, reported: false }
+    }
+
+    /// Audio arrived: the clock restarts and the warning is armed again.
+    fn audio(&mut self, now: Instant) {
+        self.since = now;
+        self.reported = false;
+    }
+
+    /// How long the lane has been silent, in seconds.
+    fn silent_s(&self, now: Instant) -> f32 {
+        now.duration_since(self.since).as_secs_f32()
+    }
+
+    /// `Some(seconds)` the first time the lane has been quiet for `after_s`,
+    /// and `None` every time after that until audio comes back.
+    fn should_report(&mut self, now: Instant, after_s: f32) -> Option<f32> {
+        if self.reported {
+            return None;
+        }
+        let silent = self.silent_s(now);
+        if silent < after_s {
+            return None;
+        }
+        self.reported = true;
+        Some(silent)
+    }
+}
+
+/// Seconds of silence before the lane says so.
+///
+/// Long enough that a band with nothing on it — which is most of the time on a
+/// weather band — cannot fire it, short enough that an operator who walks away
+/// for a minute comes back to a log line rather than to a mystery.
+const SILENCE_REPORT_S: f32 = 15.0;
 
 pub struct WefaxController {
     cfg: DigiConfig,
@@ -41,6 +100,9 @@ pub struct WefaxController {
     queued: Vec<DigiAction>,
     status_dirty: bool,
     last_status: Option<SystemTime>,
+    /// How long since audio last reached the decoder, and whether that has
+    /// already been said. See [`SilenceWatch`].
+    silence: SilenceWatch,
 }
 
 /// Translate the wire enums to the DSP's. Two copies exist because
@@ -100,6 +162,7 @@ impl WefaxController {
             queued: Vec::new(),
             status_dirty: true,
             last_status: None,
+            silence: SilenceWatch::new(Instant::now()),
         }
     }
 
@@ -219,6 +282,9 @@ impl DigiEngine for WefaxController {
     }
 
     fn on_rx_audio(&mut self, tap: &[f32]) {
+        // The lane is fed: whatever the band is doing, the path from the radio
+        // to here is alive, and anything said about silence is withdrawn.
+        self.silence.audio(Instant::now());
         let mut events = std::mem::take(&mut self.scratch);
         events.clear();
         self.rx.process(tap, &mut events);
@@ -288,6 +354,17 @@ impl DigiEngine for WefaxController {
     }
 
     fn poll(&mut self, _now: SystemTime, _dial_hz: f64) -> Vec<DigiAction> {
+        // Nothing is reaching the decoder: say so once, because a WEFAX lane
+        // that has been fed no audio looks exactly like a quiet band on screen
+        // and in the log (issue #721).
+        if let Some(secs) = self.silence.should_report(Instant::now(), SILENCE_REPORT_S) {
+            tracing::warn!(
+                "WEFAX: no receive audio is reaching the decoder — nothing has arrived for {:.0} s, \
+                 so nothing can decode. Check that the radio is on and that the audio device \
+                 sdroxide is listening to is the one it is feeding. Said once until audio returns.",
+                secs
+            );
+        }
         let mut actions = std::mem::take(&mut self.queued);
         // Status on change, and a few times a second regardless so the tuning
         // meter and the subcarrier readout stay live while hunting.
@@ -405,6 +482,48 @@ impl DigiEngine for WefaxController {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    /// **A lane nobody feeds says so, once.** The night of 2026-11-12/13: six
+    /// hours with no audio into the WEFAX lane and not one line anywhere
+    /// (issue #721).
+    #[test]
+    fn a_silent_lane_is_reported_once_and_re_armed_by_audio() {
+        let t0 = Instant::now();
+        let mut watch = SilenceWatch::new(t0);
+
+        assert_eq!(watch.should_report(t0, 15.0), None, "quiet for a moment is not a fault");
+        assert_eq!(
+            watch.should_report(t0 + Duration::from_secs(14), 15.0),
+            None,
+            "still inside the grace"
+        );
+
+        let at = watch.should_report(t0 + Duration::from_secs(16), 15.0);
+        assert!(at.is_some_and(|s| s >= 15.0), "the lane should have said so by now: {at:?}");
+        assert_eq!(
+            watch.should_report(t0 + Duration::from_secs(600), 15.0),
+            None,
+            "said once, not once per poll"
+        );
+
+        // Audio returns: the stamp moves and the warning is armed again.
+        watch.audio(t0 + Duration::from_secs(601));
+        assert_eq!(watch.should_report(t0 + Duration::from_secs(602), 15.0), None);
+        let again = watch.should_report(t0 + Duration::from_secs(700), 15.0);
+        assert!(again.is_some(), "a second silence is news again");
+    }
+
+    /// A lane that has heard nothing since it was built is silent too — that is
+    /// the shape of the fault this was written for: the decoder starts, the tap
+    /// never fills, and nothing is ever fed to it.
+    #[test]
+    fn a_lane_that_was_never_fed_counts_as_silent() {
+        let t0 = Instant::now();
+        let mut watch = SilenceWatch::new(t0);
+        assert_eq!(watch.should_report(t0 + Duration::from_secs(5), 15.0), None);
+        assert!(watch.should_report(t0 + Duration::from_secs(30), 15.0).is_some());
+    }
 
     fn ctrl() -> WefaxController {
         WefaxController::new(DigiConfig::default(), 12_000.0)
@@ -506,7 +625,7 @@ mod tests {
         c.wefax_start();
         let w = c.width as usize;
         c.on_rx_audio(&[]); // no-op, but exercises the empty path
-                            // Feed rows straight through the event handler's own logic.
+        // Feed rows straight through the event handler's own logic.
         for y in 0..3u16 {
             let gray = vec![y as u8; w];
             let mut ev = vec![WefaxEvent::Line { y, gray }];
