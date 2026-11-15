@@ -7326,12 +7326,6 @@ frame-download-hint = Öffnet die Release-Seite in Ihrem Browser
 
 frame-tuning-catching-up = Abstimmung läuft — das Funkgerät holt auf
 
-frame-roll-up-hint = Einrollen — nur die Titelleiste behalten und dem Wasserfall den Platz zurückgeben
-
-frame-unroll-hint = Ausrollen — das Panel wieder anzeigen
-
-frame-window-panel-hint = WINDOW — diesem Panel ein eigenes Fenster geben, das auf einen anderen Monitor gelegt werden kann
-
 frame-panel-window-title = { $mode } — Panel
 
 frame-auto-stopped-stop-control = Auto gestoppt: ein Stopp-Bedienelement wurde benutzt
@@ -7761,12 +7755,7 @@ settings-ui-sound-welcome-browser-only = nur im Browser – das installierte Pro
 
 settings-ui-profile-screen = Bildschirm folgt Ihrem Profil
 
-settings-ui-profile-screen-hint =
-    Als Remote-Client von `sdroxide --server` wird das *Aussehen* dieses Bildschirms – Theme, Layout, Wasserfall und Spektrum, Schriften, Einfache Oberfläche, die Kartenebenen, die eigene Ansicht des Panadapters – mit dem Profil gespeichert, mit dem Sie angemeldet sind, und kommt auf jedem Rechner zurück, statt bei den Standardwerten zu beginnen.
-    
-    { "**" }Auf dem Server gespeichert, und zwar laufend, solange Sie angemeldet sind** – es gibt nichts zu drücken. Das ist Absicht: Auf Browser-Speicher ist kein Verlass, weil `persist()` in jedem Browser anders funktioniert und eine dort gehaltene Sitzung von niemandem zurückgesetzt werden kann, der nicht an diesem Gerät sitzt. Ein Profil auf dem Server ist eine Datei, die der Betreiber der Station zurückspielen kann.
-    
-    Auf einem Server **ohne Passwort** ist jeder Client dasselbe Profil, daher wird nichts geschrieben, außer Sie drücken die Schaltfläche unten – das Theme des einen Betreibers darf nicht das des nächsten werden. Nichts, was zum Rechner gehört, wird je gespeichert, und ein lokales Funkgerät ist nicht betroffen.
+settings-ui-profile-screen-hint = Bei einer Serververbindung werden Anzeige- und Fenstereinstellungen dort automatisch gespeichert und beim erneuten Verbinden wiederhergestellt. Angemeldete Benutzer haben eigene Profile; Clients ohne Passwort teilen die Stationsvorgaben. Native Positionen und Positionen innerhalb der Seite werden getrennt gespeichert. Browserspeicher ist nicht erforderlich.
 
 settings-ui-save-to-profile = Im Profil speichern
 
@@ -8688,8 +8677,6 @@ settings-tool-window-playback = WIEDERGABE
 settings-tool-window-open = Offen
 
 settings-tool-window-closed = Geschlossen
-
-settings-detachable-native-only = Abdockbare Fenster gibt es nur in der nativen App.
 
 settings-psk-reporter-band-hint = Der Bandaktivitäts-Feed: auf dem aktuellen Band gehörte Stationen, als farbige Punkte gezeichnet. Aktiviert auch die Abfrage „wer hat mich gehört“ hinter dem HEARD-ME-Chip der Karte – ebenfalls stündlich neu geholt.
 
@@ -9814,3 +9801,25 @@ topbar-group-audio = AUDIO
 topbar-show-audio-spectrum = AUDIOSPEKTRUM ZEIGEN
 
 topbar-draw-receiver-s-own-audio = Ein Streifen unter dem Wasserfall mit dem eigenen Audio des Empfängers, 50 Hz bis 16 kHz — das Brummen eines Netzteils oder das Pfeifen eines Ladegeräts zeigt sich hier, nicht im Band
+
+window-main = Hauptfenster
+
+window-level-bottom = Hinten
+
+window-level-normal = Normal
+
+window-level-top = Vorne
+
+window-minimize = Minimieren
+
+window-maximize = Maximieren
+
+window-restore = Wiederherstellen
+
+window-close = Panel schließen (in Einstellungen öffnen)
+
+window-level-hint = Fensterpriorität; im Browser nur innerhalb der Seite. Bei gleicher Priorität gilt die normale Fokusreihenfolge.
+
+window-wayland-hint = Wayland: Die Fensterpriorität wird vom Compositor gesteuert.
+
+window-browser-hint = Der Browser steuert sein Hauptfenster. Panelbefehle gelten nur auf dieser Seite. Anordnungen werden auf dem Server gespeichert.

@@ -7336,12 +7336,6 @@ frame-download-hint = Sürüm sayfasını tarayıcınızda açar
 
 frame-tuning-catching-up = ayarlanıyor — telsiz yetişiyor
 
-frame-roll-up-hint = Yukarı sar — başlık çubuğunu bırakıp pencereyi şelaleye geri verin
-
-frame-unroll-hint = Aç — paneli yeniden gösterin
-
-frame-window-panel-hint = PENCERE — bu panele kendi penceresini verin, başka bir monitöre koymak için
-
 frame-panel-window-title = { $mode } — panel
 
 frame-auto-stopped-stop-control = otomatik durdu: bir durdurma kontrolü kullanıldı
@@ -7771,12 +7765,7 @@ settings-ui-sound-welcome-browser-only = yalnızca tarayıcı — kurulu program
 
 settings-ui-profile-screen = Ekran profilinizi izler
 
-settings-ui-profile-screen-hint =
-    `sdroxide --server` uzak istemcisi olduğunuzda, bu ekranın *görünümü* — tema, düzen, şelale ve spektrum, yazı tipleri, Basit UI, harita katmanları, panadaptörün kendi görünümü — oturum açtığınız profille birlikte saklanır; böylece varsayılanlardan başlamak yerine her makinede geri gelir.
-
-    { "**" }Sunucuda saklanır ve oturum açıkken siz çalıştıkça kaydedilir** — basılacak bir şey yoktur. Bu kasıtlıdır: tarayıcı depolamasına güvenilemez, çünkü `persist()` her tarayıcıda farklı davranır ve orada tutulan bir oturumu o aygıtta olmayan kimse sıfırlayamaz. Sunucudaki profil, istasyon operatörünün geri koyabileceği bir dosyadır.
-
-    { "**" }Parolasız** bir sunucuda her istemci aynı profildir, bu yüzden aşağıdaki düğmeye basmadıkça hiçbir şey yazılmaz — bir operatörün teması sonrakinin teması olmamalıdır. Makineye ait hiçbir şey asla saklanmaz ve yerel bir telsiz etkilenmez.
+settings-ui-profile-screen-hint = Sunucuya bağlıyken ekran ve pencere ayarları sunucuda otomatik saklanır ve yeniden bağlantıda geri yüklenir. Oturum açan kullanıcıların kendi profili vardır; parolasız istemciler istasyonun varsayılanını paylaşır. Yerel pencere ve sayfa içi konumlar ayrı saklanır. Tarayıcı depolaması gerekmez.
 
 settings-ui-save-to-profile = Profile kaydet
 
@@ -8698,8 +8687,6 @@ settings-tool-window-playback = OYNATMA
 settings-tool-window-open = Açık
 
 settings-tool-window-closed = Kapalı
-
-settings-detachable-native-only = Ayrılabilir pencereler yalnızca yerel sürümde.
 
 settings-psk-reporter-band-hint = Bant etkinliği akışı: geçerli bantta duyulan istasyonlar, renkli noktalar olarak çizilir. Ayrıca haritanın HEARD ME çipinin arkasındaki "beni kim duydu" sorgusunu da etkinleştirir — o da saatlik yeniden getirilir.
 
@@ -9822,3 +9809,25 @@ topbar-group-audio = SES
 topbar-show-audio-spectrum = SES SPEKTRUMUNU GÖSTER
 
 topbar-draw-receiver-s-own-audio = Şelalenin altında alıcının kendi sesi, 50 Hz ile 16 kHz arası — bir güç kaynağının uğultusu ya da şarj cihazının ıslığı burada görünür, bantta değil
+
+window-main = Ana pencere
+
+window-level-bottom = Arkada
+
+window-level-normal = Normal
+
+window-level-top = Önde
+
+window-minimize = Küçült
+
+window-maximize = Büyüt
+
+window-restore = Geri yükle
+
+window-close = Paneli kapat (Ayarlardan yeniden aç)
+
+window-level-hint = Pencere önceliği; tarayıcıda yalnızca sayfa içinde geçerlidir. Aynı düzeyde normal odak sırası kullanılır.
+
+window-wayland-hint = Wayland: pencere önceliğini birleştirici yönetir.
+
+window-browser-hint = Ana pencereyi tarayıcı yönetir. Panel denetimleri yalnızca bu sayfada çalışır. Düzen sunucuda saklanır.

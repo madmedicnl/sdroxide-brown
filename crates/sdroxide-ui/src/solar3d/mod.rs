@@ -214,6 +214,20 @@ impl Solar3d {
 
     /// Publish the geometry the window should open at, from the screen's
     /// settings. Consulted only when the window is (re)built.
+    /// Exchange child changes before applying a server/restored arrangement.
+    pub fn exchange_window_prefs(
+        &self,
+        prefs: sdroxide_types::WindowPrefs,
+    ) -> sdroxide_types::WindowPrefs {
+        let mut st = self.lock();
+        if std::mem::take(&mut st.window_prefs_changed) {
+            st.window_prefs
+        } else {
+            st.window_prefs = prefs;
+            prefs
+        }
+    }
+
     pub fn set_window_seed(&self, window: Option<sdroxide_types::Solar3dWindow>) {
         self.lock().window_seed = window;
     }
@@ -354,18 +368,47 @@ impl Solar3d {
         let mut builder = egui::ViewportBuilder::default()
             .with_title(format!("{} — solar system", sdroxide_version::FLAVOR))
             .with_min_inner_size([520.0, 340.0])
-            .with_clamp_size_to_monitor_size(true);
+            .with_clamp_size_to_monitor_size(true)
+            .with_minimize_button(true)
+            .with_maximize_button(true);
+        let prefs = self.lock().window_prefs;
+        if ctx.data(|d| d.get_temp::<bool>(egui::Id::new("window-stack-supported"))).unwrap_or(true)
+        {
+            builder = builder.with_window_level(crate::app::window_chrome::stack(prefs.level));
+        }
         if ctx.cumulative_pass_nr_for(vid) == 0 {
             let seed = self.lock().window_seed;
             let monitor = ctx.input(|i| i.viewport().monitor_size);
             let (size, pos) = solar3d_geometry(monitor, seed);
-            builder = builder.with_inner_size(size);
+            builder = builder
+                .with_inner_size(size)
+                .with_maximized(prefs.mode == sdroxide_types::WindowMode::Maximized);
             if let Some(pos) = pos {
                 builder = builder.with_position(pos);
             }
         }
         ctx.show_viewport_deferred(vid, builder, move |ui, _class| {
             let mut st = state.lock().unwrap_or_else(|e| e.into_inner());
+            let old_prefs = st.window_prefs;
+            let (min, max) = ui.ctx().input(|i| (i.viewport().minimized, i.viewport().maximized));
+            if min == Some(true) {
+                st.window_prefs.mode = sdroxide_types::WindowMode::Minimized;
+            } else if max == Some(true) {
+                st.window_prefs.mode = sdroxide_types::WindowMode::Maximized;
+            } else if min == Some(false) && max == Some(false) {
+                st.window_prefs.mode = sdroxide_types::WindowMode::Normal;
+            }
+            if ui.ctx().cumulative_pass_nr_for(vid) <= 1
+                && old_prefs.mode == sdroxide_types::WindowMode::Minimized
+            {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+            }
+            if crate::app::window_chrome::controls(ui, &mut st.window_prefs, true) {
+                st.close_requested = true;
+                ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
+                return;
+            }
+            st.window_prefs_changed |= old_prefs != st.window_prefs;
             // Remember the geometry for the next rebuild, in case the window is
             // ever taken down and remapped. `content_rect` is the inner size as
             // the toolkit reports it — the only size on Wayland, where
@@ -373,7 +416,10 @@ impl Solar3d {
             // no absolute position. `outer_rect` carries that position where the
             // platform has one, and is `None` on Wayland too.
             let size = ui.ctx().content_rect().size();
-            if size.x > 1.0 && size.y > 1.0 {
+            if st.window_prefs.mode == sdroxide_types::WindowMode::Normal
+                && size.x > 1.0
+                && size.y > 1.0
+            {
                 let pos = ui.ctx().input(|i| i.viewport().outer_rect).map(|r| r.min);
                 let geom = sdroxide_types::Solar3dWindow {
                     // Whole points, so a sub-point wobble is not a resize.
@@ -382,6 +428,9 @@ impl Solar3d {
                 };
                 if st.window_now != Some(geom) {
                     st.window_now = Some(geom);
+                    st.window_prefs.window =
+                        Some(sdroxide_types::DetachedWindow { size: geom.size, pos: geom.pos });
+                    st.window_prefs_changed = true;
                 }
             }
             if ui.ctx().input(|i| i.viewport().close_requested()) {

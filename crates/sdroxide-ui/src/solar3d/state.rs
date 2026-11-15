@@ -162,6 +162,10 @@ impl Focus {
 /// Shared window state. Never hold the lock across I/O or across a call into
 /// egui that could re-enter the viewport callback.
 pub struct SolarUi {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub window_prefs: sdroxide_types::WindowPrefs,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub window_prefs_changed: bool,
     /// Persisted camera / layer / scale settings, mirrored back into
     /// `ViewState` by the root pass each frame.
     pub view: Solar3dView,
@@ -417,6 +421,10 @@ impl SolarUi {
             view.layers = crate::view::solar_layer::ALL;
         }
         SolarUi {
+            #[cfg(not(target_arch = "wasm32"))]
+            window_prefs: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            window_prefs_changed: false,
             view,
             #[cfg(not(target_arch = "wasm32"))]
             close_requested: false,

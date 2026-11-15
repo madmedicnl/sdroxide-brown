@@ -7325,12 +7325,6 @@ frame-download-hint = Abre la página de la versión en tu navegador
 
 frame-tuning-catching-up = sintonizando — la radio se está poniendo al día
 
-frame-roll-up-hint = Enrollar — dejar solo la barra de título y devolver el espacio a la cascada
-
-frame-unroll-hint = Desenrollar — mostrar de nuevo el panel
-
-frame-window-panel-hint = WINDOW — dar a este panel una ventana propia, para ponerla en otro monitor
-
 frame-panel-window-title = { $mode } — panel
 
 frame-auto-stopped-stop-control = auto detenido: se usó un control de parada
@@ -7760,12 +7754,7 @@ settings-ui-sound-welcome-browser-only = solo navegador — el programa instalad
 
 settings-ui-profile-screen = La pantalla sigue su perfil
 
-settings-ui-profile-screen-hint =
-    Cuando es cliente remoto de `sdroxide --server`, el *aspecto* de esta pantalla (tema, disposición, cascada y espectro, fuentes, interfaz simple, capas de mapas, la vista propia del panadapter) se guarda con el perfil con el que inició sesión, y vuelve en cualquier máquina en lugar de partir de los valores por defecto.
-    
-    { "**" }Guardado en el servidor, y guardado sobre la marcha mientras tiene la sesión iniciada**: no hay nada que pulsar. Es deliberado: no se puede confiar en el almacenamiento del navegador, porque `persist()` se comporta distinto en cada navegador, y una sesión guardada allí no puede restablecerla nadie que no esté en ese dispositivo. Un perfil en el servidor es un archivo que el operador de la estación puede restaurar.
-    
-    En un servidor **sin contraseña** todos los clientes son el mismo perfil, así que no se escribe nada salvo que pulse el botón de abajo: el tema de un operador no debe convertirse en el del siguiente. Nunca se guarda nada que pertenezca a la máquina, y una radio local no se ve afectada.
+settings-ui-profile-screen-hint = Al conectarse a un servidor, los ajustes de pantalla y ventanas se guardan automáticamente allí y se restauran al reconectar. Cada usuario identificado tiene su perfil; los clientes sin contraseña comparten los valores de la estación. Las posiciones nativas y dentro de la página se guardan por separado. No se requiere almacenamiento del navegador.
 
 settings-ui-save-to-profile = Guardar en el perfil
 
@@ -8687,8 +8676,6 @@ settings-tool-window-playback = REPRODUCCIÓN
 settings-tool-window-open = Abierta
 
 settings-tool-window-closed = Cerrada
-
-settings-detachable-native-only = Las ventanas desacoplables solo están disponibles en la aplicación nativa.
 
 settings-psk-reporter-band-hint = El flujo de actividad de la banda: estaciones oídas en la banda actual, dibujadas como puntos de colores. También activa la consulta «quién me oyó» detrás del chip HEARD ME del mapa, que se repite cada hora.
 
@@ -9813,3 +9800,25 @@ topbar-group-audio = AUDIO
 topbar-show-audio-spectrum = MOSTRAR ESPECTRO DE AUDIO
 
 topbar-draw-receiver-s-own-audio = Una banda bajo la cascada con el audio del propio receptor, de 50 Hz a 16 kHz — el zumbido de una fuente o el silbido de un cargador se ven aquí, no en la banda
+
+window-main = Ventana principal
+
+window-level-bottom = Detrás
+
+window-level-normal = Normal
+
+window-level-top = Delante
+
+window-minimize = Minimizar
+
+window-maximize = Maximizar
+
+window-restore = Restaurar
+
+window-close = Cerrar panel (reabrir en Ajustes)
+
+window-level-hint = Prioridad de ventana; en el navegador solo dentro de la página. A igual prioridad se respeta el foco normal.
+
+window-wayland-hint = Wayland: el compositor controla la prioridad de las ventanas.
+
+window-browser-hint = El navegador controla su ventana principal. Los controles de panel solo afectan esta página. La disposición se guarda en el servidor.

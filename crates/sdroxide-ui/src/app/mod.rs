@@ -75,7 +75,6 @@ pub(in crate::app) mod publicsdr;
 pub(in crate::app) mod qo100;
 pub(in crate::app) mod rds;
 pub(in crate::app) mod recording_jobs;
-#[cfg(not(target_arch = "wasm32"))]
 pub(in crate::app) mod rotor;
 pub(in crate::app) mod sat;
 pub(in crate::app) mod save_text;
@@ -96,6 +95,7 @@ mod tx_bands;
 pub(in crate::app) mod update;
 pub(crate) mod util;
 mod weather;
+pub(crate) mod window_chrome;
 pub(in crate::app) mod windows;
 pub(in crate::app) mod winlink;
 
@@ -298,7 +298,6 @@ pub struct SdroxideApp {
     /// spectra from mirroring each other without threading a view parameter
     /// through the whole draw. Session-only for now — the main view's zoom is
     /// persisted, this one is not yet.
-    #[cfg(not(target_arch = "wasm32"))]
     aux_view: ViewState,
     peaks: spectrum_view::PeakHold,
     /// UI-side smoothing for the spectrum *line* (waterfall stays un-averaged).
@@ -354,9 +353,8 @@ pub struct SdroxideApp {
     #[cfg(not(target_arch = "wasm32"))]
     panel_undock_notice_mode: Option<sdroxide_types::Mode>,
     /// Undocked **tool windows** — the scanner, the schedule, the logbook and the
-    /// rest — by their stable id. Session-only, like the in-viewport position
-    /// egui keeps for the same windows: a tool is transient, and where it sat
-    /// last run is not worth a config field per tool.
+    /// rest — by their stable id. Native viewport bookkeeping only; durable
+    /// choices and geometry live in `ui_settings.window_layouts`.
     #[cfg(not(target_arch = "wasm32"))]
     tool_windows: std::collections::BTreeMap<&'static str, ToolWindowState>,
     /// Dismissed the receive-only nudge this session. The nudge offers a
@@ -1789,15 +1787,11 @@ pub struct SdroxideApp {
     /// Session-only, and deliberately not the engine's — the engine owns what
     /// it is actually driving, this only remembers what the operator last chose.
     ///
-    /// Native only, with the window itself: the browser has no second-window
-    /// mechanism, so the rotator's manual side is a desktop tool.
-    #[cfg(not(target_arch = "wasm32"))]
+    /// Shared by the native rotator window and its browser panel.
     rotor_target: Option<(f64, f64)>,
-    #[cfg(not(target_arch = "wasm32"))]
     rotor_entry: (f64, f64),
     /// The country last chosen from the rotator window's DX lookup, kept only
     /// so the drop-down can show it and the caption can name the bearing.
-    #[cfg(not(target_arch = "wasm32"))]
     rotor_country: Option<String>,
     /// The external T/R switch's health, mirrored from
     /// [`RadioEvent::RelayStatus`]. Replayed on connect by the server, so a
@@ -2273,7 +2267,7 @@ impl SdroxideApp {
             wide_wf: Default::default(),
             meters: None,
             sql_hold: None,
-            panel_floating: false,
+            panel_floating: ui_settings.window_layouts.get("floating-operating-panel").undocked,
             panel_window_pane: 0,
             panel_rolled: false,
             #[cfg(not(target_arch = "wasm32"))]
@@ -2282,7 +2276,6 @@ impl SdroxideApp {
             mem_folders: Vec::new(),
             scanner: sdroxide_types::ScannerConfig::default(),
             view,
-            #[cfg(not(target_arch = "wasm32"))]
             aux_view: ViewState::default(),
             peaks: spectrum_view::PeakHold::default(),
             spec_smooth: spectrum_view::SpectrumSmooth::default(),
@@ -2860,11 +2853,8 @@ impl SdroxideApp {
             qo100_win: Default::default(),
             rotator_status: None,
             rot_cfg_edit: Default::default(),
-            #[cfg(not(target_arch = "wasm32"))]
             rotor_target: None,
-            #[cfg(not(target_arch = "wasm32"))]
             rotor_entry: (0.0, 0.0),
-            #[cfg(not(target_arch = "wasm32"))]
             rotor_country: None,
             relay_status: Default::default(),
             relay_edit: Default::default(),
@@ -7115,6 +7105,10 @@ mod tests {
         assert!(!app.tool_windows.get("t").is_some_and(|s| s.undocked));
         // Undocked: the state survives the frame.
         app.tool_windows.insert("t", ToolWindowState { undocked: true, window: None });
+        app.ui_settings.window_layouts.set(
+            "t",
+            sdroxide_types::WindowPrefs { undocked: true, ..Default::default() },
+        );
         assert!(run(&mut app, true));
         assert!(app.tool_windows.get("t").is_some_and(|s| s.undocked));
     }
@@ -7145,6 +7139,10 @@ mod tests {
         });
         assert!(app.show_scanner, "a docked tool stays open");
         app.tool_windows.insert("scanner", ToolWindowState { undocked: true, window: None });
+        app.ui_settings.window_layouts.set(
+            "scanner",
+            sdroxide_types::WindowPrefs { undocked: true, ..Default::default() },
+        );
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,

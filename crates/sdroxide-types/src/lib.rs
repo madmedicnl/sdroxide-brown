@@ -436,3 +436,8 @@ pub use wspr::{
     WINDOW_HI_HZ as WSPR_WINDOW_HI_HZ, WINDOW_LO_HZ as WSPR_WINDOW_LO_HZ, WsprSpot, WsprStatus,
     dbm_to_mw, grid4 as wspr_grid4, power_dbm_for_watts, power_label, round_power_dbm,
 };
+
+mod window_layout;
+pub use window_layout::{
+    WINDOW_IDS, WindowEntry, WindowLayouts, WindowMode, WindowPrefs, WindowStack,
+};

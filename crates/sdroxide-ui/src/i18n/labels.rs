@@ -1123,3 +1123,13 @@ mod tests {
         check(&CatFamily::ALL, CatFamily::label);
     }
 }
+
+impl Tr for sdroxide_types::WindowStack {
+    fn tr(self) -> String {
+        match self {
+            sdroxide_types::WindowStack::Bottom => tr!("window-level-bottom"),
+            sdroxide_types::WindowStack::Normal => tr!("window-level-normal"),
+            sdroxide_types::WindowStack::Top => tr!("window-level-top"),
+        }
+    }
+}

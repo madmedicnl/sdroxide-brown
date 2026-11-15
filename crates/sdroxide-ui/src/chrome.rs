@@ -2271,6 +2271,10 @@ pub fn chip_window_icon_label() -> &'static str {
 /// reversed, which is what makes a pair of them readable without a word.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum WindowIcon {
+    /// Standard window controls, drawn rather than relying on font coverage.
+    Minimize,
+    Maximize,
+    Restore,
     /// Out to a window of its own: a square with an arrow leaving through its
     /// top-right corner, which is the picture every desktop uses for "pop this
     /// out" (the operator's own reference).
@@ -2393,6 +2397,18 @@ fn paint_window_icon(p: &egui::Painter, r: Rect, ink: Color32, icon: WindowIcon)
     let s = r.height();
     let stroke = Stroke::new(1.3, ink);
     match icon {
+        WindowIcon::Minimize => {
+            p.line_segment([pos2(r.left()+s*0.2, r.center().y), pos2(r.right()-s*0.2, r.center().y)], stroke);
+            return;
+        }
+        WindowIcon::Maximize | WindowIcon::Restore => {
+            let box_ = r.shrink(s*0.18);
+            if icon == WindowIcon::Restore {
+                p.rect_stroke(box_.translate(vec2(s*0.12, -s*0.12)), 0.0, stroke, StrokeKind::Inside);
+            }
+            p.rect_stroke(box_, 0.0, stroke, StrokeKind::Inside);
+            return;
+        }
         // The two chevrons: one picture, turned over.
         WindowIcon::Collapse | WindowIcon::Unfold => {
             let (up, down) = if icon == WindowIcon::Collapse { (-1.0, 1.0) } else { (1.0, -1.0) };

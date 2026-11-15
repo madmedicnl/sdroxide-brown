@@ -812,6 +812,8 @@ pub struct Workspace {
     /// modules it does know — the same tolerance [`UiSettings::detached`]'s
     /// reader has, for the same reason.
     pub slots: Vec<DetachedState>,
+    #[serde(default)]
+    pub window_layouts: crate::WindowLayouts,
 }
 
 /// How many workspaces may be saved — SDRuno's ten. A cap rather than a
@@ -822,7 +824,11 @@ pub const WORKSPACE_MAX: usize = 10;
 impl Workspace {
     /// Snapshot the arrangement in `settings` under `name`.
     pub fn capture(name: impl Into<String>, settings: &UiSettings) -> Self {
-        Self { name: name.into(), slots: settings.detached.to_vec() }
+        Self {
+            name: name.into(),
+            slots: settings.detached.to_vec(),
+            window_layouts: settings.window_layouts,
+        }
     }
 
     /// Put this arrangement back into `settings`, leaving any module the
@@ -834,6 +840,7 @@ impl Workspace {
             *slot = *saved;
         }
         settings.detached = out;
+        settings.window_layouts = self.window_layouts;
     }
 }
 
@@ -1056,6 +1063,9 @@ impl Default for ProgramsFilters {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiSettings {
+    /// Persistent native and browser panel arrangements, served in ClientScreen.
+    #[serde(default)]
+    pub window_layouts: crate::WindowLayouts,
     /// **A theme read from a file**, by name, from `themes/*.toml` in the
     /// config directory — `None` for one of the built-ins.
     ///
@@ -2060,6 +2070,7 @@ impl Default for UiSettings {
             air_units: crate::AirUnits::default(),
             classic_ui: false,
             classic_sections: String::new(),
+            window_layouts: crate::WindowLayouts::default(),
             tool_windows_open: 0,
             radio_classic_on: false,
             public_sdr_docked: false,
@@ -2118,6 +2129,12 @@ impl UiSettings {
     /// Set (or clear) a module's undocked flag, leaving its remembered window
     /// geometry alone.
     pub fn set_detached(&mut self, module: DetachableModule, on: bool) {
+        if self.detached[module.index()].detached != on {
+            let mut prefs = self.window_layouts.get(module.app_id());
+            prefs.closed = false;
+            prefs.mode = crate::WindowMode::Normal;
+            self.window_layouts.set(module.app_id(), prefs);
+        }
         self.detached[module.index()].detached = on;
     }
 
@@ -2403,6 +2420,10 @@ pub struct ClientScreen {
     /// **The audio spectrum under the waterfall**, this screen's own display
     /// choice. Appended at the tail, for the same reason.
     pub audio_spectrum: bool,
+    /// Appended wire fields: server-backed window arrangements (#748).
+    pub window_layouts: Vec<crate::WindowEntry>,
+    pub detached: Vec<DetachedState>,
+    pub tool_windows_open: u64,
 }
 
 impl Default for ClientScreen {
@@ -2457,6 +2478,9 @@ impl ClientScreen {
             // read. `apply_to` takes the name back out of it.
             theme_file: None,
             audio_spectrum: s.audio_spectrum,
+            window_layouts: s.window_layouts.entries(),
+            detached: s.detached.to_vec(),
+            tool_windows_open: s.tool_windows_open,
         }
     }
 
@@ -2488,6 +2512,12 @@ impl ClientScreen {
         s.map_cities = self.map_cities;
         s.simple_ui = self.simple_ui;
         s.audio_spectrum = self.audio_spectrum;
+        s.window_layouts = crate::WindowLayouts::from_entries(&self.window_layouts);
+        s.detached = default_detached();
+        for (slot, state) in s.detached.iter_mut().zip(&self.detached) {
+            *slot = *state;
+        }
+        s.tool_windows_open = self.tool_windows_open;
         s.tune_step_round_first = self.tune_step_round_first;
         s.sound_welcome = self.sound_welcome;
         s.keep_screen_on = self.keep_screen_on;
@@ -2841,6 +2871,7 @@ mod tests {
         let short = Workspace {
             name: "old".into(),
             slots: vec![DetachedState { detached: true, window: None }],
+            window_layouts: Default::default(),
         };
         let mut from_old = UiSettings::default();
         short.apply(&mut from_old);

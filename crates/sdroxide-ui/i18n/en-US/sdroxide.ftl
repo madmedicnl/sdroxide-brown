@@ -7338,12 +7338,6 @@ frame-download-hint = Opens the release page in your browser
 
 frame-tuning-catching-up = tuning — the radio is catching up
 
-frame-roll-up-hint = Roll up — leave the title bar and give the window back to the waterfall
-
-frame-unroll-hint = Unroll — show the panel again
-
-frame-window-panel-hint = WINDOW — give this panel a window of its own, to put on another monitor
-
 frame-panel-window-title = { $mode } — panel
 
 frame-auto-stopped-stop-control = auto stopped: a stop control was used
@@ -7773,12 +7767,7 @@ settings-ui-sound-welcome-browser-only = browser only — the installed program 
 
 settings-ui-profile-screen = Screen follows your profile
 
-settings-ui-profile-screen-hint =
-    When you are a remote client of `sdroxide --server`, the *look* of this screen — theme, layout, waterfall and spectrum, fonts, Simple UI, the map layers, the panadapter's own view — is kept with the profile you signed in as, so it comes back on any machine instead of starting from defaults.
-    
-    { "**" }Saved on the server, and saved as you go while you are signed in** — there is nothing to press. That is deliberate: browser storage cannot be relied on, because `persist()` behaves differently in every browser, and a session kept there cannot be reset by anyone who is not at that device. A profile on the server is a file the station's operator can put back.
-    
-    On a server with **no password** every client is the same profile, so nothing is written unless you press the button below — one operator's theme must not become the next one's. Nothing that belongs to the machine is ever stored, and a local radio is unaffected.
+settings-ui-profile-screen-hint = When connected to a server, screen and window settings are saved automatically there and restored on reconnect. Signed-in users have their own profile; passwordless clients share the station default. Native and in-page positions are stored separately. Browser storage is not required.
 
 settings-ui-save-to-profile = Save to profile
 
@@ -8700,8 +8689,6 @@ settings-tool-window-playback = PLAYBACK
 settings-tool-window-open = Open
 
 settings-tool-window-closed = Closed
-
-settings-detachable-native-only = Detachable windows are native only.
 
 settings-psk-reporter-band-hint = The band-activity feed: stations being heard on the current band, drawn as coloured dots. Also enables the "who heard me" query behind the map's HEARD ME chip — refetched hourly, too.
 
@@ -9851,3 +9838,25 @@ topbar-group-audio = AUDIO
 topbar-show-audio-spectrum = SHOW AUDIO SPECTRUM
 
 topbar-draw-receiver-s-own-audio = A strip under the waterfall with the receiver's own audio, 50 Hz to 16 kHz — the hum of a supply or the whistle of a charger shows up here, not on the band
+
+window-main = Main window
+
+window-level-bottom = Behind
+
+window-level-normal = Normal
+
+window-level-top = In front
+
+window-minimize = Minimize
+
+window-maximize = Maximize
+
+window-restore = Restore
+
+window-close = Close panel (reopen in Settings)
+
+window-level-hint = Window priority; in the browser this applies only inside the page. Windows at the same level follow normal focus order.
+
+window-wayland-hint = Wayland: window priority is controlled by the compositor.
+
+window-browser-hint = The browser controls its main window. Panel controls affect only this page. Layouts are saved on the server.

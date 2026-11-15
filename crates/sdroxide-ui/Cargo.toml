@@ -182,3 +182,6 @@ ron = "0.12"
 # Parses the message files strictly in the translation tests. The version
 # i18n-embed already pulls in, so it adds no build time.
 fluent-syntax = "0.12"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.raw-window-handle]
+version = "0.6"

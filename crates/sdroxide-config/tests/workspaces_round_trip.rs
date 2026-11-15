@@ -43,7 +43,11 @@ fn workspaces_round_trip_and_a_bad_row_costs_only_itself() {
 
     // A workspace with no slots (a row that never got an arrangement) leaves
     // everything docked rather than half-restored.
-    let empty = Workspace { name: "empty".into(), slots: Vec::<DetachedState>::new() };
+    let empty = Workspace {
+        name: "empty".into(),
+        slots: Vec::<DetachedState>::new(),
+        window_layouts: Default::default(),
+    };
     let mut from_empty = UiSettings::default();
     from_empty.set_detached(DetachableModule::Controls, true);
     empty.apply(&mut from_empty);

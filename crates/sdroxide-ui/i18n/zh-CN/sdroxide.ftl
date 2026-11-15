@@ -7274,12 +7274,6 @@ frame-download-hint = 在浏览器中打开发布页面
 
 frame-tuning-catching-up = 调谐中，电台正在跟上
 
-frame-roll-up-hint = 卷起：离开标题栏，把窗口还给瀑布图
-
-frame-unroll-hint = 展开：重新显示面板
-
-frame-window-panel-hint = 窗口：给此面板一个独立窗口，以便放到另一个显示器上
-
 frame-panel-window-title = { $mode }：面板
 
 frame-auto-stopped-stop-control = 已自动停止：使用了停止控制
@@ -7709,12 +7703,7 @@ settings-ui-sound-welcome-browser-only = 仅限浏览器，安装的程序无需
 
 settings-ui-profile-screen = 屏幕跟随你的配置文件
 
-settings-ui-profile-screen-hint =
-    当你是 `sdroxide --server` 的远程客户端时，此屏幕的*外观*（主题、布局、瀑布图和频谱、字体、简洁界面、地图图层、全景显示自己的视图）会与你登录所用的配置文件一起保存，因此在任何机器上都能恢复，而不是从默认值开始。
-
-    { "**" }保存在服务器上，并且在你登录期间随时自动保存**，无需按任何按钮。这是有意为之：浏览器存储不可依赖，因为 `persist()` 在每个浏览器中的行为都不同，而且保存在那里的会话无法由不在该设备前的人重置。服务器上的配置文件是电台操作员可以恢复的文件。
-
-    在**没有密码**的服务器上，所有客户端都是同一个配置文件，所以除非你按下面的按钮，否则不会写入任何内容，一个操作员的主题不应变成下一个人的主题。属于机器本身的内容绝不会被保存，本地电台不受影响。
+settings-ui-profile-screen-hint = 连接服务器时，屏幕和窗口设置会自动保存在服务器上，并在重新连接时恢复。登录用户拥有各自的配置；无密码客户端共享电台默认设置。原生窗口与页面内面板的位置分别保存。不依赖浏览器存储。
 
 settings-ui-save-to-profile = 保存到配置文件
 
@@ -8636,8 +8625,6 @@ settings-tool-window-playback = 回放
 settings-tool-window-open = 打开
 
 settings-tool-window-closed = 关闭
-
-settings-detachable-native-only = 可分离窗口仅限本机版本。
 
 settings-psk-reporter-band-hint = 波段活动馈送：当前波段上被听到的电台，以彩色圆点绘制。同时启用地图“听到我”标签背后的“谁听到了我”查询，每小时也会重新获取。
 
@@ -9760,3 +9747,25 @@ topbar-group-audio = 音频
 topbar-show-audio-spectrum = 显示音频频谱
 
 topbar-draw-receiver-s-own-audio = 瀑布图下方显示接收机自身的声音，50 Hz 至 16 kHz——电源的嗡声或充电器的啸叫在这里，而不是在波段上
+
+window-main = 主窗口
+
+window-level-bottom = 置底
+
+window-level-normal = 正常
+
+window-level-top = 置顶
+
+window-minimize = 最小化
+
+window-maximize = 最大化
+
+window-restore = 还原
+
+window-close = 关闭面板（在设置中重新打开）
+
+window-level-hint = 窗口优先级；浏览器中仅在页面内生效。同一级别遵循正常焦点顺序。
+
+window-wayland-hint = Wayland：窗口优先级由合成器控制。
+
+window-browser-hint = 主窗口由浏览器控制。面板按钮仅作用于此页面。布局保存在服务器上。

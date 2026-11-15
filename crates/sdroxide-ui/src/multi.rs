@@ -1850,7 +1850,6 @@ impl eframe::App for MultiApp {
         // so a window that is wanted is always emitted — a tiling compositor
         // never sees it torn down and re-mapped when the radio or the mode
         // changes under it.
-        #[cfg(not(target_arch = "wasm32"))]
         {
             let app = &mut self.tabs[self.focused].app;
             let want = app.detached_wanted();

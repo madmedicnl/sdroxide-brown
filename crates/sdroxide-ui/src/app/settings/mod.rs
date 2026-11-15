@@ -4073,7 +4073,6 @@ impl SdroxideApp {
                 );
             }
             SettingsTab::Detachable => {
-                #[cfg(not(target_arch = "wasm32"))]
                 {
                     use sdroxide_types::DetachableModule;
                     ui.label(
@@ -4090,7 +4089,7 @@ impl SdroxideApp {
                     ui.add_space(6.0);
                     for module in DetachableModule::ALL {
                         let mut on = io.ui_edit.is_detached(module);
-                        ui.label(module.label());
+                        ui.label(ui_tab::module_label(module));
                         ComboBox::from_id_salt(("detachable", module))
                             .selected_text(if on {
                                 tr!("settings-ui-undocked")
@@ -4101,7 +4100,16 @@ impl SdroxideApp {
                                 ui.selectable_value(&mut on, false, tr!("settings-ui-docked"));
                                 ui.selectable_value(&mut on, true, tr!("settings-ui-undocked"));
                             });
-                        ui.label(RichText::new(module.app_id()).weak().size(9.5));
+                        ui.horizontal_wrapped(|ui| {
+                            let mut prefs = io.ui_edit.window_layouts.get(module.app_id());
+                            super::window_chrome::level_picker(ui, &mut prefs, !cfg!(target_arch = "wasm32"));
+                            if (prefs.closed || prefs.mode != sdroxide_types::WindowMode::Normal) && ui.button(tr!("window-restore")).clicked() {
+                                prefs.closed = false;
+                                prefs.mode = sdroxide_types::WindowMode::Normal;
+                                on = true;
+                            }
+                            io.ui_edit.window_layouts.set(module.app_id(), prefs);
+                        });
                         ui.end_row();
                         io.ui_edit.set_detached(module, on);
                     }
@@ -4200,7 +4208,7 @@ impl SdroxideApp {
                 }
                 #[cfg(target_arch = "wasm32")]
                 {
-                    note(ui, &tr!("settings-detachable-native-only"));
+                    note(ui, &tr!("window-browser-hint"));
                 }
             }
             SettingsTab::Alerts => {

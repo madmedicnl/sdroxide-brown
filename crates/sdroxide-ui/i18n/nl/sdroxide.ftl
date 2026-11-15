@@ -7334,12 +7334,6 @@ frame-download-hint = Opent de releasepagina in je browser
 
 frame-tuning-catching-up = afstemmen — de radio loopt bij
 
-frame-roll-up-hint = Oprollen — verlaat de titelbalk en geef het venster terug aan de waterval
-
-frame-unroll-hint = Uitrollen — toon het paneel weer
-
-frame-window-panel-hint = VENSTER — geef dit paneel een eigen venster, om op een andere monitor te zetten
-
 frame-panel-window-title = { $mode } — paneel
 
 frame-auto-stopped-stop-control = auto gestopt: er is een stopbediening gebruikt
@@ -7769,12 +7763,7 @@ settings-ui-sound-welcome-browser-only = alleen browser — het geïnstalleerde 
 
 settings-ui-profile-screen = Scherm volgt je profiel
 
-settings-ui-profile-screen-hint =
-    Wanneer je een client op afstand bent van `sdroxide --server`, wordt het *uiterlijk* van dit scherm — thema, indeling, waterval en spectrum, lettertypen, Eenvoudige UI, de kaartlagen, de eigen weergave van de panadapter — bewaard bij het profiel waarmee je bent aangemeld, zodat het op elke machine terugkomt in plaats van met de standaardwaarden te beginnen.
-    
-    { "**" }Opgeslagen op de server, en opgeslagen terwijl je bezig bent zolang je bent aangemeld** — er hoeft niets te worden ingedrukt. Dat is bewust: browseropslag is niet te vertrouwen, omdat `persist()` in elke browser anders werkt, en een daar bewaarde sessie kan niet worden gereset door iemand die niet bij dat apparaat zit. Een profiel op de server is een bestand dat de operator van het station kan terugzetten.
-    
-    Op een server **zonder wachtwoord** is elke client hetzelfde profiel, dus er wordt niets geschreven tenzij je op de knop hieronder drukt — het thema van de ene operator mag niet dat van de volgende worden. Niets wat bij de machine hoort wordt ooit opgeslagen, en een lokale radio is niet betrokken.
+settings-ui-profile-screen-hint = Bij verbinding met een server worden scherm- en vensterinstellingen daar automatisch opgeslagen en bij opnieuw verbinden hersteld. Aangemelde gebruikers hebben een eigen profiel; clients zonder wachtwoord delen de stationsstandaard. Posities van systeemvensters en panelen in de pagina worden apart bewaard. Browseropslag is niet nodig.
 
 settings-ui-save-to-profile = Opslaan in profiel
 
@@ -8696,8 +8685,6 @@ settings-tool-window-playback = AFSPELEN
 settings-tool-window-open = Open
 
 settings-tool-window-closed = Gesloten
-
-settings-detachable-native-only = Losmaakbare vensters zijn alleen native.
 
 settings-psk-reporter-band-hint = De bandactiviteitsfeed: stations die op de huidige band worden gehoord, getekend als gekleurde puntjes. Zet ook de "wie hoorde mij"-query aan achter de HEARD ME-chip van de kaart — ook elk uur opnieuw opgehaald.
 
@@ -9822,3 +9809,25 @@ topbar-group-audio = AUDIO
 topbar-show-audio-spectrum = AUDIOSPECTRUM TONEN
 
 topbar-draw-receiver-s-own-audio = Een strip onder de waterval met het geluid van de ontvanger zelf, 50 Hz tot 16 kHz — de brom van een voeding of het fluitje van een lader zie je hier, niet op de band
+
+window-main = Hoofdvenster
+
+window-level-bottom = Achter
+
+window-level-normal = Normaal
+
+window-level-top = Voor
+
+window-minimize = Minimaliseren
+
+window-maximize = Maximaliseren
+
+window-restore = Herstellen
+
+window-close = Paneel sluiten (heropenen in Instellingen)
+
+window-level-hint = Vensterprioriteit; in de browser alleen binnen de pagina. Bij gelijke prioriteit geldt de normale focusvolgorde.
+
+window-wayland-hint = Wayland: de compositor bepaalt de vensterprioriteit.
+
+window-browser-hint = De browser beheert zijn hoofdvenster. Paneelbediening geldt alleen op deze pagina. Indelingen worden op de server opgeslagen.

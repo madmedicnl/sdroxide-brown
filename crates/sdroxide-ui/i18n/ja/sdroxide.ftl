@@ -7284,12 +7284,6 @@ frame-download-hint = ブラウザでリリースページを開きます
 
 frame-tuning-catching-up = 同調中 — ラジオが追従しています
 
-frame-roll-up-hint = 巻き上げ — タイトルバーだけにして、ウィンドウ領域をウォーターフォールに返します
-
-frame-unroll-hint = 巻き戻し — パネルを再表示します
-
-frame-window-panel-hint = ウィンドウ — このパネルを独立したウィンドウにして別のモニターに置きます
-
 frame-panel-window-title = { $mode } — パネル
 
 frame-auto-stopped-stop-control = 自動停止：停止コントロールが使われました
@@ -7719,12 +7713,7 @@ settings-ui-sound-welcome-browser-only = ブラウザのみ — インストー�
 
 settings-ui-profile-screen = 画面をプロファイルに追従
 
-settings-ui-profile-screen-hint =
-    `sdroxide --server` のリモートクライアントとして接続している場合、この画面の*外観*（テーマ、レイアウト、ウォーターフォールとスペクトラム、フォント、シンプルUI、マップレイヤー、パンアダプター自身の表示）は、サインインしたプロファイルに保存されるため、どのマシンでも既定値から始まらずに元の状態が復元されます。
-
-    { "**" }サーバーに保存され、サインイン中は操作のたびに保存されます**ので、押すボタンはありません。これは意図的なものです。ブラウザのストレージは当てにできず（`persist()` の動作がブラウザごとに違う）、そこに保存されたセッションはそのデバイスの前にいない人にはリセットできません。サーバー上のプロファイルは、局のオペレーターが元に戻せるファイルです。
-
-    { "**" }パスワードのない**サーバーではすべてのクライアントが同じプロファイルになるため、下のボタンを押さない限り何も書き込まれません。あるオペレーターのテーマが次のオペレーターのものになってはいけないからです。マシン固有のものは一切保存されず、ローカルのラジオには影響しません。
+settings-ui-profile-screen-hint = サーバー接続中は画面とウィンドウの設定がサーバーに自動保存され、再接続時に復元されます。ログインユーザーは個別のプロファイルを使い、パスワードなしのクライアントは局の既定設定を共有します。ネイティブウィンドウとページ内の位置は別々に保存されます。ブラウザーのストレージは不要です。
 
 settings-ui-save-to-profile = プロファイルに保存
 
@@ -8646,8 +8635,6 @@ settings-tool-window-playback = 再生
 settings-tool-window-open = 開く
 
 settings-tool-window-closed = 閉じる
-
-settings-detachable-native-only = 分離可能なウィンドウはネイティブ版のみです。
 
 settings-psk-reporter-band-hint = バンドアクティビティのフィード: 現在のバンドで受信されている局を色付きの点で表示します。地図の「受信された」チップの背後にある「誰が私を受信したか」の照会も有効にし、1時間ごとに再取得します。
 
@@ -9770,3 +9757,25 @@ topbar-group-audio = 音声
 topbar-show-audio-spectrum = 音声スペクトラムを表示
 
 topbar-draw-receiver-s-own-audio = ウォーターフォールの下に受信機自身の音声を 50 Hz から 16 kHz まで表示します。電源のハムや充電器のホイッスルはバンドではなくここに出ます
+
+window-main = メインウィンドウ
+
+window-level-bottom = 背面
+
+window-level-normal = 通常
+
+window-level-top = 前面
+
+window-minimize = 最小化
+
+window-maximize = 最大化
+
+window-restore = 元に戻す
+
+window-close = パネルを閉じる（設定から再表示）
+
+window-level-hint = ウィンドウの優先度。ブラウザーではページ内のみ。同じ優先度では通常のフォーカス順になります。
+
+window-wayland-hint = Wayland：ウィンドウの優先度はコンポジターが管理します。
+
+window-browser-hint = メインウィンドウはブラウザーが管理します。パネル操作はこのページ内で有効です。配置はサーバーに保存されます。

@@ -19142,3 +19142,32 @@ the quick-starts:
 > For a graphical sdroxide on the Pi itself, or for the wideband decoders, step
 > up to a **Pi 4 (2 GB+)** or **Pi 5** — see the README's Raspberry Pi note about
 > Mesa's V3DV Vulkan driver and the OpenGL fallback.
+
+### Window levels and window controls
+
+Settings → UI and Settings → Detachable let each module use **Behind**, **Normal**
+(the default), or **In front**. The main desktop window has its own level in
+Settings → UI. On desktop these are operating-system window levels, including
+priority over other programs. Wayland compositors control stacking themselves;
+the level selector is disabled there. Windows at the same level retain the
+system's normal focus ordering.
+
+Every detachable module and tool panel has controls at the right: **Minimize**,
+**Maximize / Restore**, and **Close**. Native detached windows also retain their
+system decorations. In a browser, minimize leaves a title strip with Restore,
+and maximize uses the available page. Priority in a browser applies only among
+panels in that page; the browser's main window cannot be controlled this way.
+Closing a panel does not stop a radio or recording. A closed detached module is
+restored from its Settings row; tools reopen through their usual buttons. The
+floating operating panel docks back into the radio when closed.
+
+Arrangements include window levels, minimized/maximized state, native and
+in-page geometry, and detached/open state. Native and browser positions are
+stored separately. Workspace snapshots also retain these choices. Existing
+configuration files load with Normal priority and normal window state.
+
+Web arrangements are automatically stored on the server in `clientsettings.json`
+and replayed on reconnection, including after a server restart. No browser
+localStorage or persistent-storage permission is needed. Signed-in profiles have
+their own arrangements; passwordless clients share the station default. Server
+and clients must use matching protocol versions (305 for this change).

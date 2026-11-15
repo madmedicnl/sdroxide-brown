@@ -3319,6 +3319,11 @@ impl SdroxideApp {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub(in crate::app) fn console_band_area(&mut self, ui: &mut egui::Ui, cmds: &mut Vec<Command>) {
+        self.band_menu_body(ui, cmds);
+    }
+
     /// The band/mode selector filling the whole content area — what stands in
     /// for the panadapter and the panel when both are undocked, so the main
     /// window is never left a black hole (the operator's second screenshot).

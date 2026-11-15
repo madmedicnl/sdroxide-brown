@@ -174,94 +174,122 @@ pub(in crate::app) fn settings_ui_tab(
         ui.end_row();
 
         // The **undocked** modules. A window arrangement, chosen once and kept,
-        // rather than something reached for mid-QSO — so it lives here with the
-        // other display settings. One row per [`DetachableModule`], so the next
-        // detachable module appears here for free. Native only: the browser
-        // keeps every module in its one window.
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            use sdroxide_types::DetachableModule;
-            for module in DetachableModule::ALL {
-                let mut on = cfg.is_detached(module);
-                ui.label(tr!("settings-ui-window-label", module = module_label(module)));
-                ComboBox::from_id_salt(("ui-undocked", module))
-                    .selected_text(if on {
-                        tr!("settings-ui-undocked")
-                    } else {
-                        tr!("settings-ui-docked")
-                    })
-                    .show_styled(ui, |ui| {
-                        ui.selectable_value(&mut on, false, tr!("settings-ui-docked"));
-                        ui.selectable_value(&mut on, true, tr!("settings-ui-undocked"));
-                    })
-                    .response
-                    .on_hover_text(tr!("settings-ui-undock-hint", app_id = module.app_id()));
-                cfg.set_detached(module, on);
-                ui.end_row();
-            }
-            // Public SDRs is not a module of its own but a tool window, with a
-            // third place the modules do not have: docked under the waterfall,
-            // as Radio Classic is. Where that slot is taken (a digital mode's
-            // panel, CW, a phone) it is a window whatever is chosen here.
+            // rather than something reached for mid-QSO — so it lives here with the
+            // other display settings. One row per [`DetachableModule`], so the next
+            // detachable module appears here for free. Native only: the browser
+            // keeps every module in its one window.
             {
-                let mut docked = cfg.public_sdr_docked;
-                ui.label(tr!("settings-ui-window-label", module = tr!("publicsdr-public-sdrs")));
-                ComboBox::from_id_salt("ui-publicsdr-place")
-                    .selected_text(if docked {
-                        tr!("settings-ui-publicsdr-under-waterfall")
-                    } else {
-                        tr!("settings-ui-undocked")
-                    })
-                    .show_styled(ui, |ui| {
-                        ui.selectable_value(
-                            &mut docked,
-                            true,
-                            tr!("settings-ui-publicsdr-under-waterfall"),
+                use sdroxide_types::DetachableModule;
+                ui.label(tr!("window-main"));
+                let mut main = cfg.window_layouts.get("main");
+                ui.add_enabled_ui(!cfg!(target_arch = "wasm32"), |ui| {
+                    ui.horizontal(|ui| {
+                        super::super::window_chrome::level_picker(ui, &mut main, true)
+                    });
+                })
+                .response
+                .on_disabled_hover_text(tr!("window-browser-hint"));
+                cfg.window_layouts.set("main", main);
+                ui.end_row();
+                for module in DetachableModule::ALL {
+                    let mut on = cfg.is_detached(module);
+                    ui.label(tr!("settings-ui-window-label", module = module_label(module)));
+                    ui.horizontal_wrapped(|ui| {
+                        ComboBox::from_id_salt(("ui-undocked", module))
+                            .selected_text(if on {
+                                tr!("settings-ui-undocked")
+                            } else {
+                                tr!("settings-ui-docked")
+                            })
+                            .show_styled(ui, |ui| {
+                                ui.selectable_value(&mut on, false, tr!("settings-ui-docked"));
+                                ui.selectable_value(&mut on, true, tr!("settings-ui-undocked"));
+                            })
+                            .response
+                            .on_hover_text(tr!(
+                                "settings-ui-undock-hint",
+                                app_id = module.app_id()
+                            ));
+                        let mut prefs = cfg.window_layouts.get(module.app_id());
+                        super::super::window_chrome::level_picker(
+                            ui,
+                            &mut prefs,
+                            !cfg!(target_arch = "wasm32"),
                         );
-                        ui.selectable_value(&mut docked, false, tr!("settings-ui-undocked"));
-                    })
-                    .response
-                    .on_hover_text(tr!("settings-ui-publicsdr-place-hint"));
-                cfg.public_sdr_docked = docked;
-                ui.end_row();
-            }
-            // Both directions at once, for arranging a whole screen in one
-            // press: every module out, or every module home. Shown only while
-            // they would do something, so neither is a button that changes
-            // nothing.
-            let any_out = DetachableModule::ALL.iter().any(|m| cfg.is_detached(*m));
-            let any_in = DetachableModule::ALL.iter().any(|m| !cfg.is_detached(*m));
-            if any_out || any_in {
-                ui.label("");
-                ui.horizontal(|ui| {
-                    if any_out
-                        && crate::chrome::chip(ui, false, tr!("multi-dock-all-windows"))
-                            .on_hover_text(
-                                tr!("settings-ui-dock-all-hint"),
-                            )
-                            .clicked()
-                    {
-                        for m in DetachableModule::ALL {
-                            cfg.set_detached(m, false);
+                        if (prefs.closed || prefs.mode != sdroxide_types::WindowMode::Normal)
+                            && ui.button(tr!("window-restore")).clicked()
+                        {
+                            prefs.closed = false;
+                            prefs.mode = sdroxide_types::WindowMode::Normal;
+                            on = true;
                         }
-                    }
-                    if any_in
-                        && crate::chrome::chip(ui, false, tr!("multi-undock-all-windows"))
-                            .on_hover_text(
-                                tr!("settings-ui-undock-all-hint"),
-                            )
-                            .clicked()
-                    {
-                        for m in DetachableModule::ALL {
-                            cfg.set_detached(m, true);
+                        cfg.window_layouts.set(module.app_id(), prefs);
+                        cfg.set_detached(module, on);
+                    });
+                    ui.end_row();
+                }
+                // Public SDRs is not a module of its own but a tool window, with a
+                // third place the modules do not have: docked under the waterfall,
+                // as Radio Classic is. Where that slot is taken (a digital mode's
+                // panel, CW, a phone) it is a window whatever is chosen here.
+                {
+                    let mut docked = cfg.public_sdr_docked;
+                    ui.label(tr!(
+                        "settings-ui-window-label",
+                        module = tr!("publicsdr-public-sdrs")
+                    ));
+                    ComboBox::from_id_salt("ui-publicsdr-place")
+                        .selected_text(if docked {
+                            tr!("settings-ui-publicsdr-under-waterfall")
+                        } else {
+                            tr!("settings-ui-undocked")
+                        })
+                        .show_styled(ui, |ui| {
+                            ui.selectable_value(
+                                &mut docked,
+                                true,
+                                tr!("settings-ui-publicsdr-under-waterfall"),
+                            );
+                            ui.selectable_value(&mut docked, false, tr!("settings-ui-undocked"));
+                        })
+                        .response
+                        .on_hover_text(tr!("settings-ui-publicsdr-place-hint"));
+                    cfg.public_sdr_docked = docked;
+                    ui.end_row();
+                }
+                // Both directions at once, for arranging a whole screen in one
+                // press: every module out, or every module home. Shown only while
+                // they would do something, so neither is a button that changes
+                // nothing.
+                let any_out = DetachableModule::ALL.iter().any(|m| cfg.is_detached(*m));
+                let any_in = DetachableModule::ALL.iter().any(|m| !cfg.is_detached(*m));
+                if any_out || any_in {
+                    ui.label("");
+                    ui.horizontal(|ui| {
+                        if any_out
+                            && crate::chrome::chip(ui, false, tr!("multi-dock-all-windows"))
+                                .on_hover_text(tr!("settings-ui-dock-all-hint"))
+                                .clicked()
+                        {
+                            for m in DetachableModule::ALL {
+                                cfg.set_detached(m, false);
+                            }
                         }
-                    }
-                });
-                ui.end_row();
+                        if any_in
+                            && crate::chrome::chip(ui, false, tr!("multi-undock-all-windows"))
+                                .on_hover_text(tr!("settings-ui-undock-all-hint"))
+                                .clicked()
+                        {
+                            for m in DetachableModule::ALL {
+                                cfg.set_detached(m, true);
+                            }
+                        }
+                    });
+                    ui.end_row();
+                }
             }
-        }
 
-        ui.label(tr!("settings-ui-frame-rate"));
+            ui.label(tr!("settings-ui-frame-rate"));
         ComboBox::from_id_salt("ui-fps")
             .selected_text(format!("{fps} fps", fps = cfg.frame_rate_fps))
             .show_styled(ui, |ui| {
@@ -1173,7 +1201,7 @@ pub(in crate::app) fn workspaces_section(
 
 /// A detachable module's name in the settings rows, in the interface language.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-fn module_label(m: sdroxide_types::DetachableModule) -> String {
+pub(super) fn module_label(m: sdroxide_types::DetachableModule) -> String {
     use sdroxide_types::DetachableModule as M;
     match m {
         M::Panadapter => tr!("settings-ui-module-panadapter"),

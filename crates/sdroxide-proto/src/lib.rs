@@ -2458,8 +2458,9 @@ use sdroxide_types::{
 /// `audio_spectrum` at its tail — this screen's own display choice, so a browser
 /// and the station agree on what is drawn. Appended, so an older peer reads the
 /// screen it knows. `PROTO_VERSION` 303 → 304, `VERSION_BYTE` 0x7B → 0x7C.
-pub const PROTO_VERSION: u16 = 304;
-const VERSION_BYTE: u8 = 0x7C;
+/// v305: server-backed named window arrangements and open panels (#748).
+pub const PROTO_VERSION: u16 = 305;
+const VERSION_BYTE: u8 = 0x7D;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3813,7 +3814,7 @@ mod tests {
         // v296: the SSTV clock layer (`TextLayer::clock`) appended at the tail
         // of a `Composer` layer, which rides the picture preset messages.
         // v300: the theme-from-a-file at the tail of `ClientScreen`.
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (305, 0x7D));
         // v297: the strip height at the tail of `ClientScreen`, and it comes
         // back as sent — with, since v300, the theme file's name and text.
         let screen_text = "name = \"Vending machines\"\n".to_string();
@@ -3894,7 +3895,7 @@ mod tests {
             }
             other => panic!("the answer did not round-trip: {other:?}"),
         }
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (305, 0x7D));
     }
 
     /// v301: the desk microphone and the pedal (issue #636) ride the wire, and
@@ -3948,7 +3949,7 @@ mod tests {
         let back: sdroxide_types::StationConfig =
             postcard::from_bytes(&postcard::to_allocvec(&station).unwrap()).unwrap();
         assert_eq!(back.ptt_inputs, cfg);
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (305, 0x7D));
     }
 
     /// v302: the browser's microphone and pedal are kept on the server, and their
@@ -3973,7 +3974,7 @@ mod tests {
         assert_eq!(decode::<ServerMsg>(&bytes).unwrap(), down);
         let prev = ServerMsg::PttInputsStatus(Box::default());
         assert_eq!(bytes[1], encode(&prev).unwrap()[1] + 1, "OperatorPtt must be last");
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (305, 0x7D));
     }
 
     /// v286: the QRZ card rides `CallsignResult` — photo, age and all.
@@ -3995,7 +3996,7 @@ mod tests {
             ServerMsg::CallsignResult(back) => assert_eq!(back, info),
             other => panic!("the card did not round-trip: {other:?}"),
         }
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (305, 0x7D));
     }
 
     /// The VOR read-out rides the wire whole, locked or not, and the message is
@@ -5100,14 +5101,14 @@ mod tests {
         let ServerMsg::Ft8Status(s) = back else { panic!("not a status") };
         assert!(!s.config.wefax_auto_slant);
         assert_eq!(s.config.wefax_slant_ppm, -37.5);
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (305, 0x7D));
     }
 
     /// v289: the satellite lock's CTCSS tone rides the end of `SatLockConfig`,
     /// and the rig's own keying the end of `TxState`; the version is pinned.
     #[test]
     fn the_sat_lock_tone_and_the_rig_keyed_flag_round_trip() {
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (305, 0x7D));
         let cfg = sdroxide_types::SatLockConfig {
             norad_id: 25544,
             ctcss_hz: Some(67.0),

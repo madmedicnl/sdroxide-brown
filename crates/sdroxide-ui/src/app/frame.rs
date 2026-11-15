@@ -317,7 +317,6 @@ fn paint_panadapter_clock(
 
 /// The dial as a large readout string, MHz with trailing zeros trimmed —
 /// "27.265", "144.8", "10.1206". Shared by the detached panadapter's overlay.
-#[cfg(not(target_arch = "wasm32"))]
 pub(in crate::app) fn readout_text(hz: f64) -> String {
     let mhz = format!("{:.6}", hz.max(0.0) / 1e6);
     format!("{} MHz", mhz.trim_end_matches('0').trim_end_matches('.'))
@@ -327,13 +326,11 @@ pub(in crate::app) fn readout_text(hz: f64) -> String {
 /// spectrum is drawn **below** the bar, not under it, which is the whole point of
 /// moving the readout out of the middle of the picture: a waterfall you cannot
 /// see the centre of is worse than a number in the way.
-#[cfg(not(target_arch = "wasm32"))]
 const SP1_TOOLBAR_H: f32 = 32.0;
 
 /// The detached window's second line: the mode, and the S-meter reading when
 /// there is one. Read-only — it shares the main window's meter, so it cannot
 /// disagree with it.
-#[cfg(not(target_arch = "wasm32"))]
 fn detached_status_line(mode: Mode, meters: Option<&sdroxide_types::Meters>) -> String {
     match meters {
         Some(m) => {
@@ -370,61 +367,6 @@ fn empty_centre(ui: &egui::Ui) {
     p.galley(egui::pos2(area.center().x - hint_w / 2.0, top + name_h + 8.0), hint, dim);
 }
 
-/// The **⇱** button for a tool window's **title bar**, beside egui's fold and
-/// close.
-///
-/// egui draws its own title bar and offers no hook to add to it, so this is an
-/// `Area` laid over the title bar. The overlay is the point: a control in the
-/// body **reserves** a row and pushes the content down (the operator: *"the
-/// button pushes the content down so a scrollbar occurs"*), while this one
-/// costs the body nothing. Returns whether it was pressed.
-#[cfg(not(target_arch = "wasm32"))]
-fn tool_window_title_button(
-    ctx: &egui::Context,
-    win_id: egui::Id,
-    win_rect: egui::Rect,
-    body_top: f32,
-) -> bool {
-    if !body_top.is_finite() {
-        return false;
-    }
-    // The title bar is the strip from the window's top down to where the body
-    // begins (its fold ▾ left, its close ✕ right).
-    let title_h = (body_top - win_rect.top()).clamp(18.0, 40.0);
-    let side = title_h - 6.0;
-    // egui's close button owns the title bar's right edge; put ours just inside
-    // it, so the two never overlap.
-    let rect = egui::Rect::from_min_size(
-        egui::pos2(win_rect.right() - 2.0 * side - 10.0, win_rect.top() + (title_h - side) / 2.0),
-        egui::vec2(side, side),
-    );
-    let mut clicked = false;
-    // **`Order::Middle`, not `Foreground`.** This is the whole of upstream #653's
-    // shape and of the operator's screenshot: a `Foreground` area paints above
-    // *every* window whatever the draw order, so with two tool windows
-    // overlapping, the lower one's chip showed through the upper one's body
-    // while the rest of its title bar was correctly hidden. The window above was
-    // hidden in window order and the chip was not — the same window, half
-    // hidden, which no other explanation fits.
-    //
-    // `Middle` is the order egui's own windows live in, so the chip now takes
-    // its place among them: it sits above the body it belongs to, and a window
-    // raised over that one covers the chip with everything else. It is still an
-    // `Area` rather than a widget in the body's `Ui`, because the title bar is
-    // outside the body's clip rect and a widget there would be clipped away —
-    // which is why this was an overlay to begin with.
-    egui::Area::new(win_id.with("title-btn")).fixed_pos(rect.min).order(egui::Order::Middle).show(
-        ctx,
-        |ui| {
-            ui.set_min_size(rect.size());
-            clicked = crate::chrome::chip_window_icon(ui, crate::chrome::WindowIcon::Out)
-                .on_hover_text(tr!("frame-window-chip-hint"))
-                .clicked();
-        },
-    );
-    clicked
-}
-
 /// See [`SdroxideApp::tool_window_egui`]: the id epoch that resets a tool
 /// window's remembered geometry when this window's bounding changes. Bump it
 /// whenever a tool window's default size or its body's height-filling changes.
@@ -445,15 +387,9 @@ fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
             // A **floating panel** docks back into the pane; an OS window docks
             // back into the main window. Two different pictures, because they are
             // two different places to go back to.
-            (
-                crate::chrome::WindowIcon::Dock,
-                tr!("frame-dock-panel-pane-hint"),
-            )
+            (crate::chrome::WindowIcon::Dock, tr!("frame-dock-panel-pane-hint"))
         } else {
-            (
-                crate::chrome::WindowIcon::Out,
-                tr!("frame-window-chip-hint"),
-            )
+            (crate::chrome::WindowIcon::Out, tr!("frame-window-chip-hint"))
         };
         // A **one-row** allocation, right-aligned — not `row_tail`. `row_tail`
         // lays out `right_to_left(Align::Center)` over the whole available
@@ -474,7 +410,6 @@ fn tool_window_chip(ui: &mut egui::Ui, undocked: bool) -> bool {
 /// Everything about a module's **own OS window** that is not its contents: the
 /// ids, the app-id a Wayland rule matches on, the title and the opening size.
 /// One per [`DetachableModule`], from [`detached_spec`].
-#[cfg(not(target_arch = "wasm32"))]
 struct DetachedWindowSpec {
     /// Stable viewport id — **one window per module for the whole station**,
     /// not per radio. `UiSettings` is station-wide, so there is a single window
@@ -498,7 +433,6 @@ struct DetachedWindowSpec {
 /// The window spec for a module. The `app_id`s are a public contract — the
 /// operator's own compositor rules match on them (`docs/internal/UNDOCKED-HANDOVER.md`), so
 /// changing one is a user-visible change.
-#[cfg(not(target_arch = "wasm32"))]
 fn detached_spec(module: sdroxide_types::DetachableModule) -> DetachedWindowSpec {
     use sdroxide_types::DetachableModule as M;
     let app_id = module.app_id();
@@ -608,8 +542,8 @@ fn workspace_slot(key: eframe::egui::Key) -> Option<usize> {
 }
 
 /// What a detached window left behind this frame.
-#[cfg(not(target_arch = "wasm32"))]
 struct DetachedOutcome {
+    prefs: sdroxide_types::WindowPrefs,
     /// The operator closed the window — which means "dock me again", not "come
     /// back next frame".
     close_requested: bool,
@@ -711,11 +645,12 @@ fn detached_viewport(
     ctx: &egui::Context,
     spec: &DetachedWindowSpec,
     seed: Option<sdroxide_types::DetachedWindow>,
+    mut prefs: sdroxide_types::WindowPrefs,
     child: ChildWindow,
     draw: impl FnOnce(&mut egui::Ui),
 ) -> DetachedOutcome {
     if ctx.embed_viewports() {
-        return DetachedOutcome { close_requested: false, geometry: None };
+        return DetachedOutcome { close_requested: false, geometry: None, prefs };
     }
     let vid = spec.viewport_id;
     let mut builder = egui::ViewportBuilder::default()
@@ -723,13 +658,20 @@ fn detached_viewport(
         // rule has to float this window and pin it to a monitor.
         .with_app_id(spec.app_id.clone())
         .with_title(spec.title.clone())
-        .with_min_inner_size(spec.min_size);
+        .with_min_inner_size(spec.min_size)
+        .with_minimize_button(true)
+        .with_maximize_button(true);
+    if ctx.data(|d| d.get_temp::<bool>(egui::Id::new("window-stack-supported"))).unwrap_or(true) {
+        builder = builder.with_window_level(super::window_chrome::stack(prefs.level));
+    }
     // Seed the size and place only on the frame the window is (re)built, so a
     // live resize is never fought by our own request.
     if ctx.cumulative_pass_nr_for(vid) == 0 {
         let monitor = ctx.input(|i| i.viewport().monitor_size);
         let (size, pos) = detached_geometry(monitor, seed, spec.default_size);
-        builder = builder.with_inner_size(size);
+        builder = builder
+            .with_inner_size(size)
+            .with_maximized(prefs.mode == sdroxide_types::WindowMode::Maximized);
         if let Some(pos) = pos {
             builder = builder.with_position(pos);
         }
@@ -741,13 +683,33 @@ fn detached_viewport(
     // un-called on a frame the window is only closing).
     let mut draw = Some((child, draw));
     ctx.show_viewport_immediate(vid, builder, |ui, _class| {
-        let ictx = ui.ctx();
+        let ictx = ui.ctx().clone();
+        let mode_key = spec.settle_id.with("requested-mode");
+        let previous_mode = ictx.data(|d| d.get_temp::<sdroxide_types::WindowMode>(mode_key));
+        let changed_mode = previous_mode.is_some_and(|mode| mode != prefs.mode);
+        if changed_mode {
+            ictx.send_viewport_cmd(egui::ViewportCommand::Minimized(prefs.mode == sdroxide_types::WindowMode::Minimized));
+            ictx.send_viewport_cmd(egui::ViewportCommand::Maximized(prefs.mode == sdroxide_types::WindowMode::Maximized));
+        }
         // `content_rect` is the inner size as the toolkit reports it — the only
         // size on Wayland, where `viewport().inner_rect` is `None` because
         // Wayland gives a client no absolute position. `outer_rect` carries that
         // position where the platform has one, and is `None` on Wayland too.
+        use sdroxide_types::WindowMode;
+        if ictx.cumulative_pass_nr_for(vid) <= 1 && prefs.mode == WindowMode::Minimized {
+            ictx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        } else if !changed_mode {
+            let (min, max) = ictx.input(|i| (i.viewport().minimized, i.viewport().maximized));
+            prefs.mode = if min == Some(true) {
+                WindowMode::Minimized
+            } else if max == Some(true) {
+                WindowMode::Maximized
+            } else {
+                WindowMode::Normal
+            };
+        }
         let size = ictx.content_rect().size();
-        if size.x > 1.0 && size.y > 1.0 {
+        if prefs.mode == sdroxide_types::WindowMode::Normal && size.x > 1.0 && size.y > 1.0 {
             let pos = ictx.input(|i| i.viewport().outer_rect).map(|r| r.min);
             geometry = Some(sdroxide_types::DetachedWindow {
                 // Whole points, so a sub-point wobble is not a resize.
@@ -762,6 +724,11 @@ fn detached_viewport(
             ictx.request_repaint_of(egui::ViewportId::ROOT);
             return;
         }
+        if super::window_chrome::controls(ui, &mut prefs, true) {
+            close_requested = true;
+            return;
+        }
+        ictx.data_mut(|d| d.insert_temp(mode_key, prefs.mode));
         if let Some((child, draw)) = draw.take() {
             // **This window's** answers, not the main window's, for as long as
             // the draw runs: its own width earns its tier, it has no band column
@@ -772,7 +739,32 @@ fn detached_viewport(
             draw(ui);
         }
     });
-    DetachedOutcome { close_requested, geometry }
+    DetachedOutcome { close_requested, geometry, prefs }
+}
+
+/// Browser viewports are movable panels in the page, never browser popups.
+#[cfg(target_arch = "wasm32")]
+fn detached_viewport(
+    ctx: &egui::Context,
+    spec: &DetachedWindowSpec,
+    _seed: Option<sdroxide_types::DetachedWindow>,
+    prefs: sdroxide_types::WindowPrefs,
+    child: ChildWindow,
+    draw: impl FnOnce(&mut egui::Ui),
+) -> DetachedOutcome {
+    let (close_requested, prefs, _) = super::window_chrome::embedded(
+        ctx,
+        spec.viewport_id.0,
+        &spec.title,
+        spec.default_size,
+        spec.min_size,
+        prefs,
+        |ui| {
+            let _scope = child.scope(ui);
+            draw(ui);
+        },
+    );
+    DetachedOutcome { close_requested, geometry: None, prefs }
 }
 
 /// Everything the panadapter draw needs that is derived from the radio's state
@@ -810,6 +802,8 @@ impl eframe::App for SdroxideApp {
         let _plan = sdroxide_types::ThreadPlanGuard::enter(self.band_plan_cur);
         let ctx = ui.ctx().clone();
         let now = ctx.input(|i| i.time);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.root_window_prefs(&ctx, frame);
         self.konami.tick(ctx.input(|i| i.stable_dt).min(0.25));
         // The profile's stored key bindings, offered when this client has not
         // adopted them. Drawn before anything else so it is the first thing
@@ -1327,9 +1321,7 @@ impl eframe::App for SdroxideApp {
             .or_else(|| tx_note.clone())
             .or_else(|| self.other_instance.clone());
         let notice = shown.or_else(|| {
-            (rx_only && !self.rx_only_nudge_dismissed).then(|| {
-                tr!("frame-rx-only-nudge")
-            })
+            (rx_only && !self.rx_only_nudge_dismissed).then(|| tr!("frame-rx-only-nudge"))
         });
         // A refused PTT or TUNE press: big, red, every time — no cap.
         if let Some(red) = self.tx_press_banner(crate::time::now_unix_f64()) {
@@ -1396,7 +1388,10 @@ impl eframe::App for SdroxideApp {
                                 // it, and nothing is retuned.
                                 if rx_only
                                     && ui
-                                        .button(RichText::new(tr!("frame-listening-controls")).size(13.0))
+                                        .button(
+                                            RichText::new(tr!("frame-listening-controls"))
+                                                .size(13.0),
+                                        )
                                         .on_hover_text(tr!("frame-listening-controls-hint"))
                                         .clicked()
                                 {
@@ -2263,7 +2258,9 @@ impl eframe::App for SdroxideApp {
             };
             // The geometry the window should open at, from this screen's
             // settings. Only consulted when the window is (re)built.
-            self.solar.set_window_seed(self.ui_settings.solar3d_window);
+            let prefs = self.solar.exchange_window_prefs(self.ui_settings.window_layouts.get("solar3d"));
+            self.remember_window_prefs("solar3d", prefs);
+            self.solar.set_window_seed(prefs.window.map(|g| sdroxide_types::Solar3dWindow { size: g.size, pos: g.pos }).or(self.ui_settings.solar3d_window));
             let lock_change = self.solar.viewport(
                 &ctx,
                 &grid,
@@ -2405,6 +2402,7 @@ impl eframe::App for SdroxideApp {
         // (Also inside `dispatch_commands`, so a module's own window cannot
         // route around it.)
         self.dispatch_commands(cmds);
+        self.flush_window_controls();
 
         // Data-driven repaint: wake at the next expected spectrum frame while
         // something is streaming, and idle-poll when nothing is. User input
@@ -2908,7 +2906,6 @@ impl SdroxideApp {
     /// The readout stays display-only — a click or drag on the spectrum still tunes,
     /// and the tuning strip stays in the controls window — so there is a single owner
     /// for the frequency and the two windows cannot disagree.
-    #[cfg(not(target_arch = "wasm32"))]
     fn sp1_toolbar(&mut self, ui: &mut egui::Ui, module: sdroxide_types::DetachableModule) {
         let area = ui.available_rect_before_wrap();
         ui.allocate_ui(egui::vec2(area.width(), SP1_TOOLBAR_H), |ui| {
@@ -2953,7 +2950,6 @@ impl SdroxideApp {
     /// One panadapter window's contents — SP1's or AUX SP's. The caller has
     /// already put the right `self.view` in place (AUX swaps its own in around
     /// this call), so the draw itself is shared.
-    #[cfg(not(target_arch = "wasm32"))]
     fn draw_detached_panadapter(
         &mut self,
         module: sdroxide_types::DetachableModule,
@@ -2969,7 +2965,8 @@ impl SdroxideApp {
         let inputs = self.panadapter_inputs(now);
         let mut clicked_spot: Option<Spot> = None;
         let child = ChildWindow::own(self);
-        let outcome = detached_viewport(ctx, spec, seed, child, |ui| {
+        let prefs = self.ui_settings.window_layouts.get(module.app_id());
+        let outcome = detached_viewport(ctx, spec, seed, prefs, child, |ui| {
             // The toolbar across the top, then the spectrum below it.
             // `panel_below` is false: the operating panel is not under this
             // window, so the band-plan strip may use the rest of the height.
@@ -3005,7 +3002,6 @@ impl SdroxideApp {
     /// business and a module only has to say how to draw itself. That is what
     /// keeps a window alive across a radio or mode switch instead of tearing
     /// down and re-mapping.
-    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn show_detached_module(
         &mut self,
         module: sdroxide_types::DetachableModule,
@@ -3051,7 +3047,8 @@ impl SdroxideApp {
                 self.panel_window_pane = self.panel_window_pane.min(panes.saturating_sub(1));
                 std::mem::swap(&mut self.view.digi_pane, &mut self.panel_window_pane);
                 let child = ChildWindow::panes(self);
-                let outcome = detached_viewport(ctx, &spec, seed, child, |ui| {
+                let prefs = self.ui_settings.window_layouts.get(&spec.app_id);
+                let outcome = detached_viewport(ctx, &spec, seed, prefs, child, |ui| {
                     // **The same title bar as the float, on the panel's own
                     // background.** A tiling window manager draws no title bar,
                     // so the window's content carries one: 14 pt, the panel's
@@ -3115,7 +3112,8 @@ impl SdroxideApp {
             }
             M::Controls => {
                 let child = ChildWindow::desk(self);
-                let outcome = detached_viewport(ctx, &spec, seed, child, |ui| {
+                let prefs = self.ui_settings.window_layouts.get(&spec.app_id);
+                let outcome = detached_viewport(ctx, &spec, seed, prefs, child, |ui| {
                     // The console is **desktop-shaped whatever its own height**:
                     // the compact strips are for a phone, and a control window
                     // that flipped to one the moment it opened was the first
@@ -3149,7 +3147,8 @@ impl SdroxideApp {
             }
             M::BandMenu => {
                 let child = ChildWindow::desk(self);
-                let outcome = detached_viewport(ctx, &spec, seed, child, |ui| {
+                let prefs = self.ui_settings.window_layouts.get(&spec.app_id);
+                let outcome = detached_viewport(ctx, &spec, seed, prefs, child, |ui| {
                     // Desktop-shaped whatever its height, like the console: the
                     // window is a desktop surface, and the compact strips are
                     // for a phone.
@@ -3201,7 +3200,8 @@ impl SdroxideApp {
             }
             M::Rotor => {
                 let child = ChildWindow::desk(self);
-                let outcome = detached_viewport(ctx, &spec, seed, child, |ui| {
+                let prefs = self.ui_settings.window_layouts.get(&spec.app_id);
+                let outcome = detached_viewport(ctx, &spec, seed, prefs, child, |ui| {
                     // Desktop-shaped whatever its height, like the console and
                     // the band selector: this is a desk tool, and the compact
                     // strips are for a phone.
@@ -3246,7 +3246,6 @@ impl SdroxideApp {
     /// once a drag settles, and dock it again when the operator closes it. The
     /// one place both modules' outcomes are handled, so their behaviour cannot
     /// drift apart.
-    #[cfg(not(target_arch = "wasm32"))]
     fn handle_detached_outcome(
         &mut self,
         ctx: &egui::Context,
@@ -3254,6 +3253,11 @@ impl SdroxideApp {
         spec: &DetachedWindowSpec,
         outcome: DetachedOutcome,
     ) {
+        let mut prefs = outcome.prefs;
+        if outcome.close_requested {
+            prefs.closed = true;
+        }
+        self.remember_window_prefs(module.app_id(), prefs);
         let mut persist = false;
         {
             let state = &mut self.ui_settings.detached[module.index()];
@@ -3270,13 +3274,10 @@ impl SdroxideApp {
                 ctx.data_mut(|d| d.insert_temp(spec.settle_id, g));
             }
             if outcome.close_requested {
-                // Closing the window is docking it again, not an invitation to
-                // re-open it next frame — and the frame it closed on still
-                // carries the geometry to keep.
+                // Close hides this module; Settings can restore it without losing geometry.
                 if let Some(g) = outcome.geometry {
                     state.window = Some(g);
                 }
-                state.detached = false;
                 persist = true;
             }
         }
@@ -3326,6 +3327,10 @@ impl SdroxideApp {
         // Lifting the panel out is asking to *see* it: a float remembered as
         // rolled up from last time would hand back a title bar and nothing else.
         self.panel_rolled = false;
+        let mut prefs = self.ui_settings.window_layouts.get("floating-operating-panel");
+        prefs.undocked = true;
+        prefs.mode = sdroxide_types::WindowMode::Normal;
+        self.remember_window_prefs("floating-operating-panel", prefs);
     }
 
     /// The operating pane as a **floating panel inside this window**.
@@ -3335,139 +3340,37 @@ impl SdroxideApp {
     /// which is what went wrong with the first attempt: it opened the mode's own
     /// tool window, and a mode without one (FT8 among them) got nothing at all.
     ///
-    /// **Its title bar is ours**, and it carries the three things a window has:
-    /// roll up, out to a window of its own, and close — which here means *dock*,
-    /// because a panel is not a tool that can be shut, it is the mode's control
-    /// surface. egui draws no hook for extra title-bar buttons, so the bar is
-    /// drawn by us and `title_bar(false)` hands the movement to egui's
-    /// drag-anywhere fallback; the bar's own empty ground drags the window.
-    ///
-    /// **Out is a window of its own**, not a state: the operator's tiling window
-    /// manager has no title bar to put the control in, so every window carries
-    /// its own dock picture in its content — but the *float* needs no picture of
-    /// its own, because the title bar is exactly the thing the OS window will not
-    /// have.
+    /// The shared title bar provides minimize, maximize/restore and close;
+    /// closing this operating surface docks it back into the radio.
     fn floating_panel_window(&mut self, ctx: &egui::Context, cmds: &mut Vec<Command>, mode: Mode) {
         let title = tr!("frame-panel-window-title", mode = mode.label());
-        let mut open = true;
-        // **No dud in the browser.** Detaching is native-only, so an out button
-        // there would dock the panel instead of giving it a window — a control
-        // doing the wrong thing, which is worse than one that is absent.
-        #[cfg(not(target_arch = "wasm32"))]
+        let mut prefs = self.ui_settings.window_layouts.get("floating-operating-panel");
+        prefs.undocked = true;
+        #[allow(unused_mut)]
         let mut out = false;
-        #[cfg(target_arch = "wasm32")]
-        let out = false;
-        let mut rolled = self.panel_rolled;
-        // The floating panel is a panel window too, and gets the same bargain as
-        // the detached one: its own pane, swapped in around the draw, clamped to
-        // a real pane so the waterfall tab the main window may have selected
-        // cannot ask it for a picture it has not got.
         let panes = super::panels::panel_panes(mode).len();
         self.panel_window_pane = self.panel_window_pane.min(panes.saturating_sub(1));
         std::mem::swap(&mut self.view.digi_pane, &mut self.panel_window_pane);
-        egui::Window::new(title)
-            .id(egui::Id::new("floating-operating-panel"))
-            .title_bar(false)
-            .default_size([540.0, 440.0])
-            .min_width(320.0)
-            .min_height(0.0)
-            .max_size(ctx.content_rect().size() * 0.95)
-            .resizable(true)
-            .show(ctx, |ui| {
-                // A floating panel is a window inside this one, and answers for
-                // its own size like any other — see `layout::ViewportScope`. It
-                // is where the fault showed first: at 540 pt it laid itself out
-                // desktop-wide, so its chip rows ran past its right edge.
+        let (closed, mut prefs, _) = super::window_chrome::embedded(
+            ctx, crate::layout::salted_id(ctx, "floating-operating-panel"), &title,
+            [540., 440.], [320., 40.], prefs, |ui| {
                 let _scope = ChildWindow::panes(self).scope(ui);
-                // **The title bar: the name, then the three buttons**, drawn
-                // right to left so the order reads left-to-right as
-                // out · roll-up · close, which is what every desktop does. The
-                // title is a noun and the glyphs are verbs, which is the whole
-                // grammar this pass is about.
-                // **The bar's own numbers**: 14 pt tall, 12 pt buttons, 10 pt
-                // name — see `chrome::BAR_H`. It is a title bar, not a strip of
-                // controls, and a portrait of the window should be as quiet as
-                // the one on any other window.
-                let btn = egui::vec2(crate::chrome::BAR_CHIP, crate::chrome::BAR_CHIP);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), crate::chrome::BAR_H),
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        ui.label(
-                            RichText::new(mode.label())
-                                .size(crate::chrome::BAR_FONT)
-                                .color(crate::theme::CYAN()),
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            // **One family, one size, one stroke.** All three are the
-                            // drawn window pictures, in chips of the same geometry —
-                            // a painted arrow beside a font `▾` and a font `×` was
-                            // three weights and three sizes on one row.
-                            if crate::chrome::chip_window_icon_sized(
-                                ui,
-                                crate::chrome::WindowIcon::Close,
-                                btn,
-                            )
-                            .on_hover_text(tr!("frame-dock-panel-hint"))
-                            .clicked()
-                            {
-                                open = false;
-                            }
-                            let roll_icon = if rolled {
-                                crate::chrome::WindowIcon::Unfold
-                            } else {
-                                crate::chrome::WindowIcon::Collapse
-                            };
-                            if crate::chrome::chip_window_icon_sized(ui, roll_icon, btn)
-                                .on_hover_text(if rolled {
-                                    tr!("frame-unroll-hint")
-                                } else {
-                                    tr!("frame-roll-up-hint")
-                                })
-                                .clicked()
-                            {
-                                rolled = !rolled;
-                            }
-                            // **Out to a window of its own** — the one button a
-                            // floating window has that a docked panel does not,
-                            // and one a browser cannot honour: detaching is
-                            // native-only, so it is not drawn there rather than
-                            // drawn dead.
-                            #[cfg(not(target_arch = "wasm32"))]
-                            {
-                                out = crate::chrome::chip_window_icon_sized(
-                                    ui,
-                                    crate::chrome::WindowIcon::Out,
-                                    btn,
-                                )
-                                .on_hover_text(tr!("frame-window-panel-hint"))
-                                .clicked();
-                            }
-                        });
-                    },
-                );
-                ui.separator();
-                if !rolled {
-                    // One pane at a time in a narrow floating panel: the chips
-                    // that reach the others belong to the window that is in front.
-                    if crate::layout::tier(ui.ctx()) == crate::layout::Tier::Phone {
-                        self.digi_tabs(ui, mode, false);
-                    }
-                    let h = ui.available_height();
-                    self.draw_operating_panel(ui, cmds, mode, h);
-                }
-            });
+                #[cfg(not(target_arch = "wasm32"))]
+                { out = tool_window_chip(ui, false); }
+                if crate::layout::tier(ui.ctx()) == crate::layout::Tier::Phone { self.digi_tabs(ui, mode, false); }
+                let h = ui.available_height();
+                self.draw_operating_panel(ui, cmds, mode, h);
+            },
+        );
         std::mem::swap(&mut self.view.digi_pane, &mut self.panel_window_pane);
-        self.panel_rolled = rolled;
-        if !open {
-            self.panel_floating = false;
-        }
+        self.panel_rolled = prefs.mode == sdroxide_types::WindowMode::Minimized;
+        if closed { self.panel_floating = false; prefs.undocked = false; }
         if out {
-            // One at a time: the OS window takes over from the floating panel, and
-            // the column keeps the room the pane gave up.
             self.panel_floating = false;
             self.detach_operating_panel();
+            prefs.undocked = false;
         }
+        self.remember_window_prefs("floating-operating-panel", prefs);
     }
 
     /// **Send the operating pane into an OS window of its own** — the detachable
@@ -3498,10 +3401,8 @@ impl SdroxideApp {
     /// as its own OS window (undocked). Returns whether it is still open, so the
     /// caller stores that back in its `show_*` flag.
     ///
-    /// The undocked flag and the remembered geometry live in
-    /// [`SdroxideApp::tool_windows`], keyed by `id`. **Session-only**, like the
-    /// in-viewport positions egui keeps for the same windows: a tool is
-    /// transient, and where it sat last run is not worth a config field per tool.
+    /// The level, state and geometry are persistent in `window_layouts`,
+    /// keyed by the stable tool id and carried to remote clients by ClientScreen.
     ///
     /// `body` receives `self` rather than capturing it, so this can be a method —
     /// a closure that captured `self` could not also be called from a `&mut self`
@@ -3557,70 +3458,43 @@ impl SdroxideApp {
         centre_first: bool,
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> (bool, bool) {
-        let mut win_open = true;
+        let mut prefs = self.ui_settings.window_layouts.get(id);
         let place = self.tool_place.take();
-        let mut win_id = crate::layout::salted_id(ctx, id).with(TOOL_WINDOW_EPOCH);
-        if let Some(p) = place {
-            win_id = win_id.with(p.epoch);
+        let epoch = place.as_ref().map_or(0, |p| p.epoch);
+        if prefs.embedded_window.is_none()
+            && let Some(p) = place
+        {
+            prefs.embedded_window = Some(sdroxide_types::DetachedWindow {
+                size: [p.size.x, p.size.y],
+                pos: Some([p.pos.x, p.pos.y]),
+            });
         }
-        #[cfg_attr(target_arch = "wasm32", allow(unused))]
-        let mut body_top = f32::NAN;
-        let mut w = egui::Window::new(title)
-            // The id carries an **epoch**, bumped when this window's bounding
-            // changes; egui remembers a window's size and eframe persists it, so
-            // the epoch discards a stale one.
-            .id(win_id)
-            .open(&mut win_open)
-            .frame(crate::chrome::window_frame())
-            .resizable(true)
-            .default_size(egui::vec2(
-                crate::layout::window_w(ctx, default_size[0]),
-                crate::layout::window_h(ctx, default_size[1]),
-            ))
-            // A cap so no remembered — or future — size can take the whole
-            // screen. The body sits at the top now (the ⇱ chip is a one-row
-            // allocation), so a large window is merely large, not broken; this
-            // just keeps it sane.
-            .max_size(ctx.content_rect().size() * 0.95);
-        if let Some(p) = place {
-            w = w.default_pos(p.pos).default_size(p.size);
+        if prefs.embedded_window.is_none() && centre_first {
+            let p =
+                ctx.content_rect().center() - egui::vec2(default_size[0], default_size[1]) * 0.5;
+            prefs.embedded_window =
+                Some(sdroxide_types::DetachedWindow { size: default_size, pos: Some([p.x, p.y]) });
         }
-        if min_size[0] > 0.0 {
-            w = w
-                .min_width(crate::layout::window_w(ctx, min_size[0]))
-                .min_height(crate::layout::window_h(ctx, min_size[1]));
-        }
-        // First open only — egui remembers a window's position, so this decides
-        // where a window lands once and never again.
-        if centre_first {
-            let want = egui::vec2(
-                crate::layout::window_w(ctx, default_size[0]),
-                crate::layout::window_h(ctx, default_size[1]),
-            );
-            w = w.default_pos(ctx.content_rect().center() - want * 0.5);
-        }
-        let resp = w.show(ctx, |ui| {
-            crate::chrome::window_body_bg(ui);
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                body_top = ui.min_rect().min.y;
-            }
-            body(self, ui);
-        });
-        // Only ever set on the native path below: the ⇱ chip rides the title
-        // bar, and the browser has no second window to send it to. Same shape
-        // as `body_top` above.
-        #[cfg_attr(target_arch = "wasm32", allow(unused))]
+        #[allow(unused_mut)]
         let mut detach = false;
-        if let Some(r) = &resp {
-            self.tool_rect = Some(r.response.rect);
-            crate::chrome::paint_window_border(ctx, &r.response);
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                detach = tool_window_title_button(ctx, win_id, r.response.rect, body_top);
-            }
-        }
-        (win_open, detach)
+        let (closed, prefs, rect) = super::window_chrome::embedded(
+            ctx,
+            crate::layout::salted_id(ctx, id).with(TOOL_WINDOW_EPOCH).with(epoch),
+            title,
+            default_size,
+            min_size,
+            prefs,
+            |ui| {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    detach = tool_window_chip(ui, false);
+                }
+                body(self, ui);
+            },
+        );
+        self.tool_rect = rect;
+        self.remember_window_prefs(id, prefs);
+        (!closed, detach)
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -3649,7 +3523,11 @@ impl SdroxideApp {
         centre_first: bool,
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> bool {
-        let st = self.tool_windows.get(id).copied().unwrap_or_default();
+        let saved = self.ui_settings.window_layouts.get(id);
+        let st = ToolWindowState {
+            undocked: saved.undocked,
+            window: saved.window.or_else(|| self.tool_windows.get(id).and_then(|s| s.window)),
+        };
         if st.undocked {
             self.tool_window_os(ctx, id, title, default_size, st.window, body)
         } else {
@@ -3657,6 +3535,10 @@ impl SdroxideApp {
                 self.tool_window_egui(ctx, id, title, default_size, min_size, centre_first, body);
             if detach {
                 self.tool_windows.insert(id, ToolWindowState { undocked: true, window: st.window });
+                let mut prefs = self.ui_settings.window_layouts.get(id);
+                prefs.undocked = true;
+                prefs.mode = sdroxide_types::WindowMode::Normal;
+                self.remember_window_prefs(id, prefs);
             }
             open
         }
@@ -3676,7 +3558,8 @@ impl SdroxideApp {
         let spec = tool_spec(id, title, default_size);
         let mut dock = false;
         let child = ChildWindow::own(self);
-        let outcome = detached_viewport(ctx, &spec, seed, child, |ui| {
+        let prefs = self.ui_settings.window_layouts.get(id);
+        let outcome = detached_viewport(ctx, &spec, seed, prefs, child, |ui| {
             // A tool's own window gets the panel background the in-window one
             // has from its `egui::Window` frame — the module windows paint their
             // own, a tool body assumes one.
@@ -3705,6 +3588,10 @@ impl SdroxideApp {
         let open = !outcome.close_requested;
         let undocked = open && !dock;
         self.tool_windows.insert(id, ToolWindowState { undocked, window });
+        let mut prefs = outcome.prefs;
+        prefs.undocked = if outcome.close_requested { st.undocked } else { undocked };
+        prefs.window = window;
+        self.remember_window_prefs(id, prefs);
         open
     }
 
@@ -3755,31 +3642,13 @@ impl SdroxideApp {
     /// operating panel, or CW's keyboard — so a voice mode ignores the setting;
     /// the preference stays and applies again in a mode with a panel.
     fn panel_detached(&self, mode: Mode) -> bool {
-        #[cfg(target_arch = "wasm32")]
-        {
-            let _ = mode;
-            false
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            (self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel))
-                && self.focused
-                && (mode.has_bottom_panel() || mode == Mode::Cw)
-        }
+        self.ui_settings.is_detached(sdroxide_types::DetachableModule::Panel)
+            && self.focused
+            && (mode.has_bottom_panel() || mode == Mode::Cw)
     }
 
-    /// Whether the focused radio draws its **control strip** in its own window
-    /// this frame. Every mode has one, so the only gates are the browser and the
-    /// focus, exactly as for the panadapter.
     fn controls_detached(&self) -> bool {
-        #[cfg(target_arch = "wasm32")]
-        {
-            false
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.ui_settings.is_detached(sdroxide_types::DetachableModule::Controls) && self.focused
-        }
+        self.ui_settings.is_detached(sdroxide_types::DetachableModule::Controls) && self.focused
     }
 
     /// **Classic UI** is in use *and* the column is drawn this frame — which the
@@ -3810,14 +3679,7 @@ impl SdroxideApp {
     /// radio *and* there is a panadapter to show (its layers are on). This is the
     /// same rule the frame loop reserves space by, so the two cannot disagree.
     fn panadapter_window_wanted(&self) -> bool {
-        #[cfg(target_arch = "wasm32")]
-        {
-            false
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.module_window_wanted(sdroxide_types::DetachableModule::Panadapter)
-        }
+        self.module_window_wanted(sdroxide_types::DetachableModule::Panadapter)
     }
 
     /// The same rule for any spectrum module: undocked on the focused radio
@@ -3825,7 +3687,6 @@ impl SdroxideApp {
     /// for both SP1 and AUX SP, so the two cannot disagree about when a spectrum
     /// window exists — a second one that appeared without its layers would be an
     /// empty window on a monitor.
-    #[cfg(not(target_arch = "wasm32"))]
     fn module_window_wanted(&self, module: sdroxide_types::DetachableModule) -> bool {
         self.ui_settings.is_detached(module) && self.focused && self.view.panadapter_visible()
     }
@@ -3834,7 +3695,6 @@ impl SdroxideApp {
     /// focused radio **and** the mode has a panel to show. A mode with none —
     /// a voice mode — gets no window at all; the operator is told why by the
     /// notice banner rather than by an empty window sitting on a monitor.
-    #[cfg(not(target_arch = "wasm32"))]
     fn panel_window_wanted(&self, mode: Mode) -> bool {
         self.panel_detached(mode)
     }
@@ -3852,7 +3712,6 @@ impl SdroxideApp {
     /// present — it is a selector, always meaningful, and the operator opened it
     /// deliberately. Every mode has a band and a mode, so there is never an empty
     /// window to explain.
-    #[cfg(not(target_arch = "wasm32"))]
     fn band_menu_detached(&self) -> bool {
         self.ui_settings.is_detached(sdroxide_types::DetachableModule::BandMenu) && self.focused
     }
@@ -3861,7 +3720,6 @@ impl SdroxideApp {
     /// radio. Like the band selector it needs nothing else to be present — the
     /// compass is meaningful whether or not a rotator is configured, and when
     /// none is, the window says so rather than disappearing.
-    #[cfg(not(target_arch = "wasm32"))]
     fn rotor_detached(&self) -> bool {
         self.ui_settings.is_detached(sdroxide_types::DetachableModule::Rotor) && self.focused
     }
@@ -3874,7 +3732,6 @@ impl SdroxideApp {
     /// focused radio, every frame. That is what keeps an undocked window from
     /// being torn down and re-mapped when the radio or the mode changes under
     /// it: the shell always asks, and there is always an answer.
-    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn detached_wanted(&self) -> [bool; sdroxide_types::DetachableModule::COUNT] {
         let mut want = [false; sdroxide_types::DetachableModule::COUNT];
         want[sdroxide_types::DetachableModule::Panadapter.index()] =
@@ -3886,6 +3743,9 @@ impl SdroxideApp {
             self.module_window_wanted(sdroxide_types::DetachableModule::AuxPanadapter);
         want[sdroxide_types::DetachableModule::BandMenu.index()] = self.band_menu_detached();
         want[sdroxide_types::DetachableModule::Rotor.index()] = self.rotor_detached();
+        for module in sdroxide_types::DetachableModule::ALL {
+            want[module.index()] &= !self.ui_settings.window_layouts.get(module.app_id()).closed;
+        }
         want
     }
 
@@ -4232,7 +4092,10 @@ impl SdroxideApp {
                     // (discussion #4). Losing it here was why a save kept going
                     // to the station default and a profile was never created.
                     self.client_settings_from = Some(profile);
-                    if has_stored {
+                    if has_stored && self.client_settings_stored.as_ref() != Some(&settings) {
+                        // An echo of our own save must not rewind an in-flight drag.
+                        let generation = egui::Id::new(("server-window-generation", self.radio_id));
+                        ctx.data_mut(|d| { let n = d.get_temp::<u64>(generation).unwrap_or(0); d.insert_temp(generation, n + 1); });
                         // A real stored set: apply it. It is presentation-only,
                         // so it lays over the client's own settings without
                         // touching anything the machine owns — see
@@ -4243,6 +4106,7 @@ impl SdroxideApp {
                         // find the picker, which is exactly how it reached a
                         // tester on three releases.
                         settings.apply_to(&mut self.ui_settings);
+                        self.panel_floating = self.ui_settings.window_layouts.get("floating-operating-panel").undocked;
                         // The look's theme file as well, as text: what the
                         // server was wearing, for a screen with no files.
                         self.adopt_profile_look(settings.theme_file.clone());
@@ -4868,11 +4732,12 @@ impl SdroxideApp {
                     // own — and another tab may be on another. The plan's name
                     // rides with it, and the same plan may come under a new name,
                     // which the equality alone does not see.
-                    let stale = self.band_plan_cur.is_none_or(|cur| {
-                        cur != &c.band_plan || cur.meta() != c.band_plan.meta()
-                    });
+                    let stale = self
+                        .band_plan_cur
+                        .is_none_or(|cur| cur != &c.band_plan || cur.meta() != c.band_plan.meta());
                     if stale {
-                        self.band_plan_cur = Some(sdroxide_types::leak_band_plan(c.band_plan.clone()));
+                        self.band_plan_cur =
+                            Some(sdroxide_types::leak_band_plan(c.band_plan.clone()));
                     }
                     // The library and the choice are the station's, announced
                     // with every bundle: the list this client chooses from.
@@ -5048,7 +4913,10 @@ impl SdroxideApp {
                     // stopped by this page every launch. Ticking it is itself
                     // an acknowledgement, so the window goes away with it.
                     if ui
-                        .checkbox(&mut self.ui_settings.oob_tx_dismissed, tr!("frame-dont-show-again"))
+                        .checkbox(
+                            &mut self.ui_settings.oob_tx_dismissed,
+                            tr!("frame-dont-show-again"),
+                        )
                         .on_hover_text(tr!("frame-dont-show-again-hint"))
                         .changed()
                     {
@@ -5103,15 +4971,9 @@ impl SdroxideApp {
                         .size(13.0),
                 );
                 ui.add_space(6.0);
-                ui.label(
-                    RichText::new(tr!("frame-cb-not-amateur"))
-                    .color(crate::theme::TEXT()),
-                );
+                ui.label(RichText::new(tr!("frame-cb-not-amateur")).color(crate::theme::TEXT()));
                 ui.add_space(6.0);
-                ui.label(
-                    RichText::new(tr!("frame-cb-only-continue"))
-                    .color(crate::theme::TEXT()),
-                );
+                ui.label(RichText::new(tr!("frame-cb-only-continue")).color(crate::theme::TEXT()));
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
                     if crate::chrome::chip_accent(
@@ -5216,39 +5078,12 @@ impl SdroxideApp {
         }
     }
 
-    /// Send this client's screen settings to the server, when the operator has
-    /// asked to keep them there. A no-op for a local engine (which has no
-    /// server to tell) and when the scope is `Browser`. The profile sent is the
-    /// one already in use, so a save lands on the set the client is reading
-    /// rather than silently creating another.
-    /// Save this screen's look against the profile, **on request only**.
-    ///
-    /// Not on every change, which is what it used to do: on a passwordless
-    /// server every client shares the station default, so one operator moving
-    /// the theme would move it for whoever signs in next. An explicit action
-    /// says who decided it, and the row says afterwards what it did.
-    /// Keep the signed-in profile's copy of the screen in step with what the
-    /// operator is actually using, so the next session — on this device or
-    /// another — comes back as they left it, **without a button being
-    /// pressed**.
-    ///
-    /// **This is the fork's answer to "store everything on the server, not in
-    /// the browser"** (fork discussion #4 and #9). The argument is Kevin's and
-    /// it is the right one: browser storage cannot be depended on — `persist()`
-    /// behaves differently in every browser (Chrome refuses it silently,
-    /// Firefox prompts), so it works for one person and not the next — and a
-    /// session kept there cannot be reset by anyone who is not standing in
-    /// front of that device. On the server it can: it is a file, and the person
-    /// who runs the station can put a good one back over SSH. That is what
-    /// makes a station *administrable*, and it is why the screen belongs there.
-    ///
-    /// **Only with a real signed-in profile, and that restriction is the whole
-    /// reason the button used to be manual.** A server with no password has one
-    /// shared `default` bucket, so storing as we go would let one operator's
-    /// theme become the next one's. A login is one person, so it is safe there
-    /// and only there.
+    /// Save this screen on the server automatically, including passwordless
+    /// stations. A login has its own profile; without a login the station's
+    /// default is deliberately shared. Browser storage is never required.
+    /// Changes are coalesced by CLIENT_AUTO_SAVE_S.
     fn auto_save_screen(&mut self, now: f64) {
-        if !matches!(self.client_settings_from, Some(Some(_))) {
+        if self.client_settings_from.is_none() {
             return;
         }
         // Debounced: dragging the theme picker is one write, not sixty.
@@ -5500,9 +5335,7 @@ impl SdroxideApp {
             ui.add_space(10.0);
             ui.horizontal(|ui| {
                 if ui
-                    .button(
-                        RichText::new(tr!("frame-bindings-use")).color(crate::theme::ALERT()),
-                    )
+                    .button(RichText::new(tr!("frame-bindings-use")).color(crate::theme::ALERT()))
                     .clicked()
                 {
                     adopt = true;
@@ -5791,24 +5624,7 @@ mod tests {
     fn every_state_of_the_operating_pane_has_a_way_out_of_it() {
         let src = include_str!("frame.rs");
         let code = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
-        // The float's title bar carries all three: roll up, out, close.
-        assert!(
-            code.contains("frame-window-panel-hint"),
-            "the floating panel has no way out to a real window"
-        );
-        assert!(
-            code.contains("frame-roll-up-hint"),
-            "the floating panel cannot be rolled up, so it costs the laptop its picture"
-        );
-        assert!(
-            code.contains("frame-dock-panel-hint"),
-            "the floating panel has no way back to the pane"
-        );
-        // Its bar is ours, because egui has no hook for a fourth title-bar button.
-        assert!(
-            code.contains(".title_bar(false)"),
-            "the floating panel is back to egui's title bar, which cannot carry the out button"
-        );
+        assert!(code.contains("super::window_chrome::embedded("));
         // The OS window's one glyph, and the one state at a time.
         assert!(
             code.contains("set_detached(sdroxide_types::DetachableModule::Panel, false)"),
