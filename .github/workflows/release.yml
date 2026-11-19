@@ -1092,7 +1092,7 @@ jobs:
           # (non-SoapySDR) variant; SoapySDR users take the portable tarball.
           if [[ "${{ matrix.variant }}" == "cat" ]]; then
             mkdir -p stage-dmg
-            APP=stage-dmg/sdroxide.app
+            APP=stage-dmg/sdroxide-brown.app
             mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
             sed "s/@VERSION@/$CARGO_VERSION/g" packaging/macos/Info.plist > "$APP/Contents/Info.plist"
             cp target/release/sdroxide "$APP/Contents/MacOS/sdroxide"
@@ -1131,13 +1131,13 @@ jobs:
             size_mb=$(( $(du -sm stage-dmg | cut -f1) + 64 ))
             # No -format here: it is only accepted together with -srcfolder or
             # -srcdevice, and a blank sized image is read-write UDIF anyway.
-            hdiutil create -volname sdroxide -fs HFS+ -size "${size_mb}m" \
+            hdiutil create -volname sdroxide-brown -fs HFS+ -size "${size_mb}m" \
               -ov rw.dmg
             mnt=$(mktemp -d)
             hdiutil attach rw.dmg -mountpoint "$mnt" -nobrowse -noautoopen
             # ditto, not cp: the code signature lives in extended attributes.
-            ditto "$APP" "$mnt/sdroxide.app"
-            codesign --verify --strict "$mnt/sdroxide.app"
+            ditto "$APP" "$mnt/sdroxide-brown.app"
+            codesign --verify --strict "$mnt/sdroxide-brown.app"
             cp LICENSE "$mnt/"
             cp crates/sdroxide-rx888/firmware/LICENSE.txt "$mnt/LICENSE-rx888-firmware.txt"
             cp assets/voices/LICENSE-voice.txt crates/sdroxide-speech/assets/LICENSE-cmudict.txt "$mnt/"

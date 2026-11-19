@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>sdroxide</string>
+    <string>sdroxide-brown</string>
     <key>CFBundleDisplayName</key>
-    <string>sdroxide</string>
+    <string>sdroxide-brown</string>
     <key>CFBundleIdentifier</key>
-    <string>com.github.dividebysandwich.sdroxide</string>
+    <string>com.github.madmedicnl.sdroxide-brown</string>
     <key>CFBundleExecutable</key>
     <string>sdroxide</string>
     <!-- Resources/sdroxide-brown.icns; this is what Finder, the Dock and Launchpad
