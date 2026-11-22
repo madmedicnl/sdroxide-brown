@@ -9822,3 +9822,15 @@ topbar-group-audio = SES
 topbar-show-audio-spectrum = SES SPEKTRUMUNU GÖSTER
 
 topbar-draw-receiver-s-own-audio = Şelalenin altında alıcının kendi sesi, 50 Hz ile 16 kHz arası — bir güç kaynağının uğultusu ya da şarj cihazının ıslığı burada görünür, bantta değil
+
+backend-perseus = Microtelecom Perseus (USB)
+
+settings-radio-no-perseus-found-press = Perseus alıcı bulunamadı — yeniden tarayın
+
+settings-radio-settled-at-open = açılışta sabitlenir: alıcı bu hız için FPGA'sını yeniden programlar, değiştirmek radyoyu yeniden açar
+
+settings-radio-preselector = Ön seçici
+
+settings-radio-preselector-hover = Alıcının ön seçici filtresi. Yalnızca 1,5 MHz üzerinde kullanılabilir; altında radyo onu devre dışı bırakır, çünkü devredeyken bandı değil sinyali kaldırırdı.
+
+settings-radio-perseus-below-1-5-mhz = Yalnızca alım. 1,5 MHz altında ön seçici otomatik olarak devre dışı bırakılır: orada devredeyken yayın bandını değil sinyali kaldırır.

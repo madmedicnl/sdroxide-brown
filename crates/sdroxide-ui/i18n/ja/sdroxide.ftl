@@ -9770,3 +9770,15 @@ topbar-group-audio = 音声
 topbar-show-audio-spectrum = 音声スペクトラムを表示
 
 topbar-draw-receiver-s-own-audio = ウォーターフォールの下に受信機自身の音声を 50 Hz から 16 kHz まで表示します。電源のハムや充電器のホイッスルはバンドではなくここに出ます
+
+backend-perseus = Microtelecom Perseus (USB)
+
+settings-radio-no-perseus-found-press = Perseus 受信機が見つかりません — 再スキャンしてください
+
+settings-radio-settled-at-open = 開くときに確定します。受信機はこのレート用に FPGA を再プログラムするため、変更するとラジオを開き直します
+
+settings-radio-preselector = プリセレクター
+
+settings-radio-preselector-hover = 受信機のプリセレクター・フィルター。1.5 MHz より上でのみ使えます。それより下では無線機がこれを切り離します。入れたままだと帯域ではなく信号そのものが消えるためです。
+
+settings-radio-perseus-below-1-5-mhz = 受信専用です。1.5 MHz より下ではプリセレクターが自動的に切り離されます。そこでは入れておくと放送帯ではなく信号が消えるためです。

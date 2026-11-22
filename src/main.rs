@@ -18,6 +18,7 @@ mod lime_source;
 mod local_controller;
 mod null_source;
 mod other_instance;
+mod perseus_source;
 mod panadapter_source;
 mod pluto_source;
 mod rtlsdr_source;
@@ -1632,6 +1633,7 @@ fn open_configured_source(
         Backend::Elad => open_elad_source(radio, cli.center_hz()),
         Backend::Lime => open_lime_source(radio, cli.center_hz(), cli.rate),
         Backend::Fobos => open_fobos_source(radio, cli.center_hz()),
+        Backend::Perseus => open_perseus_source(radio, cli.center_hz()),
         Backend::Soapy => open_soapy_source(cli, settings, radio),
         Backend::Auto => {
             #[cfg(feature = "soapy")]
@@ -2331,6 +2333,42 @@ fn fobos_caps(src: &fobos_source::FobosSource, port: FobosPort) -> DeviceCaps {
             Vec::new()
         },
         diversity: port == FobosPort::HfDual,
+        ..DeviceCaps::default()
+    }
+}
+
+/// Build the Perseus source from radio.json. The receiver is picked by the
+/// ordinal its own enumeration gives it, because it reports no serial number
+/// until it is opened (see `sdroxide_types::PerseusDevice`).
+fn open_perseus_source(
+    radio: &RadioConfig,
+    center_hz: f64,
+) -> anyhow::Result<(Box<dyn IqSource>, DeviceCaps)> {
+    let src = perseus_source::PerseusSource::open(&radio.perseus, center_hz)
+        .context("opening Perseus SDR")?;
+    let caps = perseus_caps(&src);
+    Ok((Box::new(src), caps))
+}
+
+fn perseus_caps(src: &perseus_source::PerseusSource) -> DeviceCaps {
+    use sdroxide_types::{Direction, GainElement, PerseusConfig};
+    DeviceCaps {
+        driver: "perseus".into(),
+        label: src.describe(),
+        rx_channels: 1,
+        tx_channels: 0,
+        audio_mode: false,
+        // The library's own DDC range: DC to half the 80 MHz ADC clock. The
+        // antenna input is an HF one, so the useful part is the low end of it.
+        freq_ranges_rx: vec![(0.0, 40_000_000.0)],
+        sample_rates: src.rates(),
+        gains: vec![GainElement::db(
+            PerseusConfig::ATT_ELEMENT,
+            Direction::Rx,
+            0.0,
+            30.0,
+            10.0,
+        )],
         ..DeviceCaps::default()
     }
 }

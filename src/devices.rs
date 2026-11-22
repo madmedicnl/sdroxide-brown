@@ -51,6 +51,7 @@ pub fn probe(req: DeviceProbe, radio: u32) -> ProbeAnswer {
             ProbeAnswer::PublicSdrs(Box::new(sdroxide_config::public_sdr_directory(refresh)))
         }
         DeviceProbe::Fobos => ProbeAnswer::Fobos(fobos_devices()),
+        DeviceProbe::Perseus => ProbeAnswer::Perseus(perseus_devices()),
         DeviceProbe::Test(ProbeTest::Tci(address)) => {
             // The one test that can say a failed connect as data, so the
             // interface words it in the operator's language.
@@ -133,6 +134,17 @@ fn fobos_devices() -> Vec<sdroxide_types::FobosDevice> {
     sdroxide_fobos::list()
         .into_iter()
         .map(|d| sdroxide_types::FobosDevice { serial: d.serial })
+        .collect()
+}
+
+/// `perseus_init`'s count, as the wasm-safe type. Nothing is opened: opening a
+/// Perseus downloads its firmware, so a Rescan that named every unit by its
+/// serial would take seconds per receiver and stop each one being idle. The
+/// list is therefore by ordinal, which is also what the config stores.
+fn perseus_devices() -> Vec<sdroxide_types::PerseusDevice> {
+    sdroxide_perseus::device::list()
+        .into_iter()
+        .map(|d| sdroxide_types::PerseusDevice { index: d.index })
         .collect()
 }
 

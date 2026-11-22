@@ -9837,3 +9837,15 @@ topbar-group-audio = ЗВУК
 topbar-show-audio-spectrum = ПОКАЗЫВАТЬ СПЕКТР ЗВУКА
 
 topbar-draw-receiver-s-own-audio = Полоса под водопадом со звуком самого приёмника, от 50 Гц до 16 кГц — гул блока питания или свист зарядного устройства видны здесь, а не на диапазоне
+
+backend-perseus = Microtelecom Perseus (USB)
+
+settings-radio-no-perseus-found-press = Приёмник Perseus не найден — повторите поиск
+
+settings-radio-settled-at-open = задаётся при открытии: приёмник перепрошивает для этого свой FPGA, смена переоткрывает радио
+
+settings-radio-preselector = Преселектор
+
+settings-radio-preselector-hover = Преселектор приёмника. Пригоден только выше 1,5 МГц; ниже радио отключает его, иначе он убрал бы сигнал, а не диапазон.
+
+settings-radio-perseus-below-1-5-mhz = Только приём. Ниже 1,5 МГц преселектор отключается автоматически: там он убирает сигнал, а не вещательный диапазон.

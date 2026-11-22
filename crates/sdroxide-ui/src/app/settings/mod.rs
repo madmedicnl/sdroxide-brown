@@ -47,6 +47,7 @@ use self::profiles::settings_profiles_tab;
 use self::radio::{
     settings_airspy_tab, settings_airspyhf_tab, settings_atsmini_tab, settings_cat_tab,
     settings_elad_tab, settings_fobos_tab, settings_hackrf_tab, settings_hpsdr_tab,
+    settings_perseus_tab,
     settings_hydrasdr_tab, settings_icomnet_tab, settings_kiwisdr_tab, settings_lime_tab,
     settings_pluto_tab, settings_rtlsdr_tab, settings_rtltcp_tab, settings_rx888_tab,
     settings_sdrplay_tab, settings_smartsdr_tab, settings_soapy_devices, settings_soapy_tab,
@@ -584,6 +585,7 @@ pub(in crate::app) struct SettingsIo<'a> {
     sdrplay_rescan: &'a mut bool,
     /// Re-enumerate the USB bus for Fobos SDRs. Opens nothing.
     fobos_rescan: &'a mut bool,
+    perseus_rescan: &'a mut bool,
     /// Re-run the SoapySDR enumeration. Opens nothing, but loads every
     /// installed module and asks each to scan, so it is not instant.
     soapy_rescan: &'a mut bool,
@@ -1538,6 +1540,10 @@ fn iface_opts(soapy_supported: bool) -> Vec<sdroxide_types::Backend> {
     // dlopen at runtime rather than linked, so nothing here needs it
     // installed to build or to see this entry — only to open it.
     opts.push(sdroxide_types::Backend::Fobos);
+    // Same arrangement again: libperseus-sdr is LGPL-2.1-or-later, found with
+    // dlopen at runtime, so the entry exists in every build variant and only
+    // needs the library present to open a receiver.
+    opts.push(sdroxide_types::Backend::Perseus);
     // Pure Rust over the machine's own sound cards, in every build variant.
     // Nothing to install and nothing to enumerate free — the radio is the two
     // device names picked here.
@@ -1579,6 +1585,7 @@ fn free_device_probe(backend: sdroxide_types::Backend) -> Option<sdroxide_types:
         B::SdrPlay => P::SdrPlay,
         B::Elad => P::Elad,
         B::Fobos => P::Fobos,
+        B::Perseus => P::Perseus,
         _ => return None,
     })
 }
@@ -1629,6 +1636,7 @@ impl SdroxideApp {
             A::HackRf(d) => self.hackrf_devices = d,
             A::SdrPlay(d) => self.sdrplay_devices = d,
             A::Fobos(d) => self.fobos_devices = d,
+            A::Perseus(d) => self.perseus_devices = d,
             A::Elad(d) => self.elad_devices = d,
             A::Lime(d) => self.lime_devices = d,
             // `Some` even when empty: "enumerated and found nothing" is a
@@ -1834,6 +1842,7 @@ impl SdroxideApp {
         let mut hydrasdr_copy_report = false;
         let mut sdrplay_rescan = false;
         let mut fobos_rescan = false;
+        let mut perseus_rescan = false;
         let mut soapy_rescan = false;
         let mut tci_test = false;
         let mut icomnet_test = false;
@@ -2054,6 +2063,7 @@ impl SdroxideApp {
                                 hydrasdr_copy_report: &mut hydrasdr_copy_report,
                                 sdrplay_rescan: &mut sdrplay_rescan,
                                 fobos_rescan: &mut fobos_rescan,
+                                perseus_rescan: &mut perseus_rescan,
                                 soapy_rescan: &mut soapy_rescan,
                                 tci_test: &mut tci_test,
                                 smartsdr_discover: &mut smartsdr_discover,
@@ -2358,6 +2368,9 @@ impl SdroxideApp {
         }
         if fobos_rescan {
             self.ask_device(ctx, P::Fobos);
+        }
+        if perseus_rescan {
+            self.ask_device(ctx, P::Perseus);
         }
         if soapy_rescan {
             // Loads every installed SoapySDR module and asks each to scan, so
@@ -3894,6 +3907,15 @@ impl SdroxideApp {
                             io.apply_iface,
                             io.can_probe,
                             cmds,
+                        ),
+                        Backend::Perseus => settings_perseus_tab(
+                            ui,
+                            &self.perseus_devices,
+                            self.caps.as_ref(),
+                            io.radio_edit,
+                            io.perseus_rescan,
+                            io.apply_iface,
+                            io.can_probe,
                         ),
                         // Legacy configs may still carry the removed auto-detect
                         // backend; prompt the user to pick a concrete interface.

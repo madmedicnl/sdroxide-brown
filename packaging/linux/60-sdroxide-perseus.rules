@@ -1,0 +1,39 @@
+# Microtelecom Perseus, for sdroxide's Perseus backend.
+#
+# The receiver is reached through the vendor's libperseus-sdr, which talks to it
+# over libusb, so the kernel-level requirement is the same as for the other USB
+# backends: the invoking user needs write access to the usbfs node.
+#
+# BOTH ids are needed. A Perseus with a blank EEPROM appears as 04b4:8613 and the
+# library programs its product code over that node before the receiver comes
+# back as 04b4:325c. The two ids are the library's own `PERSEUS_PID_BLANKEEPROM`
+# and `PERSEUS_PID` (perseusfx2.h), so this list is only correct for a Perseus —
+# 04b4 is Cypress's vendor id and other devices use it for other products.
+#
+# TAG+="uaccess" hands an ACL to whoever is logged in at the active seat, which
+# needs no group to exist and no re-login. It grants nothing where there is no
+# seat to be logged in at — WSL2, a headless box reached over ssh, a container,
+# or sdroxide running as a systemd service — so GROUP="plugdev" comes along as a
+# fallback for anyone in that group. To use it:
+#
+#   sudo groupadd -f plugdev && sudo usermod -aG plugdev $USER
+#
+# then log out and back in (`newgrp plugdev` for the current shell).
+#
+# The permissions are applied on their own lines because udev resolves GROUP at
+# parse time and a missing group discards the whole line it is on: keeping
+# GROUP alone means only that line is dropped and the ACL still lands.
+#
+# Install:
+#   sudo cp 60-sdroxide-perseus.rules /usr/lib/udev/rules.d/
+#   sudo udevadm control --reload
+# then unplug and replug the receiver.
+
+# A Perseus with a blank EEPROM, before the library programs its product code.
+SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="8613", ENV{SDROXIDE_PERSEUS}="1"
+
+# The receiver itself.
+SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="325c", ENV{SDROXIDE_PERSEUS}="1"
+
+ENV{SDROXIDE_PERSEUS}=="1", MODE="0660", TAG+="uaccess"
+ENV{SDROXIDE_PERSEUS}=="1", GROUP="plugdev"
