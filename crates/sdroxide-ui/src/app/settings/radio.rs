@@ -5544,6 +5544,114 @@ pub(in crate::app) fn settings_fobos_tab(
     );
 }
 
+/// Microtelecom Perseus: receiver, sample rate, attenuator, preselector.
+///
+/// The rate is settled at open (the library reprograms the FPGA for it), so a
+/// change here asks for a reopen rather than moving a live stream; the
+/// attenuator and the preselector ride the running stream.
+#[allow(clippy::too_many_arguments)]
+pub(in crate::app) fn settings_perseus_tab(
+    ui: &mut egui::Ui,
+    devices: &[sdroxide_types::PerseusDevice],
+    caps: Option<&sdroxide_types::DeviceCaps>,
+    radio_edit: &mut Option<sdroxide_types::RadioConfig>,
+    rescan: &mut bool,
+    apply: &mut crate::app::settings::ApplyInterface,
+    can_probe: bool,
+) {
+    use sdroxide_types::PerseusConfig;
+    let Some(cfg) = radio_edit.as_mut() else {
+        ui.label(tr!("settings-radio-waiting-configuration-machine-radio-attached"));
+        return;
+    };
+
+    let before = (cfg.perseus.device, cfg.perseus.sample_rate_hz, cfg.perseus.preselector);
+
+    // The rates the opened receiver reports, else the ones the library ships
+    // firmware images for — see `PerseusConfig::SAMPLE_RATES`'s own doc.
+    let rates: Vec<f64> = match caps {
+        Some(c) if c.driver == "perseus" && !c.sample_rates.is_empty() => c.sample_rates.clone(),
+        _ => PerseusConfig::SAMPLE_RATES.to_vec(),
+    };
+
+    egui::Grid::new("perseus-grid")
+        .num_columns(2)
+        .spacing([12.0, 6.0])
+        .min_row_height(ui.spacing().interact_size.y)
+        .show(ui, |ui| {
+            ui.label(tr!("settings-radio-receiver"));
+            probe_only(ui, can_probe, |ui| {
+                ui.horizontal(|ui| {
+                    if ui
+                        .button(tr!("settings-radio-rescan"))
+                        .on_hover_text(tr!("settings-radio-no-perseus-found-press"))
+                        .clicked()
+                    {
+                        *rescan = true;
+                    }
+                    let shown = devices
+                        .iter()
+                        .find(|d| d.index == cfg.perseus.device)
+                        .map(|d| d.label())
+                        .unwrap_or_else(|| tr!("settings-radio-first-one-found").to_string());
+                    egui::ComboBox::from_id_salt("perseus_dev")
+                        .width(300.0)
+                        .selected_text(shown)
+                        .show_styled(ui, |ui| {
+                            if devices.is_empty() {
+                                ui.label(tr!("settings-radio-no-perseus-found-press"));
+                            }
+                            for d in devices {
+                                ui.selectable_value(&mut cfg.perseus.device, d.index, d.label());
+                            }
+                        });
+                });
+            });
+            ui.end_row();
+
+            ui.label(tr!("settings-radio-sample-rate"));
+            ui.horizontal(|ui| {
+                egui::ComboBox::from_id_salt("perseus_rate")
+                    .width(150.0)
+                    .selected_text(format!("{:.3} Msps", cfg.perseus.sample_rate_hz / 1e6))
+                    .show_styled(ui, |ui| {
+                        for r in &rates {
+                            ui.selectable_value(
+                                &mut cfg.perseus.sample_rate_hz,
+                                *r,
+                                format!("{:.3} Msps", r / 1e6),
+                            );
+                        }
+                    });
+                ui.add(
+                    egui::Label::new(RichText::new(tr!("settings-radio-settled-at-open")).weak())
+                        .wrap(),
+                );
+            });
+            ui.end_row();
+
+            ui.label(tr!("settings-radio-attenuator"));
+            ui.horizontal(|ui| {
+                for db in PerseusConfig::ATTENUATOR_STEPS_DB {
+                    ui.selectable_value(&mut cfg.perseus.attenuator_db, db, format!("{db} dB"));
+                }
+            });
+            ui.end_row();
+
+            ui.label(tr!("settings-radio-preselector"));
+            ui.checkbox(&mut cfg.perseus.preselector, "")
+                .on_hover_text(tr!("settings-radio-preselector-hover"));
+            ui.end_row();
+        });
+
+    if (cfg.perseus.device, cfg.perseus.sample_rate_hz, cfg.perseus.preselector) != before {
+        apply.request();
+    }
+
+    ui.add_space(6.0);
+    super::note(ui, &tr!("settings-radio-perseus-below-1-5-mhz"));
+}
+
 /// HackRF interface: radio, rate, the front end, and — behind its own switch —
 /// the transmitter.
 ///

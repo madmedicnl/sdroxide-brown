@@ -9851,3 +9851,16 @@ topbar-group-audio = AUDIO
 topbar-show-audio-spectrum = SHOW AUDIO SPECTRUM
 
 topbar-draw-receiver-s-own-audio = A strip under the waterfall with the receiver's own audio, 50 Hz to 16 kHz — the hum of a supply or the whistle of a charger shows up here, not on the band
+
+backend-perseus = Microtelecom Perseus (USB)
+
+# Perseus SDR is the vendor's product name and stays as it is.
+settings-radio-no-perseus-found-press = No Perseus receiver found — search again
+
+settings-radio-settled-at-open = settled at open: the receiver reprograms its FPGA for this rate, so changing it reopens the radio
+
+settings-radio-preselector = Preselector
+
+settings-radio-preselector-hover = The receiver's preselector filter. Usable only above 1.5 MHz; below that the radio switches it out, where in circuit it would remove the signal rather than the band.
+
+settings-radio-perseus-below-1-5-mhz = Receive only. Below 1.5 MHz the preselector is switched out automatically: in circuit there it removes the signal rather than the broadcast band.

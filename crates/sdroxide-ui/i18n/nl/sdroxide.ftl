@@ -9822,3 +9822,15 @@ topbar-group-audio = AUDIO
 topbar-show-audio-spectrum = AUDIOSPECTRUM TONEN
 
 topbar-draw-receiver-s-own-audio = Een strip onder de waterval met het geluid van de ontvanger zelf, 50 Hz tot 16 kHz — de brom van een voeding of het fluitje van een lader zie je hier, niet op de band
+
+backend-perseus = Microtelecom Perseus (USB)
+
+settings-radio-no-perseus-found-press = Geen Perseus-ontvanger gevonden — zoek opnieuw
+
+settings-radio-settled-at-open = vast bij openen: de ontvanger herprogrammeert zijn FPGA voor deze snelheid, dus wijzigen heropent de radio
+
+settings-radio-preselector = Voorfilter
+
+settings-radio-preselector-hover = Het voorfilter van de ontvanger. Alleen bruikbaar boven 1,5 MHz; daaronder schakelt de radio het uit, waar het in circuit het signaal zou wegnemen in plaats van de band.
+
+settings-radio-perseus-below-1-5-mhz = Alleen ontvangst. Onder 1,5 MHz wordt het voorfilter automatisch uitgeschakeld: daar neemt het in circuit het signaal weg in plaats van de omroepband.

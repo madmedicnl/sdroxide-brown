@@ -158,6 +158,7 @@ sdroxide-elad = { path = "crates/sdroxide-elad" }
 sdroxide-lime = { path = "crates/sdroxide-lime" }
 sdroxide-limerfe = { path = "crates/sdroxide-limerfe" }
 sdroxide-fobos = { path = "crates/sdroxide-fobos" }
+sdroxide-perseus = { path = "crates/sdroxide-perseus" }
 sdroxide-relay = { path = "crates/sdroxide-relay" }
 sdroxide-spyserver = { path = "crates/sdroxide-spyserver" }
 sdroxide-kiwisdr = { path = "crates/sdroxide-kiwisdr" }
@@ -240,6 +241,7 @@ sdroxide-airspyhf.workspace = true
 sdroxide-airspy.workspace = true
 sdroxide-hydrasdr.workspace = true
 sdroxide-fobos.workspace = true
+sdroxide-perseus.workspace = true
 sdroxide-hackrf.workspace = true
 sdroxide-pluto.workspace = true
 sdroxide-sdrplay.workspace = true
@@ -311,6 +313,7 @@ assets = [
     ["packaging/linux/60-sdroxide-elad.rules", "usr/lib/udev/rules.d/", "644"],
     ["packaging/linux/60-sdroxide-limerfe.rules", "usr/lib/udev/rules.d/", "644"],
     ["packaging/linux/60-sdroxide-relay.rules", "usr/lib/udev/rules.d/", "644"],
+    ["packaging/linux/60-sdroxide-perseus.rules", "usr/lib/udev/rules.d/", "644"],
     ["packaging/icons/sdroxide-brown.svg", "usr/share/icons/hicolor/scalable/apps/sdroxide-brown.svg", "644"],
     ["packaging/icons/sdroxide-brown-16.png", "usr/share/icons/hicolor/16x16/apps/sdroxide-brown.png", "644"],
     ["packaging/icons/sdroxide-brown-24.png", "usr/share/icons/hicolor/24x24/apps/sdroxide-brown.png", "644"],

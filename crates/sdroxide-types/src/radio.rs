@@ -178,10 +178,16 @@ pub enum Backend {
     /// No I/Q — the Si4732 demodulates in hardware. Appended last, for the same
     /// reason as `SmartSdr` above.
     AtsMini,
+    /// Microtelecom Perseus: a 14-bit HF receiver with its own 24-bit I/Q
+    /// stream, driven through the vendor's `libperseus-sdr` (LGPL-2.1-or-
+    /// later, found with dlopen at runtime like the SDRplay and Fobos
+    /// backends). Receive only. Appended last, for the same reason as
+    /// `SmartSdr` above.
+    Perseus,
 }
 
 impl Backend {
-    pub const ALL: [Backend; 24] = [
+    pub const ALL: [Backend; 25] = [
         Backend::Auto,
         Backend::Soapy,
         Backend::Cat,
@@ -206,6 +212,7 @@ impl Backend {
         Backend::Fobos,
         Backend::UsbAudio,
         Backend::AtsMini,
+        Backend::Perseus,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -233,6 +240,7 @@ impl Backend {
             Backend::Fobos => "RigExpert Fobos SDR (USB)",
             Backend::UsbAudio => "USB audio radio (sound card)",
             Backend::AtsMini => "ATS Mini (Wi-Fi control, sound card)",
+            Backend::Perseus => "Microtelecom Perseus (USB)",
             Backend::None => "Not configured",
         }
     }
@@ -7527,6 +7535,83 @@ impl FobosConfig {
     ];
 }
 
+/// One Perseus receiver the vendor library can see.
+///
+/// Only the ordinal: a Perseus reports no serial number until it is opened, and
+/// opening one downloads its firmware (several seconds, and the receiver stops
+/// being idle). A Rescan that opened every unit just to name it would be both
+/// slow and noisy, so the list is by the order `perseus_init` returns, and the
+/// serial the unit reports at open appears in the stream label instead.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PerseusDevice {
+    /// Zero-based ordinal, the argument `perseus_open` takes.
+    pub index: u32,
+}
+
+impl PerseusDevice {
+    pub fn label(&self) -> String {
+        format!("Perseus SDR #{}", self.index + 1)
+    }
+}
+
+/// Microtelecom Perseus (USB) backend configuration. Receive only, through the
+/// vendor's `libperseus-sdr` — LGPL-2.1-or-later, found with dlopen at runtime
+/// the way the SDRplay, LimeSDR and Fobos backends find theirs, so this crate
+/// ships in every build variant without the library needing to be installed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PerseusConfig {
+    /// Which receiver, by the ordinal [`PerseusDevice::index`] carries.
+    pub device: u32,
+    /// One of [`PerseusConfig::SAMPLE_RATES`]. The firmware images the library
+    /// ships decide which of them the receiver actually offers, and the list
+    /// from the opened receiver is what the panel shows.
+    pub sample_rate_hz: f64,
+    /// The receiver's four-position attenuator, in dB: 0, 10, 20 or 30.
+    pub attenuator_db: u8,
+    /// The preselector. Its filter is unusable below
+    /// [`PerseusConfig::PRESELECTOR_MIN_HZ`], where it cuts the signal away; the
+    /// source forces it off below that whatever this says.
+    pub preselector: bool,
+}
+
+impl Default for PerseusConfig {
+    fn default() -> Self {
+        PerseusConfig { device: 0, sample_rate_hz: 192_000.0, attenuator_db: 0, preselector: true }
+    }
+}
+
+impl PerseusConfig {
+    /// The attenuator as it rides `Command::SetGain`, in dB.
+    pub const ATT_ELEMENT: &'static str = "ATT";
+    /// The preselector as it rides `Command::SetGain`: `0.0` off, `1.0` on —
+    /// the same convention `FobosConfig::CLK_EXTERNAL_ELEMENT` uses, so a
+    /// switch needs no `Command` variant of its own.
+    pub const PRESEL_ELEMENT: &'static str = "PRESEL";
+    /// Below this the preselector's filter cuts the signal away.
+    pub const PRESELECTOR_MIN_HZ: f64 = 1_500_000.0;
+    /// The four positions of the attenuator switch.
+    pub const ATTENUATOR_STEPS_DB: [u8; 4] = [0, 10, 20, 30];
+
+    /// The rates the vendor library ships firmware images for: one per `.rbs`
+    /// in its own source tree. The opened receiver reports its own list and
+    /// that is what the panel shows; this is the fallback, and
+    /// [`PerseusConfig::default`]'s rate must appear in both or the dropdown
+    /// renders it as selected text with no entry behind it.
+    pub const SAMPLE_RATES: [f64; 10] = [
+        48_000.0,
+        95_000.0,
+        96_000.0,
+        125_000.0,
+        192_000.0,
+        250_000.0,
+        500_000.0,
+        1_000_000.0,
+        1_600_000.0,
+        2_000_000.0,
+    ];
+}
+
 /// Where the antenna this radio listens on actually is.
 ///
 /// The station's locator says where the *operator* is, and for a radio in the
@@ -7946,6 +8031,14 @@ pub struct RadioConfig {
     /// alert, and the name stays. Appended last, as the wire requires.
     #[serde(default)]
     pub band_plan: Option<String>,
+
+    /// Microtelecom Perseus. Appended last for the same reason as every field
+    /// above it: the layout is positional, so a new block goes on the end and
+    /// nowhere else — and this one is what took `PROTO_VERSION` to 305, because
+    /// `RadioConfig` rides `ServerMsg::RadioConfig` and
+    /// `Command::SetRadioConfig` **whole**, and a peer one field short reads the
+    /// tail of every one of them out of step.
+    pub perseus: PerseusConfig,
 }
 
 /// Why [`RadioConfig::rx_block_reason`] refuses a frequency.
@@ -9818,7 +9911,8 @@ mod tests {
         let mut c = rx_list(&[], false);
         assert!(c.rx_block_reason(7_074_000.0).is_some());
         c.hide_tx = true;
-        for hz in [150_000.0, 1_000_000.0, 7_074_000.0, 14_200_000.0, 45_000_000.0, 1_090_000_000.0] {
+        for hz in [150_000.0, 1_000_000.0, 7_074_000.0, 14_200_000.0, 45_000_000.0, 1_090_000_000.0]
+        {
             assert_eq!(c.rx_block_reason(hz), None, "{hz}");
         }
         assert!(c.rx_band_allowed(Band::M40));

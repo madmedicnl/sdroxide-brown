@@ -202,7 +202,8 @@ client — are in [`docs/images/`](docs/images).
 - **Radios** — CAT/audio, CAT/stereo I/Q, TCI (SunSDR), OpenHPSDR P1/P2
   (Hermes Lite 2, Apache Labs), SoapySDR, and native drivers for RTL-SDR,
   RX-888, SDRplay RSP, Airspy HF+/R2/Mini, HydraSDR RFOne, HackRF, PlutoSDR,
-  LimeSDR + LimeRFE, ELAD FDM, RigExpert Fobos, plus Icom LAN, FlexRadio
+  LimeSDR + LimeRFE, ELAD FDM, RigExpert Fobos, Microtelecom Perseus (through
+  its vendor library), plus Icom LAN, FlexRadio
   (SmartSDR) and a **USB sound-card** backend. Setup and permissions per model:
   [Radio-specific notes](docs/USER_MANUAL.md#15-radio-specific-notes).
 - **Panadapter** — GPU waterfall + spectrum, wheel-zoom on the cursor,
@@ -323,8 +324,9 @@ brew install pkg-config cmake autoconf automake libtool opus
   reasons. The DRM window says when it is missing.
 
 For the **SoapySDR** backend, install its dev libraries and your radio's driver
-module; nothing else (including RTL-SDR) needs an SDR system library, so
-`cargo build --release --no-default-features` works with no SoapySDR installed.
+module. Nothing else needs an SDR system library to *build* — `cargo build
+--release --no-default-features` works with no SoapySDR installed — though a
+**Microtelecom Perseus** needs Microtelecom's own `libperseus-sdr` at run time.
 
 **Native binary:**
 

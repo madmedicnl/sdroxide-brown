@@ -23,8 +23,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AirspyDevice, AirspyHfDevice, EladDevice, FobosDevice, HackRfDevice, HpsdrDevice,
-    HydraSdrDevice, IcomNetConfig, LimeDevice, PlutoDevice, PublicSdrDirectory, PublicSdrNetwork,
-    RtlSdrDevice,
+    HydraSdrDevice, IcomNetConfig, LimeDevice, PerseusDevice, PlutoDevice, PublicSdrDirectory,
+    PublicSdrNetwork, RtlSdrDevice,
     Rx888Device, SdrPlayDevice, SmartSdrDevice, SoapyDeviceInfo,
 };
 
@@ -145,6 +145,10 @@ pub enum DeviceProbe {
     //      online/silent". `Test` answers by kind only, into the one slot the
     //      settings dialog shows, so it cannot carry six receivers at once.
     PublicSdrCheck { network: PublicSdrNetwork, address: String },
+    /// Perseus receivers `perseus_init` counted, same contract as
+    /// [`DeviceProbe::RtlSdr`] — no receiver is opened, because opening one
+    /// downloads its firmware. Appended last, for the usual reason.
+    Perseus,
 }
 
 /// A connection test: open, ask what is there, and hang up again.
@@ -275,6 +279,9 @@ pub enum ProbeAnswer {
     /// as English text, so the interface can say it in the operator's own
     /// language. Appended last, like every variant.
     TestFailed(TestKind, ConnectFailure),
+    /// The Perseus receivers that machine can see. Appended last, for the same
+    /// reason every other answer is.
+    Perseus(Vec<PerseusDevice>),
 }
 
 /// Why a TCP connect did not succeed.
