@@ -163,7 +163,9 @@ or connects to a remote sdroxide server.
   Fobos SDR over USB, a HackRF
   transceiver over USB, an RTL-SDR
   published over the network by
-  `rtl_tcp`, a PlutoSDR, or a CAT-controlled radio with audio over a USB sound
+  `rtl_tcp`, a PlutoSDR, a **Microtelecom Perseus** over USB (through its
+  vendor library, [§15.24](#1524-microtelecom-perseus-usb--experimental-not-yet-verified-on-a-receiver)),
+  or a CAT-controlled radio with audio over a USB sound
   card (demodulated audio or stereo IQ) — plus a **USB audio radio**: a
   handheld or walkie with no control port at all, reachable only through the
   sound card, keyed by its own VOX ([§15.22](#1522-usb-audio-radio-sound-card)).
@@ -18961,6 +18963,48 @@ exits. Whether the radio returns to receive if the program *crashes* depends on
 the serial driver lowering RTS when the port closes — many FTDI drivers do, some
 do not. If a stuck transmitter must be impossible, wire the optocoupler so a
 floating RTS is the *receive* state, and test it.
+
+### 15.24 Microtelecom Perseus (USB) — EXPERIMENTAL, not yet verified on a receiver
+
+The Perseus is a 14-bit direct-sampling HF receiver with its own 24-bit I/Q
+stream, and it is driven through Microtelecom's **libperseus-sdr** rather than by
+sdroxide's own USB code — the same arrangement as SDRplay and LimeSDR, so the
+library has to be installed on the machine the receiver is plugged into:
+
+```sh
+# Debian / Ubuntu, once the library is built and installed from source
+sudo apt-get install libusb-1.0-0-dev
+git clone https://github.com/Microtelecom/libperseus-sdr
+cd libperseus-sdr && ./bootstrap.sh && ./configure && make && sudo make install
+sudo ldconfig
+```
+
+Access to the receiver itself needs the udev rule shipped in
+`packaging/linux/60-sdroxide-perseus.rules` (both its ids: a blank-EEPROM unit
+appears as one and the programmed receiver as the other).
+
+In Settings → Radio choose **Microtelecom Perseus (USB)**, then:
+
+- **Receiver** — which unit, by the order the library enumerates them
+  (`Perseus SDR #1`, …). A Perseus reports no serial number until it is opened
+  and opening one downloads its firmware, so the list is by ordinal; the serial
+  it reports appears in the stream label once it runs. **Rescan** asks again.
+- **Sample rate** — from the firmware images the installed library carries. It
+  is settled when the receiver is opened (the library reprograms the FPGA for
+  it), so changing it reopens the radio.
+- **Attenuator** — the receiver's four-position switch: 0, 10, 20 or 30 dB. It
+  moves while the stream runs.
+- **Preselector** — the receiver's band filter. It is usable only above
+  **1.5 MHz**; below that sdroxide switches it out automatically, because in
+  circuit down there it removes the signal rather than the broadcast band.
+
+**Receive only**: the Perseus has no transmitter, so every transmit control is
+absent and the interface answers "not transmit capable".
+
+**Experimental**: this backend is written against the vendor library's own
+interface — including the sample layout, taken from Microtelecom's
+`examples/perseustest.c` — but it has not yet been run against a real receiver.
+What it does with one is what its first user reports.
 
 ---
 

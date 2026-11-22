@@ -412,6 +412,7 @@ impl Tr for Backend {
             Backend::Lime => tr!("backend-lime"),
             Backend::HydraSdr => tr!("backend-hydra-sdr"),
             Backend::Fobos => tr!("backend-fobos"),
+            Backend::Perseus => tr!("backend-perseus"),
             Backend::UsbAudio => tr!("backend-usb-audio"),
             Backend::None => tr!("backend-none"),
         }

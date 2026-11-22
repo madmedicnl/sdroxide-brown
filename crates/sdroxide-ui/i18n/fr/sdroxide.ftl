@@ -9825,3 +9825,15 @@ topbar-group-audio = AUDIO
 topbar-show-audio-spectrum = AFFICHER LE SPECTRE AUDIO
 
 topbar-draw-receiver-s-own-audio = Une bande sous la cascade avec l'audio du récepteur lui-même, de 50 Hz à 16 kHz — le ronflement d'une alimentation ou le sifflement d'un chargeur se voient ici, pas sur la bande
+
+backend-perseus = Microtelecom Perseus (USB)
+
+settings-radio-no-perseus-found-press = Aucun récepteur Perseus trouvé — relancez la recherche
+
+settings-radio-settled-at-open = fixé à l'ouverture : le récepteur reprogramme son FPGA pour ce débit, le changer rouvre la radio
+
+settings-radio-preselector = Présélecteur
+
+settings-radio-preselector-hover = Le filtre présélecteur du récepteur. Utilisable seulement au-dessus de 1,5 MHz ; en dessous, la radio le met hors circuit, où il supprimerait le signal plutôt que la bande.
+
+settings-radio-perseus-below-1-5-mhz = Réception seule. En dessous de 1,5 MHz, le présélecteur est mis hors circuit automatiquement : là, en circuit, il supprime le signal plutôt que la bande de diffusion.

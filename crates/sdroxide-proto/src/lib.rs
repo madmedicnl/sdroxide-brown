@@ -2458,8 +2458,20 @@ use sdroxide_types::{
 /// `audio_spectrum` at its tail — this screen's own display choice, so a browser
 /// and the station agree on what is drawn. Appended, so an older peer reads the
 /// screen it knows. `PROTO_VERSION` 303 → 304, `VERSION_BYTE` 0x7B → 0x7C.
-pub const PROTO_VERSION: u16 = 304;
-const VERSION_BYTE: u8 = 0x7C;
+///
+/// v305: **the Microtelecom Perseus backend.** [`sdroxide_types::Backend`] gains
+/// `Perseus`, [`sdroxide_types::DeviceProbe`] and
+/// [`sdroxide_types::ProbeAnswer`] each gain a `Perseus` variant that enumerates
+/// one, and [`sdroxide_types::RadioConfig`] gains a `perseus` block. The three
+/// enum variants are appended to the end of their own enums, so no surviving
+/// discriminant moves and none of them is the reason for this bump. The config
+/// field is: `RadioConfig` rides `ServerMsg::RadioConfig` and
+/// `Command::SetRadioConfig` whole, so a v304 peer handed one with a
+/// `PerseusConfig` on the end has nowhere to put it and reads the tail of every
+/// one of those messages out of step. `PROTO_VERSION` 304 → 305,
+/// `VERSION_BYTE` 0x7C → 0x7D.
+pub const PROTO_VERSION: u16 = 305;
+const VERSION_BYTE: u8 = 0x7D;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3061,10 +3073,16 @@ pub enum ServerMsg {
     SondeStatus(Box<sdroxide_types::SondeStatus>),
     /// The file of a band plan, for the screen that asked to save it on its own
     /// computer. Appended last.
-    BandPlanExport { file: String, json: String },
+    BandPlanExport {
+        file: String,
+        json: String,
+    },
     /// `RadioEvent::ModeRefused`: a mode the band the receiver is on does not
     /// carry was asked for. Appended last (v281).
-    ModeRefused { mode: sdroxide_types::Mode, band: sdroxide_types::Band },
+    ModeRefused {
+        mode: sdroxide_types::Mode,
+        band: sdroxide_types::Band,
+    },
     /// The weather-satellite decoder: its state and the picture lines new since
     /// the previous message (the client builds the image). Appended last (v284).
     WxsatStatus(Box<sdroxide_types::WxsatStatus>),
@@ -3861,7 +3879,9 @@ mod tests {
         let (a, b) = (encode(&export).unwrap()[1], encode(&refused).unwrap()[1]);
         assert_eq!(b, a + 1, "ModeRefused must directly follow BandPlanExport");
         match decode::<ServerMsg>(&encode(&refused).unwrap()).unwrap() {
-            ServerMsg::ModeRefused { mode, band } => assert_eq!((mode, band), (Mode::Wfm, Band::M11)),
+            ServerMsg::ModeRefused { mode, band } => {
+                assert_eq!((mode, band), (Mode::Wfm, Band::M11))
+            }
             other => panic!("did not round-trip: {other:?}"),
         }
     }
@@ -3924,10 +3944,7 @@ mod tests {
             hid_mask: 0x04,
             ..PttInputConfig::default()
         };
-        for cmd in [
-            Command::SetPttInputs(Box::new(cfg.clone())),
-            Command::RescanPttInputs,
-        ] {
+        for cmd in [Command::SetPttInputs(Box::new(cfg.clone())), Command::RescanPttInputs] {
             let m = ClientMsg::Command(cmd);
             assert_eq!(decode::<ClientMsg>(&encode(&m).unwrap()).unwrap(), m);
         }
@@ -4614,7 +4631,10 @@ mod tests {
             rows: vec![sdroxide_types::WxsatRow {
                 apid: 65,
                 row: 7,
-                lines: vec![3; sdroxide_types::WXSAT_LRPT_WIDTH * sdroxide_types::WXSAT_LRPT_ROW_LINES],
+                lines: vec![
+                    3;
+                    sdroxide_types::WXSAT_LRPT_WIDTH * sdroxide_types::WXSAT_LRPT_ROW_LINES
+                ],
             }],
             ..Default::default()
         }));
@@ -4723,7 +4743,11 @@ mod tests {
     /// its default would fail here.
     #[test]
     fn roundtrip_sonde_config() {
-        let cfg = sdroxide_types::SondeSettings { enabled: true, frequency_hz: 404_500_000.0, scan: true };
+        let cfg = sdroxide_types::SondeSettings {
+            enabled: true,
+            frequency_hz: 404_500_000.0,
+            scan: true,
+        };
         let m = ClientMsg::Command(Command::SetSondeConfig(cfg));
         assert_eq!(decode::<ClientMsg>(&encode(&m).unwrap()).unwrap(), m);
         let mut state = RadioState::default();
@@ -4778,7 +4802,10 @@ mod tests {
         assert_eq!(n, m - 1, "a bare variant has no payload");
         assert_eq!(last[2], before[2] + 1, "must directly follow ImportMemoriesFiled");
         assert_eq!(last[3..], before[3..m - 1]);
-        assert_eq!(decode::<ClientMsg>(&last).unwrap(), ClientMsg::Command(Command::WefaxRevertSlant));
+        assert_eq!(
+            decode::<ClientMsg>(&last).unwrap(),
+            ClientMsg::Command(Command::WefaxRevertSlant)
+        );
     }
 
     /// v298: the strip scroll is a new `Command` variant after the ones before
@@ -4991,6 +5018,7 @@ mod tests {
                 password: "pässwörd".into(),
                 ..IcomNetConfig::default()
             }))),
+            DeviceProbe::Perseus,
         ];
         for a in asks {
             let m = ClientMsg::Probe(a);
@@ -5016,6 +5044,7 @@ mod tests {
                 },
             ),
             ProbeAnswer::Unsupported,
+            ProbeAnswer::Perseus(vec![sdroxide_types::PerseusDevice { index: 0 }]),
         ];
         for a in answers {
             let m = ServerMsg::ProbeAnswer(Box::new(a));
@@ -5087,11 +5116,8 @@ mod tests {
         use sdroxide_types::DigiConfig;
 
         assert!(DigiConfig::default().wefax_auto_slant, "on by default");
-        let cfg = DigiConfig {
-            wefax_auto_slant: false,
-            wefax_slant_ppm: -37.5,
-            ..DigiConfig::default()
-        };
+        let cfg =
+            DigiConfig { wefax_auto_slant: false, wefax_slant_ppm: -37.5, ..DigiConfig::default() };
         let m = ClientMsg::Command(Command::SetDigiConfig(cfg.clone()));
         assert_eq!(decode::<ClientMsg>(&encode(&m).unwrap()).unwrap(), m);
         let m = ServerMsg::Ft8Status(DigiStatus::idle(cfg));
@@ -5126,7 +5152,8 @@ mod tests {
         );
         assert!(b.len() > a.len());
         let tx = sdroxide_types::TxState { rig_keyed: true, ..Default::default() };
-        let back: sdroxide_types::TxState = postcard::from_bytes(&postcard::to_allocvec(&tx).unwrap()).unwrap();
+        let back: sdroxide_types::TxState =
+            postcard::from_bytes(&postcard::to_allocvec(&tx).unwrap()).unwrap();
         assert!(back.rig_keyed);
     }
 }

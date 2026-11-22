@@ -9760,3 +9760,15 @@ topbar-group-audio = 音频
 topbar-show-audio-spectrum = 显示音频频谱
 
 topbar-draw-receiver-s-own-audio = 瀑布图下方显示接收机自身的声音，50 Hz 至 16 kHz——电源的嗡声或充电器的啸叫在这里，而不是在波段上
+
+backend-perseus = Microtelecom Perseus (USB)
+
+settings-radio-no-perseus-found-press = 未找到 Perseus 接收机 — 请重新扫描
+
+settings-radio-settled-at-open = 打开时确定：接收机会为此速率重新编程 FPGA，更改后需要重新打开电台
+
+settings-radio-preselector = 预选器
+
+settings-radio-preselector-hover = 接收机的预选器滤波器。仅在 1.5 MHz 以上可用；以下时电台会自动断开，否则接入会去掉信号而不是波段。
+
+settings-radio-perseus-below-1-5-mhz = 仅接收。1.5 MHz 以下预选器会自动断开：在那一频段接入它会去掉信号，而不是广播波段。

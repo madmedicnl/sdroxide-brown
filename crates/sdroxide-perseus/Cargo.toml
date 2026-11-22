@@ -1,0 +1,22 @@
+[package]
+name = "sdroxide-perseus"
+version.workspace = true
+edition.workspace = true
+
+# Microtelecom Perseus, driven through the vendor's `libperseus-sdr`.
+#
+# The library is LGPL-2.1-or-later (its header and `COPYING.LESSER`), which is
+# compatible with this program's GPL-3.0-or-later, and it is found with
+# **dlopen at runtime** the way `sdroxide-sdrplay`, `sdroxide-lime` and
+# `sdroxide-fobos` find their own vendor libraries: nothing is linked at build
+# time, so this crate compiles and ships in every build variant without anyone
+# needing the library installed, and a machine that has no Perseus simply has no
+# `libperseus-sdr` to find.
+#
+# Must never be a dependency of any wasm-targeted crate: it dlopens a C library
+# and talks to a USB receiver.
+[dependencies]
+libloading.workspace = true
+rtrb.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

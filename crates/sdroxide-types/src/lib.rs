@@ -317,6 +317,7 @@ pub use radio::{
     ELAD_ATTENUATOR_DB, ELAD_CAT_BAUDS, ELAD_DEFAULT_CAT_BAUD, ELAD_DEFAULT_RATE_HZ,
     ELAD_SAMPLE_RATES, EladAntenna, EladConfig, EladDevice, EladTxInput, FREQ_RANGE_MAX_HZ,
     FobosConfig, FobosDevice, FobosPort, HackRfConfig, HackRfDevice, HpsdrConfig, HpsdrDevice,
+    PerseusConfig, PerseusDevice,
     HpsdrFilterBoard, HpsdrIoRxInput, HpsdrOcPlan, HpsdrOcRow, HydraSdrConfig, HydraSdrDevice,
     HydraSdrGain, HydraSdrPort, IcomModel, IcomNetConfig, IcomRxSource, IcomScopeSpan, IfModeClass,
     KenwoodSend, KiwiConfig, LimeAuxConfig, LimeAuxRole, LimeConfig, LimeDevice, LineState,
