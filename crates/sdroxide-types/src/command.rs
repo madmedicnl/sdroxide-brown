@@ -1587,6 +1587,19 @@ pub enum Command {
     ///
     /// Appended for the usual reason — postcard numbers variants by position.
     RescanPttInputs,
+
+    /// Replace the station's receive plan (issue #754) — the whole list, not a
+    /// row at a time: the panel edits it as a list, two clients watching the
+    /// same station must converge on one answer, and the clock that acts on it
+    /// lives in the engine so an unattended station records with no screen
+    /// open.
+    ///
+    /// The engine that receives it writes `recording_jobs.json` and answers
+    /// every screen with `RadioEvent::RecordingJobs`; every other engine picks
+    /// the file up when its mtime moves.
+    ///
+    /// Appended last, for the usual reason.
+    SetRecordingJobs(Vec<crate::RecordingJob>),
 }
 
 /// What a [`Command::GetKnownCalls`] was answered with.

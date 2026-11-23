@@ -4032,6 +4032,26 @@ impl SdroxideApp {
                     );
                 }
                 self.rec_popup(ui, cmds, &rec);
+                // A planned reception is doing something even when its row
+                // keeps no file, and then the REC chip above is correctly dark.
+                // This says so, and says *which* row: the name the operator gave
+                // it, not a light with no subject.
+                if let Some(run) = self.state.plan_running.clone() {
+                    let label: String = if run.name.is_empty() {
+                        run.window.clone()
+                    } else {
+                        run.name.chars().take(14).collect()
+                    };
+                    let chip = crate::chrome::chip(ui, true, label)
+                        .on_hover_text(tr!(
+                            "recjobs-running",
+                            name = run.name,
+                            window = run.window
+                        ));
+                    if chip.clicked() {
+                        self.jobs.show = true;
+                    }
+                }
             }
             RxChip::Stereo => {
                 // WFM broadcast stereo: lit while a 19 kHz pilot is locked,
@@ -4741,6 +4761,15 @@ impl SdroxideApp {
         let audio = self.state.recording;
         let iq = self.state.iq_recording;
 
+        // What the plan is doing right now, said inside the picker as well: the
+        // chip in the strip carries the name, and this carries the window.
+        if let Some(run) = self.state.plan_running.clone() {
+            ui.label(
+                RichText::new(tr!("recjobs-running", name = run.name, window = run.window))
+                    .size(11.0)
+                    .color(crate::theme::ALERT()),
+            );
+        }
         crate::chrome::menu_caption(ui, &tr!("topbar-caption-record-audio"));
         // The container is chosen by picking the chip that starts the
         // recording, and it is fixed for the life of the file — a WAV's header
@@ -5030,6 +5059,18 @@ impl SdroxideApp {
                 .clicked()
             {
                 self.playback.open();
+            }
+        });
+
+        // Receptions planned ahead, which is the other half of the recorder:
+        // a station that records at three in the morning needs the list where
+        // the recording controls are, not behind a window of its own (issue
+        // #754). The plan itself is the station's — the engine's clock runs it
+        // — and this only opens the editor.
+        crate::chrome::menu_caption(ui, &tr!("topbar-caption-plan"));
+        ui.horizontal_wrapped(|ui| {
+            if crate::chrome::chip(ui, self.jobs.show, tr!("recjobs-open")).clicked() {
+                self.jobs.show = true;
             }
         });
     }

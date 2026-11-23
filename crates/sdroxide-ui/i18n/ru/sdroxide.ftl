@@ -5327,13 +5327,10 @@ extras-antenna = АНТЕННА
 
 extras-antenna-hint = АНТЕННА (экспериментально/бета) — длины для резки, входное сопротивление и диаграмма направленности типовых проволочных/вертикальных антенн и антенн Уда–Яги
 
-recjobs-title = ЗАПИСИ
+recjobs-title = ПЛАНИРОВАНИЕ
 
-recjobs-finished = Завершено «{ $name }»
 
-recjobs-skipped = Пропущено «{ $name }» — запись уже идёт
 
-recjobs-recording-name = Запись «{ $name }»
 
 recjobs-new-job = + НОВОЕ ЗАДАНИЕ
 
@@ -5341,21 +5338,18 @@ recjobs-recording = ● идёт запись
 
 recjobs-none = Запланированных записей нет — нажмите + НОВОЕ ЗАДАНИЕ, чтобы добавить.
 
-recjobs-done = готово
 
 recjobs-edit = изм.
 
 recjobs-del = удл.
 
-recjobs-station = Станция
+recjobs-station = Описание
 
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Тип
 
-recjobs-start-utc = Начало (UTC)
 
-recjobs-for = Длительность
 
 recjobs-save = СОХРАНИТЬ
 
@@ -9849,3 +9843,31 @@ settings-radio-preselector = Преселектор
 settings-radio-preselector-hover = Преселектор приёмника. Пригоден только выше 1,5 МГц; ниже радио отключает его, иначе он убрал бы сигнал, а не диапазон.
 
 settings-radio-perseus-below-1-5-mhz = Только приём. Ниже 1,5 МГц преселектор отключается автоматически: там он убирает сигнал, а не вещательный диапазон.
+
+recjobs-plan-on-station = Этот план хранится на станции: запись идёт независимо от того, открыт ли экран.
+
+recjobs-daily = каждый день
+
+recjobs-on-date = в дату
+
+recjobs-when = Когда
+
+recjobs-radio = Радио
+
+recjobs-radio-any = то, что открыто
+
+recjobs-start-local = Начало–конец (местное)
+
+recjobs-times-note = Время местное; конец раньше начала означает продолжение после полуночи. Разовые строки удаляются, когда их день прошёл.
+
+recjobs-incomplete = не готово
+
+topbar-caption-plan = Планирование
+
+recjobs-open = ПЛАНИРОВАНИЕ…
+
+recjobs-decode-note = Режим декодирования сохраняет свой декодер — карта, изображение или сообщение появляются в его панели. Станция настраивается примерно за полминуты, чтобы не пропустить начальный тон WEFAX или лидер SSTV.
+
+recjobs-kind-none = Нет (только декодирование)
+
+recjobs-running = Идёт: { $name } ({ $window })

@@ -5272,13 +5272,10 @@ extras-antenna = アンテナ
 
 extras-antenna-hint = アンテナ（実験的/ベータ）— 一般的なワイヤー/垂直/八木アンテナの切断長、給電点インピーダンス、パターン
 
-recjobs-title = 録音
+recjobs-title = 計画
 
-recjobs-finished = 「{ $name }」が完了
 
-recjobs-skipped = 「{ $name }」をスキップ — すでに録音中
 
-recjobs-recording-name = 「{ $name }」を録音中
 
 recjobs-new-job = + 新規ジョブ
 
@@ -5286,21 +5283,18 @@ recjobs-recording = ● 録音中
 
 recjobs-none = 予約録音はありません。+ 新規ジョブ を押して追加してください。
 
-recjobs-done = 完了
 
 recjobs-edit = 編集
 
 recjobs-del = 削除
 
-recjobs-station = 放送局
+recjobs-station = 説明
 
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = 種類
 
-recjobs-start-utc = 開始 (UTC)
 
-recjobs-for = 長さ
 
 recjobs-save = 保存
 
@@ -9782,3 +9776,31 @@ settings-radio-preselector = プリセレクター
 settings-radio-preselector-hover = 受信機のプリセレクター・フィルター。1.5 MHz より上でのみ使えます。それより下では無線機がこれを切り離します。入れたままだと帯域ではなく信号そのものが消えるためです。
 
 settings-radio-perseus-below-1-5-mhz = 受信専用です。1.5 MHz より下ではプリセレクターが自動的に切り離されます。そこでは入れておくと放送帯ではなく信号が消えるためです。
+
+recjobs-plan-on-station = この計画はステーション側にあります。画面が開いていなくても録音します。
+
+recjobs-daily = 毎日
+
+recjobs-on-date = 日付を指定
+
+recjobs-when = いつ
+
+recjobs-radio = ラジオ
+
+recjobs-radio-any = 開いているもの
+
+recjobs-start-local = 開始–終了（現地時刻）
+
+recjobs-times-note = 時刻は現地時間です。終了が開始より前なら翌日まで続きます。単発の行はその日が過ぎると削除されます。
+
+recjobs-incomplete = 未設定
+
+topbar-caption-plan = 計画
+
+recjobs-open = 計画…
+
+recjobs-decode-note = デコードモードはそのデコーダーが保存します。図、画像、メッセージはそのパネルに現れます。WEFAX の開始トーンや SSTV のリーダーを逃さないよう、ステーションは約 30 秒早く同調します。
+
+recjobs-kind-none = なし（デコードのみ）
+
+recjobs-running = 実行中: { $name }（{ $window }）

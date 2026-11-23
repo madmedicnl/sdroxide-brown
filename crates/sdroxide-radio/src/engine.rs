@@ -3393,6 +3393,23 @@ struct Engine {
     source: Box<dyn IqSource>,
     caps: DeviceCaps,
     state: RadioState,
+    /// The station's receive plan, as this engine last read it from
+    /// `recording_jobs.json` (issue #754). Filtered at use, not at load: a row
+    /// for another radio is not this engine's business, and the whole plan is
+    /// what the panel edits.
+    job_plan: Vec<sdroxide_types::RecordingJob>,
+    /// When the plan file last changed. `None` before the first read, which is
+    /// also what "there is no file" looks like — both mean "read it now".
+    job_plan_mtime: Option<std::time::SystemTime>,
+    /// The job this engine's clock is running, and what it started of it, so
+    /// the stop knows which recording to stop.
+    job_running: Option<(u64, sdroxide_types::RecordingKind)>,
+    /// A job this clock came due for while the operator was recording, so it is
+    /// said once and not retried every tick. Cleared when the window ends.
+    job_skipped: Option<u64>,
+    /// When the clock last looked at the wall clock; twice a second is plenty
+    /// for a plan whose finest granularity is a minute.
+    job_checked: std::time::Instant,
     /// Invert this receiver's I/Q before demodulation. A per-radio flag
     /// (from `RadioConfig::swap_iq`, resolved by `RadioConfig::swaps_iq` so an
     /// interface that inverts in its own layer is not inverted twice) for
@@ -5579,6 +5596,14 @@ fn engine_thread(
         source,
         caps,
         state,
+        // The station's plan is not read here: the first tick does it, which
+        // keeps a start (and every test that builds an engine) off the disk
+        // until the loop is actually running.
+        job_plan: Vec::new(),
+        job_plan_mtime: None,
+        job_running: None,
+        job_skipped: None,
+        job_checked: std::time::Instant::now(),
         cfg,
         analyzer,
         event_tx,
@@ -6220,6 +6245,9 @@ fn engine_thread(
         // The band plan, if another radio's engine or a screen changed it since
         // the last tick: an atomic load, and a withdrawal only when it moved.
         engine.poll_band_plan();
+
+        // The station's receive plan, if a row is due on this radio (issue #754).
+        engine.poll_job_clock();
 
         // The band plan's repeater shift, if the operator asked to follow it.
         // Ahead of `push_tx_freq`, which is what tells an accessory where we
@@ -11093,9 +11121,32 @@ impl Engine {
                 } else {
                     self.stop_recording();
                 }
+                // Published here as `SetIqRecording` does: the chip that says a
+                // file is being written reads this state, and nothing else
+                // sends it when an audio recorder starts or stops.
+                self.emit_state();
             }
             SetRecordingMono(on) => self.state.recording_mono = on,
             SetRecordingFormat(f) => self.state.recording_format = f,
+            SetRecordingJobs(jobs) => {
+                // The station's plan is a file, not engine state: this engine is
+                // the one that was asked, so it writes it and every other
+                // engine reads it back when the mtime moves. Writing it here
+                // rather than in the server keeps the desktop app (no server)
+                // and a browser session (no local file) on one code path.
+                match sdroxide_config::save_recording_jobs(&jobs) {
+                    Ok(()) => {
+                        info!(jobs = jobs.len(), "receive plan saved");
+                        self.job_plan = jobs.clone();
+                        self.job_plan_mtime = sdroxide_config::recording_jobs_mtime();
+                        // Tell every screen, including the one that asked: a
+                        // client's own edit is confirmed the same way another
+                        // client's is.
+                        let _ = self.event_tx.send(RadioEvent::RecordingJobs(jobs));
+                    }
+                    Err(e) => warn!("could not save the receive plan: {e}"),
+                }
+            }
             SetContestSerial(n) => {
                 let n = n.clamp(1, sdroxide_types::CONTEST_SERIAL_MAX);
                 if self.digi_config.contest_serial != n {
@@ -19713,6 +19764,189 @@ impl Engine {
     /// The lists themselves stay ticked as they were; only the confirmation goes,
     /// and with it the permission to key and to tune (see [`Engine::tx_band_refusal`]
     /// and [`Engine::rx_band_refusal_for`]).
+    /// How early a planned reception takes the radio.
+    ///
+    /// A WEFAX transmission opens with five seconds of 300 Hz start tone and
+    /// then the phasing lines, and an SSTV picture with a leader and a VIS
+    /// code. Tuning on the minute misses both, which is a chart that begins
+    /// skew and a picture whose mode had to be guessed — so the clock arrives
+    /// first and the decoder, not a recorder, starts on the tone.
+    const JOB_TUNE_LEAD_S: u32 = 25;
+
+    /// The station's receive plan, as a clock (issue #754).
+    ///
+    /// Runs twice a second in this engine's own loop, so an unattended station
+    /// records whether or not any screen is open — a browser tab's clock cannot
+    /// do that, and a station left listening at three in the morning is the
+    /// whole point of the request.
+    ///
+    /// The plan is a file both the panel and every engine see: the engine that
+    /// was told to save it writes it, and the others notice the mtime. Rows for
+    /// another radio are skipped here rather than filtered on disk, because the
+    /// panel edits one list for the station.
+    fn poll_job_clock(&mut self) {
+        use chrono::Timelike;
+
+        if self.job_checked.elapsed() < std::time::Duration::from_millis(500) {
+            return;
+        }
+        self.job_checked = std::time::Instant::now();
+
+        let mtime = sdroxide_config::recording_jobs_mtime();
+        if mtime != self.job_plan_mtime {
+            self.job_plan_mtime = mtime;
+            self.job_plan = sdroxide_config::load_recording_jobs();
+            // Said once per edit, so a client that connects later still learns
+            // the plan: `RecordingJobs` is the station's answer, not a diff.
+            let _ = self.event_tx.send(RadioEvent::RecordingJobs(self.job_plan.clone()));
+            debug!(jobs = self.job_plan.len(), radio = self.instance, "receive plan read");
+        }
+
+        let now = chrono::Local::now();
+        let date = now.format("%Y-%m-%d").to_string();
+        let secs = now.hour() * 3600 + now.minute() * 60 + now.second();
+
+        let due = self
+            .job_plan
+            .iter()
+            .find(|j| j.is_wall_clock() && self.plan_row_is_mine(j) && j.active_seconds(&date, secs, Self::JOB_TUNE_LEAD_S))
+            .map(|j| {
+                (
+                    j.id,
+                    j.freq_hz,
+                    j.mode,
+                    j.kind,
+                    j.name.clone(),
+                    j.wefax_ioc,
+                    format!("{}–{}", j.start_text(), j.stop_text()),
+                )
+            });
+
+        match (due, self.job_running) {
+            (Some((id, freq_hz, mode, kind, name, wefax_ioc, window)), running)
+                if running.map(|r| r.0) != Some(id) =>
+            {
+                // A recording the operator started is not this clock's to
+                // interrupt: retuning the radio out from under it and taking
+                // its file would be the same fault the old window avoided, and
+                // a station that records what the operator asked for is worth
+                // more than one that obeys the plan at any cost.
+                if self.state.recording || self.state.iq_recording {
+                    if self.job_skipped != Some(id) {
+                        self.job_skipped = Some(id);
+                        warn!(
+                            radio = self.instance, job = id, %name,
+                            "scheduled reception skipped: a recording is already running"
+                        );
+                    }
+                } else {
+                    if running.is_some() {
+                        self.stop_job_recording();
+                    }
+                    // Said before the recorder starts, so the state that start
+                    // publishes already carries it: a row that keeps no file
+                    // lights nothing on its own, and "the station is working"
+                    // must still be visible.
+                    self.state.plan_running = Some(sdroxide_types::PlanRun {
+                        id,
+                        name: if name.is_empty() { window.clone() } else { name.clone() },
+                        window,
+                    });
+                    // The same commands a client would send, so a planned
+                    // reception cannot do anything a hand-tuned one could not.
+                    self.apply(Command::SetVfo { vfo: Vfo::A, hz: freq_hz });
+                    self.apply(Command::SetMode { rx: RxId::Main, mode });
+                    self.arm_job_decoder(mode, wefax_ioc);
+                    self.start_job_recording(kind);
+                    self.job_running = Some((id, kind));
+                    self.job_skipped = None;
+                    info!(
+                        radio = self.instance, job = id, freq_hz, ?mode, %name,
+                        "scheduled reception started"
+                    );
+                }
+            }
+            (None, Some((id, kind))) => {
+                self.state.plan_running = None;
+                // A chart's decoder is armed by a command of its own, so it is
+                // stopped by one too — and only when this row armed it.
+                if self.job_plan.iter().any(|j| j.id == id && j.mode == Mode::Wefax) {
+                    self.apply(Command::WefaxStop);
+                }
+                self.stop_job_recording();
+                self.job_running = None;
+                info!(radio = self.instance, job = id, ?kind, "scheduled reception ended");
+            }
+            (None, None) => self.job_skipped = None,
+            _ => {}
+        }
+    }
+
+    /// Arm a planned reception's decoder, where its mode needs a command.
+    ///
+    /// A planned WEFAX is arm-and-wait: the decoder takes the index of
+    /// cooperation the row names and then begins on the 300 Hz start tone, which
+    /// is why the clock tunes the radio twenty-five seconds early. SSTV and the
+    /// text modes listen whenever their mode is set and need nothing here.
+    fn arm_job_decoder(&mut self, mode: Mode, wefax_ioc: Option<sdroxide_types::WefaxIoc>) {
+        if mode != Mode::Wefax {
+            return;
+        }
+        if let Some(ioc) = wefax_ioc {
+            let mut cfg = self.digi_config.clone();
+            if cfg.wefax_ioc != ioc || cfg.wefax_lpm != sdroxide_types::WefaxLpm::L120 {
+                cfg.wefax_ioc = ioc;
+                // 120 lines a minute is what every station in the published
+                // schedule sends; the index of cooperation is what varies.
+                cfg.wefax_lpm = sdroxide_types::WefaxLpm::L120;
+                self.apply(Command::SetDigiConfig(cfg));
+            }
+        }
+        self.apply(Command::WefaxStart);
+    }
+
+    /// Whether a plan row is this engine's to run.
+    ///
+    /// A row that names a radio is that radio's. A row that names none is one
+    /// written before a plan could name one, and "whichever is open" has no
+    /// meaning on a station whose plan is a file: every engine would take it
+    /// and five radios would pile onto one frequency. It runs on the station's
+    /// primary radio instead, which is the one a single-radio start has.
+    fn plan_row_is_mine(&self, j: &sdroxide_types::RecordingJob) -> bool {
+        match j.radio {
+            sdroxide_types::recording::JobRadio::Any => self.primary,
+            sdroxide_types::recording::JobRadio::Id(id) => id == self.instance,
+        }
+    }
+
+    /// Start what a planned reception keeps.
+    ///
+    /// The state is published here because nothing else does after an *audio*
+    /// recorder starts: `Command::SetRecording` runs the same `start_recording`
+    /// and relies on the next state the engine happens to send, which a planned
+    /// reception has no reason to produce. Without this the file is written and
+    /// the REC chip stays dark — the one thing an unattended recording must not
+    /// be.
+    fn start_job_recording(&mut self, kind: sdroxide_types::RecordingKind) {
+        use sdroxide_types::RecordingKind::*;
+        if matches!(kind, Audio | Both) {
+            self.start_recording();
+        }
+        if matches!(kind, Iq | Both) {
+            self.start_iq_recording();
+        }
+        self.emit_state();
+    }
+
+    /// Stop it again. Best effort and idempotent: the recorder says whether
+    /// anything was running, and a plan that stopped a recording the operator
+    /// never had is not an error.
+    fn stop_job_recording(&mut self) {
+        self.stop_recording();
+        self.stop_iq_recording();
+        self.emit_state();
+    }
+
     fn poll_band_plan(&mut self) {
         let rev = sdroxide_types::band_plan_revision();
         if rev != self.seen_plan_rev {

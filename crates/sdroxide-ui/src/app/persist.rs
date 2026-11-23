@@ -226,12 +226,6 @@ pub(in crate::app) fn load_recording_jobs(
     storage.and_then(|s| eframe::get_value(s, "recording_jobs")).unwrap_or_default()
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub(in crate::app) fn persist_recording_jobs(jobs: &[RecordingJob]) {
-    if let Err(e) = sdroxide_config::save_recording_jobs(jobs) {
-        eprintln!("failed to save recording jobs: {e}");
-    }
-}
 
 #[cfg(target_arch = "wasm32")]
 pub(in crate::app) fn persist_recording_jobs(_jobs: &[RecordingJob]) {

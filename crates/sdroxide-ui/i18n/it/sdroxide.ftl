@@ -5333,13 +5333,10 @@ extras-antenna = ANTENNA
 
 extras-antenna-hint = ANTENNA (Sperimentale/Beta) — lunghezze di taglio, impedenza al punto di alimentazione e diagramma per le antenne comuni a filo/verticali/Yagi
 
-recjobs-title = REGISTRAZIONI
+recjobs-title = PIANIFICAZIONE
 
-recjobs-finished = Terminata “{ $name }”
 
-recjobs-skipped = Saltata “{ $name }” — già in registrazione
 
-recjobs-recording-name = Registrazione di “{ $name }”
 
 recjobs-new-job = + NUOVA ATTIVITÀ
 
@@ -5347,21 +5344,18 @@ recjobs-recording = ● in registrazione
 
 recjobs-none = Nessuna registrazione programmata — premi + NUOVA ATTIVITÀ per aggiungerne una.
 
-recjobs-done = fatto
 
 recjobs-edit = modifica
 
 recjobs-del = canc
 
-recjobs-station = Stazione
+recjobs-station = Descrizione
 
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Tipo
 
-recjobs-start-utc = Inizio (UTC)
 
-recjobs-for = Durata
 
 recjobs-save = SALVA
 
@@ -9843,3 +9837,31 @@ settings-radio-preselector = Preselettore
 settings-radio-preselector-hover = Il filtro preselettore del ricevitore. Utilizzabile solo sopra 1,5 MHz; sotto, la radio lo esclude, dove in circuito toglierebbe il segnale invece della banda.
 
 settings-radio-perseus-below-1-5-mhz = Solo ricezione. Sotto 1,5 MHz il preselettore viene escluso automaticamente: lì, in circuito, toglie il segnale invece della banda di radiodiffusione.
+
+recjobs-plan-on-station = Questo piano risiede sulla stazione: registra che uno schermo sia aperto o no.
+
+recjobs-daily = ogni giorno
+
+recjobs-on-date = a una data
+
+recjobs-when = Quando
+
+recjobs-radio = Radio
+
+recjobs-radio-any = quella aperta
+
+recjobs-start-local = Inizio–fine (locale)
+
+recjobs-times-note = Gli orari sono locali; una fine prima dell'inizio prosegue dopo mezzanotte. Le righe singole vengono rimosse quando il loro giorno è passato.
+
+recjobs-incomplete = non pronto
+
+topbar-caption-plan = Pianifica
+
+recjobs-open = PIANIFICAZIONE…
+
+recjobs-decode-note = Una modalità di decodifica viene conservata dal suo decodificatore: la carta, l'immagine o il messaggio compaiono in quel pannello. La stazione si sintonizza circa mezzo minuto prima, per non perdere il tono di avvio WEFAX o il leader SSTV.
+
+recjobs-kind-none = Nessuno (solo decodifica)
+
+recjobs-running = In corso: { $name } ({ $window })

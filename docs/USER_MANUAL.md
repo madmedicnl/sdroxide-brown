@@ -3443,6 +3443,70 @@ This is the same data `--record-iq` ([12](#12-command-line-reference)) writes,
 in a container other programs can open — `--record-iq` writes the bare samples
 and starts with the program, which is what a headless capture wants.
 
+#### Planning recordings you will not be there for
+
+**REC → PLANNING…** opens a list of receptions planned ahead: a time, a
+frequency, a mode, the radio to use and what to keep of it, one row each. **+ NEW
+JOB** adds one.
+
+A row is either **every day** or **on a date**, and its **start–end** is the
+station's own local time of day. A stop before the start runs past midnight, so
+`22:30–00:15` is one row and not two. Times are local on purpose: "09:45 every
+day" must not walk an hour when the clocks change.
+
+Two things follow from where the clock lives. **The plan runs on the radio, not
+in this window**, so a station records a three o'clock transmission with every
+screen closed, and a browser session against that station gets the same
+behaviour as the desktop app — the list you edit is the station's, not the
+browser's. And **a row names its radio**, so one plan covers a station with
+several receivers: the four o'clock WEFAX goes on the receiver you chose, not on
+whichever tab happens to be open. A row written before a plan could name a radio
+means the station's first radio.
+
+What a row does when it comes due is what you would do by hand: it tunes the
+dial, sets the mode, and starts the recording you asked for — **Audio** (in the
+container chosen in the REC picker), **I/Q**, or both. It stops at the end of
+the window. Nothing is asked of the transmitter. If the plan comes due while a
+recording the operator started is already running, the station leaves that one
+alone rather than overwriting it.
+
+**What to keep** is a choice of four: **Audio**, **I/Q**, **Both**, or **None
+(decode only)**. None is the one for a decoding mode — the station tunes, the
+decoder does its work, and no file is written in addition. A row that keeps
+nothing is still a row that runs: the reception happens, the chart or the message
+is kept by its decoder, and only the recorder stays out of it.
+
+**A row that is on the air says so.** While any planned reception runs, a lit chip
+beside **REC** carries the name you gave the row — click it to open the list — and
+the row is marked with a red dot there. With **Audio** or **I/Q** you also have the
+REC chip itself, breathing as it does for a hand-started recording; with **None**
+the chip is rightly dark, because nothing is being written, and the named chip is
+what tells you the station is working.
+
+**A decoding mode is kept by its own decoder.** Pick **WEFAX 576/120** — or
+**WEFAX 288/120**, the two chart services the mode list offers, so the index of
+cooperation is part of the mode rather than a second field — and the chart
+appears in the WEFAX panel as it is received; pick **SSTV** and the picture is
+saved; pick **STANAG 4285** (or any other decoder mode) and its text arrives in
+the decode log. **Audio** is then optional rather than necessary — the decoder
+is what keeps the result, and its own file is written where that decoder always
+writes it.
+
+That is also why the station **tunes about half a minute early**. A WEFAX
+transmission opens with five seconds of 300 Hz start tone and then the phasing
+lines, and an SSTV picture with a leader and a VIS code; arriving on the minute
+misses both, which is a chart that starts skew and a picture whose mode had to be
+guessed. So the radio is already on the frequency when the start tone comes, and
+the decoder — not a recorder — is what begins on it. The window's end does not
+move for the early arrival.
+
+**One-off rows are removed once their day has gone**, which is what the request
+asked for: a date that has passed is a row that would never fire again. Recurring
+rows stay until you delete them, and there is no limit to how many there are —
+the list scrolls. A row that cannot run yet (a date that has passed, a start
+equal to the end, no frequency) is marked **not ready** beside it and is left
+alone until it is fixed.
+
 #### Playing a recording back into the decoders
 
 An audio recording — MP3 or WAV — is not only an archive. **▶ RECORDINGS…**, at

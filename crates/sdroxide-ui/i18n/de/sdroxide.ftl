@@ -5310,13 +5310,10 @@ extras-antenna = ANTENNE
 
 extras-antenna-hint = ANTENNE (experimentell/Beta) — Schnittlängen, Speisepunktimpedanz und Diagramm für gängige Draht-, Vertikal- und Yagi-Antennen
 
-recjobs-title = AUFNAHMEN
+recjobs-title = PLANUNG
 
-recjobs-finished = „{ $name }“ beendet
 
-recjobs-skipped = „{ $name }“ übersprungen — es wird bereits aufgenommen
 
-recjobs-recording-name = Aufnahme von „{ $name }“
 
 recjobs-new-job = + NEUER AUFTRAG
 
@@ -5324,21 +5321,18 @@ recjobs-recording = ● Aufnahme läuft
 
 recjobs-none = Keine geplanten Aufnahmen — mit + NEUER AUFTRAG einen hinzufügen.
 
-recjobs-done = erledigt
 
 recjobs-edit = bearbeiten
 
 recjobs-del = löschen
 
-recjobs-station = Sender
+recjobs-station = Beschreibung
 
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Art
 
-recjobs-start-utc = Start (UTC)
 
-recjobs-for = Dauer
 
 recjobs-save = SPEICHERN
 
@@ -9826,3 +9820,31 @@ settings-radio-preselector = Preselektor
 settings-radio-preselector-hover = Das Preselektorfilter des Empfängers. Nur oberhalb von 1,5 MHz brauchbar; darunter schaltet das Radio es ab, wo es im Signalweg das Signal statt des Bandes entfernen würde.
 
 settings-radio-perseus-below-1-5-mhz = Nur Empfang. Unterhalb von 1,5 MHz wird der Preselektor automatisch abgeschaltet: dort entfernt er im Signalweg das Signal statt des Rundfunkbands.
+
+recjobs-plan-on-station = Dieser Plan liegt auf der Station: er zeichnet auf, ob ein Bildschirm offen ist oder nicht.
+
+recjobs-daily = jeden Tag
+
+recjobs-on-date = an einem Datum
+
+recjobs-when = Wann
+
+recjobs-radio = Radio
+
+recjobs-radio-any = das gerade offene
+
+recjobs-start-local = Beginn–Ende (Ortszeit)
+
+recjobs-times-note = Die Zeiten sind Ortszeit; ein Ende vor dem Beginn läuft über Mitternacht. Einmalige Zeilen werden entfernt, sobald ihr Tag vorbei ist.
+
+recjobs-incomplete = nicht bereit
+
+topbar-caption-plan = Vorausplanen
+
+recjobs-open = PLANUNG…
+
+recjobs-decode-note = Ein Decodiermodus wird von seinem eigenen Decoder festgehalten — Karte, Bild oder Meldung erscheinen in dessen Bereich. Die Station stimmt etwa eine halbe Minute früher ab, damit WEFAX-Startton und SSTV-Leader nicht verloren gehen.
+
+recjobs-kind-none = Keine (nur decodieren)
+
+recjobs-running = Läuft: { $name } ({ $window })

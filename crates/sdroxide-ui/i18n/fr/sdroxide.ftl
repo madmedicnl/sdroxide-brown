@@ -5321,13 +5321,10 @@ extras-antenna = ANTENNE
 
 extras-antenna-hint = ANTENNE (expérimental/bêta) — longueurs de coupe, impédance au point d'alimentation et diagramme pour les antennes filaires, verticales et Yagi courantes
 
-recjobs-title = ENREGISTREMENTS
+recjobs-title = PLANIFICATION
 
-recjobs-finished = « { $name } » terminé
 
-recjobs-skipped = « { $name } » ignoré — enregistrement déjà en cours
 
-recjobs-recording-name = Enregistrement de « { $name } »
 
 recjobs-new-job = + NOUVELLE TÂCHE
 
@@ -5335,21 +5332,18 @@ recjobs-recording = ● enregistrement
 
 recjobs-none = Aucun enregistrement programmé — appuyez sur + NOUVELLE TÂCHE pour en ajouter un.
 
-recjobs-done = terminé
 
 recjobs-edit = modifier
 
 recjobs-del = suppr.
 
-recjobs-station = Station
+recjobs-station = Description
 
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Type
 
-recjobs-start-utc = Début (UTC)
 
-recjobs-for = Durée
 
 recjobs-save = ENREGISTRER
 
@@ -9837,3 +9831,31 @@ settings-radio-preselector = Présélecteur
 settings-radio-preselector-hover = Le filtre présélecteur du récepteur. Utilisable seulement au-dessus de 1,5 MHz ; en dessous, la radio le met hors circuit, où il supprimerait le signal plutôt que la bande.
 
 settings-radio-perseus-below-1-5-mhz = Réception seule. En dessous de 1,5 MHz, le présélecteur est mis hors circuit automatiquement : là, en circuit, il supprime le signal plutôt que la bande de diffusion.
+
+recjobs-plan-on-station = Ce plan réside sur la station : il enregistre qu'un écran soit ouvert ou non.
+
+recjobs-daily = chaque jour
+
+recjobs-on-date = à une date
+
+recjobs-when = Quand
+
+recjobs-radio = Radio
+
+recjobs-radio-any = celle qui est ouverte
+
+recjobs-start-local = Début–fin (local)
+
+recjobs-times-note = Les heures sont locales ; une fin avant le début se poursuit après minuit. Les lignes ponctuelles sont supprimées une fois leur jour passé.
+
+recjobs-incomplete = pas prêt
+
+topbar-caption-plan = Planifier
+
+recjobs-open = PLANIFICATION…
+
+recjobs-decode-note = Un mode de décodage est conservé par son propre décodeur — la carte, l'image ou le message apparaît dans son panneau. La station se cale environ une demi-minute plus tôt, pour ne pas manquer la tonalité de départ WEFAX ni le leader SSTV.
+
+recjobs-kind-none = Aucun (décodage seul)
+
+recjobs-running = En cours : { $name } ({ $window })

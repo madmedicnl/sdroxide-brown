@@ -5324,13 +5324,10 @@ extras-antenna = ANTEN
 
 extras-antenna-hint = ANTEN (Deneysel/Beta) — yaygın tel/dikey/Yagi antenler için kesim boyları, besleme noktası empedansı ve ışıma diyagramı
 
-recjobs-title = KAYITLAR
+recjobs-title = PLANLAMA
 
-recjobs-finished = “{ $name }” tamamlandı
 
-recjobs-skipped = “{ $name }” atlandı — zaten kayıtta
 
-recjobs-recording-name = “{ $name }” kaydediliyor
 
 recjobs-new-job = + YENİ İŞ
 
@@ -5338,21 +5335,18 @@ recjobs-recording = ● kaydediyor
 
 recjobs-none = Zamanlanmış kayıt yok — eklemek için + YENİ İŞ'e basın.
 
-recjobs-done = bitti
 
 recjobs-edit = düzenle
 
 recjobs-del = sil
 
-recjobs-station = İstasyon
+recjobs-station = Açıklama
 
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Tür
 
-recjobs-start-utc = Başlangıç (UTC)
 
-recjobs-for = Süre
 
 recjobs-save = KAYDET
 
@@ -9834,3 +9828,31 @@ settings-radio-preselector = Ön seçici
 settings-radio-preselector-hover = Alıcının ön seçici filtresi. Yalnızca 1,5 MHz üzerinde kullanılabilir; altında radyo onu devre dışı bırakır, çünkü devredeyken bandı değil sinyali kaldırırdı.
 
 settings-radio-perseus-below-1-5-mhz = Yalnızca alım. 1,5 MHz altında ön seçici otomatik olarak devre dışı bırakılır: orada devredeyken yayın bandını değil sinyali kaldırır.
+
+recjobs-plan-on-station = Bu plan istasyonda durur: bir ekran açık olsun olmasın kaydeder.
+
+recjobs-daily = her gün
+
+recjobs-on-date = bir tarihte
+
+recjobs-when = Ne zaman
+
+recjobs-radio = Radyo
+
+recjobs-radio-any = hangisi açıksa
+
+recjobs-start-local = Başlangıç–bitiş (yerel)
+
+recjobs-times-note = Saatler yereldir; bitiş başlangıçtan önceyse gece yarısını geçer. Tek seferlik satırlar günü geçince silinir.
+
+recjobs-incomplete = hazır değil
+
+topbar-caption-plan = Önceden planla
+
+recjobs-open = PLANLAMA…
+
+recjobs-decode-note = Bir kodu çözme modunu kendi çözücüsü saklar: harita, görüntü veya mesaj o panelde görünür. İstasyon yaklaşık yarım dakika erken ayarlanır; WEFAX başlangıç tonu veya SSTV lideri kaçmaz.
+
+recjobs-kind-none = Yok (yalnızca çözme)
+
+recjobs-running = Çalışıyor: { $name } ({ $window })

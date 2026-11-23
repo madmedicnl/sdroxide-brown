@@ -2459,6 +2459,14 @@ use sdroxide_types::{
 /// and the station agree on what is drawn. Appended, so an older peer reads the
 /// screen it knows. `PROTO_VERSION` 303 → 304, `VERSION_BYTE` 0x7B → 0x7C.
 ///
+/// v306: **the station's receive plan** (issue #754). `Command` gains
+/// `SetRecordingJobs` and `ServerMsg` gains `RecordingJobs`, both appended last;
+/// [`sdroxide_types::RecordingJob`] gains its repeating half at its own tail (a
+/// day, a local window, a radio, a WEFAX index of cooperation and "keep
+/// nothing"); and [`sdroxide_types::RadioState`] gains `plan_running`, which
+/// says a row is on the air even when it keeps no file. `PROTO_VERSION` 305 →
+/// 306, `VERSION_BYTE` 0x7D → 0x7E.
+///
 /// v305: **the Microtelecom Perseus backend.** [`sdroxide_types::Backend`] gains
 /// `Perseus`, [`sdroxide_types::DeviceProbe`] and
 /// [`sdroxide_types::ProbeAnswer`] each gain a `Perseus` variant that enumerates
@@ -2470,8 +2478,8 @@ use sdroxide_types::{
 /// `PerseusConfig` on the end has nowhere to put it and reads the tail of every
 /// one of those messages out of step. `PROTO_VERSION` 304 → 305,
 /// `VERSION_BYTE` 0x7C → 0x7D.
-pub const PROTO_VERSION: u16 = 305;
-const VERSION_BYTE: u8 = 0x7D;
+pub const PROTO_VERSION: u16 = 306;
+const VERSION_BYTE: u8 = 0x7E;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3098,6 +3106,11 @@ pub enum ServerMsg {
     /// on connect, and echoed after a [`ClientMsg::SetOperatorPtt`]. Client-local:
     /// it does not touch the engine. Appended last (v302).
     OperatorPtt(Box<sdroxide_types::PttInputsConfig>),
+
+    /// The station's receive plan, whole — sent when an engine starts and after
+    /// every edit, so a client that connects later still learns it. Appended
+    /// last (v306).
+    RecordingJobs(Vec<sdroxide_types::RecordingJob>),
 }
 
 /// What [`ServerMsg::ClientSettings`] carries.
@@ -3831,7 +3844,7 @@ mod tests {
         // v296: the SSTV clock layer (`TextLayer::clock`) appended at the tail
         // of a `Composer` layer, which rides the picture preset messages.
         // v300: the theme-from-a-file at the tail of `ClientScreen`.
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
         // v297: the strip height at the tail of `ClientScreen`, and it comes
         // back as sent — with, since v300, the theme file's name and text.
         let screen_text = "name = \"Vending machines\"\n".to_string();
@@ -3914,7 +3927,7 @@ mod tests {
             }
             other => panic!("the answer did not round-trip: {other:?}"),
         }
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
     }
 
     /// v301: the desk microphone and the pedal (issue #636) ride the wire, and
@@ -3965,7 +3978,7 @@ mod tests {
         let back: sdroxide_types::StationConfig =
             postcard::from_bytes(&postcard::to_allocvec(&station).unwrap()).unwrap();
         assert_eq!(back.ptt_inputs, cfg);
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
     }
 
     /// v302: the browser's microphone and pedal are kept on the server, and their
@@ -3990,7 +4003,7 @@ mod tests {
         assert_eq!(decode::<ServerMsg>(&bytes).unwrap(), down);
         let prev = ServerMsg::PttInputsStatus(Box::default());
         assert_eq!(bytes[1], encode(&prev).unwrap()[1] + 1, "OperatorPtt must be last");
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
     }
 
     /// v286: the QRZ card rides `CallsignResult` — photo, age and all.
@@ -4012,7 +4025,7 @@ mod tests {
             ServerMsg::CallsignResult(back) => assert_eq!(back, info),
             other => panic!("the card did not round-trip: {other:?}"),
         }
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
     }
 
     /// The VOR read-out rides the wire whole, locked or not, and the message is
@@ -4136,9 +4149,13 @@ mod tests {
         // fingerprint its confirmation is made against (275 → 276) and the radio's
         // own band plan (277 → 278) were appended at its tail. The pin had not
         // been moved since 265; this is the conscious edit those bumps owed it.
+        // 915 since the `perseus` block (304 → 305): a u32 ordinal, an f64 rate,
+        // a u8 attenuator and a bool preselector. That bump merged without this
+        // line, so `main` was red until here — the pins below it were still at
+        // 304/0x7C for the same reason.
         assert_eq!(
             (radio.len(), fnv1a(&radio)),
-            (904, 13_554_492_482_937_614_926),
+            (915, 17_431_928_730_515_284_165),
             "RadioConfig's wire layout shifted — append fields, never insert them"
         );
         // 316 since the two Dynamic DNS fields were appended at the end
@@ -5052,6 +5069,43 @@ mod tests {
         }
     }
 
+    /// v310/v311: the station's receive plan rides whole, and a row with every
+    /// field filled — a day, a local window, a radio, a WEFAX index of
+    /// cooperation and "keep nothing" — survives it, as does the state that says
+    /// it is running.
+    #[test]
+    fn the_receive_plan_round_trips() {
+        use sdroxide_types::recording::{JobRadio, JobRepeat};
+        use sdroxide_types::{PlanRun, WefaxIoc};
+        let row = sdroxide_types::RecordingJob {
+            id: 9,
+            at_unix: 0,
+            freq_hz: 7_878_100.0,
+            mode: sdroxide_types::Mode::Wefax,
+            duration_s: 1800,
+            kind: sdroxide_types::RecordingKind::Nothing,
+            name: "Arktische Eiskarte".into(),
+            done: false,
+            repeat: JobRepeat::Daily,
+            start_min: 15 * 60 + 40,
+            stop_min: 15 * 60 + 55,
+            date: String::new(),
+            radio: JobRadio::Id(2),
+            wefax_ioc: Some(WefaxIoc::I288),
+        };
+        let plan = vec![row];
+        let m = ClientMsg::Command(Command::SetRecordingJobs(plan.clone()));
+        assert_eq!(decode::<ClientMsg>(&encode(&m).unwrap()).unwrap(), m);
+        let m = ServerMsg::RecordingJobs(plan);
+        assert_eq!(decode::<ServerMsg>(&encode(&m).unwrap()).unwrap(), m);
+
+        let mut state = RadioState::default();
+        state.plan_running =
+            Some(PlanRun { id: 9, name: "Arktische Eiskarte".into(), window: "15:40–15:55".into() });
+        let m = ServerMsg::State(state);
+        assert_eq!(decode::<ServerMsg>(&encode(&m).unwrap()).unwrap(), m);
+    }
+
     /// The sign-in exchange, both ways.
     ///
     /// These three are the only messages that cross before the handshake has
@@ -5126,14 +5180,14 @@ mod tests {
         let ServerMsg::Ft8Status(s) = back else { panic!("not a status") };
         assert!(!s.config.wefax_auto_slant);
         assert_eq!(s.config.wefax_slant_ppm, -37.5);
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
     }
 
     /// v289: the satellite lock's CTCSS tone rides the end of `SatLockConfig`,
     /// and the rig's own keying the end of `TxState`; the version is pinned.
     #[test]
     fn the_sat_lock_tone_and_the_rig_keyed_flag_round_trip() {
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (304, 0x7C));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
         let cfg = sdroxide_types::SatLockConfig {
             norad_id: 25544,
             ctcss_hz: Some(67.0),

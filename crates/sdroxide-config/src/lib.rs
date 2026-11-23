@@ -2376,6 +2376,14 @@ pub fn save_recording_jobs(jobs: &[sdroxide_types::RecordingJob]) -> Result<(), 
     save_json("recording_jobs.json", &jobs)
 }
 
+/// When the plan last changed, so an engine reloads it only when somebody
+/// edited it — the file is the station's, and reading it once a second is
+/// cheap but reading it once a second for ever is not.
+pub fn recording_jobs_mtime() -> Option<std::time::SystemTime> {
+    let dir = config_dir().ok()?;
+    std::fs::metadata(dir.join("recording_jobs.json")).ok()?.modified().ok()
+}
+
 /// The shortwave listener's reception log (`swl_log.json`) — what was *heard*.
 ///
 /// A separate file from the QSO log on purpose: a reception has no callsign and

@@ -1210,6 +1210,9 @@ fn handle_event(shared: &Shared, ev: RadioEvent) {
     let msg = {
         let mut latest = shared.latest.lock().unwrap();
         match ev {
+            // The station's receive plan (issue #754): a whole-list answer, so
+            // it is simply passed on to every screen watching this radio.
+            RadioEvent::RecordingJobs(jobs) => Some(ServerMsg::RecordingJobs(jobs)),
             RadioEvent::Capabilities(c) => {
                 // Cached for the next client's `HelloAck`, and sent to whoever
                 // is on now: the engine emits this when it adopts a source, so

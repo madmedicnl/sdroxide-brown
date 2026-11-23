@@ -473,6 +473,10 @@ async fn run_session(
     if let Some(r) = radio {
         let _ = socket.send(msg(&ServerMsg::RadioConfig(r))).await;
     }
+    // The station's receive plan (issue #754). Read from the station's own file
+    // rather than from the engine, because a client that attaches before the
+    // engine's clock has ticked still has to see the plan it is about to add to.
+    let _ = socket.send(msg(&ServerMsg::RecordingJobs(sdroxide_config::load_recording_jobs()))).await;
     // The satellite lock is a condition too: a client attaching mid-pass has
     // to see it immediately, and must not offer to start one that is running.
     if sat_track.is_some() {
