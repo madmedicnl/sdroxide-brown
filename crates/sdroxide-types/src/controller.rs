@@ -463,6 +463,10 @@ pub enum RadioEvent {
     /// station's recordings directory. The engine's, so it rides
     /// `ServerMsg::Recordings` to a remote client.
     Recordings(crate::RecordingListing),
+    /// The station's receive plan, whole, whenever it changes and once when an
+    /// engine starts — so a client that connects later still learns it. See
+    /// [`crate::RecordingJob`].
+    RecordingJobs(Vec<crate::RecordingJob>),
     /// A slideshow picture the playing DAB station sent. Sent once per new
     /// picture, apart from [`RadioEvent::DabStatus`], which goes out several
     /// times a second. The engine's, so it rides `ServerMsg::DabSlide`.

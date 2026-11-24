@@ -643,6 +643,10 @@ impl RemoteController {
                 .push_back(RadioEvent::ClientBindings { profile: r.profile, bindings: r.bindings }),
             ServerMsg::KnownCalls(r) => self.pending.push_back(RadioEvent::KnownCalls(r)),
             ServerMsg::Recordings(l) => self.pending.push_back(RadioEvent::Recordings(l)),
+            // The station's receive plan, the same answer an engine gives
+            // locally: pushed as the event so both paths reach one handler.
+            ServerMsg::RecordingJobs(j) =>
+                self.pending.push_back(RadioEvent::RecordingJobs(j)),
             ServerMsg::DabSlide(s) => self.pending.push_back(RadioEvent::DabSlide(s)),
             ServerMsg::AudioLevel(l) => self.pending.push_back(RadioEvent::AudioLevel(l)),
             ServerMsg::TxRefused(why, hz) => {

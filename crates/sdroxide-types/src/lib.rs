@@ -337,7 +337,7 @@ pub use rds::{
     RdsClock, RdsData, RdsGroupLog, RdsStandard, RdsStats, RtPlus, af_code_hz, pi_callsign,
     pty_name, rt_plus_class,
 };
-pub use recording::{JobAction, RecordingFormat, RecordingJob, RecordingKind};
+pub use recording::{JobAction, PlanRun, RecordingFormat, RecordingJob, RecordingKind};
 pub use ptt_input::{
     Debounce, LineDrive, PttHidDevice, PttHold, PttInputConfig, PttInputSource, PttInputState,
     PttInputsConfig, PttInputsStatus, PttMidiPort, PttSlot, hid_learn, hid_pressed, level_pressed,

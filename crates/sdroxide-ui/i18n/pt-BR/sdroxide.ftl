@@ -5324,13 +5324,10 @@ extras-antenna = ANTENA
 
 extras-antenna-hint = ANTENA (Experimental/Beta) — comprimentos de corte, impedância no ponto de alimentação e diagrama para antenas comuns de fio/vertical/Yagi
 
-recjobs-title = GRAVAÇÕES
+recjobs-title = PLANEJAMENTO
 
-recjobs-finished = Concluída “{ $name }”
 
-recjobs-skipped = Ignorada “{ $name }” — já está gravando
 
-recjobs-recording-name = Gravando “{ $name }”
 
 recjobs-new-job = + NOVA TAREFA
 
@@ -5338,21 +5335,18 @@ recjobs-recording = ● gravando
 
 recjobs-none = Nenhuma gravação agendada — pressione + NOVA TAREFA para adicionar.
 
-recjobs-done = concluída
 
 recjobs-edit = editar
 
 recjobs-del = excl
 
-recjobs-station = Estação
+recjobs-station = Descrição
 
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Tipo
 
-recjobs-start-utc = Início (UTC)
 
-recjobs-for = Duração
 
 recjobs-save = SALVAR
 
@@ -9834,3 +9828,31 @@ settings-radio-preselector = Pré-seletor
 settings-radio-preselector-hover = O filtro pré-seletor do receptor. Utilizável apenas acima de 1,5 MHz; abaixo disso o rádio o desliga, pois em circuito ele removeria o sinal em vez da faixa.
 
 settings-radio-perseus-below-1-5-mhz = Somente recepção. Abaixo de 1,5 MHz o pré-seletor é desligado automaticamente: ali, em circuito, ele remove o sinal em vez da faixa de radiodifusão.
+
+recjobs-plan-on-station = Este plano fica na estação: grava com ou sem uma tela aberta.
+
+recjobs-daily = todos os dias
+
+recjobs-on-date = numa data
+
+recjobs-when = Quando
+
+recjobs-radio = Rádio
+
+recjobs-radio-any = a que estiver aberta
+
+recjobs-start-local = Início–fim (local)
+
+recjobs-times-note = Os horários são locais; um fim antes do início continua após a meia-noite. Linhas avulsas são removidas quando seu dia passa.
+
+recjobs-incomplete = não pronto
+
+topbar-caption-plan = Planejar
+
+recjobs-open = PLANEJAMENTO…
+
+recjobs-decode-note = Um modo de decodificação é guardado pelo próprio decodificador: a carta, a imagem ou a mensagem aparecem naquele painel. A estação sintoniza cerca de meio minuto antes, para não perder o tom de início do WEFAX nem o líder do SSTV.
+
+recjobs-kind-none = Nenhum (somente decodificar)
+
+recjobs-running = Em execução: { $name } ({ $window })

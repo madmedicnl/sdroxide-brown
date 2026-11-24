@@ -2218,7 +2218,6 @@ impl eframe::App for SdroxideApp {
             self.module_windows_window(&ctx);
         }
         self.recordings_window(&ctx, &mut cmds);
-        self.poll_recording_jobs(&mut cmds);
         self.mail_window(&ctx, &mut cmds);
         self.mail_log_window(&ctx);
         self.spots_window(&ctx, &mut cmds);
@@ -4218,6 +4217,10 @@ impl SdroxideApp {
                     }
                 }
                 RadioEvent::Recordings(listing) => self.playback.accept(listing),
+                // The station's receive plan (issue #754): the engine's own
+                // answer to an edit here, and how a plan made anywhere else
+                // arrives. Whole-list, so it replaces.
+                RadioEvent::RecordingJobs(jobs) => self.adopt_job_plan(jobs),
                 RadioEvent::KnownCalls(reply) => {
                     // The engine's own answer, about its own hash table — so it
                     // is taken whichever client asked, with no scope check: this

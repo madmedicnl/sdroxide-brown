@@ -5326,13 +5326,10 @@ extras-antenna = ANTENNA
 
 extras-antenna-hint = ANTENNA (Experimental/Beta) — cutting lengths, feedpoint impedance and pattern for common wire/vertical/Yagi antennas
 
-recjobs-title = RECORDINGS
+recjobs-title = PLANNING
 
-recjobs-finished = Finished “{ $name }”
 
-recjobs-skipped = Skipped “{ $name }” — already recording
 
-recjobs-recording-name = Recording “{ $name }”
 
 recjobs-new-job = + NEW JOB
 
@@ -5340,21 +5337,18 @@ recjobs-recording = ● recording
 
 recjobs-none = No scheduled recordings — press + NEW JOB to add one.
 
-recjobs-done = done
 
 recjobs-edit = edit
 
 recjobs-del = del
 
-recjobs-station = Station
+recjobs-station = Description
 
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Kind
 
-recjobs-start-utc = Start (UTC)
 
-recjobs-for = For
 
 recjobs-save = SAVE
 
@@ -9864,3 +9858,31 @@ settings-radio-preselector = Preselector
 settings-radio-preselector-hover = The receiver's preselector filter. Usable only above 1.5 MHz; below that the radio switches it out, where in circuit it would remove the signal rather than the band.
 
 settings-radio-perseus-below-1-5-mhz = Receive only. Below 1.5 MHz the preselector is switched out automatically: in circuit there it removes the signal rather than the broadcast band.
+
+recjobs-plan-on-station = This plan lives on the station: it records whether or not a screen is open.
+
+recjobs-daily = every day
+
+recjobs-on-date = on a date
+
+recjobs-when = When
+
+recjobs-radio = Radio
+
+recjobs-radio-any = whichever is open
+
+recjobs-start-local = Start–end (local)
+
+recjobs-times-note = Times are local; a stop before the start runs past midnight. One-off rows are removed once their day has gone.
+
+recjobs-incomplete = not ready
+
+topbar-caption-plan = Plan ahead
+
+recjobs-open = PLANNING…
+
+recjobs-decode-note = A decoding mode is kept by its own decoder — the chart, picture or message appears in that panel. The station tunes about half a minute early, so a WEFAX start tone or an SSTV leader is not missed.
+
+recjobs-kind-none = None (decode only)
+
+recjobs-running = Running: { $name } ({ $window })

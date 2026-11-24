@@ -12,6 +12,11 @@ soapy = ["dep:soapysdr"]
 rtl433 = ["sdroxide-ism/rtl433"]
 
 [dependencies]
+# The receive planner reads the station's wall clock: "09:45 every day" is a
+# local time of day, and the offset that turns it into an instant twice a year
+# is the system's business, not ours. `clock` pulls in the local-time database
+# only; no wasm reaches this crate.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 sdroxide-types.workspace = true
 sdroxide-dsp.workspace = true
 # DRM reception. Links a vendored C++ receiver, so it is native-only — which

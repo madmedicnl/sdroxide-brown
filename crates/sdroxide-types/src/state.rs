@@ -718,6 +718,12 @@ pub struct RadioState {
     /// numbers fields by position.
     #[serde(default)]
     pub meshtastic: crate::MeshtasticSettings,
+    /// The planned reception running right now, if one is (issue #754). `None`
+    /// when nothing is planned into this moment — see [`crate::PlanRun`], which
+    /// is what tells a screen the station is working even when the row keeps no
+    /// file. Appended last: postcard numbers fields by position.
+    #[serde(default)]
+    pub plan_running: Option<crate::PlanRun>,
 }
 
 impl Default for RadioState {
@@ -779,6 +785,7 @@ impl Default for RadioState {
             gain_by_band: false,
             playback: None,
             recording_format: crate::RecordingFormat::default(),
+            plan_running: None,
         }
     }
 }

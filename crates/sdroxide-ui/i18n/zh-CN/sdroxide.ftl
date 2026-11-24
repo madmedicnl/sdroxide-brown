@@ -5262,13 +5262,10 @@ extras-antenna = 天线
 
 extras-antenna-hint = 天线（实验/测试版），常见线状、垂直和八木天线的截取长度、馈点阻抗和方向图
 
-recjobs-title = 录音
+recjobs-title = 计划
 
-recjobs-finished = 已完成“{ $name }”
 
-recjobs-skipped = 已跳过“{ $name }”，正在录音
 
-recjobs-recording-name = 正在录制“{ $name }”
 
 recjobs-new-job = + 新建任务
 
@@ -5276,21 +5273,18 @@ recjobs-recording = ● 录制中
 
 recjobs-none = 没有定时录音，请按 + 新建任务 添加。
 
-recjobs-done = 完成
 
 recjobs-edit = 编辑
 
 recjobs-del = 删除
 
-recjobs-station = 电台
+recjobs-station = 说明
 
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = 类型
 
-recjobs-start-utc = 开始 (UTC)
 
-recjobs-for = 时长
 
 recjobs-save = 保存
 
@@ -9772,3 +9766,31 @@ settings-radio-preselector = 预选器
 settings-radio-preselector-hover = 接收机的预选器滤波器。仅在 1.5 MHz 以上可用；以下时电台会自动断开，否则接入会去掉信号而不是波段。
 
 settings-radio-perseus-below-1-5-mhz = 仅接收。1.5 MHz 以下预选器会自动断开：在那一频段接入它会去掉信号，而不是广播波段。
+
+recjobs-plan-on-station = 此计划保存在电台端：无论是否打开界面都会录音。
+
+recjobs-daily = 每天
+
+recjobs-on-date = 指定日期
+
+recjobs-when = 何时
+
+recjobs-radio = 电台
+
+recjobs-radio-any = 当前打开的那台
+
+recjobs-start-local = 开始–结束（本地时间）
+
+recjobs-times-note = 时间为本地时间；结束早于开始表示跨过午夜。一次性条目在其日期过后会被删除。
+
+recjobs-incomplete = 未就绪
+
+topbar-caption-plan = 预先计划
+
+recjobs-open = 计划…
+
+recjobs-decode-note = 解码模式由各自的解码器保存——图、图片或消息出现在对应面板。电台会提前约半分钟调谐，以免错过 WEFAX 起始音或 SSTV 引导信号。
+
+recjobs-kind-none = 无（仅解码）
+
+recjobs-running = 正在运行：{ $name }（{ $window }）

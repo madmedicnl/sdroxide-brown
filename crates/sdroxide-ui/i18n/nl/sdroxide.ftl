@@ -5322,13 +5322,10 @@ extras-antenna = ANTENNE
 
 extras-antenna-hint = ANTENNE (Experimenteel/Beta) — knippengtes, voetpuntimpedantie en patroon voor gangbare draad-/verticaal-/Yagi-antennes
 
-recjobs-title = OPNAMEN
+recjobs-title = PLANNING
 
-recjobs-finished = Klaar “{ $name }”
 
-recjobs-skipped = Overgeslagen “{ $name }” — neemt al op
 
-recjobs-recording-name = Opnemen “{ $name }”
 
 recjobs-new-job = + NIEUWE TAAK
 
@@ -5336,21 +5333,18 @@ recjobs-recording = ● opnemen
 
 recjobs-none = Geen geplande opnames — druk op + NEW JOB om er een toe te voegen.
 
-recjobs-done = klaar
 
 recjobs-edit = bewerken
 
 recjobs-del = wissen
 
-recjobs-station = Zender
+recjobs-station = Beschrijving
 
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Soort
 
-recjobs-start-utc = Start (UTC)
 
-recjobs-for = Duur
 
 recjobs-save = OPSLAAN
 
@@ -9834,3 +9828,31 @@ settings-radio-preselector = Voorfilter
 settings-radio-preselector-hover = Het voorfilter van de ontvanger. Alleen bruikbaar boven 1,5 MHz; daaronder schakelt de radio het uit, waar het in circuit het signaal zou wegnemen in plaats van de band.
 
 settings-radio-perseus-below-1-5-mhz = Alleen ontvangst. Onder 1,5 MHz wordt het voorfilter automatisch uitgeschakeld: daar neemt het in circuit het signaal weg in plaats van de omroepband.
+
+recjobs-plan-on-station = Deze planning staat op de post: er wordt opgenomen of er nu een scherm open is of niet.
+
+recjobs-daily = elke dag
+
+recjobs-on-date = op een datum
+
+recjobs-when = Wanneer
+
+recjobs-radio = Radio
+
+recjobs-radio-any = welke er open is
+
+recjobs-start-local = Begin–eind (lokaal)
+
+recjobs-times-note = Tijden zijn lokaal; een eind vóór het begin loopt over middernacht. Eenmalige regels verdwijnen zodra hun dag voorbij is.
+
+recjobs-incomplete = niet gereed
+
+topbar-caption-plan = Plannen
+
+recjobs-open = PLANNING…
+
+recjobs-decode-note = Een decodeermode wordt door zijn eigen decoder bewaard — de kaart, de afbeelding of het bericht verschijnt in dat paneel. De post stemt ongeveer een halve minuut eerder af, zodat een WEFAX-starttoon of SSTV-leader niet gemist wordt.
+
+recjobs-kind-none = Geen (alleen decoderen)
+
+recjobs-running = Loopt: { $name } ({ $window })
