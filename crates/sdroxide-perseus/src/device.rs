@@ -15,6 +15,7 @@
 //! unplugged; [`open`] reads the real serial when it opens one and the stream
 //! label carries it.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use tracing::{debug, info, warn};
@@ -72,14 +73,39 @@ pub fn api() -> Result<Arc<Api>, Error> {
     }
 }
 
+/// How many receivers are open in this process.
+///
+/// **`perseus_init()` is not safe while one is.** The library's init walks the
+/// USB bus and rebuilds its own global device table, under the transfer thread
+/// of every descriptor it already handed out: on real hardware that is
+/// `perseus: input transfer out of sequence` and then a SIGFPE inside the
+/// library, reached simply by opening Settings while the radio streams. So the
+/// list is answered from the last walk while anything is open, and only walked
+/// again when nothing is.
+static OPEN: AtomicUsize = AtomicUsize::new(0);
+/// What the last walk saw, for the answers given while one is open.
+static LAST_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+/// Whether the bus may be walked now. The whole of the crash above is this
+/// question, so it is its own function and it has a test.
+fn may_walk(open: usize) -> bool {
+    open == 0
+}
+
 /// How many receivers the library can see right now.
 pub fn count() -> Result<usize, Error> {
     let api = api()?;
-    // SAFETY: a pure enumeration call; the library owns everything it touches.
+    if !may_walk(OPEN.load(Ordering::Relaxed)) {
+        debug!("device list answered from the last walk: a receiver is streaming");
+        return Ok(LAST_COUNT.load(Ordering::Relaxed));
+    }
+    // SAFETY: a pure enumeration call, and nothing is open; the library owns
+    // everything it touches.
     let n = unsafe { (api.init)() };
     if n < 0 {
         return Err(Error::Driver(crate::ffi::error_string(&api)));
     }
+    LAST_COUNT.store(n as usize, Ordering::Relaxed);
     Ok(n as usize)
 }
 
@@ -149,19 +175,40 @@ impl Drop for Opened {
         // here. The library keeps no reference to it afterwards.
         unsafe { (self.api.close)(self.descr) };
         self.descr = std::ptr::null_mut();
+        OPEN.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
 /// Open receiver `index`, downloading its firmware.
+/// The rule the crash taught: walk the bus only when nothing is streaming.
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_bus_is_only_walked_when_nothing_is_open() {
+        assert!(super::may_walk(0));
+        assert!(!super::may_walk(1));
+        assert!(!super::may_walk(2));
+    }
+}
+
 pub fn open(index: u32) -> Result<Opened, Error> {
     let api = api()?;
-    // Re-enumerate first: the ordinal is only meaningful against the list the
-    // library holds, and a receiver unplugged since the last call would
-    // otherwise be opened as whichever unit moved into its place.
-    let n = unsafe { (api.init)() };
-    if n < 0 {
-        return Err(Error::Driver(crate::ffi::error_string(&api)));
-    }
+    // Re-enumerate first — **unless a receiver is already open**, in which case
+    // the walk would tear its stream down (see `may_walk`). A station with one
+    // Perseus streaming and a second one being added then trusts the ordinal
+    // against the last walk, which is the list the panel was drawn from anyway.
+    let n = if may_walk(OPEN.load(Ordering::Relaxed)) {
+        // SAFETY: a pure enumeration call with nothing open.
+        let n = unsafe { (api.init)() };
+        if n < 0 {
+            return Err(Error::Driver(crate::ffi::error_string(&api)));
+        }
+        LAST_COUNT.store(n as usize, Ordering::Relaxed);
+        n
+    } else {
+        debug!("opening by the last walk: a receiver is already streaming");
+        LAST_COUNT.load(Ordering::Relaxed) as i32
+    };
     if index >= n as u32 {
         return Err(Error::Index(index));
     }
@@ -177,6 +224,7 @@ pub fn open(index: u32) -> Result<Opened, Error> {
         }
         return Err(Error::Driver(msg));
     }
+    OPEN.fetch_add(1, Ordering::Relaxed);
     let opened = Opened { api, descr, serial: String::new() };
     opened.load_firmware()?;
     let mut opened = opened;
