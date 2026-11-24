@@ -9847,3 +9847,7 @@ recjobs-decode-note = Un modo de decodificación lo guarda su propio decodificad
 recjobs-kind-none = Ninguno (solo decodificar)
 
 recjobs-running = En curso: { $name } ({ $window })
+
+settings-radio-dither-hover = Dithering por hardware en el CAD: un poco de ruido añadido para que sus bits bajos sean lineales. Apagado para una banda silenciosa, encendido para una medición más limpia.
+
+settings-radio-preamp-hover = El preamplificador del CAD: la segunda etapa de ganancia del receptor, unos 10 dB. Apagado salvo que una banda silenciosa lo necesite: sube el ruido de fondo junto con la señal.

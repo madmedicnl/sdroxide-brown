@@ -9856,3 +9856,7 @@ recjobs-decode-note = Een decodeermode wordt door zijn eigen decoder bewaard —
 recjobs-kind-none = Geen (alleen decoderen)
 
 recjobs-running = Loopt: { $name } ({ $window })
+
+settings-radio-dither-hover = Hardware-dithering in de ADC: een beetje ruis erbij zodat de laagste bits lineair blijven. Uit voor een stille band, aan voor een schonere meting.
+
+settings-radio-preamp-hover = De voorversterker van de ADC — de tweede versterkertrap van de ontvanger, ongeveer 10 dB. Uit tenzij een stille band hem nodig heeft: hij tilt de ruisvloer mee met het signaal.

@@ -166,8 +166,14 @@ impl Opened {
     }
 }
 
-impl Drop for Opened {
-    fn drop(&mut self) {
+impl Opened {
+    /// Close the descriptor and give the receiver back to the system.
+    ///
+    /// Public because a source being *reopened* has to let go of the device
+    /// before its replacement claims it: `release` stops the stream, and without
+    /// this the library still held the USB handle, so the next `perseus_open`
+    /// on the same receiver failed and the radio stayed disconnected.
+    pub fn close(&mut self) {
         if self.descr.is_null() {
             return;
         }
@@ -176,6 +182,12 @@ impl Drop for Opened {
         unsafe { (self.api.close)(self.descr) };
         self.descr = std::ptr::null_mut();
         OPEN.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+impl Drop for Opened {
+    fn drop(&mut self) {
+        self.close();
     }
 }
 

@@ -9794,3 +9794,7 @@ recjobs-decode-note = 解码模式由各自的解码器保存——图、图片�
 recjobs-kind-none = 无（仅解码）
 
 recjobs-running = 正在运行：{ $name }（{ $window }）
+
+settings-radio-dither-hover = ADC 的硬件抖动：加入一点噪声，使最低位保持线性。安静的波段关闭，更干净的测量开启。
+
+settings-radio-preamp-hover = ADC 的前置放大器——接收机的第二级增益，约 10 dB。除非安静的波段需要，否则关闭：它会随信号一起抬高噪声底。

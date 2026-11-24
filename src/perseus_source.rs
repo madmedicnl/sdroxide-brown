@@ -60,6 +60,8 @@ impl PerseusSource {
             rate_hz: rate,
             att_db: cfg.attenuator_db,
             preselector,
+            dither: cfg.dither,
+            preamp: cfg.preamp,
         })
         .map_err(|e| anyhow::anyhow!("{e}"))?;
         Ok(PerseusSource {
@@ -133,6 +135,12 @@ impl IqSource for PerseusSource {
             }
             // A switch rides the gain channel as 0.0/1.0 — see the constant's
             // own doc in `sdroxide-types`.
+            PerseusConfig::DITHER_ELEMENT => {
+                self.handle.set_dither(db >= 0.5).map_err(Self::driver_err)?;
+            }
+            PerseusConfig::PREAMP_ELEMENT => {
+                self.handle.set_preamp(db >= 0.5).map_err(Self::driver_err)?;
+            }
             PerseusConfig::PRESEL_ELEMENT => {
                 self.presel_wanted = db >= 0.5;
                 if self.settle_preselector(self.center) {
@@ -149,6 +157,8 @@ impl IqSource for PerseusSource {
         vec![
             (PerseusConfig::ATT_ELEMENT.to_string(), f64::from(self.handle.att_db())),
             (PerseusConfig::PRESEL_ELEMENT.to_string(), f64::from(u8::from(self.preselector))),
+            (PerseusConfig::DITHER_ELEMENT.to_string(), f64::from(u8::from(self.handle.dither()))),
+            (PerseusConfig::PREAMP_ELEMENT.to_string(), f64::from(u8::from(self.handle.preamp()))),
         ]
     }
 

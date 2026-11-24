@@ -41,6 +41,10 @@ pub struct OpenParams {
     /// The preselector is only usable above roughly 1.5 MHz; the panel decides
     /// and this is what it decided.
     pub preselector: bool,
+    /// Hardware dithering in the ADC (`perseus_set_adc`).
+    pub dither: bool,
+    /// The ADC's preamplifier, which is the receiver's second gain stage.
+    pub preamp: bool,
 }
 
 /// The context the library's callback is handed. It outlives every callback:
@@ -127,6 +131,8 @@ pub struct PerseusHandle {
     center: f64,
     att_db: u8,
     presel: bool,
+    dither: bool,
+    preamp: bool,
     streaming: bool,
     label: String,
 }
@@ -162,12 +168,15 @@ impl PerseusHandle {
             center: p.center_hz,
             att_db: ATT_STEPS_DB[att_index(p.att_db)] as u8,
             presel: p.preselector,
+            dither: p.dither,
+            preamp: p.preamp,
             streaming: false,
             label: String::new(),
         };
         h.apply_rate(p.rate_hz)?;
         h.apply_center(p.center_hz)?;
         h.apply_att()?;
+        h.apply_adc()?;
         h.start(&api)?;
 
         let serial = h.opened.serial.clone();
@@ -230,7 +239,7 @@ impl PerseusHandle {
         // SAFETY: descriptor open; the ordinal is 0..3, which is what the
         // library's own `PERSEUS_ATT_*` constants are.
         let rc = unsafe {
-            (self.opened.api.set_attenuator)(self.opened.descr, att_index(self.att_db) as i32)
+            (self.opened.api.set_attenuator)(self.opened.descr, att_index(self.att_db) as u8)
         };
         if rc < 0 {
             return Err(Error::Driver(crate::ffi::error_string(&self.opened.api)));
@@ -302,6 +311,42 @@ impl PerseusHandle {
         self.apply_att()
     }
 
+    /// Hardware dithering and the ADC preamplifier — `perseus_set_adc`, live
+    /// while the stream runs.
+    pub fn set_dither(&mut self, on: bool) -> Result<(), Error> {
+        self.dither = on;
+        self.apply_adc()
+    }
+
+    pub fn set_preamp(&mut self, on: bool) -> Result<(), Error> {
+        self.preamp = on;
+        self.apply_adc()
+    }
+
+    fn apply_adc(&mut self) -> Result<(), Error> {
+        // SAFETY: descriptor open and the stream, if any, is the library's own;
+        // this writes the ADC control word it already owns.
+        let rc = unsafe {
+            (self.opened.api.set_adc)(
+                self.opened.descr,
+                i32::from(self.dither),
+                i32::from(self.preamp),
+            )
+        };
+        if rc < 0 {
+            return Err(Error::Driver(crate::ffi::error_string(&self.opened.api)));
+        }
+        Ok(())
+    }
+
+    pub fn dither(&self) -> bool {
+        self.dither
+    }
+
+    pub fn preamp(&self) -> bool {
+        self.preamp
+    }
+
     /// Remember the switch position. Applied with the next tune, because the
     /// library takes the frequency and the switch in one call.
     pub fn set_preselector(&mut self, on: bool) {
@@ -352,6 +397,10 @@ impl PerseusHandle {
         if stopped < 0 {
             debug!("perseus stop_async_input: {}", crate::ffi::error_string(&self.opened.api));
         }
+        // And the device goes back too: a source that is being *reopened* is
+        // released before its replacement is built, and the replacement cannot
+        // claim a receiver this one still holds.
+        self.opened.close();
     }
 }
 

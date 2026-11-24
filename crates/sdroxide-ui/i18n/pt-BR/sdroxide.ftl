@@ -9856,3 +9856,7 @@ recjobs-decode-note = Um modo de decodificação é guardado pelo próprio decod
 recjobs-kind-none = Nenhum (somente decodificar)
 
 recjobs-running = Em execução: { $name } ({ $window })
+
+settings-radio-dither-hover = Dithering de hardware no ADC: um pouco de ruído para que os bits mais baixos fiquem lineares. Desligado para uma faixa silenciosa, ligado para uma medição mais limpa.
+
+settings-radio-preamp-hover = O pré-amplificador do ADC: o segundo estágio de ganho do receptor, cerca de 10 dB. Desligado, a menos que uma faixa silenciosa precise dele: ele sobe o piso de ruído junto com o sinal.
