@@ -9804,3 +9804,7 @@ recjobs-decode-note = デコードモードはそのデコーダーが保存し�
 recjobs-kind-none = なし（デコードのみ）
 
 recjobs-running = 実行中: { $name }（{ $window }）
+
+settings-radio-dither-hover = ADC のハードウェア・ディザリング。下位ビットを線形に保つため少しノイズを加えます。静かなバンドではオフ、よりきれいな測定ではオン。
+
+settings-radio-preamp-hover = ADC のプリアンプ。受信機の 2 段目の増幅で、約 10 dB。静かなバンドで必要でなければオフ。信号と一緒にノイズフロアも上がります。

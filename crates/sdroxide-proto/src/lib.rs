@@ -2459,6 +2459,11 @@ use sdroxide_types::{
 /// and the station agree on what is drawn. Appended, so an older peer reads the
 /// screen it knows. `PROTO_VERSION` 303 → 304, `VERSION_BYTE` 0x7B → 0x7C.
 ///
+/// v307: **the Perseus ADC switches.** [`sdroxide_types::PerseusConfig`] gains
+/// `dither` and `preamp` at its tail — the two options `perseus_set_adc` exposes
+/// and the backend did not offer. `RadioConfig` rides whole, so this is
+/// positional. `PROTO_VERSION` 306 → 307, `VERSION_BYTE` 0x7E → 0x7F.
+///
 /// v306: **the station's receive plan** (issue #754). `Command` gains
 /// `SetRecordingJobs` and `ServerMsg` gains `RecordingJobs`, both appended last;
 /// [`sdroxide_types::RecordingJob`] gains its repeating half at its own tail (a
@@ -2478,8 +2483,8 @@ use sdroxide_types::{
 /// `PerseusConfig` on the end has nowhere to put it and reads the tail of every
 /// one of those messages out of step. `PROTO_VERSION` 304 → 305,
 /// `VERSION_BYTE` 0x7C → 0x7D.
-pub const PROTO_VERSION: u16 = 306;
-const VERSION_BYTE: u8 = 0x7E;
+pub const PROTO_VERSION: u16 = 307;
+const VERSION_BYTE: u8 = 0x7F;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProtoError {
@@ -3844,7 +3849,7 @@ mod tests {
         // v296: the SSTV clock layer (`TextLayer::clock`) appended at the tail
         // of a `Composer` layer, which rides the picture preset messages.
         // v300: the theme-from-a-file at the tail of `ClientScreen`.
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (307, 0x7F));
         // v297: the strip height at the tail of `ClientScreen`, and it comes
         // back as sent — with, since v300, the theme file's name and text.
         let screen_text = "name = \"Vending machines\"\n".to_string();
@@ -3927,7 +3932,7 @@ mod tests {
             }
             other => panic!("the answer did not round-trip: {other:?}"),
         }
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (307, 0x7F));
     }
 
     /// v301: the desk microphone and the pedal (issue #636) ride the wire, and
@@ -3978,7 +3983,7 @@ mod tests {
         let back: sdroxide_types::StationConfig =
             postcard::from_bytes(&postcard::to_allocvec(&station).unwrap()).unwrap();
         assert_eq!(back.ptt_inputs, cfg);
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (307, 0x7F));
     }
 
     /// v302: the browser's microphone and pedal are kept on the server, and their
@@ -4003,7 +4008,7 @@ mod tests {
         assert_eq!(decode::<ServerMsg>(&bytes).unwrap(), down);
         let prev = ServerMsg::PttInputsStatus(Box::default());
         assert_eq!(bytes[1], encode(&prev).unwrap()[1] + 1, "OperatorPtt must be last");
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (307, 0x7F));
     }
 
     /// v286: the QRZ card rides `CallsignResult` — photo, age and all.
@@ -4025,7 +4030,7 @@ mod tests {
             ServerMsg::CallsignResult(back) => assert_eq!(back, info),
             other => panic!("the card did not round-trip: {other:?}"),
         }
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (307, 0x7F));
     }
 
     /// The VOR read-out rides the wire whole, locked or not, and the message is
@@ -4153,9 +4158,10 @@ mod tests {
         // a u8 attenuator and a bool preselector. That bump merged without this
         // line, so `main` was red until here — the pins below it were still at
         // 304/0x7C for the same reason.
+        // 917 since `PerseusConfig` gained its `dither` and `preamp` (306 → 307).
         assert_eq!(
             (radio.len(), fnv1a(&radio)),
-            (915, 17_431_928_730_515_284_165),
+            (917, 685_597_617_676_611_213),
             "RadioConfig's wire layout shifted — append fields, never insert them"
         );
         // 316 since the two Dynamic DNS fields were appended at the end
@@ -5159,7 +5165,11 @@ mod tests {
 
     #[test]
     fn rejects_wrong_version_byte() {
-        assert!(matches!(decode::<ClientMsg>(&[0x7f, 0, 0]), Err(ProtoError::Version(0x7f))));
+        // Derived, not a literal: the literal used to be one-past-the-old-byte
+        // and became the *current* one at the next bump, which is a test that
+        // fails for a reason nobody is looking for.
+        let wrong = VERSION_BYTE.wrapping_add(1);
+        assert!(matches!(decode::<ClientMsg>(&[wrong, 0, 0]), Err(ProtoError::Version(v)) if v == wrong));
         assert!(matches!(decode::<ClientMsg>(&[]), Err(ProtoError::Empty)));
     }
 
@@ -5180,14 +5190,14 @@ mod tests {
         let ServerMsg::Ft8Status(s) = back else { panic!("not a status") };
         assert!(!s.config.wefax_auto_slant);
         assert_eq!(s.config.wefax_slant_ppm, -37.5);
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (307, 0x7F));
     }
 
     /// v289: the satellite lock's CTCSS tone rides the end of `SatLockConfig`,
     /// and the rig's own keying the end of `TxState`; the version is pinned.
     #[test]
     fn the_sat_lock_tone_and_the_rig_keyed_flag_round_trip() {
-        assert_eq!((PROTO_VERSION, VERSION_BYTE), (306, 0x7E));
+        assert_eq!((PROTO_VERSION, VERSION_BYTE), (307, 0x7F));
         let cfg = sdroxide_types::SatLockConfig {
             norad_id: 25544,
             ctcss_hz: Some(67.0),

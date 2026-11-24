@@ -7573,11 +7573,26 @@ pub struct PerseusConfig {
     /// [`PerseusConfig::PRESELECTOR_MIN_HZ`], where it cuts the signal away; the
     /// source forces it off below that whatever this says.
     pub preselector: bool,
+    /// Hardware dithering in the ADC (`perseus_set_adc`). Off by default: it
+    /// trades a little noise for linearity in the ADC's low bits, and a listener
+    /// on a quiet band hears the difference.
+    pub dither: bool,
+    /// The ADC's preamplifier — the receiver's second gain stage, worth about
+    /// 10 dB. Off by default for the same reason an attenuator is set by hand:
+    /// it is the operator's call what the front end does.
+    pub preamp: bool,
 }
 
 impl Default for PerseusConfig {
     fn default() -> Self {
-        PerseusConfig { device: 0, sample_rate_hz: 192_000.0, attenuator_db: 0, preselector: true }
+        PerseusConfig {
+            device: 0,
+            sample_rate_hz: 192_000.0,
+            attenuator_db: 0,
+            preselector: true,
+            dither: false,
+            preamp: false,
+        }
     }
 }
 
@@ -7588,6 +7603,10 @@ impl PerseusConfig {
     /// the same convention `FobosConfig::CLK_EXTERNAL_ELEMENT` uses, so a
     /// switch needs no `Command` variant of its own.
     pub const PRESEL_ELEMENT: &'static str = "PRESEL";
+    /// Hardware dithering, the same way: `0.0` off, `1.0` on.
+    pub const DITHER_ELEMENT: &'static str = "DITHER";
+    /// The ADC preamplifier, the same way.
+    pub const PREAMP_ELEMENT: &'static str = "PREAMP";
     /// Below this the preselector's filter cuts the signal away.
     pub const PRESELECTOR_MIN_HZ: f64 = 1_500_000.0;
     /// The four positions of the attenuator switch.

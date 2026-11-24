@@ -85,7 +85,11 @@ pub struct Api {
         unsafe extern "C" fn(descr: Descr, buf: *mut c_int, size: c_uint) -> c_int,
     pub set_ddc_center_freq:
         unsafe extern "C" fn(descr: Descr, hz: f64, enable_presel: c_int) -> c_int,
-    pub set_attenuator: unsafe extern "C" fn(descr: Descr, att: c_int) -> c_int,
+    /// `int perseus_set_attenuator(perseus_descr *, uint8_t)` — a byte in the
+    /// header, not an int.
+    pub set_attenuator: unsafe extern "C" fn(descr: Descr, att: u8) -> c_int,
+    /// `int perseus_set_adc(perseus_descr *, int enableDither, int enablePreamp)`.
+    pub set_adc: unsafe extern "C" fn(descr: Descr, dither: c_int, preamp: c_int) -> c_int,
     pub start_async_input:
         unsafe extern "C" fn(descr: Descr, buf_size: u32, cb: InputCb, extra: *mut c_void) -> c_int,
     pub stop_async_input: unsafe extern "C" fn(descr: Descr) -> c_int,
@@ -143,6 +147,7 @@ impl Api {
             get_sampling_rates: sym!("perseus_get_sampling_rates"),
             set_ddc_center_freq: sym!("perseus_set_ddc_center_freq"),
             set_attenuator: sym!("perseus_set_attenuator"),
+            set_adc: sym!("perseus_set_adc"),
             start_async_input: sym!("perseus_start_async_input"),
             stop_async_input: sym!("perseus_stop_async_input"),
             errorstr: sym!("perseus_errorstr"),

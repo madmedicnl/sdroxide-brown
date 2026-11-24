@@ -5558,6 +5558,7 @@ pub(in crate::app) fn settings_perseus_tab(
     rescan: &mut bool,
     apply: &mut crate::app::settings::ApplyInterface,
     can_probe: bool,
+    cmds: &mut Vec<Command>,
 ) {
     use sdroxide_types::PerseusConfig;
     let Some(cfg) = radio_edit.as_mut() else {
@@ -5565,7 +5566,11 @@ pub(in crate::app) fn settings_perseus_tab(
         return;
     };
 
-    let before = (cfg.perseus.device, cfg.perseus.sample_rate_hz, cfg.perseus.preselector);
+    // Only what the library settles at open: the device and its FPGA rate. The
+    // attenuator, the preselector and the ADC switches are registers written
+    // while the stream runs, so they must not cost a reopen (which is what used
+    // to leave the radio "reconnecting" and never back).
+    let before = (cfg.perseus.device, cfg.perseus.sample_rate_hz);
 
     // The rates the opened receiver reports, else the ones the library ships
     // firmware images for — see `PerseusConfig::SAMPLE_RATES`'s own doc.
@@ -5633,18 +5638,52 @@ pub(in crate::app) fn settings_perseus_tab(
             ui.label(tr!("settings-radio-attenuator"));
             ui.horizontal(|ui| {
                 for db in PerseusConfig::ATTENUATOR_STEPS_DB {
-                    ui.selectable_value(&mut cfg.perseus.attenuator_db, db, format!("{db} dB"));
+                    if ui
+                        .selectable_value(&mut cfg.perseus.attenuator_db, db, format!("{db} dB"))
+                        .changed()
+                    {
+                        push_gain(cmds, PerseusConfig::ATT_ELEMENT, f64::from(db));
+                    }
                 }
             });
             ui.end_row();
 
             ui.label(tr!("settings-radio-preselector"));
-            ui.checkbox(&mut cfg.perseus.preselector, "")
-                .on_hover_text(tr!("settings-radio-preselector-hover"));
+            if ui
+                .checkbox(&mut cfg.perseus.preselector, "")
+                .on_hover_text(tr!("settings-radio-preselector-hover"))
+                .changed()
+            {
+                push_gain(
+                    cmds,
+                    PerseusConfig::PRESEL_ELEMENT,
+                    f64::from(u8::from(cfg.perseus.preselector)),
+                );
+            }
+            ui.end_row();
+
+            ui.label(tr!("settings-radio-dither"));
+            if ui
+                .checkbox(&mut cfg.perseus.dither, "")
+                .on_hover_text(tr!("settings-radio-dither-hover"))
+                .changed()
+            {
+                push_gain(cmds, PerseusConfig::DITHER_ELEMENT, f64::from(u8::from(cfg.perseus.dither)));
+            }
+            ui.end_row();
+
+            ui.label(tr!("settings-radio-preamp"));
+            if ui
+                .checkbox(&mut cfg.perseus.preamp, "")
+                .on_hover_text(tr!("settings-radio-preamp-hover"))
+                .changed()
+            {
+                push_gain(cmds, PerseusConfig::PREAMP_ELEMENT, f64::from(u8::from(cfg.perseus.preamp)));
+            }
             ui.end_row();
         });
 
-    if (cfg.perseus.device, cfg.perseus.sample_rate_hz, cfg.perseus.preselector) != before {
+    if (cfg.perseus.device, cfg.perseus.sample_rate_hz) != before {
         apply.request();
     }
 

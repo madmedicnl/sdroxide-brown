@@ -3916,6 +3916,7 @@ impl SdroxideApp {
                             io.perseus_rescan,
                             io.apply_iface,
                             io.can_probe,
+                            cmds,
                         ),
                         // Legacy configs may still carry the removed auto-detect
                         // backend; prompt the user to pick a concrete interface.

@@ -9886,3 +9886,7 @@ recjobs-decode-note = A decoding mode is kept by its own decoder — the chart, 
 recjobs-kind-none = None (decode only)
 
 recjobs-running = Running: { $name } ({ $window })
+
+settings-radio-dither-hover = Hardware dithering in the ADC: a little noise added so its lowest bits behave linearly. Off is the quiet band; on is the cleaner measurement.
+
+settings-radio-preamp-hover = The ADC's preamplifier — the receiver's second gain stage, worth about 10 dB. Off unless a quiet band needs it: it raises the noise floor with the signal.

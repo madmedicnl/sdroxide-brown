@@ -9859,3 +9859,7 @@ recjobs-decode-note = Un mode de décodage est conservé par son propre décodeu
 recjobs-kind-none = Aucun (décodage seul)
 
 recjobs-running = En cours : { $name } ({ $window })
+
+settings-radio-dither-hover = Dithering matériel dans le CAN : un peu de bruit ajouté pour que ses bits de poids faible restent linéaires. Arrêté pour une bande silencieuse, activé pour une mesure plus propre.
+
+settings-radio-preamp-hover = Le préamplificateur du CAN — le second étage de gain du récepteur, environ 10 dB. Arrêté sauf si une bande silencieuse l'exige : il monte le plancher de bruit avec le signal.

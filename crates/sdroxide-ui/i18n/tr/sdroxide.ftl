@@ -9856,3 +9856,7 @@ recjobs-decode-note = Bir kodu çözme modunu kendi çözücüsü saklar: harita
 recjobs-kind-none = Yok (yalnızca çözme)
 
 recjobs-running = Çalışıyor: { $name } ({ $window })
+
+settings-radio-dither-hover = ADC'de donanım dithering: en alt bitler doğrusal kalsın diye biraz gürültü ekler. Sessiz bant için kapalı, daha temiz ölçüm için açık.
+
+settings-radio-preamp-hover = ADC'nin ön yükselticisi: alıcının ikinci kazanç katı, yaklaşık 10 dB. Sessiz bir bant gerekmiyorsa kapalı: gürültü tabanını sinyalle birlikte yükseltir.
