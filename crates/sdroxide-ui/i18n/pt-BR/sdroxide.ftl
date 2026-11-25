@@ -656,7 +656,6 @@ settings-add-radio-here-station-you = Adicionar um rádio — aqui, ou em uma es
 
 ## Settings window, General, continued
 
-
 ## Settings window, picture upload (src/app/settings/picup.rs)
 
 settings-picup-received-pictures-ftp = Imagens recebidas → FTP
@@ -1958,11 +1957,9 @@ topbar-dec-off = DEC desligado
 topbar-vol = Vol
 topbar-counted-steps-not-decibels-what =
 
-
     Counted in steps, not decibels: what one step is worth is the receiver's own business, and on an SDRplay it depends on the band as well. Right is still more gain.
 topbar-gain = Ganho
 topbar-plutosdr-s-own-agc-setting =
-
 
     The PlutoSDR's own AGC is setting this gain, so moving the slider does nothing. Set Settings → Radio → AGC to Manual to control it here.
 topbar-agc-hang-time-click-cycle = Tempo de retenção do AGC — clique para alternar: Desligado / Lento / Médio / Rápido
@@ -3728,7 +3725,6 @@ atchat-nothing-flight = nada em trânsito
 atchat-images = IMAGENS
 atchat-no-images-received = Nenhuma imagem recebida.
 
-
 ## rds (src/app/rds.rs)
 
 rds-station = ESTAÇÃO
@@ -3996,7 +3992,6 @@ ism-transmissions-gate-opened-how-many = Transmissões em que a porta abriu, e q
 ism-nothing-heard-yet = nada ouvido ainda
 ism-click-tune-receiver =
 
-
     Click to tune the receiver to it
 
 ## app (src/app/mod.rs)
@@ -4098,19 +4093,15 @@ frame-restart-without-oob-tx-put = Reinicie sem --oob-tx para restaurar o bloque
 smeter-alc-how-hard-transmitter-being = ALC — com que força o transmissor está sendo excitado, em porcentagem da potência máxima que ele pode entregar. 100 % é a escala total, não a potência total em watts: quanto isso vale na antena depende do rádio e da Excitação.
 smeter-radio-reports-no-forward-power =
 
-
     This radio reports no forward power, so the figure beside ALC is the ALC reading again rather than watts.
 smeter-no-swr-radio-has-no =
-
 
     No SWR: this radio has no bridge to measure it with, and sdroxide will not invent one — it can only show what the radio itself reports. A rig with an SWR meter (over CAT, TCI or a LAN link) and an HPSDR board both fill this in; a plain SDR transmitter cannot.
 smeter-no-signal-report-yet-receiver = Nenhum relatório de sinal ainda — o receptor não entregou uma leitura de medidor.
 smeter-s9-73-dbm-each-s =
 
-
     S9 is −73 dBm and each S-unit below it is 6 dB. The dBm figure is only as honest as the front end's calibration — an uncalibrated receiver reports dBFS with a dBm label.
 smeter-ovld-converter-into-rails-so =
-
 
     OVLD: the converter is into its rails, so the level shown understates the signal. Wind the front-end gain back.
 smeter-table-held = , tabela mantida
@@ -4250,14 +4241,12 @@ remote-connection-closed = conexão encerrada
 
 ## solarwin (src/solar3d/mod.rs)
 
-
 ## solarbtn (src/app/solar.rs)
 
 solarbtn-solar-system-3d-view-sun = Visão 3D do sistema solar — Sol, Terra, Lua, manchas solares e CMEs (janela separada)
 solarbtn-solar-system-3d-view-sun-2 = Visão 3D do sistema solar — Sol, Terra, Lua, manchas solares e CMEs (nova aba do navegador)
 
 ## widespec (src/widgets/wide_spectrum.rs)
-
 
 ## speech (src/app/speech.rs)
 
@@ -4299,8 +4288,6 @@ hfdlmap-no-aircraft-located-yet = nenhuma aeronave localizada ainda
 worldmap-double-click-reframe = CLIQUE DUAS VEZES PARA REENQUADRAR
 
 ## chrome (src/chrome.rs)
-
-
 
 ## duopower (src/app/duo_power.rs)
 
@@ -4390,7 +4377,6 @@ textmodem-frequency-shifted = deslocado em frequência
 winlink-to-heading = PARA
 
 ## adsbmap: messages with values (src/adsb_map.rs)
-
 
 ## aismap: messages with values (src/ais_map.rs)
 
@@ -5326,15 +5312,11 @@ extras-antenna-hint = ANTENA (Experimental/Beta) — comprimentos de corte, impe
 
 recjobs-title = PLANEJAMENTO
 
-
-
-
 recjobs-new-job = + NOVA TAREFA
 
 recjobs-recording = ● gravando
 
 recjobs-none = Nenhuma gravação agendada — pressione + NOVA TAREFA para adicionar.
-
 
 recjobs-edit = editar
 
@@ -5345,8 +5327,6 @@ recjobs-station = Descrição
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Tipo
-
-
 
 recjobs-save = SALVAR
 
@@ -5366,7 +5346,6 @@ navtex-hunting-hint =
     Se há claramente um sinal forte mas o texto continua sem sentido, pressione REV: ele está chegando invertido.
 
     Lembre-se também de que o NAVTEX é uma grade horária, não uma conversa: uma estação costeira transmite por dez minutos a cada quatro horas, então o silêncio é normal na maior parte do tempo. É preciso estar escutando quando sua estação estiver programada. E os 518 kHz só ganham vida à noite — uma banda quieta de dia não é um decodificador quebrado.
-
 
 navtex-tune-dial-usb-below-channel = Sintonize o dial aqui (USB, 1,700 kHz abaixo do canal).
 
@@ -5909,8 +5888,6 @@ macros-add = ADD
 macros-note-placeholders = { $mycall } e { $mygrid } são preenchidos quando a mensagem sai.
 
 macros-buttons-note = Cada botão envia o texto inteiro de uma vez. F1–F9 acionam os nove primeiros, desde que nada na tela esteja com o teclado.
-
-
 
 widgets-worked-before-any = Já trabalhado
 
@@ -6547,7 +6524,6 @@ panels-enigma-hint = Máquina Enigma — cifre uma mensagem em um painel dos tem
 
 panels-slot-bar-heard-hint = Acompanha o som nos alto-falantes: branca enquanto um quadro é ouvido, verde quando parou, e volta ao início quando o próximo começa. Os tempos são os do modo, então um quadro que termina cedo ainda preenche a barra.
 
-
 morse-send-correct = correto: { $want }
 
 morse-send-heard = ouvido { $got }, esperado { $want }
@@ -6608,7 +6584,6 @@ decodes-beam-hint = Apontar a antena para o localizador desta estação
 decodes-queue-next = próxima
 
 decodes-queue-waiting = aguardando
-
 
 decodes-setup-hint = AJUSTES — a identidade da estação e os modelos que estes modos de QSO compartilham
 
@@ -6703,7 +6678,6 @@ app-rx-only-hint = Este rádio só recebe — não tem transmissor para acionar.
 spots-n-calls = { $n } chamadas
 
 spots-opening-hover = Caminho na banda de { $band } de { $from } para { $to }: a última janela de 15 minutos superou a linha de base de 3 horas do caminho — chamadores recentes: { $calls }
-
 
 spots-download-unsupported = { $source } não pôde ser baixado nesta plataforma
 
@@ -7633,7 +7607,6 @@ net-wavelog-no-station-location = nenhum local de estação de onde baixar — t
 
 publicsdr-could-not-connect = não foi possível conectar nesta sessão
 
-
 weather-title = RELATÓRIOS METEOROLÓGICOS
 
 weather-intro = Relatórios meteorológicos codificados de navios e estações em terra, em RTTY em 4583, 7646 e 10100,8 kHz. SHIP sai por volta das 02:00 e 07:35 UTC, SYNOP por volta das 00:35 e 12:10. Um relatório fica guardado aqui e não na lista de decodificação porque os números sozinhos não significam nada.
@@ -7713,14 +7686,6 @@ settings-ui-updates = Atualizações
 settings-ui-updates-check = verificar nova versão ao iniciar
 
 settings-ui-updates-hint = Consulta os GitHub Releases do fork pela última versão uma vez ao iniciar, e mostra um aviso se for mais nova que esta build. Só versões completas contam — a nightly é uma pré-versão — e desligado significa nenhuma chamada externa.
-
-settings-ui-undocked = Desacoplado — janela própria
-
-settings-ui-docked = Acoplado nesta janela
-
-settings-ui-dock-all-hint = Traz todas as janelas desacopladas de volta para esta.
-
-settings-ui-undock-all-hint = Coloca cada módulo em uma janela própria — a janela principal fica com o espectro e os decodificadores. Um módulo sem nada a mostrar, como o painel de operação em um modo de voz, não abre janela.
 
 settings-ui-spectrum-line = Linha do espectro
 
@@ -8057,13 +8022,6 @@ chrome-hide-message-hover = Oculta esta mensagem de vez. Nada nas suas configura
 
 chrome-close-message-hover = Fecha esta mensagem. Nada mais muda.
 
-settings-ui-window-label = Janela { $module }
-
-settings-ui-undock-hint =
-    Desacoplado, este módulo vai para uma janela própria e a janela principal devolve o espaço ao que sobra — ponha o waterfall em um segundo monitor, ou os controles em um terceiro. Fechar a janela o acopla de novo.
-
-    No Wayland o tamanho volta, mas o compositor decide onde uma janela fica: deixe-a flutuante e fixe-a em um monitor com uma regra de janela que corresponda ao app-id "{ $app_id }".
-
 settings-ui-workspace-restore-out = Restaurar esta disposição — { $n } módulo(s) em janela(s) própria(s)
 
 settings-ui-profile-in-use-named = em uso: o perfil { $name }
@@ -8209,7 +8167,6 @@ sstv-top = Topo
 sstv-bottom = Base
 
 topbar-ptt-hold-hint = Segure para transmitir — um clique o trava ligado, e o próximo toque o solta
-
 
 topbar-above-the-dial = acima
 
@@ -8689,10 +8646,6 @@ settings-tool-window-memories = MEMÓRIAS
 
 settings-tool-window-playback = REPRODUÇÃO
 
-settings-tool-window-open = Abrir
-
-settings-tool-window-closed = Fechada
-
 settings-detachable-native-only = Janelas destacáveis existem apenas no app nativo.
 
 settings-psk-reporter-band-hint = O feed de atividade da banda: estações sendo ouvidas na banda atual, desenhadas como pontos coloridos. Também habilita a consulta "quem me ouviu" por trás do chip ME OUVIRAM do mapa — atualizada a cada hora também.
@@ -8856,7 +8809,6 @@ sessionqso-include-cw = Incluir CW
 
 decodes-live-log = LOG AO VIVO
 
-
 schedule-colour-all = Cor
 
 schedule-colour-all-hint = Cor do rótulo no waterfall para todas as estações — substitui as escolhidas por estação
@@ -8902,7 +8854,6 @@ tx-bands-check = Verificar bandas…
 tx-bands-notice-new = A transmissão está desligada em todas as bandas. Escolha as bandas em que este rádio transmite e confirme-as uma vez. Devido ao risco para o rádio, verifique com atenção as opções escolhidas.
 
 tx-bands-notice-carried = Suas bandas de transmissão foram trazidas da versão anterior. A transmissão continua bloqueada até que você as verifique e confirme uma vez. Devido ao risco para o rádio, verifique cada opção com atenção.
-
 
 adsbmap-surface-asphalt = asfalto
 
@@ -9038,11 +8989,9 @@ publicsdr-mine = MEUS
 
 publicsdr-mine-hint = Apenas os receptores que você marcou
 
-
 publicsdr-star-receiver = Guardar este receptor em MEUS
 
 publicsdr-unstar-receiver = Remover este receptor de MEUS
-
 
 sstv-sync-pulses = PULSOS DE SYNC
 
@@ -9176,7 +9125,6 @@ sonde-col-pressure = Pressão
 
 settings-net-broadcast-import-needs-station = Conecte-se a uma estação para importar.
 
-
 sonde-online-why-signin = A estação exige login primeiro.
 
 sonde-online-why-busy = A estação já consulta o SondeHub tão seguido quanto pode. Tente de novo em um minuto.
@@ -9191,9 +9139,6 @@ sonde-online-why-http = Resposta: HTTP { $n }.
 settings-general-band-plan = Plano de bandas
 
 settings-general-band-plan-built-in = IARU integrado
-
-
-
 
 sonde-card-source = Origem
 
@@ -9391,8 +9336,6 @@ tx-off-cb = TRANSMISSÃO PROIBIDA em 11 m (CB) — a banda está na sua lista de
 settings-cb-allow-tx-needs-band = Primeiro coloque 11M-CB em SIM na lista TX deste rádio (Configurações → Rádio) e depois permita aqui.
 
 settings-cb-allow-tx-order-note = Dois bloqueios, nesta ordem: 1) 11M-CB em SIM na lista de bandas TX do rádio, confirmada; 2) esta caixa. Os dois são necessários para transmitir em 11 m. Tirar 11M-CB da lista também desmarca esta caixa.
-
-settings-ui-publicsdr-under-waterfall = Acoplado sob a cachoeira
 
 settings-ui-publicsdr-place-hint = Onde o Public SDRs abre: acoplado sob a cachoeira nos modos de voz que não têm nada ali, ou em uma janela. Modos digitais, CW e celulares usam uma janela de qualquer forma.
 
@@ -9764,7 +9707,6 @@ ptt-here-heading = NESTE COMPUTADOR
 
 ptt-station-heading = NO COMPUTADOR DA ESTAÇÃO
 
-
 ptt-grant-serial = Permitir uma porta serial…
 
 ptt-grant-hid = Permitir um dispositivo USB HID…
@@ -9860,3 +9802,11 @@ recjobs-running = Em execução: { $name } ({ $window })
 settings-radio-dither-hover = Dithering de hardware no ADC: um pouco de ruído para que os bits mais baixos fiquem lineares. Desligado para uma faixa silenciosa, ligado para uma medição mais limpa.
 
 settings-radio-preamp-hover = O pré-amplificador do ADC: o segundo estágio de ganho do receptor, cerca de 10 dB. Desligado, a menos que uma faixa silenciosa precise dele: ele sobe o piso de ruído junto com o sinal.
+
+settings-ui-level-bottom = Atrás
+
+settings-ui-level-top = Na frente
+
+settings-ui-level-fixed = No Wayland, o compositor decide o empilhamento; um de mosaico não tem camadas para escolher.
+
+settings-ui-main-window = Janela principal

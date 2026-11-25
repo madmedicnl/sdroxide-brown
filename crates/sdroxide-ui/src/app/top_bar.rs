@@ -1822,6 +1822,16 @@ impl SdroxideApp {
             };
             ui.horizontal(|ui| {
                 ui.label(RichText::new(module_window_name(m)).size(12.0));
+                // How this window sorts against **other programs** (#748), set
+                // here beside the window it belongs to rather than in Settings:
+                // the chips to its right are where the window itself is handled.
+                if now == ModuleWindow::OwnWindow
+                    && crate::app::settings::ui_tab::stacking_is_ours()
+                {
+                    let mut level = self.ui_settings.detached_level(m);
+                    crate::app::settings::level_chips(ui, &mut level);
+                    self.ui_settings.set_detached_level(m, level);
+                }
                 // Right to left, and **reversed**: a `right_to_left` layout puts
                 // each chip drawn to the left of the last, so drawing them from
                 // the window end keeps the row reading *docked → floating → its

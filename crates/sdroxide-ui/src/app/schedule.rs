@@ -1245,7 +1245,7 @@ mod preview {
             app.schedule.show = true;
             app.schedule.local_time = local;
             app.ui_settings.schedule_window =
-                Some(DetachedWindow { size: [width, 600.0], pos: Some([4.0, 4.0]) });
+                Some(DetachedWindow { size: [width, 600.0], pos: Some([4.0, 4.0]), level: Default::default() });
             let mut tex = crate::test_raster::Textures::default();
             let mut last = None;
             for i in 0..6 {

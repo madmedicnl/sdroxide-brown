@@ -1438,6 +1438,22 @@ fn tx_eq_band_row(
     ui.end_row();
 }
 
+/// The window level as two chips: **Achterop** and **Voorop**, with neither
+/// pressed meaning the ordinary one — which needs no name, because it is what
+/// every window already does (#748).
+pub(in crate::app) fn level_chips(ui: &mut egui::Ui, level: &mut sdroxide_types::WindowLevel) {
+    use sdroxide_types::WindowLevel;
+    for (value, text) in [
+        (WindowLevel::Bottom, tr!("settings-ui-level-bottom")),
+        (WindowLevel::Top, tr!("settings-ui-level-top")),
+    ] {
+        let lit = *level == value;
+        if crate::chrome::chip(ui, lit, text).clicked() {
+            *level = if lit { WindowLevel::Normal } else { value };
+        }
+    }
+}
+
 pub(in crate::app) fn enum_combo<T: PartialEq + Copy, L: Into<egui::WidgetText>>(
     ui: &mut egui::Ui,
     id: &str,
@@ -4113,20 +4129,49 @@ impl SdroxideApp {
                     ui.add_space(6.0);
                     for module in DetachableModule::ALL {
                         let mut on = io.ui_edit.is_detached(module);
-                        ui.label(module.label());
-                        ComboBox::from_id_salt(("detachable", module))
-                            .selected_text(if on {
-                                tr!("settings-ui-undocked")
-                            } else {
-                                tr!("settings-ui-docked")
-                            })
-                            .show_styled(ui, |ui| {
-                                ui.selectable_value(&mut on, false, tr!("settings-ui-docked"));
-                                ui.selectable_value(&mut on, true, tr!("settings-ui-undocked"));
-                            });
-                        ui.label(RichText::new(module.app_id()).weak().size(9.5));
-                        ui.end_row();
+                        ui.horizontal(|ui| {
+                            // Ticked, the module leaves this window; unticked is
+                            // where everything starts, so it needs no sentence.
+                            ui.checkbox(&mut on, ui_tab::module_label(module))
+                                .on_hover_text(module.app_id());
+                            if on && ui_tab::stacking_is_ours() {
+                                ui.add_space(10.0);
+                                let mut level = io.ui_edit.detached_level(module);
+                                level_chips(ui, &mut level);
+                                io.ui_edit.set_detached_level(module, level);
+                            }
+                        });
+                        ui.add_space(2.0);
                         io.ui_edit.set_detached(module, on);
+                    }
+
+                    // Public SDRs is a tool window with two places: under the
+                    // waterfall, which is where it starts, or a window of its
+                    // own. It is not a DetachableModule, so it is a row here.
+                    {
+                        let mut undocked = !io.ui_edit.public_sdr_docked;
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut undocked, tr!("publicsdr-public-sdrs"))
+                                .on_hover_text(tr!("settings-ui-publicsdr-place-hint"));
+                        });
+                        io.ui_edit.public_sdr_docked = !undocked;
+                        ui.add_space(2.0);
+                    }
+
+                    // The main window has no docked state: its row is the two
+                    // chips alone.
+                    if ui_tab::stacking_is_ours() {
+                        ui.horizontal(|ui| {
+                            ui.label(tr!("settings-ui-main-window"));
+                            ui.add_space(10.0);
+                            let mut level = io.ui_edit.main_level;
+                            level_chips(ui, &mut level);
+                            io.ui_edit.main_level = level;
+                        });
+                        ui.add_space(2.0);
+                    } else {
+                        note(ui, &tr!("settings-ui-level-fixed"));
+                        ui.add_space(2.0);
                     }
                     let any_out = DetachableModule::ALL.iter().any(|m| io.ui_edit.is_detached(*m));
                     let any_in = DetachableModule::ALL.iter().any(|m| !io.ui_edit.is_detached(*m));
@@ -4209,18 +4254,36 @@ impl SdroxideApp {
                     (tr!("pane-image"), crate::app::frame::TW_IMAGE),
                     (tr!("settings-tool-window-session-qsos"), crate::app::frame::TW_SESSION_QSOS),
                 ];
-                for (name, bit) in tool_windows {
-                    let mut on = (io.ui_edit.tool_windows_open & bit) != 0;
-                    ui.label(name.as_str());
-                    let label = if on { tr!("settings-tool-window-open") } else { tr!("settings-tool-window-closed") };
-                    crate::chrome::checkbox(ui, &mut on, label);
-                    if on {
-                        io.ui_edit.tool_windows_open |= bit;
-                    } else {
-                        io.ui_edit.tool_windows_open &= !bit;
+                // Three columns: the list is long enough that one column left
+                // two thirds of the dialog empty. The checkbox carries the name
+                // — "Open" and "Closed" said what the tick already says.
+                const COLUMNS: usize = 3;
+                let per_column = tool_windows.len().div_ceil(COLUMNS).max(1);
+                let mut chunks = tool_windows.chunks(per_column);
+                ui.columns(COLUMNS, |columns| {
+                    for column in columns.iter_mut() {
+                        // A long name must not widen its column: three columns
+                        // that each grow to their longest entry push the page
+                        // wider than the dialog and bring up a scrollbar under
+                        // it. Truncated, the row keeps its width and the name
+                        // still reads on the hover.
+                        column.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                        let Some(chunk) = chunks.next() else { break };
+                        for (name, bit) in chunk {
+                            let mut on = (io.ui_edit.tool_windows_open & bit) != 0;
+                            crate::chrome::checkbox(column, &mut on, name.as_str())
+                                .on_hover_text(name.as_str());
+                            if on {
+                                io.ui_edit.tool_windows_open |= bit;
+                            } else {
+                                io.ui_edit.tool_windows_open &= !bit;
+                            }
+                        }
                     }
-                    ui.end_row();
-                }
+                });
+                // Room under the columns, so the last row is not pressed
+                // against whatever follows.
+                ui.add_space(8.0);
                 #[cfg(target_arch = "wasm32")]
                 {
                     note(ui, &tr!("settings-detachable-native-only"));

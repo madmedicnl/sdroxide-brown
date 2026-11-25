@@ -5631,7 +5631,7 @@ mod tests {
         let mut app = SdroxideApp::new_tab(&ctx, None, None, controller, 0, true);
         app.show_aircraft = true;
         app.ui_settings.aircraft_window =
-            Some(DetachedWindow { size: [ww, wh], pos: Some([8.0, 8.0]) });
+            Some(DetachedWindow { size: [ww, wh], pos: Some([8.0, 8.0]), level: Default::default() });
         app.state.rx[0].mode = Mode::Adsb;
         app.aircraft_view = match view.as_str() {
             "vdl2" => Mode::Vdl2,
@@ -5734,7 +5734,7 @@ mod tests {
         assert!(r.top() >= bar && r.top() < bar + 12.0, "under the top bar: {r:?} vs {bar}");
         assert!(r.right() > w - 12.0, "at the right of the frame: {r:?}");
         let saved =
-            sdroxide_types::DetachedWindow { size: [900.0, 230.0], pos: Some([200.0, 300.0]) };
+            sdroxide_types::DetachedWindow { size: [900.0, 230.0], pos: Some([200.0, 300.0]), level: Default::default() };
         let (r, _) = open_rect(Some(saved));
         assert!((r.min.x - 200.0).abs() < 2.0 && (r.min.y - 300.0).abs() < 2.0, "place: {r:?}");
         assert!((r.width() - 900.0).abs() < 2.0, "size: {r:?}");
@@ -5899,7 +5899,7 @@ mod tests {
         let (r, bar) = open_rect(None);
         assert!(r.top() >= bar && r.top() < bar + 12.0, "under the top bar: {r:?} vs {bar}");
         let saved =
-            sdroxide_types::DetachedWindow { size: [900.0, 500.0], pos: Some([150.0, 250.0]) };
+            sdroxide_types::DetachedWindow { size: [900.0, 500.0], pos: Some([150.0, 250.0]), level: Default::default() };
         let (r, _) = open_rect(Some(saved));
         assert!((r.min.x - 150.0).abs() < 2.0 && (r.min.y - 250.0).abs() < 2.0, "place: {r:?}");
         assert!((r.width() - 900.0).abs() < 2.0, "size: {r:?}");

@@ -653,7 +653,6 @@ settings-add-radio-here-station-you = 無線機を追加 — ここ、または�
 
 ## Settings window, General, continued
 
-
 ## Settings window, picture upload (src/app/settings/picup.rs)
 
 settings-picup-received-pictures-ftp = 受信画像 → FTP
@@ -1937,11 +1936,9 @@ topbar-dec-off = DEC オフ
 topbar-vol = 音量
 topbar-counted-steps-not-decibels-what =
 
-
     Counted in steps, not decibels: what one step is worth is the receiver's own business, and on an SDRplay it depends on the band as well. Right is still more gain.
 topbar-gain = ゲイン
 topbar-plutosdr-s-own-agc-setting =
-
 
     The PlutoSDR's own AGC is setting this gain, so moving the slider does nothing. Set Settings → Radio → AGC to Manual to control it here.
 topbar-agc-hang-time-click-cycle = AGC のホールドタイム。クリックで切り替え：オフ / 遅い / 中 / 速い
@@ -3704,7 +3701,6 @@ atchat-nothing-flight = 送信中のものはありません
 atchat-images = 画像
 atchat-no-images-received = 受信した画像はありません。
 
-
 ## rds (src/app/rds.rs)
 
 rds-station = 局
@@ -3972,7 +3968,6 @@ ism-transmissions-gate-opened-how-many = ゲートが開いた送信の数と、
 ism-nothing-heard-yet = まだ何も聞こえていません
 ism-click-tune-receiver =
 
-
     Click to tune the receiver to it
 
 ## app (src/app/mod.rs)
@@ -4074,19 +4069,15 @@ frame-restart-without-oob-tx-put = ロックアウトを元に戻すには、--o
 smeter-alc-how-hard-transmitter-being = ALC。送信機がどれだけ強く駆動されているかを、出力できる最大値に対する割合で示します。100 % はフルスケールであり、ワット数でのフルパワーではありません。アンテナでそれが何ワットに相当するかは、無線機と駆動の設定によります。
 smeter-radio-reports-no-forward-power =
 
-
     This radio reports no forward power, so the figure beside ALC is the ALC reading again rather than watts.
 smeter-no-swr-radio-has-no =
-
 
     No SWR: this radio has no bridge to measure it with, and sdroxide will not invent one — it can only show what the radio itself reports. A rig with an SWR meter (over CAT, TCI or a LAN link) and an HPSDR board both fill this in; a plain SDR transmitter cannot.
 smeter-no-signal-report-yet-receiver = まだ信号レポートはありません。受信機がメーターの読み値をまだ送っていません。
 smeter-s9-73-dbm-each-s =
 
-
     S9 is −73 dBm and each S-unit below it is 6 dB. The dBm figure is only as honest as the front end's calibration — an uncalibrated receiver reports dBFS with a dBm label.
 smeter-ovld-converter-into-rails-so =
-
 
     OVLD: the converter is into its rails, so the level shown understates the signal. Wind the front-end gain back.
 smeter-table-held = 、テーブルを保持
@@ -4226,14 +4217,12 @@ remote-connection-closed = 接続が閉じられました
 
 ## solarwin (src/solar3d/mod.rs)
 
-
 ## solarbtn (src/app/solar.rs)
 
 solarbtn-solar-system-3d-view-sun = 太陽系 3D ビュー — 太陽、地球、月、黒点、CME（別ウィンドウ）
 solarbtn-solar-system-3d-view-sun-2 = 太陽系 3D ビュー — 太陽、地球、月、黒点、CME（新しいブラウザタブ）
 
 ## widespec (src/widgets/wide_spectrum.rs)
-
 
 ## speech (src/app/speech.rs)
 
@@ -4275,8 +4264,6 @@ hfdlmap-no-aircraft-located-yet = まだ位置の特定できた航空機はあ�
 worldmap-double-click-reframe = ダブルクリックで枠を合わせ直します
 
 ## chrome (src/chrome.rs)
-
-
 
 ## duopower (src/app/duo_power.rs)
 
@@ -4353,7 +4340,6 @@ textmodem-frequency-shifted = 周波数偏移
 winlink-to-heading = 宛先
 
 ## adsbmap: messages with values (src/adsb_map.rs)
-
 
 ## aismap: messages with values (src/ais_map.rs)
 
@@ -5274,15 +5260,11 @@ extras-antenna-hint = アンテナ（実験的/ベータ）— 一般的なワ�
 
 recjobs-title = 計画
 
-
-
-
 recjobs-new-job = + 新規ジョブ
 
 recjobs-recording = ● 録音中
 
 recjobs-none = 予約録音はありません。+ 新規ジョブ を押して追加してください。
-
 
 recjobs-edit = 編集
 
@@ -5293,8 +5275,6 @@ recjobs-station = 説明
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = 種類
-
-
 
 recjobs-save = 保存
 
@@ -5314,7 +5294,6 @@ navtex-hunting-hint =
     強い信号があるのに文字が意味不明な場合は、REVを押してください。信号が逆向きに届いています。
 
     また、NAVTEXは会話ではなく時刻表で運用されます。海岸局は4時間ごとに10分間送信するので、ほとんどの時間は無音で正常です。局の送信時刻に合わせて受信する必要があります。さらに518 kHzは夜間にしか開けません。昼間に静かなのはデコーダーの故障ではありません。
-
 
 navtex-tune-dial-usb-below-channel = ここにダイヤルを合わせます（USB、チャンネルより1.700 kHz下）。
 
@@ -5857,8 +5836,6 @@ macros-add = 追加
 macros-note-placeholders = { $mycall } と { $mygrid } は送信時に自動で入ります。
 
 macros-buttons-note = 各ボタンは全文を一度に送信します。画面上でキーボードが使われていなければ、F1〜F9で最初の9個を押せます。
-
-
 
 widgets-worked-before-any = 交信済み
 
@@ -6495,7 +6472,6 @@ panels-enigma-hint = エニグマ機 — 戦時中のパネルでメッセージ
 
 panels-slot-bar-heard-hint = スピーカーの音に追従します。フレームが聞こえている間は白、止まると緑、次のフレームが始まると最初に戻ります。時間はモードごとのもので、短いフレームでもバーは満たされます。
 
-
 morse-send-correct = 正解: { $want }
 
 morse-send-heard = 受信 { $got }、正解 { $want }
@@ -6556,7 +6532,6 @@ decodes-beam-hint = アンテナをこの局のロケーターに向けます
 decodes-queue-next = 次
 
 decodes-queue-waiting = 待機
-
 
 decodes-setup-hint = セットアップ — これらの QSO モードが共有する局の識別情報とテンプレート
 
@@ -6651,7 +6626,6 @@ app-rx-only-hint = この無線機は受信専用です — キーイングす�
 spots-n-calls = { $n } コール
 
 spots-opening-hover = { $from } から { $to } への { $band } バンド経路: 直近15分のウィンドウが経路の3時間ベースラインを超えて急増しました — 最近のコール: { $calls }
-
 
 spots-download-unsupported = このプラットフォームでは { $source } をダウンロードできませんでした
 
@@ -7581,7 +7555,6 @@ net-wavelog-no-station-location = ダウンロード元の局ロケーション�
 
 publicsdr-could-not-connect = このセッションでは接続できませんでした
 
-
 weather-title = 気象通報
 
 weather-intro = 船舶と陸上局からの符号化された気象通報で、RTTYの4583、7646、10100.8 kHzで送信されます。SHIPは02:00と07:35 UTC頃、SYNOPは00:35と12:10頃です。数値だけでは意味がないため、通報はデコード一覧ではなくここに保存されます。
@@ -7661,14 +7634,6 @@ settings-ui-updates = アップデート
 settings-ui-updates-check = 起動時に新しいリリースを確認
 
 settings-ui-updates-hint = 起動時に1回、フォークのGitHub Releasesに最新リリースを問い合わせ、このビルドより新しければバナーを表示します。正式リリースのみが対象で（ナイトリーはプレリリース）、オフにすると外部への通信は一切行いません。
-
-settings-ui-undocked = ドック解除 — 独立ウィンドウ
-
-settings-ui-docked = このウィンドウにドック
-
-settings-ui-dock-all-hint = ドック解除したすべてのウィンドウをこのウィンドウに戻します。
-
-settings-ui-undock-all-hint = すべてのモジュールを個別のウィンドウにします。メインウィンドウにはスペクトラムとデコーダが残ります。音声モードの操作パネルのように表示するものがないモジュールは、ウィンドウを開きません。
 
 settings-ui-spectrum-line = スペクトラム線
 
@@ -8005,13 +7970,6 @@ chrome-hide-message-hover = このメッセージを今後表示しません。�
 
 chrome-close-message-hover = このメッセージを閉じます。他は何も変わりません。
 
-settings-ui-window-label = { $module } ウィンドウ
-
-settings-ui-undock-hint =
-    ドッキング解除すると、このモジュールは専用ウィンドウに移り、メインウィンドウは空いた場所を残りの部分に譲ります。ウォーターフォールを2台目のモニターに、操作部を3台目に置くこともできます。ウィンドウを閉じると再びドッキングします。
-
-    Wayland ではサイズは復元されますが、ウィンドウの位置はコンポジターが決めます。フロート表示にし、app-id "{ $app_id }" に一致するウィンドウルールでモニターに固定してください。
-
 settings-ui-workspace-restore-out = この配置に戻す — { $n } 個のモジュールを個別ウィンドウに
 
 settings-ui-profile-in-use-named = 使用中: プロファイル { $name }
@@ -8157,7 +8115,6 @@ sstv-top = 上
 sstv-bottom = 下
 
 topbar-ptt-hold-hint = 押している間送信します。クリックでラッチされ、次に押すと解除されます
-
 
 topbar-above-the-dial = 上
 
@@ -8637,10 +8594,6 @@ settings-tool-window-memories = メモリー
 
 settings-tool-window-playback = 再生
 
-settings-tool-window-open = 開く
-
-settings-tool-window-closed = 閉じる
-
 settings-detachable-native-only = 分離可能なウィンドウはネイティブ版のみです。
 
 settings-psk-reporter-band-hint = バンドアクティビティのフィード: 現在のバンドで受信されている局を色付きの点で表示します。地図の「受信された」チップの背後にある「誰が私を受信したか」の照会も有効にし、1時間ごとに再取得します。
@@ -8804,7 +8757,6 @@ sessionqso-include-cw = CW を含める
 
 decodes-live-log = ライブログ
 
-
 schedule-colour-all = 色
 
 schedule-colour-all-hint = すべての局のウォーターフォールラベルの色です。局ごとに選んだ色は置き換えられます
@@ -8850,7 +8802,6 @@ tx-bands-check = バンドを確認…
 tx-bands-notice-new = すべてのバンドで送信はオフです。この無線機が送信するバンドを選び、一度確認してください。無線機に危険が及ぶため、選んだ項目を慎重に確認してください。
 
 tx-bands-notice-carried = 送信バンドは以前のバージョンから引き継がれました。一度確認して確定するまで、送信はブロックされたままです。無線機に危険が及ぶため、すべての項目を慎重に確認してください。
-
 
 adsbmap-surface-asphalt = アスファルト
 
@@ -8986,11 +8937,9 @@ publicsdr-mine = マイ
 
 publicsdr-mine-hint = スターを付けた受信機のみ
 
-
 publicsdr-star-receiver = この受信機をマイに保存
 
 publicsdr-unstar-receiver = この受信機をマイから外す
-
 
 sstv-sync-pulses = 同期パルス
 
@@ -9124,7 +9073,6 @@ sonde-col-pressure = 気圧
 
 settings-net-broadcast-import-needs-station = インポートするには局に接続してください。
 
-
 sonde-online-why-signin = ステーションが先にサインインを求めています。
 
 sonde-online-why-busy = ステーションは許される上限の頻度で SondeHub に問い合わせています。1 分後にもう一度お試しください。
@@ -9139,9 +9087,6 @@ sonde-online-why-http = 応答: HTTP { $n }。
 settings-general-band-plan = バンドプラン
 
 settings-general-band-plan-built-in = 内蔵IARU
-
-
-
 
 sonde-card-source = ソース
 
@@ -9339,8 +9284,6 @@ tx-off-cb = 11 m (CB) では送信禁止 — このバンドは送信リスト�
 settings-cb-allow-tx-needs-band = まずこの無線機の TX バンドリスト（設定 → 無線機）で 11M-CB を「はい」にし、そのあとここで許可してください。
 
 settings-cb-allow-tx-order-note = ロックは2つ、この順です：1) 無線機の TX バンドリストで 11M-CB が「はい」かつ確認済み、2) このチェックボックス。11 m で送信するには両方が必要です。11M-CB をリストから外すと、このチェックも外れます。
-
-settings-ui-publicsdr-under-waterfall = ウォーターフォールの下にドック
 
 settings-ui-publicsdr-place-hint = Public SDRs を開く場所：そこに何もない音声モードではウォーターフォールの下にドック、または別ウィンドウ。デジタルモード、CW、スマートフォンでは常にウィンドウになります。
 
@@ -9712,7 +9655,6 @@ ptt-here-heading = このコンピュータ
 
 ptt-station-heading = 局のコンピュータ
 
-
 ptt-grant-serial = シリアルポートを許可…
 
 ptt-grant-hid = USB HIDデバイスを許可…
@@ -9808,3 +9750,11 @@ recjobs-running = 実行中: { $name }（{ $window }）
 settings-radio-dither-hover = ADC のハードウェア・ディザリング。下位ビットを線形に保つため少しノイズを加えます。静かなバンドではオフ、よりきれいな測定ではオン。
 
 settings-radio-preamp-hover = ADC のプリアンプ。受信機の 2 段目の増幅で、約 10 dB。静かなバンドで必要でなければオフ。信号と一緒にノイズフロアも上がります。
+
+settings-ui-level-bottom = 背面
+
+settings-ui-level-top = 前面
+
+settings-ui-level-fixed = Wayland ではコンポジタが重なり順を決めます。タイル型には選べる層がありません。
+
+settings-ui-main-window = メインウィンドウ

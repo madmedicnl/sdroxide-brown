@@ -656,7 +656,6 @@ settings-add-radio-here-station-you = Add a radio — here, or on a station you 
 
 ## Settings window, General, continued
 
-
 ## Settings window, picture upload (src/app/settings/picup.rs)
 
 settings-picup-received-pictures-ftp = Received pictures → FTP
@@ -1958,11 +1957,9 @@ topbar-dec-off = DEC off
 topbar-vol = Vol
 topbar-counted-steps-not-decibels-what =
 
-
     Counted in steps, not decibels: what one step is worth is the receiver's own business, and on an SDRplay it depends on the band as well. Right is still more gain.
 topbar-gain = Gain
 topbar-plutosdr-s-own-agc-setting =
-
 
     The PlutoSDR's own AGC is setting this gain, so moving the slider does nothing. Set Settings → Radio → AGC to Manual to control it here.
 topbar-agc-hang-time-click-cycle = AGC hang time — click to cycle: Off / Slow / Med / Fast
@@ -3728,7 +3725,6 @@ atchat-nothing-flight = nothing in flight
 atchat-images = IMAGES
 atchat-no-images-received = No images received.
 
-
 ## rds (src/app/rds.rs)
 
 rds-station = STATION
@@ -3998,7 +3994,6 @@ ism-transmissions-gate-opened-how-many = Transmissions the gate opened on, and h
 ism-nothing-heard-yet = nothing heard yet
 ism-click-tune-receiver =
 
-
     Click to tune the receiver to it
 
 ## app (src/app/mod.rs)
@@ -4100,19 +4095,15 @@ frame-restart-without-oob-tx-put = Restart without --oob-tx to put the lockout b
 smeter-alc-how-hard-transmitter-being = ALC — how hard the transmitter is being driven, as a percentage of the most it can put out. 100 % is full scale, not full power in watts: what that is worth at the antenna depends on the radio and on Drive.
 smeter-radio-reports-no-forward-power =
 
-
     This radio reports no forward power, so the figure beside ALC is the ALC reading again rather than watts.
 smeter-no-swr-radio-has-no =
-
 
     No SWR: this radio has no bridge to measure it with, and sdroxide will not invent one — it can only show what the radio itself reports. A rig with an SWR meter (over CAT, TCI or a LAN link) and an HPSDR board both fill this in; a plain SDR transmitter cannot.
 smeter-no-signal-report-yet-receiver = No signal report yet — the receiver has not delivered a meter reading.
 smeter-s9-73-dbm-each-s =
 
-
     S9 is −73 dBm and each S-unit below it is 6 dB. The dBm figure is only as honest as the front end's calibration — an uncalibrated receiver reports dBFS with a dBm label.
 smeter-ovld-converter-into-rails-so =
-
 
     OVLD: the converter is into its rails, so the level shown understates the signal. Wind the front-end gain back.
 smeter-table-held = , table held
@@ -4252,14 +4243,12 @@ remote-connection-closed = connection closed
 
 ## solarwin (src/solar3d/mod.rs)
 
-
 ## solarbtn (src/app/solar.rs)
 
 solarbtn-solar-system-3d-view-sun = Solar system 3D view — Sun, Earth, Moon, sunspots and CMEs (separate window)
 solarbtn-solar-system-3d-view-sun-2 = Solar system 3D view — Sun, Earth, Moon, sunspots and CMEs (new browser tab)
 
 ## widespec (src/widgets/wide_spectrum.rs)
-
 
 ## speech (src/app/speech.rs)
 
@@ -4301,8 +4290,6 @@ hfdlmap-no-aircraft-located-yet = no aircraft located yet
 worldmap-double-click-reframe = DOUBLE-CLICK TO REFRAME
 
 ## chrome (src/chrome.rs)
-
-
 
 ## duopower (src/app/duo_power.rs)
 
@@ -4392,7 +4379,6 @@ textmodem-frequency-shifted = frequency-shifted
 winlink-to-heading = TO
 
 ## adsbmap: messages with values (src/adsb_map.rs)
-
 
 ## aismap: messages with values (src/ais_map.rs)
 
@@ -5328,15 +5314,11 @@ extras-antenna-hint = ANTENNA (Experimental/Beta) — cutting lengths, feedpoint
 
 recjobs-title = PLANNING
 
-
-
-
 recjobs-new-job = + NEW JOB
 
 recjobs-recording = ● recording
 
 recjobs-none = No scheduled recordings — press + NEW JOB to add one.
-
 
 recjobs-edit = edit
 
@@ -5347,8 +5329,6 @@ recjobs-station = Description
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Kind
-
-
 
 recjobs-save = SAVE
 
@@ -5368,7 +5348,6 @@ navtex-hunting-hint =
     If there is clearly a strong signal but the text is still nonsense, press REV: it is arriving the other way round.
     
     Also remember NAVTEX is a timetable, not a conversation: a coast station sends for ten minutes every four hours, so silence is normal most of the time. You have to be listening when your station is due. And 518 kHz only comes alive at night — a quiet daytime band is not a broken decoder.
-
 
 navtex-tune-dial-usb-below-channel = Tune the dial here (USB, 1.700 kHz below the channel).
 
@@ -5911,8 +5890,6 @@ macros-add = ADD
 macros-note-placeholders = { $mycall } and { $mygrid } are filled in as the message goes out.
 
 macros-buttons-note = Each button sends its whole text in one go. F1–F9 press the first nine, so long as nothing on screen has the keyboard.
-
-
 
 widgets-worked-before-any = Worked before
 
@@ -6549,7 +6526,6 @@ panels-enigma-hint = Enigma machine — encipher a message on a wartime faceplat
 
 panels-slot-bar-heard-hint = Follows the sound in the speakers: white while a frame is heard, green once it has stopped, and back to the start when the next one begins. The times are the mode's, so a frame that runs short still fills the bar.
 
-
 morse-send-correct = correct: { $want }
 
 morse-send-heard = heard { $got }, wanted { $want }
@@ -6610,7 +6586,6 @@ decodes-beam-hint = Point the antenna at this station's locator
 decodes-queue-next = next
 
 decodes-queue-waiting = waiting
-
 
 decodes-setup-hint = SETUP — the station identity and the templates these QSO modes share
 
@@ -6705,7 +6680,6 @@ app-rx-only-hint = This radio can only receive — it has no transmitter to key.
 spots-n-calls = { $n } calls
 
 spots-opening-hover = { $band } band path from { $from } to { $to }: the last 15-minute window surged past the path's 3-hour baseline — recent callers: { $calls }
-
 
 spots-download-unsupported = { $source } could not be downloaded on this platform
 
@@ -7635,7 +7609,6 @@ net-wavelog-no-station-location = no station location to download from — test 
 
 publicsdr-could-not-connect = could not connect this session
 
-
 weather-title = WEATHER REPORTS
 
 weather-intro = Coded weather reports from ships and land stations, in RTTY on 4583, 7646 and 10100.8 kHz. SHIP goes out around 02:00 and 07:35 UTC, SYNOP around 00:35 and 12:10. A report is kept here rather than in the decode list because the figures on their own mean nothing.
@@ -7715,14 +7688,6 @@ settings-ui-updates = Updates
 settings-ui-updates-check = check for a new release at start-up
 
 settings-ui-updates-hint = Asks the fork's GitHub Releases for the latest release once at start-up, and shows a banner if it is newer than this build. Only full releases count — the nightly is a pre-release — and off means no outbound call at all.
-
-settings-ui-undocked = Undocked — its own window
-
-settings-ui-docked = Docked in this window
-
-settings-ui-dock-all-hint = Bring every undocked window back into this one.
-
-settings-ui-undock-all-hint = Put every module in a window of its own — the main window is left as the spectrum and the decoders. A module with nothing to show, like the operating panel in a voice mode, opens no window.
 
 settings-ui-spectrum-line = Spectrum line
 
@@ -8059,13 +8024,6 @@ chrome-hide-message-hover = Hide this message for good. Nothing about your setti
 
 chrome-close-message-hover = Close this message. Nothing else changes.
 
-settings-ui-window-label = { $module } window
-
-settings-ui-undock-hint =
-    Undocked, this module moves into its own window and the main window gives the space back to what is left — put the waterfall on a second monitor, or the controls on a third. Closing its window docks it again.
-    
-    On Wayland the size comes back but the compositor decides where a window goes: float it and pin it to a monitor with a window rule matching app-id "{ $app_id }".
-
 settings-ui-workspace-restore-out = Put this arrangement back — { $n } module(s) in their own window(s)
 
 settings-ui-profile-in-use-named = in use: the profile { $name }
@@ -8211,7 +8169,6 @@ sstv-top = Top
 sstv-bottom = Bottom
 
 topbar-ptt-hold-hint = Hold to transmit — a click latches it on, and the next press lets go
-
 
 topbar-above-the-dial = above
 
@@ -8691,10 +8648,6 @@ settings-tool-window-memories = MEMORIES
 
 settings-tool-window-playback = PLAYBACK
 
-settings-tool-window-open = Open
-
-settings-tool-window-closed = Closed
-
 settings-detachable-native-only = Detachable windows are native only.
 
 settings-psk-reporter-band-hint = The band-activity feed: stations being heard on the current band, drawn as coloured dots. Also enables the "who heard me" query behind the map's HEARD ME chip — refetched hourly, too.
@@ -8858,7 +8811,6 @@ sessionqso-include-cw = Include CW
 
 decodes-live-log = LIVE LOG
 
-
 schedule-colour-all = Colour
 
 schedule-colour-all-hint = Waterfall label colour for every station — replaces the ones picked per station
@@ -8904,7 +8856,6 @@ tx-bands-check = Check bands…
 tx-bands-notice-new = Transmit is off on every band. Choose the bands this radio transmits on and confirm them once. Because of the risk to the radio, check the options you choose carefully.
 
 tx-bands-notice-carried = Your transmit bands were carried over from the previous version. Transmit stays blocked until you check and confirm them once. Because of the risk to the radio, check every option carefully.
-
 
 adsbmap-surface-asphalt = asphalt
 
@@ -9200,7 +9151,6 @@ sonde-col-pressure = Pressure
 
 settings-net-broadcast-import-needs-station = Connect to a station to import.
 
-
 sonde-online-why-signin = The station wants you signed in first.
 
 sonde-online-why-busy = The station is already asking SondeHub as often as it may. Try again in a minute.
@@ -9215,9 +9165,6 @@ sonde-online-why-http = Answer: HTTP { $n }.
 settings-general-band-plan = Band plan
 
 settings-general-band-plan-built-in = Built-in IARU
-
-
-
 
 sonde-card-source = Source
 
@@ -9417,8 +9364,6 @@ tx-off-cb = TRANSMIT FORBIDDEN on 11 m (CB) — the band is in your transmit lis
 settings-cb-allow-tx-needs-band = First set 11M-CB to YES in this radio's TX band list (Settings → Radio), then allow it here.
 
 settings-cb-allow-tx-order-note = Two locks, in this order: 1) 11M-CB is YES in the TX band list of the radio, confirmed; 2) this box. Both are needed to transmit on 11 m. Taking 11M-CB off the list also clears this box.
-
-settings-ui-publicsdr-under-waterfall = Docked under the waterfall
 
 settings-ui-publicsdr-place-hint = Where Public SDRs opens: docked under the waterfall in the voice modes that have nothing there, or in a window. Digital modes, CW and phones use a window anyway.
 
@@ -9793,7 +9738,6 @@ ptt-here-heading = ON THIS COMPUTER
 
 ptt-station-heading = ON THE STATION'S COMPUTER
 
-
 ptt-grant-serial = Allow a serial port…
 
 ptt-grant-hid = Allow a USB HID device…
@@ -9890,3 +9834,11 @@ recjobs-running = Running: { $name } ({ $window })
 settings-radio-dither-hover = Hardware dithering in the ADC: a little noise added so its lowest bits behave linearly. Off is the quiet band; on is the cleaner measurement.
 
 settings-radio-preamp-hover = The ADC's preamplifier — the receiver's second gain stage, worth about 10 dB. Off unless a quiet band needs it: it raises the noise floor with the signal.
+
+settings-ui-level-bottom = Behind
+
+settings-ui-level-top = In front
+
+settings-ui-level-fixed = The compositor decides the stacking on Wayland; a tiling one has no layers to choose between.
+
+settings-ui-main-window = Main window

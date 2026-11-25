@@ -670,6 +670,44 @@ pub struct DetachedWindow {
     /// Outer (top-left) position in points; `None` on Wayland.
     #[serde(default)]
     pub pos: Option<[f32; 2]>,
+    /// How this window is stacked against other programs (issue #748).
+    #[serde(default)]
+    pub level: WindowLevel,
+}
+
+/// How a window sits against the programs around it (issue #748, AJ6CU's).
+///
+/// Three answers, because that is what the operating system offers: there is no
+/// finer ordering between windows on the same level than "the one used last is
+/// in front", and a setting that pretended otherwise would be lying.
+///
+/// **Normal** is today's behaviour and the default, so an operator who never
+/// touches it sees nothing change. **Top** keeps a window — the undocked
+/// panadapter, usually — above the logging program or the browser beside it.
+/// **Bottom** keeps one below everything, which is how a main window is got out
+/// of the way without being minimised.
+///
+/// The operator decides, and nothing moves a window by itself: the question of
+/// a main window left at the bottom with nothing around it is answered by the
+/// hand that set it there (`madmedicnl`, 2026-11-23).
+///
+/// **Wayland decides the stacking itself**; there the choice is greyed with the
+/// reason rather than stored and ignored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowLevel {
+    /// Below other programs.
+    Bottom,
+    /// Ordinary, in the order the operator last used them.
+    #[default]
+    Normal,
+    /// Above other programs.
+    Top,
+}
+
+impl WindowLevel {
+    /// The three answers, in the order the settings offer them.
+    pub const ALL: [WindowLevel; 3] = [WindowLevel::Bottom, WindowLevel::Normal, WindowLevel::Top];
 }
 
 /// A module that can be pulled out of the main window into its own OS window —
@@ -846,6 +884,13 @@ pub struct DetachedState {
     /// Where its window last was; `None` until it has been open once.
     #[serde(default)]
     pub window: Option<DetachedWindow>,
+    /// How its window is stacked against other programs (#748).
+    ///
+    /// Beside the geometry rather than inside it, because the operator may
+    /// choose a level before the window has ever been open — and while the
+    /// module is docked, so that undocking it later comes up where he asked.
+    #[serde(default)]
+    pub level: WindowLevel,
 }
 
 /// Which broadcast stations a listener's screen is allowed to show.
@@ -1575,6 +1620,14 @@ pub struct UiSettings {
     /// wants anyway.
     #[serde(default = "default_detached", deserialize_with = "detached_slots")]
     pub detached: [DetachedState; DetachableModule::COUNT],
+    /// How the **main** window is stacked against other programs (#748). The
+    /// undocked windows carry their own level in [`DetachedWindow::level`].
+    ///
+    /// Machine-local, like the geometry beside it: where a window sits is a
+    /// property of this screen, not of the station, so it stays out of
+    /// `ClientScreen`.
+    #[serde(default)]
+    pub main_level: WindowLevel,
     /// Legacy — the panadapter's undocked flag from before [`Self::detached`]
     /// existed, read once at load by [`Self::migrate_detached`] and never
     /// written again. Public only because a `..*settings` struct update needs
@@ -1972,6 +2025,7 @@ impl UiSettings {
 impl Default for UiSettings {
     fn default() -> Self {
         UiSettings {
+            main_level: WindowLevel::Normal,
             theme_file: None,
             band_dock_open: Default::default(),
             audio_spectrum: false,
@@ -2119,6 +2173,40 @@ impl UiSettings {
     /// geometry alone.
     pub fn set_detached(&mut self, module: DetachableModule, on: bool) {
         self.detached[module.index()].detached = on;
+    }
+
+    /// How a module's window is stacked against other programs (#748).
+    pub fn detached_level(&self, module: DetachableModule) -> WindowLevel {
+        self.detached[module.index()].level
+    }
+
+    /// Set it, and carry it into the stored geometry so a window that is open
+    /// right now is saved with it.
+    pub fn set_detached_level(&mut self, module: DetachableModule, level: WindowLevel) {
+        let slot = &mut self.detached[module.index()];
+        slot.level = level;
+        if let Some(window) = slot.window.as_mut() {
+            window.level = level;
+        }
+    }
+
+    /// The geometry to seed a module's window with, carrying the level the
+    /// operator has chosen rather than whatever the geometry last held.
+    pub fn detached_seed(&self, module: DetachableModule) -> Option<DetachedWindow> {
+        let slot = self.detached[module.index()];
+        match slot.window {
+            Some(window) => Some(DetachedWindow { level: slot.level, ..window }),
+            // A level chosen before the window has ever been open still has to
+            // reach it, so a seed is made with no size — `detached_geometry`
+            // reads that as "use the module's own" — and Normal, which is what
+            // every window did before #748, keeps the `None`.
+            None if slot.level != WindowLevel::Normal => Some(DetachedWindow {
+                size: [0.0, 0.0],
+                pos: None,
+                level: slot.level,
+            }),
+            None => None,
+        }
     }
 
     /// Fold the pre-array `panadapter_detached` / `panadapter_window` keys from
@@ -2840,7 +2928,7 @@ mod tests {
         // the modules it does reach are restored, and the rest stay docked.
         let short = Workspace {
             name: "old".into(),
-            slots: vec![DetachedState { detached: true, window: None }],
+            slots: vec![DetachedState { detached: true, window: None, level: WindowLevel::Normal }],
         };
         let mut from_old = UiSettings::default();
         short.apply(&mut from_old);
@@ -2975,21 +3063,21 @@ mod tests {
         // Undock the panel and give it a window; the panadapter stays docked.
         s.set_detached(DetachableModule::Panel, true);
         s.detached[DetachableModule::Panel.index()].window =
-            Some(DetachedWindow { size: [520.0, 700.0], pos: None });
+            Some(DetachedWindow { size: [520.0, 700.0], pos: None, level: Default::default() });
         let json = serde_json::to_string(&s).unwrap();
         let back: UiSettings = serde_json::from_str(&json).unwrap();
         assert!(back.is_detached(DetachableModule::Panel));
         assert!(!back.is_detached(DetachableModule::Panadapter));
         assert_eq!(
             back.detached_state(DetachableModule::Panel).window,
-            Some(DetachedWindow { size: [520.0, 700.0], pos: None })
+            Some(DetachedWindow { size: [520.0, 700.0], pos: None, level: Default::default() })
         );
 
         // An old config's two panadapter keys fold in on `migrate_detached`.
         let mut migrated = UiSettings::default();
         migrated.panadapter_detached_legacy = true;
         migrated.panadapter_window_legacy =
-            Some(DetachedWindow { size: [960.0, 540.0], pos: None });
+            Some(DetachedWindow { size: [960.0, 540.0], pos: None, level: Default::default() });
         assert!(!migrated.is_detached(DetachableModule::Panadapter), "not until migration runs");
         migrated.migrate_detached();
         assert!(migrated.is_detached(DetachableModule::Panadapter));
@@ -3002,6 +3090,46 @@ mod tests {
         assert!(migrated.is_detached(DetachableModule::Panadapter));
     }
 }
+
+    #[test]
+    fn a_window_level_is_normal_until_the_operator_says_otherwise() {
+        use DetachableModule::Panadapter;
+
+        let window: DetachedWindow =
+            serde_json::from_str(r#"{"size":[800.0,600.0]}"#).expect("a window without a level");
+        assert_eq!(window.level, WindowLevel::Normal, "old configs load unchanged");
+
+        let mut settings = UiSettings::default();
+        settings.set_detached_level(Panadapter, WindowLevel::Top);
+        assert_eq!(settings.detached_level(Panadapter), WindowLevel::Top);
+        assert_eq!(
+            settings.detached_seed(Panadapter).map(|w| w.level),
+            Some(WindowLevel::Top),
+            "the level travels with the seed even before the window has a size"
+        );
+
+        // Once the window has been open, the level is carried into the geometry
+        // and the geometry is kept.
+        settings.detached[Panadapter.index()].window =
+            Some(DetachedWindow { size: [640.0, 480.0], pos: None, level: WindowLevel::Normal });
+        settings.set_detached_level(Panadapter, WindowLevel::Bottom);
+        let stored = settings.detached[Panadapter.index()].window.expect("stored");
+        assert_eq!(stored.level, WindowLevel::Bottom);
+        assert_eq!(stored.size, [640.0, 480.0]);
+    }
+
+    #[test]
+    fn a_level_survives_a_config_round_trip() {
+        let mut settings = UiSettings::default();
+        settings.main_level = WindowLevel::Top;
+        settings.set_detached_level(DetachableModule::Controls, WindowLevel::Bottom);
+
+        let json = serde_json::to_string(&settings).expect("serialise");
+        let back: UiSettings = serde_json::from_str(&json).expect("read back");
+
+        assert_eq!(back.main_level, WindowLevel::Top);
+        assert_eq!(back.detached_level(DetachableModule::Controls), WindowLevel::Bottom);
+    }
 
 #[cfg(test)]
 mod advisory_tests {
