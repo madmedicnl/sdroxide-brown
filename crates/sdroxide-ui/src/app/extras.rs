@@ -196,7 +196,7 @@ impl super::SdroxideApp {
             let g = sdroxide_types::DetachedWindow {
                 size: [r.width(), r.height()],
                 pos: Some([r.min.x, r.min.y]),
-            };
+            level: Default::default() };
             let moved = (r.min - pos).abs().max_elem() > 1.0 || (r.size().x - size.x).abs() > 1.0;
             let (docked, _) = self.tool_geometry_slots(id);
             let had = docked.is_some();
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn a_remembered_place_and_size_win() {
-        let g = sdroxide_types::DetachedWindow { size: [900.0, 200.0], pos: Some([300.0, 400.0]) };
+        let g = sdroxide_types::DetachedWindow { size: [900.0, 200.0], pos: Some([300.0, 400.0]), level: Default::default() };
         let (pos, size) = extras_place(Some(g), screen(), screen());
         assert_eq!((pos, size), (egui::pos2(300.0, 400.0), egui::vec2(900.0, 200.0)));
     }
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn a_place_saved_on_a_bigger_screen_is_pulled_back() {
         let g =
-            sdroxide_types::DetachedWindow { size: [700.0, 200.0], pos: Some([5000.0, 4000.0]) };
+            sdroxide_types::DetachedWindow { size: [700.0, 200.0], pos: Some([5000.0, 4000.0]), level: Default::default() };
         let (pos, size) = extras_place(Some(g), screen(), screen());
         assert!(screen().contains_rect(egui::Rect::from_min_size(pos, egui::vec2(size.x, 40.0))));
     }

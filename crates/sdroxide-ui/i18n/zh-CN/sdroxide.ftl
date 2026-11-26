@@ -653,7 +653,6 @@ settings-add-radio-here-station-you = 添加电台——在此处，或在你已
 
 ## Settings window, General, continued
 
-
 ## Settings window, picture upload (src/app/settings/picup.rs)
 
 settings-picup-received-pictures-ftp = 接收的图片 → FTP
@@ -1936,11 +1935,9 @@ topbar-dec-off = DEC 关
 topbar-vol = 音量
 topbar-counted-steps-not-decibels-what =
 
-
     Counted in steps, not decibels: what one step is worth is the receiver's own business, and on an SDRplay it depends on the band as well. Right is still more gain.
 topbar-gain = 增益
 topbar-plutosdr-s-own-agc-setting =
-
 
     The PlutoSDR's own AGC is setting this gain, so moving the slider does nothing. Set Settings → Radio → AGC to Manual to control it here.
 topbar-agc-hang-time-click-cycle = AGC 保持时间——点击循环切换：关 / 慢 / 中 / 快
@@ -3700,7 +3697,6 @@ atchat-nothing-flight = 没有正在传输的内容
 atchat-images = 图片
 atchat-no-images-received = 尚未收到图片。
 
-
 ## rds (src/app/rds.rs)
 
 rds-station = 电台
@@ -3968,7 +3964,6 @@ ism-transmissions-gate-opened-how-many = 闸门打开过的发射次数，以及
 ism-nothing-heard-yet = 尚未听到任何内容
 ism-click-tune-receiver =
 
-
     Click to tune the receiver to it
 
 ## app (src/app/mod.rs)
@@ -4070,19 +4065,15 @@ frame-restart-without-oob-tx-put = 不带 --oob-tx 重新启动，以恢复锁�
 smeter-alc-how-hard-transmitter-being = ALC——发射机被驱动的力度，以其最大输出的百分比表示。100% 是满量程，而不是以瓦计的满功率：它在天线上相当于多少，取决于电台和驱动设置。
 smeter-radio-reports-no-forward-power =
 
-
     This radio reports no forward power, so the figure beside ALC is the ALC reading again rather than watts.
 smeter-no-swr-radio-has-no =
-
 
     No SWR: this radio has no bridge to measure it with, and sdroxide will not invent one — it can only show what the radio itself reports. A rig with an SWR meter (over CAT, TCI or a LAN link) and an HPSDR board both fill this in; a plain SDR transmitter cannot.
 smeter-no-signal-report-yet-receiver = 尚无信号报告——接收机尚未提供表头读数。
 smeter-s9-73-dbm-each-s =
 
-
     S9 is −73 dBm and each S-unit below it is 6 dB. The dBm figure is only as honest as the front end's calibration — an uncalibrated receiver reports dBFS with a dBm label.
 smeter-ovld-converter-into-rails-so =
-
 
     OVLD: the converter is into its rails, so the level shown understates the signal. Wind the front-end gain back.
 smeter-table-held = ，表格已保持
@@ -4222,14 +4213,12 @@ remote-connection-closed = 连接已关闭
 
 ## solarwin (src/solar3d/mod.rs)
 
-
 ## solarbtn (src/app/solar.rs)
 
 solarbtn-solar-system-3d-view-sun = 太阳系三维视图——太阳、地球、月球、太阳黑子和日冕物质抛射（独立窗口）
 solarbtn-solar-system-3d-view-sun-2 = 太阳系三维视图——太阳、地球、月球、太阳黑子和日冕物质抛射（新的浏览器标签页）
 
 ## widespec (src/widgets/wide_spectrum.rs)
-
 
 ## speech (src/app/speech.rs)
 
@@ -4271,8 +4260,6 @@ hfdlmap-no-aircraft-located-yet = 尚未定位到任何飞机
 worldmap-double-click-reframe = 双击重新取景
 
 ## chrome (src/chrome.rs)
-
-
 
 ## duopower (src/app/duo_power.rs)
 
@@ -4349,7 +4336,6 @@ textmodem-frequency-shifted = 频移
 winlink-to-heading = 收件人
 
 ## adsbmap: messages with values (src/adsb_map.rs)
-
 
 ## aismap: messages with values (src/ais_map.rs)
 
@@ -5264,15 +5250,11 @@ extras-antenna-hint = 天线（实验/测试版），常见线状、垂直和八
 
 recjobs-title = 计划
 
-
-
-
 recjobs-new-job = + 新建任务
 
 recjobs-recording = ● 录制中
 
 recjobs-none = 没有定时录音，请按 + 新建任务 添加。
-
 
 recjobs-edit = 编辑
 
@@ -5283,8 +5265,6 @@ recjobs-station = 说明
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = 类型
-
-
 
 recjobs-save = 保存
 
@@ -5304,7 +5284,6 @@ navtex-hunting-hint =
     如果明显有强信号但文字仍是乱码，请按 REV：信号是反向到达的。
 
     还请记住，NAVTEX 是按时间表发送的，而不是对话：海岸电台每四小时发送十分钟，所以大部分时间安静是正常的。您必须在电台的发送时刻收听。而且 518 kHz 只在夜间才活跃，白天波段安静并不意味着解码器坏了。
-
 
 navtex-tune-dial-usb-below-channel = 在此调谐拨盘（USB，比信道低 1.700 kHz）。
 
@@ -5847,8 +5826,6 @@ macros-add = 添加
 macros-note-placeholders = 消息发出时会填入 { $mycall } 和 { $mygrid }。
 
 macros-buttons-note = 每个按钮一次发送其全部文本。只要屏幕上没有其他控件占用键盘，F1-F9 就对应前九个按钮。
-
-
 
 widgets-worked-before-any = 已联络过
 
@@ -6485,7 +6462,6 @@ panels-enigma-hint = 恩尼格玛密码机——在战时面板上加密消息�
 
 panels-slot-bar-heard-hint = 跟随扬声器中的声音：听到帧时为白色，停止后变为绿色，下一帧开始时回到起点。时间取自该模式，因此较短的帧仍会填满进度条。
 
-
 morse-send-correct = 正确：{ $want }
 
 morse-send-heard = 听到 { $got }，应为 { $want }
@@ -6546,7 +6522,6 @@ decodes-beam-hint = 将天线指向此电台的网格定位
 decodes-queue-next = 下一个
 
 decodes-queue-waiting = 等待中
-
 
 decodes-setup-hint = 设置——这些 QSO 模式共用的电台身份和模板
 
@@ -6641,7 +6616,6 @@ app-rx-only-hint = 此电台只能接收——没有可键控的发射机。
 spots-n-calls = { $n } 个呼叫
 
 spots-opening-hover = { $band } 波段从 { $from } 到 { $to } 的路径：最近 15 分钟窗口的活动量超过该路径的 3 小时基线——近期呼叫者：{ $calls }
-
 
 spots-download-unsupported = 在此平台上无法下载 { $source }
 
@@ -7571,7 +7545,6 @@ net-wavelog-no-station-location = 没有可供下载的电台位置，请先测�
 
 publicsdr-could-not-connect = 本次会话无法连接
 
-
 weather-title = 天气报告
 
 weather-intro = 来自船舶和陆地站的编码天气报告，使用 RTTY，频率为 4583、7646 和 10100.8 kHz。SHIP 约在 02:00 和 07:35 UTC 发出，SYNOP 约在 00:35 和 12:10。报告保存在这里而不在解码列表中，因为单独的数字没有意义。
@@ -7651,14 +7624,6 @@ settings-ui-updates = 更新
 settings-ui-updates-check = 启动时检查新版本
 
 settings-ui-updates-hint = 启动时向此分支的 GitHub Releases 查询一次最新版本，如果比当前构建更新，则显示横幅。只计正式发布版，夜间版属于预发布，关闭则完全不进行外部请求。
-
-settings-ui-undocked = 已取消停靠：独立窗口
-
-settings-ui-docked = 停靠在此窗口中
-
-settings-ui-dock-all-hint = 把所有已取消停靠的窗口放回此窗口。
-
-settings-ui-undock-all-hint = 让每个模块都使用自己的窗口：主窗口只留下频谱和解码器。没有内容可显示的模块，例如语音模式下的操作面板，不会打开窗口。
 
 settings-ui-spectrum-line = 频谱线
 
@@ -7995,13 +7960,6 @@ chrome-hide-message-hover = 永久隐藏此消息。您的设置不会有任何�
 
 chrome-close-message-hover = 关闭此消息。其他内容不变。
 
-settings-ui-window-label = { $module }窗口
-
-settings-ui-undock-hint =
-    取消停靠后，此模块将移到独立窗口，主窗口把空出的空间让给其余部分：可以把瀑布图放到第二块显示器，把控制面板放到第三块。关闭其窗口即可重新停靠。
-
-    在Wayland下大小可以恢复，但窗口位置由合成器决定：请让它浮动，并用匹配app-id "{ $app_id }" 的窗口规则把它固定到某块显示器。
-
 settings-ui-workspace-restore-out = 恢复此布局：{ $n } 个模块位于独立窗口
 
 settings-ui-profile-in-use-named = 使用中：配置文件 { $name }
@@ -8147,7 +8105,6 @@ sstv-top = 顶部
 sstv-bottom = 底部
 
 topbar-ptt-hold-hint = 按住发射：点击一次锁定为开，再按一次松开
-
 
 topbar-above-the-dial = 高于
 
@@ -8627,10 +8584,6 @@ settings-tool-window-memories = 记忆
 
 settings-tool-window-playback = 回放
 
-settings-tool-window-open = 打开
-
-settings-tool-window-closed = 关闭
-
 settings-detachable-native-only = 可分离窗口仅限本机版本。
 
 settings-psk-reporter-band-hint = 波段活动馈送：当前波段上被听到的电台，以彩色圆点绘制。同时启用地图“听到我”标签背后的“谁听到了我”查询，每小时也会重新获取。
@@ -8794,7 +8747,6 @@ sessionqso-include-cw = 包含CW
 
 decodes-live-log = 实时日志
 
-
 schedule-colour-all = 颜色
 
 schedule-colour-all-hint = 所有电台的瀑布图标签颜色：取代为各电台单独选的颜色
@@ -8840,7 +8792,6 @@ tx-bands-check = 检查波段…
 tx-bands-notice-new = 所有波段的发射均已关闭。请选择此电台发射的波段，并确认一次。由于存在损坏电台的风险，请仔细检查您所选的选项。
 
 tx-bands-notice-carried = 您的发射波段是从上一版本沿用的。在您检查并确认一次之前，发射仍被禁止。由于存在损坏电台的风险，请仔细检查每个选项。
-
 
 adsbmap-surface-asphalt = 沥青
 
@@ -8976,11 +8927,9 @@ publicsdr-mine = 我的
 
 publicsdr-mine-hint = 仅显示你加星的接收机
 
-
 publicsdr-star-receiver = 将此接收机保存在“我的”中
 
 publicsdr-unstar-receiver = 从“我的”中移除此接收机
-
 
 sstv-sync-pulses = 同步脉冲
 
@@ -9114,7 +9063,6 @@ sonde-col-pressure = 气压
 
 settings-net-broadcast-import-needs-station = 连接到电台以导入。
 
-
 sonde-online-why-signin = 站点要求先登录。
 
 sonde-online-why-busy = 站点已按允许的最高频率查询 SondeHub，请一分钟后再试。
@@ -9129,9 +9077,6 @@ sonde-online-why-http = 响应：HTTP { $n }。
 settings-general-band-plan = 波段计划
 
 settings-general-band-plan-built-in = 内置IARU
-
-
-
 
 sonde-card-source = 来源
 
@@ -9329,8 +9274,6 @@ tx-off-cb = 11 m (CB) 禁止发射 — 该频段已在发射列表中，但“�
 settings-cb-allow-tx-needs-band = 请先在此电台的 TX 频段列表（设置 → 电台）中将 11M-CB 设为“是”，然后在此允许。
 
 settings-cb-allow-tx-order-note = 两道锁，按此顺序：1) 电台 TX 频段列表中 11M-CB 为“是”且已确认；2) 此复选框。在 11 m 发射需要两者。将 11M-CB 从列表移除也会取消勾选此框。
-
-settings-ui-publicsdr-under-waterfall = 停靠在瀑布图下方
 
 settings-ui-publicsdr-place-hint = Public SDRs 的打开位置：在下方没有内容的语音模式中停靠在瀑布图下方，或使用窗口。数字模式、CW 和手机始终使用窗口。
 
@@ -9702,7 +9645,6 @@ ptt-here-heading = 本机
 
 ptt-station-heading = 电台的计算机
 
-
 ptt-grant-serial = 允许串口…
 
 ptt-grant-hid = 允许USB HID设备…
@@ -9798,3 +9740,11 @@ recjobs-running = 正在运行：{ $name }（{ $window }）
 settings-radio-dither-hover = ADC 的硬件抖动：加入一点噪声，使最低位保持线性。安静的波段关闭，更干净的测量开启。
 
 settings-radio-preamp-hover = ADC 的前置放大器——接收机的第二级增益，约 10 dB。除非安静的波段需要，否则关闭：它会随信号一起抬高噪声底。
+
+settings-ui-level-bottom = 置于后方
+
+settings-ui-level-top = 置于前方
+
+settings-ui-level-fixed = 在 Wayland 上由合成器决定层叠顺序；平铺式合成器没有可选的层级。
+
+settings-ui-main-window = 主窗口

@@ -651,7 +651,6 @@ settings-add-radio-here-station-you = Voeg een radio toe — hier, of op een sta
 
 ## Settings window, General, continued
 
-
 ## Settings window, picture upload (src/app/settings/picup.rs)
 
 settings-picup-received-pictures-ftp = Ontvangen afbeeldingen → FTP
@@ -1956,11 +1955,9 @@ topbar-dec-off = DEC uit
 topbar-vol = Vol
 topbar-counted-steps-not-decibels-what =
 
-
     In stappen geteld, niet in decibel: wat één stap waard is bepaalt de ontvanger zelf, en bij een SDRplay hangt het ook van de band af. Rechts is nog steeds meer versterking.
 topbar-gain = Versterking
 topbar-plutosdr-s-own-agc-setting =
-
 
     De eigen AGC van de PlutoSDR bepaalt deze versterking, dus de schuifregelaar verplaatsen doet niets. Zet Settings → Radio → AGC op Manual om het hier te regelen.
 topbar-agc-hang-time-click-cycle = AGC-hangtijd — klik om te wisselen: Uit / Langzaam / Midden / Snel
@@ -3726,7 +3723,6 @@ atchat-nothing-flight = niets onderweg
 atchat-images = AFBEELDINGEN
 atchat-no-images-received = Geen afbeeldingen ontvangen.
 
-
 ## rds (src/app/rds.rs)
 
 rds-station = STATION
@@ -3994,7 +3990,6 @@ ism-transmissions-gate-opened-how-many = Transmissies waarop de poort opende, en
 ism-nothing-heard-yet = nog niets ontvangen
 ism-click-tune-receiver =
 
-
     Klik om de ontvanger erop af te stemmen
 
 ## app (src/app/mod.rs)
@@ -4096,19 +4091,15 @@ frame-restart-without-oob-tx-put = Start opnieuw zonder --oob-tx om de vergrende
 smeter-alc-how-hard-transmitter-being = ALC — hoe hard de zender wordt aangestuurd, als percentage van het maximum dat hij kan leveren. 100 % is volle schaal, niet vol vermogen in watt: wat dat aan de antenne waard is hangt af van de radio en van Drive.
 smeter-radio-reports-no-forward-power =
 
-
     Deze radio meldt geen voorwaarts vermogen, dus het cijfer naast ALC is opnieuw de ALC-meting in plaats van watt.
 smeter-no-swr-radio-has-no =
-
 
     Geen SWR: deze radio heeft geen brug om het te meten, en sdroxide verzint er geen — het kan alleen tonen wat de radio zelf meldt. Een rig met een SWR-meter (via CAT, TCI of een LAN-link) en een HPSDR-bord vullen dit allebei in; een gewone SDR-zender kan dat niet.
 smeter-no-signal-report-yet-receiver = Nog geen signaalrapport — de ontvanger heeft nog geen meterwaarde geleverd.
 smeter-s9-73-dbm-each-s =
 
-
     S9 is −73 dBm en elke S-eenheid daaronder is 6 dB. Het dBm-cijfer is slechts zo eerlijk als de kalibratie van de front-end — een ongekalibreerde ontvanger meldt dBFS met een dBm-label.
 smeter-ovld-converter-into-rails-so =
-
 
     OVLD: de omzetter zit tegen zijn grenzen aan, dus het getoonde niveau onderschat het signaal. Draai de front-end-versterking terug.
 smeter-table-held = , tabel vastgehouden
@@ -4248,14 +4239,12 @@ remote-connection-closed = verbinding gesloten
 
 ## solarwin (src/solar3d/mod.rs)
 
-
 ## solarbtn (src/app/solar.rs)
 
 solarbtn-solar-system-3d-view-sun = 3D-weergave van het zonnestelsel — Zon, Aarde, Maan, zonnevlekken en CME's (apart venster)
 solarbtn-solar-system-3d-view-sun-2 = 3D-weergave van het zonnestelsel — Zon, Aarde, Maan, zonnevlekken en CME's (nieuw browsertabblad)
 
 ## widespec (src/widgets/wide_spectrum.rs)
-
 
 ## speech (src/app/speech.rs)
 
@@ -4297,8 +4286,6 @@ hfdlmap-no-aircraft-located-yet = nog geen vliegtuigen gelokaliseerd
 worldmap-double-click-reframe = DUBBELKLIK OM OPNIEUW IN BEELD TE BRENGEN
 
 ## chrome (src/chrome.rs)
-
-
 
 ## duopower (src/app/duo_power.rs)
 
@@ -4388,7 +4375,6 @@ textmodem-frequency-shifted = frequentieverschoven
 winlink-to-heading = AAN
 
 ## adsbmap: messages with values (src/adsb_map.rs)
-
 
 ## aismap: messages with values (src/ais_map.rs)
 
@@ -5324,15 +5310,11 @@ extras-antenna-hint = ANTENNE (Experimenteel/Beta) — knippengtes, voetpuntimpe
 
 recjobs-title = PLANNING
 
-
-
-
 recjobs-new-job = + NIEUWE TAAK
 
 recjobs-recording = ● opnemen
 
 recjobs-none = Geen geplande opnames — druk op + NEW JOB om er een toe te voegen.
-
 
 recjobs-edit = bewerken
 
@@ -5343,8 +5325,6 @@ recjobs-station = Beschrijving
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Soort
-
-
 
 recjobs-save = OPSLAAN
 
@@ -5364,7 +5344,6 @@ navtex-hunting-hint =
     Als er duidelijk een sterk signaal is maar de tekst nog steeds onzin is, druk dan op REV: het komt omgekeerd binnen.
     
     Bedenk ook dat NAVTEX een dienstregeling is, geen gesprek: een kuststation zendt elke vier uur tien minuten lang, dus stilte is meestal normaal. Je moet luisteren als jouw station aan de beurt is. En 518 kHz komt pas 's nachts tot leven — een stille dagband is geen kapotte decoder.
-
 
 navtex-tune-dial-usb-below-channel = Stem de dial hier af (USB, 1.700 kHz onder het kanaal).
 
@@ -5907,8 +5886,6 @@ macros-add = TOEVOEGEN
 macros-note-placeholders = { $mycall } en { $mygrid } worden ingevuld zodra het bericht uitgaat.
 
 macros-buttons-note = Elke knop verzendt zijn hele tekst in één keer. F1–F9 drukken de eerste negen in, zolang niets op het scherm het toetsenbord heeft.
-
-
 
 widgets-worked-before-any = Eerder gewerkt
 
@@ -6545,7 +6522,6 @@ panels-enigma-hint = Enigma-machine — versleutel een bericht op een oorlogsfro
 
 panels-slot-bar-heard-hint = Volgt het geluid in de luidsprekers: wit zolang een frame wordt gehoord, groen zodra het is gestopt, en terug naar het begin als het volgende begint. De tijden zijn die van de modus, dus een frame dat korter duurt vult toch de balk.
 
-
 morse-send-correct = juist: { $want }
 
 morse-send-heard = gehoord { $got }, gewenst { $want }
@@ -6606,7 +6582,6 @@ decodes-beam-hint = Richt de antenne op de locator van dit station
 decodes-queue-next = volgende
 
 decodes-queue-waiting = wachtend
-
 
 decodes-setup-hint = SETUP — de stationsidentiteit en de sjablonen die deze QSO-modi delen
 
@@ -6701,7 +6676,6 @@ app-rx-only-hint = Deze radio kan alleen ontvangen — hij heeft geen zender om 
 spots-n-calls = { $n } oproepen
 
 spots-opening-hover = Bandpad { $band } van { $from } naar { $to }: het laatste venster van 15 minuten overschreed de basislijn van 3 uur van het pad — recente aanroepers: { $calls }
-
 
 spots-download-unsupported = { $source } kon op dit platform niet worden gedownload
 
@@ -7631,7 +7605,6 @@ net-wavelog-no-station-location = geen stationslocatie om van te downloaden — 
 
 publicsdr-could-not-connect = kon niet verbinden in deze sessie
 
-
 weather-title = WEERRAPPORTEN
 
 weather-intro = Gecodeerde weerrapporten van schepen en landstations, in RTTY op 4583, 7646 en 10100,8 kHz. SHIP gaat rond 02:00 en 07:35 UTC uit, SYNOP rond 00:35 en 12:10. Een rapport wordt hier bewaard in plaats van in de decodeerlijst, omdat de cijfers op zichzelf niets betekenen.
@@ -7711,14 +7684,6 @@ settings-ui-updates = Updates
 settings-ui-updates-check = bij het opstarten controleren op een nieuwe release
 
 settings-ui-updates-hint = Vraagt eenmaal bij het opstarten de GitHub Releases van de fork om de laatste release, en toont een banner als die nieuwer is dan deze build. Alleen volledige releases tellen — de nightly is een pre-release — en uit betekent helemaal geen uitgaande aanroep.
-
-settings-ui-undocked = Losgekoppeld — eigen venster
-
-settings-ui-docked = Gedockt in dit venster
-
-settings-ui-dock-all-hint = Breng elk losgekoppeld venster terug in dit venster.
-
-settings-ui-undock-all-hint = Zet elke module in een eigen venster — het hoofdvenster blijft over als het spectrum en de decoders. Een module zonder iets om te tonen, zoals het bedieningspaneel in een spraakmodus, opent geen venster.
 
 settings-ui-spectrum-line = Spectrumlijn
 
@@ -8055,13 +8020,6 @@ chrome-hide-message-hover = Verberg dit bericht voorgoed. Er verandert niets aan
 
 chrome-close-message-hover = Sluit dit bericht. Er verandert verder niets.
 
-settings-ui-window-label = Venster { $module }
-
-settings-ui-undock-hint =
-    Losgekoppeld verhuist deze module naar een eigen venster en geeft het hoofdvenster de ruimte terug aan wat overblijft — zet de waterfall op een tweede monitor, of de bediening op een derde. Het venster sluiten koppelt de module weer vast.
-
-    Onder Wayland komt de grootte terug, maar de compositor bepaalt waar een venster komt: laat het zweven en zet het vast op een monitor met een vensterregel die overeenkomt met app-id "{ $app_id }".
-
 settings-ui-workspace-restore-out = Zet deze indeling terug — { $n } module(s) in eigen venster(s)
 
 settings-ui-profile-in-use-named = in gebruik: het profiel { $name }
@@ -8207,7 +8165,6 @@ sstv-top = Boven
 sstv-bottom = Onder
 
 topbar-ptt-hold-hint = Ingedrukt houden om te zenden — een klik houdt het vast, en de volgende druk laat los
-
 
 topbar-above-the-dial = boven
 
@@ -8687,10 +8644,6 @@ settings-tool-window-memories = GEHEUGENS
 
 settings-tool-window-playback = AFSPELEN
 
-settings-tool-window-open = Open
-
-settings-tool-window-closed = Gesloten
-
 settings-detachable-native-only = Losmaakbare vensters zijn alleen native.
 
 settings-psk-reporter-band-hint = De bandactiviteitsfeed: stations die op de huidige band worden gehoord, getekend als gekleurde puntjes. Zet ook de "wie hoorde mij"-query aan achter de HEARD ME-chip van de kaart — ook elk uur opnieuw opgehaald.
@@ -8854,7 +8807,6 @@ sessionqso-include-cw = CW opnemen
 
 decodes-live-log = LIVE LOG
 
-
 schedule-colour-all = Kleur
 
 schedule-colour-all-hint = Kleur van de waterval-labels voor alle zenders — vervangt de per zender gekozen kleuren
@@ -8900,7 +8852,6 @@ tx-bands-check = Banden controleren…
 tx-bands-notice-new = Zenden staat op alle banden uit. Kies de banden waarop deze radio zendt en bevestig ze één keer. Vanwege het risico voor de radio: controleer de gekozen opties zorgvuldig.
 
 tx-bands-notice-carried = Uw zendbanden zijn overgenomen uit de vorige versie. Zenden blijft geblokkeerd tot u ze één keer hebt gecontroleerd en bevestigd. Vanwege het risico voor de radio: controleer elke optie zorgvuldig.
-
 
 adsbmap-surface-asphalt = asfalt
 
@@ -9038,11 +8989,9 @@ publicsdr-mine = MIJN
 
 publicsdr-mine-hint = Alleen de ontvangers die je hebt gemarkeerd
 
-
 publicsdr-star-receiver = Deze ontvanger in MIJN bewaren
 
 publicsdr-unstar-receiver = Deze ontvanger uit MIJN halen
-
 
 sstv-sync-pulses = SYNCPULSEN
 
@@ -9176,7 +9125,6 @@ sonde-col-pressure = Druk
 
 settings-net-broadcast-import-needs-station = Verbind met een station om te importeren.
 
-
 sonde-online-why-signin = Het station vraagt eerst om aanmelden.
 
 sonde-online-why-busy = Het station vraagt SondeHub al zo vaak als is toegestaan. Probeer het over een minuut opnieuw.
@@ -9191,9 +9139,6 @@ sonde-online-why-http = Antwoord: HTTP { $n }.
 settings-general-band-plan = Bandplan
 
 settings-general-band-plan-built-in = Ingebouwd (IARU)
-
-
-
 
 sonde-card-source = Bron
 
@@ -9391,8 +9336,6 @@ tx-off-cb = ZENDEN VERBODEN op 11 m (CB) — de band staat in uw zendlijst, maar
 settings-cb-allow-tx-needs-band = Zet eerst 11M-CB op JA in de TX-bandlijst van deze radio (Instellingen → Radio) en sta het daarna hier toe.
 
 settings-cb-allow-tx-order-note = Twee sloten, in deze volgorde: 1) 11M-CB staat op JA in de TX-bandlijst van de radio, bevestigd; 2) dit vakje. Beide zijn nodig om op 11 m te zenden. 11M-CB uit de lijst halen zet dit vakje ook uit.
-
-settings-ui-publicsdr-under-waterfall = Vastgezet onder de waterval
 
 settings-ui-publicsdr-place-hint = Waar Public SDRs opent: vastgezet onder de waterval in spraakmodi die daar niets hebben, of in een venster. Digitale modi, CW en telefoons gebruiken sowieso een venster.
 
@@ -9764,7 +9707,6 @@ ptt-here-heading = OP DEZE COMPUTER
 
 ptt-station-heading = OP DE COMPUTER VAN HET STATION
 
-
 ptt-grant-serial = Seriële poort toestaan…
 
 ptt-grant-hid = USB-HID-apparaat toestaan…
@@ -9860,3 +9802,11 @@ recjobs-running = Loopt: { $name } ({ $window })
 settings-radio-dither-hover = Hardware-dithering in de ADC: een beetje ruis erbij zodat de laagste bits lineair blijven. Uit voor een stille band, aan voor een schonere meting.
 
 settings-radio-preamp-hover = De voorversterker van de ADC — de tweede versterkertrap van de ontvanger, ongeveer 10 dB. Uit tenzij een stille band hem nodig heeft: hij tilt de ruisvloer mee met het signaal.
+
+settings-ui-level-bottom = Achterop
+
+settings-ui-level-top = Voorop
+
+settings-ui-level-fixed = Op Wayland bepaalt de compositor de stapeling; een tiling-compositor heeft geen lagen om uit te kiezen.
+
+settings-ui-main-window = Hoofdvenster

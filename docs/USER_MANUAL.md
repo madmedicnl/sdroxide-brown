@@ -13420,6 +13420,19 @@ Set each under its row on this tab — **Docked in this window** (the default) o
 **Undocked — its own window**. Closing an undocked window docks it again, and its
 size and place are remembered for next time.
 
+**In front, or behind.** Each module's row also carries a **level** once it is
+undocked — **Behind**, **Normal** (the default) or **In front** — and so does the
+main window. It is how a window sorts against the *other programs* on the
+screen, not against its own windows: an undocked panadapter set to **In front**
+stays above the logging program beside it, and a main window set to **Behind**
+is got out of the way without being minimised. Windows on the same level keep
+the order the operating system gives them — the one used last is in front.
+
+The choice is remembered beside the window's size and place, and it can be made
+before that window has ever been opened, or while the module is still docked, so
+that undocking it comes up where you asked. On Wayland the compositor decides
+the stacking; there the choice is shown greyed, with the reason.
+
 You can also do it from the window itself: the **🪟 WINDOWS** chip at the right of
 the **radio-tab strip** — the row of radio names at the top of the main window —
 opens a list of the module windows (**SP1 — the spectrum**, **SP2 (AUX) — a second

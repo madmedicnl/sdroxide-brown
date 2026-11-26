@@ -657,7 +657,6 @@ settings-add-radio-here-station-you = Добавить радио — здесь
 
 ## Settings window, General, continued
 
-
 ## Settings window, picture upload (src/app/settings/picup.rs)
 
 settings-picup-received-pictures-ftp = Полученные изображения → FTP
@@ -1964,11 +1963,9 @@ topbar-dec-off = DEC выкл.
 topbar-vol = Гром.
 topbar-counted-steps-not-decibels-what =
 
-
     Counted in steps, not decibels: what one step is worth is the receiver's own business, and on an SDRplay it depends on the band as well. Right is still more gain.
 topbar-gain = Усиление
 topbar-plutosdr-s-own-agc-setting =
-
 
     The PlutoSDR's own AGC is setting this gain, so moving the slider does nothing. Set Settings → Radio → AGC to Manual to control it here.
 topbar-agc-hang-time-click-cycle = Время удержания AGC — нажмите, чтобы переключать: Выкл. / Медленно / Средне / Быстро
@@ -3736,7 +3733,6 @@ atchat-nothing-flight = ничего в полёте
 atchat-images = ИЗОБРАЖЕНИЯ
 atchat-no-images-received = Изображений не получено.
 
-
 ## rds (src/app/rds.rs)
 
 rds-station = СТАНЦИЯ
@@ -4004,7 +4000,6 @@ ism-transmissions-gate-opened-how-many = Передачи, на которых �
 ism-nothing-heard-yet = пока ничего не слышно
 ism-click-tune-receiver =
 
-
     Click to tune the receiver to it
 
 ## app (src/app/mod.rs)
@@ -4106,19 +4101,15 @@ frame-restart-without-oob-tx-put = Перезапустите без --oob-tx, �
 smeter-alc-how-hard-transmitter-being = ALC — насколько сильно раскачивается передатчик, в процентах от наибольшего, что он может выдать. 100 % — полная шкала, а не полная мощность в ваттах: чего это стоит на антенне, зависит от радио и от Drive.
 smeter-radio-reports-no-forward-power =
 
-
     This radio reports no forward power, so the figure beside ALC is the ALC reading again rather than watts.
 smeter-no-swr-radio-has-no =
-
 
     No SWR: this radio has no bridge to measure it with, and sdroxide will not invent one — it can only show what the radio itself reports. A rig with an SWR meter (over CAT, TCI or a LAN link) and an HPSDR board both fill this in; a plain SDR transmitter cannot.
 smeter-no-signal-report-yet-receiver = Отчёта о сигнале пока нет — приёмник не выдал показания измерителя.
 smeter-s9-73-dbm-each-s =
 
-
     S9 is −73 dBm and each S-unit below it is 6 dB. The dBm figure is only as honest as the front end's calibration — an uncalibrated receiver reports dBFS with a dBm label.
 smeter-ovld-converter-into-rails-so =
-
 
     OVLD: the converter is into its rails, so the level shown understates the signal. Wind the front-end gain back.
 smeter-table-held = , таблица удержана
@@ -4258,14 +4249,12 @@ remote-connection-closed = соединение закрыто
 
 ## solarwin (src/solar3d/mod.rs)
 
-
 ## solarbtn (src/app/solar.rs)
 
 solarbtn-solar-system-3d-view-sun = Трёхмерный вид Солнечной системы — Солнце, Земля, Луна, пятна и CME (отдельное окно)
 solarbtn-solar-system-3d-view-sun-2 = Трёхмерный вид Солнечной системы — Солнце, Земля, Луна, пятна и CME (новая вкладка браузера)
 
 ## widespec (src/widgets/wide_spectrum.rs)
-
 
 ## speech (src/app/speech.rs)
 
@@ -4307,8 +4296,6 @@ hfdlmap-no-aircraft-located-yet = воздушные суда пока не оп
 worldmap-double-click-reframe = ДВОЙНОЙ КЛИК, ЧТОБЫ ПЕРЕПОДОБРАТЬ КАДР
 
 ## chrome (src/chrome.rs)
-
-
 
 ## duopower (src/app/duo_power.rs)
 
@@ -4398,7 +4385,6 @@ textmodem-frequency-shifted = частотная манипуляция
 winlink-to-heading = КОМУ
 
 ## adsbmap: messages with values (src/adsb_map.rs)
-
 
 ## aismap: messages with values (src/ais_map.rs)
 
@@ -5329,15 +5315,11 @@ extras-antenna-hint = АНТЕННА (экспериментально/бета)
 
 recjobs-title = ПЛАНИРОВАНИЕ
 
-
-
-
 recjobs-new-job = + НОВОЕ ЗАДАНИЕ
 
 recjobs-recording = ● идёт запись
 
 recjobs-none = Запланированных записей нет — нажмите + НОВОЕ ЗАДАНИЕ, чтобы добавить.
-
 
 recjobs-edit = изм.
 
@@ -5348,8 +5330,6 @@ recjobs-station = Описание
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Тип
-
-
 
 recjobs-save = СОХРАНИТЬ
 
@@ -5369,7 +5349,6 @@ navtex-hunting-hint =
     Если сигнал явно сильный, а текст всё равно бессмысленный, нажмите REV: сигнал приходит в обратной полярности.
 
     Помните также, что NAVTEX работает по расписанию, а не как диалог: береговая станция передаёт десять минут каждые четыре часа, так что тишина — это нормально в большую часть времени. Нужно слушать тогда, когда ваша станция в эфире. А 518 кГц оживает только ночью — тихий дневной диапазон не означает, что декодер сломан.
-
 
 navtex-tune-dial-usb-below-channel = Настройте шкалу сюда (USB, на 1.700 кГц ниже канала).
 
@@ -5914,8 +5893,6 @@ macros-add = ДОБАВИТЬ
 macros-note-placeholders = { $mycall } и { $mygrid } подставляются при отправке сообщения.
 
 macros-buttons-note = Каждая кнопка отправляет весь свой текст сразу. F1–F9 нажимают первые девять, пока клавиатура не занята чем-то на экране.
-
-
 
 widgets-worked-before-any = Работали ранее
 
@@ -6552,7 +6529,6 @@ panels-enigma-hint = Машина Enigma — зашифруйте сообщен
 
 panels-slot-bar-heard-hint = Следует за звуком в колонках: белый, пока слышен кадр, зелёный, когда он закончился, и возврат к началу, когда начинается следующий. Времена — для режима, поэтому короткий кадр всё равно заполняет полосу.
 
-
 morse-send-correct = верно: { $want }
 
 morse-send-heard = услышано { $got }, нужно { $want }
@@ -6613,7 +6589,6 @@ decodes-beam-hint = Направить антенну на локатор это
 decodes-queue-next = далее
 
 decodes-queue-waiting = ожидает
-
 
 decodes-setup-hint = НАСТРОЙКА — идентификация станции и шаблоны, общие для этих режимов QSO
 
@@ -6708,7 +6683,6 @@ app-rx-only-hint = Это радио только принимает — у не
 spots-n-calls = вызовов: { $n }
 
 spots-opening-hover = Трасса диапазона { $band } от { $from } до { $to }: последнее 15-минутное окно превысило 3-часовой базовый уровень трассы — недавние вызывавшие: { $calls }
-
 
 spots-download-unsupported = { $source } не удалось загрузить на этой платформе
 
@@ -7642,7 +7616,6 @@ net-wavelog-no-station-location = нет места станции для ска
 
 publicsdr-could-not-connect = не удалось подключиться в этом сеансе
 
-
 weather-title = СВОДКИ ПОГОДЫ
 
 weather-intro = Кодированные сводки погоды от судов и наземных станций, в RTTY на 4583, 7646 и 10100,8 кГц. SHIP передаётся около 02:00 и 07:35 UTC, SYNOP около 00:35 и 12:10. Сводка хранится здесь, а не в списке декодирования, потому что цифры сами по себе ничего не значат.
@@ -7726,14 +7699,6 @@ settings-ui-updates = Обновления
 settings-ui-updates-check = проверять новый релиз при запуске
 
 settings-ui-updates-hint = Один раз при запуске запрашивает у GitHub Releases форка последний релиз и показывает баннер, если он новее этой сборки. Учитываются только полные релизы — ночная сборка является предварительным релизом, — а при выключении исходящих обращений нет вообще.
-
-settings-ui-undocked = Отстыковано — своё окно
-
-settings-ui-docked = Пристыковано в этом окне
-
-settings-ui-dock-all-hint = Вернуть все отстыкованные окна в это окно.
-
-settings-ui-undock-all-hint = Поместить каждый модуль в отдельное окно — главное окно останется со спектром и декодерами. Модуль, которому нечего показывать, например рабочая панель в голосовом режиме, окна не открывает.
 
 settings-ui-spectrum-line = Линия спектра
 
@@ -8072,13 +8037,6 @@ chrome-hide-message-hover = Скрыть это сообщение навсег�
 
 chrome-close-message-hover = Закрыть это сообщение. Больше ничего не меняется.
 
-settings-ui-window-label = Окно { $module }
-
-settings-ui-undock-hint =
-    После отстыковки этот модуль перемещается в своё окно, а главное окно отдаёт освободившееся место остальному — поместите водопад на второй монитор или управление на третий. Закрытие его окна пристыковывает его обратно.
-
-    В Wayland размер восстанавливается, но место окна решает композитор: сделайте его плавающим и закрепите за монитором правилом окна с app-id "{ $app_id }".
-
 settings-ui-workspace-restore-out = Вернуть эту раскладку — модулей в отдельных окнах: { $n }
 
 settings-ui-profile-in-use-named = используется: профиль { $name }
@@ -8224,7 +8182,6 @@ sstv-top = Верх
 sstv-bottom = Низ
 
 topbar-ptt-hold-hint = Удерживайте для передачи — щелчок фиксирует её, а следующее нажатие отпускает
-
 
 topbar-above-the-dial = выше
 
@@ -8704,10 +8661,6 @@ settings-tool-window-memories = ПАМЯТЬ
 
 settings-tool-window-playback = ВОСПРОИЗВЕДЕНИЕ
 
-settings-tool-window-open = Открыто
-
-settings-tool-window-closed = Закрыто
-
 settings-detachable-native-only = Отсоединяемые окна — только в нативной версии.
 
 settings-psk-reporter-band-hint = Лента активности диапазона: станции, слышимые на текущем диапазоне, рисуются цветными точками. Также включает запрос «кто меня слышал» за чипом HEARD ME на карте — тоже обновляется ежечасно.
@@ -8871,7 +8824,6 @@ sessionqso-include-cw = Включая CW
 
 decodes-live-log = ЖИВОЙ ЖУРНАЛ
 
-
 schedule-colour-all = Цвет
 
 schedule-colour-all-hint = Цвет подписи на водопаде для всех станций — заменяет цвета, выбранные для отдельных станций
@@ -8917,7 +8869,6 @@ tx-bands-check = Проверить диапазоны…
 tx-bands-notice-new = Передача выключена на всех диапазонах. Выберите диапазоны, на которых передаёт этот трансивер, и подтвердите их один раз. Из-за риска для трансивера внимательно проверьте выбранные пункты.
 
 tx-bands-notice-carried = Ваши диапазоны передачи перенесены из предыдущей версии. Передача остаётся заблокированной, пока вы не проверите и не подтвердите их один раз. Из-за риска для трансивера внимательно проверьте каждый пункт.
-
 
 adsbmap-surface-asphalt = асфальт
 
@@ -9053,11 +9004,9 @@ publicsdr-mine = МОИ
 
 publicsdr-mine-hint = Только отмеченные вами приёмники
 
-
 publicsdr-star-receiver = Сохранить этот приёмник в МОИ
 
 publicsdr-unstar-receiver = Убрать этот приёмник из МОИ
-
 
 sstv-sync-pulses = СИНХРОИМПУЛЬСЫ
 
@@ -9191,7 +9140,6 @@ sonde-col-pressure = Давл.
 
 settings-net-broadcast-import-needs-station = Подключитесь к станции для импорта.
 
-
 sonde-online-why-signin = Станция требует сначала войти в систему.
 
 sonde-online-why-busy = Станция уже опрашивает SondeHub так часто, как разрешено. Повторите через минуту.
@@ -9206,9 +9154,6 @@ sonde-online-why-http = Ответ: HTTP { $n }.
 settings-general-band-plan = План диапазонов
 
 settings-general-band-plan-built-in = Встроенный IARU
-
-
-
 
 sonde-card-source = Источник
 
@@ -9406,8 +9351,6 @@ tx-off-cb = ПЕРЕДАЧА ЗАПРЕЩЕНА на 11 м (CB) — диапаз
 settings-cb-allow-tx-needs-band = Сначала установите 11M-CB на ДА в списке TX этого радио (Настройки → Радио), затем разрешите здесь.
 
 settings-cb-allow-tx-order-note = Две блокировки, в таком порядке: 1) 11M-CB на ДА в списке диапазонов TX радио, подтверждённом; 2) этот флажок. Для передачи на 11 м нужны обе. Если убрать 11M-CB из списка, флажок тоже снимается.
-
-settings-ui-publicsdr-under-waterfall = Закреплён под водопадом
 
 settings-ui-publicsdr-place-hint = Где открывается Public SDRs: под водопадом в голосовых режимах, где там ничего нет, или в окне. Цифровые режимы, CW и телефоны в любом случае используют окно.
 
@@ -9779,7 +9722,6 @@ ptt-here-heading = НА ЭТОМ КОМПЬЮТЕРЕ
 
 ptt-station-heading = НА КОМПЬЮТЕРЕ СТАНЦИИ
 
-
 ptt-grant-serial = Разрешить последовательный порт…
 
 ptt-grant-hid = Разрешить устройство USB HID…
@@ -9875,3 +9817,11 @@ recjobs-running = Идёт: { $name } ({ $window })
 settings-radio-dither-hover = Аппаратный дизеринг АЦП: немного шума, чтобы младшие разряды оставались линейными. Выключен для тихого диапазона, включён для более чистого измерения.
 
 settings-radio-preamp-hover = Предусилитель АЦП — вторая ступень усиления приёмника, около 10 дБ. Выключен, если тихому диапазону он не нужен: он поднимает шумовой порог вместе с сигналом.
+
+settings-ui-level-bottom = Позади
+
+settings-ui-level-top = Спереди
+
+settings-ui-level-fixed = В Wayland порядок окон определяет композитор; у мозаичного композитора слоёв для выбора нет.
+
+settings-ui-main-window = Главное окно

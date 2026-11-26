@@ -402,6 +402,7 @@ pub use tone::{CTCSS_TONES, SubTone};
 pub use ui::{
     BandplanKind, BroadcastScope, ChromeStyle, ClassicSection, ClientAcks, ClientScreen,
     DetachableModule, DetachedState, DetachedWindow, FontSize, LayoutMode, MapStyle, MeterView,
+    WindowLevel,
     ProgramsFilters, ProgramsSort, ProgramsState, ScreenThemeFile, SmeterStyle, Solar3dWindow,
     SpectrumDetail, SpectrumFillStyle, Speed, UiLanguage, UiSettings, UiTheme, WORKSPACE_MAX,
     Workspace,

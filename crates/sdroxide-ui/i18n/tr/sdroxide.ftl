@@ -656,7 +656,6 @@ settings-add-radio-here-station-you = Bir radyo ekleyin — burada ya da bağlı
 
 ## Settings window, General, continued
 
-
 ## Settings window, picture upload (src/app/settings/picup.rs)
 
 settings-picup-received-pictures-ftp = Alınan resimler → FTP
@@ -1958,11 +1957,9 @@ topbar-dec-off = DEC kapalı
 topbar-vol = Ses
 topbar-counted-steps-not-decibels-what =
 
-
     Counted in steps, not decibels: what one step is worth is the receiver's own business, and on an SDRplay it depends on the band as well. Right is still more gain.
 topbar-gain = Kazanç
 topbar-plutosdr-s-own-agc-setting =
-
 
     The PlutoSDR's own AGC is setting this gain, so moving the slider does nothing. Set Settings → Radio → AGC to Manual to control it here.
 topbar-agc-hang-time-click-cycle = AGC tutma süresi — döngü için tıklayın: Kapalı / Yavaş / Orta / Hızlı
@@ -3728,7 +3725,6 @@ atchat-nothing-flight = uçuşta hiçbir şey yok
 atchat-images = GÖRÜNTÜLER
 atchat-no-images-received = Alınmış görüntü yok.
 
-
 ## rds (src/app/rds.rs)
 
 rds-station = İSTASYON
@@ -3996,7 +3992,6 @@ ism-transmissions-gate-opened-how-many = Kapının açıldığı yayınlar ve ka
 ism-nothing-heard-yet = henüz hiçbir şey duyulmadı
 ism-click-tune-receiver =
 
-
     Click to tune the receiver to it
 
 ## app (src/app/mod.rs)
@@ -4098,19 +4093,15 @@ frame-restart-without-oob-tx-put = Kilidi geri koymak için --oob-tx olmadan yen
 smeter-alc-how-hard-transmitter-being = ALC — verici, çıkarabileceği en fazlanın yüzdesi olarak ne kadar sürülüyor. %100 tam ölçektir, watt cinsinden tam güç değil: bunun antende ne değerinde olduğu radyoya ve Sürüş'e bağlıdır.
 smeter-radio-reports-no-forward-power =
 
-
     This radio reports no forward power, so the figure beside ALC is the ALC reading again rather than watts.
 smeter-no-swr-radio-has-no =
-
 
     No SWR: this radio has no bridge to measure it with, and sdroxide will not invent one — it can only show what the radio itself reports. A rig with an SWR meter (over CAT, TCI or a LAN link) and an HPSDR board both fill this in; a plain SDR transmitter cannot.
 smeter-no-signal-report-yet-receiver = Henüz sinyal raporu yok — alıcı bir metre okuması vermedi.
 smeter-s9-73-dbm-each-s =
 
-
     S9 is −73 dBm and each S-unit below it is 6 dB. The dBm figure is only as honest as the front end's calibration — an uncalibrated receiver reports dBFS with a dBm label.
 smeter-ovld-converter-into-rails-so =
-
 
     OVLD: the converter is into its rails, so the level shown understates the signal. Wind the front-end gain back.
 smeter-table-held = , tablo tutuldu
@@ -4250,14 +4241,12 @@ remote-connection-closed = bağlantı kapandı
 
 ## solarwin (src/solar3d/mod.rs)
 
-
 ## solarbtn (src/app/solar.rs)
 
 solarbtn-solar-system-3d-view-sun = Güneş sistemi 3B görünüm — Güneş, Dünya, Ay, güneş lekeleri ve CME'ler (ayrı pencere)
 solarbtn-solar-system-3d-view-sun-2 = Güneş sistemi 3B görünüm — Güneş, Dünya, Ay, güneş lekeleri ve CME'ler (yeni tarayıcı sekmesi)
 
 ## widespec (src/widgets/wide_spectrum.rs)
-
 
 ## speech (src/app/speech.rs)
 
@@ -4299,8 +4288,6 @@ hfdlmap-no-aircraft-located-yet = henüz konumlandırılmış uçak yok
 worldmap-double-click-reframe = YENİDEN ÇERÇEVELEMEK İÇİN ÇİFT TIKLAYIN
 
 ## chrome (src/chrome.rs)
-
-
 
 ## duopower (src/app/duo_power.rs)
 
@@ -4390,7 +4377,6 @@ textmodem-frequency-shifted = frekans kaydırmalı
 winlink-to-heading = KİME
 
 ## adsbmap: messages with values (src/adsb_map.rs)
-
 
 ## aismap: messages with values (src/ais_map.rs)
 
@@ -5326,15 +5312,11 @@ extras-antenna-hint = ANTEN (Deneysel/Beta) — yaygın tel/dikey/Yagi antenler 
 
 recjobs-title = PLANLAMA
 
-
-
-
 recjobs-new-job = + YENİ İŞ
 
 recjobs-recording = ● kaydediyor
 
 recjobs-none = Zamanlanmış kayıt yok — eklemek için + YENİ İŞ'e basın.
-
 
 recjobs-edit = düzenle
 
@@ -5345,8 +5327,6 @@ recjobs-station = Açıklama
 recjobs-station-hint = BBC World Service
 
 recjobs-kind = Tür
-
-
 
 recjobs-save = KAYDET
 
@@ -5366,7 +5346,6 @@ navtex-hunting-hint =
     Güçlü bir sinyal olduğu halde metin hâlâ anlamsızsa REV'e basın: sinyal ters yönde geliyordur.
 
     Ayrıca NAVTEX'in bir sohbet değil, bir tarife olduğunu unutmayın: bir kıyı istasyonu her dört saatte on dakika yayın yapar, bu yüzden çoğu zaman sessizlik normaldir. İstasyonunuzun sırası geldiğinde dinliyor olmalısınız. Ayrıca 518 kHz yalnızca geceleri canlanır — sessiz bir gündüz bandı bozuk bir çözücü anlamına gelmez.
-
 
 navtex-tune-dial-usb-below-channel = Kadranı buraya ayarlayın (USB, kanalın 1.700 kHz altı).
 
@@ -5909,8 +5888,6 @@ macros-add = EKLE
 macros-note-placeholders = { $mycall } ve { $mygrid } mesaj giderken doldurulur.
 
 macros-buttons-note = Her düğme metninin tamamını tek seferde gönderir. Ekranda klavyeyi tutan bir şey olmadığı sürece F1–F9 ilk dokuzuna basar.
-
-
 
 widgets-worked-before-any = Daha önce çalışıldı
 
@@ -6547,7 +6524,6 @@ panels-enigma-hint = Enigma makinesi — bir mesajı savaş dönemi ön yüzünd
 
 panels-slot-bar-heard-hint = Hoparlördeki sesi izler: bir çerçeve duyulurken beyaz, durduğunda yeşil, sonraki başladığında başa döner. Süreler modundur, bu yüzden kısa süren bir çerçeve de çubuğu doldurur.
 
-
 morse-send-correct = doğru: { $want }
 
 morse-send-heard = duyulan { $got }, istenen { $want }
@@ -6608,7 +6584,6 @@ decodes-beam-hint = Anteni bu istasyonun lokatörüne çevir
 decodes-queue-next = sıradaki
 
 decodes-queue-waiting = bekliyor
-
 
 decodes-setup-hint = KURULUM — bu QSO modlarının paylaştığı istasyon kimliği ve şablonlar
 
@@ -6703,7 +6678,6 @@ app-rx-only-hint = Bu radyo yalnızca alabilir — anahtarlayacak bir vericisi y
 spots-n-calls = { $n } çağrı
 
 spots-opening-hover = { $from } – { $to } arası { $band } bandı yolu: son 15 dakikalık pencere yolun 3 saatlik taban çizgisini aştı — son arayanlar: { $calls }
-
 
 spots-download-unsupported = { $source } bu platformda indirilemedi
 
@@ -7633,7 +7607,6 @@ net-wavelog-no-station-location = indirilecek istasyon konumu yok — önce bağ
 
 publicsdr-could-not-connect = bu oturum bağlanamadı
 
-
 weather-title = HAVA RAPORLARI
 
 weather-intro = Gemilerden ve kara istasyonlarından kodlu hava raporları, RTTY ile 4583, 7646 ve 10100,8 kHz'de. SHIP yaklaşık 02:00 ve 07:35 UTC'de, SYNOP yaklaşık 00:35 ve 12:10'da yayınlanır. Bir rapor karar listesinde değil burada tutulur, çünkü rakamların tek başına bir anlamı yoktur.
@@ -7713,14 +7686,6 @@ settings-ui-updates = Güncellemeler
 settings-ui-updates-check = başlangıçta yeni sürümü denetle
 
 settings-ui-updates-hint = Başlangıçta fork'un GitHub Releases sayfasından son sürümü bir kez sorar ve bu derlemeden yeniyse bir başlık gösterir. Yalnızca tam sürümler sayılır — nightly bir ön sürümdür — ve kapalı olması hiç dışarı çağrı yapılmaması demektir.
-
-settings-ui-undocked = Ayrılmış — kendi penceresi
-
-settings-ui-docked = Bu pencerede yerleşik
-
-settings-ui-dock-all-hint = Ayrılmış her pencereyi bu pencereye geri getirir.
-
-settings-ui-undock-all-hint = Her modülü kendi penceresine koyar — ana pencerede spektrum ve çözücüler kalır. Bir ses modundaki işletim paneli gibi gösterecek bir şeyi olmayan modül pencere açmaz.
 
 settings-ui-spectrum-line = Spektrum çizgisi
 
@@ -8057,13 +8022,6 @@ chrome-hide-message-hover = Bu mesajı kalıcı olarak gizle. Ayarlarınızda hi
 
 chrome-close-message-hover = Bu mesajı kapat. Başka hiçbir şey değişmez.
 
-settings-ui-window-label = { $module } penceresi
-
-settings-ui-undock-hint =
-    Ayrıldığında bu modül kendi penceresine taşınır ve ana pencere boşluğu kalanlara geri verir — şelaleyi ikinci bir monitöre, kontrolleri üçüncüye koyun. Penceresini kapatmak onu yeniden yerleştirir.
-
-    Wayland'de boyut geri gelir ama bir pencerenin nereye gideceğine compositor karar verir: onu yüzdürüp app-id "{ $app_id }" ile eşleşen bir pencere kuralıyla bir monitöre sabitleyin.
-
 settings-ui-workspace-restore-out = Bu düzeni geri koy — kendi pencerelerinde { $n } modül
 
 settings-ui-profile-in-use-named = kullanımda: { $name } profili
@@ -8209,7 +8167,6 @@ sstv-top = Üst
 sstv-bottom = Alt
 
 topbar-ptt-hold-hint = Göndermek için basılı tutun — bir tıklama onu kilitler ve sonraki basış bırakır
-
 
 topbar-above-the-dial = üstünde
 
@@ -8689,10 +8646,6 @@ settings-tool-window-memories = HAFIZALAR
 
 settings-tool-window-playback = OYNATMA
 
-settings-tool-window-open = Açık
-
-settings-tool-window-closed = Kapalı
-
 settings-detachable-native-only = Ayrılabilir pencereler yalnızca yerel sürümde.
 
 settings-psk-reporter-band-hint = Bant etkinliği akışı: geçerli bantta duyulan istasyonlar, renkli noktalar olarak çizilir. Ayrıca haritanın HEARD ME çipinin arkasındaki "beni kim duydu" sorgusunu da etkinleştirir — o da saatlik yeniden getirilir.
@@ -8856,7 +8809,6 @@ sessionqso-include-cw = CW'yi dahil et
 
 decodes-live-log = CANLI GÜNLÜK
 
-
 schedule-colour-all = Renk
 
 schedule-colour-all-hint = Tüm istasyonlar için şelale etiket rengi — istasyon başına seçilenlerin yerini alır
@@ -8902,7 +8854,6 @@ tx-bands-check = Bantları kontrol et…
 tx-bands-notice-new = Yayın tüm bantlarda kapalı. Bu telsizin yayın yaptığı bantları seçin ve bir kez onaylayın. Telsize zarar verme riski nedeniyle seçtiğiniz seçenekleri dikkatle kontrol edin.
 
 tx-bands-notice-carried = Verici bantlarınız önceki sürümden aktarıldı. Bunları kontrol edip bir kez onaylayana kadar yayın engelli kalır. Telsize zarar verme riski nedeniyle her seçeneği dikkatle kontrol edin.
-
 
 adsbmap-surface-asphalt = asfalt
 
@@ -9038,11 +8989,9 @@ publicsdr-mine = BENİM
 
 publicsdr-mine-hint = Yalnızca yıldızladığınız alıcılar
 
-
 publicsdr-star-receiver = Bu alıcıyı BENİM içinde tut
 
 publicsdr-unstar-receiver = Bu alıcıyı BENİM içinden çıkar
-
 
 sstv-sync-pulses = SENK PULSLARI
 
@@ -9176,7 +9125,6 @@ sonde-col-pressure = Basınç
 
 settings-net-broadcast-import-needs-station = İçe aktarmak için bir istasyona bağlanın.
 
-
 sonde-online-why-signin = İstasyon önce oturum açılmasını istiyor.
 
 sonde-online-why-busy = İstasyon SondeHub'ı zaten izin verilen sıklıkta sorguluyor. Bir dakika sonra yeniden deneyin.
@@ -9191,9 +9139,6 @@ sonde-online-why-http = Yanıt: HTTP { $n }.
 settings-general-band-plan = Bant planı
 
 settings-general-band-plan-built-in = Yerleşik IARU
-
-
-
 
 sonde-card-source = Kaynak
 
@@ -9391,8 +9336,6 @@ tx-off-cb = 11 m (CB) üzerinde YAYIN YASAK — bant yayın listenizde, ancak "1
 settings-cb-allow-tx-needs-band = Önce bu telsizin TX bant listesinde 11M-CB'yi EVET yapın (Ayarlar → Radyo), sonra burada izin verin.
 
 settings-cb-allow-tx-order-note = İki kilit, bu sırayla: 1) telsizin TX bant listesinde 11M-CB EVET ve onaylı; 2) bu kutu. 11 m'de yayın için ikisi de gerekir. 11M-CB'yi listeden çıkarmak bu kutunun işaretini de kaldırır.
-
-settings-ui-publicsdr-under-waterfall = Şelalenin altına sabitlenmiş
 
 settings-ui-publicsdr-place-hint = Public SDRs'nin nerede açılacağı: orada hiçbir şeyi olmayan ses modlarında şelalenin altına sabitlenmiş ya da bir pencerede. Sayısal modlar, CW ve telefonlar zaten pencere kullanır.
 
@@ -9764,7 +9707,6 @@ ptt-here-heading = BU BİLGİSAYARDA
 
 ptt-station-heading = İSTASYONUN BİLGİSAYARINDA
 
-
 ptt-grant-serial = Bir seri porta izin ver…
 
 ptt-grant-hid = Bir USB HID cihazına izin ver…
@@ -9860,3 +9802,11 @@ recjobs-running = Çalışıyor: { $name } ({ $window })
 settings-radio-dither-hover = ADC'de donanım dithering: en alt bitler doğrusal kalsın diye biraz gürültü ekler. Sessiz bant için kapalı, daha temiz ölçüm için açık.
 
 settings-radio-preamp-hover = ADC'nin ön yükselticisi: alıcının ikinci kazanç katı, yaklaşık 10 dB. Sessiz bir bant gerekmiyorsa kapalı: gürültü tabanını sinyalle birlikte yükseltir.
+
+settings-ui-level-bottom = Arkada
+
+settings-ui-level-top = Önde
+
+settings-ui-level-fixed = Wayland'de pencere sırasını compositor belirler; döşemeli bir compositor'un seçebileceği katman yoktur.
+
+settings-ui-main-window = Ana pencere

@@ -556,7 +556,12 @@ fn detached_geometry(
     seed: Option<sdroxide_types::DetachedWindow>,
     default_size: [f32; 2],
 ) -> (egui::Vec2, Option<egui::Pos2>) {
-    let want = seed.map_or(egui::Vec2::from(default_size), |s| egui::Vec2::from(s.size));
+    // A seed with no size is one that carries only a level (#748): the module's
+    // own size is the answer then.
+    let want = match seed {
+        Some(s) if s.size[0] > 1.0 && s.size[1] > 1.0 => egui::Vec2::from(s.size),
+        _ => egui::Vec2::from(default_size),
+    };
     let Some(monitor) = monitor.filter(|m| m.x > 1.0 && m.y > 1.0) else {
         return (want, seed.and_then(|s| s.pos).map(egui::Pos2::from));
     };
@@ -706,6 +711,29 @@ impl ChildWindow {
 /// width, it has no band column to dock, and its ids belong to the radio it
 /// shows. The guard is made inside the viewport and dropped at the end of the
 /// draw, so nothing of it outlives a frame.
+/// The operator's stacking choice, in the toolkit's own terms (issue #748).
+pub(crate) fn viewport_level(level: sdroxide_types::WindowLevel) -> egui::WindowLevel {
+    match level {
+        sdroxide_types::WindowLevel::Bottom => egui::WindowLevel::AlwaysOnBottom,
+        sdroxide_types::WindowLevel::Normal => egui::WindowLevel::Normal,
+        sdroxide_types::WindowLevel::Top => egui::WindowLevel::AlwaysOnTop,
+    }
+}
+
+/// Ask for the **main** window's level, once per change rather than per frame.
+///
+/// The last one asked for is kept in the context's temporary store, so a
+/// restart asks again (the store starts empty) and an operator moving the chip
+/// sees it take effect on the next frame.
+pub(crate) fn apply_main_level(ctx: &egui::Context, want: sdroxide_types::WindowLevel) {
+    let id = egui::Id::new("sdroxide-main-window-level");
+    let last: Option<sdroxide_types::WindowLevel> = ctx.data(|d| d.get_temp(id));
+    if last != Some(want) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(viewport_level(want)));
+        ctx.data_mut(|d| d.insert_temp(id, want));
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn detached_viewport(
     ctx: &egui::Context,
@@ -723,7 +751,10 @@ fn detached_viewport(
         // rule has to float this window and pin it to a monitor.
         .with_app_id(spec.app_id.clone())
         .with_title(spec.title.clone())
-        .with_min_inner_size(spec.min_size);
+        .with_min_inner_size(spec.min_size)
+        // The operator's stacking choice for this window (#748), Normal when
+        // it has never been set — which is what every window did before it.
+        .with_window_level(viewport_level(seed.map(|s| s.level).unwrap_or_default()));
     // Seed the size and place only on the frame the window is (re)built, so a
     // live resize is never fought by our own request.
     if ctx.cumulative_pass_nr_for(vid) == 0 {
@@ -753,6 +784,9 @@ fn detached_viewport(
                 // Whole points, so a sub-point wobble is not a resize.
                 size: [size.x.round(), size.y.round()],
                 pos: pos.map(|p| [p.x.round(), p.y.round()]),
+                // Kept with the size and place, so a chip moved while the
+                // window is open survives the next start (#748).
+                level: seed.map(|s| s.level).unwrap_or_default(),
             });
         }
         if ictx.input(|i| i.viewport().close_requested()) {
@@ -809,6 +843,9 @@ impl eframe::App for SdroxideApp {
         // This radio's band plan for everything this frame draws and decides.
         let _plan = sdroxide_types::ThreadPlanGuard::enter(self.band_plan_cur);
         let ctx = ui.ctx().clone();
+        // The main window's stacking choice (#748) — sent when it changes, and
+        // once at start-up, which is what the empty temporary store means.
+        apply_main_level(&ctx, self.ui_settings.main_level);
         let now = ctx.input(|i| i.time);
         self.konami.tick(ctx.input(|i| i.stable_dt).min(0.25));
         // The profile's stored key bindings, offered when this client has not
@@ -6343,7 +6380,7 @@ mod tests {
         // A position past the right edge of a small monitor comes back inside it,
         // and the window still fits the screen it opened on.
         let stored =
-            sdroxide_types::DetachedWindow { size: [960.0, 540.0], pos: Some([1920.0, 0.0]) };
+            sdroxide_types::DetachedWindow { size: [960.0, 540.0], pos: Some([1920.0, 0.0]), level: Default::default() };
         let (size, pos) = super::detached_geometry(
             Some(eframe::egui::vec2(800.0, 600.0)),
             Some(stored),
@@ -6355,7 +6392,7 @@ mod tests {
         // A position that is already on the monitor is left exactly where the
         // operator put it — this is not a re-layout, it is a rescue.
         let stored =
-            sdroxide_types::DetachedWindow { size: [640.0, 480.0], pos: Some([120.0, 90.0]) };
+            sdroxide_types::DetachedWindow { size: [640.0, 480.0], pos: Some([120.0, 90.0]), level: Default::default() };
         let (_, pos) = super::detached_geometry(
             Some(eframe::egui::vec2(1920.0, 1080.0)),
             Some(stored),
@@ -6365,7 +6402,7 @@ mod tests {
 
         // A monitor to the left of the primary is a real place, not a lost window.
         let stored =
-            sdroxide_types::DetachedWindow { size: [640.0, 480.0], pos: Some([-1920.0, 40.0]) };
+            sdroxide_types::DetachedWindow { size: [640.0, 480.0], pos: Some([-1920.0, 40.0]), level: Default::default() };
         let (_, pos) = super::detached_geometry(
             Some(eframe::egui::vec2(1920.0, 1080.0)),
             Some(stored),
@@ -7081,7 +7118,7 @@ mod detached_geometry_tests {
         let saved = Some(sdroxide_types::DetachedWindow {
             size: [900.0, 700.0],
             pos: Some([5000.0, 3000.0]),
-        });
+        level: Default::default() });
         let (_, pos) = detached_geometry(monitor, saved, [800.0, 600.0]);
         let pos = pos.expect("a restored position");
         assert!(pos.x <= 1920.0 - 80.0, "x {:.0} is off the right edge", pos.x);
@@ -7092,11 +7129,18 @@ mod detached_geometry_tests {
         let left = Some(sdroxide_types::DetachedWindow {
             size: [900.0, 700.0],
             pos: Some([-1200.0, 40.0]),
-        });
+        level: Default::default() });
         let (_, pos) = detached_geometry(monitor, left, [800.0, 600.0]);
         let pos = pos.expect("a restored position");
         assert!(pos.x < 0.0, "a left-hand monitor was pulled to the primary");
         assert!((pos.y - 40.0).abs() < 0.5);
+    }
+    #[test]
+    fn the_operators_level_maps_to_the_toolkits_three() {
+        use sdroxide_types::WindowLevel;
+        assert_eq!(super::viewport_level(WindowLevel::Bottom), egui::WindowLevel::AlwaysOnBottom);
+        assert_eq!(super::viewport_level(WindowLevel::Normal), egui::WindowLevel::Normal);
+        assert_eq!(super::viewport_level(WindowLevel::Top), egui::WindowLevel::AlwaysOnTop);
     }
 }
 pub const TW_SESSION_QSOS: u64 = 1 << 51;
